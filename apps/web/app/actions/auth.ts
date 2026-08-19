@@ -1,0 +1,392 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { logAudit } from "@/lib/audit";
+
+export interface AuthFormState {
+  error?: string;
+  message?: string;
+  fieldErrors?: Record<string, string>;
+  fieldValues?: Record<string, string>;
+}
+
+export async function login(state: AuthFormState, formData: FormData): Promise<AuthFormState> {
+  const email = ((formData.get("email") as string) || "").trim();
+  const password = (formData.get("password") as string) || "";
+
+  const fieldErrors: Record<string, string> = {};
+  if (!email) fieldErrors.email = "Email address is required.";
+  if (!password) fieldErrors.password = "Password is required.";
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return {
+      error: "Email and password are required.",
+      fieldErrors,
+      fieldValues: { email, password },
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
+
+  if (error) {
+    // Distinguish between unconfirmed email and invalid credentials
+    if (error.message.toLowerCase().includes("email not confirmed")) {
+      return {
+        error: "Your email is not confirmed yet. Please wait for an administrator to approve your account.",
+        fieldErrors: { email: "Email pending administrator confirmation." },
+        fieldValues: { email, password },
+      };
+    }
+    return {
+      error: "Invalid email or password.",
+      fieldErrors: { email: "Invalid email or password.", password: "Invalid email or password." },
+      fieldValues: { email, password },
+    };
+  }
+
+  // Check if user has a profile and is active — select minimal status column
+  const { data: profile } = await supabase
+    .from("users")
+    .select("status")
+    .eq("id", data.user.id)
+    .single();
+
+  if (!profile) {
+    await supabase.auth.signOut();
+    return {
+      error: "User profile not found. Contact your administrator.",
+      fieldErrors: { email: "User profile not found." },
+      fieldValues: { email, password },
+    };
+  }
+
+  if (profile.status === "inactive") {
+    await supabase.auth.signOut();
+    return {
+      error: "Your account has been deactivated. Contact your administrator.",
+      fieldErrors: { email: "Account is deactivated." },
+      fieldValues: { email, password },
+    };
+  }
+
+  if (profile.status === "pending") {
+    await supabase.auth.signOut();
+    return {
+      error: "Your account is pending approval. Please wait for an administrator to approve your account.",
+      fieldErrors: { email: "Account pending admin approval." },
+      fieldValues: { email, password },
+    };
+  }
+
+  // Fire audit log with pre-resolved user_id without blocking response
+  void logAudit({
+    action: "auth.login",
+    entity_type: "user",
+    entity_id: data.user.id,
+    user_id: data.user.id,
+    metadata: { user_email: email },
+  });
+
+  redirect("/dashboard");
+}
+
+function formatRetryAfter(seconds: number): string {
+  if (seconds < 60) {
+    const s = Math.round(seconds);
+    return s === 1 ? "1 minute" : `${s} minutes`;
+  }
+  if (seconds < 3600) {
+    const m = Math.round(seconds / 60);
+    return m === 1 ? "1 minute" : `${m} minutes`;
+  }
+  const h = Math.round(seconds / 3600);
+  return h === 1 ? "1 hour" : `${h} hours`;
+}
+
+export async function logout() {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    await logAudit({
+      action: "auth.logout",
+      entity_type: "user",
+      entity_id: user.id,
+      user_id: user.id,
+      metadata: { user_email: user.email },
+    });
+  }
+
+  await supabase.auth.signOut();
+  redirect("/login");
+}
+
+export async function forgotPassword(
+  state: AuthFormState,
+  formData: FormData
+): Promise<AuthFormState> {
+  const email = ((formData.get("email") as string) || "").trim();
+
+  if (!email) {
+    return {
+      error: "Email is required.",
+      fieldErrors: { email: "Email address is required." },
+      fieldValues: { email },
+    };
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email.toLowerCase())) {
+    return {
+      error: "Please enter a valid email address.",
+      fieldErrors: { email: "Please enter a valid email address." },
+      fieldValues: { email },
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(
+      ".supabase.co",
+      ""
+    )}/reset-password`,
+  });
+
+  if (error) {
+    return {
+      error: "Failed to send reset email. Please try again.",
+      fieldErrors: { email: "Failed to send reset link." },
+      fieldValues: { email },
+    };
+  }
+
+  return { message: "Password reset link has been sent to your email." };
+}
+
+export async function signup(
+  state: AuthFormState,
+  formData: FormData
+): Promise<AuthFormState> {
+  const fullName = ((formData.get("full_name") as string) || "").trim();
+  const email = ((formData.get("email") as string) || "").trim();
+  const phone = ((formData.get("phone") as string) || "").trim();
+  const password = (formData.get("password") as string) || "";
+  const confirmPassword = (formData.get("confirm_password") as string) || "";
+  const requestedRole = (formData.get("role") as string) || "service_engineer";
+
+  const validRoles = [
+    "super_admin",
+    "admin",
+    "branch_manager",
+    "service_engineer",
+    "engineer",
+    "supervisor",
+    "store_manager",
+    "operator",
+    "mechanic",
+    "hr_manager",
+    "finance_manager",
+    "sales_executive",
+    "rental_manager",
+    "client",
+  ];
+
+  const role = validRoles.includes(requestedRole) ? requestedRole : "service_engineer";
+
+  const fieldValues = {
+    full_name: fullName,
+    email,
+    phone,
+    role,
+    password,
+    confirm_password: confirmPassword,
+  };
+
+  const fieldErrors: Record<string, string> = {};
+
+  if (!fullName) fieldErrors.full_name = "Full name is required.";
+  if (!email) fieldErrors.email = "Email address is required.";
+  if (!phone) fieldErrors.phone = "Mobile number is required.";
+  if (!password) fieldErrors.password = "Password is required.";
+  if (!confirmPassword) fieldErrors.confirm_password = "Confirm password is required.";
+
+  if (Object.keys(fieldErrors).length > 0) {
+    return {
+      error: "Please fill in all required fields.",
+      fieldErrors,
+      fieldValues,
+    };
+  }
+
+  if (password !== confirmPassword) {
+    return {
+      error: "Passwords do not match.",
+      fieldErrors: {
+        password: "Passwords do not match.",
+        confirm_password: "Passwords do not match.",
+      },
+      fieldValues,
+    };
+  }
+
+  if (password.length < 6) {
+    return {
+      error: "Password must be at least 6 characters long.",
+      fieldErrors: {
+        password: "Password must be at least 6 characters long.",
+      },
+      fieldValues,
+    };
+  }
+
+  const digitsOnly = phone.replace(/\D/g, "");
+  const is10DigitMobile =
+    digitsOnly.length === 10 ||
+    (digitsOnly.length === 12 && digitsOnly.startsWith("91")) ||
+    (digitsOnly.length === 11 && digitsOnly.startsWith("0"));
+
+  if (!is10DigitMobile) {
+    return {
+      error: "Please enter a valid 10-digit mobile number.",
+      fieldErrors: {
+        phone: "Please enter a valid 10-digit mobile number.",
+      },
+      fieldValues,
+    };
+  }
+
+  const emailLower = email.toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(emailLower)) {
+    return {
+      error: "Please enter a valid email address.",
+      fieldErrors: {
+        email: "Please enter a valid email address.",
+      },
+      fieldValues,
+    };
+  }
+
+  const supabase = await createSupabaseServerClient();
+
+  // Create the auth user. The handle_new_user() DB trigger automatically
+  // inserts a row into public.users with status = 'pending', so no
+  // app-side status update is needed (and none would work pre-confirmation
+  // because RLS blocks writes without a session).
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
+        phone,
+        role: role,
+      },
+      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/login`,
+    },
+  });
+
+  if (error) {
+    console.error("Signup error:", error);
+    const message = error.message.toLowerCase();
+    
+    if (message.includes("already registered") || message.includes("user already exists") || message.includes("already exists")) {
+      return {
+        error: "An account with this email already exists.",
+        fieldErrors: {
+          email: "An account with this email already exists.",
+        },
+        fieldValues,
+      };
+    }
+    if (error.status === 429 || message.includes("rate limit") || message.includes("too many requests")) {
+      const maybeRetryAfter = (error as unknown as { retry_after?: number }).retry_after;
+      const retryText = typeof maybeRetryAfter === "number" && Number.isFinite(maybeRetryAfter) && maybeRetryAfter > 0
+        ? formatRetryAfter(maybeRetryAfter)
+        : "about a minute";
+      return {
+        error: `Too many attempts. Please try again in ${retryText}.`,
+        fieldValues,
+      };
+    }
+    if (message.includes("invalid") && (message.includes("email") || message.includes("address"))) {
+      return {
+        error: "Please enter a valid email address.",
+        fieldErrors: {
+          email: "Please enter a valid email address.",
+        },
+        fieldValues,
+      };
+    }
+    if (message.includes("password") && message.includes("weak")) {
+      return {
+        error: "Password is too weak. Please use a stronger password.",
+        fieldErrors: {
+          password: "Password is too weak. Please use a stronger password.",
+        },
+        fieldValues,
+      };
+    }
+    if (message.includes("signup") || message.includes("registration")) {
+      return {
+        error: error.message,
+        fieldValues,
+      };
+    }
+    
+    return {
+      error: "Signup failed. Please check your details and try again.",
+      fieldValues,
+    };
+  }
+
+  if (!data.user) {
+    return {
+      error: "Failed to create account. Please try again.",
+      fieldValues,
+    };
+  }
+
+  const userId = data.user.id;
+
+  // Use the admin client (bypasses RLS) to fetch admin emails for the
+  // notification. The user-session client has no session at this point
+  // (email confirmation is pending), so RLS would block the query.
+  const adminSupabase = createSupabaseAdminClient();
+  const { data: adminUsers } = await adminSupabase
+    .from("users")
+    .select("email")
+    .in("role", ["super_admin", "admin"])
+    .eq("status", "active");
+
+  // Send notification emails to admins
+  if (adminUsers && adminUsers.length > 0) {
+    const adminEmails = adminUsers.map((u) => u.email).filter((e): e is string => e !== null);
+
+    // Import email functions dynamically to avoid circular dependencies
+    const { sendPendingApprovalEmailToAdmins } = await import("@/lib/email");
+    sendPendingApprovalEmailToAdmins(adminEmails, fullName, email, role).catch((err) =>
+      console.error("Failed to send pending approval emails:", err)
+    );
+  }
+
+  await logAudit({
+    action: "user.signup",
+    entity_type: "user",
+    entity_id: userId,
+    user_id: userId,
+    metadata: { user_name: fullName, user_email: email, phone, role: role },
+  });
+
+  return { message: "Signup successful! Your account is pending approval. You will be notified once an administrator approves your account." };
+}
