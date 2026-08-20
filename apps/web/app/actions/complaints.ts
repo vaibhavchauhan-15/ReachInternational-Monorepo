@@ -268,3 +268,74 @@ export async function updateComplaintStatusAction(
 
   return { success: true };
 }
+
+export async function deleteComplaint(
+  id: string
+): Promise<{ error?: string; success?: boolean }> {
+  const user = await getCurrentUser();
+  if (!user) return { error: "Unauthorized" };
+
+  const canDelete =
+    user.role === "super_admin" ||
+    user.role === "admin" ||
+    user.role === "service_manager" ||
+    user.role === "branch_manager" ||
+    user.role === "supervisor";
+
+  if (!canDelete) {
+    return { error: "You do not have permission to delete breakdown complaints." };
+  }
+
+  const supabase = createSupabaseAdminClient();
+
+  // Fetch complaint details to get complaint_no and machine_id
+  const { data: complaint, error: fetchErr } = await supabase
+    .from("machine_complaints")
+    .select("complaint_no, machine_id")
+    .eq("id", id)
+    .single();
+
+  if (fetchErr || !complaint) {
+    return { error: "Complaint record not found." };
+  }
+
+  const { error: deleteErr } = await supabase
+    .from("machine_complaints")
+    .delete()
+    .eq("id", id);
+
+  if (deleteErr) {
+    console.error("Error deleting complaint:", deleteErr);
+    return { error: deleteErr.message };
+  }
+
+  // Check if machine has any other active complaints
+  if (complaint.machine_id) {
+    const { data: activeComplaints } = await supabase
+      .from("machine_complaints")
+      .select("id")
+      .eq("machine_id", complaint.machine_id)
+      .in("status", ["open", "in_progress", "pending_parts"]);
+
+    if (!activeComplaints || activeComplaints.length === 0) {
+      await supabase
+        .from("machines")
+        .update({ status: "active" })
+        .eq("id", complaint.machine_id);
+    }
+  }
+
+  await logAudit({
+    action: "complaint.deleted",
+    entity_type: "machine_complaint",
+    entity_id: id,
+    metadata: { complaint_no: complaint.complaint_no, machine_id: complaint.machine_id },
+  });
+
+  revalidateTag(CACHE_TAGS.complaints, "max");
+  revalidateTag(CACHE_TAGS.machines, "max");
+  revalidateTag(CACHE_TAGS.dashboard, "max");
+
+  return { success: true };
+}
+

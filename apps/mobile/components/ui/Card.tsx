@@ -10,12 +10,16 @@ import { radiusNumeric, spacingNumeric } from '@servicecentric/design-tokens';
 
 export interface CardProps {
   children: React.ReactNode;
+  variant?: 'base' | 'elevated' | 'interactive';
   onPress?: () => void;
   style?: StyleProp<ViewStyle>;
 }
 
-export const Card: React.FC<CardProps> = ({ children, onPress, style }) => {
+export const Card: React.FC<CardProps> = ({ children, variant = 'base', onPress, style }) => {
   const { theme } = useTheme();
+
+  const isElevated = variant === 'elevated';
+  const shadowProps = isElevated ? theme.shadows.floating : theme.shadows.whisper;
 
   const cardStyle: ViewStyle = {
     backgroundColor: theme.colors.canvasElevated,
@@ -24,11 +28,12 @@ export const Card: React.FC<CardProps> = ({ children, onPress, style }) => {
     borderRadius: radiusNumeric.md,
     padding: spacingNumeric.md,
     marginVertical: spacingNumeric.xs,
+    ...shadowProps,
   };
 
   if (onPress) {
     return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={[cardStyle, style]}>
+      <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={[cardStyle, style]}>
         {children}
       </TouchableOpacity>
     );

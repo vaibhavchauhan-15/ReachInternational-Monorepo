@@ -56,6 +56,15 @@ ServiceCentric transforms heavy machinery fleet management and end-to-end indust
 - **Assigned Items Scoping**: Scopes assigned breakdown complaints (`machine_complaints`), assigned service jobs (`service_records`), assigned equipment cards (`machines`), role-specific approval tasks (`purchase_orders`), and daily meter log tasks.
 - **Permission-Gated UI Controls**: Integrated `roleHasPermission()` access controls on task actions and clean empty states ("No Assigned Work Items Today") for field staff with zero active tasks.
 
+### 📋 To-Do & Task Management System (`/tasks`)
+- **Boss → Employee Task Delegation**: Boss/Managers create and assign daily or scheduled tasks to single or multiple employees with due dates, due times, priority levels (`low`, `medium`, `high`, `critical`), and reminder offsets (`10m`, `30m`, `1h`, `1d`).
+- **Full Task Lifecycle & Statuses**: Complete tracking through `pending`, `in_progress`, `completed`, `overdue`, `cancelled`, and `reopened` states.
+- **Employee Task Execution & Completion Proof**: Employees view assigned tasks, update progress, add completion notes, and upload completion proof attachments (photos/documents).
+- **Manager Verification & Reopening**: Managers review submitted task completion details and proof attachments with options to **Approve & Verify** or **Reject & Reopen** with revision feedback.
+- **Task Discussions & Audit Timeline**: Threaded comments between employees and managers per task, accompanied by complete audit activity logs (`task_activity_logs`).
+- **Unified Web & Mobile Experience**: Full feature parity between Next.js Web App (List View, Kanban Board, Multi-Filter toolbar, KPI stats) and Expo Mobile App matching native wireframe designs.
+
+
 ### 🏭 Machine Directory & Compliance Master (`/machines`)
 - **Machine Taxonomy**: Dynamic categories (`machine_categories`) including Forklifts, Scissor Lifts, Boom Lifts, Reach Trucks, Pallet Trucks, and Industrial Generators.
 - **Extended Technical Specifications**: Tracks equipment specs, model details, serial numbers, manufacturer, year of mfg, engine serial number, and engine MOT number.
@@ -138,6 +147,7 @@ ServiceCentric transforms heavy machinery fleet management and end-to-end indust
 - **App Shell & 2-Column Layout**: Smooth 2-column workspace shell with Framer Motion spring transitions (`280px` expanded / `72px` collapsed).
 - **ChatGPT-Style Collapsed Logo Toggle**: Hovering over the collapsed sidebar logo smoothly morphs into the expand button (`PanelLeftOpen`).
 - **Vercel Geist Day/Night Theme Switch**: Animated dark/light toggle switch (`ThemeToggle`) with spring physics and sun/moon micro-animations.
+- **Universal Reusable Custom Dropdown (`Select.tsx`)**: Reusable custom dropdown component built with Framer Motion popover slide & fade animations, dark/light theme tokens, checkmark indicators (`AnimatedCheck`), search filtering for long option lists (> 6 items), and full keyboard navigation (`ArrowUp`, `ArrowDown`, `Enter`, `Escape`), replacing 100% of native browser `<select>` dropdowns across the web application.
 - **Reusable FilterToolbar & Table Primitives**: Standardized search input with filter toggle button, active filter count badge, and expandable multi-field filter panel.
 - **Platform-Aware Command Palette (`⌘K` / `Ctrl+K`)**: Weighted relevance search engine mapping commands and alias keywords.
 
@@ -376,11 +386,12 @@ The platform relies on Supabase PostgreSQL with **38+ core tables**, all protect
 
 ServiceCentric features a complete field service workflow for breakdown complaints:
 
-1. **Malfunction Reporting**: A Supervisor, Admin, or Service Engineer logs a breakdown complaint via `<MachineComplaintModal />` on `/service?tab=complaints` or via `action=create_complaint`.
-2. **Engineer Dispatch**: The complaint is assigned to a Service Engineer or Mechanic with status set to `open` or `in_progress`.
-3. **Field Service Report (FSR)**: The engineer opens the interactive `<FieldServiceReportModal />`, fills out component checklists, records work completed/pending, specifies replacement parts, and resolves the issue.
-4. **Managerial Review**: Service Managers and Branch Managers review the completed FSR with options to **Approve FSR** or **Send Back for Revision**.
-5. **Digital A4 PDF Generation**: Clicking **"Print / Save PDF"** invokes an iframe print handler generating an exact A4 portrait PDF output with clean text inputs and zero browser header/footer artifacts.
+1. **Malfunction Reporting**: A Supervisor, Admin, Service Manager, or Field Engineer logs a breakdown complaint via `<MachineComplaintModal />` on `/machines?tab=complaints` or via `action=create_complaint`.
+2. **Engineer Dispatch & Multi-Option Filtering**: The complaint is assigned to a Service Engineer or Mechanic with status set to `open`, `in_progress`, or `pending_parts`. The `/machines?tab=complaints` view provides multi-option filters for Status, Machine/Model, Assigned Engineer, and Spare Parts Required.
+3. **Interactive Complaint Detail Modal**: Clicking any row in the complaints table opens `<ComplaintDetailModal />`, providing comprehensive machine specs, reported malfunction details, required spare parts & quantities, hour meter reading, assigned personnel, work log, and direct action triggers.
+4. **Field Service Report (FSR)**: The engineer opens `<FieldServiceReportModal />` via the compact icon-only FSR button, completes component checklists, records work completed/pending, specifies replacement parts, and resolves the issue.
+5. **Managerial Governance & Deletion**: Service Managers and Admins can perform complaint management, editing, or deletion via `deleteComplaint` server action with automatic machine status restoration.
+6. **Digital A4 PDF Generation**: Clicking **"Print / Save PDF"** invokes an iframe print handler generating an exact A4 portrait PDF output with clean text inputs and zero browser header/footer artifacts.
 
 ---
 
@@ -524,15 +535,17 @@ Configure Upstash QStash or Vercel Cron to invoke `POST /api/cron/send-reminders
 - [x] **Phase 2 — Shared Type System**: Modularize canonical domain types into `@servicecentric/types` covering all 22 domain categories.
 - [x] **Phase 3 — Shared Validation Package**: Modularize Zod validation schemas into `@servicecentric/validation` covering all 12 domain categories.
 - [x] **Phase 4 — Shared Permissions Package**: Modularize RBAC matrix & scope definitions into `@servicecentric/permissions` covering 14 roles, 100+ permissions, and 3-tier scoping rules.
-- [ ] **Phase 5 — Shared Design Tokens Package**: Modularize brand colors, semantic tokens, and typography into `@servicecentric/design-tokens`.
-- [ ] **Phase 6 — Shared API / Data Contracts**: Create shared API client package `@servicecentric/api-client`.
-- [ ] **Phase 7 — Mobile App Foundation**: Initialize Expo React Native application (`apps/mobile`) with Expo Router & Supabase Auth.
-- [ ] **Phase 8 — Mobile Shared Layer Integration**: Wire mobile client to shared types, Zod schemas, and design tokens.
-- [ ] **Phase 9 — Mobile UI System**: Build mobile design primitives, top/bottom navigation, cards, and bottom sheets.
-- [ ] **Phase 10 — Mobile Auth & Profile**: Implement mobile login, password reset, and profile management.
-- [ ] **Phase 11 — Mobile Core Role Workflows**: Implement mobile Field Service FSRs, Operator hour meter logs, and Breakdown Complaints.
+- [x] **Phase 5 — Shared Design Tokens Package**: Modularize brand colors, semantic tokens, typography, and bimodal radius into `@servicecentric/design-tokens` with Web CSS variables and React Native adapters.
+- [x] **Phase 6 — Shared API / Data Contracts**: Create shared API client package `@servicecentric/api-client`.
+- [x] **Phase 7 — Mobile App Foundation**: Initialize Expo React Native application (`apps/mobile`) with Expo Router & Supabase Auth.
+- [x] **Phase 8 — Mobile Shared Layer Integration**: Wire mobile client to shared types, Zod schemas, and design tokens.
+- [x] **Phase 9 — Mobile UI System**: Build mobile design primitives (`Button`, `Card`, `Badge`, `Input`, `MobileHeader`), top/bottom navigation, cards, and bottom sheets.
+- [x] **Phase 10 — Mobile Auth & Profile**: Implement mobile login (mesh gradient hero bloom, platform metrics), password reset, and profile management.
+- [x] **Phase 11 — Mobile Core Role Workflows**: Implement mobile Field Service FSRs, Operator hour meter logs, Breakdown Complaints, Sales, Rentals, HR, and Finance.
+- [x] **Phase 12–33 — Mobile Alignment & Production Distribution**: Web-identical Vercel Geist theme system alignment (`#0a0a0a` canvas, `#171717` cards, `#262626` / `#ebebeb` hairlines, micro-dot status badges, pill CTAs, uppercase Geist Mono eyebrows, branded top header bar) + EAS Internal APK build distribution.
 
 ### Completed Features ✅
+- [x] Mobile Navigation System: 3-Line Hamburger Menu Icon Modal (all 13 main pages) & Contextual Bottom Navbar Submenus (`@servicecentric/mobile`)
 - [x] Comprehensive 13-Role RBAC & Data Access Scoping Architecture (`super_admin`, `admin`, `branch_manager`, `service_manager`, `service_engineer`, `supervisor`, `mechanic`, `operator`, `store_manager`, `hr_manager`, `rental_manager`, `sales_executive`, `finance_manager`, `client`)
 - [x] Live Task & Assignment Workspace (`/my-work`)
 - [x] Breakdown Complaints Management & Malfunction Logging (`/service?tab=complaints`)

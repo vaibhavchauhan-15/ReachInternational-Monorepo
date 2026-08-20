@@ -22,6 +22,7 @@ export interface ColumnDef<T> {
   accessorKey?: keyof T;
   cell?: (row: T) => ReactNode;
   sortable?: boolean;
+  sortFn?: (a: T, b: T) => number;
   tooltip?: string;
   width?: string;
 }
@@ -45,6 +46,9 @@ interface EnterpriseTableProps<T extends { id: string | number }> {
     onClick: (selectedIds: (string | number)[]) => void;
     variant?: "default" | "danger";
   }[];
+  defaultHiddenColumns?: string[];
+  defaultSortColumn?: string | null;
+  defaultSortDirection?: "asc" | "desc";
 }
 
 export function CopyCell({
@@ -101,19 +105,24 @@ export function EnterpriseTable<T extends { id: string | number }>({
   selectedIds = [],
   onSelectionChange,
   bulkActions = [],
+  defaultHiddenColumns = [],
+  defaultSortColumn = null,
+  defaultSortDirection = "asc",
 }: EnterpriseTableProps<T>) {
   const [density, setDensity] = useState<TableDensity>("default");
-  const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(
-    columns.map((c) => c.id)
+  const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(() =>
+    columns
+      .map((c) => c.id)
+      .filter((id) => !defaultHiddenColumns.includes(id))
   );
-  const [sortColumn, setSortColumn] = useState<string | null>(null);
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [sortColumn, setSortColumn] = useState<string | null>(defaultSortColumn);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">(defaultSortDirection);
   const [showColumnMenu, setShowColumnMenu] = useState(false);
 
   const densityPadding: Record<TableDensity, string> = {
     compact: "py-1.5 px-3 text-xs",
-    default: "py-3 px-4 text-xs",
-    comfortable: "py-4 px-5 text-sm",
+    default: "py-2.5 px-3.5 text-xs",
+    comfortable: "py-3 px-4 text-xs font-medium",
   };
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -156,7 +165,16 @@ export function EnterpriseTable<T extends { id: string | number }>({
   const sortedData = useMemo(() => {
     if (!sortColumn) return data;
     const col = columns.find((c) => c.id === sortColumn);
-    if (!col || !col.accessorKey) return data;
+    if (!col) return data;
+
+    if (col.sortFn) {
+      return [...data].sort((a, b) => {
+        const res = col.sortFn!(a, b);
+        return sortDirection === "asc" ? res : -res;
+      });
+    }
+
+    if (!col.accessorKey) return data;
 
     const key = col.accessorKey;
     return [...data].sort((a, b) => {
@@ -224,47 +242,59 @@ export function EnterpriseTable<T extends { id: string | number }>({
         <div className="flex items-center gap-2 ml-auto">
           {/* Density Selector */}
           <div className="flex items-center bg-[var(--color-hairline-soft-surface)] p-0.5 rounded-[var(--radius-sm)] text-xs">
-            <button
-              onClick={() => setDensity("compact")}
-              className={`px-2 py-1 rounded-[calc(var(--radius-sm)-2px)] transition-all cursor-pointer ${
-                density === "compact"
-                  ? "bg-[var(--color-canvas-elevated)] font-semibold shadow-xs text-[var(--color-ink)]"
-                  : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-              }`}
-            >
-              Compact
-            </button>
-            <button
-              onClick={() => setDensity("default")}
-              className={`px-2 py-1 rounded-[calc(var(--radius-sm)-2px)] transition-all cursor-pointer ${
-                density === "default"
-                  ? "bg-[var(--color-canvas-elevated)] font-semibold shadow-xs text-[var(--color-ink)]"
-                  : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-              }`}
-            >
-              Default
-            </button>
-            <button
-              onClick={() => setDensity("comfortable")}
-              className={`px-2 py-1 rounded-[calc(var(--radius-sm)-2px)] transition-all cursor-pointer ${
-                density === "comfortable"
-                  ? "bg-[var(--color-canvas-elevated)] font-semibold shadow-xs text-[var(--color-ink)]"
-                  : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-              }`}
-            >
-              Comfortable
-            </button>
+            <TooltipWrapper content="Compact table row spacing" side="top">
+              <button
+                onClick={() => setDensity("compact")}
+                className={`px-2 py-1 rounded-[calc(var(--radius-sm)-2px)] transition-all cursor-pointer ${
+                  density === "compact"
+                    ? "bg-[var(--color-canvas-elevated)] font-semibold shadow-xs text-[var(--color-ink)]"
+                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                }`}
+                aria-label="Compact row density"
+              >
+                Compact
+              </button>
+            </TooltipWrapper>
+            <TooltipWrapper content="Default table row spacing" side="top">
+              <button
+                onClick={() => setDensity("default")}
+                className={`px-2 py-1 rounded-[calc(var(--radius-sm)-2px)] transition-all cursor-pointer ${
+                  density === "default"
+                    ? "bg-[var(--color-canvas-elevated)] font-semibold shadow-xs text-[var(--color-ink)]"
+                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                }`}
+                aria-label="Default row density"
+              >
+                Default
+              </button>
+            </TooltipWrapper>
+            <TooltipWrapper content="Comfortable table row spacing" side="top">
+              <button
+                onClick={() => setDensity("comfortable")}
+                className={`px-2 py-1 rounded-[calc(var(--radius-sm)-2px)] transition-all cursor-pointer ${
+                  density === "comfortable"
+                    ? "bg-[var(--color-canvas-elevated)] font-semibold shadow-xs text-[var(--color-ink)]"
+                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                }`}
+                aria-label="Comfortable row density"
+              >
+                Comfortable
+              </button>
+            </TooltipWrapper>
           </div>
 
           {/* Column Visibility Dropdown */}
           <div className="relative">
-            <button
-              onClick={() => setShowColumnMenu(!showColumnMenu)}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-sm)] border border-[var(--color-hairline)] text-xs text-[var(--color-body)] hover:bg-[var(--color-hairline-soft-surface)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
-            >
-              <AnimatedSlidersHorizontal size={14} />
-              <span>Columns</span>
-            </button>
+            <TooltipWrapper content="Customize visible table columns" side="top">
+              <button
+                onClick={() => setShowColumnMenu(!showColumnMenu)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-[var(--radius-sm)] border border-[var(--color-hairline)] text-xs text-[var(--color-body)] hover:bg-[var(--color-hairline-soft-surface)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
+                aria-label="Customize visible table columns"
+              >
+                <AnimatedSlidersHorizontal size={14} />
+                <span>Columns</span>
+              </button>
+            </TooltipWrapper>
 
             {showColumnMenu && (
               <>

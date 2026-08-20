@@ -1,19 +1,16 @@
-/**
- * ServiceCentric Mobile — Adapted Mobile Dashboard (Phase 13)
- * Mobile-first KPI cards, priority action items, pull-to-refresh, and cached data rendering.
- */
-
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useAuth } from '../../lib/auth/useAuth';
-import { Card, Badge, Button, useTheme } from '../../components/ui';
+import { Card, Badge, Button, useTheme, MobileHeader } from '../../components/ui';
 import { spacingNumeric } from '@servicecentric/design-tokens';
 import { formatCompactCurrency } from '@servicecentric/utils';
 
 export default function DashboardScreen() {
-  const { user, role, can } = useAuth();
+  const { user, role } = useAuth();
   const { theme } = useTheme();
   const [refreshing, setRefreshing] = useState(false);
+
+  const userName = user?.email ? user.email.split('@')[0] : 'Operator';
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -21,69 +18,67 @@ export default function DashboardScreen() {
   }, []);
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: theme.colors.canvas }]}
-      contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
-    >
-      {/* Top Header Banner */}
-      <View style={styles.header}>
-        <View>
-          <Text style={[styles.greeting, { color: theme.colors.mute }]}>Welcome back,</Text>
-          <Text style={[styles.userName, { color: theme.colors.ink }]}>
-            {user?.email ? user.email.split('@')[0] : 'Operator'}
-          </Text>
+    <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
+      <MobileHeader
+        eyebrow="FIELD OPERATIONS"
+        title={`Welcome, ${userName}`}
+        subtitle="Real-time machinery status & operational overview"
+      />
+
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
+      >
+        {/* Primary KPI Summary Grid */}
+        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>KEY METRICS OVERVIEW</Text>
+        <View style={styles.kpiGrid}>
+          <Card variant="elevated" style={styles.kpiCard}>
+            <Text style={[styles.kpiValue, { color: theme.colors.link }]}>14</Text>
+            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Total Machines</Text>
+          </Card>
+
+          <Card variant="elevated" style={styles.kpiCard}>
+            <Text style={[styles.kpiValue, { color: theme.colors.error }]}>5</Text>
+            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Open Complaints</Text>
+          </Card>
+
+          <Card variant="elevated" style={styles.kpiCard}>
+            <Text style={[styles.kpiValue, { color: theme.colors.warning }]}>23</Text>
+            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Services Recorded</Text>
+          </Card>
+
+          <Card variant="elevated" style={styles.kpiCard}>
+            <Text style={[styles.kpiValue, { color: theme.colors.success }]}>
+              {formatCompactCurrency(1250000)}
+            </Text>
+            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Monthly Revenue</Text>
+          </Card>
         </View>
-        <Badge status="active" customLabel={role || 'Engineer'} />
-      </View>
 
-      {/* Primary KPI Summary Grid */}
-      <Text style={[styles.sectionTitle, { color: theme.colors.body }]}>Field KPI Overview</Text>
-      <View style={styles.kpiGrid}>
-        <Card style={styles.kpiCard}>
-          <Text style={[styles.kpiValue, { color: theme.colors.link }]}>14</Text>
-          <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Total Machines</Text>
+        {/* Priority Action Tasks */}
+        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute, marginTop: spacingNumeric.lg }]}>
+          PRIORITY FIELD TASKS
+        </Text>
+        
+        <Card variant="base" style={styles.taskCard}>
+          <View style={styles.taskHeader}>
+            <Badge status="breakdown" customLabel="Breakdown" />
+            <Text style={[styles.taskTime, { color: theme.colors.faint }]}>2h ago</Text>
+          </View>
+          <Text style={[styles.taskTitle, { color: theme.colors.ink }]}>Hydraulic Leakage — Toyota 8FG</Text>
+          <Text style={[styles.taskMeta, { color: theme.colors.mute }]}>Site: Delhi Logistics Hub • Machine #MCH-004</Text>
         </Card>
 
-        <Card style={styles.kpiCard}>
-          <Text style={[styles.kpiValue, { color: theme.colors.error }]}>5</Text>
-          <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Open Complaints</Text>
+        <Card variant="base" style={styles.taskCard}>
+          <View style={styles.taskHeader}>
+            <Badge status="scheduled" customLabel="Service Due" />
+            <Text style={[styles.taskTime, { color: theme.colors.faint }]}>Today</Text>
+          </View>
+          <Text style={[styles.taskTitle, { color: theme.colors.ink }]}>500 Hours Periodic Maintenance</Text>
+          <Text style={[styles.taskMeta, { color: theme.colors.mute }]}>Site: Gurgaon Plant • Machine #MCH-012</Text>
         </Card>
-
-        <Card style={styles.kpiCard}>
-          <Text style={[styles.kpiValue, { color: theme.colors.warning }]}>23</Text>
-          <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Services Recorded</Text>
-        </Card>
-
-        <Card style={styles.kpiCard}>
-          <Text style={[styles.kpiValue, { color: theme.colors.success }]}>
-            {formatCompactCurrency(1250000)}
-          </Text>
-          <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Monthly Revenue</Text>
-        </Card>
-      </View>
-
-      {/* Priority Action Tasks */}
-      <Text style={[styles.sectionTitle, { color: theme.colors.body }]}>Priority Field Tasks</Text>
-      
-      <Card style={styles.taskCard}>
-        <View style={styles.taskHeader}>
-          <Badge status="breakdown" customLabel="Breakdown" />
-          <Text style={[styles.taskTime, { color: theme.colors.faint }]}>2h ago</Text>
-        </View>
-        <Text style={[styles.taskTitle, { color: theme.colors.ink }]}>Hydraulic Leakage — Toyota 8FG</Text>
-        <Text style={[styles.taskMeta, { color: theme.colors.mute }]}>Site: Delhi Logistics Hub • Machine #MCH-004</Text>
-      </Card>
-
-      <Card style={styles.taskCard}>
-        <View style={styles.taskHeader}>
-          <Badge status="scheduled" customLabel="Service Due" />
-          <Text style={[styles.taskTime, { color: theme.colors.faint }]}>Today</Text>
-        </View>
-        <Text style={[styles.taskTitle, { color: theme.colors.ink }]}>500 Hours Periodic Maintenance</Text>
-        <Text style={[styles.taskMeta, { color: theme.colors.mute }]}>Site: Gurgaon Plant • Machine #MCH-012</Text>
-      </Card>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -93,27 +88,13 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacingNumeric.md,
-    paddingTop: 50,
+    paddingBottom: spacingNumeric.xl,
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacingNumeric.lg,
-  },
-  greeting: {
-    fontSize: 13,
-  },
-  userName: {
-    fontSize: 22,
+  eyebrowHeader: {
+    fontSize: 11,
     fontWeight: '700',
-    textTransform: 'capitalize',
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    letterSpacing: 0.8,
     marginBottom: spacingNumeric.xs,
-    marginTop: spacingNumeric.sm,
   },
   kpiGrid: {
     flexDirection: 'row',
@@ -122,17 +103,21 @@ const styles = StyleSheet.create({
   },
   kpiCard: {
     width: '48%',
-    padding: spacingNumeric.sm,
+    padding: spacingNumeric.md,
     alignItems: 'center',
   },
   kpiValue: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '800',
     marginBottom: 2,
+    letterSpacing: -0.5,
   },
   kpiLabel: {
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '500',
     textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   taskCard: {
     marginVertical: spacingNumeric.xxs,
@@ -145,10 +130,12 @@ const styles = StyleSheet.create({
   },
   taskTime: {
     fontSize: 11,
+    fontWeight: '500',
   },
   taskTitle: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: -0.2,
     marginBottom: 4,
   },
   taskMeta: {

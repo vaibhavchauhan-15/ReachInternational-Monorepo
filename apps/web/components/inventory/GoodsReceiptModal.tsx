@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Modal, Button, Input, Textarea, useToast } from "@/components/ui";
+import { Modal, Button, Input, Textarea, Select, useToast } from "@/components/ui";
 import { recordGoodsReceiptAction } from "@/app/actions/inventory";
 import type { InventoryProduct, InventoryStock, Branch, PurchaseOrder } from "@/lib/types/database";
 import { AnimatedPlus, AnimatedUpload, AnimatedCheckCircle } from "@/components/ui/animated-icons";
@@ -155,23 +155,18 @@ export function GoodsReceiptModal({
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Header Metadata Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
-          <div>
-            <label className="block text-xs font-bold mb-1 text-[var(--color-ink)]">
-              Link Purchase Order (Optional)
-            </label>
-            <select
-              value={selectedPoId}
-              onChange={(e) => handlePoSelect(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
-            >
-              <option value="">Direct Supplier Receipt (No PO)</option>
-              {purchaseOrders.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.po_number} — {p.vendor_name} (₹{Number(p.amount).toLocaleString("en-IN")})
-                </option>
-              ))}
-            </select>
-          </div>
+          <Select
+            label="Link Purchase Order (Optional)"
+            value={selectedPoId}
+            onChange={(e) => handlePoSelect(e.target.value)}
+            options={[
+              { value: "", label: "Direct Supplier Receipt (No PO)" },
+              ...(purchaseOrders || []).map((p) => ({
+                value: p.id,
+                label: `${p.po_number} — ${p.vendor_name} (₹${Number(p.amount).toLocaleString("en-IN")})`,
+              })),
+            ]}
+          />
 
           <div>
             <label className="block text-xs font-bold mb-1 text-[var(--color-ink)]">
@@ -216,20 +211,15 @@ export function GoodsReceiptModal({
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-bold mb-1 text-[var(--color-ink)]">Receiving Branch</label>
-            <select
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
-            >
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name} ({b.code})
-                </option>
-              ))}
-            </select>
-          </div>
+          <Select
+            label="Receiving Branch"
+            value={branchId}
+            onChange={(e) => setBranchId(e.target.value)}
+            options={branches.map((b) => ({
+              value: b.id,
+              label: `${b.name} (${b.code})`,
+            }))}
+          />
         </div>
 
         {/* Transport & PDF Document Upload Section */}
@@ -308,7 +298,7 @@ export function GoodsReceiptModal({
                   return (
                     <tr key={idx}>
                       <td className="p-2">
-                        <select
+                        <Select
                           value={item.productId}
                           onChange={(e) => {
                             const val = e.target.value;
@@ -327,14 +317,11 @@ export function GoodsReceiptModal({
                               )
                             );
                           }}
-                          className="w-full p-1 border rounded bg-[var(--color-canvas)] font-bold"
-                        >
-                          {products.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} ({p.part_number})
-                            </option>
-                          ))}
-                        </select>
+                          options={products.map((p) => ({
+                            value: p.id,
+                            label: `${p.name} (${p.part_number})`,
+                          }))}
+                        />
                       </td>
                       <td className="p-2">
                         <input

@@ -18,7 +18,7 @@ import {
   AnimatedBarChart3,
   AnimatedClipboardList,
 } from "@/components/ui/animated-icons";
-import { Badge, Button, Input, Modal, useToast, TooltipWrapper } from "@/components/ui";
+import { Badge, Button, Input, Modal, Select, useToast, TooltipWrapper } from "@/components/ui";
 import type {
   InventoryStock,
   InventoryTransaction,
@@ -896,71 +896,71 @@ export function StockLedgerClient({
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              <select
+              <Select
                 value={filterCategory}
                 onChange={(e) => {
                   setFilterCategory(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="px-2.5 py-1.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-semibold text-[var(--color-ink)] cursor-pointer"
-              >
-                <option value="all">All Categories</option>
-                <option value="Filters">Filters</option>
-                <option value="Seals">Seals</option>
-                <option value="Electrical">Electrical</option>
-                <option value="Hydraulic">Hydraulic</option>
-                <option value="Bearings">Bearings</option>
-              </select>
+                options={[
+                  { value: "all", label: "All Categories" },
+                  { value: "Filters", label: "Filters" },
+                  { value: "Seals", label: "Seals" },
+                  { value: "Electrical", label: "Electrical" },
+                  { value: "Hydraulic", label: "Hydraulic" },
+                  { value: "Bearings", label: "Bearings" },
+                ]}
+              />
 
-              <select
+              <Select
                 value={filterManufacturer}
                 onChange={(e) => {
                   setFilterManufacturer(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="px-2.5 py-1.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-semibold text-[var(--color-ink)] cursor-pointer"
-              >
-                <option value="all">All Manufacturers</option>
-                <option value="JCB">JCB</option>
-                <option value="Hyundai">Hyundai</option>
-                <option value="Caterpillar">Caterpillar</option>
-                <option value="Volvo">Volvo</option>
-                <option value="Komatsu">Komatsu</option>
-                <option value="Genie">Genie</option>
-                <option value="JLG">JLG</option>
-                <option value="Haulotte">Haulotte</option>
-                <option value="Mahindra">Mahindra</option>
-                <option value="Tata">Tata</option>
-              </select>
+                options={[
+                  { value: "all", label: "All Manufacturers" },
+                  { value: "JCB", label: "JCB" },
+                  { value: "Hyundai", label: "Hyundai" },
+                  { value: "Caterpillar", label: "Caterpillar" },
+                  { value: "Volvo", label: "Volvo" },
+                  { value: "Komatsu", label: "Komatsu" },
+                  { value: "Genie", label: "Genie" },
+                  { value: "JLG", label: "JLG" },
+                  { value: "Haulotte", label: "Haulotte" },
+                  { value: "Mahindra", label: "Mahindra" },
+                  { value: "Tata", label: "Tata" },
+                ]}
+              />
 
-              <select
+              <Select
                 value={filterRack}
                 onChange={(e) => {
                   setFilterRack(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="px-2.5 py-1.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-semibold text-[var(--color-ink)] cursor-pointer"
-              >
-                <option value="all">All Racks</option>
-                <option value="R-01">Rack R-01</option>
-                <option value="R-02">Rack R-02</option>
-                <option value="R-03">Rack R-03</option>
-                <option value="R-04">Rack R-04</option>
-              </select>
+                options={[
+                  { value: "all", label: "All Racks" },
+                  { value: "R-01", label: "Rack R-01" },
+                  { value: "R-02", label: "Rack R-02" },
+                  { value: "R-03", label: "Rack R-03" },
+                  { value: "R-04", label: "Rack R-04" },
+                ]}
+              />
 
-              <select
+              <Select
                 value={filterStockStatus}
                 onChange={(e) => {
                   setFilterStockStatus(e.target.value as any);
                   setCurrentPage(1);
                 }}
-                className="px-2.5 py-1.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-semibold text-[var(--color-ink)] cursor-pointer"
-              >
-                <option value="all">All Stock</option>
-                <option value="in_stock">In Stock</option>
-                <option value="low_stock">Low Stock</option>
-                <option value="out_of_stock">Out of Stock</option>
-              </select>
+                options={[
+                  { value: "all", label: "All Stock" },
+                  { value: "in_stock", label: "In Stock" },
+                  { value: "low_stock", label: "Low Stock" },
+                  { value: "out_of_stock", label: "Out of Stock" },
+                ]}
+              />
 
               {(filterCategory !== "all" || filterManufacturer !== "all" || filterRack !== "all" || filterStockStatus !== "all" || searchQuery) && (
                 <button
@@ -1286,19 +1286,20 @@ export function StockLedgerClient({
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-1.5">
                     <span>Rows per page:</span>
-                    <select
-                      value={pageSize}
+                    <Select
+                      value={String(pageSize)}
                       onChange={(e) => {
                         setPageSize(Number(e.target.value));
                         setCurrentPage(1);
                       }}
-                      className="px-2 py-1 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] font-semibold text-[var(--color-ink)] cursor-pointer focus:outline-none focus:ring-2 focus:ring-sky-500/20"
-                    >
-                      <option value={10}>10</option>
-                      <option value={25}>25</option>
-                      <option value={50}>50</option>
-                      <option value={100}>100</option>
-                    </select>
+                      options={[
+                        { value: "10", label: "10" },
+                        { value: "25", label: "25" },
+                        { value: "50", label: "50" },
+                        { value: "100", label: "100" },
+                      ]}
+                      className="w-20 text-xs"
+                    />
                   </div>
 
                   <div className="flex items-center gap-1.5">
@@ -1851,32 +1852,36 @@ export function StockLedgerClient({
                 <label className="block font-bold mb-1">Part Name *</label>
                 <Input value={partName} onChange={(e) => setPartName(e.target.value)} placeholder="Hydraulic Filter" required />
               </div>
-              <div>
-                <label className="block font-bold mb-1">Category</label>
-                <select value={partCat} onChange={(e) => setPartCat(e.target.value)} className="w-full p-2 border rounded-xl bg-[var(--color-canvas)]">
-                  <option value="Filters">Filters</option>
-                  <option value="Seals">Seals</option>
-                  <option value="Electrical">Electrical</option>
-                  <option value="Hydraulic">Hydraulic</option>
-                  <option value="Bearings">Bearings</option>
-                </select>
-              </div>
-              <div>
-                <label className="block font-bold mb-1">Manufacturer</label>
-                <select value={partManufacturer} onChange={(e) => setPartManufacturer(e.target.value)} className="w-full p-2 border rounded-xl bg-[var(--color-canvas)] font-medium">
-                  <option value="JCB">JCB</option>
-                  <option value="Hyundai">Hyundai</option>
-                  <option value="Caterpillar">Caterpillar</option>
-                  <option value="Volvo">Volvo</option>
-                  <option value="Komatsu">Komatsu</option>
-                  <option value="Genie">Genie</option>
-                  <option value="JLG">JLG</option>
-                  <option value="Haulotte">Haulotte</option>
-                  <option value="Mahindra">Mahindra</option>
-                  <option value="Tata">Tata</option>
-                  <option value="Other">Other / OEM</option>
-                </select>
-              </div>
+              <Select
+                label="Category"
+                value={partCat}
+                onChange={(e) => setPartCat(e.target.value)}
+                options={[
+                  { value: "Filters", label: "Filters" },
+                  { value: "Seals", label: "Seals" },
+                  { value: "Electrical", label: "Electrical" },
+                  { value: "Hydraulic", label: "Hydraulic" },
+                  { value: "Bearings", label: "Bearings" },
+                ]}
+              />
+              <Select
+                label="Manufacturer"
+                value={partManufacturer}
+                onChange={(e) => setPartManufacturer(e.target.value)}
+                options={[
+                  { value: "JCB", label: "JCB" },
+                  { value: "Hyundai", label: "Hyundai" },
+                  { value: "Caterpillar", label: "Caterpillar" },
+                  { value: "Volvo", label: "Volvo" },
+                  { value: "Komatsu", label: "Komatsu" },
+                  { value: "Genie", label: "Genie" },
+                  { value: "JLG", label: "JLG" },
+                  { value: "Haulotte", label: "Haulotte" },
+                  { value: "Mahindra", label: "Mahindra" },
+                  { value: "Tata", label: "Tata" },
+                  { value: "Other", label: "Other / OEM" },
+                ]}
+              />
               <div>
                 <label className="block font-bold mb-1">Unit Cost (₹)</label>
                 <Input type="number" value={unitCost} onChange={(e) => setUnitCost(parseFloat(e.target.value) || 0)} required />
@@ -1933,14 +1938,16 @@ export function StockLedgerClient({
                 <label className="block font-bold mb-1">Returned Quantity</label>
                 <Input type="number" min={1} value={returnQty} onChange={(e) => setReturnQty(parseInt(e.target.value, 10) || 1)} required />
               </div>
-              <div>
-                <label className="block font-bold mb-1">Item Condition</label>
-                <select value={returnCondition} onChange={(e) => setReturnCondition(e.target.value as any)} className="w-full p-2 border rounded-xl bg-[var(--color-canvas)]">
-                  <option value="good">Good (Restore Available Stock)</option>
-                  <option value="damaged">Damaged (Mark Damaged)</option>
-                  <option value="scrap">Scrap (Mark Scrap)</option>
-                </select>
-              </div>
+              <Select
+                label="Item Condition"
+                value={returnCondition}
+                onChange={(e) => setReturnCondition(e.target.value as any)}
+                options={[
+                  { value: "good", label: "Good (Restore Available Stock)" },
+                  { value: "damaged", label: "Damaged (Mark Damaged)" },
+                  { value: "scrap", label: "Scrap (Mark Scrap)" },
+                ]}
+              />
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="secondary" onClick={() => setReturnModalIssue(null)}>Cancel</Button>

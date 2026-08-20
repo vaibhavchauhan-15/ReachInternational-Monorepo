@@ -14,7 +14,7 @@ import {
   CollapsibleTrigger,
   CollapsibleContent,
 } from "@/components/ui/sidebar";
-import { CollapsedFlyoutPortal } from "./CollapsedFlyoutPortal";
+import { CollapsedSidebarFlyout } from "./CollapsedSidebarFlyout";
 import type { NavItem } from "./types";
 
 interface NavigationItemProps {
@@ -39,7 +39,6 @@ export function NavigationItem({
   setFlyoutHref,
 }: NavigationItemProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const Icon = item.icon;
 
   const isActive =
@@ -53,58 +52,24 @@ export function NavigationItem({
     ? `${item.href}?tab=${item.subItems[0].tab}`
     : item.href;
 
-  const handleMouseEnter = () => {
-    if (!collapsed || !hasSubItems) return;
-    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-    hoverTimeoutRef.current = setTimeout(() => {
-      setFlyoutHref(item.href);
-    }, 120);
-  };
-
-  const handleMouseLeave = () => {
-    if (!collapsed || !hasSubItems) return;
-    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-    hoverTimeoutRef.current = setTimeout(() => {
-      if (flyoutHref === item.href) {
-        setFlyoutHref(null);
-      }
-    }, 200);
-  };
-
-  const handleMouseEnterPortal = () => {
-    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-  };
-
-  const handleMouseLeavePortal = () => {
-    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
-    hoverTimeoutRef.current = setTimeout(() => {
-      setFlyoutHref(null);
-    }, 180);
-  };
-
   // Collapsed Mode Renderer
   if (collapsed) {
     return (
       <SidebarMenuItem key={item.href}>
         <SidebarTooltip content={item.label} enabled={!isFlyoutOpen}>
           {hasSubItems ? (
-            <div
-              onMouseEnter={handleMouseEnter}
-              onMouseLeave={handleMouseLeave}
-              className="w-full flex justify-center"
-            >
+            <div className="w-full flex justify-center">
               <SidebarMenuButton
                 ref={buttonRef}
-                active={isActive}
+                active={isActive || isFlyoutOpen}
                 onClick={() => {
-                  if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
                   setFlyoutHref(isFlyoutOpen ? null : item.href);
                 }}
                 aria-expanded={isFlyoutOpen}
                 aria-label={item.label}
                 className="focus:outline-none focus:ring-2 focus:ring-sky-500/30"
               >
-                <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-sky-600 dark:text-sky-400 font-bold" : ""}`} />
+                <Icon className={`h-4 w-4 shrink-0 ${(isActive || isFlyoutOpen) ? "text-sky-600 dark:text-sky-400 font-bold" : ""}`} />
               </SidebarMenuButton>
             </div>
           ) : (
@@ -120,15 +85,13 @@ export function NavigationItem({
           )}
         </SidebarTooltip>
 
-        {/* Floating Flyout Portal */}
+        {/* Floating Flyout Submenu */}
         {hasSubItems && (
-          <CollapsedFlyoutPortal
+          <CollapsedSidebarFlyout
             item={item}
             anchorEl={buttonRef.current}
             isOpen={isFlyoutOpen}
             onClose={() => setFlyoutHref(null)}
-            onMouseEnterPortal={handleMouseEnterPortal}
-            onMouseLeavePortal={handleMouseLeavePortal}
             currentTab={currentTab}
             isActiveParent={isActive}
           />

@@ -57,6 +57,8 @@ import {
   updateFinanceSettingsAction,
 } from "@/app/actions/finance";
 
+import { Select } from "@/components/ui";
+
 interface FinanceClientProps {
   user: User;
   metrics: FinanceDashboardMetrics;
@@ -596,18 +598,18 @@ export function FinanceClient({
               />
             </div>
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <select
+              <Select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 text-sm rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]"
-              >
-                <option value="all">All Statuses</option>
-                <option value="draft">Draft</option>
-                <option value="finalized">Finalized</option>
-                <option value="paid">Paid</option>
-                <option value="partially_paid">Partially Paid</option>
-                <option value="overdue">Overdue</option>
-              </select>
+                options={[
+                  { value: "all", label: "All Statuses" },
+                  { value: "draft", label: "Draft" },
+                  { value: "finalized", label: "Finalized" },
+                  { value: "paid", label: "Paid" },
+                  { value: "partially_paid", label: "Partially Paid" },
+                  { value: "overdue", label: "Overdue" },
+                ]}
+              />
             </div>
           </div>
 
@@ -1084,19 +1086,17 @@ export function FinanceClient({
               </button>
             </div>
             <form onSubmit={handleCreateInvoice} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-[var(--color-mute)] mb-1">Invoice Type</label>
-                <select
-                  value={invoiceForm.invoice_type}
-                  onChange={(e) => setInvoiceForm({ ...invoiceForm, invoice_type: e.target.value as any })}
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]"
-                >
-                  <option value="sales">Sales Invoice</option>
-                  <option value="rental">Rental Invoice</option>
-                  <option value="service">Service Invoice</option>
-                  <option value="custom">Custom Invoice</option>
-                </select>
-              </div>
+              <Select
+                label="Invoice Type"
+                value={invoiceForm.invoice_type}
+                onChange={(e) => setInvoiceForm({ ...invoiceForm, invoice_type: e.target.value as any })}
+                options={[
+                  { value: "sales", label: "Sales Invoice" },
+                  { value: "rental", label: "Rental Invoice" },
+                  { value: "service", label: "Service Invoice" },
+                  { value: "custom", label: "Custom Invoice" },
+                ]}
+              />
               <div>
                 <label className="block text-xs font-semibold text-[var(--color-mute)] mb-1">Customer Name *</label>
                 <input
@@ -1177,24 +1177,19 @@ export function FinanceClient({
               </button>
             </div>
             <form onSubmit={handleRecordPayment} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-[var(--color-mute)] mb-1">Select Invoice *</label>
-                <select
-                  value={paymentForm.invoice_id}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, invoice_id: e.target.value })}
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]"
-                  required
-                >
-                  <option value="">-- Choose Invoice --</option>
-                  {invoices
-                    .filter((inv) => inv.status !== "paid" && inv.status !== "cancelled")
-                    .map((inv) => (
-                      <option key={inv.id} value={inv.id}>
-                        {inv.invoice_number} - {inv.customer_name} (Due: ₹{Number(inv.amount_due).toLocaleString("en-IN")})
-                      </option>
-                    ))}
-                </select>
-              </div>
+              <Select
+                label="Select Invoice *"
+                value={paymentForm.invoice_id}
+                onChange={(e) => setPaymentForm({ ...paymentForm, invoice_id: e.target.value })}
+                required
+                placeholder="-- Choose Invoice --"
+                options={invoices
+                  .filter((inv) => inv.status !== "paid" && inv.status !== "cancelled")
+                  .map((inv) => ({
+                    value: inv.id,
+                    label: `${inv.invoice_number} - ${inv.customer_name} (Due: ₹${Number(inv.amount_due).toLocaleString("en-IN")})`,
+                  }))}
+              />
               <div>
                 <label className="block text-xs font-semibold text-[var(--color-mute)] mb-1">Payment Amount (₹) *</label>
                 <input
@@ -1205,20 +1200,18 @@ export function FinanceClient({
                   className="w-full px-3 py-2 text-sm rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-[var(--color-mute)] mb-1">Payment Method</label>
-                <select
-                  value={paymentForm.payment_method}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value as any })}
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]"
-                >
-                  <option value="bank_transfer">Bank Transfer (NEFT/RTGS)</option>
-                  <option value="upi">UPI</option>
-                  <option value="cheque">Cheque</option>
-                  <option value="cash">Cash</option>
-                  <option value="card">Credit/Debit Card</option>
-                </select>
-              </div>
+              <Select
+                label="Payment Method"
+                value={paymentForm.payment_method}
+                onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value as any })}
+                options={[
+                  { value: "bank_transfer", label: "Bank Transfer (NEFT/RTGS)" },
+                  { value: "upi", label: "UPI" },
+                  { value: "cheque", label: "Cheque" },
+                  { value: "cash", label: "Cash" },
+                  { value: "card", label: "Credit/Debit Card" },
+                ]}
+              />
               <div>
                 <label className="block text-xs font-semibold text-[var(--color-mute)] mb-1">Transaction Ref / UTR Number</label>
                 <input
@@ -1267,17 +1260,15 @@ export function FinanceClient({
               </button>
             </div>
             <form onSubmit={handleIssueCreditDebitNote} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-[var(--color-mute)] mb-1">Adjustment Type</label>
-                <select
-                  value={creditNoteForm.note_type}
-                  onChange={(e) => setCreditNoteForm({ ...creditNoteForm, note_type: e.target.value as any })}
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]"
-                >
-                  <option value="credit_note">Credit Note (Reduce Invoice Amount)</option>
-                  <option value="debit_note">Debit Note (Increase Invoice Amount)</option>
-                </select>
-              </div>
+              <Select
+                label="Adjustment Type"
+                value={creditNoteForm.note_type}
+                onChange={(e) => setCreditNoteForm({ ...creditNoteForm, note_type: e.target.value as any })}
+                options={[
+                  { value: "credit_note", label: "Credit Note (Reduce Invoice Amount)" },
+                  { value: "debit_note", label: "Debit Note (Increase Invoice Amount)" },
+                ]}
+              />
               <div>
                 <label className="block text-xs font-semibold text-[var(--color-mute)] mb-1">Adjustment Amount (₹) *</label>
                 <input
@@ -1334,20 +1325,15 @@ export function FinanceClient({
               </button>
             </div>
             <form onSubmit={handleCreateExpense} className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-[var(--color-mute)] mb-1">Expense Category *</label>
-                <select
-                  value={expenseForm.category}
-                  onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}
-                  className="w-full px-3 py-2 text-sm rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]"
-                >
-                  {expenseCategories.map((c) => (
-                    <option key={c.id} value={c.name}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Select
+                label="Expense Category *"
+                value={expenseForm.category}
+                onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}
+                options={expenseCategories.map((c) => ({
+                  value: c.name,
+                  label: c.name,
+                }))}
+              />
               <div>
                 <label className="block text-xs font-semibold text-[var(--color-mute)] mb-1">Expense Amount (₹) *</label>
                 <input

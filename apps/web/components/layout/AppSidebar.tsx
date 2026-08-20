@@ -60,10 +60,30 @@ export const mainNavItems: NavItem[] = [
     ],
   },
   {
+    href: "/tasks",
+    label: "To-Do / Tasks",
+    icon: AnimatedClipboardList,
+    roles: [
+      "super_admin", "admin", "branch_manager", "service_manager", "service_engineer", "engineer",
+      "supervisor", "store_manager", "operator", "mechanic",
+      "hr_manager", "finance_manager", "sales_executive", "rental_manager"
+    ],
+  },
+  {
     href: "/rentals",
     label: "Rentals",
     icon: AnimatedBuilding2,
     roles: ["super_admin", "admin", "branch_manager", "rental_manager", "sales_executive", "finance_manager"],
+    subItems: [
+      { label: "Rental Dashboard", tab: "dashboard", icon: AnimatedDashboard },
+      { label: "Rental Requests", tab: "requests", icon: AnimatedClipboardList },
+      { label: "Customer Directory", tab: "customers", icon: AnimatedUsers },
+      { label: "Agreements", tab: "agreements", icon: AnimatedFileText },
+      { label: "Dispatch Challans", tab: "challans", icon: AnimatedPackage },
+      { label: "Return Inspections", tab: "returns", icon: AnimatedRefresh },
+      { label: "Damage Assessment", tab: "damage", icon: AnimatedAlertTriangle },
+      { label: "Billing Ledger", tab: "billing", icon: AnimatedBarChart3 },
+    ],
   },
   {
     href: "/crm",
@@ -91,6 +111,11 @@ export const mainNavItems: NavItem[] = [
     roles: [
       "super_admin", "admin", "branch_manager", "service_manager", "service_engineer", "engineer",
       "supervisor", "operator", "mechanic", "store_manager", "sales_executive", "rental_manager", "finance_manager"
+    ],
+    subItems: [
+      { label: "Machine Directory", tab: "inventory", icon: AnimatedWrench },
+      { label: "Service Logs", tab: "services", icon: AnimatedClipboardList },
+      { label: "Breakdown Complaints", tab: "complaints", icon: AnimatedAlertTriangle },
     ],
   },
   {

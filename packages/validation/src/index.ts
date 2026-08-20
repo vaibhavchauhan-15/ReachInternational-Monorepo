@@ -15,3 +15,5 @@ export * from "./rental";
 export * from "./sales";
 export * from "./finance";
 export * from "./hr";
+export * from "./task";
+

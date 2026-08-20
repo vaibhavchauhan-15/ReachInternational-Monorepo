@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/animated-icons";
 import { motion, AnimatePresence } from "framer-motion";
 import type { User, DocumentRecord } from "@/lib/types/database";
-import { TooltipWrapper } from "@/components/ui";
+import { Select, TooltipWrapper } from "@/components/ui";
 
 interface DocumentsClientProps {
   user: User;
@@ -215,17 +215,17 @@ export function DocumentsClient({ user }: DocumentsClientProps) {
           </div>
 
           {/* Status Filter */}
-          <select
+          <Select
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-semibold text-[var(--color-ink)] focus:outline-none focus:ring-2 focus:ring-sky-500/20"
-          >
-            <option value="all">All Document Statuses</option>
-            <option value="valid">Valid (🟢)</option>
-            <option value="expiring_soon">Expiring Soon (🟡)</option>
-            <option value="expired">Expired (🔴)</option>
-            <option value="pending_approval">Pending Approval (🟠)</option>
-          </select>
+            options={[
+              { value: "all", label: "All Document Statuses" },
+              { value: "valid", label: "Valid (🟢)" },
+              { value: "expiring_soon", label: "Expiring Soon (🟡)" },
+              { value: "expired", label: "Expired (🔴)" },
+              { value: "pending_approval", label: "Pending Approval (🟠)" },
+            ]}
+          />
         </div>
 
         {/* Entity Tabs */}

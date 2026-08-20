@@ -45,6 +45,8 @@ import {
   uploadEmployeeDocumentAction
 } from "@/app/actions/hr";
 
+import { Select } from "@/components/ui";
+
 export interface HRClientProps {
   employees: Employee[];
   branches: Branch[];
@@ -631,44 +633,40 @@ export function HRClient({
               className="px-3.5 py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs font-semibold text-[var(--color-ink)] focus:outline-none"
             />
 
-            <select
+            <Select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs font-bold"
-            >
-              <option value="all">All Employee Statuses</option>
-              <option value="pending_onboarding">Pending Onboarding</option>
-              <option value="active">Active Duty</option>
-              <option value="notice_period">Notice Period</option>
-              <option value="on_leave">On Leave</option>
-              <option value="resigned">Resigned</option>
-              <option value="terminated">Terminated</option>
-              <option value="retired">Retired</option>
-              <option value="inactive">Inactive</option>
-              <option value="archived">Archived</option>
-            </select>
+              options={[
+                { value: "all", label: "All Employee Statuses" },
+                { value: "pending_onboarding", label: "Pending Onboarding" },
+                { value: "active", label: "Active Duty" },
+                { value: "notice_period", label: "Notice Period" },
+                { value: "on_leave", label: "On Leave" },
+                { value: "resigned", label: "Resigned" },
+                { value: "terminated", label: "Terminated" },
+                { value: "retired", label: "Retired" },
+                { value: "inactive", label: "Inactive" },
+                { value: "archived", label: "Archived" },
+              ]}
+            />
 
-            <select
+            <Select
               value={departmentFilter}
               onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="px-3 py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs font-bold"
-            >
-              <option value="all">All Departments</option>
-              {departments.map((d) => (
-                <option key={d.id} value={d.name}>{d.name}</option>
-              ))}
-            </select>
+              options={[
+                { value: "all", label: "All Departments" },
+                ...departments.map((d) => ({ value: d.name, label: d.name })),
+              ]}
+            />
 
-            <select
+            <Select
               value={branchFilter}
               onChange={(e) => setBranchFilter(e.target.value)}
-              className="px-3 py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs font-bold"
-            >
-              <option value="all">All Branches</option>
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>{b.name} ({b.city})</option>
-              ))}
-            </select>
+              options={[
+                { value: "all", label: "All Branches" },
+                ...branches.map((b) => ({ value: b.id, label: `${b.name} (${b.city})` })),
+              ]}
+            />
           </div>
 
           {/* Directory Table */}
@@ -1128,46 +1126,30 @@ export function HRClient({
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold mb-1">Department</label>
-                  <select
-                    value={departmentName}
-                    onChange={(e) => setDepartmentName(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
-                  >
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.name}>{d.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold mb-1">Branch Location</label>
-                  <select
-                    value={branchId}
-                    onChange={(e) => setBranchId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
-                  >
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>{b.name} ({b.city})</option>
-                    ))}
-                  </select>
-                </div>
+                <Select
+                  label="Department"
+                  value={departmentName}
+                  onChange={(e) => setDepartmentName(e.target.value)}
+                  options={departments.map((d) => ({ value: d.name, label: d.name }))}
+                />
+                <Select
+                  label="Branch Location"
+                  value={branchId}
+                  onChange={(e) => setBranchId(e.target.value)}
+                  options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.city})` }))}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold mb-1">Reporting Manager</label>
-                  <select
-                    value={reportingManagerId}
-                    onChange={(e) => setReportingManagerId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
-                  >
-                    <option value="">None (Top Level)</option>
-                    {employees.map((e) => (
-                      <option key={e.id} value={e.id}>{e.full_name} ({e.designation})</option>
-                    ))}
-                  </select>
-                </div>
+                <Select
+                  label="Reporting Manager"
+                  value={reportingManagerId}
+                  onChange={(e) => setReportingManagerId(e.target.value)}
+                  options={[
+                    { value: "", label: "None (Top Level)" },
+                    ...employees.map((e) => ({ value: e.id, label: `${e.full_name} (${e.designation})` })),
+                  ]}
+                />
                 <div>
                   <label className="block text-xs font-bold mb-1">Joining Date</label>
                   <input
@@ -1203,17 +1185,15 @@ export function HRClient({
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold mb-1">Employment Status</label>
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as EmployeeStatus)}
-                    className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
-                  >
-                    <option value="pending_onboarding">Pending Onboarding</option>
-                    <option value="active">Active Duty</option>
-                  </select>
-                </div>
+                <Select
+                  label="Employment Status"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as EmployeeStatus)}
+                  options={[
+                    { value: "pending_onboarding", label: "Pending Onboarding" },
+                    { value: "active", label: "Active Duty" },
+                  ]}
+                />
                 <div>
                   <label className="block text-xs font-bold mb-1">Monthly Salary (₹)</label>
                   <input
@@ -1280,30 +1260,18 @@ export function HRClient({
               </div>
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold mb-1">Department</label>
-                  <select
-                    value={departmentName}
-                    onChange={(e) => setDepartmentName(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
-                  >
-                    {departments.map((d) => (
-                      <option key={d.id} value={d.name}>{d.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold mb-1">Branch Location</label>
-                  <select
-                    value={branchId}
-                    onChange={(e) => setBranchId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
-                  >
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>{b.name} ({b.city})</option>
-                    ))}
-                  </select>
-                </div>
+                <Select
+                  label="Department"
+                  value={departmentName}
+                  onChange={(e) => setDepartmentName(e.target.value)}
+                  options={departments.map((d) => ({ value: d.name, label: d.name }))}
+                />
+                <Select
+                  label="Branch Location"
+                  value={branchId}
+                  onChange={(e) => setBranchId(e.target.value)}
+                  options={branches.map((b) => ({ value: b.id, label: `${b.name} (${b.city})` }))}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -1360,24 +1328,22 @@ export function HRClient({
               Update status for <strong className="text-[var(--color-ink)]">{selectedEmployee.full_name}</strong>. Employees are never permanently deleted.
             </p>
             <form onSubmit={handleChangeStatus} className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold mb-1">Target Status</label>
-                <select
-                  value={newStatus}
-                  onChange={(e) => setNewStatus(e.target.value as EmployeeStatus)}
-                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
-                >
-                  <option value="active">Active Duty</option>
-                  <option value="pending_onboarding">Pending Onboarding</option>
-                  <option value="notice_period">Notice Period</option>
-                  <option value="on_leave">On Leave</option>
-                  <option value="resigned">Resigned</option>
-                  <option value="terminated">Terminated</option>
-                  <option value="retired">Retired</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="archived">Archived</option>
-                </select>
-              </div>
+              <Select
+                label="Target Status"
+                value={newStatus}
+                onChange={(e) => setNewStatus(e.target.value as EmployeeStatus)}
+                options={[
+                  { value: "active", label: "Active Duty" },
+                  { value: "pending_onboarding", label: "Pending Onboarding" },
+                  { value: "notice_period", label: "Notice Period" },
+                  { value: "on_leave", label: "On Leave" },
+                  { value: "resigned", label: "Resigned" },
+                  { value: "terminated", label: "Terminated" },
+                  { value: "retired", label: "Retired" },
+                  { value: "inactive", label: "Inactive" },
+                  { value: "archived", label: "Archived" },
+                ]}
+              />
 
               <div>
                 <label className="block text-xs font-bold mb-1">Status Notes / Reason</label>
@@ -1595,18 +1561,12 @@ export function HRClient({
                   />
                 </div>
               </div>
-              <div>
-                <label className="block text-xs font-bold mb-1">Department</label>
-                <select
-                  value={desigDeptCode}
-                  onChange={(e) => setDesigDeptCode(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
-                >
-                  {departments.map((d) => (
-                    <option key={d.id} value={d.code}>{d.name} ({d.code})</option>
-                  ))}
-                </select>
-              </div>
+              <Select
+                label="Department"
+                value={desigDeptCode}
+                onChange={(e) => setDesigDeptCode(e.target.value)}
+                options={departments.map((d) => ({ value: d.code, label: `${d.name} (${d.code})` }))}
+              />
               <div>
                 <label className="block text-xs font-bold mb-1">Description</label>
                 <textarea
@@ -1648,37 +1608,33 @@ export function HRClient({
               Submit account creation or role request for <strong className="text-[var(--color-ink)]">{selectedEmployee.full_name}</strong> to Admin.
             </p>
             <form onSubmit={handleRequestUserAccount} className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold mb-1">Request Type</label>
-                <select
-                  value={reqType}
-                  onChange={(e) => setReqType(e.target.value as any)}
-                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
-                >
-                  <option value="create_account">Create New System Account</option>
-                  <option value="deactivate_account">Deactivate System Account</option>
-                  <option value="role_change">Modify Assigned System Role</option>
-                </select>
-              </div>
+              <Select
+                label="Request Type"
+                value={reqType}
+                onChange={(e) => setReqType(e.target.value as any)}
+                options={[
+                  { value: "create_account", label: "Create New System Account" },
+                  { value: "deactivate_account", label: "Deactivate System Account" },
+                  { value: "role_change", label: "Modify Assigned System Role" },
+                ]}
+              />
 
-              <div>
-                <label className="block text-xs font-bold mb-1">Requested System Role</label>
-                <select
-                  value={reqRole}
-                  onChange={(e) => setReqRole(e.target.value as UserRole)}
-                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
-                >
-                  <option value="service_engineer">Service Engineer</option>
-                  <option value="mechanic">Mechanic</option>
-                  <option value="operator">Operator</option>
-                  <option value="supervisor">Supervisor</option>
-                  <option value="store_manager">Store Manager</option>
-                  <option value="branch_manager">Branch Manager</option>
-                  <option value="sales_executive">Sales Executive</option>
-                  <option value="finance_manager">Finance Manager</option>
-                  <option value="hr_manager">HR Manager</option>
-                </select>
-              </div>
+              <Select
+                label="Requested System Role"
+                value={reqRole}
+                onChange={(e) => setReqRole(e.target.value as UserRole)}
+                options={[
+                  { value: "service_engineer", label: "Service Engineer" },
+                  { value: "mechanic", label: "Mechanic" },
+                  { value: "operator", label: "Operator" },
+                  { value: "supervisor", label: "Supervisor" },
+                  { value: "store_manager", label: "Store Manager" },
+                  { value: "branch_manager", label: "Branch Manager" },
+                  { value: "sales_executive", label: "Sales Executive" },
+                  { value: "finance_manager", label: "Finance Manager" },
+                  { value: "hr_manager", label: "HR Manager" },
+                ]}
+              />
 
               <div>
                 <label className="block text-xs font-bold mb-1">Admin Notes / Justification</label>
@@ -1723,24 +1679,22 @@ export function HRClient({
               Upload metadata for <strong className="text-[var(--color-ink)]">{selectedEmployee.full_name}</strong>.
             </p>
             <form onSubmit={handleUploadDocument} className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold mb-1">Document Category</label>
-                <select
-                  value={docType}
-                  onChange={(e) => setDocType(e.target.value as any)}
-                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
-                >
-                  <option value="joining">Joining Document</option>
-                  <option value="identity">Identity (Aadhaar/PAN/Passport)</option>
-                  <option value="qualification">Qualification Certificate</option>
-                  <option value="employment">Employment Agreement</option>
-                  <option value="offer_letter">Offer Letter</option>
-                  <option value="appointment_letter">Appointment Letter</option>
-                  <option value="resignation">Resignation Letter</option>
-                  <option value="experience">Experience Certificate</option>
-                  <option value="other">Other Document</option>
-                </select>
-              </div>
+              <Select
+                label="Document Category"
+                value={docType}
+                onChange={(e) => setDocType(e.target.value as any)}
+                options={[
+                  { value: "joining", label: "Joining Document" },
+                  { value: "identity", label: "Identity (Aadhaar/PAN/Passport)" },
+                  { value: "qualification", label: "Qualification Certificate" },
+                  { value: "employment", label: "Employment Agreement" },
+                  { value: "offer_letter", label: "Offer Letter" },
+                  { value: "appointment_letter", label: "Appointment Letter" },
+                  { value: "resignation", label: "Resignation Letter" },
+                  { value: "experience", label: "Experience Certificate" },
+                  { value: "other", label: "Other Document" },
+                ]}
+              />
 
               <div>
                 <label className="block text-xs font-bold mb-1">Document Name *</label>

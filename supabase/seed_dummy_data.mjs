@@ -990,6 +990,49 @@ async function seed() {
     }
   }
 
+  // ====================================================
+  // STEP 14: TO-DO & TASK MANAGEMENT RECORDS
+  // ====================================================
+  console.log('\n14️⃣ Seeding To-Do Tasks & Assignments...');
+  const { data: adminUsers } = await admin.from('users').select('id, email, role').limit(10);
+  if (adminUsers && adminUsers.length > 0) {
+    const managerUser = adminUsers.find((u) => u.role === 'super_admin' || u.role === 'admin' || u.role === 'service_manager') || adminUsers[0];
+    const engineerUser = adminUsers.find((u) => u.role === 'service_engineer' || u.role === 'engineer') || adminUsers[1] || adminUsers[0];
+
+    const { data: seedTask } = await admin.from('tasks').upsert({
+      task_no: 'TSK-00001',
+      title: 'Inspect Hydraulic Cylinder Leakage on Toyota Forklift',
+      description: 'Perform complete inspection of main lift cylinder seals and replace O-rings if needed.',
+      due_date: new Date(Date.now() + 2 * 86400000).toISOString().split('T')[0],
+      due_time: '14:00',
+      priority: 'high',
+      status: 'in_progress',
+      created_by: managerUser.id,
+      reminder_offset: '30m',
+    }).select('id').single();
+
+    if (seedTask) {
+      await admin.from('task_assignees').upsert({
+        task_id: seedTask.id,
+        user_id: engineerUser.id,
+        assigned_by: managerUser.id,
+      });
+
+      await admin.from('task_comments').upsert({
+        task_id: seedTask.id,
+        user_id: engineerUser.id,
+        comment: 'Spare seal kit requisitioned from main store. Will begin replacement tomorrow morning.',
+      });
+
+      await admin.from('task_activity_logs').upsert({
+        task_id: seedTask.id,
+        actor_id: managerUser.id,
+        action: 'created',
+        details: { title: 'Inspect Hydraulic Cylinder Leakage on Toyota Forklift', priority: 'high' },
+      });
+    }
+  }
+
   console.log('\n✅ DUMMY DATA SEEDING COMPLETED SUCCESSFULLY!');
 }
 

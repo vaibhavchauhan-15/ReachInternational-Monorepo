@@ -1,20 +1,25 @@
 # Current Task Context
 
-## Completed Task (2026-08-19) — Monorepo GitIgnore Clean-up & Staging Protocol
+## Completed Task (2026-08-19) — Proper Tooltip Wrappers for Unlabeled Project Icons
 
-**Goal**: Fix excessive git untracked files caused by missing recursive `node_modules/`, `.next/`, `.expo/`, `.turbo/`, and `.env` ignore rules in `.gitignore`. Prepare the repository staging state so only required source files are tracked, while strictly avoiding publishing to GitHub per user instruction.
+**Goal**: Address user feedback on `/machines?tab=complaints`: "add proper tool tip for all the icons in this project which have not any label".
 
-### Implementation Details
-1. **Root `.gitignore` Refactoring (`.gitignore`)**:
-   - Replaced root-only `/node_modules` with recursive `node_modules/`.
-   - Added monorepo build artifact ignores: `.next/`, `.expo/`, `.turbo/`, `dist/`, `out/`, `build/`.
-   - Added Supabase CLI local temporary directory ignores: `supabase/.temp/`, `.temp/`.
-   - Added environment secret protection: `.env`, `.env.*` (allowing `!.env.example`).
-2. **Git Index Staging (`git add .`)**:
-   - Cleared locked `.git/index.lock`.
-   - Removed tracked/staged `.temp/` files.
-   - Staged all clean, required project source files for committing.
+### Implementation Summary
+1. **Modal Dialog Close Button (`apps/web/components/animate-ui/components/radix/dialog.tsx`)**:
+   - Wrapped `DialogPrimitive.Close` button with `<TooltipWrapper content="Close modal (Esc)" side="left">`, automatically providing interactive tooltips on the close button across all modals in the application.
+
+2. **Complaints Table Action Tooltips (`apps/web/components/complaints/ComplaintsClient.tsx`)**:
+   - Wrapped `View FSR Report`, `Resolve (Fill FSR)` / `View Details`, `Edit Complaint`, and `Delete Complaint` icon buttons in `<TooltipWrapper>` popovers.
+
+3. **Complaints & FSR Detail Modal Actions (`ComplaintDetailModal.tsx`, `FieldServiceReportModal.tsx`)**:
+   - Wrapped `Delete Complaint`, `Edit Complaint`, `Edit Report`, and table row removal (`Trash2`) buttons with `<TooltipWrapper>` popovers.
+
+4. **Machine Services Table Actions (`apps/web/components/services/ServicesClient.tsx`)**:
+   - Wrapped `Update Service Log` and `Delete Service Log` icon buttons in `<TooltipWrapper>` popovers.
+
+5. **Enterprise Table Toolbar Controls (`apps/web/components/ui/EnterpriseTable.tsx`)**:
+   - Added tooltips to table density buttons (`Compact`, `Default`, `Comfortable`) and column selector toggle (`Columns`).
 
 ### Verification Results
-- Executed `git status`: **Verified 0 `node_modules`, `.next`, `.expo`, `.turbo`, or secret `.env` files tracked**.
-- Confirmed zero remote push performed (`dont publish this repo` instruction enforced).
+- TypeScript Verification: Executed `pnpm --filter @servicecentric/web typecheck` (**Passed cleanly with 0 compilation errors**).
+

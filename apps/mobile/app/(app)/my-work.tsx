@@ -7,7 +7,7 @@
 
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
-import { Card, Badge, Button, useTheme } from '../../components/ui';
+import { Card, Badge, Button, useTheme, MobileHeader } from '../../components/ui';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { ComplaintStatusModal } from '../../components/work/ComplaintStatusModal';
 import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
@@ -47,15 +47,16 @@ export default function MyWorkScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      {/* Top Fixed Header */}
-      <View style={styles.header}>
-        <Text style={[styles.screenTitle, { color: theme.colors.ink }]}>My Daily Field Work</Text>
-        <Text style={[styles.screenSubtitle, { color: theme.colors.mute }]}>
-          Central active field queue & technician assignments
-        </Text>
+      {/* Top Mobile Header */}
+      <MobileHeader
+        eyebrow="FIELD QUEUE"
+        title="My Daily Field Work"
+        subtitle="Central active field queue & technician assignments"
+      />
 
-        {/* Filter Segment Pills */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.segmentScroll}>
+      {/* Filter Segment Pills Bar */}
+      <View style={[styles.filterBar, { backgroundColor: theme.colors.canvas, borderBottomColor: theme.colors.hairline }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.segmentScroll}>
           {[
             { key: 'all', label: 'All Tasks (5)' },
             { key: 'complaints', label: 'Complaints (2)' },
@@ -68,6 +69,7 @@ export default function MyWorkScreen() {
               <TouchableOpacity
                 key={seg.key}
                 onPress={() => setActiveSegment(seg.key as SegmentFilter)}
+                activeOpacity={0.7}
                 style={[
                   styles.segmentPill,
                   {
@@ -79,7 +81,7 @@ export default function MyWorkScreen() {
                 <Text
                   style={[
                     styles.segmentText,
-                    { color: isActive ? '#ffffff' : theme.colors.body },
+                    { color: isActive ? theme.colors.onPrimary : theme.colors.body },
                   ]}
                 >
                   {seg.label}
@@ -247,29 +249,21 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    paddingHorizontal: spacingNumeric.md,
-    paddingTop: 50,
-    paddingBottom: spacingNumeric.xs,
-  },
-  screenTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-  },
-  screenSubtitle: {
-    fontSize: 13,
-    marginBottom: spacingNumeric.sm,
+  filterBar: {
+    paddingVertical: spacingNumeric.xs,
+    borderBottomWidth: 1,
   },
   segmentScroll: {
+    paddingHorizontal: spacingNumeric.md,
     flexDirection: 'row',
-    marginBottom: spacingNumeric.xs,
+    gap: spacingNumeric.xs,
   },
   segmentPill: {
     paddingVertical: 6,
     paddingHorizontal: spacingNumeric.sm,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
-    marginRight: spacingNumeric.xs,
+    marginRight: spacingNumeric.xxs,
   },
   segmentText: {
     fontSize: 12,

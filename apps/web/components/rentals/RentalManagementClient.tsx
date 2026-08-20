@@ -18,6 +18,7 @@ import { MetricCard } from "@/components/ui/MetricCard";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
 
 import {
   createRentalCustomerAction,
@@ -433,31 +434,29 @@ export function RentalManagementClient({
           className="space-y-4 text-xs"
         >
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium mb-1">Customer</label>
-              <select name="customer_id" required className="w-full p-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]">
-                <option value="">Select Customer</option>
-                {initialCustomers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.company_name} ({c.contact_person})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Select
+              label="Customer"
+              name="customer_id"
+              required
+              placeholder="Select Customer"
+              options={initialCustomers.map((c) => ({
+                value: c.id,
+                label: `${c.company_name} (${c.contact_person})`,
+              }))}
+            />
 
-            <div>
-              <label className="block text-xs font-medium mb-1">Machine</label>
-              <select name="machine_id" required className="w-full p-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]">
-                <option value="">Select Machine</option>
-                {machines
-                  .filter((m) => m.status === "active")
-                  .map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.machine_code} - {m.machine_name} ({m.model})
-                    </option>
-                  ))}
-              </select>
-            </div>
+            <Select
+              label="Machine"
+              name="machine_id"
+              required
+              placeholder="Select Machine"
+              options={machines
+                .filter((m) => m.status === "active")
+                .map((m) => ({
+                  value: m.id,
+                  label: `${m.machine_code} - ${m.machine_name} (${m.model})`,
+                }))}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -467,14 +466,16 @@ export function RentalManagementClient({
 
           <div className="grid grid-cols-3 gap-3">
             <Input label="Rental Rate (₹)" name="rental_rate" type="number" required placeholder="50000" />
-            <div>
-              <label className="block text-xs font-medium mb-1">Rate Unit</label>
-              <select name="rate_unit" className="w-full p-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]">
-                <option value="monthly">Monthly</option>
-                <option value="weekly">Weekly</option>
-                <option value="daily">Daily</option>
-              </select>
-            </div>
+            <Select
+              label="Rate Unit"
+              name="rate_unit"
+              defaultValue="monthly"
+              options={[
+                { value: "monthly", label: "Monthly" },
+                { value: "weekly", label: "Weekly" },
+                { value: "daily", label: "Daily" },
+              ]}
+            />
             <Input label="Security Deposit (₹)" name="security_deposit" type="number" placeholder="25000" />
           </div>
 
@@ -561,13 +562,15 @@ export function RentalManagementClient({
             <Input label="Fuel Level (%)" name="end_fuel_level" type="number" defaultValue={100} />
           </div>
 
-          <div>
-            <label className="block text-xs font-medium mb-1">Has Machine Damage?</label>
-            <select name="has_damage" className="w-full p-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]">
-              <option value="false">No — Machine OK</option>
-              <option value="true">Yes — Create Damage Report</option>
-            </select>
-          </div>
+          <Select
+            label="Has Machine Damage?"
+            name="has_damage"
+            defaultValue="false"
+            options={[
+              { value: "false", label: "No — Machine OK" },
+              { value: "true", label: "Yes — Create Damage Report" },
+            ]}
+          />
 
           <Input label="Damage Description (If any)" name="damage_description" placeholder="Hydraulic hose leakage / tyre puncture" />
           <Input label="Estimated Repair Cost (₹)" name="estimated_repair_cost" type="number" placeholder="0" />

@@ -59,7 +59,7 @@ export function MachineCategoryModal({
 
   return (
     <Modal open={open} onClose={onClose} title="Manage Machine Categories" size="lg">
-      <div className="flex flex-col gap-5 max-h-[75vh] overflow-y-auto pr-1">
+      <div className="flex flex-col gap-5">
         {/* Create New Category Form */}
         <form onSubmit={handleAddCategory} className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 flex flex-col gap-3">
           <div className="flex items-center gap-2 pb-2 border-b border-[var(--color-hairline)]">

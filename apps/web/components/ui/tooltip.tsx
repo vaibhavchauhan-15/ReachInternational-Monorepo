@@ -53,10 +53,10 @@ export function TooltipWrapper({
   delayDuration?: number;
   disabled?: boolean;
 }) {
-  if (disabled || !content) return <>{children}</>;
+  if (!content) return <>{children}</>;
 
   return (
-    <Tooltip delayDuration={delayDuration}>
+    <Tooltip delayDuration={delayDuration} open={disabled ? false : undefined}>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       <TooltipContent side={side} align={align}>
         {content}
@@ -140,10 +140,10 @@ export function SidebarTooltip({
   enabled?: boolean;
   delayMs?: number;
 }) {
-  if (!enabled || !content) return <>{children}</>;
+  if (!content) return <>{children}</>;
 
   return (
-    <Tooltip delayDuration={delayMs}>
+    <Tooltip delayDuration={delayMs} open={enabled ? undefined : false}>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       <TooltipContent side="right" sideOffset={12} className="font-semibold text-xs py-1.5 px-3">
         {content}

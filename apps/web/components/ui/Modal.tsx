@@ -15,8 +15,9 @@ import { cn } from "@/lib/utils";
 export interface ModalProps {
   open: boolean;
   onClose: () => void;
-  title?: string;
-  description?: string;
+  title?: ReactNode;
+  description?: ReactNode;
+  headerActions?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
   size?: "sm" | "md" | "lg" | "xl";
@@ -36,6 +37,7 @@ export function Modal({
   onClose,
   title,
   description,
+  headerActions,
   children,
   footer,
   size = "md",
@@ -49,12 +51,19 @@ export function Modal({
         showCloseButton={true}
         className={cn(sizeClasses[size], className)}
       >
-        {(title || description) && (
+        {(title || description || headerActions) && (
           <DialogHeader className="pr-12">
-            {title && <DialogTitle>{title}</DialogTitle>}
-            {description && (
-              <DialogDescription>{description}</DialogDescription>
-            )}
+            <div className="flex items-center justify-between gap-4 w-full">
+              <div className="flex flex-col space-y-1.5 min-w-0 flex-1">
+                {title && <DialogTitle>{title}</DialogTitle>}
+                {description && (
+                  <DialogDescription>{description}</DialogDescription>
+                )}
+              </div>
+              {headerActions && (
+                <div className="flex items-center gap-2 shrink-0">{headerActions}</div>
+              )}
+            </div>
           </DialogHeader>
         )}
         <div className="flex-1 overflow-y-auto p-6">{children}</div>

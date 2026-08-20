@@ -11,7 +11,6 @@ import {
   AnimatedCalendarClock,
   AnimatedUserCheck,
 } from "@/components/ui/animated-icons";
-import { AlertTriangle, Wrench } from "lucide-react";
 
 
 interface MachineComplaintModalProps {
@@ -105,24 +104,28 @@ export function MachineComplaintModal({
       open={open}
       onClose={onClose}
       title={isEdit ? `Edit Machine Complaint (${complaint.complaint_no})` : "Raise Machine Complaint"}
+      headerActions={
+        <div className="flex items-center gap-1.5">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={isPending} className="h-7 px-2.5 text-xs font-medium">
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="machine-complaint-form"
+            variant="primary"
+            loading={isPending}
+            className="h-7 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+          >
+            {isEdit ? "Update Complaint" : "Raise Machine Complaint"}
+          </Button>
+        </div>
+      }
       size="xl"
     >
-      <form onSubmit={handleSubmit} className="flex flex-col gap-5 max-h-[80vh] overflow-y-auto pr-1">
-        {/* Section Header */}
-        <div className="rounded-xl border border-amber-300/80 bg-amber-500/10 p-3.5 flex items-center gap-3">
-          <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
-          <div className="text-xs">
-            <span className="font-bold text-amber-900 dark:text-amber-200 block">Malfunction Complaint Entry</span>
-            <span className="text-amber-800/90 dark:text-amber-300/90">
-              Supervisors can report machine breakdowns. Assigned service engineers will receive immediate notifications.
-            </span>
-          </div>
-        </div>
-
+      <form id="machine-complaint-form" onSubmit={handleSubmit} className="flex flex-col gap-5">
         {/* 2-Column Machine & Site Selection Form */}
         <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 flex flex-col gap-3.5">
           <div className="flex items-center gap-2 pb-2 border-b border-[var(--color-hairline)]">
-            <Wrench className="h-4 w-4 text-[var(--color-link)]" />
             <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink)]">
               Machine & Breakdown Details
             </h4>
@@ -262,16 +265,6 @@ export function MachineComplaintModal({
             rows={2}
             disabled={isPending}
           />
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center justify-end gap-3 pt-3 border-t border-[var(--color-hairline)] sticky bottom-0 bg-[var(--color-canvas-elevated)] py-2">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={isPending}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="primary" loading={isPending} className="px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold">
-            {isEdit ? "Update Complaint" : "Raise Machine Complaint"}
-          </Button>
         </div>
       </form>
     </Modal>

@@ -1,14 +1,9 @@
-/**
- * ServiceCentric Mobile — Push Notifications Hub & History Feed (Phase 24)
- * Notification history, mark-as-read, deep-link navigation, and notification preferences.
- */
-
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Switch } from 'react-native';
-import { Card, Badge, Button, useTheme } from '../../components/ui';
+import { Card, Badge, Button, useTheme, MobileHeader } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
 import { formatDate } from '@servicecentric/utils';
-import { useRouter } from 'expo-router';
+import { useRouter, useGlobalSearchParams } from 'expo-router';
 import { Bell, CheckCheck, ShieldAlert, Wrench, Settings, ArrowRight } from 'lucide-react-native';
 
 export type NotifFilter = 'all' | 'unread' | 'breakdowns' | 'system';
@@ -65,9 +60,17 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
 export default function NotificationsScreen() {
   const { theme } = useTheme();
   const router = useRouter();
+  const searchParams = useGlobalSearchParams();
 
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
-  const [activeFilter, setActiveFilter] = useState<NotifFilter>('all');
+  
+  const tabParam = (searchParams?.tab as NotifFilter) || 'all';
+  const activeFilter = ['all', 'unread', 'breakdowns', 'system'].includes(tabParam) ? tabParam : 'all';
+
+  const setActiveFilter = (filter: NotifFilter) => {
+    router.setParams({ tab: filter });
+  };
+
   const [refreshing, setRefreshing] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
 
@@ -86,9 +89,7 @@ export default function NotificationsScreen() {
   };
 
   const handleTapNotification = (item: NotificationItem) => {
-    // Mark item as read
     setNotifications((prev) => prev.map((n) => (n.id === item.id ? { ...n, read: true } : n)));
-    // Deep link tap navigation
     if (item.targetRoute) {
       router.push(item.targetRoute as any);
     }
@@ -105,58 +106,52 @@ export default function NotificationsScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={[styles.screenTitle, { color: theme.colors.ink }]}>Notifications ({unreadCount} unread)</Text>
-            <Text style={[styles.screenSubtitle, { color: theme.colors.mute }]}>
-              Realtime breakdown alerts & system updates
-            </Text>
-          </View>
+      {/* Top Mobile Header */}
+      <MobileHeader
+        eyebrow="ALERT SYSTEM"
+        title={`Notifications (${unreadCount})`}
+        subtitle="Realtime breakdown alerts & system dispatch notifications"
+        rightAction={
+          <TouchableOpacity onPress={() => setShowPreferences(!showPreferences)} style={styles.iconBtn}>
+            <Settings size={18} color={theme.colors.mute} />
+          </TouchableOpacity>
+        }
+      />
 
-          <View style={styles.headerActions}>
-            <TouchableOpacity onPress={() => setShowPreferences(!showPreferences)} style={styles.iconBtn}>
-              <Settings size={20} color={theme.colors.mute} />
-            </TouchableOpacity>
-            {unreadCount > 0 && (
-              <Button label="Mark All Read" onPress={markAllRead} size="sm" variant="ghost" />
-            )}
+      {/* Preferences Drawer */}
+      {showPreferences && (
+        <View style={[styles.prefBox, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+          <Text style={[styles.prefTitle, { color: theme.colors.ink }]}>Notification Preferences</Text>
+          <View style={styles.prefRow}>
+            <Text style={[styles.prefLabel, { color: theme.colors.body }]}>Breakdown Alerts</Text>
+            <Switch value={breakdownAlerts} onValueChange={setBreakdownAlerts} trackColor={{ false: theme.colors.hairline, true: theme.colors.link }} />
+          </View>
+          <View style={styles.prefRow}>
+            <Text style={[styles.prefLabel, { color: theme.colors.body }]}>FSR Approval Updates</Text>
+            <Switch value={fsrAlerts} onValueChange={setFsrAlerts} trackColor={{ false: theme.colors.hairline, true: theme.colors.link }} />
+          </View>
+          <View style={styles.prefRow}>
+            <Text style={[styles.prefLabel, { color: theme.colors.body }]}>Daily Meter Reminders</Text>
+            <Switch value={meterReminders} onValueChange={setMeterReminders} trackColor={{ false: theme.colors.hairline, true: theme.colors.link }} />
           </View>
         </View>
+      )}
 
-        {/* Preferences Drawer */}
-        {showPreferences && (
-          <View style={[styles.prefBox, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <Text style={[styles.prefTitle, { color: theme.colors.ink }]}>Notification Preferences</Text>
-            <View style={styles.prefRow}>
-              <Text style={[styles.prefLabel, { color: theme.colors.body }]}>Breakdown Alerts</Text>
-              <Switch value={breakdownAlerts} onValueChange={setBreakdownAlerts} trackColor={{ false: theme.colors.hairline, true: theme.colors.link }} />
-            </View>
-            <View style={styles.prefRow}>
-              <Text style={[styles.prefLabel, { color: theme.colors.body }]}>FSR Approval Updates</Text>
-              <Switch value={fsrAlerts} onValueChange={setFsrAlerts} trackColor={{ false: theme.colors.hairline, true: theme.colors.link }} />
-            </View>
-            <View style={styles.prefRow}>
-              <Text style={[styles.prefLabel, { color: theme.colors.body }]}>Daily Meter Reminders</Text>
-              <Switch value={meterReminders} onValueChange={setMeterReminders} trackColor={{ false: theme.colors.hairline, true: theme.colors.link }} />
-            </View>
-          </View>
-        )}
-
-        {/* Filter Pills */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+      {/* Filter Pills Bar */}
+      <View style={[styles.filterBar, { backgroundColor: theme.colors.canvas, borderBottomColor: theme.colors.hairline }]}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
           {[
             { key: 'all', label: 'All Alerts' },
             { key: 'unread', label: `Unread (${unreadCount})` },
             { key: 'breakdowns', label: 'Breakdowns' },
-            { key: 'system', label: 'System & Reminders' },
+            { key: 'system', label: 'System' },
           ].map((f) => {
             const isActive = activeFilter === f.key;
             return (
               <TouchableOpacity
                 key={f.key}
                 onPress={() => setActiveFilter(f.key as NotifFilter)}
+                activeOpacity={0.7}
                 style={[
                   styles.filterPill,
                   {
@@ -165,7 +160,7 @@ export default function NotificationsScreen() {
                   },
                 ]}
               >
-                <Text style={[styles.filterText, { color: isActive ? '#ffffff' : theme.colors.body }]}>
+                <Text style={[styles.filterText, { color: isActive ? theme.colors.onPrimary : theme.colors.body }]}>
                   {f.label}
                 </Text>
               </TouchableOpacity>
@@ -267,16 +262,21 @@ const styles = StyleSheet.create({
   prefLabel: {
     fontSize: 12,
   },
+  filterBar: {
+    paddingVertical: spacingNumeric.xs,
+    borderBottomWidth: 1,
+  },
   filterScroll: {
+    paddingHorizontal: spacingNumeric.md,
     flexDirection: 'row',
-    marginBottom: spacingNumeric.xs,
+    gap: spacingNumeric.xs,
   },
   filterPill: {
     paddingVertical: 6,
     paddingHorizontal: spacingNumeric.sm,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
-    marginRight: spacingNumeric.xs,
+    marginRight: spacingNumeric.xxs,
   },
   filterText: {
     fontSize: 12,

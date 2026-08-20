@@ -15,6 +15,17 @@ export function formatDate(dateInput: string | Date | null | undefined): string 
   });
 }
 
+export function formatDisplayDate(dateInput: string | Date | null | undefined): string {
+  if (!dateInput) return '—';
+  const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  if (isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 export function formatDateTime(dateInput: string | Date | null | undefined): string {
   if (!dateInput) return '—';
   const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;

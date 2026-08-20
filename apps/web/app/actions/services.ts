@@ -92,3 +92,60 @@ export async function completeService(formData: FormData) {
   revalidateTag(CACHE_TAGS.machineDetail(machine_id), "max");
   revalidateTag(CACHE_TAGS.machineServices(machine_id), "max");
 }
+
+export async function deleteServiceRecord(machineId: string) {
+  const supabase = await createSupabaseServerClient();
+  const user = await requireRole("engineer", "service_engineer", "service_manager", "branch_manager", "supervisor", "mechanic", "admin", "super_admin");
+
+  const { data: machine } = await supabase
+    .from("machines")
+    .select("service_count, id, machine_code")
+    .eq("id", machineId)
+    .single();
+
+  if (!machine) throw new Error("Machine not found");
+
+  const { data: latestRecord } = await supabase
+    .from("service_records")
+    .select("id")
+    .eq("machine_id", machineId)
+    .order("service_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (latestRecord) {
+    const { error: delError } = await supabase
+      .from("service_records")
+      .delete()
+      .eq("id", latestRecord.id);
+
+    if (delError) {
+      throw new Error(`Failed to delete service record: ${delError.message}`);
+    }
+  }
+
+  const updatedCount = Math.max(0, (machine.service_count || 1) - 1);
+  await supabase
+    .from("machines")
+    .update({
+      service_count: updatedCount,
+    })
+    .eq("id", machineId);
+
+  await logAudit({
+    action: "service.deleted",
+    entity_type: "machine",
+    entity_id: machineId,
+    metadata: { deleted_by: user.id },
+  });
+
+  revalidatePath(`/machines/${machineId}`);
+  revalidatePath("/dashboard");
+  revalidatePath("/services");
+  revalidateTag(CACHE_TAGS.dashboard, "max");
+  revalidateTag(CACHE_TAGS.machines, "max");
+  revalidateTag(CACHE_TAGS.services, "max");
+  revalidateTag(CACHE_TAGS.machineDetail(machineId), "max");
+  revalidateTag(CACHE_TAGS.machineServices(machineId), "max");
+}
+

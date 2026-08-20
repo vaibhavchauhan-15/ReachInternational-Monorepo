@@ -1258,3 +1258,106 @@ export interface FinanceDashboardMetrics {
   cashPaid: number;
   netCashFlow: number;
 }
+
+export type TaskPriority = "low" | "medium" | "high" | "critical";
+export type TaskStatus = "pending" | "in_progress" | "completed" | "overdue" | "cancelled" | "reopened";
+export type TaskReminderOffset = "none" | "10m" | "30m" | "1h" | "1d";
+
+export interface TaskAssignee {
+  id: string;
+  task_id: string;
+  user_id: string;
+  assigned_at: string;
+  assigned_by: string;
+  user?: Pick<User, "id" | "full_name" | "email" | "role"> | null;
+}
+
+export interface TaskAttachment {
+  id: string;
+  task_id: string;
+  file_name: string;
+  file_url: string;
+  file_type: "attachment" | "completion_proof";
+  uploaded_by: string;
+  created_at: string;
+  uploader?: Pick<User, "id" | "full_name"> | null;
+}
+
+export interface TaskComment {
+  id: string;
+  task_id: string;
+  user_id: string;
+  comment: string;
+  parent_id: string | null;
+  created_at: string;
+  updated_at: string;
+  user?: Pick<User, "id" | "full_name" | "role"> | null;
+}
+
+export interface TaskActivityLog {
+  id: string;
+  task_id: string;
+  actor_id: string;
+  action: string;
+  details: Record<string, any>;
+  created_at: string;
+  actor?: Pick<User, "id" | "full_name" | "role"> | null;
+}
+
+export interface Task {
+  id: string;
+  task_no: string;
+  title: string;
+  description: string | null;
+  due_date: string;
+  due_time: string | null;
+  priority: TaskPriority;
+  status: TaskStatus;
+  created_by: string;
+  branch_id: string | null;
+  reminder_offset: TaskReminderOffset | null;
+  completion_notes: string | null;
+  completed_by: string | null;
+  completed_at: string | null;
+  verified_by: string | null;
+  verified_at: string | null;
+  reopened_by: string | null;
+  reopened_at: string | null;
+  reopen_reason: string | null;
+  cancelled_by: string | null;
+  cancelled_at: string | null;
+  cancel_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  creator?: Pick<User, "id" | "full_name" | "email" | "role"> | null;
+  completer?: Pick<User, "id" | "full_name" | "role"> | null;
+  verifier?: Pick<User, "id" | "full_name" | "role"> | null;
+  assignees?: TaskAssignee[];
+  attachments?: TaskAttachment[];
+  comments?: TaskComment[];
+  activity_logs?: TaskActivityLog[];
+}
+
+export interface TaskStats {
+  totalTasks: number;
+  pending: number;
+  inProgress: number;
+  completed: number;
+  overdue: number;
+  dueToday: number;
+  highPriority: number;
+  completionRate: number;
+}
+
+export interface TaskFilterParams {
+  tab?: "all" | "my_tasks" | "assigned_to_me" | "completed" | "pending" | "overdue" | "in_progress";
+  search?: string;
+  status?: TaskStatus | "all";
+  priority?: TaskPriority | "all";
+  assigneeId?: string;
+  branchId?: string;
+  dueDate?: string;
+  sortBy?: "due_date" | "priority" | "created_at" | "status" | "title";
+  sortOrder?: "asc" | "desc";
+}
+

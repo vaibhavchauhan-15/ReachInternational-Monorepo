@@ -130,40 +130,26 @@ export function PurchaseRequestModal({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-bold text-[var(--color-ink)] mb-1">
-                Branch Scope
-              </label>
-              <select
-                value={branchId}
-                onChange={(e) => setBranchId(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)]"
-              >
-                {branches.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} ({b.code})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Select
+              label="Branch Scope"
+              value={branchId}
+              onChange={(e) => setBranchId(e.target.value)}
+              options={branches.map((b) => ({
+                value: b.id,
+                label: `${b.name} (${b.code})`,
+              }))}
+            />
 
-            <div>
-              <label className="block text-xs font-bold text-[var(--color-ink)] mb-1">
-                Select Receiving Manager (Sent To) <span className="text-rose-500">*</span>
-              </label>
-              <select
-                value={sentToManagerId}
-                onChange={(e) => setSentToManagerId(e.target.value)}
-                required
-                className="w-full px-3 py-2 rounded-xl border border-sky-500 bg-[var(--color-canvas)] text-xs font-black text-sky-700 dark:text-sky-300 focus:ring-2 focus:ring-sky-500"
-              >
-                {managers.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.full_name} ({m.role.replace("_", " ").toUpperCase()})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <Select
+              label="Select Receiving Manager (Sent To)"
+              value={sentToManagerId}
+              onChange={(e) => setSentToManagerId(e.target.value)}
+              required
+              options={managers.map((m) => ({
+                value: m.id,
+                label: `${m.full_name} (${m.role.replace("_", " ").toUpperCase()})`,
+              }))}
+            />
           </div>
 
           {selectedManager && (
@@ -179,16 +165,16 @@ export function PurchaseRequestModal({
         {/* Priority & Reason */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs font-bold text-[var(--color-ink)] mb-1">Priority</label>
-            <select
+            <Select
+              label="Priority"
               value={priority}
               onChange={(e) => setPriority(e.target.value as any)}
-              className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)]"
-            >
-              <option value="normal">Normal Priority</option>
-              <option value="high">High Priority</option>
-              <option value="urgent">Urgent Breakdown Priority</option>
-            </select>
+              options={[
+                { value: "normal", label: "Normal Priority" },
+                { value: "high", label: "High Priority" },
+                { value: "urgent", label: "Urgent Breakdown Priority" },
+              ]}
+            />
           </div>
 
           <div className="sm:col-span-2">
@@ -237,7 +223,7 @@ export function PurchaseRequestModal({
                   return (
                     <tr key={idx}>
                       <td className="p-2">
-                        <select
+                        <Select
                           value={item.productId}
                           onChange={(e) => {
                             const val = e.target.value;
@@ -245,14 +231,11 @@ export function PurchaseRequestModal({
                               prev.map((r, i) => (i === idx ? { ...r, productId: val } : r))
                             );
                           }}
-                          className="w-full px-2 py-1.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
-                        >
-                          {products.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} ({p.part_number})
-                            </option>
-                          ))}
-                        </select>
+                          options={products.map((p) => ({
+                            value: p.id,
+                            label: `${p.name} (${p.part_number})`,
+                          }))}
+                        />
                       </td>
                       <td className="p-2 text-center font-mono font-bold">
                         <span

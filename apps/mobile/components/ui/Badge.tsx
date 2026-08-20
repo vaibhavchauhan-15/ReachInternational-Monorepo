@@ -23,7 +23,8 @@ export const Badge: React.FC<BadgeProps> = ({ status, customLabel, style }) => {
   const colorValue = colorsRecord[config.colorToken] || theme.colors.link;
 
   return (
-    <View style={[styles.badge, { backgroundColor: colorValue + '22', borderColor: colorValue }, style]}>
+    <View style={[styles.badge, { backgroundColor: colorValue + '1a', borderColor: colorValue + '40' }, style]}>
+      <View style={[styles.dot, { backgroundColor: colorValue }]} />
       <Text style={[styles.text, { color: colorValue }]}>{customLabel || config.label}</Text>
     </View>
   );
@@ -31,16 +32,24 @@ export const Badge: React.FC<BadgeProps> = ({ status, customLabel, style }) => {
 
 const styles = StyleSheet.create({
   badge: {
-    paddingVertical: 2,
-    paddingHorizontal: spacingNumeric.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 3,
+    paddingHorizontal: 8,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
     alignSelf: 'flex-start',
+    gap: 5,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   text: {
     fontSize: 11,
     fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
   },
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Modal, Button, Input, Textarea, useToast } from "@/components/ui";
+import { Modal, Button, Input, Textarea, useToast, TooltipWrapper } from "@/components/ui";
 import { closeComplaintWithFSR } from "@/app/actions/complaints";
 import type { ComplaintWithDetails } from "@/lib/types/database";
 import {
@@ -353,8 +353,86 @@ export function FieldServiceReportModal({
   const failedCount = Object.values(checklist).filter((v) => v === "N").length;
 
   return (
-    <Modal open={open} onClose={onClose} title={`Field Service Report (${fsrNo})`} size="xl">
-      <form onSubmit={handleCloseAndSubmit} className="flex flex-col gap-5">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`Field Service Report (${fsrNo})`}
+      headerActions={
+        <div className="flex items-center gap-1.5">
+          <Button type="button" variant="secondary" onClick={handlePrintReport} className="h-7 px-2.5 text-xs font-medium" title="Print / Save PDF">
+            <Printer className="h-3.5 w-3.5 mr-1" /> Print / Save PDF
+          </Button>
+
+          {isResolvedOrClosed && !isEditing && !isManagerReview && (
+            <TooltipWrapper content="Edit Report" side="top">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setIsEditing(true)}
+                className="h-7 w-7 p-0 flex items-center justify-center font-semibold"
+                aria-label="Edit Report"
+              >
+                <Edit3 className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipWrapper>
+          )}
+
+          {isEditing && isResolvedOrClosed && !isManagerReview && (
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => setIsEditing(false)}
+              className="h-7 px-2.5 text-xs"
+            >
+              Cancel Edit
+            </Button>
+          )}
+
+          {isManagerReview && (
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  toast("info", `FSR ${fsrNo} sent back to Engineer for revision`);
+                  onClose();
+                }}
+                className="h-7 px-2.5 text-xs bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 font-bold border-amber-300"
+              >
+                <RotateCcw className="h-3.5 w-3.5 mr-1" /> Send Back
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => {
+                  toast("success", `FSR ${fsrNo} reviewed & approved by Service Manager!`);
+                  if (onSuccess) onSuccess();
+                  onClose();
+                }}
+                className="h-7 px-2.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+              >
+                <CheckCheck className="h-3.5 w-3.5 mr-1" /> Approve FSR
+              </Button>
+            </>
+          )}
+
+          {isEditing && !isManagerReview && (
+            <Button
+              type="submit"
+              form="fsr-form"
+              variant="primary"
+              loading={isPending}
+              className="h-7 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+            >
+              <CheckCircle className="h-3.5 w-3.5 mr-1" />{" "}
+              {userRole === "mechanic" ? "Submit Details" : isResolvedOrClosed ? "Save Updates" : "Complete FSR"}
+            </Button>
+          )}
+        </div>
+      }
+      size="xl"
+    >
+      <form id="fsr-form" onSubmit={handleCloseAndSubmit} className="flex flex-col gap-5">
         {/* Printable FSR Report Container */}
         <div id="printable-fsr-report" className="bg-white text-black p-6 rounded-xl border border-neutral-300 shadow-sm flex flex-col gap-4 text-xs font-sans">
           {/* FSR Header */}
@@ -583,13 +661,16 @@ export function FieldServiceReportModal({
                     <td className="p-1.5 border border-neutral-300 font-mono text-neutral-600">{p.date}</td>
                     {isEditing && (
                       <td className="p-1 border border-neutral-300 text-center">
-                        <button
-                          type="button"
-                          onClick={() => handleRemovePartRow(idx)}
-                          className="text-red-600 hover:text-red-800 p-1"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        <TooltipWrapper content="Remove part row" side="left">
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePartRow(idx)}
+                            className="text-red-600 hover:text-red-800 p-1 cursor-pointer"
+                            aria-label="Remove part row"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </TooltipWrapper>
                       </td>
                     )}
                   </tr>
@@ -624,76 +705,6 @@ export function FieldServiceReportModal({
           </div>
         </div>
 
-        {/* Modal Action Buttons */}
-        <div className="flex items-center justify-between pt-3 border-t border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] py-3 px-6 -mx-6 -mb-6 sticky bottom-0 z-20">
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="secondary" onClick={handlePrintReport}>
-              <Printer className="h-4 w-4 mr-1.5" /> Print / Save PDF
-            </Button>
-            {isResolvedOrClosed && !isEditing && !isManagerReview && (
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setIsEditing(true)}
-              >
-                <Edit3 className="h-3.5 w-3.5 mr-1.5" /> Edit Report
-              </Button>
-            )}
-            {isEditing && isResolvedOrClosed && !isManagerReview && (
-              <Button
-                type="button"
-                variant="ghost-sm"
-                onClick={() => setIsEditing(false)}
-              >
-                Cancel Edit
-              </Button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button type="button" variant="secondary" onClick={onClose} disabled={isPending}>
-              Close
-            </Button>
-            {isManagerReview && (
-              <>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={() => {
-                    toast("info", `FSR ${fsrNo} sent back to Engineer for revision`);
-                    onClose();
-                  }}
-                  className="bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 font-bold border-amber-300"
-                >
-                  <RotateCcw className="h-4 w-4 mr-1.5" /> Send Back for Revision
-                </Button>
-                <Button
-                  type="button"
-                  variant="primary"
-                  onClick={() => {
-                    toast("success", `FSR ${fsrNo} reviewed & approved by Service Manager!`);
-                    if (onSuccess) onSuccess();
-                    onClose();
-                  }}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
-                >
-                  <CheckCheck className="h-4 w-4 mr-1.5" /> Approve FSR
-                </Button>
-              </>
-            )}
-            {isEditing && !isManagerReview && (
-              <Button
-                type="submit"
-                variant="primary"
-                loading={isPending}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
-              >
-                <CheckCircle className="h-4 w-4 mr-1.5" />{" "}
-                {userRole === "mechanic" ? "Submit Repair Details" : isResolvedOrClosed ? "Save FSR Updates" : "Complete FSR & Close Complaint"}
-              </Button>
-            )}
-          </div>
-        </div>
       </form>
     </Modal>
   );

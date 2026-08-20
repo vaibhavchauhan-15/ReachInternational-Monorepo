@@ -32,16 +32,10 @@ export const BADGE_CONFIGS: Record<string, BadgeConfig> = {
   // Purchase Order & Challan Statuses
   pending_approval: { label: 'Pending Approval', variant: 'pending', colorToken: 'pending', bgToken: 'pendingSoft' },
   completed: { label: 'Completed', variant: 'success', colorToken: 'success', bgToken: 'successSoft' },
-  cancelled: { label: 'Cancelled', variant: 'error', colorToken: 'error', bgToken: 'errorSoft' },
-
-  // Employee Lifecycle Statuses
-  pending_onboarding: { label: 'Pending Onboarding', variant: 'pending', colorToken: 'pending', bgToken: 'pendingSoft' },
-  on_leave: { label: 'On Leave', variant: 'warning', colorToken: 'warningDeep', bgToken: 'warningSoft' },
-  notice_period: { label: 'Notice Period', variant: 'error', colorToken: 'error', bgToken: 'errorSoft' },
-  resigned: { label: 'Resigned', variant: 'neutral', colorToken: 'mute', bgToken: 'hairlineSoft' },
-  terminated: { label: 'Terminated', variant: 'error', colorToken: 'errorDeep', bgToken: 'errorSoft' },
-  retired: { label: 'Retired', variant: 'neutral', colorToken: 'mute', bgToken: 'hairlineSoft' },
-  archived: { label: 'Archived', variant: 'neutral', colorToken: 'faint', bgToken: 'hairlineSoft' },
+  // Task Specific Statuses
+  pending: { label: 'Pending', variant: 'pending', colorToken: 'pending', bgToken: 'pendingSoft' },
+  overdue: { label: 'Overdue', variant: 'overdue', colorToken: 'error', bgToken: 'errorSoft' },
+  reopened: { label: 'Reopened', variant: 'warning', colorToken: 'warningDeep', bgToken: 'warningSoft' },
 };
 
 export function getStatusBadgeConfig(status: string, fallbackLabel?: string): BadgeConfig {

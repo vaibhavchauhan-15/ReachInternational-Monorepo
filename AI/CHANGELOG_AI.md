@@ -1,3 +1,134 @@
+- **Page Feedback: Proper Tooltip Wrappers for Unlabeled Project Icons (`apps/web/components/animate-ui/components/radix/dialog.tsx`, `ComplaintsClient.tsx`, `ComplaintDetailModal.tsx`, `FieldServiceReportModal.tsx`, `ServicesClient.tsx`, `EnterpriseTable.tsx`) (2026-08-19)**:
+  - **Modal Close Button Tooltip (`dialog.tsx`)**: Wrapped Radix `DialogPrimitive.Close` button with `<TooltipWrapper content="Close modal (Esc)" side="left">`, giving every modal dialog in the app a clean tooltip on close button hover.
+  - **Complaints Table Action Tooltips (`ComplaintsClient.tsx`)**: Wrapped all icon-only table cell action buttons (`View FSR Report`, `Resolve (Fill FSR)` / `View Details`, `Edit Complaint`, `Delete Complaint`) in `<TooltipWrapper>` popovers.
+  - **Complaint & FSR Modal Action Tooltips (`ComplaintDetailModal.tsx`, `FieldServiceReportModal.tsx`)**: Wrapped icon buttons (`Delete Complaint`, `Edit Complaint`, `Edit Report`, `Remove part row`) in `<TooltipWrapper>` popovers.
+  - **Service Logs Action Tooltips (`ServicesClient.tsx`)**: Wrapped icon-only table cell action buttons (`Update Service Log`, `Delete Service Log`) in `<TooltipWrapper>` popovers.
+  - **Enterprise Table Toolbar Tooltips (`EnterpriseTable.tsx`)**: Added tooltips to density control toggle buttons (`Compact`, `Default`, `Comfortable`) and column menu toggle button.
+  - **Verification**: Executed `pnpm --filter @servicecentric/web typecheck` (**Passed cleanly with 0 compilation errors**).
+
+- **Page Feedback: Compact Modal Header Action Buttons & Icon-Only Edit/Delete (`apps/web/components/complaints/ComplaintDetailModal.tsx`, `MachineComplaintModal.tsx`, `FieldServiceReportModal.tsx`) (2026-08-19)**:
+  - **Icon-Only Edit & Delete Buttons (`ComplaintDetailModal.tsx`, `FieldServiceReportModal.tsx`)**: Replaced text labels on `Edit` and `Delete` header buttons with clean icon-only buttons (`h-7 w-7 p-0 flex items-center justify-center`) with descriptive `title` tooltips (`"Edit Complaint"`, `"Delete Complaint"`, `"Edit Report"`).
+  - **Slightly Smaller Button Standard (`ComplaintDetailModal.tsx`, `MachineComplaintModal.tsx`, `FieldServiceReportModal.tsx`)**: Compacted all modal header action buttons to `h-7` (~28px compact height) with `px-2.5 text-xs` padding for a high-density, refined header design.
+  - **Verification**: Executed `pnpm --filter @servicecentric/web typecheck` (**Passed cleanly with 0 compilation errors**).
+
+- **Page Feedback: Field Service Report (FSR) Modal Header Actions (`apps/web/components/complaints/FieldServiceReportModal.tsx`) (2026-08-19)**:
+  - **Shifted Actions to Header (`FieldServiceReportModal.tsx`)**: Moved `Print / Save PDF`, `Edit Report`, `Send Back for Revision`, `Approve FSR`, and `Complete FSR / Submit` action buttons into the top header bar next to the modal title via `headerActions` prop. Removed bottom footer action buttons container for 100% modal consistency across the complaints module.
+  - **Verification**: Executed `pnpm --filter @servicecentric/web typecheck` (**Passed cleanly with 0 compilation errors**).
+
+- **Page Feedback: Complaint Detail Modal Header Actions (`apps/web/components/complaints/ComplaintDetailModal.tsx`) (2026-08-19)**:
+  - **Shifted Actions to Header (`ComplaintDetailModal.tsx`)**: Moved `Delete`, `Edit`, and `View FSR Report` / `Resolve (Fill FSR)` action buttons into the top header bar next to the modal title via `headerActions` prop. Removed the bottom footer action buttons container for visual consistency with `MachineComplaintModal`.
+  - **Verification**: Executed `pnpm --filter @servicecentric/web typecheck` (**Passed cleanly with 0 compilation errors**).
+
+- **Page Feedback: Modal Double Scrollbar Resolution & Single Scroll Container Standard (`apps/web/components/complaints/MachineComplaintModal.tsx`, `ComplaintDetailModal.tsx`, `apps/web/components/machines/MachineModal.tsx`, `MachineCategoryModal.tsx`) (2026-08-19)**:
+  - **Eliminated Nested Scrollbars (`MachineComplaintModal.tsx`, `ComplaintDetailModal.tsx`, `MachineModal.tsx`, `MachineCategoryModal.tsx`)**: Removed redundant inner `max-h-[...vh] overflow-y-auto pr-1` styles from modal form/div body containers, leaving `Modal.tsx`'s `<div className="flex-1 overflow-y-auto p-6">` as the single, smooth scroll container for all modal dialogs.
+  - **Verification**: Executed `pnpm --filter @servicecentric/web typecheck` (**Passed cleanly with 0 compilation errors**).
+
+- **Page Feedback: Machine Complaint Modal Header Actions & UI Cleanup (`apps/web/components/complaints/MachineComplaintModal.tsx`, `apps/web/components/ui/Modal.tsx`) (2026-08-19)**:
+  - **Modal Header Actions (`Modal.tsx`, `MachineComplaintModal.tsx`)**: Extended `ModalProps` with `headerActions?: ReactNode` rendered in `DialogHeader` alongside modal title with `pr-12` padding. Moved `Cancel` and `Raise Machine Complaint` / `Update Complaint` action buttons into top header bar.
+  - **Removed Footer & Section Banner (`MachineComplaintModal.tsx`)**: Completely removed bottom sticky action buttons container from form body and removed the top amber notice box (`Malfunction Complaint Entry`).
+  - **Removed Section Header Icon (`MachineComplaintModal.tsx`)**: Removed the `<Wrench>` icon next to the "Machine & Breakdown Details" subheader for a cleaner form layout.
+  - **Verification**: Executed `pnpm --filter @servicecentric/web typecheck` (**Passed cleanly with 0 compilation errors in modified files**).
+
+- **Enterprise To-Do & Task Management Module (Web & Mobile) (`supabase/migrations/033_todo_task_management.sql`, `apps/web/`, `apps/mobile/`, `packages/`) (2026-08-19)**:
+  - **Database & RLS (`033_todo_task_management.sql`)**: Created `tasks`, `task_assignees`, `task_attachments`, `task_comments`, and `task_activity_logs` tables with auto-incrementing task numbers (`TSK-00001`), RLS security policies, performance indexes, and triggers. Updated `seed_dummy_data.mjs` with task seed data.
+  - **Shared Workspace Packages (`packages/`)**: Extended `@servicecentric/types` with `Task`, `TaskAssignee`, `TaskAttachment`, `TaskComment`, `TaskActivityLog`, `TaskStats`, `TaskFilterParams`. Created `@servicecentric/validation` Zod schemas (`createTaskSchema`, `updateTaskSchema`, `completeTaskSchema`, `verifyTaskSchema`, `taskCommentSchema`). Extended `@servicecentric/design-tokens` badge contracts with task statuses (`pending`, `overdue`, `reopened`).
+  - **Next.js Web App (`apps/web`)**: Implemented DAL queries (`tasks.ts`), Server Actions (`tasks.ts`), `/tasks` page route, KPI dashboard stats, List & Kanban views, `CreateTaskModal`, `TaskDetailDrawer`, `CompleteTaskModal`, and `VerifyTaskModal`. Updated `AppSidebar.tsx` navigation.
+  - **Expo Mobile App (`apps/mobile`)**: Built pixel-perfect mobile task screen (`tasks.tsx`) and creation modal (`CreateTaskModal.tsx`) matching user wireframe screenshots. Features left-border priority accents (Red/Orange/Green), sub-tabs (`All Tasks`, `My Tasks`, `Assigned to Me`, `Completed`), assignee cards with avatars & roles, due date badges, sort options, and Floating Action Button (+).
+  - **Verification**: Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across all 9 monorepo workspace packages**).
+
+- **Page Feedback: Machine Breakdown Complaints Table UI/UX Overhaul & Click-Row Detail Modal (`apps/web/components/complaints/ComplaintsClient.tsx`, `apps/web/components/complaints/ComplaintDetailModal.tsx`, `apps/web/app/actions/complaints.ts`) (2026-08-19)**:
+  - **Icon-Only Action Buttons (`ComplaintsClient.tsx`)**: Replaced text buttons `"View FSR Report"` and `"Edit"` with compact icon-only buttons (`AnimatedFileText`, `AnimatedEdit`, `AnimatedTrash`) with tooltips (`"View FSR Report"`, `"Edit Complaint"`, `"Delete Complaint"`).
+  - **Fully Functional Delete Server Action (`complaints.ts`, `ComplaintsClient.tsx`)**: Created `deleteComplaint(id)` server action with RBAC checks (`super_admin`, `admin`, `service_manager`, `branch_manager`, `supervisor`), Supabase record deletion, automatic machine status restoration (if no other active complaints), audit logging (`complaint.deleted`), cache revalidations (`complaints`, `machines`, `dashboard`), and delete confirmation modal.
+  - **Click-Row Complaint Detail View (`ComplaintDetailModal.tsx`, `ComplaintsClient.tsx`)**: Created `ComplaintDetailModal` displaying machine specs, malfunction details, required spare parts & quantities, hour meter reading, personnel assignment, work done logs, and FSR status. Connected `onRowClick` on `EnterpriseTable`.
+  - **Interactive Multi-Option Filter Toolbar (`ComplaintsClient.tsx`)**: Added search bar + 4 filter dropdowns (`Status`, `Machine/Model`, `Assigned Engineer`, `Spare Parts Required`) with active filter counter and reset button.
+  - **Clean Data & Title Case Table Headers (`ComplaintsClient.tsx`)**: Formatted table headers into Title Case (`Complaint No`, `Machine & Model`, `Malfunction Issue`, `Personnel`, `Status`, `Actions`) with bold machine codes, part badges, and formatted business dates (`formatDisplayDate`).
+  - **Verification**: Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across all 9 monorepo workspace packages**).
+
+- **Page Feedback: Service Log Update Modal UI/UX Redesign & Save CTA Label (`apps/web/components/services/ServicesClient.tsx`, `apps/web/components/ui/Modal.tsx`) (2026-08-19)**:
+  - **Submit Button Label ("Save") (`ServicesClient.tsx`)**: Updated the primary form submit button label from `"Save & Complete Service"` to `"Save"` per user feedback ("show only save").
+  - **Modal Overflow & Scroll Container Fix (`ServicesClient.tsx`, `Modal.tsx`)**: Removed `max-h-[75vh] overflow-y-auto` from the `<form>` element inside `ServicesClient.tsx`, eliminating nested scroll containers and double scrollbar bugs. Pinned action buttons (`Cancel` & `Save`) in the `Modal` footer prop (`footer`), ensuring action buttons remain visible and pinned at the bottom while the form body scrolls smoothly.
+  - **Redesigned DialogHeader (`ServicesClient.tsx`, `Modal.tsx`)**: Extended `ModalProps` to accept `ReactNode` for `title` and `description`. Redesigned header with an icon avatar, bold title (`Update Service Log`), machine code badge (`EXCA-001`), model name, and category subtitle for clear visual hierarchy.
+  - **Verification**: Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across all 9 monorepo workspace packages**).
+
+- **Web App Reusable Custom Dropdown System (`apps/web/components/ui/Select.tsx`, `apps/web/components/*`) (2026-08-19)**:
+  - **Upgraded Custom Dropdown Component (`Select.tsx`)**: Rebuilt `Select` component with `framer-motion` popover slide & fade animations, dark/light theme support, custom chevron rotation (`AnimatedChevronDown`), checkmark indicators (`AnimatedCheck`), search filter bar for long lists (> 6 items), and full keyboard navigation (`ArrowUp`, `ArrowDown`, `Enter`, `Escape`).
+  - **Backward Compatibility & Form Handling**: Supports both `options={[{ value, label }]}` array props and parsing `<option>` JSX children. Maintained 100% native `<form>` compatibility (`FormData`) via hidden `<input type="hidden" name={name} value={value} />` and synthetic `React.ChangeEvent` dispatch.
+  - **Web Application Refactoring**: Replaced 100% of native browser `<select>` dropdowns across all web application modules (`ServicesClient.tsx`, `BranchSelector.tsx`, `MachineModal.tsx`, `RentalManagementClient.tsx`, `OperationsClient.tsx`, `StockLedgerClient.tsx`, `PurchaseRequestModal.tsx`, `PartIssueModal.tsx`, `GoodsReceiptModal.tsx`, `HRClient.tsx`, `FinanceClient.tsx`, `DocumentsClient.tsx`, `OperatorDashboard.tsx`, `AuditLogsClient.tsx`).
+  - **Verification**: Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across all 9 monorepo workspace packages**). Verified zero remaining native `<select>` tags in web application components.
+
+- **Page Feedback: Machine Service Table Row Icon Removal & Dual Action Icons (Update / Delete) (`apps/web/components/services/ServicesClient.tsx`, `apps/web/app/actions/services.ts`) (2026-08-19)**:
+  - **Removed Row Icon from Machine Number Column (`ServicesClient.tsx`)**: Removed the Wrench icon span wrapper from the Machine Number column cell across all table rows per user feedback.
+  - **Dual Action Icons (Update / Delete) (`ServicesClient.tsx`)**: Replaced text button with compact icon-only Update (`Edit`) and Delete (`Trash2`) buttons.
+  - **Fully Functional Delete Server Action (`services.ts`, `ServicesClient.tsx`)**: Created `deleteServiceRecord(machineId)` server action with Supabase deletion, machine service count update, audit logging (`service.deleted`), and cache revalidations (`services`, `machines`, `dashboard`). Added confirmation modal for deletion.
+  - **Verification**: Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across all 9 monorepo workspace packages**).
+
+- **Page Feedback: Machine Service & Maintenance Logs Table UX & Visual Hierarchy Redesign (`apps/web/components/services/ServicesClient.tsx`, `apps/web/components/ui/EnterpriseTable.tsx`, `packages/utils/src/date.ts`) (2026-08-19)**:
+
+  - **Column Structure & Title Case Headers (`ServicesClient.tsx`)**: Reordered columns to place Machine Number as the primary visual anchor (bold mono, Wrench icon, brand link highlight, clickable). Transformed awkwardly wrapped uppercase headers into clean Title Case headers (`Action`, `Machine Number`, `Model`, `Category`, `Service Status`, `Service Due Date`, `Days`, `Completion Date`, `Serial No.`).
+  - **Humanized Urgency & Positive Days (`ServicesClient.tsx`)**: Replaced `Overdue (-16 days)` with `16 days overdue` (bold count + red highlight). Replaced raw counts with humanized urgency text (`Due today`, `1 day left`, `13 days left`).
+  - **Compact CTA & Row Density (`ServicesClient.tsx`, `EnterpriseTable.tsx`)**: Replaced large `Update Service` buttons with compact `✎ Update` CTA buttons. Adjusted default row padding (`py-2.5 px-3.5`) targeting ~56–64px row height.
+  - **Business Date Formatting & Subdued Missing Values (`date.ts`, `ServicesClient.tsx`)**: Standardized ISO dates to business format (`07 Aug 2026`) via `formatDisplayDate`. Rendered missing values (`—`) in subtle muted gray (`opacity-40 font-normal`).
+  - **Interactive Multi-Filter Toolbar & Default Urgency Sorting (`ServicesClient.tsx`, `EnterpriseTable.tsx`)**: Added Status, Category, and Due Date filters. Pre-sorted table by urgency (`defaultSortColumn="due_days"`). Hidden low-priority `Serial No.` by default (`defaultHiddenColumns={["serial_no"]}`).
+  - **Verification**: Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across all workspace packages**).
+
+- **Page Feedback: Removal of Comment Prefix Slashes (`//`) Across Entire Mobile App (`apps/mobile/components/ui/MobileHeader.tsx`, `profile.tsx`, `dashboard.tsx`, `machines.tsx`, `my-work.tsx`, `notifications.tsx`, `login.tsx`) (2026-08-19)**:
+  - **Sanitized Mobile Header (`MobileHeader.tsx`)**: Added regex sanitizer (`eyebrow.replace(/^\/\/\s*/, '')`) to `MobileHeader` component to automatically strip leading `//` comment slashes from any header eyebrow.
+  - **Cleaned UI Text Strings Across Mobile Screens (`profile.tsx`, `dashboard.tsx`, `machines.tsx`, `my-work.tsx`, `notifications.tsx`, `login.tsx`)**: Removed comment-like `// ` prefix from `eyebrow` props and JSX `<Text>` elements (`USER ACCOUNT`, `USER IDENTIFICATION`, `SYSTEM PREFERENCES`, `FIELD OPERATIONS`, `KEY METRICS OVERVIEW`, `PRIORITY FIELD TASKS`, `FLEET DIRECTORY`, `FIELD QUEUE`, `ALERT SYSTEM`, `ENTERPRISE FLEET TRACKING`).
+  - **Verification**: Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across all 9/9 monorepo workspace packages**). Verified 0 remaining `//` comment slashes in mobile UI text.
+
+- **Page Feedback: Mobile Bottom Navbar 3-Line Menu & Contextual Submenus Navigation (`apps/mobile/components/ui/MainMenuModal.tsx`, `CustomBottomTabBar.tsx`, `_layout.tsx`, `notifications.tsx`) (2026-08-19)**:
+  - **All Main Pages Navigation Drawer (`MainMenuModal.tsx`)**: Built full-screen bottom-sheet modal triggered by the 3-line Menu icon button in the bottom navigation bar. Categorized all 13 main pages (Core Operations, Resource & Commercial, Administration & Staff) with active indicators and smooth navigation.
+  - **Contextual Bottom Tab Bar (`CustomBottomTabBar.tsx`)**: Placed 3-line Menu icon button on the left of the bottom navbar. Dynamically mapped and rendered active module submenus/subtabs (`/notifications`, `/machines`, `/operations`, `/rentals`, `/my-work`, `/inventory`, `/crm`, `/finance`, `/hr`, `/dashboard`, `/profile`).
+  - **Connected App Layout & Route Sync (`_layout.tsx`, `notifications.tsx`)**: Connected `CustomBottomTabBar` to `<Tabs tabBar={(props) => <CustomBottomTabBar {...props} />}>`. Synced search parameter `tab` in `NotificationsScreen` with bottom navbar submenus (`tab=all`, `tab=unread`, `tab=breakdowns`, `tab=system`).
+  - **Verification**: Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across all 9/9 workspace packages**).
+
+- **AI Agent Global Rule: Web & Mobile UI/UX Consistency (`.agents/rules/web_mobile_ui_consistency.md`, `AI/UI_RULES.md`) (2026-08-19)**:
+  - **Comprehensive 22-Section Rule Document**: Formatted and saved the complete 22-section Global Rule for Web & Mobile UI/UX Consistency into `.agents/rules/web_mobile_ui_consistency.md` and integrated it into `AI/UI_RULES.md`.
+  - **Core Protocols Enforced**: Enforces single design system source of truth (`@servicecentric/design-tokens`), identical color tokens, shared typography hierarchy, visual component parity, information architecture preservation, identical icon families, uniform UX logic, matching terminology, and strict accessibility standards.
+  - **Verification**: Verified rule documents written cleanly to `.agents/rules/web_mobile_ui_consistency.md` and `AI/UI_RULES.md`.
+
+- **Mobile Role-Based Left Drawer & Dynamic Sub-Menu Bottom Navigation (`apps/mobile/components/navigation/`, `apps/mobile/components/ui/`) (2026-08-19)**:
+  - **Top-Left Hamburger Menu Trigger (`MobileHeader.tsx`)**: Placed hamburger `Menu` button in top-left of the clean header bar, connected to open the left navigation drawer.
+  - **Left Slide-Out Drawer Menu (`MobileDrawer.tsx`)**: Built smooth left slide-out drawer rendering role-filtered navigation items (`Dashboard`, `My Work`, `Rentals`, `CRM`, `Machines`, `Operations`, `Service`, `Inventory`, `Vendors`, `Purchase Orders`, `Challans`, `Documents`, `HR`, `Finance`, `Reports`, `Administration`) matching web app sidebar reference. Included bottom profile card with avatar, email, role badge, theme toggle switch, and Sign Out button.
+  - **Dynamic Sub-Menu Bottom Navigation (`CustomBottomTabBar.tsx`, `DynamicBottomNav.tsx`)**: Dynamically renders sub-menu tabs for active routes containing sub-items (`/machines`, `/rentals`, `/crm`, `/operations`, `/service`, `/inventory`, `/hr`, `/finance`).
+  - **No-Submenu Guard**: Automatically hides bottom navigation bar (`returns null`) when viewing screens without sub-menus (`/dashboard`, `/my-work`, `/challans`, `/documents`, `/reports`, `/administration`, `/notifications`, `/profile`), giving maximum full-screen height to page content.
+  - **Verification**: Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across all 9/9 workspace packages**).
+
+- **Mobile App UI, Color & Design Alignment with Web App (`apps/mobile/components/ui/`, `apps/mobile/app/`) (2026-08-19)**:
+  - **Identical Theme & Design System Tokens**: Standardized mobile colors, borders, elevation, and typography with the Vercel Geist design system (`#0a0a0a` canvas in dark, `#171717` elevated cards, `#262626` / `#ebebeb` hairlines, `#3b82f6` / `#0070f3` link accents).
+  - **Standardized Mobile Header Component (`MobileHeader.tsx`)**: Created reusable top header bar featuring ServiceCentric emblem logo, live sync dot indicator, notifications trigger, user role badge, theme toggle button, and uppercase Geist Mono section eyebrows.
+  - **Upgraded UI Primitives (`Badge.tsx`, `Button.tsx`, `Card.tsx`, `Input.tsx`)**: Added micro-dot status indicators and 15% opacity fills to `Badge`, pill CTA vs square app control shapes to `Button`, base vs elevated shadow variants to `Card`, and left icon slot with focus ring highlights to `Input`.
+  - **Web-Identical Mobile Screens (`login.tsx`, `dashboard.tsx`, `my-work.tsx`, `machines.tsx`, `notifications.tsx`, `profile.tsx`, `_layout.tsx`)**: Updated mobile login hero screen (mesh gradient bloom, platform metrics), dashboard KPI cards (`tabular-nums`), tab bar navigation with top indicator line, search inputs, and subtab filter pill strips.
+  - **Verification**: Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across all 9/9 workspace packages**).
+
+- **Page Feedback: Collapsed Sidebar Flyout Positioning Fix (`apps/web/components/ui/tooltip.tsx`, `apps/web/components/layout/sidebar/CollapsedSidebarFlyout.tsx`) (2026-08-19)**:
+  - **DOM Unmount & Root Cause Resolution (`tooltip.tsx`)**: Fixed root cause where `SidebarTooltip` conditionally unmounted `<SidebarMenuButton>` when `enabled={!isFlyoutOpen}` changed from `true` to `false`. Updated `SidebarTooltip` and `TooltipWrapper` to pass `open={enabled ? undefined : false}` on `<Tooltip>`, maintaining a continuous DOM tree structure without unmounting or remounting DOM elements on menu click.
+  - **DOM Connection & Zero-Rect Positioning Guards (`CollapsedSidebarFlyout.tsx`)**: Enhanced `updatePosition()` in `CollapsedSidebarFlyout` with `anchorEl.isConnected` check and invalid zero-bounding-box guard (`rect.width === 0 && rect.height === 0`), guaranteeing that `getBoundingClientRect()` accurately measures live painted sidebar menu buttons and positions the flyout directly in front of the clicked button.
+  - **Verification**: Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across all 9/9 workspace packages**).
+
+- **Page Feedback: Collapsed Sidebar Flyout Submenu UI/UX Redesign (`apps/web/components/layout/sidebar/CollapsedSidebarFlyout.tsx`, `NavigationItem.tsx`, `SidebarNavigation.tsx`) (2026-08-19)**:
+  - **Removed Old Popup Implementation (`NavigationItem.tsx`)**: Completely removed old `CollapsedFlyoutPortal` import and implementation per user request.
+  - **Reusable Collapsed Flyout Component (`CollapsedSidebarFlyout.tsx`)**: Created portaled floating submenu component (`document.body`) positioned dynamically beside the collapsed sidebar (`SIDEBAR_WIDTH_COLLAPSED = 72px`). Includes left-to-right Framer Motion slide animation (`x: -10px -> 0px`, `opacity: 0 -> 1`), visual triangular caret beak pointing directly to the clicked sidebar icon center, parent header with icon, bold menu name, and `OVERVIEW` section badge.
+  - **Interaction & Dismiss Logic (`CollapsedSidebarFlyout.tsx`, `NavigationItem.tsx`)**: Submenu links render icons, labels, hover highlights, active tab/route state, and auto-close upon navigation. Added dismiss listeners for outside clicks (`mousedown`/`touchstart`), `Escape` key, window scroll, and resize. Connected cleanly across all sidebar parent items with submenus.
+  - **Verification**: Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across 9/9 workspace packages**).
+
+- **Page Feedback: Collapsed Sidebar Click-to-Open Sub-Topic Popover (`components/layout/AppSidebar.tsx`, `components/layout/sidebar/NavigationItem.tsx`, `components/layout/sidebar/CollapsedFlyoutPortal.tsx`) (2026-08-19)**:
+  - **Click-Only Trigger & Hover Removal (`NavigationItem.tsx`, `CollapsedFlyoutPortal.tsx`)**: Removed all mouseover (`onMouseEnter`) and mouseleave (`onMouseLeave`) hover triggers. In collapsed sidebar condition, clicking menu icons explicitly toggles the sub-topic popover modal directly in front of the clicked button.
+  - **Sub-Topics Array Configuration (`AppSidebar.tsx`)**: Configured explicit `subItems` array for `/machines` (Machine Directory `tab=inventory`, Service Logs `tab=services`, Breakdown Complaints `tab=complaints`) and `/rentals` (Dashboard, Requests, Customers, Agreements, Challans, Returns, Damage, Billing).
+  - **Visual Match & Dynamic Alignment (`CollapsedFlyoutPortal.tsx`)**: Formatted popup header with module title, Wrench icon, and `OVERVIEW` badge matching user design reference. Added `window` resize and scroll listeners for dynamic positioning.
+  - **Verification**: Executed `pnpm --filter @servicecentric/web typecheck` (**Passed cleanly with 0 compilation errors**).
+
+- **Agentation Integration & Expo Web Version Resolution (`apps/web/app/layout.tsx`, `apps/mobile/app/_layout.tsx`, `apps/mobile/metro.config.js`, `apps/mobile/package.json`) (2026-08-19)**:
+  - **Package & Peer Version Alignment**: Installed `agentation` (^3.0.2) in `apps/mobile`. Fixed blank white screen error on Expo Web by aligning `react-dom` to `"19.1.0"`, `@types/react-dom` to `"~19.1.7"`, and `react-native-web` to `"~0.19.13"` matching Expo SDK 54 (`react@19.1.0`).
+  - **Monorepo Metro Config (`metro.config.js`)**: Added `apps/mobile/metro.config.js` with workspace root watch folders and module paths for monorepo package resolution.
+  - **Platform-Safe Layout Component (`_layout.tsx`)**: Created `MobileAgentation` client guard using dynamic `require('agentation')` scoped strictly to development mode on Expo Web (`Platform.OS === 'web'`).
+  - **Verification**: Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across all workspace packages**).
+
+- **Mobile Login Network Error Resolution (`apps/mobile/.env`, `apps/mobile/lib/supabase.ts`, `apps/mobile/lib/environment.ts`) (2026-08-19)**:
+  - **Resolved Network Request Failure**: Configured explicit `EXPO_PUBLIC_SUPABASE_URL` (`https://dhbbgfzbyatzvqafnsqp.supabase.co`) and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in `apps/mobile/.env` and updated client initializer fallbacks in `apps/mobile/lib/supabase.ts` and `apps/mobile/lib/environment.ts`, fixing DNS/fetch failures during mobile login.
+  - **Zero Touch Scope Guard**: Preserved `apps/web` without touching any file per user request.
+  - **Verification**: Executed `pnpm --filter @servicecentric/mobile typecheck` (**Passed cleanly with 0 compilation errors**).
+
 - **Monorepo GitIgnore Clean-up & Staging Protocol (`.gitignore`) (2026-08-19)**:
   - **Comprehensive GitIgnore Rules (`.gitignore`)**: Standardized recursive monorepo rules for `node_modules/`, `.next/`, `.expo/`, `.turbo/`, `dist/`, `build/`, `supabase/.temp/`, and `.env` secrets.
   - **Clean Git Index Staging**: Removed unwanted temporary files from tracking and staged all clean, required project source files for committing.

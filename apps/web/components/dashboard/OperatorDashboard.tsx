@@ -34,7 +34,7 @@ import {
   submitOperatorHourLogAction,
   updateOperatorHourLogAction,
 } from "@/app/actions/operators";
-import { Modal, Badge, useToast } from "@/components/ui";
+import { Modal, Badge, Select, useToast } from "@/components/ui";
 import { MachineComplaintModal } from "@/components/complaints/MachineComplaintModal";
 import { PurchaseRequestModal } from "@/components/inventory/PurchaseRequestModal";
 
@@ -547,19 +547,15 @@ export function OperatorDashboard({
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[var(--color-ink)] mb-1">
-                  Shift Type
-                </label>
-                <select
-                  value={shiftType}
-                  onChange={(e) => setShiftType(e.target.value as "day" | "night")}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-sm font-bold text-[var(--color-ink)]"
-                >
-                  <option value="day">Day Shift ☀️</option>
-                  <option value="night">Night Shift 🌙</option>
-                </select>
-              </div>
+              <Select
+                label="Shift Type"
+                value={shiftType}
+                onChange={(e) => setShiftType(e.target.value as "day" | "night")}
+                options={[
+                  { value: "day", label: "Day Shift ☀️" },
+                  { value: "night", label: "Night Shift 🌙" },
+                ]}
+              />
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -591,21 +587,17 @@ export function OperatorDashboard({
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[var(--color-ink)] mb-1">
-                  Machine Condition
-                </label>
-                <select
-                  value={machineCondition}
-                  onChange={(e) => setMachineCondition(e.target.value as "good" | "fair" | "needs_attention" | "breakdown")}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-sm font-bold text-[var(--color-ink)]"
-                >
-                  <option value="good">Good Condition 🟢</option>
-                  <option value="fair">Fair / Minor Wear 🟡</option>
-                  <option value="needs_attention">Needs Attention 🟠</option>
-                  <option value="breakdown">Breakdown Reported 🔴</option>
-                </select>
-              </div>
+              <Select
+                label="Machine Condition"
+                value={machineCondition}
+                onChange={(e) => setMachineCondition(e.target.value as "good" | "fair" | "needs_attention" | "breakdown")}
+                options={[
+                  { value: "good", label: "Good Condition 🟢" },
+                  { value: "fair", label: "Fair / Minor Wear 🟡" },
+                  { value: "needs_attention", label: "Needs Attention 🟠" },
+                  { value: "breakdown", label: "Breakdown Reported 🔴" },
+                ]}
+              />
             </div>
 
             {/* Calculated Hours Banner */}
@@ -936,17 +928,15 @@ export function OperatorDashboard({
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-[var(--color-ink)] mb-1">Shift</label>
-                <select
-                  value={editShift}
-                  onChange={(e) => setEditShift(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)]"
-                >
-                  <option value="day">Day Shift</option>
-                  <option value="night">Night Shift</option>
-                </select>
-              </div>
+              <Select
+                label="Shift"
+                value={editShift}
+                onChange={(e) => setEditShift(e.target.value)}
+                options={[
+                  { value: "day", label: "Day Shift" },
+                  { value: "night", label: "Night Shift" },
+                ]}
+              />
             </div>
 
             <div>

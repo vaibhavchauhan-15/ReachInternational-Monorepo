@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Modal, Button, Input, Textarea, useToast } from "@/components/ui";
+import { Modal, Button, Input, Textarea, Select, useToast } from "@/components/ui";
 import { createPartIssueAction } from "@/app/actions/inventory";
 import type { InventoryProduct, InventoryStock, Branch, Machine } from "@/lib/types/database";
 import { AnimatedPlus, AnimatedTrash, AnimatedCheckCircle } from "@/components/ui/animated-icons";
@@ -113,40 +113,28 @@ export function PartIssueModal({
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Recipient & Machine Selection */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
-          <div>
-            <label className="block text-xs font-bold mb-1 text-[var(--color-ink)]">
-              Branch Scope
-            </label>
-            <select
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
-            >
-              {branches.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name} ({b.code})
-                </option>
-              ))}
-            </select>
-          </div>
+          <Select
+            label="Branch Scope"
+            value={branchId}
+            onChange={(e) => setBranchId(e.target.value)}
+            options={branches.map((b) => ({
+              value: b.id,
+              label: `${b.name} (${b.code})`,
+            }))}
+          />
 
-          <div>
-            <label className="block text-xs font-bold mb-1 text-[var(--color-ink)]">
-              Target Machine (Optional)
-            </label>
-            <select
-              value={machineId}
-              onChange={(e) => setMachineId(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
-            >
-              <option value="">General Store / Employee Issue</option>
-              {machines.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.machine_code} — {m.machine_name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Select
+            label="Target Machine (Optional)"
+            value={machineId}
+            onChange={(e) => setMachineId(e.target.value)}
+            options={[
+              { value: "", label: "General Store / Employee Issue" },
+              ...(machines || []).map((m) => ({
+                value: m.id,
+                label: `${m.machine_code} — ${m.machine_name}`,
+              })),
+            ]}
+          />
 
           <div>
             <label className="block text-xs font-bold mb-1 text-[var(--color-ink)]">
@@ -170,23 +158,19 @@ export function PartIssueModal({
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-bold mb-1 text-[var(--color-ink)]">
-              Returnable Type
-            </label>
-            <select
-              value={isReturnable ? "YES" : "NO"}
-              onChange={(e) => {
-                const val = e.target.value === "YES";
-                setIsReturnable(val);
-                setItems((prev) => prev.map((item) => ({ ...item, isReturnable: val })));
-              }}
-              className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
-            >
-              <option value="NO">NON-RETURNABLE (Consumable/Permanent)</option>
-              <option value="YES">RETURNABLE (Tools/Assembly/Trial)</option>
-            </select>
-          </div>
+          <Select
+            label="Returnable Type"
+            value={isReturnable ? "YES" : "NO"}
+            onChange={(e) => {
+              const val = e.target.value === "YES";
+              setIsReturnable(val);
+              setItems((prev) => prev.map((item) => ({ ...item, isReturnable: val })));
+            }}
+            options={[
+              { value: "NO", label: "NON-RETURNABLE (Consumable/Permanent)" },
+              { value: "YES", label: "RETURNABLE (Tools/Assembly/Trial)" },
+            ]}
+          />
 
           {isReturnable && (
             <div>
@@ -249,7 +233,7 @@ export function PartIssueModal({
                   return (
                     <tr key={idx}>
                       <td className="p-2">
-                        <select
+                        <Select
                           value={item.productId}
                           onChange={(e) => {
                             const val = e.target.value;
@@ -257,14 +241,11 @@ export function PartIssueModal({
                               prev.map((r, i) => (i === idx ? { ...r, productId: val } : r))
                             );
                           }}
-                          className="w-full p-1 border rounded bg-[var(--color-canvas)] font-bold"
-                        >
-                          {products.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} ({p.part_number})
-                            </option>
-                          ))}
-                        </select>
+                          options={products.map((p) => ({
+                            value: p.id,
+                            label: `${p.name} (${p.part_number})`,
+                          }))}
+                        />
                       </td>
                       <td className="p-2 text-center font-mono font-bold">
                         <span className={availQty < item.quantityIssued ? "text-rose-600 font-black" : "text-emerald-600"}>

@@ -8,8 +8,8 @@ const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || 'eyJhbGciOiJIUzI1
 const admin = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY);
 
 async function run() {
-  console.log("Checking database connection...");
-  const sql = fs.readFileSync(path.resolve(process.cwd(), 'supabase/migrations/027_rental_manager_role_refinements.sql'), 'utf8');
+  console.log("Checking database connection and running migration 033_todo_task_management.sql...");
+  const sql = fs.readFileSync(path.resolve(process.cwd(), 'supabase/migrations/033_todo_task_management.sql'), 'utf8');
 
   // Try RPC if available
   const { data, error } = await admin.rpc('exec_sql', { sql_query: sql });

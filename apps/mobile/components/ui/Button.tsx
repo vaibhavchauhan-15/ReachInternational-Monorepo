@@ -15,14 +15,17 @@ import {
 import { useTheme } from './ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@servicecentric/design-tokens';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
+export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
 export type ButtonSize = 'sm' | 'md' | 'lg';
+export type ButtonShape = 'pill' | 'square';
 
 export interface ButtonProps {
   label: string;
   onPress: () => void;
   variant?: ButtonVariant;
   size?: ButtonSize;
+  shape?: ButtonShape;
+  icon?: React.ReactNode;
   isLoading?: boolean;
   disabled?: boolean;
   fullWidth?: boolean;
@@ -34,6 +37,8 @@ export const Button: React.FC<ButtonProps> = ({
   onPress,
   variant = 'primary',
   size = 'md',
+  shape = 'pill',
+  icon,
   isLoading = false,
   disabled = false,
   fullWidth = false,
@@ -47,6 +52,7 @@ export const Button: React.FC<ButtonProps> = ({
 
     if (variant === 'secondary') {
       bg = theme.colors.hairlineSoft;
+      border = theme.colors.hairline;
     } else if (variant === 'outline') {
       bg = 'transparent';
       border = theme.colors.hairline;
@@ -54,31 +60,39 @@ export const Button: React.FC<ButtonProps> = ({
       bg = 'transparent';
     } else if (variant === 'danger') {
       bg = theme.colors.error;
+    } else if (variant === 'success') {
+      bg = theme.colors.success;
     }
 
-    let paddingVertical: number = spacingNumeric.xs;
+    let paddingVertical: number = 10;
     let paddingHorizontal: number = spacingNumeric.md;
+    let minHeight: number = 44;
 
     if (size === 'sm') {
       paddingVertical = 6;
-      paddingHorizontal = spacingNumeric.xs;
+      paddingHorizontal = 12;
+      minHeight = 34;
     } else if (size === 'lg') {
-      paddingVertical = spacingNumeric.md;
+      paddingVertical = 14;
       paddingHorizontal = spacingNumeric.lg;
+      minHeight = 48;
     }
+
+    const borderRadius = shape === 'pill' ? radiusNumeric.pill : radiusNumeric.sm;
 
     return {
       backgroundColor: bg,
       borderColor: border,
-      borderWidth: variant === 'outline' ? 1 : 0,
-      borderRadius: radiusNumeric.md,
+      borderWidth: variant === 'outline' || variant === 'secondary' ? 1 : 0,
+      borderRadius,
       paddingVertical,
       paddingHorizontal,
       alignItems: 'center',
       justifyContent: 'center',
       flexDirection: 'row',
+      gap: 6,
       opacity: disabled ? 0.5 : 1,
-      minHeight: 44,
+      minHeight,
       minWidth: 44,
       width: fullWidth ? '100%' : 'auto',
     };
@@ -86,14 +100,16 @@ export const Button: React.FC<ButtonProps> = ({
 
   const getTextStyle = (): TextStyle => {
     let color = theme.colors.ink;
-    if (variant === 'primary' || variant === 'danger') {
+    if (variant === 'primary') {
+      color = theme.colors.onPrimary;
+    } else if (variant === 'danger' || variant === 'success') {
       color = '#ffffff';
     } else if (variant === 'outline' || variant === 'ghost') {
       color = theme.colors.link;
     }
 
     let fontSize = 14;
-    if (size === 'sm') fontSize = 12;
+    if (size === 'sm') fontSize = 13;
     if (size === 'lg') fontSize = 16;
 
     return {
@@ -107,7 +123,7 @@ export const Button: React.FC<ButtonProps> = ({
     <TouchableOpacity
       onPress={onPress}
       disabled={disabled || isLoading}
-      activeOpacity={0.8}
+      activeOpacity={0.7}
       accessible={true}
       accessibilityLabel={label}
       accessibilityRole="button"
@@ -117,10 +133,13 @@ export const Button: React.FC<ButtonProps> = ({
       {isLoading ? (
         <ActivityIndicator
           size="small"
-          color={variant === 'primary' || variant === 'danger' ? '#ffffff' : theme.colors.link}
+          color={variant === 'primary' ? theme.colors.onPrimary : theme.colors.link}
         />
       ) : (
-        <Text style={getTextStyle()}>{label}</Text>
+        <>
+          {icon}
+          <Text style={getTextStyle()}>{label}</Text>
+        </>
       )}
     </TouchableOpacity>
   );

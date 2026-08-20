@@ -1,15 +1,11 @@
-/**
- * ServiceCentric Mobile — Machine Fleet Suite (Phase 15)
- * Real-time machine search, status filters, machine cards, and detail modal.
- */
-
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
-import { Card, Badge, Input, Button, useTheme } from '../../components/ui';
+import { Card, Badge, Input, Button, useTheme, MobileHeader } from '../../components/ui';
 import { MachineDetailModal } from '../../components/machines/MachineDetailModal';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
 import { formatMachineCode } from '@servicecentric/utils';
+import { Search } from 'lucide-react-native';
 
 export type StatusFilter = 'all' | 'active' | 'on_rent' | 'under_maintenance' | 'inactive';
 
@@ -116,20 +112,26 @@ export default function MachinesScreen() {
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
       {/* Top Header */}
-      <View style={styles.header}>
-        <Text style={[styles.screenTitle, { color: theme.colors.ink }]}>Machine Fleet (3)</Text>
+      <MobileHeader
+        eyebrow="FLEET DIRECTORY"
+        title="Machine Fleet Directory"
+        subtitle="Industrial machinery assets, spec sheets & site assignments"
+      />
 
+      {/* Search & Filter Bar */}
+      <View style={[styles.searchFilterContainer, { backgroundColor: theme.colors.canvas, borderBottomColor: theme.colors.hairline }]}>
         <Input
           placeholder="Search code, model, customer..."
           value={search}
           onChangeText={setSearch}
+          leftIcon={<Search size={16} color={theme.colors.mute} />}
           containerStyle={styles.searchInput}
         />
 
         {/* Filter Pills */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
           {[
-            { key: 'all', label: 'All Fleet' },
+            { key: 'all', label: 'All Fleet (3)' },
             { key: 'active', label: 'Active' },
             { key: 'on_rent', label: 'On Rent' },
             { key: 'under_maintenance', label: 'Under Service' },
@@ -139,6 +141,7 @@ export default function MachinesScreen() {
               <TouchableOpacity
                 key={f.key}
                 onPress={() => setActiveFilter(f.key as StatusFilter)}
+                activeOpacity={0.7}
                 style={[
                   styles.filterPill,
                   {
@@ -147,7 +150,7 @@ export default function MachinesScreen() {
                   },
                 ]}
               >
-                <Text style={[styles.filterText, { color: isActive ? '#ffffff' : theme.colors.body }]}>
+                <Text style={[styles.filterText, { color: isActive ? theme.colors.onPrimary : theme.colors.body }]}>
                   {f.label}
                 </Text>
               </TouchableOpacity>
@@ -210,29 +213,26 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
+  searchFilterContainer: {
     paddingHorizontal: spacingNumeric.md,
-    paddingTop: 50,
+    paddingTop: spacingNumeric.xs,
     paddingBottom: spacingNumeric.xs,
-  },
-  screenTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    marginBottom: spacingNumeric.xs,
+    borderBottomWidth: 1,
   },
   searchInput: {
     marginBottom: spacingNumeric.xs,
   },
   filterScroll: {
     flexDirection: 'row',
-    marginBottom: spacingNumeric.xs,
+    gap: spacingNumeric.xs,
+    paddingBottom: 4,
   },
   filterPill: {
     paddingVertical: 6,
     paddingHorizontal: spacingNumeric.sm,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
-    marginRight: spacingNumeric.xs,
+    marginRight: spacingNumeric.xxs,
   },
   filterText: {
     fontSize: 12,

@@ -46,8 +46,8 @@ export function getEnvironmentConfig(): EnvironmentConfig {
   const currentEnv = (process.env.EXPO_PUBLIC_APP_ENV as AppEnvironment) || 'development';
   const preset = ENV_PRESETS[currentEnv] || ENV_PRESETS.development;
 
-  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://reachinternational.supabase.co';
-  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key';
+  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dhbbgfzbyatzvqafnsqp.supabase.co';
+  const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_FL-1BqCcGNxYByFYzrBWuA_BvHMxVis';
 
   return {
     env: currentEnv,

@@ -105,7 +105,7 @@ export function MachineModal({ open, onClose, machine, engineers, userRole, onSu
       title={isEdit ? `Edit Machine (${machine.machine_code})` : "Register New Machine"}
       size="xl"
     >
-      <form id="machine-form" onSubmit={handleSubmit} className="flex flex-col gap-5 max-h-[80vh] overflow-y-auto pr-1">
+      <form id="machine-form" onSubmit={handleSubmit} className="flex flex-col gap-5">
         {formError && (
           <div className="p-3 text-xs rounded-[var(--radius-sm)] bg-[rgba(238,0,0,0.1)] text-[var(--color-error-deep)] border border-[var(--color-error)]">
             {formError}
@@ -122,27 +122,22 @@ export function MachineModal({ open, onClose, machine, engineers, userRole, onSu
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {/* Machine Category */}
-            <div className="flex flex-col gap-1.5 w-full">
-              <label htmlFor="category_name" className="label-sm font-medium text-[var(--color-ink)] select-none flex items-center justify-between">
-                <span>Machine Category</span>
-                <span className="text-[10px] text-[var(--color-mute)]">Required</span>
-              </label>
-              <select
-                id="category_name"
-                name="category_name"
-                defaultValue={machine?.category_name || "Forklift"}
-                disabled={isPending}
-                className="input-base w-full bg-[var(--color-canvas)] text-xs font-semibold text-[var(--color-ink)]"
-              >
-                <option value="Forklift">Forklift</option>
-                <option value="Scissor Lift">Scissor Lift</option>
-                <option value="Boom Lift">Boom Lift</option>
-                <option value="Reach Truck">Reach Truck</option>
-                <option value="Pallet Truck">Pallet Truck</option>
-                <option value="Generators">Generators</option>
-              </select>
-            </div>
+            <Select
+              id="category_name"
+              name="category_name"
+              label="Machine Category"
+              defaultValue={machine?.category_name || "Forklift"}
+              disabled={isPending}
+              required
+              options={[
+                { value: "Forklift", label: "Forklift" },
+                { value: "Scissor Lift", label: "Scissor Lift" },
+                { value: "Boom Lift", label: "Boom Lift" },
+                { value: "Reach Truck", label: "Reach Truck" },
+                { value: "Pallet Truck", label: "Pallet Truck" },
+                { value: "Generators", label: "Generators" },
+              ]}
+            />
 
             {/* Machine No (Code) */}
             <div className="flex flex-col gap-1.5 w-full">

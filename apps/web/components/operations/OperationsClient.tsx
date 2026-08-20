@@ -14,7 +14,7 @@ import {
   AnimatedBuilding2,
   AnimatedStar,
 } from "@/components/ui/animated-icons";
-import { Badge, Button, useToast } from "@/components/ui";
+import { Badge, Button, Select, useToast } from "@/components/ui";
 import type { Machine, User, MachineAssignment, MachineHourLog } from "@/lib/types/database";
 import {
   assignOperatorToMachineAction,
@@ -696,33 +696,26 @@ export function OperationsClient({
             </h3>
 
             <div className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">Select Machine *</label>
-                <select
-                  value={moveMachineId}
-                  onChange={(e) => setMoveMachineId(e.target.value)}
-                  className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] font-semibold"
-                >
-                  {machines.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.machine_name} ({m.machine_code})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Select
+                label="Select Machine *"
+                value={moveMachineId}
+                onChange={(e) => setMoveMachineId(e.target.value)}
+                options={machines.map((m) => ({
+                  value: m.id,
+                  label: `${m.machine_name} (${m.machine_code})`,
+                }))}
+              />
 
-              <div>
-                <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">Movement Type *</label>
-                <select
-                  value={moveType}
-                  onChange={(e) => setMoveType(e.target.value as any)}
-                  className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] font-semibold"
-                >
-                  <option value="loading_dispatch">Loading & Yard Dispatch</option>
-                  <option value="unloading_arrival">Unloading & Arrival at Client Site</option>
-                  <option value="relocation">Site-to-Site Relocation</option>
-                </select>
-              </div>
+              <Select
+                label="Movement Type *"
+                value={moveType}
+                onChange={(e) => setMoveType(e.target.value as any)}
+                options={[
+                  { value: "loading_dispatch", label: "Loading & Yard Dispatch" },
+                  { value: "unloading_arrival", label: "Unloading & Arrival at Client Site" },
+                  { value: "relocation", label: "Site-to-Site Relocation" },
+                ]}
+              />
 
               <div>
                 <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">Rental Client Name *</label>
@@ -759,20 +752,15 @@ export function OperationsClient({
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">Assigned Operator on Site</label>
-                <select
-                  value={moveOperatorId}
-                  onChange={(e) => setMoveOperatorId(e.target.value)}
-                  className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] font-semibold"
-                >
-                  {operators.map((op) => (
-                    <option key={op.id} value={op.id}>
-                      {op.full_name} ({op.phone || "Operator"})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Select
+                label="Assigned Operator on Site"
+                value={moveOperatorId}
+                onChange={(e) => setMoveOperatorId(e.target.value)}
+                options={operators.map((op) => ({
+                  value: op.id,
+                  label: `${op.full_name} (${op.phone || "Operator"})`,
+                }))}
+              />
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
@@ -804,20 +792,15 @@ export function OperationsClient({
             </h3>
 
             <div className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">Select Operator *</label>
-                <select
-                  value={payoutOperatorId}
-                  onChange={(e) => setPayoutOperatorId(e.target.value)}
-                  className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] font-semibold"
-                >
-                  {operators.map((op) => (
-                    <option key={op.id} value={op.id}>
-                      {op.full_name} ({op.phone || "Operator"})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <Select
+                label="Select Operator *"
+                value={payoutOperatorId}
+                onChange={(e) => setPayoutOperatorId(e.target.value)}
+                options={operators.map((op) => ({
+                  value: op.id,
+                  label: `${op.full_name} (${op.phone || "Operator"})`,
+                }))}
+              />
 
               <div className="grid grid-cols-2 gap-2">
                 <div>

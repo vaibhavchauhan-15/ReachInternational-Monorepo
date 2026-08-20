@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/animated-icons";
 import { motion, AnimatePresence } from "framer-motion";
 import type { AuditLogWithUser } from "@/lib/types/database";
-import { PageHeader, Badge, Button, Modal, FilterToolbar } from "@/components/ui";
+import { PageHeader, Badge, Button, Modal, Select, FilterToolbar } from "@/components/ui";
 import { formatAuditAction, getAuditActionStyle, getAuditLogDescription } from "@/lib/audit-helpers";
 
 interface AuditLogsClientProps {
@@ -168,33 +168,33 @@ export function AuditLogsClient({
             {/* Role Filter Select */}
             <div className="flex items-center gap-2">
               <AnimatedShieldCheck size={16} className="text-muted-foreground shrink-0 hidden sm:block" />
-              <select
+              <Select
                 value={role}
                 onChange={(e) => handleRoleChange(e.target.value)}
-                className="w-full py-2 px-3 rounded-lg bg-background border border-border text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
-              >
-                <option value="all">All User Roles</option>
-                <option value="super_admin">Super Admin</option>
-                <option value="admin">Admin</option>
-                <option value="engineer">Service Engineer</option>
-                <option value="system">System (Automated)</option>
-              </select>
+                options={[
+                  { value: "all", label: "All User Roles" },
+                  { value: "super_admin", label: "Super Admin" },
+                  { value: "admin", label: "Admin" },
+                  { value: "engineer", label: "Service Engineer" },
+                  { value: "system", label: "System (Automated)" },
+                ]}
+              />
             </div>
 
             {/* Date Filter Select */}
             <div className="flex items-center gap-2">
               <AnimatedCalendarClock size={16} className="text-muted-foreground shrink-0 hidden sm:block" />
-              <select
+              <Select
                 value={dateRange}
                 onChange={(e) => handleDateRangeChange(e.target.value)}
-                className="w-full py-2 px-3 rounded-lg bg-background border border-border text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-all"
-              >
-                <option value="all">All Time</option>
-                <option value="today">Today</option>
-                <option value="7days">Last 7 Days</option>
-                <option value="30days">Last 30 Days</option>
-                <option value="custom">Custom Date Range</option>
-              </select>
+                options={[
+                  { value: "all", label: "All Time" },
+                  { value: "today", label: "Today" },
+                  { value: "7days", label: "Last 7 Days" },
+                  { value: "30days", label: "Last 30 Days" },
+                  { value: "custom", label: "Custom Date Range" },
+                ]}
+              />
             </div>
           </div>
 

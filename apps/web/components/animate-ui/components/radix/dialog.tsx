@@ -5,6 +5,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { AnimatedX } from "@/components/ui/animated-icons";
 import { cn } from "@/lib/utils";
+import { TooltipWrapper } from "@/components/ui/tooltip";
 
 export type DialogFrom = "top" | "bottom" | "left" | "right" | "center";
 
@@ -139,10 +140,12 @@ export const DialogContent = React.forwardRef<
                 >
                   {children}
                   {showCloseButton && (
-                    <DialogPrimitive.Close className="absolute right-5 top-5 rounded-[var(--radius-sm)] p-1.5 text-[var(--color-mute)] transition-colors hover:bg-[var(--color-hairline-soft-surface)] hover:text-[var(--color-ink)] focus:outline-none">
-                      <AnimatedX size={16} />
-                      <span className="sr-only">Close</span>
-                    </DialogPrimitive.Close>
+                    <TooltipWrapper content="Close modal (Esc)" side="left">
+                      <DialogPrimitive.Close className="absolute right-5 top-5 rounded-[var(--radius-sm)] p-1.5 text-[var(--color-mute)] transition-colors hover:bg-[var(--color-hairline-soft-surface)] hover:text-[var(--color-ink)] focus:outline-none cursor-pointer">
+                        <AnimatedX size={16} />
+                        <span className="sr-only">Close</span>
+                      </DialogPrimitive.Close>
+                    </TooltipWrapper>
                   )}
                 </motion.div>
               </DialogPrimitive.Content>
