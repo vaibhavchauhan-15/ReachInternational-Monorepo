@@ -1,11 +1,11 @@
 /**
  * ServiceCentric Mobile — Theme Provider
- * Provides reactive light/dark theme objects derived from @servicecentric/design-tokens.
+ * Provides reactive light/dark theme objects derived from @reachinternational/design-tokens.
  */
 
 import React, { createContext, useContext, useState } from 'react';
 import { useColorScheme } from 'react-native';
-import { getRNTheme } from '@servicecentric/design-tokens';
+import { getRNTheme } from '@reachinternational/design-tokens';
 
 export type RNThemeType = ReturnType<typeof getRNTheme>;
 

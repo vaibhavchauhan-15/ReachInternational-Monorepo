@@ -1,5 +1,5 @@
 {
-  "name": "@servicecentric/validation",
+  "name": "@reachinternational/validation",
   "version": "0.1.0",
   "private": true,
   "main": "./src/index.ts",
@@ -12,10 +12,10 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "echo \"@servicecentric/validation built\""
+    "build": "echo \"@reachinternational/validation built\""
   },
   "dependencies": {
-    "@servicecentric/types": "workspace:*",
+    "@reachinternational/types": "workspace:*",
     "zod": "^3.23.8"
   },
   "devDependencies": {

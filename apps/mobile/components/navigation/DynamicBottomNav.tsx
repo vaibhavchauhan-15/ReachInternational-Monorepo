@@ -9,7 +9,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-nati
 import { usePathname, useRouter } from 'expo-router';
 import { useTheme } from '../ui';
 import { mobileNavItems, type MobileSubItem } from '../../lib/nav/navItems';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 
 export interface DynamicBottomNavProps {
   activeTab?: string;

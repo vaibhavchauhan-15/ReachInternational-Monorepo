@@ -1,4 +1,4 @@
-# Testing & Verification Rules — ServiceCentric
+# Testing & Verification Rules — ReachInternational
 
 1. **TypeScript Typecheck**: Run `pnpm typecheck` to verify workspace-wide type safety (0 errors across 9 workspace projects).
 2. **ESLint Verification**: Run `pnpm lint` to ensure code meets linting standards across all workspace projects.

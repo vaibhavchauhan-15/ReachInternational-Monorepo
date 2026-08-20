@@ -1,11 +1,11 @@
-# UI & Aesthetic Rules — ServiceCentric (Web & Mobile UI/UX Consistency Protocol)
+# UI & Aesthetic Rules — ReachInternational (Web & Mobile UI/UX Consistency Protocol)
 
-## Specific ServiceCentric Aesthetics
+## Specific ReachInternational Aesthetics
 1. **Enterprise Dark/Light Mode**: Use curated dark color palettes (`#0a0a0a` canvas, `#171717` cards, `#262626` / `#ebebeb` hairlines, blue `#3b82f6` / `#0070f3` accents) with smooth glassmorphism (`backdrop-blur-md`, `bg-slate-900/80`).
 2. **Typography**: Modern Vercel Geist font stack (`Geist Sans` & `Geist Mono`) with high legibility for industrial data tables, KPI metrics, and log timelines.
 3. **Animations**: Subtle, purposeful micro-animations using `framer-motion` for page transitions, tab switches, and modal opens. Avoid heavy or disruptive transitions.
 4. **Responsive Layouts**: Design for both desktop monitors and mobile touch devices. Mobile bottom navigation must utilize Expo Router tabs + top hairline border.
-5. **UI Primitives**: Always reuse components from `components/ui/*` (`Button`, `Card`, `Badge`, `EnterpriseTable`, `Modal`, `PageHeader`, `Toast`, `Skeleton`) and shared design tokens (`@servicecentric/design-tokens`) before inventing custom elements.
+5. **UI Primitives**: Always reuse components from `components/ui/*` (`Button`, `Card`, `Badge`, `EnterpriseTable`, `Modal`, `PageHeader`, `Toast`, `Skeleton`) and shared design tokens (`@reachinternational/design-tokens`) before inventing custom elements.
 6. **No Placeholders**: Never use broken or filler image links; generate or build SVG mockups.
 
 ---
@@ -28,7 +28,7 @@ The mobile app may adapt layouts and interactions for smaller screens, but it mu
 
 ## 1. Single Source of Truth for Design
 
-Before creating or modifying any UI, the AI agent must identify and follow the existing application's design system (`@servicecentric/design-tokens`).
+Before creating or modifying any UI, the AI agent must identify and follow the existing application's design system (`@reachinternational/design-tokens`).
 
 Create and maintain a shared design system containing:
 
@@ -84,7 +84,7 @@ const colors = {
 };
 ```
 
-The values must come from a shared design specification (`@servicecentric/design-tokens`).
+The values must come from a shared design specification (`@reachinternational/design-tokens`).
 
 ### Rules
 
@@ -296,7 +296,7 @@ Do not use:
 
 unless there is a deliberate design-system decision.
 
-If platform limitations require different icon implementations, choose visually equivalent icons and maintain the same meaning and visual weight (e.g. via `@servicecentric/design-tokens` icon registry).
+If platform limitations require different icon implementations, choose visually equivalent icons and maintain the same meaning and visual weight (e.g. via `@reachinternational/design-tokens` icon registry).
 
 ---
 
@@ -381,7 +381,7 @@ export const designTokens = {
 };
 ```
 
-Web and Mobile should consume these tokens (`@servicecentric/design-tokens`) instead of hard-coding values independently.
+Web and Mobile should consume these tokens (`@reachinternational/design-tokens`) instead of hard-coding values independently.
 
 Avoid:
 

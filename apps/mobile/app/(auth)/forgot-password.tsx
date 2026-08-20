@@ -7,7 +7,7 @@ import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } fr
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { Button, Input, Card, useTheme } from '../../components/ui';
-import { spacingNumeric } from '@servicecentric/design-tokens';
+import { spacingNumeric } from '@reachinternational/design-tokens';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();

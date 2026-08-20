@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import type { Task, TaskFilterParams, TaskStats, User } from "@servicecentric/types";
+import type { Task, TaskFilterParams, TaskStats, User } from "@reachinternational/types";
 
 export const getTasks = cache(async (
   userId: string,

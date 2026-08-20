@@ -8,8 +8,8 @@
  * - HR & Finance sensitive data shielding
  */
 
-import { roleHasPermission } from '@servicecentric/permissions';
-import type { UserRole } from '@servicecentric/types';
+import { roleHasPermission } from '@reachinternational/permissions';
+import type { UserRole } from '@reachinternational/types';
 
 /**
  * Invariant Check: Verify that no service role key or server secret is present in mobile environment.

@@ -1,4 +1,4 @@
 /**
- * Shared Configuration Package Placeholder for ServiceCentric Monorepo
+ * Shared Configuration Package Placeholder for ReachInternational Monorepo
  */
-export const CONFIG_PACKAGE = "@servicecentric/config";
+export const CONFIG_PACKAGE = "@reachinternational/config";

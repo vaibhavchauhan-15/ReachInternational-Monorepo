@@ -1,5 +1,5 @@
 {
-  "name": "@servicecentric/permissions",
+  "name": "@reachinternational/permissions",
   "version": "0.1.0",
   "private": true,
   "main": "./src/index.ts",
@@ -12,10 +12,10 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "echo \"@servicecentric/permissions built\""
+    "build": "echo \"@reachinternational/permissions built\""
   },
   "dependencies": {
-    "@servicecentric/types": "workspace:*"
+    "@reachinternational/types": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.0.0"

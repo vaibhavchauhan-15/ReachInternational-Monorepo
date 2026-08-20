@@ -1,5 +1,5 @@
 # Product Requirements Document
-## ServiceCentric — Machine Service Tracking & Automated Alert System
+## ReachInternational — Machine Service Tracking & Automated Alert System
 ### Phase 1 — Internal Enterprise Application
 
 | | |
@@ -17,7 +17,7 @@
 
 The business currently tracks machine service schedules for 500+ heavy machinery units manually using Excel. This creates a single point of failure: if the admin does not check the spreadsheet on a given day, service due-dates are missed, customer relationships suffer, and engineers are not dispatched.
 
-ServiceCentric Phase 1 replaces this manual process with an internal web application that:
+ReachInternational Phase 1 replaces this manual process with an internal web application that:
 
 - Centralizes all machine and customer service records in a single database.
 - Automatically identifies machines due for service **today**, **tomorrow**, or **overdue**.

@@ -1,4 +1,4 @@
-import type { UserRole } from "@servicecentric/types";
+import type { UserRole } from "@reachinternational/types";
 
 export const CANONICAL_ROLES: UserRole[] = [
   "super_admin",

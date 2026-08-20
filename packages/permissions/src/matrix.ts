@@ -1,4 +1,4 @@
-import type { UserRole } from "@servicecentric/types";
+import type { UserRole } from "@reachinternational/types";
 
 /**
  * Role-Permission Matrix mapping all 14 system roles to granular permissions

@@ -1,4 +1,4 @@
 /**
- * Re-export canonical domain types from @servicecentric/types monorepo package.
+ * Re-export canonical domain types from @reachinternational/types monorepo package.
  */
-export * from "@servicecentric/types";
+export * from "@reachinternational/types";

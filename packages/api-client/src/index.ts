@@ -1,5 +1,5 @@
 /**
- * Shared API Client Package for ServiceCentric Monorepo
+ * Shared API Client Package for ReachInternational Monorepo
  * Standardized API response envelopes, error classes, query parameters, and endpoint contracts.
  */
 
@@ -8,4 +8,4 @@ export * from './query';
 export * from './error';
 export * from './endpoints';
 
-export const API_CLIENT_PACKAGE = "@servicecentric/api-client";
+export const API_CLIENT_PACKAGE = "@reachinternational/api-client";

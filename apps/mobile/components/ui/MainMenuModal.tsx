@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useTheme } from './ThemeProvider';
-import { radiusNumeric, spacingNumeric } from '@servicecentric/design-tokens';
+import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import {
   LayoutDashboard,
   CheckSquare,

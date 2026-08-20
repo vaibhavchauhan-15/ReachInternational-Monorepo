@@ -1,9 +1,9 @@
-# Coding & Architecture Rules — ServiceCentric
+# Coding & Architecture Rules — ReachInternational
 
-1. **Strict TypeScript & Explicit Types**: Avoid using `any` or `@ts-ignore`. Define data models in `@servicecentric/types` or `lib/types/*` and infer from Supabase Database Types.
+1. **Strict TypeScript & Explicit Types**: Avoid using `any` or `@ts-ignore`. Define data models in `@reachinternational/types` or `lib/types/*` and infer from Supabase Database Types.
 2. **Server First Architecture (RSC)**: Default to React Server Components unless client interactivity (state, click handlers, animations, hooks) is strictly required. Use `'use client'` only at the lowest component level.
 3. **Data Access Layer Enforcement**: Never write ad-hoc raw Supabase select queries inside UI components. Use `lib/dal.ts` or `lib/queries/*`.
-4. **Server Actions for Mutations**: Handle all POST/PUT/DELETE operations in `app/actions/*`. Validate inputs with canonical Zod schemas from `@servicecentric/validation`.
+4. **Server Actions for Mutations**: Handle all POST/PUT/DELETE operations in `app/actions/*`. Validate inputs with canonical Zod schemas from `@reachinternational/validation`.
 5. **Monorepo Layering & One-Way Dependency Flow**:
    - Dependencies flow strictly: `apps/*` → `shared/domain packages` → `foundation packages` (`types`, `utils`).
    - Packages MUST NOT import from applications (`packages/*` → `apps/*` forbidden).
@@ -12,7 +12,7 @@
    - Circular workspace dependencies are forbidden.
 6. **Canonical Package Export Barrels & No Deep Internal Imports**:
    - Always import strictly through canonical package export barrels (`index.ts` / exports map).
-   - Deep internal file imports (e.g. `@servicecentric/utils/src/internal/date.ts`) are strictly forbidden.
+   - Deep internal file imports (e.g. `@reachinternational/utils/src/internal/date.ts`) are strictly forbidden.
 7. **Architectural Change Control & Blast Radius Management**:
    - Do NOT refactor, rename, extract, or split packages unnecessarily without explicit requirement or a verified concrete problem.
    - Always choose the smallest, most localized modification that satisfies requirements.

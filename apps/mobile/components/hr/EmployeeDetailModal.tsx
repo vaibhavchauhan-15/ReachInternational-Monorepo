@@ -6,8 +6,8 @@
 import React, { useState } from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Badge, Button, useTheme } from '../ui';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
-import { formatDate } from '@servicecentric/utils';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { formatDate } from '@reachinternational/utils';
 import { X, User, Phone, Mail, ShieldCheck, FileText, Wrench } from 'lucide-react-native';
 
 export interface EmployeeDetailModalProps {

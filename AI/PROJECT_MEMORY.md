@@ -1,7 +1,7 @@
-# Project Memory — ServiceCentric (reachinternation.com)
+# Project Memory — ReachInternational (reachinternation.com)
 
 ## Core Overview
-**ServiceCentric** is an enterprise-grade industrial machine service, maintenance tracking, and notification management platform built for Service Managers, Engineers, and Clients.
+**ReachInternational** is an enterprise-grade industrial machine service, maintenance tracking, and notification management platform built for Service Managers, Engineers, and Clients.
 
 ## Technology Stack
 - **Framework**: Next.js 16.2 (App Router - `apps/web`), Expo React Native (`apps/mobile`), Turborepo monorepo
@@ -10,7 +10,7 @@
 - **Animations**: Framer Motion 12, TW Animate CSS
 - **Database & Auth**: Supabase PostgreSQL, Supabase SSR Auth, Row Level Security (RLS)
 - **Notification Services**: SendGrid Mail API, Twilio (SMS/WhatsApp), Upstash QStash (Scheduled Jobs/Queues)
-- **Shared Packages (`packages/*`)**: `@servicecentric/types`, `@servicecentric/validation`, `@servicecentric/permissions`, `@servicecentric/design-tokens`, `@servicecentric/api-client`, `@servicecentric/utils`, `@servicecentric/config`
+- **Shared Packages (`packages/*`)**: `@reachinternational/types`, `@reachinternational/validation`, `@reachinternational/permissions`, `@reachinternational/design-tokens`, `@reachinternational/api-client`, `@reachinternational/utils`, `@reachinternational/config`
 - **Validation & State**: Zod v4, Server Actions, React Server Components (RSC) + Data Access Layer (DAL), TanStack Query (Mobile)
 
 ## Key User Roles (RBAC)

@@ -1,4 +1,4 @@
-# Security Rules — ServiceCentric
+# Security Rules — ReachInternational
 
 1. **Role-Based Access Control (RBAC)**: Verify user session role (`admin`, `service_manager`, `engineer`, `client`) before rendering restricted pages or executing elevated Server Actions.
 2. **Supabase Row Level Security (RLS)**: Enforce RLS policies on all tables (`machines`, `service_logs`, `notifications`, `profiles`). Never bypass RLS in standard queries.

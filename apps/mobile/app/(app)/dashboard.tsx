@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useAuth } from '../../lib/auth/useAuth';
 import { Card, Badge, Button, useTheme, MobileHeader } from '../../components/ui';
-import { spacingNumeric } from '@servicecentric/design-tokens';
-import { formatCompactCurrency } from '@servicecentric/utils';
+import { spacingNumeric } from '@reachinternational/design-tokens';
+import { formatCompactCurrency } from '@reachinternational/utils';
 
 export default function DashboardScreen() {
   const { user, role } = useAuth();

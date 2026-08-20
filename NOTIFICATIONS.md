@@ -1,7 +1,7 @@
 # Notification System Setup Guide
 
 ## Overview
-ServiceCentric uses a multi-channel notification system:
+ReachInternational uses a multi-channel notification system:
 - **Email**: SendGrid (consolidated daily summaries, auth emails)
 - **WhatsApp**: Twilio (immediate action alerts for engineers and admins)
 - **In-App**: Dashboard notifications
@@ -25,7 +25,7 @@ TWILIO_SMS_NUMBER=+91xxxxxxxxxx
 ```env
 SENDGRID_API_KEY=your_sendgrid_api_key
 SENDGRID_FROM_EMAIL=your_from_email@example.com
-SENDGRID_FROM_NAME=ServiceCentric
+SENDGRID_FROM_NAME=ReachInternational
 ```
 
 ## Database Migration
@@ -96,7 +96,7 @@ qstash schedule \
 ## Email Templates
 
 ### Daily Summary Email
-**Subject**: ServiceCentric - Daily Service Summary (03 Aug 2026)
+**Subject**: ReachInternational - Daily Service Summary (03 Aug 2026)
 
 **Content**:
 - Today's due count

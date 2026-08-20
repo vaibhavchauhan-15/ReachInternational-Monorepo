@@ -6,8 +6,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../supabase';
 import type { Session, User } from '@supabase/supabase-js';
-import type { UserRole } from '@servicecentric/types';
-import { roleHasPermission, hasAnyPermission, type PermissionCode } from '@servicecentric/permissions';
+import type { UserRole } from '@reachinternational/types';
+import { roleHasPermission, hasAnyPermission, type PermissionCode } from '@reachinternational/permissions';
 
 export interface AuthContextType {
   session: Session | null;

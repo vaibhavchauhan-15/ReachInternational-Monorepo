@@ -11,7 +11,7 @@ import {
   verifyTaskSchema,
   taskCommentSchema,
   type CreateTaskInput,
-} from "@servicecentric/validation";
+} from "@reachinternational/validation";
 
 export async function createTask(input: CreateTaskInput) {
   try {

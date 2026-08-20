@@ -10,8 +10,9 @@ import {
   Alert,
 } from 'react-native';
 import { useTheme, Button } from '../ui';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
-import type { Task, User } from '@servicecentric/types';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import type { Task, User } from '@reachinternational/types';
+import { summarizeTaskTitle } from '@reachinternational/utils';
 
 interface CreateTaskModalProps {
   visible: boolean;
@@ -44,7 +45,18 @@ export function CreateTaskModal({
   );
 
   const handleSave = () => {
-    if (!title.trim()) {
+    if (!description.trim()) {
+      Alert.alert('Required', 'Please enter task description / instructions');
+      return;
+    }
+
+    let finalTitle = title.trim();
+    if (!finalTitle) {
+      finalTitle = summarizeTaskTitle(description);
+      setTitle(finalTitle);
+    }
+
+    if (!finalTitle) {
       Alert.alert('Required', 'Please enter task title');
       return;
     }
@@ -55,7 +67,7 @@ export function CreateTaskModal({
 
     onSave({
       id: initialTask?.id,
-      title,
+      title: finalTitle,
       description,
       due_date: dueDate,
       due_time: dueTime,
@@ -103,13 +115,13 @@ export function CreateTaskModal({
 
           {/* Description */}
           <View style={styles.fieldGroup}>
-            <Text style={[styles.fieldLabel, { color: theme.colors.mute }]}>Description</Text>
+            <Text style={[styles.fieldLabel, { color: theme.colors.mute }]}>Description *</Text>
             <View style={[styles.inputBox, styles.textAreaBox, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
               <Text style={styles.inputIcon}>📄</Text>
               <TextInput
                 value={description}
                 onChangeText={setDescription}
-                placeholder="Enter task description (optional)"
+                placeholder="Enter task description / instructions (Required)"
                 placeholderTextColor={theme.colors.faint}
                 multiline
                 numberOfLines={3}

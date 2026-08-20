@@ -9,8 +9,8 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } 
 import { Card, Badge, Button, useTheme } from '../../components/ui';
 import { SiteMovementModal } from '../../components/operations/SiteMovementModal';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
-import { formatDate, formatMachineCode } from '@servicecentric/utils';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { formatDate, formatMachineCode } from '@reachinternational/utils';
 import { Truck, Clock, Fuel, UserCheck, MapPin } from 'lucide-react-native';
 
 export type OpsFilter = 'all' | 'shift_logs' | 'movements' | 'assignments';

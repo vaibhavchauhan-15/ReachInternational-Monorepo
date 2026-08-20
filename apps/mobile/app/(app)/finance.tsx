@@ -8,8 +8,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { Card, Badge, Input, Button, useTheme } from '../../components/ui';
 import { ExpenseClaimModal } from '../../components/finance/ExpenseClaimModal';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
-import { formatDate, formatINR } from '@servicecentric/utils';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { formatDate, formatINR } from '@reachinternational/utils';
 import { DollarSign, FileText, CheckCircle2, AlertTriangle, CreditCard } from 'lucide-react-native';
 
 export type FinFilter = 'all' | 'invoices' | 'expenses' | 'approvals';

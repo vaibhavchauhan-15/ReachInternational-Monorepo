@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-nati
 import { useRouter, usePathname, useGlobalSearchParams } from 'expo-router';
 import { useTheme } from './ThemeProvider';
 import { mobileNavItems, type MobileSubItem } from '../../lib/nav/navItems';
-import { radiusNumeric, spacingNumeric } from '@servicecentric/design-tokens';
+import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
 export const CustomBottomTabBar: React.FC<any> = () => {
   const { theme } = useTheme();

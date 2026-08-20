@@ -1,4 +1,4 @@
-# ServiceCentric — Current Security & RBAC Audit
+# ReachInternational — Current Security & RBAC Audit
 
 > **Phase 0 Deliverable**  
 > **Last Updated:** 2026-08-19  
@@ -6,9 +6,9 @@
 
 ---
 
-## 1. Security Architecture Overview
+## 1. Executive Summary & Defense-in-Depth Model
 
-Security in ServiceCentric is built on a **defense-in-depth model** with four distinct layers:
+Security in ReachInternational is built on a **defense-in-depth model** with four distinct layers:
 
 1. **Authentication Boundary**: Supabase SSR Auth with secure HTTP-only cookies (`lib/supabase/server.ts`).
 2. **Database Authorization Boundary**: Supabase Row Level Security (RLS) enforced directly in PostgreSQL across 38+ tables using `auth.uid()`, `public.profiles`, and tenant scoping policies.

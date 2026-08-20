@@ -1,5 +1,5 @@
 /**
- * ServiceCentric Shared Validation Package (@servicecentric/validation)
+ * ReachInternational Shared Validation Package (@reachinternational/validation)
  */
 
 export * from "./helpers";

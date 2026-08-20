@@ -1,4 +1,4 @@
-# Monorepo System Architecture & Design System — ServiceCentric
+# Monorepo System Architecture & Design System — ReachInternational
 
 > *"Architecture should prevent accidental complexity, not create complexity in the name of architecture."*
 
@@ -9,23 +9,23 @@
 Dependencies flow IN ONE DIRECTION ONLY:
 
               [ apps/* ]
-     (apps/web [@servicecentric/web], 
-      apps/mobile [@servicecentric/mobile])
+     (apps/web [@reachinternational/web], 
+      apps/mobile [@reachinternational/mobile])
                     │
                     ▼
         [ shared/domain packages ]
-   (@servicecentric/api-client, @servicecentric/validation, 
-    @servicecentric/permissions, @servicecentric/design-tokens)
+   (@reachinternational/api-client, @reachinternational/validation, 
+    @reachinternational/permissions, @reachinternational/design-tokens)
                     │
                     ▼
          [ foundation packages ]
-     (@servicecentric/types, @servicecentric/utils)
+     (@reachinternational/types, @reachinternational/utils)
 
 ### Layer Definitions:
 1. **`apps/*`**: Applications (Web, Mobile) that consume shared domain and foundation packages.
 2. **`shared/domain packages`**: Business logic, API client contracts (`api-client`), Zod validation schemas (`validation`), universal RBAC matrices (`permissions`), and platform-neutral design tokens (`design-tokens`) providing Web CSS custom properties and Native React Native theme object adapters.
 3. **`foundation packages`**: Pure, low-level contracts (`types`, `utils`) with zero domain or platform assumptions.
-4. **`tooling/config infrastructure`**: Isolated build and lint configurations (`@servicecentric/config`), treated as tooling, not runtime dependencies.
+4. **`tooling/config infrastructure`**: Isolated build and lint configurations (`@reachinternational/config`), treated as tooling, not runtime dependencies.
 
 ---
 
@@ -39,7 +39,7 @@ Before adding an import between workspace projects, verify that the dependency d
 - ❌ `Platform-neutral / foundation package` → `Platform-specific package` (Platform-neutral code MUST NOT depend on platform-specific implementation)
 - ❌ `apps/web` ↔ `apps/mobile` (No cross-app imports)
 - ❌ Circular workspace dependencies (Direct or indirect)
-- ❌ **Deep internal imports**: Importing from another package's internal source files (e.g. `@servicecentric/utils/src/internal/date.ts`). Always import strictly through canonical package export barrels (`index.ts` / exports map).
+- ❌ **Deep internal imports**: Importing from another package's internal source files (e.g. `@reachinternational/utils/src/internal/date.ts`). Always import strictly through canonical package export barrels (`index.ts` / exports map).
 
 ### Allowed:
 - ✅ `apps/*` → Shared domain & foundation packages
@@ -83,13 +83,13 @@ Before creating or modifying any workspace dependency in `package.json`:
 
 ## 6. PACKAGE RESPONSIBILITIES
 
-- **`@servicecentric/types`**: Pure TypeScript interfaces, database types, DTOs, and global enums. Zero runtime dependencies.
-- **`@servicecentric/validation`**: Canonical Zod schemas shared across forms, API handlers, and Server Actions.
-- **`@servicecentric/permissions`**: Universal RBAC roles, permission matrices, and 3-tier scoping rules (`ORGANIZATION`, `BRANCH`, `ASSIGNED`).
-- **`@servicecentric/design-tokens`**: Platform-neutral visual tokens with Web (CSS variables) and Mobile (RN style objects) adapters.
-- **`@servicecentric/api-client`**: Standardized HTTP/RPC contracts, response envelopes (`ApiResponse<T>`), and API error handlers.
-- **`@servicecentric/utils`**: Pure platform-neutral helper functions (date formatters, INR currency, string formatters, math).
-- **`@servicecentric/config`**: Monorepo tooling and linting configurations.
+- **`@reachinternational/types`**: Pure TypeScript interfaces, database types, DTOs, and global enums. Zero runtime dependencies.
+- **`@reachinternational/validation`**: Canonical Zod schemas shared across forms, API handlers, and Server Actions.
+- **`@reachinternational/permissions`**: Universal RBAC roles, permission matrices, and 3-tier scoping rules (`ORGANIZATION`, `BRANCH`, `ASSIGNED`).
+- **`@reachinternational/design-tokens`**: Platform-neutral visual tokens with Web (CSS variables) and Mobile (RN style objects) adapters.
+- **`@reachinternational/api-client`**: Standardized HTTP/RPC contracts, response envelopes (`ApiResponse<T>`), and API error handlers.
+- **`@reachinternational/utils`**: Pure platform-neutral helper functions (date formatters, INR currency, string formatters, math).
+- **`@reachinternational/config`**: Monorepo tooling and linting configurations.
 
 ---
 

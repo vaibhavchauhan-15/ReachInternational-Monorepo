@@ -7,8 +7,8 @@
 import React, { useState } from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Badge, Button, useTheme } from '../ui';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
-import { formatMachineCode, formatDate, formatINR } from '@servicecentric/utils';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { formatMachineCode, formatDate, formatINR } from '@reachinternational/utils';
 import { X, Truck, ShieldCheck, Wrench, Calendar, MapPin, UserCheck } from 'lucide-react-native';
 
 export interface MachineDetailModalProps {

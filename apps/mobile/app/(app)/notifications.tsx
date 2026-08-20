@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Switch } from 'react-native';
 import { Card, Badge, Button, useTheme, MobileHeader } from '../../components/ui';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
-import { formatDate } from '@servicecentric/utils';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { formatDate } from '@reachinternational/utils';
 import { useRouter, useGlobalSearchParams } from 'expo-router';
 import { Bell, CheckCheck, ShieldAlert, Wrench, Settings, ArrowRight } from 'lucide-react-native';
 

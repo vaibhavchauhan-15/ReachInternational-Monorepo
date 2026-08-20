@@ -1,8 +1,8 @@
-# ServiceCentric — Enterprise Heavy Machinery, Field Service & Operations Platform
+# ReachInternational — Enterprise Heavy Machinery, Field Service & Operations Platform
 
-> **ServiceCentric** — Enterprise-grade industrial machine tracking, multi-branch operations, field service maintenance, breakdown complaint handling, rental fleet management, CRM & sales pipelines, finance & accounting governance, HR lifecycle management, and automated notification system.
+> **ReachInternational** — Enterprise-grade industrial machine tracking, multi-branch operations, field service maintenance, breakdown complaint handling, rental fleet management, CRM & sales pipelines, finance & accounting governance, HR lifecycle management, and automated notification system.
 
-ServiceCentric transforms heavy machinery fleet management and end-to-end industrial operations into an automated, multi-tenant capable, branch-aware enterprise platform. Built for Service Managers, Branch Managers, Field Engineers, Mechanics, Supervisors, Operators, Store Managers, HR Managers, Rental Managers, Sales Executives, Finance Managers, and Admins, it automatically tracks machinery lifecycles, processes digital Field Service Reports (FSR), manages breakdown complaints, orchestrates rental agreements and sales pipelines, handles multi-way financial matching & invoicing, logs daily operator hour meters & site movements, and dispatches multi-channel alerts via SendGrid and Twilio.
+ReachInternational transforms heavy machinery fleet management and end-to-end industrial operations into an automated, multi-tenant capable, branch-aware enterprise platform. Built for Service Managers, Branch Managers, Field Engineers, Mechanics, Supervisors, Operators, Store Managers, HR Managers, Rental Managers, Sales Executives, Finance Managers, and Admins, it automatically tracks machinery lifecycles, processes digital Field Service Reports (FSR), manages breakdown complaints, orchestrates rental agreements and sales pipelines, handles multi-way financial matching & invoicing, logs daily operator hour meters & site movements, and dispatches multi-channel alerts via SendGrid and Twilio.
 
 ---
 
@@ -30,7 +30,7 @@ ServiceCentric transforms heavy machinery fleet management and end-to-end indust
 
 ## 🚀 Project Overview
 
-**ServiceCentric** is an enterprise platform engineered to manage large-scale heavy machinery fleets, field service operations, multi-branch inventory, rental fleet workflows, customer relationships, corporate finance, and workforce lifecycle management. Designed to scale seamlessly from 500+ machines to 50,000+ units across regional branches without architectural friction.
+**ReachInternational** is an enterprise platform engineered to manage large-scale heavy machinery fleets, field service operations, multi-branch inventory, rental fleet workflows, customer relationships, corporate finance, and workforce lifecycle management. Designed to scale seamlessly from 500+ machines to 50,000+ units across regional branches without architectural friction.
 
 ### Key Operational Challenges Solved
 
@@ -155,21 +155,21 @@ ServiceCentric transforms heavy machinery fleet management and end-to-end indust
 
 ## 🏗 Monorepo System Architecture & Boundary Rules
 
-ServiceCentric is orchestrated as a high-performance pnpm workspace with Turborepo task pipeline management (`turbo.json`).
+ReachInternational is orchestrated as a high-performance pnpm workspace with Turborepo task pipeline management (`turbo.json`).
 
 ```
               [ apps/* ]
-     (apps/web [@servicecentric/web], 
-      apps/mobile [@servicecentric/mobile])
+     (apps/web [@reachinternational/web], 
+      apps/mobile [@reachinternational/mobile])
                     │
                     ▼
         [ shared/domain packages ]
-   (@servicecentric/api-client, @servicecentric/validation, 
-    @servicecentric/permissions, @servicecentric/design-tokens)
+   (@reachinternational/api-client, @reachinternational/validation, 
+    @reachinternational/permissions, @reachinternational/design-tokens)
                     │
                     ▼
          [ foundation packages ]
-     (@servicecentric/types, @servicecentric/utils)
+     (@reachinternational/types, @reachinternational/utils)
 ```
 
 ### Layer & Boundary Enforcement Rules
@@ -181,13 +181,13 @@ ServiceCentric is orchestrated as a high-performance pnpm workspace with Turbore
    - ❌ Circular dependencies (Direct or indirect)
    - ❌ Deep internal imports (Import strictly through canonical package export barrels `index.ts`)
 3. **Workspace Packages**:
-   - **`@servicecentric/types`**: Pure TypeScript interfaces, DTOs, and Supabase Database Types (zero runtime dependencies).
-   - **`@servicecentric/validation`**: Canonical Zod schemas shared across forms, API handlers, and Server Actions.
-   - **`@servicecentric/permissions`**: Universal 14-role RBAC matrix, permissions, and 3-tier scoping rules.
-   - **`@servicecentric/design-tokens`**: Visual tokens with Web (CSS custom variables) and Mobile (React Native theme objects) adapters.
-   - **`@servicecentric/api-client`**: Standardized response envelopes (`ApiResponse<T>`), endpoint contracts, and error handlers.
-   - **`@servicecentric/utils`**: Platform-neutral helper functions (date formatters `"en-GB"`, INR currency, string formatters).
-   - **`@servicecentric/config`**: Tooling and linting configurations.
+   - **`@reachinternational/types`**: Pure TypeScript interfaces, DTOs, and Supabase Database Types (zero runtime dependencies).
+   - **`@reachinternational/validation`**: Canonical Zod schemas shared across forms, API handlers, and Server Actions.
+   - **`@reachinternational/permissions`**: Universal 14-role RBAC matrix, permissions, and 3-tier scoping rules.
+   - **`@reachinternational/design-tokens`**: Visual tokens with Web (CSS custom variables) and Mobile (React Native theme objects) adapters.
+   - **`@reachinternational/api-client`**: Standardized response envelopes (`ApiResponse<T>`), endpoint contracts, and error handlers.
+   - **`@reachinternational/utils`**: Platform-neutral helper functions (date formatters `"en-GB"`, INR currency, string formatters).
+   - **`@reachinternational/config`**: Tooling and linting configurations.
 
 ---
 
@@ -303,7 +303,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 # SendGrid Email Integration
 SENDGRID_API_KEY=your_sendgrid_api_key
 SENDGRID_FROM_EMAIL=notifications@yourdomain.com
-SENDGRID_FROM_NAME=ServiceCentric
+SENDGRID_FROM_NAME=ReachInternational
 
 # Twilio Messaging (WhatsApp / SMS)
 TWILIO_ACCOUNT_SID=your_twilio_sid
@@ -320,7 +320,7 @@ QSTASH_NEXT_SIGNING_KEY=your_next_qstash_key
 
 ## 🔐 13-Role RBAC & Data Scoping Architecture
 
-ServiceCentric implements a granular permission matrix enforced across Server Actions (`lib/auth/rbac.ts`), Data Access Layer (`lib/dal.ts`), database RLS policies, and UI elements.
+ReachInternational implements a granular permission matrix enforced across Server Actions (`lib/auth/rbac.ts`), Data Access Layer (`lib/dal.ts`), database RLS policies, and UI elements.
 
 ### Supported System Roles
 
@@ -384,7 +384,7 @@ The platform relies on Supabase PostgreSQL with **38+ core tables**, all protect
 
 ## 🛠 Breakdown Complaints & Digital FSR System
 
-ServiceCentric features a complete field service workflow for breakdown complaints:
+ReachInternational features a complete field service workflow for breakdown complaints:
 
 1. **Malfunction Reporting**: A Supervisor, Admin, Service Manager, or Field Engineer logs a breakdown complaint via `<MachineComplaintModal />` on `/machines?tab=complaints` or via `action=create_complaint`.
 2. **Engineer Dispatch & Multi-Option Filtering**: The complaint is assigned to a Service Engineer or Mechanic with status set to `open`, `in_progress`, or `pending_parts`. The `/machines?tab=complaints` view provides multi-option filters for Status, Machine/Model, Assigned Engineer, and Spare Parts Required.
@@ -410,11 +410,11 @@ The system supports automated multi-channel messaging:
 ```
 reachinternation.com/
 ├── apps/
-│   ├── web/                          # Next.js App Router Application (@servicecentric/web)
+│   ├── web/                          # Next.js App Router Application (@reachinternational/web)
 │   │   ├── app/                      # Next.js App Router (25 route modules, actions, API routes)
 │   │   ├── components/               # Geist design system UI components & feature modules
 │   │   └── lib/                      # Data Access Layer (DAL), query helpers, & auth re-exports
-│   └── mobile/                       # Expo / React Native Application (@servicecentric/mobile)
+│   └── mobile/                       # Expo / React Native Application (@reachinternational/mobile)
 │       ├── app/                      # Expo Router navigation ((auth)/login, (app)/dashboard, my-work, machines)
 │       ├── components/ui/            # Native design system primitives (Button, Input, Card, Badge, ThemeProvider)
 │       ├── components/work/          # My Work field task modals (MeterLogModal, ComplaintStatusModal)
@@ -430,13 +430,13 @@ reachinternation.com/
 │       ├── components/ui/            # Native design system primitives, OfflineSyncBanner & OptimizedList
 │       └── lib/                      # Supabase client, useAuth, notifications, media, offline-sync, realtime, performance, accessibility, security, testing & environment manager
 ├── packages/                         # Canonical Shared Monorepo Packages
-│   ├── types/                        # @servicecentric/types — 22 domain category TypeScript definitions
-│   ├── validation/                   # @servicecentric/validation — Zod schemas across 12 domain categories
-│   ├── permissions/                  # @servicecentric/permissions — 14 roles, 100+ permissions & 3-tier scoping
-│   ├── design-tokens/                # @servicecentric/design-tokens — Light/Dark tokens & Web/RN theme adapters
-│   ├── api-client/                   # @servicecentric/api-client — Shared API response envelopes, error classes & 11 domain endpoint contracts
-│   ├── config/                       # @servicecentric/config — Shared TypeScript/ESLint workspace configs
-│   └── utils/                        # @servicecentric/utils — Platform-neutral date, currency, string, and object helpers
+│   ├── types/                        # @reachinternational/types — 22 domain category TypeScript definitions
+│   ├── validation/                   # @reachinternational/validation — Zod schemas across 12 domain categories
+│   ├── permissions/                  # @reachinternational/permissions — 14 roles, 100+ permissions & 3-tier scoping
+│   ├── design-tokens/                # @reachinternational/design-tokens — Light/Dark tokens & Web/RN theme adapters
+│   ├── api-client/                   # @reachinternational/api-client — Shared API response envelopes, error classes & 11 domain endpoint contracts
+│   ├── config/                       # @reachinternational/config — Shared TypeScript/ESLint workspace configs
+│   └── utils/                        # @reachinternational/utils — Platform-neutral date, currency, string, and object helpers
 ├── supabase/migrations/              # SQL schema migration scripts (001 - 032)
 ├── pnpm-workspace.yaml               # pnpm workspace package declaration
 └── turbo.json                        # Turborepo task pipeline orchestration
@@ -532,11 +532,11 @@ Configure Upstash QStash or Vercel Cron to invoke `POST /api/cron/send-reminders
 ### Web + Mobile Monorepo Plan 🚀
 - [x] **Phase 0 — Repository and Production Audit Baseline**: Full inventory of 25 web routes, 18 Server Actions, 19 DAL queries, 35 database migrations, 38+ tables, 13 system roles, and environment secrets protection rules.
 - [x] **Phase 1 — Monorepo Foundation**: Convert repository into pnpm workspace (`apps/web`, `apps/mobile`, `packages/*`) with Turborepo task pipeline orchestration (`turbo.json`).
-- [x] **Phase 2 — Shared Type System**: Modularize canonical domain types into `@servicecentric/types` covering all 22 domain categories.
-- [x] **Phase 3 — Shared Validation Package**: Modularize Zod validation schemas into `@servicecentric/validation` covering all 12 domain categories.
-- [x] **Phase 4 — Shared Permissions Package**: Modularize RBAC matrix & scope definitions into `@servicecentric/permissions` covering 14 roles, 100+ permissions, and 3-tier scoping rules.
-- [x] **Phase 5 — Shared Design Tokens Package**: Modularize brand colors, semantic tokens, typography, and bimodal radius into `@servicecentric/design-tokens` with Web CSS variables and React Native adapters.
-- [x] **Phase 6 — Shared API / Data Contracts**: Create shared API client package `@servicecentric/api-client`.
+- [x] **Phase 2 — Shared Type System**: Modularize canonical domain types into `@reachinternational/types` covering all 22 domain categories.
+- [x] **Phase 3 — Shared Validation Package**: Modularize Zod validation schemas into `@reachinternational/validation` covering all 12 domain categories.
+- [x] **Phase 4 — Shared Permissions Package**: Modularize RBAC matrix & scope definitions into `@reachinternational/permissions` covering 14 roles, 100+ permissions, and 3-tier scoping rules.
+- [x] **Phase 5 — Shared Design Tokens Package**: Modularize brand colors, semantic tokens, typography, and bimodal radius into `@reachinternational/design-tokens` with Web CSS variables and React Native adapters.
+- [x] **Phase 6 — Shared API / Data Contracts**: Create shared API client package `@reachinternational/api-client`.
 - [x] **Phase 7 — Mobile App Foundation**: Initialize Expo React Native application (`apps/mobile`) with Expo Router & Supabase Auth.
 - [x] **Phase 8 — Mobile Shared Layer Integration**: Wire mobile client to shared types, Zod schemas, and design tokens.
 - [x] **Phase 9 — Mobile UI System**: Build mobile design primitives (`Button`, `Card`, `Badge`, `Input`, `MobileHeader`), top/bottom navigation, cards, and bottom sheets.
@@ -545,7 +545,7 @@ Configure Upstash QStash or Vercel Cron to invoke `POST /api/cron/send-reminders
 - [x] **Phase 12–33 — Mobile Alignment & Production Distribution**: Web-identical Vercel Geist theme system alignment (`#0a0a0a` canvas, `#171717` cards, `#262626` / `#ebebeb` hairlines, micro-dot status badges, pill CTAs, uppercase Geist Mono eyebrows, branded top header bar) + EAS Internal APK build distribution.
 
 ### Completed Features ✅
-- [x] Mobile Navigation System: 3-Line Hamburger Menu Icon Modal (all 13 main pages) & Contextual Bottom Navbar Submenus (`@servicecentric/mobile`)
+- [x] Mobile Navigation System: 3-Line Hamburger Menu Icon Modal (all 13 main pages) & Contextual Bottom Navbar Submenus (`@reachinternational/mobile`)
 - [x] Comprehensive 13-Role RBAC & Data Access Scoping Architecture (`super_admin`, `admin`, `branch_manager`, `service_manager`, `service_engineer`, `supervisor`, `mechanic`, `operator`, `store_manager`, `hr_manager`, `rental_manager`, `sales_executive`, `finance_manager`, `client`)
 - [x] Live Task & Assignment Workspace (`/my-work`)
 - [x] Breakdown Complaints Management & Malfunction Logging (`/service?tab=complaints`)
@@ -565,4 +565,4 @@ Configure Upstash QStash or Vercel Cron to invoke `POST /api/cron/send-reminders
 
 ## 📄 License
 
-This is an internal enterprise application for **ServiceCentric**. All rights reserved.
+This is an internal enterprise application for **ReachInternational**. All rights reserved.

@@ -1,4 +1,4 @@
-# ServiceCentric — Current Architecture Audit
+# ReachInternational — Current Architecture Audit
 
 > **Phase 0 Deliverable**  
 > **Last Updated:** 2026-08-19  
@@ -8,7 +8,7 @@
 
 ## 1. Executive Summary & Application Purpose
 
-**ServiceCentric** (`reachinternation.com`) is an enterprise-grade heavy machinery field-service, maintenance tracking, rental management, and operations platform. It serves 13 internal employee roles (from Super Admin and Branch Managers to Field Service Engineers, Mechanics, and Heavy Equipment Operators) plus Client access.
+**ReachInternational** (`reachinternation.com`) is an enterprise-grade heavy machinery field-service, maintenance tracking, rental management, and operations platform. It serves 13 internal employee roles (from Super Admin and Branch Managers to Field Service Engineers, Mechanics, and Heavy Equipment Operators) plus Client access.
 
 The system is built as a single Next.js web application designed for seamless monorepo evolution into a shared web + mobile (React Native/Expo) platform using a single Supabase PostgreSQL database, Supabase SSR Auth, and unified business rules.
 

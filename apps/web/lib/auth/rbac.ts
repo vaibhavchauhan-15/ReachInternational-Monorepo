@@ -1,4 +1,4 @@
 /**
- * Re-export canonical RBAC and permissions from @servicecentric/permissions
+ * Re-export canonical RBAC and permissions from @reachinternational/permissions
  */
-export * from "@servicecentric/permissions";
+export * from "@reachinternational/permissions";

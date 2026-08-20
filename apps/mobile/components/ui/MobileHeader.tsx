@@ -11,7 +11,7 @@ import { useAuth } from '../../lib/auth/useAuth';
 import { useTheme } from './ThemeProvider';
 import { Badge } from './Badge';
 import { Bell, Sun, Moon, Menu } from 'lucide-react-native';
-import { radiusNumeric, spacingNumeric } from '@servicecentric/design-tokens';
+import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
 import { useDrawer } from '../../lib/nav/DrawerContext';
 

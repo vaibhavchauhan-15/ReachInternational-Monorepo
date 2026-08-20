@@ -8,8 +8,8 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } 
 import { Card, Badge, Input, Button, useTheme } from '../../components/ui';
 import { EmployeeDetailModal } from '../../components/hr/EmployeeDetailModal';
 import { AccountRequestModal } from '../../components/hr/AccountRequestModal';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
-import { formatDate } from '@servicecentric/utils';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { formatDate } from '@reachinternational/utils';
 import { User, Phone, Mail, ShieldCheck, MapPin, Wrench } from 'lucide-react-native';
 
 export type HrFilter = 'all' | 'technicians' | 'operators' | 'onboarding';

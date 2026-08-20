@@ -1,5 +1,5 @@
 /**
- * Shared Design Tokens Package for ServiceCentric Monorepo
+ * Shared Design Tokens Package for ReachInternational Monorepo
  * Canonical visual language single source of truth for Web & Mobile.
  */
 
@@ -20,4 +20,4 @@ export * from './contracts/icons';
 export * from './adapters/cssVariables';
 export * from './adapters/reactNative';
 
-export const DESIGN_TOKENS_PACKAGE = "@servicecentric/design-tokens";
+export const DESIGN_TOKENS_PACKAGE = "@reachinternational/design-tokens";

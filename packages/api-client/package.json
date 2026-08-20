@@ -1,5 +1,5 @@
 {
-  "name": "@servicecentric/api-client",
+  "name": "@reachinternational/api-client",
   "version": "0.1.0",
   "private": true,
   "main": "./src/index.ts",
@@ -12,10 +12,10 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "build": "echo \"@servicecentric/api-client built\""
+    "build": "echo \"@reachinternational/api-client built\""
   },
   "dependencies": {
-    "@servicecentric/types": "workspace:*"
+    "@reachinternational/types": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.0.0"

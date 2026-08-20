@@ -6,7 +6,7 @@ import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import { useTheme } from './ThemeProvider';
 import { Button } from './Button';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 
 export interface EmptyStateProps {
   title: string;

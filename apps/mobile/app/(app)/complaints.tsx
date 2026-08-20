@@ -8,8 +8,8 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } 
 import { Card, Badge, Button, useTheme } from '../../components/ui';
 import { CreateComplaintModal } from '../../components/complaints/CreateComplaintModal';
 import { ComplaintStatusModal } from '../../components/work/ComplaintStatusModal';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
-import { formatDate, formatMachineCode } from '@servicecentric/utils';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { formatDate, formatMachineCode } from '@reachinternational/utils';
 import { Plus, Camera, MapPin, Wrench } from 'lucide-react-native';
 
 export type ComplaintFilter = 'all' | 'open' | 'in_progress' | 'resolved' | 'closed';

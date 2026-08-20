@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { Card, Badge, Button, useTheme, MobileHeader } from '../../components/ui';
-import { spacingNumeric } from '@servicecentric/design-tokens';
+import { spacingNumeric } from '@reachinternational/design-tokens';
 import { LogOut, Sun, Moon, Shield, Building } from 'lucide-react-native';
 
 export default function ProfileScreen() {

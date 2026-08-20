@@ -1,25 +1,27 @@
 # Current Task Context
 
-## Completed Task (2026-08-19) — Proper Tooltip Wrappers for Unlabeled Project Icons
+## Completed Task (2026-08-20) — Page Feedback: Auto-Summarize Task Title on Save Task & Upgraded Summarizer Engine
 
-**Goal**: Address user feedback on `/machines?tab=complaints`: "add proper tool tip for all the icons in this project which have not any label".
+**Goal**: Address user feedback for `/tasks`:
+"Feedback: when user click save task then it summerise the desc and fill the short title and also improve the summeriser engine so it show correct short title"
 
 ### Implementation Summary
-1. **Modal Dialog Close Button (`apps/web/components/animate-ui/components/radix/dialog.tsx`)**:
-   - Wrapped `DialogPrimitive.Close` button with `<TooltipWrapper content="Close modal (Esc)" side="left">`, automatically providing interactive tooltips on the close button across all modals in the application.
+1. **Upgraded Summarizer Engine (`@reachinternational/utils`)**:
+   - Implemented and exported `summarizeTaskTitle(description: string): string` in `packages/utils/src/string.ts`.
+   - Features:
+     - Extracts machine codes (e.g. `EXCA-001`, `CAT-320`, `GEN-04`) to preserve or append them.
+     - Strips leading list numbers (`1.`, `a)`), markdown symbols (`*`, `-`, `#`), greetings (`Hi John,`), and filler prefixes (`Please kindly ensure to`, `Task instructions:`, `Urgent:`).
+     - Isolates primary sentence/clause and strips trailing deadline phrases (`by 4 PM tomorrow`, `due Friday`).
+     - Formats clean sentence capitalization and truncates neatly up to ~55 characters without dangling prepositions (`on...`, `for...`).
 
-2. **Complaints Table Action Tooltips (`apps/web/components/complaints/ComplaintsClient.tsx`)**:
-   - Wrapped `View FSR Report`, `Resolve (Fill FSR)` / `View Details`, `Edit Complaint`, and `Delete Complaint` icon buttons in `<TooltipWrapper>` popovers.
+2. **Auto-Summarize Title on Save Task (`apps/web/components/tasks/CreateTaskModal.tsx`)**:
+   - Imported `summarizeTaskTitle` from `@reachinternational/utils`.
+   - Updated `handleSubmit` handler so when the user clicks **Save Task** / **Save Changes**, if the Title input is blank, it automatically runs `summarizeTaskTitle(description)` to populate the short title and save the task seamlessly.
+   - Updated **⚡ Auto-fill Title** button to use `summarizeTaskTitle`.
 
-3. **Complaints & FSR Detail Modal Actions (`ComplaintDetailModal.tsx`, `FieldServiceReportModal.tsx`)**:
-   - Wrapped `Delete Complaint`, `Edit Complaint`, `Edit Report`, and table row removal (`Trash2`) buttons with `<TooltipWrapper>` popovers.
-
-4. **Machine Services Table Actions (`apps/web/components/services/ServicesClient.tsx`)**:
-   - Wrapped `Update Service Log` and `Delete Service Log` icon buttons in `<TooltipWrapper>` popovers.
-
-5. **Enterprise Table Toolbar Controls (`apps/web/components/ui/EnterpriseTable.tsx`)**:
-   - Added tooltips to table density buttons (`Compact`, `Default`, `Comfortable`) and column selector toggle (`Columns`).
+3. **Mobile Task Creation Parity (`apps/mobile/components/tasks/CreateTaskModal.tsx`)**:
+   - Imported `summarizeTaskTitle` from `@reachinternational/utils`.
+   - Updated `handleSave` in mobile `CreateTaskModal` to automatically populate `finalTitle` via `summarizeTaskTitle(description)` if title is blank when tapping **SAVE**.
 
 ### Verification Results
-- TypeScript Verification: Executed `pnpm --filter @servicecentric/web typecheck` (**Passed cleanly with 0 compilation errors**).
-
+- Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across all 9 monorepo workspace packages**).

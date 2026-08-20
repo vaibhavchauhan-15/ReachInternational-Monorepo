@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "ServiceCentric",
-    "slug": "servicecentric",
+    "name": "ReachInternational",
+    "slug": "reachinternational",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "servicecentric",
+    "scheme": "reachinternational",
     "userInterfaceStyle": "automatic",
     "splash": {
       "image": "./assets/splash.png",
@@ -17,14 +17,14 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.servicecentric.app"
+      "bundleIdentifier": "com.reachinternational.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0a0a0a"
       },
-      "package": "com.servicecentric.app"
+      "package": "com.reachinternational.app"
     },
     "web": {
       "bundler": "metro"

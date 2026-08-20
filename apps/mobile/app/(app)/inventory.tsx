@@ -7,8 +7,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { Card, Badge, Input, Button, useTheme } from '../../components/ui';
 import { PartRequestModal } from '../../components/inventory/PartRequestModal';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
-import { formatDate, formatINR, formatMachineCode } from '@servicecentric/utils';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { formatDate, formatINR, formatMachineCode } from '@reachinternational/utils';
 import { Package, Search, Truck, Layers, CheckCircle } from 'lucide-react-native';
 
 export type InventoryFilter = 'all' | 'stock' | 'requests' | 'challans';

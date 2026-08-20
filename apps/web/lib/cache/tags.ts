@@ -1,7 +1,7 @@
 import "server-only";
 
 /**
- * ServiceCentric Multi-Layer Performance Architecture
+ * ReachInternational Multi-Layer Performance Architecture
  * Standardized Cache Tags & Tag Generators
  */
 export const TAGS = {

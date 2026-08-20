@@ -3,8 +3,8 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } 
 import { Card, Badge, Input, Button, useTheme, MobileHeader } from '../../components/ui';
 import { MachineDetailModal } from '../../components/machines/MachineDetailModal';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
-import { formatMachineCode } from '@servicecentric/utils';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { formatMachineCode } from '@reachinternational/utils';
 import { Search } from 'lucide-react-native';
 
 export type StatusFilter = 'all' | 'active' | 'on_rent' | 'under_maintenance' | 'inactive';

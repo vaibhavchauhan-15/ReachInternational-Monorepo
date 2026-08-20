@@ -8,7 +8,7 @@ import {
   RecordExpenseSchema as CreateExpenseSchema,
   VendorPaymentSchema as RecordVendorPaymentSchema,
   type CreateInvoiceInput,
-} from "@servicecentric/validation";
+} from "@reachinternational/validation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/dal";
 import { roleHasPermission } from "@/lib/auth/rbac";

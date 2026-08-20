@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useTheme } from './ThemeProvider';
 import { getPendingQueueCount, processOfflineSyncQueue } from '../../lib/offline-sync';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { WifiOff, RefreshCw, CheckCircle2 } from 'lucide-react-native';
 
 export interface OfflineSyncBannerProps {

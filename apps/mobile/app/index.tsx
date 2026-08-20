@@ -7,7 +7,7 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../lib/auth/useAuth';
-import { colorsDark, spacingNumeric } from '@servicecentric/design-tokens';
+import { colorsDark, spacingNumeric } from '@reachinternational/design-tokens';
 
 export default function GatewayScreen() {
   const { isLoading, session } = useAuth();

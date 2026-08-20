@@ -13,7 +13,7 @@ import {
   type TextStyle,
 } from 'react-native';
 import { useTheme } from './ThemeProvider';
-import { radiusNumeric, spacingNumeric } from '@servicecentric/design-tokens';
+import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
 export type ButtonSize = 'sm' | 'md' | 'lg';

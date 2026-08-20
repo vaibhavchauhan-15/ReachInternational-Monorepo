@@ -1,7 +1,7 @@
 "use client";
 
 import { Modal, Button, Badge, CopyCell, TooltipWrapper } from "@/components/ui";
-import { formatDisplayDate } from "@servicecentric/utils";
+import { formatDisplayDate } from "@reachinternational/utils";
 import type { ComplaintWithDetails, UserRole } from "@/lib/types/database";
 import {
   AnimatedAlertTriangle,

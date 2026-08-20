@@ -1,4 +1,4 @@
-# ServiceCentric — Current Dependencies & Environment Audit
+# ReachInternational — Current Dependencies & Environment Audit
 
 > **Phase 0 Deliverable**  
 > **Last Updated:** 2026-08-19  
@@ -118,5 +118,5 @@ TWILIO_SMS_NUMBER=+1...                  # Sender Number
 TWILIO_CONTENT_SID=HX...                 # Template SID
 SENDGRID_API_KEY=SG...                   # SendGrid Master API Key
 SENDGRID_FROM_EMAIL=...                  # Verified Sender Email
-SENDGRID_FROM_NAME=ServiceCentric        # Sender Display Name
+SENDGRID_FROM_NAME=ReachInternational        # Sender Display Name
 ```

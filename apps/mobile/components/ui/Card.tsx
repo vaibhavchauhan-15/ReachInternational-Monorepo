@@ -6,7 +6,7 @@
 import React from 'react';
 import { View, TouchableOpacity, StyleSheet, type ViewStyle, type StyleProp } from 'react-native';
 import { useTheme } from './ThemeProvider';
-import { radiusNumeric, spacingNumeric } from '@servicecentric/design-tokens';
+import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
 export interface CardProps {
   children: React.ReactNode;

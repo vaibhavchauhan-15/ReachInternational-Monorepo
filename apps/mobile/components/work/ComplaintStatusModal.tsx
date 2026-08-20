@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Button, Badge, useTheme } from '../ui';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { X } from 'lucide-react-native';
 
 export interface ComplaintStatusModalProps {

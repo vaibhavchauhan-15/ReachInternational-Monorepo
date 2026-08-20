@@ -26,7 +26,7 @@ export async function sendNotification(
   try {
     if (payload.channel === "email") {
       // Send via SendGrid with delivery verification + retry.
-      const subject = payload.subject || "ServiceCentric Notification";
+      const subject = payload.subject || "ReachInternational Notification";
       const html = getServiceReminderEmailHtml({
         subject,
         message: payload.message,

@@ -8,8 +8,11 @@ import { Button } from "@/components/ui/Button";
 import { FilterToolbar } from "@/components/ui/FilterToolbar";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { EnterpriseTable, ColumnDef } from "@/components/ui/EnterpriseTable";
+import { TooltipWrapper } from "@/components/ui/tooltip";
+import { formatDisplayDate } from "@reachinternational/utils";
 import {
   CheckSquare,
+  Square,
   Clock,
   CheckCircle2,
   AlertTriangle,
@@ -22,13 +25,14 @@ import {
   Edit,
   Eye,
   Trash2,
+  Camera,
 } from "lucide-react";
 import { CreateTaskModal } from "./CreateTaskModal";
 import { TaskDetailDrawer } from "./TaskDetailDrawer";
 import { CompleteTaskModal } from "./CompleteTaskModal";
 import { VerifyTaskModal } from "./VerifyTaskModal";
 import { deleteTask } from "@/app/actions/tasks";
-import type { Task, TaskStats, User as UserType } from "@servicecentric/types";
+import type { Task, TaskStats, User as UserType } from "@reachinternational/types";
 
 interface TasksClientProps {
   user: UserType;
@@ -141,19 +145,31 @@ export function TasksClient({ user, initialTasks, stats, users }: TasksClientPro
 
   const columns: ColumnDef<Task>[] = [
     {
+      id: "task_no",
+      header: "Task No.",
+      width: "110px",
+      cell: (task) => (
+        <div onClick={() => handleOpenDetail(task)} className="cursor-pointer">
+          <span className="text-xs font-mono font-bold text-[var(--color-link)] bg-[var(--color-link)]/10 px-2 py-0.5 rounded-full border border-[var(--color-link)]/20 hover:bg-[var(--color-link)]/20 transition-colors inline-block">
+            #{task.task_no}
+          </span>
+        </div>
+      ),
+    },
+    {
       id: "title",
-      header: "Task No / Title",
+      header: "Title & Instructions",
+      width: "300px",
       cell: (task) => (
         <div
           onClick={() => handleOpenDetail(task)}
-          className="cursor-pointer hover:underline"
+          className="cursor-pointer space-y-0.5 group"
         >
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-mono font-bold text-[var(--color-link)]">#{task.task_no}</span>
-            <span className="text-xs font-bold text-[var(--color-ink)]">{task.title}</span>
-          </div>
+          <span className="text-xs font-bold text-[var(--color-ink)] group-hover:text-[var(--color-link)] transition-colors block leading-tight">
+            {task.title}
+          </span>
           {task.description && (
-            <p className="text-[11px] text-[var(--color-mute)] truncate max-w-sm">{task.description}</p>
+            <p className="text-[11px] text-[var(--color-mute)] truncate max-w-xs">{task.description}</p>
           )}
         </div>
       ),
@@ -161,9 +177,10 @@ export function TasksClient({ user, initialTasks, stats, users }: TasksClientPro
     {
       id: "priority",
       header: "Priority",
+      width: "110px",
       cell: (task) => (
         <span
-          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${
+          className={`text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-full border inline-block ${
             task.priority === "critical"
               ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
               : task.priority === "high"
@@ -179,24 +196,41 @@ export function TasksClient({ user, initialTasks, stats, users }: TasksClientPro
     },
     {
       id: "assignees",
-      header: "Assigned To",
+      header: "Assigned Employee",
+      width: "220px",
       cell: (task) => {
         const assignees = task.assignees || [];
-        if (assignees.length === 0) return <span className="text-xs text-[var(--color-mute)]">Unassigned</span>;
+        if (assignees.length === 0) {
+          return <span className="text-xs text-[var(--color-mute)] italic">Unassigned</span>;
+        }
         return (
-          <div className="flex items-center -space-x-1.5 overflow-hidden">
-            {assignees.slice(0, 3).map((a) => (
-              <div
-                key={a.id}
-                title={a.user?.full_name}
-                className="w-6 h-6 rounded-full bg-[var(--color-link)]/20 border border-[var(--color-hairline)] flex items-center justify-center text-[10px] font-bold text-[var(--color-link)]"
-              >
-                {a.user?.full_name?.charAt(0) || "U"}
-              </div>
-            ))}
-            {assignees.length > 3 && (
-              <span className="text-[10px] text-[var(--color-mute)] pl-2">+{assignees.length - 3}</span>
-            )}
+          <div className="flex flex-col gap-1.5">
+            {assignees.map((a) => {
+              const fullName = a.user?.full_name || "Unknown User";
+              const rawRole = a.user?.role || "";
+              const formattedRole = rawRole
+                ? rawRole
+                    .split("_")
+                    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                    .join(" ")
+                : "";
+
+              return (
+                <div key={a.id} className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-full bg-[var(--color-link)]/15 border border-[var(--color-hairline)] flex items-center justify-center text-[10px] font-bold text-[var(--color-link)] shrink-0">
+                    {fullName.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="flex flex-col min-w-0 leading-tight">
+                    <span className="font-semibold text-[var(--color-ink)] text-xs truncate max-w-[170px]">{fullName}</span>
+                    {formattedRole && (
+                      <span className="text-[10px] text-[var(--color-mute)] font-medium truncate max-w-[170px]">
+                        {formattedRole}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         );
       },
@@ -204,12 +238,13 @@ export function TasksClient({ user, initialTasks, stats, users }: TasksClientPro
     {
       id: "due_date",
       header: "Due Date",
+      width: "140px",
       cell: (task) => {
         const isOverdue = task.due_date < new Date().toISOString().split("T")[0] && task.status !== "completed";
         return (
           <div className="text-xs">
             <span className={isOverdue ? "text-rose-500 font-bold" : "text-[var(--color-body)]"}>
-              {task.due_date} {task.due_time ? `@ ${task.due_time}` : ""}
+              {formatDisplayDate(task.due_date)} {task.due_time ? `@ ${task.due_time}` : ""}
             </span>
             {isOverdue && <span className="block text-[10px] text-rose-500 font-medium">Overdue</span>}
           </div>
@@ -219,58 +254,81 @@ export function TasksClient({ user, initialTasks, stats, users }: TasksClientPro
     {
       id: "status",
       header: "Status",
+      width: "120px",
       cell: (task) => <Badge variant={task.status === "completed" ? "success" : task.status === "overdue" ? "error" : "info"}>{task.status.replace(/_/g, " ")}</Badge>,
     },
     {
       id: "actions",
       header: "Actions",
-      cell: (task) => (
-        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-          <button
-            onClick={() => handleOpenDetail(task)}
-            className="p-1 rounded text-[var(--color-mute)] hover:text-[var(--color-link)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
-            title="View Task Details"
-          >
-            <Eye className="w-3.5 h-3.5" />
-          </button>
-          {isManager && (
-            <button
-              onClick={() => handleOpenEdit(task)}
-              className="p-1 rounded text-[var(--color-mute)] hover:text-emerald-500 hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
-              title="Edit Task"
-            >
-              <Edit className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {(task.status === "pending" || task.status === "in_progress" || task.status === "reopened") && (
-            <Button
-              variant="secondary"
-              onClick={() => handleOpenComplete(task)}
-              className="text-[11px] h-7 px-2 py-0"
-            >
-              Complete
-            </Button>
-          )}
-          {isManager && task.status === "completed" && (
-            <Button
-              variant="primary"
-              onClick={() => handleOpenVerify(task)}
-              className="text-[11px] h-7 px-2 py-0"
-            >
-              Verify
-            </Button>
-          )}
-          {isManager && (
-            <button
-              onClick={() => handleDelete(task.id)}
-              className="p-1 rounded text-[var(--color-mute)] hover:text-rose-500 hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
-              title="Delete Task"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-      ),
+      width: "140px",
+      cell: (task) => {
+        const hasAttachments = (task.attachments || []).length > 0;
+        return (
+          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <TooltipWrapper content="View Task Details" side="top">
+              <button
+                onClick={() => handleOpenDetail(task)}
+                className="p-1 rounded text-[var(--color-mute)] hover:text-[var(--color-link)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
+                aria-label="View Task Details"
+              >
+                <Eye className="w-3.5 h-3.5" />
+              </button>
+            </TooltipWrapper>
+            {isManager && (
+              <TooltipWrapper content="Edit Task" side="top">
+                <button
+                  onClick={() => handleOpenEdit(task)}
+                  className="p-1 rounded text-[var(--color-mute)] hover:text-emerald-500 hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
+                  aria-label="Edit Task"
+                >
+                  <Edit className="w-3.5 h-3.5" />
+                </button>
+              </TooltipWrapper>
+            )}
+            {(task.status === "pending" || task.status === "in_progress" || task.status === "reopened") && (
+              <TooltipWrapper content="Mark Task Complete" side="top">
+                <button
+                  onClick={() => handleOpenComplete(task)}
+                  className="p-1 rounded-md border border-[var(--color-hairline)] hover:border-emerald-500 hover:bg-emerald-500/15 text-[var(--color-mute)] hover:text-emerald-500 transition-colors cursor-pointer flex items-center justify-center"
+                  aria-label="Mark Task Complete"
+                >
+                  <Square className="w-4 h-4" />
+                </button>
+              </TooltipWrapper>
+            )}
+            {task.status === "completed" && (
+              <TooltipWrapper content={hasAttachments ? "Completed with Uploaded Proof Photo" : "Completed"} side="top">
+                <div className="p-1 rounded-md bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 flex items-center justify-center gap-1">
+                  <CheckSquare className="w-4 h-4" />
+                  {hasAttachments && <Camera className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />}
+                </div>
+              </TooltipWrapper>
+            )}
+            {isManager && task.status === "completed" && (
+              <TooltipWrapper content="Verify Task & Review Uploaded Proof Image" side="top">
+                <Button
+                  variant="primary"
+                  onClick={() => handleOpenVerify(task)}
+                  className="text-[11px] h-7 px-2.5 py-0 ml-1 flex items-center gap-1 shrink-0"
+                >
+                  <Camera className="w-3 h-3" /> Verify
+                </Button>
+              </TooltipWrapper>
+            )}
+            {isManager && (
+              <TooltipWrapper content="Delete Task" side="top">
+                <button
+                  onClick={() => handleDelete(task.id)}
+                  className="p-1 rounded text-[var(--color-mute)] hover:text-rose-500 hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
+                  aria-label="Delete Task"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </TooltipWrapper>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -279,7 +337,6 @@ export function TasksClient({ user, initialTasks, stats, users }: TasksClientPro
       {/* Top Header */}
       <PageHeader
         title="To-Do & Task Management"
-        description="Boss-to-employee task assignment, daily workload tracking, completion verification, & discussions"
         actions={
           <Button variant="primary" onClick={() => { setSelectedTaskForEdit(null); setIsCreateOpen(true); }}>
             <Plus className="w-4 h-4 mr-1.5" /> Create To-Do / Task
@@ -368,12 +425,12 @@ export function TasksClient({ user, initialTasks, stats, users }: TasksClientPro
         activeFilterCount={activeFilterCount}
         onResetFilters={resetFilters}
         actions={
-          <div className="flex items-center gap-1 p-1 bg-[var(--color-canvas-elevated)] rounded-lg border border-[var(--color-hairline)] shrink-0">
+          <div className="flex items-center gap-1 p-1 bg-[var(--color-canvas-elevated)] rounded-full border border-[var(--color-hairline)] shrink-0">
             <button
               onClick={() => setViewMode("list")}
-              className={`p-1.5 rounded text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                 viewMode === "list"
-                  ? "bg-[var(--color-canvas)] text-[var(--color-ink)] shadow-xs border border-[var(--color-hairline)] font-bold"
+                  ? "bg-[var(--color-canvas)] text-[var(--color-ink)] shadow-xs border border-[var(--color-hairline)]"
                   : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
               }`}
               title="List View"
@@ -382,9 +439,9 @@ export function TasksClient({ user, initialTasks, stats, users }: TasksClientPro
             </button>
             <button
               onClick={() => setViewMode("kanban")}
-              className={`p-1.5 rounded text-xs font-medium flex items-center gap-1 transition-colors cursor-pointer ${
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                 viewMode === "kanban"
-                  ? "bg-[var(--color-canvas)] text-[var(--color-ink)] shadow-xs border border-[var(--color-hairline)] font-bold"
+                  ? "bg-[var(--color-canvas)] text-[var(--color-ink)] shadow-xs border border-[var(--color-hairline)]"
                   : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
               }`}
               title="Kanban View"
@@ -451,12 +508,13 @@ export function TasksClient({ user, initialTasks, stats, users }: TasksClientPro
 
       {/* Main View Display */}
       {viewMode === "list" && (
-        <Card className="p-0 border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden">
-          <EnterpriseTable
-            data={filteredTasks}
-            columns={columns}
-          />
-        </Card>
+        <EnterpriseTable
+          data={filteredTasks}
+          columns={columns}
+          onRowClick={(task) => handleOpenDetail(task)}
+          emptyMessage="No tasks found"
+          emptyDescription="There are no tasks matching your selected filters."
+        />
       )}
 
       {/* Kanban Board View */}
@@ -470,32 +528,90 @@ export function TasksClient({ user, initialTasks, stats, users }: TasksClientPro
           ].map((col) => {
             const colTasks = filteredTasks.filter((t) => t.status === col.status);
             return (
-              <div key={col.status} className={`bg-[var(--color-canvas-elevated)] p-3 rounded-xl border ${col.color} space-y-3`}>
+              <div key={col.status} className={`bg-[var(--color-canvas-elevated)] p-3.5 rounded-xl border ${col.color} space-y-3 shadow-xs`}>
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">{col.title}</h3>
-                  <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-[var(--color-canvas)] text-[var(--color-body)] border border-[var(--color-hairline)]">
+                  <span className="px-2.5 py-0.5 text-xs font-bold rounded-full bg-[var(--color-canvas)] text-[var(--color-body)] border border-[var(--color-hairline)]">
                     {colTasks.length}
                   </span>
                 </div>
 
                 <div className="space-y-2.5 max-h-[600px] overflow-y-auto pr-1">
-                  {colTasks.map((t) => (
-                    <Card
-                      key={t.id}
-                      onClick={() => handleOpenDetail(t)}
-                      className="p-3 bg-[var(--color-canvas)] border-[var(--color-hairline)] hover:border-[var(--color-link)]/40 cursor-pointer space-y-2"
-                    >
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="font-mono text-[var(--color-link)] font-bold">#{t.task_no}</span>
-                        <span className="font-bold text-[var(--color-mute)] uppercase">{t.priority}</span>
-                      </div>
-                      <h4 className="text-xs font-bold text-[var(--color-ink)]">{t.title}</h4>
-                      <div className="flex items-center justify-between text-[11px] text-[var(--color-mute)] pt-1 border-t border-[var(--color-hairline)]">
-                        <span>Due: {t.due_date}</span>
-                        <span className="text-[var(--color-emerald)] font-medium">{(t.assignees || []).length} assigned</span>
-                      </div>
-                    </Card>
-                  ))}
+                  {colTasks.map((t) => {
+                    const assignees = t.assignees || [];
+                    const isOverdue = t.due_date < new Date().toISOString().split("T")[0] && t.status !== "completed";
+
+                    return (
+                      <Card
+                        key={t.id}
+                        onClick={() => handleOpenDetail(t)}
+                        className="p-3.5 bg-[var(--color-canvas)] border-[var(--color-hairline)] hover:border-[var(--color-link)]/40 hover:shadow-sm cursor-pointer space-y-2.5 transition-all"
+                      >
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-mono text-[var(--color-link)] font-bold bg-[var(--color-link)]/10 px-2 py-0.5 rounded-full border border-[var(--color-link)]/20">#{t.task_no}</span>
+                          <span
+                            className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
+                              t.priority === "critical"
+                                ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+                                : t.priority === "high"
+                                ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+                                : t.priority === "medium"
+                                ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20"
+                                : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                            }`}
+                          >
+                            {t.priority}
+                          </span>
+                        </div>
+
+                        <h4 className="text-xs font-bold text-[var(--color-ink)] leading-snug">{t.title}</h4>
+
+                        {/* Assigned Employee Details */}
+                        {assignees.length > 0 && (
+                          <div className="space-y-1.5 pt-1">
+                            {assignees.slice(0, 2).map((a) => {
+                              const fullName = a.user?.full_name || "Unknown";
+                              const rawRole = a.user?.role || "";
+                              const formattedRole = rawRole
+                                ? rawRole
+                                    .split("_")
+                                    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                                    .join(" ")
+                                : "";
+
+                              return (
+                                <div key={a.id} className="flex items-center gap-2">
+                                  <div className="w-5 h-5 rounded-full bg-[var(--color-link)]/15 border border-[var(--color-hairline)] flex items-center justify-center text-[9px] font-bold text-[var(--color-link)] shrink-0">
+                                    {fullName.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div className="flex flex-col min-w-0 leading-tight">
+                                    <span className="font-semibold text-[var(--color-ink)] text-[11px] truncate max-w-[170px]">{fullName}</span>
+                                    {formattedRole && (
+                                      <span className="text-[10px] text-[var(--color-mute)] font-medium truncate max-w-[170px]">
+                                        {formattedRole}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {assignees.length > 2 && (
+                              <p className="text-[10px] text-[var(--color-mute)] italic pl-5">+{assignees.length - 2} more assignees</p>
+                            )}
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between text-[11px] text-[var(--color-mute)] pt-2 border-t border-[var(--color-hairline)]">
+                          <span className={isOverdue ? "text-rose-500 font-bold" : "text-[var(--color-body)]"}>
+                            Due: {formatDisplayDate(t.due_date)}
+                          </span>
+                          <span className="text-[var(--color-link)] font-semibold text-[10px]">
+                            {t.comments?.length ? `${t.comments.length} comments` : "View details"}
+                          </span>
+                        </div>
+                      </Card>
+                    );
+                  })}
                   {colTasks.length === 0 && (
                     <p className="text-xs text-[var(--color-mute)] italic text-center py-4">No tasks</p>
                   )}
@@ -548,3 +664,4 @@ export function TasksClient({ user, initialTasks, stats, users }: TasksClientPro
     </div>
   );
 }
+

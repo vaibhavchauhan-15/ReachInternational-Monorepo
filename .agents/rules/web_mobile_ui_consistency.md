@@ -72,7 +72,7 @@ const colors = {
 };
 ```
 
-The values must come from a shared design specification (e.g. `@servicecentric/design-tokens`).
+The values must come from a shared design specification (e.g. `@reachinternational/design-tokens`).
 
 ### Rules
 
@@ -284,7 +284,7 @@ Do not use:
 
 unless there is a deliberate design-system decision.
 
-If platform limitations require different icon implementations, choose visually equivalent icons and maintain the same meaning and visual weight (e.g. via `@servicecentric/design-tokens` icon contracts).
+If platform limitations require different icon implementations, choose visually equivalent icons and maintain the same meaning and visual weight (e.g. via `@reachinternational/design-tokens` icon contracts).
 
 ---
 
@@ -369,7 +369,7 @@ export const designTokens = {
 };
 ```
 
-Web and Mobile should consume these tokens (`@servicecentric/design-tokens`) instead of hard-coding values independently.
+Web and Mobile should consume these tokens (`@reachinternational/design-tokens`) instead of hard-coding values independently.
 
 Avoid:
 

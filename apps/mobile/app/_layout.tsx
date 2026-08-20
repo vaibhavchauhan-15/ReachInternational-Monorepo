@@ -9,7 +9,7 @@ import { Slot } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '../lib/auth/useAuth';
-import { colorsDark } from '@servicecentric/design-tokens';
+import { colorsDark } from '@reachinternational/design-tokens';
 
 function MobileAgentation() {
   if (process.env.NODE_ENV !== 'development' || Platform.OS !== 'web') {

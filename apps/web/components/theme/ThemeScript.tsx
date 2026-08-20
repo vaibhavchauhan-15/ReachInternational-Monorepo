@@ -2,7 +2,7 @@ export function ThemeScript() {
   const code = `
 (function() {
   try {
-    var key = 'servicecentric-theme';
+    var key = 'reachinternational-theme';
     var stored = localStorage.getItem(key);
     var dark = false;
     if (stored === 'dark') {

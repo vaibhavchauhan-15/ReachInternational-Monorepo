@@ -1,5 +1,5 @@
 /**
- * ServiceCentric Shared Permissions & RBAC Package (@servicecentric/permissions)
+ * ReachInternational Shared Permissions & RBAC Package (@reachinternational/permissions)
  */
 
 export * from "./roles";

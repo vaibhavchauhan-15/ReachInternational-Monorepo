@@ -1,4 +1,4 @@
-import type { UserRole, PermissionScope } from "@servicecentric/types";
+import type { UserRole, PermissionScope } from "@reachinternational/types";
 
 /**
  * Maps each user role to their default permission scope level

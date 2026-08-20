@@ -361,7 +361,7 @@ export function EnterpriseTable<T extends { id: string | number }>({
                 <th
                   key={col.id}
                   style={{ width: col.width }}
-                  className={`font-semibold text-[var(--color-mute)] tracking-tight select-none ${
+                  className={`font-semibold text-[var(--color-mute)] tracking-tight select-none align-middle ${
                     densityPadding[density]
                   } ${col.sortable ? "cursor-pointer hover:text-[var(--color-ink)]" : ""}`}
                   onClick={() => col.sortable && handleSort(col.id)}
@@ -394,7 +394,7 @@ export function EnterpriseTable<T extends { id: string | number }>({
               <tr>
                 <td
                   colSpan={visibleColumns.length + (selectable ? 1 : 0)}
-                  className="py-12 text-center"
+                  className="py-12 text-center align-middle"
                 >
                   <EmptyState
                     title={emptyMessage}
@@ -421,7 +421,7 @@ export function EnterpriseTable<T extends { id: string | number }>({
                   >
                     {selectable && (
                       <td
-                        className={densityPadding[density]}
+                        className={`align-middle ${densityPadding[density]}`}
                         onClick={(e) => handleSelectRow(row.id, e)}
                       >
                         <input
@@ -436,7 +436,7 @@ export function EnterpriseTable<T extends { id: string | number }>({
                     {visibleColumns.map((col) => {
                       const value = col.accessorKey ? row[col.accessorKey] : null;
                       return (
-                        <td key={col.id} className={densityPadding[density]}>
+                        <td key={col.id} className={`align-middle ${densityPadding[density]}`}>
                           {col.cell ? col.cell(row) : (value as ReactNode)}
                         </td>
                       );

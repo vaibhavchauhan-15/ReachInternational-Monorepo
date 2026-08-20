@@ -7,8 +7,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { Card, Badge, Button, useTheme } from '../../components/ui';
 import { CreateFsrModal } from '../../components/fsr/CreateFsrModal';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
-import { formatDate, formatMachineCode } from '@servicecentric/utils';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { formatDate, formatMachineCode } from '@reachinternational/utils';
 import { FileText, CheckCircle, Edit3, AlertCircle } from 'lucide-react-native';
 
 export type FsrFilter = 'all' | 'draft' | 'submitted' | 'approved' | 'revision_requested';

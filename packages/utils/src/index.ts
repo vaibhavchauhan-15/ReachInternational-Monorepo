@@ -1,5 +1,5 @@
 /**
- * Shared Utilities Package for ServiceCentric Monorepo
+ * Shared Utilities Package for ReachInternational Monorepo
  * Platform-independent date, currency, string, and object helpers.
  */
 
@@ -8,4 +8,4 @@ export * from './currency';
 export * from './string';
 export * from './object';
 
-export const UTILS_PACKAGE = "@servicecentric/utils";
+export const UTILS_PACKAGE = "@reachinternational/utils";

@@ -31,7 +31,7 @@ import { completeService, deleteServiceRecord } from "@/app/actions/services";
 import type { MachineWithEngineer } from "@/lib/types/database";
 import type { EngineerServicesData } from "@/lib/queries/services";
 import { useRouter } from "next/navigation";
-import { formatDisplayDate } from "@servicecentric/utils";
+import { formatDisplayDate } from "@reachinternational/utils";
 
 function getDueDays(dueDateStr: string | null | undefined): number {
   if (!dueDateStr) return 999;

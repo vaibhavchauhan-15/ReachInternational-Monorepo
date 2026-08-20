@@ -6,7 +6,7 @@
 import React from 'react';
 import { View, Text, TextInput, StyleSheet, type TextInputProps, type ViewStyle } from 'react-native';
 import { useTheme } from './ThemeProvider';
-import { radiusNumeric, spacingNumeric } from '@servicecentric/design-tokens';
+import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
 export interface InputProps extends TextInputProps {
   label?: string;

@@ -15,9 +15,9 @@ import {
 } from 'react-native';
 import { Card, Badge, useTheme, MobileHeader } from '../../components/ui';
 import { CreateTaskModal } from '../../components/tasks/CreateTaskModal';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
-import { formatDate } from '@servicecentric/utils';
-import type { Task, User } from '@servicecentric/types';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { formatDate } from '@reachinternational/utils';
+import type { Task, User } from '@reachinternational/types';
 
 export default function TasksScreen() {
   const { theme } = useTheme();

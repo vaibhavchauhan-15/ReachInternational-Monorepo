@@ -8,8 +8,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
 import { Card, Badge, Input, Button, useTheme } from '../../components/ui';
 import { RentalReturnModal } from '../../components/rentals/RentalReturnModal';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
-import { formatDate, formatINR, formatMachineCode } from '@servicecentric/utils';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { formatDate, formatINR, formatMachineCode } from '@reachinternational/utils';
 import { Calendar, FileCheck, Truck, ShieldAlert } from 'lucide-react-native';
 
 export type RentalFilter = 'all' | 'active' | 'pending_return' | 'challans';

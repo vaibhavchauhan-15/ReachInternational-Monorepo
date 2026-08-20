@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Tou
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { Button, Input, Card, useTheme, Badge } from '../../components/ui';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { Mail, Lock, Cpu, BellRing, Activity, ArrowLeft } from 'lucide-react-native';
 
 export default function LoginScreen() {

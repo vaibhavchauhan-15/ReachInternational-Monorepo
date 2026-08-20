@@ -7,7 +7,7 @@
 import React, { useState } from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Button, Input, useTheme } from '../ui';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { X, Camera, Paperclip } from 'lucide-react-native';
 
 export interface CreateComplaintModalProps {

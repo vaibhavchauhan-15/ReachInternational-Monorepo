@@ -23,7 +23,7 @@ import {
   TooltipWrapper,
 } from "@/components/ui";
 import dynamic from "next/dynamic";
-import { formatDisplayDate } from "@servicecentric/utils";
+import { formatDisplayDate } from "@reachinternational/utils";
 import { deleteComplaint } from "@/app/actions/complaints";
 import type { ComplaintWithDetails, MachineWithEngineer, User, UserRole } from "@/lib/types/database";
 

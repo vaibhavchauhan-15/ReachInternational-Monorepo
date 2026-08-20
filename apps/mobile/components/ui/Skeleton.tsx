@@ -5,7 +5,7 @@
 import React from 'react';
 import { View, StyleSheet, type ViewStyle } from 'react-native';
 import { useTheme } from './ThemeProvider';
-import { radiusNumeric } from '@servicecentric/design-tokens';
+import { radiusNumeric } from '@reachinternational/design-tokens';
 
 export interface SkeletonProps {
   width?: number | `${number}%`;

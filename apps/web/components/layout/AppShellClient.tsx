@@ -18,33 +18,33 @@ export function AppShellClient({
 
   useEffect(() => {
     setMounted(true);
-    const saved = localStorage.getItem("servicecentric_sidebar_collapsed");
+    const saved = localStorage.getItem("reachinternational_sidebar_collapsed");
     if (saved !== null) {
       setCollapsed(saved === "true");
     }
   }, []);
 
-  const toggleCollapse = () => {
+  const toggleSidebar = () => {
     setCollapsed((prev) => {
       const next = !prev;
-      localStorage.setItem("servicecentric_sidebar_collapsed", String(next));
+      localStorage.setItem("reachinternational_sidebar_collapsed", String(next));
       return next;
     });
   };
 
-  const handleCollapsedChange = (next: boolean) => {
-    setCollapsed(next);
-    localStorage.setItem("servicecentric_sidebar_collapsed", String(next));
+  const setCollapsedState = (collapsedValue: boolean) => {
+    setCollapsed(collapsedValue);
+    localStorage.setItem("reachinternational_sidebar_collapsed", String(collapsedValue));
   };
 
   return (
-    <SidebarProvider collapsed={collapsed} onCollapsedChange={handleCollapsedChange}>
+    <SidebarProvider collapsed={collapsed} onCollapsedChange={setCollapsedState}>
       <div className="min-h-screen flex flex-col bg-[var(--color-canvas)]">
         {/* Desktop Left Sidebar */}
         <AppSidebar
           user={user}
           collapsed={collapsed}
-          onToggleCollapse={toggleCollapse}
+          onToggleCollapse={toggleSidebar}
         />
 
         {/* Mobile Bottom Navigation Bar */}

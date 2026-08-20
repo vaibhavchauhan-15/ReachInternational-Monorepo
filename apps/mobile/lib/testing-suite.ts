@@ -4,9 +4,9 @@
  * RBAC permission matrix, media storage policies, deep-link routing, and 9 critical E2E workflows.
  */
 
-import { formatINR, formatCompactCurrency, formatMachineCode, formatDate } from '@servicecentric/utils';
-import { roleHasPermission } from '@servicecentric/permissions';
-import type { UserRole } from '@servicecentric/types';
+import { formatINR, formatCompactCurrency, formatMachineCode, formatDate } from '@reachinternational/utils';
+import { roleHasPermission } from '@reachinternational/permissions';
+import type { UserRole } from '@reachinternational/types';
 import { validateMediaFile } from './media';
 import { sanitizeDeepLinkRoute } from './security';
 import { enqueueOfflineMutation, getSyncQueue } from './offline-sync';

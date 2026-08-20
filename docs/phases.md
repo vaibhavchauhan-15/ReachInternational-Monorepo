@@ -1,4 +1,4 @@
-# ServiceCentric — AI Agent Execution Plan
+# ReachInternational — AI Agent Execution Plan
 ## Web + Mobile Monorepo Migration and Development
 
 > **Purpose:** This is an executable development plan for AI coding agents.  
@@ -8,7 +8,7 @@
 
 # 0. Mission
 
-Transform the existing ServiceCentric Next.js enterprise application into a production-ready monorepo supporting:
+Transform the existing ReachInternational Next.js enterprise application into a production-ready monorepo supporting:
 
 1. Existing Next.js web application
 2. New React Native + Expo mobile application

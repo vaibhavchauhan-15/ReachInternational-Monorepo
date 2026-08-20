@@ -1,12 +1,12 @@
 /**
  * ServiceCentric Mobile — Native Badge Primitive
- * Status badge powered by @servicecentric/design-tokens getStatusBadgeConfig.
+ * Status badge powered by @reachinternational/design-tokens getStatusBadgeConfig.
  */
 
 import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import { useTheme } from './ThemeProvider';
-import { getStatusBadgeConfig, radiusNumeric, spacingNumeric } from '@servicecentric/design-tokens';
+import { getStatusBadgeConfig, radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
 export interface BadgeProps {
   status: string;

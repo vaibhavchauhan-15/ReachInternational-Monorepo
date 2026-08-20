@@ -1,7 +1,7 @@
 import "server-only";
 
 /**
- * ServiceCentric Multi-Layer Performance Architecture
+ * ReachInternational Multi-Layer Performance Architecture
  * Data Freshness Policies & Revalidation Time Tiers (in Seconds)
  */
 export const CACHE_TIERS = {

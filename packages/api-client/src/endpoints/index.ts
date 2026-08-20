@@ -1,5 +1,5 @@
 /**
- * ServiceCentric Shared API — Endpoint Contracts
+ * ReachInternational Shared API — Endpoint Contracts
  * Canonical endpoint contract declarations for all 11 monorepo operational domains.
  */
 
@@ -19,7 +19,7 @@ import type {
   FinanceInvoice,
   Employee,
   Notification,
-} from '@servicecentric/types';
+} from '@reachinternational/types';
 
 export interface AuthApiContract {
   login(credentials: { email: string; password: string }): Promise<ApiResponse<{ user: User; token: string }>>;

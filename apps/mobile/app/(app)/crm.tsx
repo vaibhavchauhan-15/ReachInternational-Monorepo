@@ -9,8 +9,8 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } 
 import { Card, Badge, Input, Button, useTheme } from '../../components/ui';
 import { CreateLeadModal } from '../../components/crm/CreateLeadModal';
 import { LogInteractionModal } from '../../components/crm/LogInteractionModal';
-import { spacingNumeric, radiusNumeric } from '@servicecentric/design-tokens';
-import { formatDate, formatINR } from '@servicecentric/utils';
+import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { formatDate, formatINR } from '@reachinternational/utils';
 import { PhoneCall, MapPin, DollarSign, Calendar, TrendingUp } from 'lucide-react-native';
 
 export type CrmFilter = 'all' | 'leads' | 'opportunities' | 'interactions';

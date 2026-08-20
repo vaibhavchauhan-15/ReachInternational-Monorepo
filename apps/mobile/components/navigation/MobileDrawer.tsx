@@ -20,7 +20,7 @@ import { useRouter, usePathname } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { useTheme, Badge } from '../ui';
 import { getVisibleMobileNavItems, type MobileNavItem } from '../../lib/nav/navItems';
-import { radiusNumeric, spacingNumeric } from '@servicecentric/design-tokens';
+import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { X, ChevronDown, ChevronRight, LogOut, Sun, Moon, Shield, Settings, User as UserIcon } from 'lucide-react-native';
 
 const DRAWER_WIDTH = Math.min(320, Dimensions.get('window').width * 0.82);

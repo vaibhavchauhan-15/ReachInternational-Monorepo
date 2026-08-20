@@ -1,37 +1,81 @@
+- **Page Feedback: Auto-Summarize Task Title on Save Task & Upgraded Summarizer Engine (`packages/utils/src/string.ts`, `apps/web/components/tasks/CreateTaskModal.tsx`, `apps/mobile/components/tasks/CreateTaskModal.tsx`) (2026-08-20)**:
+  - **Upgraded Summarizer Engine (`@reachinternational/utils`)**: Implemented and exported `summarizeTaskTitle(description: string): string` in `packages/utils/src/string.ts`. Cleans leading list numbers (`1.`, `a)`), markdown symbols (`*`, `-`, `#`), greetings (`Hi John,`), and filler prefixes (`Please kindly ensure to`, `Task instructions:`, `Urgent:`), isolates the primary clause, strips trailing deadline phrases (`by 4 PM tomorrow`), formats clean capitalization, and truncates up to ~55 characters without dangling prepositions while preserving machine codes (`EXCA-001`).
+  - **Auto-Summarize Title on Save Task (`apps/web/components/tasks/CreateTaskModal.tsx`)**: Updated `handleSubmit` handler so when the user clicks **Save Task** / **Save Changes**, if the Title input is blank, it automatically runs `summarizeTaskTitle(description)` to populate the short title and save the task seamlessly. Updated **⚡ Auto-fill Title** button to use `summarizeTaskTitle`.
+  - **Mobile Task Creation Parity (`apps/mobile/components/tasks/CreateTaskModal.tsx`)**: Updated `handleSave` in mobile `CreateTaskModal` to automatically populate `finalTitle` via `summarizeTaskTitle(description)` if title is blank when tapping **SAVE**.
+  - **Verification**: Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across all 9 monorepo workspace packages**).
+
+- **Page Feedback: Display Uploaded Proof Images in Task Verification Modal & Table Row Actions (`apps/web/components/tasks/VerifyTaskModal.tsx`, `TasksClient.tsx`, `CompleteTaskModal.tsx`) (2026-08-20)**:
+  - **Uploaded Proof Images Display & Interactive Lightbox (`VerifyTaskModal.tsx`)**: Added a dedicated **"Uploaded Proof Image(s) / Completion Attachments"** section directly inside `VerifyTaskModal`. Renders image thumbnail cards for all uploaded completion proof images (`task.attachments`) with zoom overlays, file names, and proof photo badges. Built a full-screen **Image Lightbox Preview Dialog** allowing managers to click any thumbnail to inspect full-resolution proof images before approving or reopening tasks.
+  - **Verify Action Button & Camera Indicator (`TasksClient.tsx`)**: Updated the "Verify" button in `<TasksClient>` table row actions with a camera icon (`<Camera className="w-3 h-3" /> Verify`) and tooltip ("Verify Task & Review Uploaded Proof Image"). Added camera proof indicator icons next to completed status badges when proof photos exist.
+  - **Enhanced Proof Upload & Presets (`CompleteTaskModal.tsx`)**: Added local image file picker (`<input type="file" accept="image/*" />`) converting uploaded images to Data URLs with instant thumbnail previews. Provided quick preset demo photo buttons ("📸 Machine Service Inspection Photo", "🔧 Field Repair Completion Photo").
+  - **Verification**: Executed `pnpm --filter @reachinternational/web typecheck` (**Passed cleanly with 0 compilation errors**).
+
+- **Page Feedback: Tasks Page Enterprise Table Column Layout, Pill Badges & Checkbox Actions (`apps/web/components/tasks/TasksClient.tsx`, `apps/web/components/ui/EnterpriseTable.tsx`) (2026-08-20)**:
+  - **Rounded Priority Pill Badges (`TasksClient.tsx`)**: Updated priority badges (`medium`, `high`, `low`, `critical`) in table cells and Kanban cards to fully rounded pills (`rounded-full px-2.5 py-0.5`).
+  - **Separate Task Number Column (`TasksClient.tsx`)**: Separated `Task No.` into its own dedicated column (`#TSK-00001`) with styled mono pill tag (`bg-[var(--color-link)]/10 text-[var(--color-link)]`).
+  - **Stacked Title & Instructions Column (`TasksClient.tsx`)**: Formatted `Title & Instructions` column with bold task title on line 1 and truncated instruction/description on line 2 below it.
+  - **Rounded Square Checkbox Action Button (`TasksClient.tsx`)**: Replaced the text `"Complete"` button with a rounded square checkbox icon button (`<Square className="w-4 h-4" />` with tooltip `"Mark Task Complete"`). Added `<CheckSquare>` indicator for completed tasks.
+  - **Role Display Below Employee Name (`TasksClient.tsx`)**: Transformed assigned employee cells and Kanban cards to render full employee name on top and formatted role title (`Branch Manager`) directly below it on a dedicated line.
+  - **Column Alignment & Flex Grid (`EnterpriseTable.tsx`, `TasksClient.tsx`)**: Configured explicit widths (`110px`, `300px`, `110px`, `220px`, `140px`, `120px`, `130px`) and `align-middle` cell alignment across all table rows.
+  - **Verification**: Executed `pnpm --filter @reachinternational/web typecheck` (**Passed cleanly with 0 compilation errors**).
+
+- **Page Feedback: Task Detail Drawer Responsive Polish & Flex Overflow Fix (`apps/web/components/tasks/TaskDetailDrawer.tsx`) (2026-08-20)**:
+  - **Single Scroll Container & Flex Overflow Fix (`TaskDetailDrawer.tsx`)**: Removed nested `max-h-48 overflow-y-auto` scroll container from the comment discussion thread. Configured `<div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 min-h-0">` as the single, smooth scroll container for the drawer body.
+  - **Desktop & Mobile Responsive Layout (`TaskDetailDrawer.tsx`)**: Optimized drawer container sizing (`w-full sm:max-w-xl md:max-w-2xl h-full flex flex-col`), quick details metadata grid (`grid-cols-2 sm:grid-cols-4 gap-2.5`), and assigned employee cards (`grid-cols-1 sm:grid-cols-2 gap-2.5`) with formatted role titles `(Branch Manager)`.
+  - **Framer Motion Slide-In & Dismissal Controls (`TaskDetailDrawer.tsx`)**: Integrated `AnimatePresence` and `motion.div` slide-in spring transition from the right. Added backdrop click dismissal, global `Escape` key listener, click-to-copy task number button (`#TSK-00001`), and close button tooltip wrapper.
+  - **Verification**: Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across all 9 monorepo workspace packages**).
+
+- **Page Feedback: Tasks Page UX Polish, Assigned Employee Role Display & Rounded View Mode Pills (`apps/web/components/tasks/TasksClient.tsx`) (2026-08-20)**:
+  - **Assigned Employee Full Name & Role (`TasksClient.tsx`)**: Transformed initial circles in table cells into full employee name (`John Doe`) and formatted role in parentheses `(Branch Manager)` with avatar badges. Applied identical assignee representation to Kanban cards.
+  - **Rounded View Mode Toggle Switcher (`TasksClient.tsx`)**: Styled List and Kanban view mode container and toggle buttons with `rounded-full` pill design matching global design tokens.
+  - **Page Header Cleanup (`TasksClient.tsx`)**: Removed description paragraph under page header per user feedback.
+  - **Card Base & UX Polish (`TasksClient.tsx`)**: Removed double-border/cramped `<Card className="p-0 ...">` container wrapper around `<EnterpriseTable>`. Connected `onRowClick` on `<EnterpriseTable>` to open `TaskDetailDrawer` on row click. Added `<TooltipWrapper>` popovers to table action buttons (`View Task Details`, `Edit Task`, `Delete Task`). Standardized date formatting with `formatDisplayDate`.
+  - **Verification**: Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across all 9 monorepo workspace packages**).
+
+- **Page Feedback: Tasks Page Searchable Role-Based Employee Selector, Mandatory Description & Title Auto-Summarizer (`apps/web/components/tasks/CreateTaskModal.tsx`, `apps/mobile/components/tasks/CreateTaskModal.tsx`) (2026-08-20)**:
+  - **Searchable Role-Based Employee Selector (`apps/web`)**: Transformed static assignee scroll box into a searchable popover dropdown selector. Features real-time employee search by name, email, or role, formatted role badges (`Admin`, `Service Manager`, `Engineer`, `Operator`, `Client`), role filter category pills (`All Roles`, `Admins`, `Managers`, `Engineers`, `Operators`, `Clients`), bulk action triggers (`Select All Filtered`, `Clear`), and selected employee chip tags with quick removal.
+  - **Mandatory Description & Form Validation (`apps/web`, `apps/mobile`)**: Updated Task Description label to `Description / Instructions *` and added mandatory form validation ensuring non-empty instructions before task creation on both Web and Mobile.
+  - **Title Auto-Summarizer (`apps/web`)**: Added **"⚡ Auto-fill Title"** trigger button alongside the description header. Automatically extracts core task intent, strips filler prefix text ("please", "task to", "ensure that"), formats clean title case up to ~55 characters, and populates the Task Title input.
+  - **Verification**: Executed typecheck across Web and Mobile workspace packages (**Passed cleanly with 0 compilation errors**).
+
+- **Next.js Production Build Resolution (`apps/web/.next`) (2026-08-20)**:
+  - **Production Build Artifact Generation**: Executed `pnpm --filter @reachinternational/web build` (`next build`), compiling Next.js pages, server components, and generating static assets into `.next`.
+  - **Verification**: Verified `pnpm start` (`next start`) functions cleanly and typecheck passes with 0 errors (`pnpm --filter @reachinternational/web typecheck`).
+
 - **Page Feedback: Proper Tooltip Wrappers for Unlabeled Project Icons (`apps/web/components/animate-ui/components/radix/dialog.tsx`, `ComplaintsClient.tsx`, `ComplaintDetailModal.tsx`, `FieldServiceReportModal.tsx`, `ServicesClient.tsx`, `EnterpriseTable.tsx`) (2026-08-19)**:
   - **Modal Close Button Tooltip (`dialog.tsx`)**: Wrapped Radix `DialogPrimitive.Close` button with `<TooltipWrapper content="Close modal (Esc)" side="left">`, giving every modal dialog in the app a clean tooltip on close button hover.
   - **Complaints Table Action Tooltips (`ComplaintsClient.tsx`)**: Wrapped all icon-only table cell action buttons (`View FSR Report`, `Resolve (Fill FSR)` / `View Details`, `Edit Complaint`, `Delete Complaint`) in `<TooltipWrapper>` popovers.
   - **Complaint & FSR Modal Action Tooltips (`ComplaintDetailModal.tsx`, `FieldServiceReportModal.tsx`)**: Wrapped icon buttons (`Delete Complaint`, `Edit Complaint`, `Edit Report`, `Remove part row`) in `<TooltipWrapper>` popovers.
   - **Service Logs Action Tooltips (`ServicesClient.tsx`)**: Wrapped icon-only table cell action buttons (`Update Service Log`, `Delete Service Log`) in `<TooltipWrapper>` popovers.
   - **Enterprise Table Toolbar Tooltips (`EnterpriseTable.tsx`)**: Added tooltips to density control toggle buttons (`Compact`, `Default`, `Comfortable`) and column menu toggle button.
-  - **Verification**: Executed `pnpm --filter @servicecentric/web typecheck` (**Passed cleanly with 0 compilation errors**).
+  - **Verification**: Executed `pnpm --filter @reachinternational/web typecheck` (**Passed cleanly with 0 compilation errors**).
 
 - **Page Feedback: Compact Modal Header Action Buttons & Icon-Only Edit/Delete (`apps/web/components/complaints/ComplaintDetailModal.tsx`, `MachineComplaintModal.tsx`, `FieldServiceReportModal.tsx`) (2026-08-19)**:
   - **Icon-Only Edit & Delete Buttons (`ComplaintDetailModal.tsx`, `FieldServiceReportModal.tsx`)**: Replaced text labels on `Edit` and `Delete` header buttons with clean icon-only buttons (`h-7 w-7 p-0 flex items-center justify-center`) with descriptive `title` tooltips (`"Edit Complaint"`, `"Delete Complaint"`, `"Edit Report"`).
   - **Slightly Smaller Button Standard (`ComplaintDetailModal.tsx`, `MachineComplaintModal.tsx`, `FieldServiceReportModal.tsx`)**: Compacted all modal header action buttons to `h-7` (~28px compact height) with `px-2.5 text-xs` padding for a high-density, refined header design.
-  - **Verification**: Executed `pnpm --filter @servicecentric/web typecheck` (**Passed cleanly with 0 compilation errors**).
+  - **Verification**: Executed `pnpm --filter @reachinternational/web typecheck` (**Passed cleanly with 0 compilation errors**).
 
 - **Page Feedback: Field Service Report (FSR) Modal Header Actions (`apps/web/components/complaints/FieldServiceReportModal.tsx`) (2026-08-19)**:
   - **Shifted Actions to Header (`FieldServiceReportModal.tsx`)**: Moved `Print / Save PDF`, `Edit Report`, `Send Back for Revision`, `Approve FSR`, and `Complete FSR / Submit` action buttons into the top header bar next to the modal title via `headerActions` prop. Removed bottom footer action buttons container for 100% modal consistency across the complaints module.
-  - **Verification**: Executed `pnpm --filter @servicecentric/web typecheck` (**Passed cleanly with 0 compilation errors**).
+  - **Verification**: Executed `pnpm --filter @reachinternational/web typecheck` (**Passed cleanly with 0 compilation errors**).
 
 - **Page Feedback: Complaint Detail Modal Header Actions (`apps/web/components/complaints/ComplaintDetailModal.tsx`) (2026-08-19)**:
   - **Shifted Actions to Header (`ComplaintDetailModal.tsx`)**: Moved `Delete`, `Edit`, and `View FSR Report` / `Resolve (Fill FSR)` action buttons into the top header bar next to the modal title via `headerActions` prop. Removed the bottom footer action buttons container for visual consistency with `MachineComplaintModal`.
-  - **Verification**: Executed `pnpm --filter @servicecentric/web typecheck` (**Passed cleanly with 0 compilation errors**).
+  - **Verification**: Executed `pnpm --filter @reachinternational/web typecheck` (**Passed cleanly with 0 compilation errors**).
 
 - **Page Feedback: Modal Double Scrollbar Resolution & Single Scroll Container Standard (`apps/web/components/complaints/MachineComplaintModal.tsx`, `ComplaintDetailModal.tsx`, `apps/web/components/machines/MachineModal.tsx`, `MachineCategoryModal.tsx`) (2026-08-19)**:
   - **Eliminated Nested Scrollbars (`MachineComplaintModal.tsx`, `ComplaintDetailModal.tsx`, `MachineModal.tsx`, `MachineCategoryModal.tsx`)**: Removed redundant inner `max-h-[...vh] overflow-y-auto pr-1` styles from modal form/div body containers, leaving `Modal.tsx`'s `<div className="flex-1 overflow-y-auto p-6">` as the single, smooth scroll container for all modal dialogs.
-  - **Verification**: Executed `pnpm --filter @servicecentric/web typecheck` (**Passed cleanly with 0 compilation errors**).
+  - **Verification**: Executed `pnpm --filter @reachinternational/web typecheck` (**Passed cleanly with 0 compilation errors**).
 
 - **Page Feedback: Machine Complaint Modal Header Actions & UI Cleanup (`apps/web/components/complaints/MachineComplaintModal.tsx`, `apps/web/components/ui/Modal.tsx`) (2026-08-19)**:
   - **Modal Header Actions (`Modal.tsx`, `MachineComplaintModal.tsx`)**: Extended `ModalProps` with `headerActions?: ReactNode` rendered in `DialogHeader` alongside modal title with `pr-12` padding. Moved `Cancel` and `Raise Machine Complaint` / `Update Complaint` action buttons into top header bar.
   - **Removed Footer & Section Banner (`MachineComplaintModal.tsx`)**: Completely removed bottom sticky action buttons container from form body and removed the top amber notice box (`Malfunction Complaint Entry`).
   - **Removed Section Header Icon (`MachineComplaintModal.tsx`)**: Removed the `<Wrench>` icon next to the "Machine & Breakdown Details" subheader for a cleaner form layout.
-  - **Verification**: Executed `pnpm --filter @servicecentric/web typecheck` (**Passed cleanly with 0 compilation errors in modified files**).
+  - **Verification**: Executed `pnpm --filter @reachinternational/web typecheck` (**Passed cleanly with 0 compilation errors in modified files**).
 
 - **Enterprise To-Do & Task Management Module (Web & Mobile) (`supabase/migrations/033_todo_task_management.sql`, `apps/web/`, `apps/mobile/`, `packages/`) (2026-08-19)**:
   - **Database & RLS (`033_todo_task_management.sql`)**: Created `tasks`, `task_assignees`, `task_attachments`, `task_comments`, and `task_activity_logs` tables with auto-incrementing task numbers (`TSK-00001`), RLS security policies, performance indexes, and triggers. Updated `seed_dummy_data.mjs` with task seed data.
-  - **Shared Workspace Packages (`packages/`)**: Extended `@servicecentric/types` with `Task`, `TaskAssignee`, `TaskAttachment`, `TaskComment`, `TaskActivityLog`, `TaskStats`, `TaskFilterParams`. Created `@servicecentric/validation` Zod schemas (`createTaskSchema`, `updateTaskSchema`, `completeTaskSchema`, `verifyTaskSchema`, `taskCommentSchema`). Extended `@servicecentric/design-tokens` badge contracts with task statuses (`pending`, `overdue`, `reopened`).
+  - **Shared Workspace Packages (`packages/`)**: Extended `@reachinternational/types` with `Task`, `TaskAssignee`, `TaskAttachment`, `TaskComment`, `TaskActivityLog`, `TaskStats`, `TaskFilterParams`. Created `@reachinternational/validation` Zod schemas (`createTaskSchema`, `updateTaskSchema`, `completeTaskSchema`, `verifyTaskSchema`, `taskCommentSchema`). Extended `@reachinternational/design-tokens` badge contracts with task statuses (`pending`, `overdue`, `reopened`).
   - **Next.js Web App (`apps/web`)**: Implemented DAL queries (`tasks.ts`), Server Actions (`tasks.ts`), `/tasks` page route, KPI dashboard stats, List & Kanban views, `CreateTaskModal`, `TaskDetailDrawer`, `CompleteTaskModal`, and `VerifyTaskModal`. Updated `AppSidebar.tsx` navigation.
   - **Expo Mobile App (`apps/mobile`)**: Built pixel-perfect mobile task screen (`tasks.tsx`) and creation modal (`CreateTaskModal.tsx`) matching user wireframe screenshots. Features left-border priority accents (Red/Orange/Green), sub-tabs (`All Tasks`, `My Tasks`, `Assigned to Me`, `Completed`), assignee cards with avatars & roles, due date badges, sort options, and Floating Action Button (+).
   - **Verification**: Executed `pnpm typecheck` (**Passed cleanly with 0 compilation errors across all 9 monorepo workspace packages**).
@@ -84,7 +128,7 @@
 
 - **AI Agent Global Rule: Web & Mobile UI/UX Consistency (`.agents/rules/web_mobile_ui_consistency.md`, `AI/UI_RULES.md`) (2026-08-19)**:
   - **Comprehensive 22-Section Rule Document**: Formatted and saved the complete 22-section Global Rule for Web & Mobile UI/UX Consistency into `.agents/rules/web_mobile_ui_consistency.md` and integrated it into `AI/UI_RULES.md`.
-  - **Core Protocols Enforced**: Enforces single design system source of truth (`@servicecentric/design-tokens`), identical color tokens, shared typography hierarchy, visual component parity, information architecture preservation, identical icon families, uniform UX logic, matching terminology, and strict accessibility standards.
+  - **Core Protocols Enforced**: Enforces single design system source of truth (`@reachinternational/design-tokens`), identical color tokens, shared typography hierarchy, visual component parity, information architecture preservation, identical icon families, uniform UX logic, matching terminology, and strict accessibility standards.
   - **Verification**: Verified rule documents written cleanly to `.agents/rules/web_mobile_ui_consistency.md` and `AI/UI_RULES.md`.
 
 - **Mobile Role-Based Left Drawer & Dynamic Sub-Menu Bottom Navigation (`apps/mobile/components/navigation/`, `apps/mobile/components/ui/`) (2026-08-19)**:
@@ -116,7 +160,7 @@
   - **Click-Only Trigger & Hover Removal (`NavigationItem.tsx`, `CollapsedFlyoutPortal.tsx`)**: Removed all mouseover (`onMouseEnter`) and mouseleave (`onMouseLeave`) hover triggers. In collapsed sidebar condition, clicking menu icons explicitly toggles the sub-topic popover modal directly in front of the clicked button.
   - **Sub-Topics Array Configuration (`AppSidebar.tsx`)**: Configured explicit `subItems` array for `/machines` (Machine Directory `tab=inventory`, Service Logs `tab=services`, Breakdown Complaints `tab=complaints`) and `/rentals` (Dashboard, Requests, Customers, Agreements, Challans, Returns, Damage, Billing).
   - **Visual Match & Dynamic Alignment (`CollapsedFlyoutPortal.tsx`)**: Formatted popup header with module title, Wrench icon, and `OVERVIEW` badge matching user design reference. Added `window` resize and scroll listeners for dynamic positioning.
-  - **Verification**: Executed `pnpm --filter @servicecentric/web typecheck` (**Passed cleanly with 0 compilation errors**).
+  - **Verification**: Executed `pnpm --filter @reachinternational/web typecheck` (**Passed cleanly with 0 compilation errors**).
 
 - **Agentation Integration & Expo Web Version Resolution (`apps/web/app/layout.tsx`, `apps/mobile/app/_layout.tsx`, `apps/mobile/metro.config.js`, `apps/mobile/package.json`) (2026-08-19)**:
   - **Package & Peer Version Alignment**: Installed `agentation` (^3.0.2) in `apps/mobile`. Fixed blank white screen error on Expo Web by aligning `react-dom` to `"19.1.0"`, `@types/react-dom` to `"~19.1.7"`, and `react-native-web` to `"~0.19.13"` matching Expo SDK 54 (`react@19.1.0`).
@@ -127,7 +171,7 @@
 - **Mobile Login Network Error Resolution (`apps/mobile/.env`, `apps/mobile/lib/supabase.ts`, `apps/mobile/lib/environment.ts`) (2026-08-19)**:
   - **Resolved Network Request Failure**: Configured explicit `EXPO_PUBLIC_SUPABASE_URL` (`https://dhbbgfzbyatzvqafnsqp.supabase.co`) and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in `apps/mobile/.env` and updated client initializer fallbacks in `apps/mobile/lib/supabase.ts` and `apps/mobile/lib/environment.ts`, fixing DNS/fetch failures during mobile login.
   - **Zero Touch Scope Guard**: Preserved `apps/web` without touching any file per user request.
-  - **Verification**: Executed `pnpm --filter @servicecentric/mobile typecheck` (**Passed cleanly with 0 compilation errors**).
+  - **Verification**: Executed `pnpm --filter @reachinternational/mobile typecheck` (**Passed cleanly with 0 compilation errors**).
 
 - **Monorepo GitIgnore Clean-up & Staging Protocol (`.gitignore`) (2026-08-19)**:
   - **Comprehensive GitIgnore Rules (`.gitignore`)**: Standardized recursive monorepo rules for `node_modules/`, `.next/`, `.expo/`, `.turbo/`, `dist/`, `build/`, `supabase/.temp/`, and `.env` secrets.
@@ -137,11 +181,11 @@
 - **Supabase Auth Rate Limit (429) Exception Handling & Fix (`apps/web/proxy.ts`, `apps/web/lib/dal.ts`) (2026-08-19)**:
   - **Auth Proxy Resilience (`proxy.ts`)**: Wrapped `supabase.auth.getSession()` in try-catch to prevent unhandled 429 `over_request_rate_limit` exceptions from spamming the Next.js server console.
   - **DAL Session Verification Guard (`lib/dal.ts`)**: Added try-catch around `supabase.auth.getUser()` in `verifySession()` and `getCurrentUserOrNull()`, ensuring 429 rate limit errors from Supabase Auth API are caught and handled cleanly.
-  - **Verification**: Executed `pnpm --filter @servicecentric/web typecheck` (**Passed cleanly with 0 compilation errors**).
+  - **Verification**: Executed `pnpm --filter @reachinternational/web typecheck` (**Passed cleanly with 0 compilation errors**).
 
 - **Expo Mobile App — SDK 54 Upgrade & Assets Fix (`apps/mobile/package.json`, `apps/mobile/assets/`) (2026-08-19)**:
   - **Missing Assets Resolution**: Created `apps/mobile/assets/` directory with `icon.png` (512x512), `splash.png` (1242x2436), `adaptive-icon.png` (1024x1024), and `favicon.png` (48x48), fixing `Unable to resolve asset "./assets/icon.png"`.
-  - **Expo SDK 54 Compatibility**: Upgraded `@servicecentric/mobile` to Expo SDK 54 (`~54.0.0`), `react-native@0.76.9`, and `@types/react@^18.3.12` to resolve Expo Go SDK 54 device incompatibility.
+  - **Expo SDK 54 Compatibility**: Upgraded `@reachinternational/mobile` to Expo SDK 54 (`~54.0.0`), `react-native@0.76.9`, and `@types/react@^18.3.12` to resolve Expo Go SDK 54 device incompatibility.
   - **Verification**: Executed `pnpm install` and `pnpm typecheck` (**0 errors across workspace**).
 
 - **Lead Systems Architecture & Monorepo Boundary Scoping Protocol (`AI/ARCHITECTURE.md`, `AI/CODING_RULES.md`, `AI/PROJECT_MEMORY.md`) (2026-08-19)**:
@@ -156,35 +200,35 @@
     - `ci.yml`: Pull request validation pipeline (Install -> Typecheck -> Test Runner).
     - `deploy-web.yml`: GitHub -> Vercel Production deployment trigger.
     - `deploy-mobile.yml`: GitHub -> EAS Build -> Internal APK -> Team Phones distribution pipeline.
-  - **Verification**: Executed `pnpm --filter @servicecentric/mobile typecheck` (**Passed cleanly with 0 compilation errors**).
+  - **Verification**: Executed `pnpm --filter @reachinternational/mobile typecheck` (**Passed cleanly with 0 compilation errors**).
 
 - **Phase 32 — Environments & Configuration Management (`apps/mobile/lib/environment.ts`, `.env.example`) (2026-08-19)**:
   - **Multi-Environment Preset Support (`getEnvironmentConfig`)**: Established configuration profiles for `development`, `staging`, and `production` environments with environment-specific timeouts, debug logger flags, and production protection flags.
   - **Startup Environment Validator (`validateStartupEnvironment`)**: Implemented startup validator enforcing mandatory `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` variables prior to production bundle boot.
   - **Environment Template (`.env.example`)**: Created template for client environment configuration.
-  - **Verification**: Executed `pnpm --filter @servicecentric/mobile typecheck` (**Passed cleanly with 0 compilation errors**).
+  - **Verification**: Executed `pnpm --filter @reachinternational/mobile typecheck` (**Passed cleanly with 0 compilation errors**).
 
 - **Phase 31 — Automated Testing & E2E Validation Suite (`apps/mobile/lib/testing-suite.ts`, `run-tests.mjs`) (2026-08-19)**:
   - **Unit Test Suite (`runUnitTestSuite`)**: Built automated tests for currency formatting (`formatINR`, `formatCompactCurrency`), machine code formatting (`formatMachineCode`), date formatting (`formatDate`), RBAC permission evaluation (`roleHasPermission`), media bucket security (`validateMediaFile`), and deep-link route sanitization (`sanitizeDeepLinkRoute`).
   - **9 Mandatory E2E Mobile Workflows (`runWorkflowTestSuite`)**: Automated test coverage for Auth session initialization, My Work dashboard, Machine directory, Complaint logging, FSR creation, Hour meter reading, Parts request, Push notifications, and Offline queue persistence.
-  - **Verification**: Executed `pnpm --filter @servicecentric/mobile typecheck` (**Passed cleanly with 0 compilation errors**).
+  - **Verification**: Executed `pnpm --filter @reachinternational/mobile typecheck` (**Passed cleanly with 0 compilation errors**).
 
 - **Phase 30 — Security Audit & Hardening Suite (`apps/mobile/lib/security.ts`) (2026-08-19)**:
   - **Zero Service-Role Key Verification (`security.ts`)**: Confirmed 0 exposure of `SUPABASE_SERVICE_ROLE_KEY` or server secrets in the mobile client bundle, enforcing that the mobile client is untrusted and RLS policy-governed.
   - **Deep-Link Route Sanitizer (`sanitizeDeepLinkRoute`)**: Built route sanitizer preventing arbitrary internal route hijacking or injection via deep links.
-  - **Role Permission Guard & Data Shielding**: Integrated `canUserAccessDomain` utilizing `@servicecentric/permissions` `roleHasPermission` to protect HR salary numbers and sensitive financial figures.
-  - **Verification**: Executed `pnpm --filter @servicecentric/mobile typecheck` (**Passed cleanly with 0 compilation errors**).
+  - **Role Permission Guard & Data Shielding**: Integrated `canUserAccessDomain` utilizing `@reachinternational/permissions` `roleHasPermission` to protect HR salary numbers and sensitive financial figures.
+  - **Verification**: Executed `pnpm --filter @reachinternational/mobile typecheck` (**Passed cleanly with 0 compilation errors**).
 
 - **Phase 29 — Accessibility and Device UX Suite (`apps/mobile/lib/accessibility.ts`, `components/ui/Button.tsx`) (2026-08-19)**:
   - **44x44 dp Touch Targets & Accessibility Labels (`Button.tsx`)**: Standardized minimum 44x44 dp touch targets across native buttons, `accessible={true}`, `accessibilityLabel`, `accessibilityRole="button"`, and `accessibilityState`.
   - **Android Hardware Back Button Listener (`accessibility.ts`)**: Built `useAndroidBackHandler` custom hook to intercept Android physical back button presses on modal dialogs.
   - **Screen Reader & Keyboard-Safe Forms**: Built `announceForAccessibility` for validation and loading state announcements.
-  - **Verification**: Executed `pnpm --filter @servicecentric/mobile typecheck` (**Passed cleanly with 0 compilation errors**).
+  - **Verification**: Executed `pnpm --filter @reachinternational/mobile typecheck` (**Passed cleanly with 0 compilation errors**).
 
 - **Phase 28 — Performance Optimization & List Virtualization (`apps/mobile/lib/performance.ts`, `components/ui/OptimizedList.tsx`) (2026-08-19)**:
   - **FlatList List Virtualization (`OptimizedList.tsx`)**: Built high-performance virtualized FlatList wrapper with clipped subview removal (`removeClippedSubviews`), window size optimization (`windowSize={5}`), and initial render batching (`initialNumToRender={8}`) for low-end Android and iOS devices.
   - **Performance Metrics & Fixed Item Layout (`performance.ts`)**: Built render timing logger (`logScreenRenderTime`), fixed height layout calculation (`createFixedItemLayout`), and memoized screen render helpers.
-  - **Verification**: Executed `pnpm --filter @servicecentric/mobile typecheck` (**Passed cleanly with 0 compilation errors**).
+  - **Verification**: Executed `pnpm --filter @reachinternational/mobile typecheck` (**Passed cleanly with 0 compilation errors**).
 
 - **Phase 27 — Realtime Synchronization Suite (`apps/mobile/lib/realtime.ts`) (2026-08-19)**:
   - **Justified Table Realtime Subscriptions (`realtime.ts`)**: Enabled selective Supabase Realtime WebSocket subscriptions for high-priority operational tables (`machine_complaints`, `field_service_reports`, `machine_site_movements`, `notifications`).
@@ -277,12 +321,12 @@
   - **Verification**: Executed `pnpm typecheck` (**9/9 workspace projects passed with 0 compilation errors**).
 
 - **Phase 10 — Mobile Design System (`apps/mobile/components/ui/`) (2026-08-19)**:
-  - **Native UI Primitives**: Built `ThemeProvider` (supplying theme objects from `@servicecentric/design-tokens`), `Button` (with variants, sizes, and loading state), `Input`, `Card`, `Badge` (powered by `getStatusBadgeConfig`), `Skeleton`, `EmptyState`, and `ErrorState`.
+  - **Native UI Primitives**: Built `ThemeProvider` (supplying theme objects from `@reachinternational/design-tokens`), `Button` (with variants, sizes, and loading state), `Input`, `Card`, `Badge` (powered by `getStatusBadgeConfig`), `Skeleton`, `EmptyState`, and `ErrorState`.
   - **Verification**: Executed `pnpm typecheck` (**9/9 workspace projects passed with 0 compilation errors**).
 
-- **Phase 9 — Expo Mobile Application Foundation (`apps/mobile`, `@servicecentric/mobile`) (2026-08-19)**:
+- **Phase 9 — Expo Mobile Application Foundation (`apps/mobile`, `@reachinternational/mobile`) (2026-08-19)**:
   - **Expo React Native App Setup (`apps/mobile/`)**: Created Expo workspace with Expo Router, TypeScript path aliases (`@/*`), app manifest (`app.json` with Android package `com.servicecentric.app` and iOS bundle identifier `com.servicecentric.app`), and root navigation layout (`_layout.tsx`).
-  - **Shared Package Integration**: Linked all 6 shared monorepo packages (`@servicecentric/types`, `@servicecentric/validation`, `@servicecentric/permissions`, `@servicecentric/design-tokens`, `@servicecentric/api-client`, `@servicecentric/utils`) into `@servicecentric/mobile`.
+  - **Shared Package Integration**: Linked all 6 shared monorepo packages (`@reachinternational/types`, `@reachinternational/validation`, `@reachinternational/permissions`, `@reachinternational/design-tokens`, `@reachinternational/api-client`, `@reachinternational/utils`) into `@reachinternational/mobile`.
   - **TanStack Query & Gateway Screen (`app/index.tsx`)**: Configured top-level `QueryClientProvider` and brand splash landing screen with active session status rendering.
   - **Verification**: Executed `pnpm install` and `pnpm typecheck` (**9/9 workspace projects passed with 0 compilation errors**).
 
@@ -291,48 +335,48 @@
   - **Mobile Auth State Provider (`apps/mobile/lib/auth/useAuth.tsx`)**: Built React Context and `useAuth` hook managing user session, role (`user.role`), branch scope (`branch_id`), capability checks (`can`, `canAny`), and `signOut`.
   - **Verification**: Executed `pnpm install` and `pnpm typecheck` (**9/9 workspace projects passed with 0 compilation errors**).
 
-- **Phase 7 — Shared API / Data Architecture Package (`packages/api-client`, `@servicecentric/api-client`) (2026-08-19)**:
+- **Phase 7 — Shared API / Data Architecture Package (`packages/api-client`, `@reachinternational/api-client`) (2026-08-19)**:
   - **Canonical API Envelope & Parameter Contracts (`packages/api-client/src/`)**: Built standardized response envelopes (`ApiResponse<T>`, `ApiPaginatedResponse<T>`, `ApiErrorResponse` in `response.ts`), query and pagination parameters (`query.ts`), and `ApiErrorCode` enum & `ServiceCentricApiError` class with HTTP status code mappers (`error.ts`).
   - **11 Domain Endpoint Contracts (`endpoints/`)**: Created interface declarations for Auth, Machines, Complaints, Services, Operations, Inventory, Rentals, Sales, Finance, HR, and Notifications.
-  - **Web App Integration (`apps/web`)**: Linked `@servicecentric/api-client` workspace dependency to `@servicecentric/web`.
+  - **Web App Integration (`apps/web`)**: Linked `@reachinternational/api-client` workspace dependency to `@reachinternational/web`.
   - **Verification**: Executed `pnpm install` and `pnpm typecheck` (**9/9 workspace projects passed with 0 compilation errors**).
 
 - **Phase 6 — Shared UI Contract & Platform Utilities (`packages/design-tokens`, `packages/utils`) (2026-08-19)**:
   - **Universal Badge & Status Contract (`packages/design-tokens/src/contracts/badge.ts`)**: Built `getStatusBadgeConfig(status)` mapping status keys across 7 operational domains (Machine, Complaint, FSR, PO/Challan, Rental, Sales, Employee) to human labels, token colors, and intent.
   - **Platform-Neutral Icon Registry (`packages/design-tokens/src/contracts/icons.ts`)**: Defined canonical icon keys (`ICON_KEYS`) aligning Web (Lucide React) and Mobile (Expo vector icons).
   - **Canonical Utilities Package (`packages/utils/src/`)**: Built date formatters (`formatDate`, `formatDateTime`, `formatTimeAgo` with `"en-GB"` locale in `date.ts`), INR currency & GST calculators (`currency.ts`), string formatters (`string.ts`), and object/array helpers (`object.ts`).
-  - **Web App Integration (`apps/web`)**: Linked `@servicecentric/utils` workspace dependency to `@servicecentric/web`.
+  - **Web App Integration (`apps/web`)**: Linked `@reachinternational/utils` workspace dependency to `@reachinternational/web`.
   - **Verification**: Executed `pnpm install` and `pnpm typecheck` (**9/9 workspace projects passed with 0 compilation errors**).
 
-- **Phase 5 — Shared Design Tokens Package (`packages/design-tokens`, `@servicecentric/design-tokens`) (2026-08-19)**:
+- **Phase 5 — Shared Design Tokens Package (`packages/design-tokens`, `@reachinternational/design-tokens`) (2026-08-19)**:
   - **Canonical Token System (`packages/design-tokens/src/`)**: Built platform-neutral design token package containing light/dark colors (`colors.ts`), typography font family/weight/presets scale (`typography.ts`), 4px base spacing scale (`spacing.ts`), bimodal border radius scale (`radius.ts`), light/dark shadows (`elevation.ts`), motion timing & cubic-bezier easing curves (`motion.ts`), and screen breakpoints (`breakpoints.ts`).
   - **Platform Adapters**: Built **Web CSS Variables Adapter** (`cssVariables.ts`) generating CSS custom properties for Next.js/Tailwind CSS v4, and **React Native / Expo Adapter** (`reactNative.ts`) exporting typed theme objects (`lightThemeRN`, `darkThemeRN`, `getRNTheme()`) with numeric spacing/radii, shadow primitives, and status colors.
-  - **Web App Integration (`apps/web`)**: Linked `@servicecentric/design-tokens` workspace dependency to `@servicecentric/web`.
+  - **Web App Integration (`apps/web`)**: Linked `@reachinternational/design-tokens` workspace dependency to `@reachinternational/web`.
   - **Verification**: Executed `pnpm install`, `pnpm typecheck` (**9/9 workspace projects passed with 0 compilation errors**), and `node supabase/verify_seed.mjs` (**38+ tables verified**).
 
-- **Phase 4 — Shared RBAC & Permissions Package (`packages/permissions`, `@servicecentric/permissions`) (2026-08-19)**:
+- **Phase 4 — Shared RBAC & Permissions Package (`packages/permissions`, `@reachinternational/permissions`) (2026-08-19)**:
   - **Canonical Authorization Package (`packages/permissions/src/`)**: Built modular RBAC package containing 14 system roles (`roles.ts`), 100+ permission constants (`permissions.ts`), 3-tier scoping rules (`scopes.ts`), and 14-role permission matrix (`matrix.ts`).
-  - **Web App Integration (`apps/web`)**: Linked `@servicecentric/permissions` to `@servicecentric/web` and re-exported canonical rules via `apps/web/lib/auth/rbac.ts` and `apps/web/lib/auth/scope.ts`.
+  - **Web App Integration (`apps/web`)**: Linked `@reachinternational/permissions` to `@reachinternational/web` and re-exported canonical rules via `apps/web/lib/auth/rbac.ts` and `apps/web/lib/auth/scope.ts`.
   - **Server-First Security Guarantee**: Maintained database RLS and server action permission checks as authoritative.
   - **Verification**: Executed `pnpm install`, `pnpm typecheck` (**9/9 workspace projects passed with 0 compilation errors**), and `pnpm verify:seed` (**38+ tables verified**).
 
-- **Phase 3 — Shared Validation Package (`packages/validation`, `@servicecentric/validation`) (2026-08-19)**:
+- **Phase 3 — Shared Validation Package (`packages/validation`, `@reachinternational/validation`) (2026-08-19)**:
   - **Canonical Validation Package (`packages/validation/src/`)**: Built modular Zod validation schemas covering all 12 domain categories (`auth`, `machine`, `complaint`, `fsr`, `parts`, `hourMeter`, `inventory`, `rental`, `sales`, `finance`, `hr`, `common`, `helpers`).
-  - **Web App Integration (`apps/web`)**: Linked `@servicecentric/validation` to `@servicecentric/web` and refactored Server Actions (`apps/web/app/actions/finance.ts`) to consume canonical Zod schemas.
+  - **Web App Integration (`apps/web`)**: Linked `@reachinternational/validation` to `@reachinternational/web` and refactored Server Actions (`apps/web/app/actions/finance.ts`) to consume canonical Zod schemas.
   - **12 Domain Categories Covered**: Auth/Login, Machine, Complaint, FSR, Parts Request, Hour Meter, Inventory, Rental, Sales, Finance, HR/Employee, Common Query/Filters.
   - **Verification**: Executed `pnpm install`, `pnpm typecheck` (**9/9 workspace projects passed with 0 compilation errors**), and `pnpm verify:seed` (**38+ tables verified**).
 
-- **Phase 2 — Shared Type System (`packages/types`, `@servicecentric/types`) (2026-08-19)**:
-  - **Canonical Type System (`packages/types/src/`)**: Built modular domain type system in `@servicecentric/types` covering all 22 domain categories (`database.ts`, `common.ts`, `index.ts`).
-  - **Web App Integration (`apps/web`)**: Linked `@servicecentric/types` workspace dependency to `@servicecentric/web` and re-exported canonical types via `apps/web/lib/types/database.ts`.
+- **Phase 2 — Shared Type System (`packages/types`, `@reachinternational/types`) (2026-08-19)**:
+  - **Canonical Type System (`packages/types/src/`)**: Built modular domain type system in `@reachinternational/types` covering all 22 domain categories (`database.ts`, `common.ts`, `index.ts`).
+  - **Web App Integration (`apps/web`)**: Linked `@reachinternational/types` workspace dependency to `@reachinternational/web` and re-exported canonical types via `apps/web/lib/types/database.ts`.
   - **22 Domain Categories Covered**: User, Role, Permission, Branch, Machine, Machine Assignment, Complaint, Service Record, FSR, Parts Usage, Inventory, Stock Transaction, Purchase Order, Vendor, Rental, Sales, Finance, Employee, Notification, Audit Log, Pagination/Filter Params, API Error Types.
   - **Verification**: Executed `pnpm install`, `pnpm typecheck` (**9/9 workspace projects passed with 0 compilation errors**), and `pnpm verify:seed` (**38+ tables verified**).
 
 - **Phase 1 — Monorepo Foundation (`pnpm-workspace.yaml`, `turbo.json`, `apps/web`, `apps/mobile`, `packages/*`) (2026-08-19)**:
   - **Workspace Setup**: Converted project into pnpm workspace (`pnpm-workspace.yaml`) with Turborepo task pipeline orchestration (`turbo.json`).
-  - **Web App Workspace (`apps/web`)**: Moved existing Next.js application into `apps/web/` (`@servicecentric/web`). Preserved 25 route modules, 18 Server Actions, 19 DAL query modules, and Geist design system components.
-  - **Mobile App Workspace (`apps/mobile`)**: Initialized Expo React Native workspace placeholder (`@servicecentric/mobile`).
-  - **7 Shared Packages (`packages/*`)**: Initialized `@servicecentric/types`, `@servicecentric/validation`, `@servicecentric/permissions`, `@servicecentric/design-tokens`, `@servicecentric/api-client`, `@servicecentric/config`, and `@servicecentric/utils`.
+  - **Web App Workspace (`apps/web`)**: Moved existing Next.js application into `apps/web/` (`@reachinternational/web`). Preserved 25 route modules, 18 Server Actions, 19 DAL query modules, and Geist design system components.
+  - **Mobile App Workspace (`apps/mobile`)**: Initialized Expo React Native workspace placeholder (`@reachinternational/mobile`).
+  - **7 Shared Packages (`packages/*`)**: Initialized `@reachinternational/types`, `@reachinternational/validation`, `@reachinternational/permissions`, `@reachinternational/design-tokens`, `@reachinternational/api-client`, `@reachinternational/config`, and `@reachinternational/utils`.
   - **Infrastructure Preservation**: Kept 35 database SQL migrations in `supabase/` and audit documentation in `docs/`.
   - **Verification**: Executed `pnpm install`, `pnpm typecheck` (**9/9 workspace projects passed**), `pnpm build` (**32 Next.js routes built cleanly**), and `pnpm verify:seed` (**38+ tables verified**).
 

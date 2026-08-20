@@ -8,7 +8,7 @@ async function testNotifications() {
   console.log("Starting notification tests...\n");
 
   const testEmail = "vaibhav3chauhan12353@gmail.com";
-  const testMessage = "Hello from ServiceCentric - Test Email Notification";
+  const testMessage = "Hello from ReachInternational - Test Email Notification";
 
   // Test Email
   console.log("1. Testing SendGrid Email...");
@@ -40,7 +40,7 @@ async function testNotifications() {
       to: testEmail,
       channel: "email",
       message: testMessage,
-      subject: "ServiceCentric - Test Notification",
+      subject: "ReachInternational - Test Notification",
       recipientName: "Vaibhav Chauhan",
       metadata: {
         machine_id: "test-uuid",

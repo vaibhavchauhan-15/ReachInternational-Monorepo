@@ -1,5 +1,5 @@
 /**
- * ServiceCentric Shared Types Package (@servicecentric/types)
+ * ReachInternational Shared Types Package (@reachinternational/types)
  */
 
 export * from "./database";
