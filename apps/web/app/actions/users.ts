@@ -31,7 +31,7 @@ function generateRandomPassword(length = 12): string {
 
 // Get all users (admin only) — includes assigned branch details
 export async function getAllUsers(): Promise<User[]> {
-  await requireRole("admin", "super_admin");
+  await requireRole("admin", "super_admin", "branch_manager", "service_manager", "hr_manager");
   const supabase = await createSupabaseServerClient();
   
   const { data, error } = await supabase
@@ -49,7 +49,7 @@ export async function getAllUsers(): Promise<User[]> {
 
 // Get pending users — includes assigned branch details
 export async function getPendingUsers(): Promise<User[]> {
-  await requireRole("admin", "super_admin");
+  await requireRole("admin", "super_admin", "branch_manager", "service_manager", "hr_manager");
   const supabase = await createSupabaseServerClient();
   
   const { data, error } = await supabase
@@ -275,6 +275,26 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
       console.error("Error updating user status:", updateError);
     }
 
+    // Synchronize user account into public.employees directory table
+    const empCode = `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
+    const designationLabel = role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    try {
+      await adminSupabase
+        .from("employees")
+        .insert({
+          employee_code: empCode,
+          full_name: fullName.trim(),
+          user_id: data.user.id,
+          phone: phone || null,
+          email: email.trim(),
+          designation: designationLabel,
+          branch_id: branchId && branchId !== "none" ? branchId : null,
+          status: "active",
+        });
+    } catch (empErr: any) {
+      console.warn("Note: employees directory record sync skipped or existing:", empErr?.message || empErr);
+    }
+
     // Send welcome email with credentials
     await sendWelcomeEmail(email, fullName, password);
 
@@ -399,6 +419,16 @@ export async function toggleUserStatus(userId: string): Promise<UserFormState> {
     if (updateError) {
       console.error("Error toggling user status:", updateError);
       return { error: "Failed to update user status. Please try again." };
+    }
+
+    // Sync status with public.employees directory table if linked
+    try {
+      await adminSupabase
+        .from("employees")
+        .update({ status: newStatus === "active" ? "active" : "inactive" })
+        .eq("user_id", userId);
+    } catch (empErr: any) {
+      console.warn("Note: employees directory status update skipped:", empErr?.message || empErr);
     }
 
     const action = newStatus === "active" ? "activated" : "deactivated";
@@ -617,6 +647,24 @@ export async function editUser(userId: string, formData: FormData): Promise<User
     if (updateError) {
       console.error("Error updating user profile:", updateError);
       return { error: "Failed to update user profile. Please try again." };
+    }
+
+    // Sync changes with public.employees directory table if linked
+    try {
+      const empUpdatePayload: Record<string, unknown> = {
+        full_name: fullName.trim(),
+        phone: phone || null,
+        branch_id: branchId && branchId !== "none" ? branchId : null,
+      };
+      if (role) {
+        empUpdatePayload.designation = role.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+      }
+      await adminSupabase
+        .from("employees")
+        .update(empUpdatePayload)
+        .eq("user_id", userId);
+    } catch (empErr: any) {
+      console.warn("Note: employees directory edit sync skipped:", empErr?.message || empErr);
     }
 
     await logAudit({

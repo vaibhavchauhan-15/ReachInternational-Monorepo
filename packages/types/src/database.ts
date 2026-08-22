@@ -24,7 +24,8 @@ export type PermissionScope =
   | "SELF";
 
 export type UserStatus = "active" | "inactive" | "pending";
-export type MachineStatus = "active" | "inactive" | "on_rent" | "under_maintenance";
+export type MachineStatus = "available" | "rented" | "active" | "inactive" | "on_rent" | "under_maintenance";
+export type MachineHealthStatus = "active" | "under_maintenance" | "breakdown";
 export type OwnershipType = "company_owned" | "customer_owned" | "rental_fleet";
 export type ComplaintStatus = "open" | "in_progress" | "pending_parts" | "resolved" | "closed";
 export type ServiceStatus = "scheduled" | "in_progress" | "completed" | "overdue";
@@ -226,51 +227,51 @@ export interface MachineCategory {
 
 export interface Machine {
   id: string;
-  machine_code: string;
-  machine_name: string;
+  machine_id: string;
   model: string | null;
   serial_number: string | null;
-  manufacturer: string | null;
   year_of_mfg: string | null;
-  category_id: string | null;
-  category_name: string | null;
-  branch_id: string | null;
-  manufacturer_id: string | null;
-  model_id: string | null;
-  ownership_type: OwnershipType;
-  current_operator_id: string | null;
+  manufacturer: string | null;
   current_supervisor_id: string | null;
-  purchase_date: string | null;
-  purchase_cost: number | null;
-  warranty_end_date: string | null;
   hour_meter: number;
   service_count: number;
-  engine_serial_no: string | null;
-  engine_mot_no: string | null;
-  insurance_policy_no: string | null;
-  insurance_expiry_date: string | null;
-  third_party_certificate: string | null;
-  third_party_expiry_date: string | null;
-  rto_tax: string | null;
-  rto_tax_expiry_date: string | null;
-  customer_name: string;
-  customer_mobile: string;
-  customer_email: string | null;
-  customer_address: string | null;
-  city: string;
-  state: string;
-  engineer_id: string | null;
-  last_service_date: string | null;
-  next_service_due_date: string;
-  service_interval_days: number;
+  current_operator_id: string | null;
+  health_status: MachineHealthStatus;
   status: MachineStatus;
-  notes: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
-  branch?: Pick<Branch, "id" | "code" | "name" | "city"> | null;
   current_operator?: Pick<User, "id" | "full_name" | "phone" | "email"> | null;
   current_supervisor?: Pick<User, "id" | "full_name" | "phone" | "email"> | null;
+
+  // Backward-compatibility optional fields for transition
+  machine_code?: string;
+  machine_name?: string;
+  customer_name?: string;
+  customer_mobile?: string;
+  customer_email?: string | null;
+  customer_address?: string | null;
+  city?: string;
+  state?: string;
+  branch_id?: string | null;
+  engineer_id?: string | null;
+  next_service_due_date?: string;
+  service_interval_days?: number;
+  category_name?: string | null;
+  last_service_date?: string | null;
+  engine_serial_no?: string | null;
+  insurance_policy_no?: string | null;
+  insurance_expiry_date?: string | null;
+  third_party_certificate?: string | null;
+  third_party_expiry_date?: string | null;
+  rto_tax?: string | null;
+  rto_tax_expiry_date?: string | null;
+  air_filter_no?: string | null;
+  starter_motor_teeth?: string | null;
+  diesel_filter_no?: string | null;
+  headgas_kit_notch?: string | null;
+  front_tyre_size?: string | null;
+  back_tyre_size?: string | null;
 }
 
 export interface MachineWithEngineer extends Machine {
@@ -303,12 +304,12 @@ export interface MachineHourLog {
   running_hours: number;
   location: string | null;
   remarks: string | null;
-  verification_status?: "pending" | "approved" | "rejected" | "correction_requested" | null;
-  verified_by?: string | null;
-  verified_at?: string | null;
-  verification_remarks?: string | null;
   fuel_consumed?: number | null;
-  shift?: string | null;
+  shift?: "shift_1" | "shift_2" | "shift_3" | "custom" | string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  overtime_hours?: number | null;
+  is_breakdown?: boolean | null;
   created_at: string;
   operator?: Pick<User, "id" | "full_name"> | null;
   machine?: Pick<Machine, "id" | "machine_code" | "machine_name"> | null;

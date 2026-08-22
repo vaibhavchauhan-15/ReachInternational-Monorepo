@@ -23,6 +23,7 @@ import {
   AnimatedPhone,
 } from "@/components/ui/animated-icons";
 import { Button, Badge, Select, TooltipWrapper } from "@/components/ui";
+import { formatDate } from "@reachinternational/utils";
 import type { User, UserRole } from "@/lib/types/database";
 
 const allRoleOptions = [
@@ -258,7 +259,7 @@ export const UserRow = memo(function UserRow({
 
       {/* 6. Created Date */}
       <td suppressHydrationWarning className="py-3 px-4 text-xs font-mono text-[var(--color-mute)]">
-        {new Date(user.created_at).toLocaleDateString()}
+        {formatDate(user.created_at)}
       </td>
 
       {/* 7. Actions Menu */}

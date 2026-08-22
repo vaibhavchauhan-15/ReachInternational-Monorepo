@@ -87,12 +87,12 @@ export function ServicesClient({ data }: ServicesClientProps) {
       // Search filter
       const matchesSearch =
         searchQuery === "" ||
-        m.machine_code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        m.machine_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (m.machine_code || m.machine_id).toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (m.machine_name || m.model || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         (m.serial_number && m.serial_number.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (m.model && m.model.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        m.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        m.city.toLowerCase().includes(searchQuery.toLowerCase());
+        (m.customer_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (m.city || "").toLowerCase().includes(searchQuery.toLowerCase());
 
       // Status filter
       let matchesStatus = true;

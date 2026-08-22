@@ -65,10 +65,16 @@ ReachInternational transforms heavy machinery fleet management and end-to-end in
 - **Unified Web & Mobile Experience**: Full feature parity between Next.js Web App (List View, Kanban Board, Multi-Filter toolbar, KPI stats) and Expo Mobile App matching native wireframe designs.
 
 
-### 🏭 Machine Directory & Compliance Master (`/machines`)
+### 🏭 Machine Directory & Compliance Master (`/machines`, `/machines/[id]`)
 - **Machine Taxonomy**: Dynamic categories (`machine_categories`) including Forklifts, Scissor Lifts, Boom Lifts, Reach Trucks, Pallet Trucks, and Industrial Generators.
-- **Extended Technical Specifications**: Tracks equipment specs, model details, serial numbers, manufacturer, year of mfg, engine serial number, and engine MOT number.
-- **Compliance & Insurance Tracking**: Monitors Insurance Policy numbers & expiry dates, Third-Party Certificates & expiry dates, and RTO Tax registrations & expiry dates.
+- **Extended Technical Specifications**: Tracks equipment specs, model details, serial numbers, manufacturer, year of mfg, engine serial number, engine MOT number, front & back tyre sizes, starter motor teeth, air filter number, headgas kit notch, and diesel filter number.
+- **Client & On-Rent Status Integration**: Real-time Client Details card on machine detail page when status is `On Rent`, displaying Customer Company, Contact Person, Mobile, Email, Site Address, City, State, active rental contract details, and touch quick actions (Call, WhatsApp, Map Site).
+- **Compliance & Insurance Tracking**: Monitors Insurance Policy numbers & expiry dates, Third-Party Certificates & expiry dates, and RTO Tax registrations & expiry dates (with default formatting `1st January 1970`).
+- **Unified Multi-Tab History & Operations Hub**:
+  - *Service & Breakdown History*: Combined timeline table of completed maintenance services and malfunction breakdown reports (FSR).
+  - *Hour Meter Running History*: Operator daily machine logs with Client Name, Operator Name, start/end meter readings (`start_meter → end_meter`), operating hours, shift timings, overtime, and remarks.
+  - *All Parts Used History*: Complete inventory issue ledger for the machine featuring part numbers, names, quantities issued, returnable status, and issued-to technician details.
+  - *Service Interval Schedule*: Frequency cycle (90 days, 180 days, 250h, 500h), last service date, next service due countdown, and preventive maintenance checklist rules.
 - **Machine Lifecycle**: `active`, `inactive`, `on_rent`, and `under_maintenance`.
 - **Universal Table Selection & CSV Export**: Row checkboxes enabled for all employee roles viewing the directory with CSV export capturing Category, Machine Code, Name, Model, Serial Number, Hour Meter, Total Services, Status, Customer Name, City, State, Assigned Engineer, Assigned Operator, and Next Service Due Date.
 
@@ -81,7 +87,7 @@ ReachInternational transforms heavy machinery fleet management and end-to-end in
 
 ### 🚜 Operations & Workforce Directory (`/operations`)
 - **4-Tab Operations Suite**:
-  1. *Daily Running Hour Logs*: Daily start/end hour meter readings, fuel consumed (liters), shift details, condition checks, and anomaly warning badges.
+  1. *Daily Running Hour Logs*: Daily start & end hour meter readings (`start_meter` & `end_meter`), calculated meter running hours (`running_hours`), start/end shift timings, overtime hours, breakdown status checks, draft local persistence, printable PDF reports, Excel exports, and direct database storage with auto-updating current machine hour meter readings (`machines.hour_meter = end_meter`).
   2. *Operator Assignments*: Assign and track operators assigned to specific machinery units.
   3. *Loading/Unloading Ledger*: Record rental machine loading at yard, transport vehicle numbers, dispatch, and client site unloading/relocation (`machine_site_movements`).
   4. *Operator Workforce Directory & Payroll*: Direct operator hiring workflow (`hireOperatorAction`), workforce directory under branch, and monthly salary payout recorder (`recordOperatorPayoutAction`).
@@ -105,6 +111,12 @@ ReachInternational transforms heavy machinery fleet management and end-to-end in
   8. *Machine Sales & Reservations*: Reserve machines for sales orders without physical stock dispatch.
   9. *Delivery & Handover*: Request delivery and upload signed handover proof documents.
   10. *Sales Settings*: Configure sales defaults and thresholds.
+
+### 🚜 Operator Multi-Shift Daily Machine Log System (`/dashboard`)
+- **Multi-Shift Entry Support**: Operators working two or more shifts (e.g. Shift 1: 06:00 AM – 02:00 PM, Shift 2: 02:00 PM – 10:00 PM, Shift 3: 10:00 PM – 06:00 AM, Custom Shift) can log separate entries per shift worked on the same day.
+- **Non-Overlapping Shift Validation**: Enforces strict shift non-overlap validation across Database triggers (`036_operator_multi_shift_non_overlap.sql`), Server Actions (`checkShiftOverlapServer`), and real-time Frontend client form guards.
+- **Direct Database Storage**: Operator logs automatically store as approved records in database with full audit trails (`logAudit`).
+- **Breakdown & Remarks Disclosure**: Breakdown toggle dynamically opens breakdown duration, cause input, action taken, and quick remark shortcuts.
 
 ### 💰 Finance & Financial Governance Suite (`/finance`)
 - **11-Tab Enterprise Finance Hub**:
@@ -148,6 +160,7 @@ ReachInternational transforms heavy machinery fleet management and end-to-end in
 - **ChatGPT-Style Collapsed Logo Toggle**: Hovering over the collapsed sidebar logo smoothly morphs into the expand button (`PanelLeftOpen`).
 - **Vercel Geist Day/Night Theme Switch**: Animated dark/light toggle switch (`ThemeToggle`) with spring physics and sun/moon micro-animations.
 - **Universal Reusable Custom Dropdown (`Select.tsx`)**: Reusable custom dropdown component built with Framer Motion popover slide & fade animations, dark/light theme tokens, checkmark indicators (`AnimatedCheck`), search filtering for long option lists (> 6 items), and full keyboard navigation (`ArrowUp`, `ArrowDown`, `Enter`, `Escape`), replacing 100% of native browser `<select>` dropdowns across the web application.
+- **Landing Page Authentication Routing (`/`)**: Root landing page automatically redirects unauthenticated users to signin (`/login`) and active authenticated users to their workspace dashboard (`/dashboard`), with explicit `/signin` route alias redirection.
 - **Reusable FilterToolbar & Table Primitives**: Standardized search input with filter toggle button, active filter count badge, and expandable multi-field filter panel.
 - **Platform-Aware Command Palette (`⌘K` / `Ctrl+K`)**: Weighted relevance search engine mapping commands and alias keywords.
 
@@ -278,6 +291,7 @@ Execute the SQL migration files in sequence in your Supabase SQL Editor or via S
 33. `supabase/migrations/030_single_delhi_branch_consolidation.sql`
 34. `supabase/migrations/031_fix_machines_rls_scoping.sql`
 35. `supabase/migrations/032_supervisor_operations_enhancements.sql`
+36. `supabase/migrations/042_refactor_machines_table.sql` (Machines table refactoring, machine_id sequence, health_status & status constraints)
 
 ### 5. Run Development Server
 
@@ -331,9 +345,9 @@ ReachInternational implements a granular permission matrix enforced across Serve
 | `branch_manager` | Branch (`BRANCH`) | Branch operational control, equipment catalog, service planning, inventory oversight, FSR review. |
 | `service_manager` | Branch (`BRANCH`) | Service schedule planning, breakdown assignment, engineer dispatch, FSR review & approvals. |
 | `service_engineer` | Assigned (`ASSIGNED`) | Field service execution, breakdown resolution, digital FSR creation, parts usage logging. |
-| `supervisor` | Branch (`BRANCH`) | Machinery breakdown complaint logging, daily operator hour meter log verification, site movements. |
+| `supervisor` | Branch (`BRANCH`) | Machinery breakdown complaint logging, daily operator hour meter log tracking, site movements. |
 | `mechanic` | Assigned (`ASSIGNED`) | Equipment maintenance, repair detail logging, part requests, breakdown assistance. |
-| `operator` | Assigned (`ASSIGNED`) | Daily machine hour meter entries, shift condition checks, start/end fuel level tracking. |
+| `operator` | Assigned (`ASSIGNED`) | Streamlined Daily Machine Logs (Machine Name/No/Model, Start/End Timings, Overtime Hours, Breakdown toggle, Remarks). |
 | `store_manager` | Branch (`BRANCH`) | Inventory stock ledger, stock receiving/dispatch, PO creation/approvals, inter-branch transfers. |
 | `hr_manager` | Global (`ORGANIZATION`) | Employee directory, staff onboarding, department/designation management, salary history, user requests. |
 | `rental_manager` | Branch (`BRANCH`) | Rental customer directory, contract agreements, dispatch challans, return inspections, damage routing. |
@@ -516,6 +530,20 @@ Configure Upstash QStash or Vercel Cron to invoke `POST /api/cron/send-reminders
 ## 📚 Documentation
 
 - [`AGENTS.md`](AGENTS.md) — AI Software Engineer protocol & codebase guidelines.
+- [`AI/RULES/ARCHITECTURE.md`](AI/RULES/ARCHITECTURE.md) — Authoritative Production Architecture Policy for AI Coding Agents.
+- [`AI/RULES/DESIGN-SYSTEM.md`](AI/RULES/DESIGN-SYSTEM.md) — Authoritative Production Design System Policy for AI Coding Agents.
+- [`AI/RULES/UI-UX.md`](AI/RULES/UI-UX.md) — Authoritative Production UI/UX Engineering Policy for AI Coding Agents.
+- [`AI/RULES/PERFORMANCE.md`](AI/RULES/PERFORMANCE.md) — Authoritative Production Performance & Optimization Policy for AI Coding Agents.
+- [`AI/RULES/SECURITY.md`](AI/RULES/SECURITY.md) — Authoritative Production Security Engineering Policy for AI Coding Agents.
+- [`AI/RULES/AUTHENTICATION-AUTHORIZATION.md`](AI/RULES/AUTHENTICATION-AUTHORIZATION.md) — Authoritative Production Authentication & Authorization Policy for AI Coding Agents.
+- [`AI/RULES/DATA-PROTECTION-PRIVACY.md`](AI/RULES/DATA-PROTECTION-PRIVACY.md) — Authoritative Production Data Protection & Privacy Policy for AI Coding Agents.
+- [`AI/RULES/VALIDATION-ERROR-RESILIENCE.md`](AI/RULES/VALIDATION-ERROR-RESILIENCE.md) — Authoritative Production Validation, Error Handling & Resilience Policy for AI Coding Agents.
+- [`AI/RULES/TESTING-QA.md`](AI/RULES/TESTING-QA.md) — Authoritative Production Testing & Quality Assurance Policy for AI Coding Agents.
+- [`AI/RULES/SEO-METADATA-DISCOVERABILITY.md`](AI/RULES/SEO-METADATA-DISCOVERABILITY.md) — Authoritative Production SEO, Metadata & Discoverability Policy for AI Coding Agents.
+- [`AI/RULES/OBSERVABILITY-MONITORING-LOGGING.md`](AI/RULES/OBSERVABILITY-MONITORING-LOGGING.md) — Authoritative Production Observability, Monitoring & Logging Policy for AI Coding Agents.
+- [`AI/RULES/DEPLOYMENT-DEVOPS-RELEASE.md`](AI/RULES/DEPLOYMENT-DEVOPS-RELEASE.md) — Authoritative Production Deployment, DevOps & Release Policy for AI Coding Agents.
+- [`.agents/rules/responsive_cross_platform_design.md`](.agents/rules/responsive_cross_platform_design.md) — Cross-Platform Responsive UI & Touch Standards for AI Coding Agents.
+- [`.agents/rules/web_mobile_ui_consistency.md`](.agents/rules/web_mobile_ui_consistency.md) — Web & Mobile UI Consistency & Design System Rules for AI Coding Agents.
 - [`Mobile/phases.md`](Mobile/phases.md) — AI Agent Execution Plan for Web + Mobile Monorepo Migration.
 - [`docs/current-architecture.md`](docs/current-architecture.md) — Phase 0 Architecture Audit & System Inventory.
 - [`docs/current-dependencies.md`](docs/current-dependencies.md) — Phase 0 Package Manager, Dependency & Environment Audit.
@@ -543,6 +571,7 @@ Configure Upstash QStash or Vercel Cron to invoke `POST /api/cron/send-reminders
 - [x] **Phase 10 — Mobile Auth & Profile**: Implement mobile login (mesh gradient hero bloom, platform metrics), password reset, and profile management.
 - [x] **Phase 11 — Mobile Core Role Workflows**: Implement mobile Field Service FSRs, Operator hour meter logs, Breakdown Complaints, Sales, Rentals, HR, and Finance.
 - [x] **Phase 12–33 — Mobile Alignment & Production Distribution**: Web-identical Vercel Geist theme system alignment (`#0a0a0a` canvas, `#171717` cards, `#262626` / `#ebebeb` hairlines, micro-dot status badges, pill CTAs, uppercase Geist Mono eyebrows, branded top header bar) + EAS Internal APK build distribution.
+- [x] **Phase 34 — AI Agent Rule: Strict DESIGN.md & Cross-Platform Responsiveness Protocol**: Authoritative AI agent rules (`.agents/rules/responsive_cross_platform_design.md`, `AI/UI_RULES.md`, `AGENTS.md`) mandating strict Vercel Geist design token compliance (`#171717`, `#fafafa`, `#ffffff`, `#ebebeb`, `#0070f3`) and 3-tier viewport responsiveness across Mobile (≤640px touch cards `block sm:hidden`, scrollable toolbars), Tablet (641px–1023px 2-col grids), and Desktop (≥1024px high-density data tables `hidden sm:block`, hover tooltips `<TooltipWrapper>`).
 
 ### Completed Features ✅
 - [x] Mobile Navigation System: 3-Line Hamburger Menu Icon Modal (all 13 main pages) & Contextual Bottom Navbar Submenus (`@reachinternational/mobile`)
@@ -553,7 +582,8 @@ Configure Upstash QStash or Vercel Cron to invoke `POST /api/cron/send-reminders
 - [x] Machine Categories taxonomy & Extended Technical / Compliance tracking (Insurance, RTO Tax, 3rd Party Cert)
 - [x] Multi-Branch Inventory Stock Ledger, PO approval thresholds (>₹10k), & Inter-Branch Stock Transfers (`/inventory`)
 - [x] 7-Tab HR Employee Lifecycle Suite, Payroll Revision History, & Document Repository (`/hr`)
-- [x] 4-Tab Operations Hub, Meter Logbook, Site Movement Ledger, & Operator Hiring (`/operations`)
+- [x] 4-Tab Operations Hub (`/operations`), Operator Meter Logbook (`/operations?tab=entry`), Operator History (`/operations?tab=history`), Supervisor Running Hours Logs by Machine, Client, Operator with Month-Wise Filtering & Excel/PDF Exports (`/operations?tab=logs`), Machine Site Movement Ledger (`/operations?tab=site-movement`), & Operator Directory/Payroll (`/operations?tab=operators`)
+- [x] Employee & User Management Hub (`/users`), Admin employee onboarding, staff role assignments, branch location mapping, status toggle (Active/Inactive), temporary password resets, and automatic `users` + `employees` dual-table synchronization
 - [x] 9-Tab Rental Fleet Hub, Agreements, Delivery Challans, Return Inspections, & Damage Routing (`/rentals`)
 - [x] 10-Tab Sales & CRM Suite, Lead Pipeline, Versioned Quotations, & Discount Approvals (`/crm`)
 - [x] 11-Tab Finance Management Suite, 3-Way PO Matching, Receivables Aging, Payments, & Expenses (`/finance`)

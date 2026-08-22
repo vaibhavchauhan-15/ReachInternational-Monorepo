@@ -1,12 +1,24 @@
 # UI & Aesthetic Rules — ReachInternational (Web & Mobile UI/UX Consistency Protocol)
 
+## Mandatory AI Agent Protocol — Strict DESIGN.md & Cross-Platform Responsiveness
+All AI agents developing web or mobile pages, components, modules, or UI/UX MUST strictly follow:
+1. **Source of Truth**: `DESIGN.md` (Vercel Geist System tokens: Ink `#171717`, Canvas `#fafafa`, Elevated `#ffffff`, Hairline `#ebebeb`, Primary Link `#0070f3`, Geist Sans/Mono typography, radius scale).
+2. **3-Tier Viewport Optimization**:
+   - **Mobile (≤640px)**: Reflow high-density tables into touch cards (`block sm:hidden`), enable smooth horizontal filter scrolling (`overflow-x-auto custom-scrollbar flex-nowrap`), modal bottom-sheet / height clamping (`max-h-[calc(100vh-2rem)]`), touch targets ≥ 44px.
+   - **Tablet (641px–1023px)**: 2-column flex/grid reflow (`grid-cols-1 sm:grid-cols-2`), fluid modal width (`sm:max-w-xl md:max-w-2xl`), responsive header toolbars.
+   - **Desktop (≥1024px)**: Full multi-column dashboard layouts (`grid-cols-3` / `grid-cols-4`), sidebar navigation, high-density enterprise tables (`hidden sm:block`), hover tooltips (`<TooltipWrapper>`).
+3. **Unified Visual Identity**: Identical colors, typography weight, icon families, status pill designs, badge semantics, and operational terminology across Web and Mobile.
+
+---
+
 ## Specific ReachInternational Aesthetics
-1. **Enterprise Dark/Light Mode**: Use curated dark color palettes (`#0a0a0a` canvas, `#171717` cards, `#262626` / `#ebebeb` hairlines, blue `#3b82f6` / `#0070f3` accents) with smooth glassmorphism (`backdrop-blur-md`, `bg-slate-900/80`).
+1. **Enterprise Dark/Light Mode**: Use curated dark/light color palettes (`#171717` ink, `#fafafa` canvas, `#ffffff` card elevated, `#ebebeb` / `#262626` hairlines, blue `#0070f3` accents) with smooth glassmorphism (`backdrop-blur-md`, `bg-slate-900/80`).
 2. **Typography**: Modern Vercel Geist font stack (`Geist Sans` & `Geist Mono`) with high legibility for industrial data tables, KPI metrics, and log timelines.
 3. **Animations**: Subtle, purposeful micro-animations using `framer-motion` for page transitions, tab switches, and modal opens. Avoid heavy or disruptive transitions.
-4. **Responsive Layouts**: Design for both desktop monitors and mobile touch devices. Mobile bottom navigation must utilize Expo Router tabs + top hairline border.
+4. **Responsive Layouts**: Design for desktop monitors, tablet viewports, and mobile touch devices. High-density data tables must reflow into touch cards (`block sm:hidden`) on mobile. Mobile bottom navigation must utilize Expo Router tabs + top hairline border.
 5. **UI Primitives**: Always reuse components from `components/ui/*` (`Button`, `Card`, `Badge`, `EnterpriseTable`, `Modal`, `PageHeader`, `Toast`, `Skeleton`) and shared design tokens (`@reachinternational/design-tokens`) before inventing custom elements.
 6. **No Placeholders**: Never use broken or filler image links; generate or build SVG mockups.
+
 
 ---
 

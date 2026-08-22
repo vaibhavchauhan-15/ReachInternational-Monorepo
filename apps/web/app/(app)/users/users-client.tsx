@@ -261,9 +261,9 @@ export function UsersPageClient({
     <div className="flex flex-col gap-6 pb-28 md:pb-6">
       {/* Page Header */}
       <PageHeader
-        title="User Management"
-        description="Manage user accounts, administrator privileges, assigned branch locations, and service engineer roles."
-        breadcrumbs={[{ label: "Users" }]}
+        title="Employee & User Management"
+        description="View all employees, manage staff roles and access credentials, assign company branch locations, reset passwords, and onboard new employees."
+        breadcrumbs={[{ label: "Employees & Users" }]}
         actions={
           <div className="flex items-center gap-2">
             {/* View Switcher for Desktop / Mobile */}
@@ -312,7 +312,7 @@ export function UsersPageClient({
 
             <Button onClick={() => setShowCreateModal(true)} className="shadow-sm hidden sm:inline-flex">
               <AnimatedUserPlus size={16} className="mr-2" />
-              Invite New User
+              Add Employee / User
             </Button>
           </div>
         }
@@ -494,6 +494,9 @@ export function UsersPageClient({
               { id: "service_engineer", label: "Engineers", activeColor: "text-blue-700 dark:text-blue-400 font-semibold", dotColor: "bg-blue-500" },
               { id: "service_manager", label: "Service Managers", activeColor: "text-sky-700 dark:text-sky-400 font-semibold", dotColor: "bg-sky-500" },
               { id: "branch_manager", label: "Branch Managers", activeColor: "text-indigo-700 dark:text-indigo-400 font-semibold", dotColor: "bg-indigo-500" },
+              { id: "supervisor", label: "Supervisors", activeColor: "text-teal-700 dark:text-teal-400 font-semibold", dotColor: "bg-teal-500" },
+              { id: "operator", label: "Operators", activeColor: "text-amber-700 dark:text-amber-400 font-semibold", dotColor: "bg-amber-500" },
+              { id: "mechanic", label: "Mechanics", activeColor: "text-orange-700 dark:text-orange-400 font-semibold", dotColor: "bg-orange-500" },
               { id: "admin", label: "Admins", activeColor: "text-amber-700 dark:text-amber-400 font-semibold", dotColor: "bg-amber-500" },
               { id: "super_admin", label: "Super Admins", activeColor: "text-red-700 dark:text-red-400 font-semibold", dotColor: "bg-red-500" },
             ].map((pill) => {

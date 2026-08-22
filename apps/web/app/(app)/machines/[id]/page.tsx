@@ -1,6 +1,13 @@
 import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/dal";
-import { getMachineById, getMachineServiceHistory } from "@/lib/queries/machines";
+import {
+  getMachineById,
+  getMachineServiceHistory,
+  getMachineBreakdownHistory,
+  getMachineHourMeterLogs,
+  getMachinePartsUsedHistory,
+  getMachineActiveRental,
+} from "@/lib/queries/machines";
 import { EmptyState, MachineDetailSkeleton } from "@/components/ui";
 import { MachineClientView } from "./machine-client-view";
 
@@ -8,9 +15,20 @@ async function MachineDetailContent({ id }: { id: string }) {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const [machine, serviceHistory] = await Promise.all([
+  const [
+    machine,
+    serviceHistory,
+    breakdownHistory,
+    hourMeterLogs,
+    partsUsedHistory,
+    activeRental,
+  ] = await Promise.all([
     getMachineById(id),
     getMachineServiceHistory(id),
+    getMachineBreakdownHistory(id),
+    getMachineHourMeterLogs(id),
+    getMachinePartsUsedHistory(id),
+    getMachineActiveRental(id),
   ]);
 
   if (!machine) {
@@ -31,6 +49,10 @@ async function MachineDetailContent({ id }: { id: string }) {
     <MachineClientView
       machine={machine}
       serviceHistory={serviceHistory}
+      breakdownHistory={breakdownHistory}
+      hourMeterLogs={hourMeterLogs}
+      partsUsedHistory={partsUsedHistory}
+      activeRental={activeRental}
       isAdmin={isAdmin}
       isAssignedEngineer={isAssignedEngineer}
       currentUserId={user.id}

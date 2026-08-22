@@ -5,16 +5,8 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   AnimatedPlus,
-  AnimatedCalendarClock,
-  AnimatedAlertTriangle,
-  AnimatedDownload,
   AnimatedEdit,
   AnimatedTrash,
-  AnimatedSearch,
-  AnimatedSlidersHorizontal,
-  AnimatedX,
-  AnimatedRotateCcw,
-  AnimatedFileText,
   AnimatedRefresh,
   AnimatedClipboardList,
 } from "@/components/ui/animated-icons";
@@ -23,21 +15,17 @@ import {
   Button,
   Pagination,
   useToast,
-  PageHeader,
   SearchableSelect,
   EnterpriseTable,
   ConfirmationDialog,
   Badge,
-  EmptyState,
-  RefreshButton,
   FilterToolbar,
   TooltipWrapper,
 } from "@/components/ui";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { deleteMachine } from "@/app/actions/machines";
-import type { MachineWithEngineer, User, UserRole } from "@/lib/types/database";
-import type { ComplaintWithDetails } from "@/lib/types/database";
+import type { Machine, User, UserRole, ComplaintWithDetails } from "@/lib/types/database";
 import type { EngineerServicesData } from "@/lib/queries/services";
 
 const MobileMachineCard = dynamic(
@@ -66,26 +54,26 @@ const ServicesClient = dynamic(
 );
 
 interface MachineListClientProps {
-  machines: MachineWithEngineer[];
+  machines: Machine[];
   total: number;
   page: number;
   pageSize: number;
   totalPages: number;
-  engineers: User[];
+  engineers?: User[];
   supervisors?: User[];
-  cities: string[];
+  operators?: User[];
+  cities?: string[];
   complaints?: ComplaintWithDetails[];
   serviceData?: EngineerServicesData;
   userRole: UserRole;
   currentSearch?: string;
   currentStatus?: string;
-  currentCity?: string;
   currentEngineerId?: string;
   currentBucket?: string;
   initialTab?: string;
 }
 
-// Contextual Row Actions Menu (⋮) — "View Details" removed per Feedback 5 (row click handles it directly!)
+// Contextual Row Actions Menu (⋮)
 function RowActionsMenu({
   machine,
   canEdit,
@@ -94,11 +82,11 @@ function RowActionsMenu({
   onDelete,
   onNavigate,
 }: {
-  machine: MachineWithEngineer;
+  machine: Machine;
   canEdit: boolean;
   isAdmin: boolean;
-  onEdit: (m: MachineWithEngineer) => void;
-  onDelete: (m: MachineWithEngineer) => void;
+  onEdit: (m: Machine) => void;
+  onDelete: (m: Machine) => void;
   onNavigate: (path: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -165,7 +153,7 @@ function RowActionsMenu({
                     className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors"
                   >
                     <AnimatedTrash size={14} className="text-rose-500" />
-                    <span>Deactivate</span>
+                    <span>Delete Machine</span>
                   </button>
                 </>
               )}
@@ -177,7 +165,7 @@ function RowActionsMenu({
   );
 }
 
-// Secondary Action Header Menu (⋮ More)
+// Secondary Action Header Menu
 function HeaderMoreMenu({
   isAdmin,
   onOpenImport,
@@ -199,7 +187,7 @@ function HeaderMoreMenu({
         className="flex items-center gap-1 px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs font-semibold text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors shadow-2xs cursor-pointer"
         title="More options"
       >
-        <span className="hidden sm:inline">More</span>
+        <span>⋮ More</span>
       </button>
 
       <AnimatePresence>
@@ -211,7 +199,7 @@ function HeaderMoreMenu({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: -4 }}
               transition={{ type: "spring", stiffness: 450, damping: 30 }}
-              className="absolute right-0 top-full mt-1 z-50 w-48 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1.5 shadow-xl text-xs space-y-0.5"
+              className="absolute right-0 top-full mt-1 z-50 w-48 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1 shadow-xl text-xs space-y-0.5"
             >
               {isAdmin && (
                 <button
@@ -222,8 +210,8 @@ function HeaderMoreMenu({
                   }}
                   className="w-full flex items-center gap-2 px-2.5 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
                 >
-                  <AnimatedFileText size={16} className="text-emerald-500" />
-                  <span>Import Excel</span>
+                  <AnimatedClipboardList size={16} className="text-sky-500" />
+                  <span>Bulk Excel Import</span>
                 </button>
               )}
 
@@ -235,7 +223,7 @@ function HeaderMoreMenu({
                 }}
                 className="w-full flex items-center gap-2 px-2.5 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
               >
-                <AnimatedDownload size={16} className="text-sky-500" />
+                <Download size={16} className="text-emerald-500" />
                 <span>Export CSV</span>
               </button>
 
@@ -264,17 +252,13 @@ export function MachineListClient({
   page,
   pageSize,
   totalPages,
-  engineers,
   supervisors = [],
-  cities,
+  operators = [],
   complaints = [],
   serviceData,
   userRole,
   currentSearch = "",
   currentStatus = "all",
-  currentCity = "all",
-  currentEngineerId = "all",
-  currentBucket = "all",
   initialTab = "inventory",
 }: MachineListClientProps) {
   const router = useRouter();
@@ -288,25 +272,24 @@ export function MachineListClient({
   const [search, setSearch] = useState(currentSearch);
   const deferredSearch = useDeferredValue(search);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingMachine, setEditingMachine] = useState<MachineWithEngineer | null>(null);
-  const [deletingMachine, setDeletingMachine] = useState<MachineWithEngineer | null>(null);
+  const [editingMachine, setEditingMachine] = useState<Machine | null>(null);
+  const [deletingMachine, setDeletingMachine] = useState<Machine | null>(null);
   const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
   const [viewMode, setViewMode] = useState<"cards" | "table">("table");
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [healthStatusFilter, setHealthStatusFilter] = useState<string>("all");
 
   const isAdmin = userRole === "super_admin" || userRole === "admin";
   const canEdit = isAdmin || userRole === "branch_manager" || userRole === "service_manager" || userRole === "rental_manager" || userRole === "supervisor";
-  const canCreateMachine = isAdmin || userRole === "branch_manager";
+  const canCreateMachine = isAdmin || userRole === "branch_manager" || userRole === "service_manager";
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (currentStatus !== "all") count++;
-    if (currentCity !== "all") count++;
-    if (currentEngineerId !== "all") count++;
-    if (currentBucket !== "all") count++;
+    if (healthStatusFilter !== "all") count++;
     if (search.trim() !== "") count++;
     return count;
-  }, [currentStatus, currentCity, currentEngineerId, currentBucket, search]);
+  }, [currentStatus, healthStatusFilter, search]);
 
   const updateFilters = useCallback(
     (updates: Record<string, string | number | undefined>) => {
@@ -332,6 +315,7 @@ export function MachineListClient({
 
   const handleResetAllFilters = () => {
     setSearch("");
+    setHealthStatusFilter("all");
     startTransition(() => {
       router.push(pathname);
     });
@@ -342,12 +326,12 @@ export function MachineListClient({
     startTransition(async () => {
       try {
         await deleteMachine(deletingMachine.id);
-        toast("success", `Machine ${deletingMachine.machine_code} marked inactive`);
+        toast("success", `Machine ${deletingMachine.machine_id} deleted successfully`);
         setDeletingMachine(null);
         router.refresh();
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : "An error occurred";
-        toast("error", "Failed to deactivate machine", errorMsg);
+        toast("error", "Failed to delete machine", errorMsg);
       }
     });
   }, [deletingMachine, router, toast]);
@@ -358,40 +342,34 @@ export function MachineListClient({
         ids.length > 0 ? machines.filter((m) => ids.includes(m.id)) : machines;
 
       const headers = [
-        "Category",
-        "Machine Code",
-        "Machine Name",
+        "Machine ID",
         "Model",
         "Serial No",
-        "Hour Meter",
-        "Total Services",
+        "Year of Mfg (YUM)",
+        "Manufacturer",
+        "Hour Meter Reading (HMR)",
+        "Service Count",
+        "Current Supervisor",
+        "Current Operator",
+        "Health Status",
         "Status",
-        "Customer Name",
-        "City",
-        "State",
-        "Assigned Engineer",
-        "Assigned Operator",
-        "Next Service Due",
       ].join(",");
 
       const rows = targetMachines.map((m) => {
-        const engineerName = m.engineer?.full_name || "Unassigned";
+        const supervisorName = m.current_supervisor?.full_name || "Unassigned";
         const operatorName = m.current_operator?.full_name || "Unassigned";
         return [
-          `"${(m.category_name || "Forklift").replace(/"/g, '""')}"`,
-          `"${(m.machine_code || "").replace(/"/g, '""')}"`,
-          `"${(m.machine_name || "").replace(/"/g, '""')}"`,
+          `"${(m.machine_id || "").replace(/"/g, '""')}"`,
           `"${(m.model || "").replace(/"/g, '""')}"`,
           `"${(m.serial_number || "").replace(/"/g, '""')}"`,
+          `"${(m.year_of_mfg || "").replace(/"/g, '""')}"`,
+          `"${(m.manufacturer || "").replace(/"/g, '""')}"`,
           `"${m.hour_meter || 0}"`,
           `"${m.service_count || 0}"`,
-          `"${(m.status || "").replace(/"/g, '""')}"`,
-          `"${(m.customer_name || "").replace(/"/g, '""')}"`,
-          `"${(m.city || "").replace(/"/g, '""')}"`,
-          `"${(m.state || "").replace(/"/g, '""')}"`,
-          `"${engineerName.replace(/"/g, '""')}"`,
+          `"${supervisorName.replace(/"/g, '""')}"`,
           `"${operatorName.replace(/"/g, '""')}"`,
-          `"${m.next_service_due_date || ""}"`,
+          `"${(m.health_status || "").replace(/"/g, '""')}"`,
+          `"${(m.status || "").replace(/"/g, '""')}"`,
         ].join(",");
       });
 
@@ -409,64 +387,37 @@ export function MachineListClient({
     [machines, toast]
   );
 
-  const { today, tomorrow } = useMemo(() => {
-    const d = new Date();
-    const todayStr = d.toISOString().split("T")[0];
-    const tomDate = new Date(d);
-    tomDate.setDate(tomDate.getDate() + 1);
-    const tomStr = tomDate.toISOString().split("T")[0];
-    return { today: todayStr, tomorrow: tomStr };
-  }, []);
-
   const statsSummary = useMemo(() => {
-    let overdueCount = 0;
-    let dueTodayCount = 0;
-    let dueTomorrowCount = 0;
-    let activeCount = 0;
+    let availableCount = 0;
+    let rentedCount = 0;
+    let breakdownCount = 0;
+    let maintenanceCount = 0;
 
     machines.forEach((m) => {
-      if (m.status === "active") activeCount++;
-      if (m.next_service_due_date < today) overdueCount++;
-      else if (m.next_service_due_date === today) dueTodayCount++;
-      else if (m.next_service_due_date === tomorrow) dueTomorrowCount++;
+      if (m.status === "available") availableCount++;
+      if (m.status === "rented") rentedCount++;
+      if (m.health_status === "breakdown") breakdownCount++;
+      if (m.health_status === "under_maintenance") maintenanceCount++;
     });
 
-    return { overdueCount, dueTodayCount, dueTomorrowCount, activeCount };
-  }, [machines, today, tomorrow]);
-
-  const cityOptions = useMemo(
-    () => [
-      { value: "all", label: "All Cities" },
-      ...cities.map((c) => ({ value: c, label: c })),
-    ],
-    [cities]
-  );
-
-  const engineerOptions = useMemo(
-    () => [
-      { value: "all", label: "All Engineers" },
-      ...engineers.map((e) => ({ value: e.id, label: e.full_name })),
-    ],
-    [engineers]
-  );
+    return { availableCount, rentedCount, breakdownCount, maintenanceCount };
+  }, [machines]);
 
   const statusOptions = useMemo(
     () => [
-      { value: "all", label: "All Status" },
-      { value: "on_rent", label: "On Rent" },
-      { value: "active", label: "Active" },
-      { value: "under_maintenance", label: "Under Maintenance" },
-      { value: "inactive", label: "Inactive" },
+      { value: "all", label: "All Rental Status" },
+      { value: "available", label: "Available" },
+      { value: "rented", label: "Rented" },
     ],
     []
   );
 
-  const bucketOptions = useMemo(
+  const healthStatusOptions = useMemo(
     () => [
-      { value: "all", label: "All Service Due" },
-      { value: "today", label: "Due Today" },
-      { value: "tomorrow", label: "Due Tomorrow" },
-      { value: "overdue", label: "Overdue" },
+      { value: "all", label: "All Health Status" },
+      { value: "active", label: "Active" },
+      { value: "under_maintenance", label: "Under Maintenance" },
+      { value: "breakdown", label: "Breakdown" },
     ],
     []
   );
@@ -479,27 +430,16 @@ export function MachineListClient({
   const tableColumns = useMemo(
     () => [
       {
-        id: "category",
-        header: "CATEGORY",
-        accessorKey: "category_name" as const,
+        id: "machine_id",
+        header: "MACHINE ID",
+        accessorKey: "machine_id" as const,
         sortable: true,
-        cell: (row: MachineWithEngineer) => (
-          <span className="text-xs font-semibold text-[var(--color-ink)]">
-            {row.category_name || "Forklift"}
-          </span>
-        ),
-      },
-      {
-        id: "code",
-        header: "MACHINE NO.",
-        accessorKey: "machine_code" as const,
-        sortable: true,
-        cell: (row: MachineWithEngineer) => (
+        cell: (row: Machine) => (
           <Link
             href={`/machines/${row.id}`}
             className="font-mono text-xs font-bold text-[var(--color-ink)] hover:text-sky-600 dark:hover:text-sky-400 hover:underline"
           >
-            {row.machine_code}
+            {row.machine_id}
           </Link>
         ),
       },
@@ -508,8 +448,8 @@ export function MachineListClient({
         header: "MODEL",
         accessorKey: "model" as const,
         sortable: true,
-        cell: (row: MachineWithEngineer) => (
-          <span className="text-xs font-medium text-[var(--color-body)]">
+        cell: (row: Machine) => (
+          <span className="text-xs font-semibold text-[var(--color-ink)]">
             {row.model || "—"}
           </span>
         ),
@@ -519,19 +459,30 @@ export function MachineListClient({
         header: "SERIAL NO.",
         accessorKey: "serial_number" as const,
         sortable: true,
-        cell: (row: MachineWithEngineer) => (
-          <span className="font-mono text-xs text-[var(--color-mute)]">
+        cell: (row: Machine) => (
+          <span className="font-mono text-xs text-[var(--color-body)] font-medium">
             {row.serial_number || "—"}
           </span>
         ),
       },
       {
+        id: "yum",
+        header: "YUM",
+        accessorKey: "year_of_mfg" as const,
+        sortable: true,
+        cell: (row: Machine) => (
+          <span className="text-xs text-[var(--color-mute)] font-medium">
+            {row.year_of_mfg || "—"}
+          </span>
+        ),
+      },
+      {
         id: "hours",
-        header: "HOURS",
+        header: "HMR (HRS)",
         accessorKey: "hour_meter" as const,
         sortable: true,
-        cell: (row: MachineWithEngineer) => (
-          <span className="font-mono text-xs font-semibold text-[var(--color-ink)]">
+        cell: (row: Machine) => (
+          <span className="font-mono text-xs font-bold text-[var(--color-ink)]">
             {row.hour_meter || 0}
           </span>
         ),
@@ -541,28 +492,55 @@ export function MachineListClient({
         header: "SERVICES",
         accessorKey: "service_count" as const,
         sortable: true,
-        cell: (row: MachineWithEngineer) => (
+        cell: (row: Machine) => (
           <span className="font-mono text-xs font-bold text-[var(--color-ink)]">
             {row.service_count || 0}
           </span>
         ),
       },
       {
+        id: "supervisor",
+        header: "SUPERVISOR",
+        cell: (row: Machine) => (
+          <span className="text-xs font-medium text-[var(--color-body)]">
+            {row.current_supervisor?.full_name || "Unassigned"}
+          </span>
+        ),
+      },
+      {
+        id: "operator",
+        header: "OPERATOR",
+        cell: (row: Machine) => (
+          <span className="text-xs font-medium text-[var(--color-body)]">
+            {row.current_operator?.full_name || "Unassigned"}
+          </span>
+        ),
+      },
+      {
+        id: "health_status",
+        header: "HEALTH",
+        accessorKey: "health_status" as const,
+        sortable: true,
+        cell: (row: Machine) => {
+          if (row.health_status === "breakdown") return <Badge variant="overdue" dot>Breakdown</Badge>;
+          if (row.health_status === "under_maintenance") return <Badge variant="warning" dot>Maintenance</Badge>;
+          return <Badge variant="success" dot>Active</Badge>;
+        },
+      },
+      {
         id: "status",
         header: "STATUS",
         accessorKey: "status" as const,
         sortable: true,
-        cell: (row: MachineWithEngineer) => {
-          if (row.status === "on_rent") return <Badge variant="info">On Rent</Badge>;
-          if (row.status === "under_maintenance") return <Badge variant="warning">Under Maintenance</Badge>;
-          if (row.status === "active") return <Badge variant="active">Active</Badge>;
-          return <Badge variant="inactive">Inactive</Badge>;
+        cell: (row: Machine) => {
+          if (row.status === "rented") return <Badge variant="info" dot>Rented</Badge>;
+          return <Badge variant="neutral">Available</Badge>;
         },
       },
       {
         id: "actions",
         header: "",
-        cell: (row: MachineWithEngineer) => (
+        cell: (row: Machine) => (
           <RowActionsMenu
             machine={row}
             canEdit={canEdit}
@@ -592,8 +570,8 @@ export function MachineListClient({
         <ComplaintsClient
           complaints={complaints}
           total={complaints.length}
-          machines={machines}
-          engineers={engineers}
+          machines={[]}
+          engineers={[]}
           supervisors={supervisors}
           userRole={userRole}
         />
@@ -602,7 +580,6 @@ export function MachineListClient({
       {/* TAB 1: Equipment Inventory View */}
       {activeTab === "inventory" && (
         <>
-          {/* LEVEL 3: Page Header (Subtitle removed per Feedback 4!) */}
           <div className="flex flex-row items-center justify-between gap-4">
             <h1 className="text-2xl font-extrabold tracking-tight text-[var(--color-ink)]">
               Machine Directory
@@ -632,97 +609,73 @@ export function MachineListClient({
             </div>
           </div>
 
-          {/* Interactive KPI Cards Row — Linked 1:1 with status filter */}
+          {/* Interactive KPI Cards Row */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {/* Total Card */}
-            <motion.div
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => updateFilters({ bucket: "all", page: 1 })}
+            <div
+              onClick={() => updateFilters({ status: "all", page: 1 })}
               className={`cursor-pointer p-3.5 rounded-xl border transition-all ${
-                currentBucket === "all"
+                currentStatus === "all"
                   ? "bg-[var(--color-ink)] text-[var(--color-canvas)] border-[var(--color-ink)] shadow-md"
                   : "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] border-[var(--color-hairline)] hover:border-[var(--color-ink)]"
               }`}
-              title="Click to view total machines"
             >
               <div className="text-[11px] font-semibold text-[var(--color-mute)] uppercase tracking-wider">
                 Total Machines
               </div>
               <div className="text-2xl font-black mt-1">{total}</div>
-            </motion.div>
+            </div>
 
-            {/* Due Today Card */}
-            <motion.div
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => updateFilters({ bucket: "today", page: 1 })}
+            {/* Available Card */}
+            <div
+              onClick={() => updateFilters({ status: "available", page: 1 })}
               className={`cursor-pointer p-3.5 rounded-xl border transition-all ${
-                currentBucket === "today"
-                  ? "bg-amber-500 text-slate-950 border-amber-600 shadow-md font-bold"
-                  : "bg-amber-500/10 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border-amber-200/80 dark:border-amber-900/60 hover:bg-amber-500/20"
+                currentStatus === "available"
+                  ? "bg-emerald-600 text-white border-emerald-700 shadow-md font-bold"
+                  : "bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-900/60 hover:bg-emerald-500/20"
               }`}
-              title="Click to filter machines due today"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-wider">Due Today</span>
-                <AnimatedCalendarClock size={16} />
-              </div>
-              <div className="text-2xl font-black mt-1">{statsSummary.dueTodayCount}</div>
-            </motion.div>
+              <div className="text-[11px] font-semibold uppercase tracking-wider">Available Fleet</div>
+              <div className="text-2xl font-black mt-1">{statsSummary.availableCount}</div>
+            </div>
 
-            {/* Overdue Card — Distinct Red Alert Styling */}
-            <motion.div
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => updateFilters({ bucket: "overdue", page: 1 })}
+            {/* Rented Card */}
+            <div
+              onClick={() => updateFilters({ status: "rented", page: 1 })}
               className={`cursor-pointer p-3.5 rounded-xl border transition-all ${
-                currentBucket === "overdue"
-                  ? "bg-rose-600 text-white border-rose-700 shadow-md font-bold ring-2 ring-rose-500/40"
-                  : "bg-rose-500/10 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-300/80 dark:border-rose-900/80 hover:bg-rose-500/20"
-              }`}
-              title="Click to filter overdue machines requiring immediate service"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider">Overdue</span>
-                <AnimatedAlertTriangle size={16} className="text-rose-500 animate-pulse" />
-              </div>
-              <div className="text-2xl font-black mt-1">{statsSummary.overdueCount}</div>
-            </motion.div>
-
-            {/* Due Tomorrow Card */}
-            <motion.div
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => updateFilters({ bucket: "tomorrow", page: 1 })}
-              className={`cursor-pointer p-3.5 rounded-xl border transition-all ${
-                currentBucket === "tomorrow"
+                currentStatus === "rented"
                   ? "bg-sky-600 text-white border-sky-700 shadow-md font-bold"
                   : "bg-sky-500/10 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-200/80 dark:border-sky-900/60 hover:bg-sky-500/20"
               }`}
-              title="Click to filter machines due tomorrow"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold uppercase tracking-wider">Tomorrow</span>
-                <AnimatedCalendarClock size={16} />
-              </div>
-              <div className="text-2xl font-black mt-1">{statsSummary.dueTomorrowCount}</div>
-            </motion.div>
+              <div className="text-[11px] font-semibold uppercase tracking-wider">On Rent</div>
+              <div className="text-2xl font-black mt-1">{statsSummary.rentedCount}</div>
+            </div>
+
+            {/* Breakdown Card */}
+            <div
+              onClick={() => setHealthStatusFilter(healthStatusFilter === "breakdown" ? "all" : "breakdown")}
+              className={`cursor-pointer p-3.5 rounded-xl border transition-all ${
+                healthStatusFilter === "breakdown"
+                  ? "bg-rose-600 text-white border-rose-700 shadow-md font-bold"
+                  : "bg-rose-500/10 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-300/80 dark:border-rose-900/80 hover:bg-rose-500/20"
+              }`}
+            >
+              <div className="text-[11px] font-bold uppercase tracking-wider">Breakdown Events</div>
+              <div className="text-2xl font-black mt-1">{statsSummary.breakdownCount}</div>
+            </div>
           </div>
 
-
-
-          {/* Search Bar & Filter Toolbar — View Switcher (`[ Table ] [ Cards ]`) aligned in `actions` per Feedback 3! */}
+          {/* Search Bar & Filter Toolbar */}
           <FilterToolbar
             searchQuery={search}
             onSearchChange={setSearch}
-            placeholder="Search machines, models, serial no, customer..."
+            placeholder="Search Machine ID, Model, Serial Number..."
             activeFilterCount={activeFilterCount}
             onResetFilters={handleResetAllFilters}
             onSubmitSearch={handleSearchSubmit}
             actions={
               <div className="flex items-center gap-2">
-                {/* View Switcher Aligned with Table/Card Filter Controls */}
                 <div className="flex items-center gap-1 bg-[var(--color-hairline-soft-surface)] p-1 rounded-lg border border-[var(--color-hairline)] text-xs shrink-0">
                   <TooltipWrapper content="Switch to table view">
                     <button
@@ -760,43 +713,26 @@ export function MachineListClient({
                     onClick={() => handleExportCSV(selectedIds)}
                     className="text-xs justify-center shrink-0"
                   >
-                    <AnimatedDownload size={14} className="mr-1" /> CSV ({selectedIds.length})
+                    <Download size={14} className="mr-1" /> CSV ({selectedIds.length})
                   </Button>
                 )}
               </div>
             }
           >
-            {/* Filter Dropdowns Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1">
               <SearchableSelect
                 options={statusOptions}
                 value={currentStatus}
                 onChange={(val) => updateFilters({ status: val, page: 1 })}
-                placeholder="Filter Status"
+                placeholder="Filter Rental Status"
               />
 
               <SearchableSelect
-                options={bucketOptions}
-                value={currentBucket}
-                onChange={(val) => updateFilters({ bucket: val, page: 1 })}
-                placeholder="Filter Service Due"
+                options={healthStatusOptions}
+                value={healthStatusFilter}
+                onChange={(val) => setHealthStatusFilter(val)}
+                placeholder="Filter Health Status"
               />
-
-              <SearchableSelect
-                options={cityOptions}
-                value={currentCity}
-                onChange={(val) => updateFilters({ city: val, page: 1 })}
-                placeholder="Filter City"
-              />
-
-              {isAdmin && (
-                <SearchableSelect
-                  options={engineerOptions}
-                  value={currentEngineerId}
-                  onChange={(val) => updateFilters({ engineer_id: val, page: 1 })}
-                  placeholder="Filter Engineer"
-                />
-              )}
             </div>
           </FilterToolbar>
 
@@ -809,13 +745,11 @@ export function MachineListClient({
                     key={m.id}
                     machine={m}
                     isAdmin={isAdmin}
-                    today={today}
-                    tomorrow={tomorrow}
-                    onEdit={(mach: MachineWithEngineer) => {
+                    onEdit={(mach: Machine) => {
                       setEditingMachine(mach);
                       setModalOpen(true);
                     }}
-                    onDelete={(mach: MachineWithEngineer) => setDeletingMachine(mach)}
+                    onDelete={(mach: Machine) => setDeletingMachine(mach)}
                   />
                 ))}
               </AnimatePresence>
@@ -864,7 +798,8 @@ export function MachineListClient({
             setEditingMachine(null);
           }}
           machine={editingMachine}
-          engineers={engineers}
+          supervisors={supervisors}
+          operators={operators}
           userRole={userRole}
           onSuccess={() => {
             setModalOpen(false);
@@ -892,9 +827,9 @@ export function MachineListClient({
           isOpen={!!deletingMachine}
           onClose={() => setDeletingMachine(null)}
           onConfirm={handleDeleteConfirm}
-          title={`Deactivate Machine ${deletingMachine.machine_code}?`}
-          description={`Are you sure you want to deactivate ${deletingMachine.machine_name}? It can be restored later.`}
-          confirmLabel="Deactivate Machine"
+          title={`Delete Machine ${deletingMachine.machine_id}?`}
+          description={`Are you sure you want to delete machine ${deletingMachine.machine_id}? This action cannot be undone.`}
+          confirmLabel="Delete Machine"
           variant="danger"
           loading={isPending}
         />

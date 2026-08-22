@@ -75,6 +75,19 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
   return { ...data, email: session.email } as User;
 });
 
+export function protectOperatorRoute(role?: string) {
+  if (role === "operator") {
+    redirect("/operations?tab=entry");
+  }
+}
+
+export function protectDisabledRoute(role?: string) {
+  if (role === "operator") {
+    redirect("/operations?tab=entry");
+  }
+  redirect("/machines");
+}
+
 export const getCurrentUserRole = cache(async (): Promise<UserRole | null> => {
   const user = await getCurrentUser();
   return user?.role ?? null;

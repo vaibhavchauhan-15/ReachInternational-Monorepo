@@ -4,6 +4,8 @@ import React from "react";
 import { ReachInternationalLogo } from "@/components/branding/ReachInternationalLogo";
 import type { DeliveryChallan, DeliveryChallanItem } from "@/lib/types/database";
 
+import { formatDate } from "@reachinternational/utils";
+
 interface PrintableDeliveryChallanProps {
   challan: DeliveryChallan & {
     from_address?: string;
@@ -53,7 +55,7 @@ export function PrintableDeliveryChallan({ challan }: PrintableDeliveryChallanPr
               </div>
             </div>
             <div className="text-xs font-bold text-neutral-900 pt-2 border-t border-neutral-300">
-              DATE: {challan.issue_date || new Date().toLocaleDateString("en-GB")}
+              DATE: {formatDate(challan.issue_date || new Date())}
             </div>
           </div>
         </div>

@@ -3,6 +3,8 @@
 import React from "react";
 import type { PartIssue, PartIssueItem } from "@/lib/types/database";
 
+import { formatDate } from "@reachinternational/utils";
+
 interface PrintablePartsIssueChallanProps {
   issue: PartIssue & {
     items?: PartIssueItem[];
@@ -34,7 +36,7 @@ export function PrintablePartsIssueChallan({ issue }: PrintablePartsIssueChallan
           </div>
 
           <div className="text-right font-mono font-bold text-xs">
-            <div>DATE: {issue.issue_date || new Date().toLocaleDateString("en-GB")}</div>
+            <div>DATE: {formatDate(issue.issue_date || new Date())}</div>
             <div className="text-[10px] text-neutral-500 font-normal mt-0.5">
               Issue No: {issue.issue_number}
             </div>

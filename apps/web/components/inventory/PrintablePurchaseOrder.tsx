@@ -4,6 +4,8 @@ import React from "react";
 import { ReachInternationalLogo } from "@/components/branding/ReachInternationalLogo";
 import type { PurchaseOrder, PurchaseOrderItem } from "@/lib/types/database";
 
+import { formatDate } from "@reachinternational/utils";
+
 interface PrintablePurchaseOrderProps {
   po: PurchaseOrder & { items?: PurchaseOrderItem[] };
 }
@@ -59,7 +61,7 @@ export function PrintablePurchaseOrder({ po }: PrintablePurchaseOrderProps) {
           <div className="text-right text-xs space-y-1">
             <h2 className="text-xl font-black uppercase text-neutral-900 tracking-wider">PURCHASE ORDER</h2>
             <div className="font-mono font-bold text-blue-700 text-sm">{po.po_number}</div>
-            <div className="text-neutral-700">Date: <strong>{new Date(po.created_at).toLocaleDateString("en-GB")}</strong></div>
+            <div className="text-neutral-700">Date: <strong>{formatDate(po.created_at)}</strong></div>
             <div className="text-neutral-600">Created By: <strong>{po.requested_by || "Store Dept"}</strong></div>
             <div className="inline-block px-2.5 py-0.5 text-[10px] font-extrabold uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 rounded mt-1">
               {po.status.replace("_", " ")}

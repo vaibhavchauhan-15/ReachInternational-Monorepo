@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/animated-icons";
 import { Shield, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Button, Badge, Select, Dialog, DialogContent } from "@/components/ui";
+import { formatDate } from "@reachinternational/utils";
 import type { User, UserRole } from "@/lib/types/database";
 
 const roleOptions = [
@@ -243,7 +244,7 @@ export function UserDetailSheet({
                   <AnimatedCalendarClock size={14} className="text-[var(--color-mute)]" /> Registered Date
                 </span>
                 <span className="font-semibold text-[var(--color-ink)]">
-                  {new Date(user.created_at).toLocaleDateString()}
+                  {formatDate(user.created_at)}
                 </span>
               </div>
             </div>

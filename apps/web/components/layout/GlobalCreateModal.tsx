@@ -55,7 +55,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     icon: AnimatedAlertTriangle,
     color: "text-red-500 bg-red-500/10 border-red-500/20",
     href: "/service?tab=complaints&action=create_complaint",
-    roles: ["super_admin", "admin", "branch_manager", "service_engineer", "supervisor", "operator", "mechanic"],
+    roles: ["super_admin", "admin", "branch_manager", "service_engineer", "supervisor", "mechanic"],
   },
   {
     id: "service",
@@ -111,6 +111,10 @@ export function GlobalCreateModal({ userRole }: GlobalCreateModalProps) {
   const availableActions = QUICK_ACTIONS.filter(
     (action) => !action.roles || action.roles.includes(userRole)
   );
+
+  if (availableActions.length === 0) {
+    return null;
+  }
 
   const handleSelectAction = (href: string) => {
     setOpen(false);

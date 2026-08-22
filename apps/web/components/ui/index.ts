@@ -110,4 +110,5 @@ export {
   SIDEBAR_WIDTH_COLLAPSED,
 } from "./sidebar";
 export { Logo, ReachInternationalLogo, ScissorLiftLogoIcon, type LogoProps } from "./Logo";
+export { CustomTimePicker } from "./CustomTimePicker";
 export { BRAND_ASSETS, BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";

@@ -24,9 +24,10 @@ import {
   AnimatedHistory,
   AnimatedBuilding2,
   AnimatedFileText,
-  AnimatedEye,
+  AnimatedPackage,
+  AnimatedSettings,
 } from "@/components/ui/animated-icons";
-import { Phone, Mail, Check, Copy, MapPin, Navigation, UserCheck, AlertTriangle, CheckCircle2, FileText } from "lucide-react";
+import { Phone, Mail, Check, Copy, MapPin, Navigation, UserCheck, AlertTriangle, CheckCircle2, FileText, Layers, ShieldCheck, Tag, Wrench, PackageCheck, User } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Card,
@@ -41,9 +42,16 @@ import {
   Modal,
   useToast,
   RefreshButton,
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
 } from "@/components/ui";
 import dynamic from "next/dynamic";
 import type { MachineWithEngineer, ServiceRecordWithDetails } from "@/lib/types/database";
+import { formatDate } from "@reachinternational/utils";
 
 const ServiceForm = dynamic(() => import("./service-form").then((mod) => mod.ServiceForm), { ssr: false });
 
@@ -66,6 +74,10 @@ function formatComplianceDate(dateStr?: string | null): string {
 interface MachineClientViewProps {
   machine: MachineWithEngineer;
   serviceHistory: ServiceRecordWithDetails[];
+  breakdownHistory?: any[];
+  hourMeterLogs?: any[];
+  partsUsedHistory?: any[];
+  activeRental?: any;
   isAdmin: boolean;
   isAssignedEngineer: boolean;
   currentUserId: string;
@@ -74,6 +86,10 @@ interface MachineClientViewProps {
 export function MachineClientView({
   machine,
   serviceHistory,
+  breakdownHistory = [],
+  hourMeterLogs = [],
+  partsUsedHistory = [],
+  activeRental = null,
   isAdmin,
   isAssignedEngineer,
   currentUserId,
@@ -81,23 +97,26 @@ export function MachineClientView({
   const { toast } = useToast();
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "service" | "complaints" | "documents" | "assignments" | "running_hours" | "history">("overview");
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "service_breakdown" | "running_hours" | "parts_used" | "service_interval" | "documents" | "complete_service"
+  >("overview");
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   // Calculate Due Status & Health Metrics
   const today = new Date().toISOString().split("T")[0];
   const todayDate = new Date();
-  const dueDate = new Date(machine.next_service_due_date);
+  const nextDueDateStr = machine.next_service_due_date || today;
+  const dueDate = new Date(nextDueDateStr);
   const diffTime = dueDate.getTime() - todayDate.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
   let dueVariant: "today" | "tomorrow" | "overdue" | "default" = "default";
   let dueLabel = "Scheduled";
 
-  if (machine.next_service_due_date < today) {
+  if (nextDueDateStr < today) {
     dueVariant = "overdue";
     dueLabel = `Overdue by ${Math.abs(diffDays)} day${Math.abs(diffDays) === 1 ? "" : "s"}`;
-  } else if (machine.next_service_due_date === today) {
+  } else if (nextDueDateStr === today) {
     dueVariant = "today";
     dueLabel = "Due Today";
   } else if (diffDays === 1) {
@@ -113,7 +132,7 @@ export function MachineClientView({
   const healthPercentage = Math.max(0, Math.min(100, Math.round(((totalDays - daysPassed) / totalDays) * 100)));
 
   const handleCopyCode = () => {
-    navigator.clipboard.writeText(machine.machine_code);
+    navigator.clipboard.writeText(machine.machine_code || machine.machine_id);
     setCopiedCode(true);
     toast("success", "Copied!", `Machine code ${machine.machine_code} copied to clipboard.`);
     setTimeout(() => setCopiedCode(false), 2000);
@@ -129,13 +148,23 @@ export function MachineClientView({
     setTimeout(() => setCopiedAddress(false), 2000);
   };
 
-  const cleanPhone = machine.customer_mobile.replace(/[^0-9+]/g, "");
+  const cleanPhone = machine.customer_mobile ? machine.customer_mobile.replace(/[^0-9+]/g, "") : "";
   const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
-    `Hello ${machine.customer_name}, regarding service for machine ${machine.machine_code} (${machine.machine_name}).`
+    `Hello ${machine.customer_name}, regarding machine ${machine.machine_code} (${machine.machine_name}).`
   )}`;
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     `${machine.customer_name} ${machine.customer_address || ""} ${machine.city || ""} ${machine.state || ""}`
   )}`;
+
+  const clientInfo = activeRental?.customer || {
+    company_name: machine.customer_name,
+    contact_person: machine.customer_name,
+    contact_mobile: machine.customer_mobile,
+    contact_email: machine.customer_email,
+    billing_address: machine.customer_address,
+    city: machine.city,
+    state: machine.state,
+  };
 
   return (
     <div className="flex flex-col gap-5 pb-20 md:pb-8 max-w-7xl mx-auto px-1 sm:px-0">
@@ -152,14 +181,13 @@ export function MachineClientView({
         </Link>
         <span className="text-xs text-[var(--color-mute)] flex items-center gap-1.5 font-mono">
           <AnimatedShieldCheck size={14} className="text-[var(--color-link)]" />
-          <span className="hidden xs:inline">REACH INTERNATIONAL</span> Enterprise
+          <span className="hidden xs:inline">REACH INTERNATIONAL</span> Fleet Portal
         </span>
       </FadeIn>
 
       {/* Hero Machine Banner Card */}
       <FadeIn delay={0.05}>
         <div className="relative overflow-hidden rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-6 shadow-sm transition-all">
-          {/* Subtle background glow accent */}
           <div className="absolute top-0 right-0 -mr-16 -mt-16 h-48 w-48 rounded-full bg-[var(--color-link)]/10 blur-3xl pointer-events-none" />
 
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
@@ -191,11 +219,11 @@ export function MachineClientView({
                 {/* Machine Code & Model */}
                 <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs sm:text-sm text-[var(--color-mute)]">
                   <div className="inline-flex items-center gap-1">
-                    <span className="font-mono text-xs text-[var(--color-mute)]">Code:</span>
+                    <span className="font-mono text-xs text-[var(--color-mute)]">Unique ID:</span>
                     <motion.button
                       whileTap={{ scale: 0.92 }}
                       onClick={handleCopyCode}
-                      title="Copy Machine Code"
+                      title="Copy Unique Code"
                       className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-mono bg-[var(--color-hairline-soft-surface)] hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-all active:scale-95 border border-[var(--color-hairline)]"
                     >
                       <span>{machine.machine_code}</span>
@@ -212,18 +240,24 @@ export function MachineClientView({
                       <span className="font-mono text-xs text-[var(--color-mute)]">Model: {machine.model}</span>
                     </>
                   )}
+                  {machine.serial_number && (
+                    <>
+                      <span>•</span>
+                      <span className="font-mono text-xs text-[var(--color-mute)]">Serial: {machine.serial_number}</span>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* Desktop & Mobile Main Header Action Buttons */}
+            {/* Header Action Buttons */}
             <div className="flex items-center gap-2 shrink-0 pt-1 sm:pt-0">
               <RefreshButton path={`/machines/${machine.id}`} tag={`machine:${machine.id}`} />
 
               {isAdmin && (
                 <Link href={`/machines/${machine.id}/edit`} className="flex-1 sm:flex-initial">
                   <Button variant="secondary" className="w-full sm:w-auto text-xs sm:text-sm py-2 px-3 shadow-2xs">
-                    <AnimatedEdit size={16} className="mr-1 text-[var(--color-body)]" /> Edit
+                    <AnimatedEdit size={16} className="mr-1 text-[var(--color-body)]" /> Edit Machine
                   </Button>
                 </Link>
               )}
@@ -232,33 +266,40 @@ export function MachineClientView({
                 <Button
                   variant="primary"
                   onClick={() => {
-                    setActiveTab("service");
+                    setActiveTab("complete_service");
                     window.scrollTo({ top: 350, behavior: "smooth" });
                   }}
                   className="flex-1 sm:flex-initial text-xs sm:text-sm py-2 px-3.5 shadow-sm hover:shadow-md active:scale-98 transition-all"
                 >
-                  <AnimatedSparkles size={16} className="mr-1 text-amber-300" /> Complete Service
+                  <AnimatedSparkles size={16} className="mr-1 text-amber-300" /> Log Service
                 </Button>
               )}
             </div>
           </div>
 
-          {/* Quick Action Touch Cards for Field Engineers */}
+          {/* Client Touch Quick Actions */}
           <div className="mt-4 pt-3.5 border-t border-[var(--color-hairline)] flex flex-col gap-2">
-            <span className="text-[10px] font-extrabold text-[var(--color-mute)] uppercase tracking-wider">
-              Technician Field Actions
-            </span>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-extrabold text-[var(--color-mute)] uppercase tracking-wider">
+                Client & Site Contact Actions
+              </span>
+              {machine.status === "on_rent" && (
+                <span className="text-[11px] font-bold text-sky-600 dark:text-sky-400">
+                  Client: {clientInfo.company_name}
+                </span>
+              )}
+            </div>
 
             <div className="grid grid-cols-3 gap-2">
               <motion.a
                 whileTap={{ scale: 0.94 }}
-                href={`tel:${machine.customer_mobile}`}
+                href={`tel:${clientInfo.contact_mobile || machine.customer_mobile}`}
                 className="flex flex-col items-center justify-center p-2 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 transition-all text-center group"
               >
                 <AnimatedPhone size={16} className="mb-0.5 text-emerald-600 dark:text-emerald-400 group-hover:scale-110 transition-transform" />
-                <span className="text-xs font-bold leading-tight">Call</span>
+                <span className="text-xs font-bold leading-tight">Call Client</span>
                 <span className="text-[10px] text-[var(--color-mute)] truncate max-w-full font-mono mt-0.5">
-                  {machine.customer_mobile}
+                  {clientInfo.contact_mobile || machine.customer_mobile}
                 </span>
               </motion.a>
 
@@ -271,7 +312,7 @@ export function MachineClientView({
               >
                 <AnimatedMessageSquare size={16} className="mb-0.5 text-green-600 dark:text-green-400 group-hover:scale-110 transition-transform" />
                 <span className="text-xs font-bold leading-tight">WhatsApp</span>
-                <span className="text-[10px] text-[var(--color-mute)] truncate max-w-full mt-0.5">Chat Now</span>
+                <span className="text-[10px] text-[var(--color-mute)] truncate max-w-full mt-0.5">Direct Chat</span>
               </motion.a>
 
               <motion.a
@@ -292,88 +333,77 @@ export function MachineClientView({
         </div>
       </FadeIn>
 
-      {/* Dynamic Metrics Scorecard Grid (2x2 on Mobile, 4x1 on Desktop) */}
+      {/* Scorecard Metrics Grid */}
       <SlideUp delay={0.1}>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
-          {/* Health Score */}
-          <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.15 }}>
-            <Card padding="sm" className="relative overflow-hidden border-l-4 border-l-[var(--color-link)] h-full flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Health</span>
-                  <AnimatedActivity size={14} className="text-[var(--color-link)]" />
-                </div>
-                <div className="flex items-baseline gap-1 mb-1.5">
-                  <span className="text-lg sm:text-2xl font-extrabold text-[var(--color-ink)]">
-                    <AnimatedCounter value={healthPercentage} />%
-                  </span>
-                  <span className="text-[10px] text-[var(--color-mute)] hidden xs:inline">Score</span>
-                </div>
+          <Card padding="sm" className="relative overflow-hidden border-l-4 border-l-[var(--color-link)] h-full flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Health</span>
+                <AnimatedActivity size={14} className="text-[var(--color-link)]" />
               </div>
-              <AnimatedProgress
-                value={healthPercentage}
-                max={100}
-                barClassName={healthPercentage < 25 ? "bg-red-500" : healthPercentage < 50 ? "bg-amber-500" : "bg-emerald-500"}
-              />
-            </Card>
-          </motion.div>
+              <div className="flex items-baseline gap-1 mb-1.5">
+                <span className="text-lg sm:text-2xl font-extrabold text-[var(--color-ink)]">
+                  <AnimatedCounter value={healthPercentage} />%
+                </span>
+                <span className="text-[10px] text-[var(--color-mute)] hidden xs:inline">Score</span>
+              </div>
+            </div>
+            <AnimatedProgress
+              value={healthPercentage}
+              max={100}
+              barClassName={healthPercentage < 25 ? "bg-red-500" : healthPercentage < 50 ? "bg-amber-500" : "bg-emerald-500"}
+            />
+          </Card>
 
-          {/* Next Due Date */}
-          <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.15 }}>
-            <Card padding="sm" className="h-full flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Next Due</span>
-                  <AnimatedCalendarClock size={14} className="text-[var(--color-mute)]" />
-                </div>
-                <p className="text-xs sm:text-sm font-bold text-[var(--color-ink)] mt-0.5 truncate">{machine.next_service_due_date}</p>
+          <Card padding="sm" className="h-full flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Hour Meter</span>
+                <AnimatedClock size={14} className="text-[var(--color-mute)]" />
               </div>
-              <p className="text-[10px] sm:text-xs font-medium text-[var(--color-mute)] mt-1 truncate">{dueLabel}</p>
-            </Card>
-          </motion.div>
+              <p className="text-lg sm:text-2xl font-extrabold text-[var(--color-ink)] mt-0.5 font-mono">
+                {machine.hour_meter || 0} hrs
+              </p>
+            </div>
+            <p className="text-[10px] sm:text-xs font-medium text-[var(--color-mute)] mt-1 truncate">Current Total Run</p>
+          </Card>
 
-          {/* Interval */}
-          <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.15 }}>
-            <Card padding="sm" className="h-full flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Interval</span>
-                  <AnimatedClock size={14} className="text-[var(--color-mute)]" />
-                </div>
-                <p className="text-xs sm:text-sm font-bold text-[var(--color-ink)] mt-0.5">{machine.service_interval_days} Days</p>
+          <Card padding="sm" className="h-full flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Next Service</span>
+                <AnimatedCalendarClock size={14} className="text-[var(--color-mute)]" />
               </div>
-              <p className="text-[10px] sm:text-xs text-[var(--color-mute)] mt-1">Frequency Cycle</p>
-            </Card>
-          </motion.div>
+              <p className="text-xs sm:text-sm font-bold text-[var(--color-ink)] mt-0.5 truncate">{formatDate(machine.next_service_due_date)}</p>
+            </div>
+            <p className="text-[10px] sm:text-xs font-medium text-[var(--color-mute)] mt-1 truncate">{dueLabel}</p>
+          </Card>
 
-          {/* Total Serviced */}
-          <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.15 }}>
-            <Card padding="sm" className="h-full flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Serviced</span>
-                  <AnimatedHistory size={14} className="text-[var(--color-mute)]" />
-                </div>
-                <p className="text-lg sm:text-2xl font-extrabold text-[var(--color-ink)] mt-0.5">
-                  <AnimatedCounter value={serviceHistory.length} />
-                </p>
+          <Card padding="sm" className="h-full flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Service Interval</span>
+                <AnimatedSettings size={14} className="text-[var(--color-mute)]" />
               </div>
-              <p className="text-[10px] sm:text-xs text-[var(--color-mute)] mt-1">Total Maintenance Logs</p>
-            </Card>
-          </motion.div>
+              <p className="text-lg sm:text-2xl font-extrabold text-[var(--color-ink)] mt-0.5">
+                {machine.service_interval_days || 90} Days
+              </p>
+            </div>
+            <p className="text-[10px] sm:text-xs text-[var(--color-mute)] mt-1">Maintenance Cycle</p>
+          </Card>
         </div>
       </SlideUp>
 
-      {/* 100% Mobile Responsive Segmented Navigation Tabs Grid */}
+      {/* Segmented Navigation Tabs Bar */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1.5 no-scrollbar bg-[var(--color-hairline-soft-surface)]/70 p-1.5 rounded-2xl border border-[var(--color-hairline)]">
         {[
-          { id: "overview", label: "Overview & Specs", icon: AnimatedBuilding2 },
-          { id: "service", label: "Service Logs", icon: AnimatedWrench },
-          { id: "complaints", label: "Complaints", icon: AnimatedAlertTriangle },
-          { id: "documents", label: "Documents", icon: AnimatedFileText },
-          { id: "assignments", label: "Assignments", icon: AnimatedUserCheck },
-          { id: "running_hours", label: "Running Hours", icon: AnimatedClock },
-          { id: "history", label: "Activity Trail", icon: AnimatedHistory },
+          { id: "overview", label: "Master Specs & Client", icon: AnimatedBuilding2 },
+          { id: "service_breakdown", label: `Service & Breakdown History (${serviceHistory.length + breakdownHistory.length})`, icon: AnimatedWrench },
+          { id: "running_hours", label: `Hour Meter Running History (${hourMeterLogs.length})`, icon: AnimatedClock },
+          { id: "parts_used", label: `All Parts Used History (${partsUsedHistory.length})`, icon: AnimatedPackage },
+          { id: "service_interval", label: "Service Interval Schedule", icon: AnimatedSettings },
+          { id: "documents", label: "Compliance & Expiry", icon: AnimatedFileText },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -402,8 +432,9 @@ export function MachineClientView({
         })}
       </div>
 
-      {/* Main Animated Tab Content */}
+      {/* Main Tab Content Panels */}
       <AnimatePresence mode="wait">
+        {/* TAB 1: OVERVIEW & MASTER SPECS */}
         {activeTab === "overview" && (
           <motion.div
             key="overview"
@@ -413,329 +444,365 @@ export function MachineClientView({
             transition={{ duration: 0.18 }}
             className="flex flex-col gap-6"
           >
-            {/* Machine Details & Technical Specifications Card */}
-            <Card padding="lg" className="card-hover-system border-[var(--color-link)]/30 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-[var(--color-hairline)]">
+            <Card padding="lg" className="card-hover-system">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[var(--color-hairline)]">
                 <div>
                   <h3 className="text-base sm:text-lg font-bold text-[var(--color-ink)] flex items-center gap-2">
                     <AnimatedWrench size={20} className="text-[var(--color-link)]" />
-                    Machine Details & Technical Record
+                    Machine Master Parameters & Specifications
                   </h3>
                   <p className="text-xs text-[var(--color-mute)] mt-0.5">
-                    Master equipment specs, engine parameters, and compliance dates
+                    Machine identification, meter readings, personnel assignments, and fleet status
                   </p>
                 </div>
-                <Badge variant={machine.status === "on_rent" ? "info" : machine.status === "active" ? "success" : machine.status === "under_maintenance" ? "warning" : "neutral"} dot>
+                <Badge variant={machine.status === "rented" ? "info" : "neutral"} dot>
                   <span className="font-bold uppercase tracking-wider text-xs">
-                    {machine.status === "on_rent" ? "On Rent" : machine.status === "under_maintenance" ? "Under Maintenance" : machine.status}
+                    {machine.status === "rented" ? "On Rent" : "Available"}
                   </span>
                 </Badge>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mt-4 text-xs sm:text-sm">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-4 mt-4 text-xs sm:text-sm">
                 <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Machine No</span>
-                  <span className="font-bold text-[var(--color-ink)] font-mono text-base">{machine.machine_code}</span>
-                  <span className="text-[10px] text-[var(--color-mute)] mt-0.5">Auto Unique Code</span>
+                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Machine ID</span>
+                  <span className="font-bold text-[var(--color-ink)] font-mono text-base">{machine.machine_id}</span>
                 </div>
 
                 <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Machine Model</span>
-                  <span className="font-bold text-[var(--color-ink)] text-base">{machine.model || "S3246EE"}</span>
-                  <span className="text-[10px] text-[var(--color-mute)] mt-0.5">Equipment Model</span>
+                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Model</span>
+                  <span className="font-bold text-[var(--color-ink)] text-sm">{machine.model || "-"}</span>
                 </div>
 
                 <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Machine Sr No</span>
-                  <span className="font-bold text-[var(--color-ink)] font-mono text-base">{machine.serial_number || "3605417"}</span>
-                  <span className="text-[10px] text-[var(--color-mute)] mt-0.5">Serial Number</span>
+                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Serial No</span>
+                  <span className="font-bold text-[var(--color-ink)] font-mono text-sm">{machine.serial_number || "-"}</span>
+                </div>
+
+                <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
+                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Year Of Mfg (YUM)</span>
+                  <span className="font-bold text-[var(--color-ink)] text-sm">{machine.year_of_mfg || "-"}</span>
                 </div>
 
                 <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                   <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Manufacturer</span>
-                  <span className="font-bold text-[var(--color-ink)] text-base">{machine.manufacturer || "JCB"}</span>
-                  <span className="text-[10px] text-[var(--color-mute)] mt-0.5">OEM Brand</span>
+                  <span className="font-bold text-[var(--color-ink)] text-sm">{machine.manufacturer || "-"}</span>
                 </div>
 
                 <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Year Of Mfg</span>
-                  <span className="font-bold text-[var(--color-ink)] text-base">{machine.year_of_mfg || "2026"}</span>
-                  <span className="text-[10px] text-[var(--color-mute)] mt-0.5">Manufacturing Year</span>
+                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Hour Meter (HMR)</span>
+                  <span className="font-bold text-[var(--color-ink)] font-mono text-base">{machine.hour_meter ?? 0} hrs</span>
                 </div>
 
                 <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Engine Serial No</span>
-                  <span className="font-bold text-[var(--color-ink)] text-base">{machine.engine_serial_no || "Electric"}</span>
-                  <span className="text-[10px] text-[var(--color-mute)] mt-0.5">Engine Spec</span>
+                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Services Logged</span>
+                  <span className="font-bold text-[var(--color-ink)] text-base">{machine.service_count ?? 0}</span>
                 </div>
 
                 <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Engine Mot No</span>
-                  <span className="font-bold text-[var(--color-ink)] text-base">{machine.engine_mot_no || "Electric"}</span>
-                  <span className="text-[10px] text-[var(--color-mute)] mt-0.5">Motor Spec</span>
+                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Current Supervisor</span>
+                  <span className="font-bold text-[var(--color-ink)] text-sm">{machine.current_supervisor?.full_name || "-"}</span>
                 </div>
 
                 <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Status</span>
-                  <span className="font-bold text-emerald-600 dark:text-emerald-400 text-base capitalize">
-                    {machine.status === "on_rent" ? "On Rent" : machine.status === "under_maintenance" ? "Under Maintenance" : machine.status}
+                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Current Operator</span>
+                  <span className="font-bold text-[var(--color-ink)] text-sm">{machine.current_operator?.full_name || "-"}</span>
+                </div>
+
+                <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
+                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Health Status</span>
+                  <span className="font-bold text-sm capitalize text-[var(--color-ink)]">
+                    {machine.health_status === "breakdown" ? "Breakdown" : machine.health_status === "under_maintenance" ? "Under Maintenance" : "Active"}
                   </span>
-                  <span className="text-[10px] text-[var(--color-mute)] mt-0.5">Operating Condition</span>
                 </div>
-              </div>
 
-              {/* Compliance & Document Expiry Section */}
-              <div className="mt-5 pt-4 border-t border-[var(--color-hairline)]">
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-ink)] mb-3 flex items-center gap-1.5">
-                  <AnimatedShieldCheck size={16} className="text-[var(--color-link)]" />
-                  Legal Compliance & Certificate Expiry Dates
-                </h4>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                  {/* Insurance */}
-                  <div className="p-3.5 rounded-xl bg-[var(--color-hairline-soft-surface)]/40 border border-[var(--color-hairline)] flex flex-col gap-1">
-                    <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Insurance Policy</span>
-                    <span className="font-semibold text-xs text-[var(--color-ink)]">{machine.insurance_policy_no || "Policy Logged"}</span>
-                    <div className="mt-1 pt-1 border-t border-[var(--color-hairline)] flex justify-between items-center text-xs">
-                      <span className="text-[var(--color-mute)] text-[11px]">Expiry Date</span>
-                      <span className="font-bold text-[var(--color-ink)]">{formatComplianceDate(machine.insurance_expiry_date)}</span>
-                    </div>
-                  </div>
-
-                  {/* 3rd Party Certificate */}
-                  <div className="p-3.5 rounded-xl bg-[var(--color-hairline-soft-surface)]/40 border border-[var(--color-hairline)] flex flex-col gap-1">
-                    <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">3rd Party Certificate</span>
-                    <span className="font-semibold text-xs text-[var(--color-ink)]">{machine.third_party_certificate || "Certificate Valid"}</span>
-                    <div className="mt-1 pt-1 border-t border-[var(--color-hairline)] flex justify-between items-center text-xs">
-                      <span className="text-[var(--color-mute)] text-[11px]">Expiry Date</span>
-                      <span className="font-bold text-[var(--color-ink)]">{formatComplianceDate(machine.third_party_expiry_date)}</span>
-                    </div>
-                  </div>
-
-                  {/* RTO Tax */}
-                  <div className="p-3.5 rounded-xl bg-[var(--color-hairline-soft-surface)]/40 border border-[var(--color-hairline)] flex flex-col gap-1">
-                    <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">RTO Tax</span>
-                    <span className="font-semibold text-xs text-[var(--color-ink)]">{machine.rto_tax || "Tax Paid"}</span>
-                    <div className="mt-1 pt-1 border-t border-[var(--color-hairline)] flex justify-between items-center text-xs">
-                      <span className="text-[var(--color-mute)] text-[11px]">Expiry Date</span>
-                      <span className="font-bold text-[var(--color-ink)]">{formatComplianceDate(machine.rto_tax_expiry_date)}</span>
-                    </div>
-                  </div>
+                <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
+                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Rental Fleet Status</span>
+                  <span className="font-bold text-sky-600 dark:text-sky-400 text-sm capitalize">
+                    {machine.status === "rented" ? "On Rent" : "Available"}
+                  </span>
                 </div>
               </div>
             </Card>
 
+            {/* Client Details Section (If On Rent or Client Assigned) */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-              {/* Customer Info Card */}
-              <Card padding="lg" className="card-hover-system flex flex-col justify-between">
-                <div>
-                  <CardHeader title="Customer & Site Information" eyebrow="Client Location" />
+              <Card padding="lg" className="lg:col-span-2 card-hover-system border-sky-500/20 bg-sky-500/5">
+                <CardHeader
+                  title={machine.status === "on_rent" ? "Client Details (On Rent)" : "Customer & Site Location"}
+                  eyebrow="Active Deployment Client"
+                  action={
+                    <Badge variant={machine.status === "on_rent" ? "info" : "neutral"}>
+                      {machine.status === "on_rent" ? "On Rent Contract Active" : "Site Deployed"}
+                    </Badge>
+                  }
+                />
 
-                  <div className="flex flex-col gap-3.5 mt-4 text-xs sm:text-sm">
-                    <div>
-                      <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider block mb-1">
-                        Company / Name
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 text-xs sm:text-sm">
+                  <div>
+                    <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider block mb-1">
+                      Client / Company Name
+                    </span>
+                    <p className="font-bold text-[var(--color-ink)] text-base">{clientInfo.company_name || machine.customer_name}</p>
+                    {activeRental?.contract_number && (
+                      <span className="inline-block mt-1 font-mono text-[11px] text-sky-600 font-bold bg-sky-500/10 px-2 py-0.5 rounded">
+                        Contract: {activeRental.contract_number}
                       </span>
-                      <p className="font-bold text-[var(--color-ink)] text-sm sm:text-base">{machine.customer_name}</p>
-                    </div>
+                    )}
+                  </div>
 
+                  <div>
+                    <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider block mb-1">
+                      Contact Person
+                    </span>
+                    <p className="font-semibold text-[var(--color-ink)] text-sm">{clientInfo.contact_person || machine.customer_name}</p>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider block mb-1">
+                      Contact Mobile
+                    </span>
+                    <a
+                      href={`tel:${clientInfo.contact_mobile || machine.customer_mobile}`}
+                      className="font-semibold text-[var(--color-link)] hover:underline inline-flex items-center gap-1.5"
+                    >
+                      <Phone className="h-3.5 w-3.5" /> {clientInfo.contact_mobile || machine.customer_mobile}
+                    </a>
+                  </div>
+
+                  {clientInfo.contact_email && (
                     <div>
                       <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider block mb-1">
-                        Contact Mobile
+                        Contact Email
                       </span>
                       <a
-                        href={`tel:${machine.customer_mobile}`}
-                        className="font-medium text-[var(--color-link)] hover:underline inline-flex items-center gap-1.5"
+                        href={`mailto:${clientInfo.contact_email}`}
+                        className="font-medium text-[var(--color-link)] hover:underline inline-flex items-center gap-1.5 break-all"
                       >
-                        <Phone className="h-3.5 w-3.5" /> {machine.customer_mobile}
+                        <Mail className="h-3.5 w-3.5 shrink-0" /> {clientInfo.contact_email}
                       </a>
                     </div>
+                  )}
 
-                    {machine.customer_email && (
-                      <div>
-                        <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider block mb-1">
-                          Contact Email
-                        </span>
-                        <a
-                          href={`mailto:${machine.customer_email}`}
-                          className="font-medium text-[var(--color-link)] hover:underline inline-flex items-center gap-1.5 break-all"
-                        >
-                          <Mail className="h-3.5 w-3.5 shrink-0" /> {machine.customer_email}
-                        </a>
-                      </div>
-                    )}
-
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Site Address</span>
-                        <motion.button
-                          whileTap={{ scale: 0.9 }}
-                          onClick={handleCopyAddress}
-                          className="text-xs text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-1"
-                        >
-                          {copiedAddress ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                          <span>{copiedAddress ? "Copied" : "Copy"}</span>
-                        </motion.button>
-                      </div>
-                      <p className="text-xs sm:text-sm text-[var(--color-ink)] leading-relaxed bg-[var(--color-hairline-soft-surface)]/60 p-3 rounded-xl border border-[var(--color-hairline)] font-medium">
-                        {machine.customer_address || "No specific address logged"}
-                      </p>
+                  <div className="sm:col-span-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Site Location Address</span>
+                      <button
+                        type="button"
+                        onClick={handleCopyAddress}
+                        className="text-xs text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-1"
+                      >
+                        {copiedAddress ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                        <span>{copiedAddress ? "Copied" : "Copy"}</span>
+                      </button>
                     </div>
-
-                    <div className="flex items-center gap-2 pt-1">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[var(--color-hairline-soft-surface)] text-xs font-semibold text-[var(--color-ink)] border border-[var(--color-hairline)]">
-                        <MapPin className="h-3.5 w-3.5 text-[var(--color-link)]" /> {machine.city}
-                      </span>
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[var(--color-hairline-soft-surface)] text-xs font-semibold text-[var(--color-ink)] border border-[var(--color-hairline)]">
-                        {machine.state}
-                      </span>
-                    </div>
+                    <p className="text-xs sm:text-sm text-[var(--color-ink)] leading-relaxed bg-[var(--color-canvas-elevated)] p-3 rounded-xl border border-[var(--color-hairline)] font-medium">
+                      {clientInfo.billing_address || machine.customer_address || "Delhi NCR Site Yard"}
+                    </p>
                   </div>
-                </div>
 
-                <div className="mt-5 pt-3.5 border-t border-[var(--color-hairline)]">
-                  <a
-                    href={mapsUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full btn-secondary text-xs inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl font-semibold"
-                  >
-                    <Navigation className="h-3.5 w-3.5 text-sky-500" /> Open Navigation Map
-                  </a>
+                  {activeRental && (
+                    <div className="sm:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-[var(--color-hairline)]">
+                      <div>
+                        <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block">Rental Start</span>
+                        <span className="font-semibold text-xs text-[var(--color-ink)]">{formatDate(activeRental.start_date)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block">Rental End</span>
+                        <span className="font-semibold text-xs text-[var(--color-ink)]">{formatDate(activeRental.end_date)}</span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block">Rental Rate</span>
+                        <span className="font-semibold text-xs text-emerald-600">₹{activeRental.rental_rate} / {activeRental.rate_unit}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </Card>
 
-              {/* Assigned Engineer Card */}
+              {/* Assigned Engineer & Staff */}
               <Card padding="lg" className="card-hover-system flex flex-col justify-between">
                 <div>
-                  <CardHeader title="Assigned Field Engineer" eyebrow="Technician Workspace" />
+                  <CardHeader title="Assigned Engineer" eyebrow="Field Operations" />
 
                   <div className="mt-4">
                     {machine.engineer ? (
-                      <div className="flex flex-col gap-3.5 text-xs sm:text-sm">
+                      <div className="flex flex-col gap-3 text-xs sm:text-sm">
                         <div className="flex items-center gap-3 bg-[var(--color-hairline-soft-surface)]/60 p-3 rounded-xl border border-[var(--color-hairline)]">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr from-sky-600 to-blue-500 text-white font-bold text-base shadow-sm">
-                            {machine.engineer.full_name?.charAt(0).toUpperCase() ?? "E"}
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sky-600 text-white font-bold text-sm">
+                            {machine.engineer.full_name?.charAt(0).toUpperCase()}
                           </div>
                           <div className="overflow-hidden">
                             <p className="font-bold text-[var(--color-ink)] truncate text-sm">{machine.engineer.full_name}</p>
                             <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 font-semibold">
-                              <UserCheck className="h-3 w-3" /> Active Field Technician
+                              <UserCheck className="h-3 w-3" /> Field Engineer
                             </span>
                           </div>
                         </div>
 
                         {machine.engineer.phone && (
                           <div>
-                            <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider block mb-1">
-                              Phone Contact
-                            </span>
-                            <a href={`tel:${machine.engineer.phone}`} className="font-medium text-[var(--color-link)] hover:underline flex items-center gap-1.5">
+                            <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider block mb-1">Phone</span>
+                            <a href={`tel:${machine.engineer.phone}`} className="font-medium text-[var(--color-link)] hover:underline flex items-center gap-1">
                               <Phone className="h-3.5 w-3.5" /> {machine.engineer.phone}
                             </a>
                           </div>
                         )}
-
-                        {machine.engineer.email && (
-                          <div>
-                            <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider block mb-1">
-                              Email Address
-                            </span>
-                            <p className="text-[var(--color-body)] font-mono text-xs truncate">{machine.engineer.email}</p>
-                          </div>
-                        )}
                       </div>
                     ) : (
-                      <div className="flex flex-col items-center justify-center py-7 text-center bg-[var(--color-hairline-soft-surface)]/40 rounded-xl border border-dashed border-[var(--color-hairline)] px-3">
-                        <AlertTriangle className="h-7 w-7 text-amber-500 mb-1.5" />
-                        <p className="font-bold text-[var(--color-ink)] text-xs sm:text-sm">No Engineer Assigned</p>
-                        <p className="text-xs text-[var(--color-mute)] mt-1">
-                          Assign a field technician to handle upcoming service reminders.
-                        </p>
+                      <div className="flex flex-col items-center justify-center py-6 text-center bg-[var(--color-hairline-soft-surface)]/40 rounded-xl border border-dashed border-[var(--color-hairline)] px-3">
+                        <AlertTriangle className="h-6 w-6 text-amber-500 mb-1" />
+                        <p className="font-bold text-[var(--color-ink)] text-xs">No Engineer Assigned</p>
                       </div>
                     )}
                   </div>
                 </div>
 
                 {isAdmin && (
-                  <div className="mt-5 pt-3.5 border-t border-[var(--color-hairline)]">
+                  <div className="mt-4 pt-3 border-t border-[var(--color-hairline)]">
                     <Link href={`/machines/${machine.id}/edit`}>
-                      <Button variant="secondary" className="w-full text-xs font-semibold py-2.5 rounded-xl">
-                        Reassign Engineer
+                      <Button variant="secondary" className="w-full text-xs font-semibold py-2 rounded-xl">
+                        Reassign Staff
                       </Button>
                     </Link>
                   </div>
                 )}
               </Card>
-
-              {/* Maintenance Rules & Specs */}
-              <Card padding="lg" className="card-hover-system flex flex-col justify-between">
-                <div>
-                  <CardHeader title="Maintenance Rules & Specs" eyebrow="Schedule Details" />
-
-                  <div className="flex flex-col gap-3 mt-4 text-xs sm:text-sm">
-                    <div className="flex justify-between items-center py-2 border-b border-[var(--color-hairline)]">
-                      <span className="text-[var(--color-mute)] font-medium">Service Interval</span>
-                      <span className="font-bold text-[var(--color-ink)]">{machine.service_interval_days} Days</span>
-                    </div>
-
-                    <div className="flex justify-between items-center py-2 border-b border-[var(--color-hairline)]">
-                      <span className="text-[var(--color-mute)] font-medium">Last Serviced Date</span>
-                      <span className="font-bold text-[var(--color-ink)]">
-                        {machine.last_service_date || "Never Serviced"}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center py-2 border-b border-[var(--color-hairline)]">
-                      <span className="text-[var(--color-mute)] font-medium">Next Due Date</span>
-                      <span className="font-bold text-[var(--color-ink)]">{machine.next_service_due_date}</span>
-                    </div>
-
-                    <div className="pt-1">
-                      <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider block mb-1">
-                        Technician Remarks / Notes
-                      </span>
-                      <p className="text-xs text-[var(--color-body)] italic bg-[var(--color-hairline-soft-surface)]/60 p-3 rounded-xl border border-[var(--color-hairline)] leading-relaxed">
-                        {machine.notes || "No special maintenance remarks logged for this machine."}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </Card>
             </div>
           </motion.div>
         )}
 
-        {/* Complete Service Tab */}
-        {activeTab === "service" && (isAssignedEngineer || isAdmin) && (
+        {/* TAB 2: SERVICE & BREAKDOWN HISTORY */}
+        {activeTab === "service_breakdown" && (
           <motion.div
-            key="service"
+            key="service_breakdown"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.18 }}
+            className="flex flex-col gap-5"
           >
-            <Card padding="lg" className="shadow-sm border-[var(--color-link)]/20">
+            <Card padding="lg">
               <CardHeader
-                title="Complete Maintenance Service"
-                eyebrow="Field Logger"
+                title="Service Records & Breakdown Malfunction History"
+                eyebrow="Combined Maintenance & FSR Ledger"
                 action={
-                  <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 rounded-full font-semibold">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Auto-updates Schedule
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <Link href="/service?tab=complaints&action=create_complaint">
+                      <Button variant="danger-sm" className="text-xs font-bold py-1.5 px-3">
+                        <AlertTriangle className="h-3.5 w-3.5 mr-1" /> Report Breakdown
+                      </Button>
+                    </Link>
+                    {(isAssignedEngineer || isAdmin) && (
+                      <Button
+                        variant="primary"
+                        onClick={() => setActiveTab("complete_service")}
+                        className="text-xs font-bold py-1.5 px-3"
+                      >
+                        + Log Maintenance Service
+                      </Button>
+                    )}
+                  </div>
                 }
               />
-              <div className="mt-4">
-                <ServiceForm machineId={machine.id} engineerId={currentUserId} />
-              </div>
+
+              {serviceHistory.length === 0 && breakdownHistory.length === 0 ? (
+                <div className="py-10 text-center">
+                  <EmptyState
+                    title="No Service or Breakdown Logs Found"
+                    description="This machine has no recorded maintenance services or breakdown complaints logged yet."
+                  />
+                </div>
+              ) : (
+                <div className="mt-4 space-y-4">
+                  {/* Maintenance Service Records */}
+                  {serviceHistory.length > 0 && (
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-ink)] flex items-center gap-1.5">
+                        <Wrench className="h-4 w-4 text-sky-500" /> Maintenance Service Logs ({serviceHistory.length})
+                      </h4>
+
+                      <div className="w-full overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Service Date</TableHead>
+                              <TableHead>Category / Type</TableHead>
+                              <TableHead>Meter (hrs)</TableHead>
+                              <TableHead>Engineer</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>Notes & Remarks</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {serviceHistory.map((s) => (
+                              <TableRow key={s.id}>
+                                <TableCell className="font-mono text-xs font-bold">{formatDate(s.service_date)}</TableCell>
+                                <TableCell className="font-semibold text-xs">{s.service_category || "Routine Service"}</TableCell>
+                                <TableCell className="font-mono text-xs">{s.hour_meter || 0} hrs</TableCell>
+                                <TableCell className="text-xs">{s.engineer?.full_name || "Assigned Engineer"}</TableCell>
+                                <TableCell>
+                                  <Badge variant={s.service_status === "completed" ? "success" : "warning"}>
+                                    <span className="capitalize">{s.service_status || "completed"}</span>
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-xs text-[var(--color-mute)] max-w-xs truncate">{s.notes || "-"}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Breakdown Complaints */}
+                  {breakdownHistory.length > 0 && (
+                    <div className="space-y-3 pt-4 border-t border-[var(--color-hairline)]">
+                      <h4 className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-ink)] flex items-center gap-1.5">
+                        <AlertTriangle className="h-4 w-4 text-amber-500" /> Breakdown Malfunction Reports ({breakdownHistory.length})
+                      </h4>
+
+                      <div className="w-full overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Complaint No</TableHead>
+                              <TableHead>Reported Date</TableHead>
+                              <TableHead>Malfunction Details</TableHead>
+                              <TableHead>Required Part</TableHead>
+                              <TableHead>Engineer / Supervisor</TableHead>
+                              <TableHead>FSR Status</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {breakdownHistory.map((b) => (
+                              <TableRow key={b.id}>
+                                <TableCell className="font-mono text-xs font-bold text-red-600 dark:text-red-400">{b.complaint_no}</TableCell>
+                                <TableCell className="font-mono text-xs">{formatDate(b.complaint_date)}</TableCell>
+                                <TableCell className="text-xs font-medium max-w-xs truncate">{b.complaint}</TableCell>
+                                <TableCell className="text-xs font-mono">{b.required_part ? `${b.required_part} (${b.part_quantity || 1})` : "-"}</TableCell>
+                                <TableCell className="text-xs">{b.engineer?.full_name || b.supervisor?.full_name || "Technician"}</TableCell>
+                                <TableCell>
+                                  <Badge variant={b.status === "resolved" ? "success" : b.status === "in_progress" ? "info" : "overdue"}>
+                                    <span className="capitalize">{b.status}</span>
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </Card>
           </motion.div>
         )}
 
-        {/* Breakdown Complaints Tab */}
-        {activeTab === "complaints" && (
+        {/* TAB 3: HOUR METER RUNNING HISTORY */}
+        {activeTab === "running_hours" && (
           <motion.div
-            key="complaints"
+            key="running_hours"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
@@ -743,36 +810,207 @@ export function MachineClientView({
           >
             <Card padding="lg">
               <CardHeader
-                title="Breakdown Complaints & FSR Log"
-                eyebrow="Malfunction Records"
+                title="Hour Meter Running Machine History"
+                eyebrow="Operator Daily Logbook with Client & Operator Details"
                 action={
-                  <Link href="/service?tab=complaints&action=create_complaint">
-                    <Button variant="danger-sm" className="text-xs font-bold py-1.5 px-3">
-                      <AlertTriangle className="h-3.5 w-3.5 mr-1" /> Report Malfunction
+                  <Link href="/operations?tab=logs">
+                    <Button variant="secondary" className="text-xs font-bold py-1.5 px-3">
+                      + Add Meter Log Entry
                     </Button>
                   </Link>
                 }
               />
-              <div className="mt-4 space-y-3">
-                <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] flex items-center justify-between">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-red-600 dark:text-red-400">CMP-1024</span>
-                      <Badge variant="overdue">Critical Breakdown</Badge>
-                    </div>
-                    <p className="text-xs font-bold text-[var(--color-ink)]">Hydraulic Pressure Leakage & Arm Cylinder Hose Rupture</p>
-                    <p className="text-[11px] text-[var(--color-mute)]">Logged by Operator Raj Kumar • Delhi Yard Site</p>
-                  </div>
-                  <Link href="/service?tab=complaints">
-                    <Button variant="secondary" className="text-xs py-1.5 px-3">View FSR Report</Button>
+
+              {hourMeterLogs.length === 0 ? (
+                <div className="py-10 text-center">
+                  <EmptyState
+                    title="No Running Meter Logs Logged"
+                    description="Daily hour meter logbook entries recorded by machine operators will be displayed here."
+                  />
+                </div>
+              ) : (
+                <div className="mt-4 w-full overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Log Date</TableHead>
+                        <TableHead>Client Company</TableHead>
+                        <TableHead>Operator</TableHead>
+                        <TableHead>Operating Hours</TableHead>
+                        <TableHead>Meter Reading (Start → End)</TableHead>
+                        <TableHead>Overtime</TableHead>
+                        <TableHead>Remarks</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {hourMeterLogs.map((log: any) => (
+                        <TableRow key={log.id}>
+                          <TableCell className="font-mono text-xs font-bold">{formatDate(log.log_date)}</TableCell>
+                          <TableCell className="font-medium text-xs">{clientInfo.company_name || machine.customer_name}</TableCell>
+                          <TableCell className="text-xs font-semibold">{log.operator?.full_name || "Operator"}</TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {log.start_time && log.end_time ? `${log.start_time} - ${log.end_time}` : `${log.running_hours || 0} hrs`}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs text-sky-600 dark:text-sky-400 font-bold">
+                            {log.start_meter || 0} → {log.end_meter || 0} (+{log.running_hours || 0}h)
+                          </TableCell>
+                          <TableCell className="font-mono text-xs text-amber-600 font-semibold">
+                            {log.overtime_hours ? `+${log.overtime_hours} hrs` : "-"}
+                          </TableCell>
+                          <TableCell className="text-xs text-[var(--color-mute)] max-w-xs truncate">{log.remarks || "-"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </Card>
+          </motion.div>
+        )}
+
+        {/* TAB 4: ALL PARTS USED HISTORY */}
+        {activeTab === "parts_used" && (
+          <motion.div
+            key="parts_used"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18 }}
+          >
+            <Card padding="lg">
+              <CardHeader
+                title="All Spare Parts Used & Issued History"
+                eyebrow="Inventory Issue Challan Ledger"
+                action={
+                  <Link href="/inventory?tab=issue">
+                    <Button variant="secondary" className="text-xs font-bold py-1.5 px-3">
+                      <PackageCheck className="h-3.5 w-3.5 mr-1" /> Issue Part to Machine
+                    </Button>
                   </Link>
+                }
+              />
+
+              {partsUsedHistory.length === 0 ? (
+                <div className="py-10 text-center">
+                  <EmptyState
+                    title="No Spare Parts Issued"
+                    description="No inventory parts or spare components have been issued to this machine yet."
+                  />
+                </div>
+              ) : (
+                <div className="mt-4 w-full overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Challan / Issue No</TableHead>
+                        <TableHead>Issue Date</TableHead>
+                        <TableHead>Part Number & Description</TableHead>
+                        <TableHead>Qty Issued</TableHead>
+                        <TableHead>Issued To</TableHead>
+                        <TableHead>Returnable</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {partsUsedHistory.flatMap((issue: any) =>
+                        (issue.items || []).map((item: any) => (
+                          <TableRow key={`${issue.id}-${item.id}`}>
+                            <TableCell className="font-mono text-xs font-bold text-sky-600">{issue.challan_number || issue.issue_number}</TableCell>
+                            <TableCell className="font-mono text-xs">{formatDate(issue.issue_date)}</TableCell>
+                            <TableCell className="text-xs">
+                              <span className="font-mono font-bold block">{item.product?.part_number || "PART-SPEC"}</span>
+                              <span className="text-[var(--color-mute)]">{item.product?.name || "Spare Component"}</span>
+                            </TableCell>
+                            <TableCell className="font-mono text-xs font-bold">{item.quantity_issued} {item.unit || "Pcs"}</TableCell>
+                            <TableCell className="text-xs">{issue.issued_to_name || "Service Technician"}</TableCell>
+                            <TableCell>
+                              <Badge variant={item.is_returnable ? "warning" : "neutral"}>
+                                {item.is_returnable ? "Returnable" : "Non-Returnable"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={issue.status === "issued" ? "success" : "neutral"}>
+                                <span className="capitalize">{issue.status}</span>
+                              </Badge>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </Card>
+          </motion.div>
+        )}
+
+        {/* TAB 5: SERVICE INTERVAL & SCHEDULE */}
+        {activeTab === "service_interval" && (
+          <motion.div
+            key="service_interval"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.18 }}
+            className="flex flex-col gap-6"
+          >
+            <Card padding="lg">
+              <CardHeader
+                title="Service Interval & Scheduled Maintenance Rules"
+                eyebrow="Routine Inspection Cycles (90 Days / 180 Days / 250 Hrs / 500 Hrs)"
+              />
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 text-xs sm:text-sm">
+                <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-2">
+                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider block">Service Frequency Interval</span>
+                  <p className="text-xl font-extrabold text-[var(--color-ink)]">{machine.service_interval_days || 90} Days</p>
+                  <p className="text-[11px] text-[var(--color-mute)]">Recommended preventive maintenance cycle</p>
+                </div>
+
+                <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-2">
+                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider block">Last Serviced Date</span>
+                  <p className="text-xl font-extrabold text-[var(--color-ink)]">{machine.last_service_date ? formatDate(machine.last_service_date) : "Never Serviced"}</p>
+                  <p className="text-[11px] text-[var(--color-mute)]">Last logged maintenance completion</p>
+                </div>
+
+                <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-2">
+                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider block">Next Service Due Date</span>
+                  <p className="text-xl font-extrabold text-[var(--color-link)]">{formatDate(machine.next_service_due_date)}</p>
+                  <p className="text-[11px] text-amber-600 font-semibold">{dueLabel}</p>
+                </div>
+              </div>
+
+              {/* Maintenance Schedule Checklist Matrix */}
+              <div className="mt-6 pt-5 border-t border-[var(--color-hairline)] space-y-4">
+                <h4 className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-ink)]">
+                  Standard Preventive Maintenance Checklist Rules
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/50 space-y-1">
+                    <span className="font-bold text-[var(--color-ink)] flex items-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" /> 90-Day / 250-Hour Interval
+                    </span>
+                    <p className="text-[var(--color-mute)] leading-relaxed">
+                      Engine oil filter replacement, air filter inspection/cleaning (`{machine.air_filter_no || "Standard"}`), hydraulic fluid check, battery voltage test, and starter motor teeth inspection (`{machine.starter_motor_teeth || "Standard"}`).
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/50 space-y-1">
+                    <span className="font-bold text-[var(--color-ink)] flex items-center gap-1.5">
+                      <CheckCircle2 className="h-4 w-4 text-sky-600" /> 180-Day / 500-Hour Interval
+                    </span>
+                    <p className="text-[var(--color-mute)] leading-relaxed">
+                      Diesel fuel filter replacement (`{machine.diesel_filter_no || "Standard"}`), headgas kit notch inspection (`{machine.headgas_kit_notch || "Standard"}`), front tyre (`{machine.front_tyre_size || "Standard"}`) & back tyre (`{machine.back_tyre_size || "Standard"}`) wear check, brake pads, and hydraulic hose stress test.
+                    </p>
+                  </div>
                 </div>
               </div>
             </Card>
           </motion.div>
         )}
 
-        {/* Machine Documents Tab */}
+        {/* TAB 6: COMPLIANCE DOCUMENTS */}
         {activeTab === "documents" && (
           <motion.div
             key="documents"
@@ -793,13 +1031,13 @@ export function MachineClientView({
                   </Link>
                 }
               />
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-2 text-xs">
                   <div className="flex justify-between items-center">
                     <span className="font-bold text-[var(--color-ink)]">Insurance Policy Certificate</span>
-                    <Badge variant="warning">Expiring Soon</Badge>
+                    <Badge variant="warning">Policy Logged</Badge>
                   </div>
-                  <p className="text-[var(--color-mute)]">Policy No: {machine.insurance_policy_no || "POL-889412"}</p>
+                  <p className="text-[var(--color-mute)]">Policy No: {machine.insurance_policy_no || "-"}</p>
                   <p className="text-[var(--color-mute)]">Expires: {formatComplianceDate(machine.insurance_expiry_date)}</p>
                 </div>
 
@@ -808,63 +1046,44 @@ export function MachineClientView({
                     <span className="font-bold text-[var(--color-ink)]">Third Party Fitness Certificate</span>
                     <Badge variant="success">Valid</Badge>
                   </div>
-                  <p className="text-[var(--color-mute)]">Cert No: {machine.third_party_certificate || "FIT-2026-99"}</p>
+                  <p className="text-[var(--color-mute)]">Cert No: {machine.third_party_certificate || "-"}</p>
                   <p className="text-[var(--color-mute)]">Expires: {formatComplianceDate(machine.third_party_expiry_date)}</p>
                 </div>
-              </div>
-            </Card>
-          </motion.div>
-        )}
 
-        {/* Machine Operator & Staff Assignments Tab */}
-        {activeTab === "assignments" && (
-          <motion.div
-            key="assignments"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.18 }}
-          >
-            <Card padding="lg">
-              <CardHeader
-                title="Machine Staff & Site Assignments"
-                eyebrow="Operator Logbook"
-              />
-              <div className="mt-4 space-y-3 text-xs">
-                <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] flex justify-between items-center">
-                  <div>
-                    <p className="font-bold text-[var(--color-ink)]">Primary Assigned Operator: Raj Kumar</p>
-                    <p className="text-[var(--color-mute)]">Site Location: Delhi Metro Yard Site 4</p>
+                <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-2 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-[var(--color-ink)]">RTO Tax Receipt</span>
+                    <Badge variant="success">Paid</Badge>
                   </div>
-                  <Badge variant="success">Active Assignment</Badge>
+                  <p className="text-[var(--color-mute)]">Tax Receipt No: {machine.rto_tax || "-"}</p>
+                  <p className="text-[var(--color-mute)]">Expires: {machine.rto_tax_expiry_date ? formatComplianceDate(machine.rto_tax_expiry_date) : "-"}</p>
                 </div>
               </div>
             </Card>
           </motion.div>
         )}
 
-        {/* Running Hours Tab */}
-        {activeTab === "running_hours" && (
+        {/* TAB 7: COMPLETE SERVICE FORM */}
+        {activeTab === "complete_service" && (isAssignedEngineer || isAdmin) && (
           <motion.div
-            key="running_hours"
+            key="complete_service"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.18 }}
           >
-            <Card padding="lg">
+            <Card padding="lg" className="shadow-sm border-[var(--color-link)]/20">
               <CardHeader
-                title="Daily Meter Readings & Running Hours Log"
-                eyebrow="Hour Meter History"
+                title="Complete Maintenance Service"
+                eyebrow="Field Logger"
+                action={
+                  <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 rounded-full font-semibold">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Auto-updates Schedule
+                  </span>
+                }
               />
-              <div className="mt-4 space-y-3 text-xs">
-                <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] flex justify-between items-center">
-                  <div>
-                    <p className="font-bold text-[var(--color-ink)] text-sm">Today&apos;s Reading: {machine.hour_meter || 4827.5} hrs</p>
-                    <p className="text-[var(--color-mute)]">Operating Duration: 6.5 hours</p>
-                  </div>
-                  <span className="font-mono text-xs font-bold text-sky-600">Logged Today</span>
-                </div>
+              <div className="mt-4">
+                <ServiceForm machineId={machine.id} engineerId={currentUserId} />
               </div>
             </Card>
           </motion.div>

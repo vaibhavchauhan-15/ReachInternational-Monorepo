@@ -1,6 +1,6 @@
 import { Suspense } from "react";
-import { getCurrentUser } from "@/lib/dal";
-import { getMachines, getActiveEngineers, getActiveSupervisors, getMachineCities } from "@/lib/queries/machines";
+import { getCurrentUser, protectOperatorRoute } from "@/lib/dal";
+import { getMachines, getActiveSupervisors, getActiveOperators } from "@/lib/queries/machines";
 import { getMachineComplaints } from "@/lib/queries/complaints";
 import { getEngineerServicesData } from "@/lib/queries/services";
 import { MachineListClient } from "@/components/machines/MachineListClient";
@@ -21,6 +21,7 @@ interface MachinesPageProps {
 async function MachinesContent({ searchParams }: MachinesPageProps) {
   const user = await getCurrentUser();
   if (!user) return null;
+  protectOperatorRoute(user.role);
 
   const resolvedParams = await searchParams;
   const page = parseInt(resolvedParams.page || "1", 10);
@@ -31,19 +32,15 @@ async function MachinesContent({ searchParams }: MachinesPageProps) {
   const bucket = resolvedParams.bucket || "all";
   const initialTab = resolvedParams.tab || "inventory";
 
-  const [machineData, engineers, supervisors, cities, complaintData, serviceData] = await Promise.all([
+  const [machineData, supervisors, operators, complaintData, serviceData] = await Promise.all([
     getMachines({
       search,
       status,
-      city,
-      engineer_id,
-      bucket,
       page,
       pageSize: 25,
     }),
-    getActiveEngineers(),
     getActiveSupervisors(),
-    getMachineCities(),
+    getActiveOperators(),
     getMachineComplaints(),
     getEngineerServicesData(),
   ]);
@@ -55,15 +52,15 @@ async function MachinesContent({ searchParams }: MachinesPageProps) {
       page={machineData.page}
       pageSize={machineData.pageSize}
       totalPages={machineData.totalPages}
-      engineers={engineers}
+      engineers={[]}
       supervisors={supervisors}
-      cities={cities}
+      operators={operators}
+      cities={[]}
       complaints={complaintData.complaints}
       serviceData={serviceData}
       userRole={user.role}
       currentSearch={search}
       currentStatus={status}
-      currentCity={city}
       currentEngineerId={engineer_id}
       currentBucket={bucket}
       initialTab={initialTab}

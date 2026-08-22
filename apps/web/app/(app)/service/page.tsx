@@ -1,4 +1,4 @@
-import { getCurrentUser } from "@/lib/dal";
+import { getCurrentUser, protectDisabledRoute } from "@/lib/dal";
 import { redirect } from "next/navigation";
 import { getMachines, getActiveEngineers, getActiveSupervisors } from "@/lib/queries/machines";
 import { getMachineComplaints } from "@/lib/queries/complaints";
@@ -11,6 +11,8 @@ export default async function ServicePage() {
   if (!user) {
     redirect("/login");
   }
+
+  protectDisabledRoute(user.role);
 
   const [complaintData, machineData, engineers, supervisors, serviceData] = await Promise.all([
     getMachineComplaints(),

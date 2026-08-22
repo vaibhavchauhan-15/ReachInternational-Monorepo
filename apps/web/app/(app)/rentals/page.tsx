@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/dal";
+import { getCurrentUser, protectDisabledRoute } from "@/lib/dal";
 import { roleHasPermission } from "@/lib/auth/rbac";
 import { getMachines } from "@/lib/queries/machines";
 import {
@@ -22,6 +22,7 @@ export const metadata = {
 export default async function RentalsPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  protectDisabledRoute(user.role);
 
   if (!roleHasPermission(user.role, "rental.view")) {
     redirect("/dashboard");

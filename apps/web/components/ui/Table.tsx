@@ -13,10 +13,16 @@ export function Table({ children, className = "" }: TableProps) {
   );
 }
 
-export function TableHeader({ children }: { children: ReactNode }) {
+export function TableHeader({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <thead className="sticky top-0 z-10 bg-background/90 backdrop-blur-md">
-      <tr className="border-b border-border">{children}</tr>
+    <thead className={`sticky top-0 z-10 bg-background/90 backdrop-blur-md ${className}`}>
+      {children}
     </thead>
   );
 }

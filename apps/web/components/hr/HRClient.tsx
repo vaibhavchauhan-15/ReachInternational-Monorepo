@@ -671,7 +671,8 @@ export function HRClient({
 
           {/* Directory Table */}
           <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden shadow-sm">
-            <table className="w-full text-left text-xs">
+            <div className="overflow-x-auto custom-scrollbar">
+              <table className="w-full text-left text-xs min-w-[750px]">
               <thead className="bg-[var(--color-canvas)] text-[var(--color-mute)] uppercase font-extrabold border-b border-[var(--color-hairline)]">
                 <tr>
                   <th className="px-4 py-3">Code & Name</th>
@@ -782,6 +783,7 @@ export function HRClient({
             </table>
           </div>
         </div>
+      </div>
       )}
 
       {/* TAB 3: ONBOARDING WORKFLOW */}

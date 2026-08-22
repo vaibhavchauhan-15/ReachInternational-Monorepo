@@ -1,4 +1,4 @@
-import { getCurrentUser } from "@/lib/dal";
+import { getCurrentUser, protectDisabledRoute } from "@/lib/dal";
 import { redirect } from "next/navigation";
 import { PODetailClient } from "@/components/purchase/PODetailClient";
 
@@ -12,6 +12,8 @@ export default async function PODetailPage({ params }: PageProps) {
   if (!user) {
     redirect("/login");
   }
+
+  protectDisabledRoute(user.role);
 
   const { id } = await params;
 

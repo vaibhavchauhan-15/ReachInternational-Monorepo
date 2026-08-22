@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/dal";
+import { getCurrentUser, protectDisabledRoute } from "@/lib/dal";
 import { getAuditLogsFiltered } from "@/lib/queries/audit-logs";
 import { AuditLogsClient } from "@/components/audit-logs/AuditLogsClient";
 
@@ -20,9 +20,7 @@ export default async function AuditLogsPage({ searchParams }: AuditLogsPageProps
     redirect("/login");
   }
 
-  if (user.role !== "super_admin" && user.role !== "admin") {
-    redirect("/dashboard");
-  }
+  protectDisabledRoute(user.role);
 
   const params = await searchParams;
   const page = params.page ? parseInt(params.page, 10) : 1;

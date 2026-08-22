@@ -1,47 +1,84 @@
 /**
  * ServiceCentric Shared Utilities — Date Formatting
- * Enforces explicit "en-GB" locale to guarantee identical DD/MM/YYYY
- * rendering on both server (Node.js) and client environments without hydration mismatches.
+ * Enforces explicit DD-MM-YYYY rendering on both server (Node.js) and client environments without hydration mismatches.
  */
 
 export function formatDate(dateInput: string | Date | null | undefined): string {
   if (!dateInput) return '—';
-  const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  let date: Date;
+  if (typeof dateInput === 'string') {
+    const cleanStr = dateInput.trim();
+    if (!cleanStr) return '—';
+
+    // Check YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss
+    const isoParts = cleanStr.split('T')[0].split('-');
+    if (isoParts.length === 3 && isoParts[0].length === 4) {
+      const year = parseInt(isoParts[0], 10);
+      const month = parseInt(isoParts[1], 10) - 1;
+      const day = parseInt(isoParts[2], 10);
+      date = new Date(year, month, day);
+    } else {
+      // Check DD-MM-YYYY or DD/MM/YYYY
+      const dmParts = cleanStr.split(/[/-]/);
+      if (dmParts.length === 3 && dmParts[0].length <= 2 && dmParts[2].length === 4) {
+        const day = parseInt(dmParts[0], 10);
+        const month = parseInt(dmParts[1], 10) - 1;
+        const year = parseInt(dmParts[2], 10);
+        date = new Date(year, month, day);
+      } else {
+        date = new Date(cleanStr);
+      }
+    }
+  } else {
+    date = dateInput;
+  }
   if (isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
 }
 
 export function formatDisplayDate(dateInput: string | Date | null | undefined): string {
-  if (!dateInput) return '—';
-  const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
-  if (isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  });
+  return formatDate(dateInput);
 }
 
 export function formatDateTime(dateInput: string | Date | null | undefined): string {
   if (!dateInput) return '—';
-  const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  let date: Date;
+  if (typeof dateInput === 'string') {
+    const cleanStr = dateInput.trim();
+    const isoParts = cleanStr.split('T')[0].split('-');
+    if (isoParts.length === 3 && isoParts[0].length === 4 && !cleanStr.includes('T')) {
+      const year = parseInt(isoParts[0], 10);
+      const month = parseInt(isoParts[1], 10) - 1;
+      const day = parseInt(isoParts[2], 10);
+      date = new Date(year, month, day);
+    } else {
+      date = new Date(cleanStr);
+    }
+  } else {
+    date = dateInput;
+  }
   if (isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${day}-${month}-${year}, ${hours}:${minutes}`;
 }
 
 export function formatTimeAgo(dateInput: string | Date | null | undefined): string {
   if (!dateInput) return '—';
-  const date = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+  let date: Date;
+  if (typeof dateInput === 'string') {
+    date = new Date(dateInput);
+  } else {
+    date = dateInput;
+  }
   if (isNaN(date.getTime())) return '—';
 
   const diffMs = Date.now() - date.getTime();

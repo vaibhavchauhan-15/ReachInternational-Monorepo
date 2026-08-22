@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/dal";
+import { getCurrentUser, protectDisabledRoute } from "@/lib/dal";
 import { roleHasPermission } from "@/lib/auth/rbac";
 import {
   getFinanceDashboardMetrics,
@@ -19,6 +19,7 @@ export default async function FinancePage() {
   if (!user) {
     redirect("/login");
   }
+  protectDisabledRoute(user.role);
 
   if (!roleHasPermission(user.role, "finance.view")) {
     redirect("/dashboard");

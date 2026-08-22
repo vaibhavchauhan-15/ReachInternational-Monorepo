@@ -6,7 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/dal";
 import { TAGS, CACHE_TIERS } from "@/lib/cache";
 import type {
-  MachineWithEngineer,
+  Machine,
   ServiceRecordWithDetails,
   User,
 } from "@/lib/types/database";
@@ -14,49 +14,32 @@ import type {
 export interface MachineListParams {
   search?: string;
   status?: string;
-  city?: string;
-  engineer_id?: string;
-  bucket?: string;
+  health_status?: string;
+  current_supervisor_id?: string;
   page?: number;
   pageSize?: number;
   sortField?: string;
   sortOrder?: "asc" | "desc";
 }
 
-// Minimal projection — columns the UI + edit modal render.
+// Columns projection for refactored machines schema
 const MACHINE_LIST_COLUMNS = `
   id,
-  machine_code,
-  machine_name,
+  machine_id,
   model,
   serial_number,
-  manufacturer,
   year_of_mfg,
-  category_id,
-  category_name,
+  manufacturer,
+  current_supervisor_id,
   hour_meter,
   service_count,
-  engine_serial_no,
-  engine_mot_no,
-  insurance_policy_no,
-  insurance_expiry_date,
-  third_party_certificate,
-  third_party_expiry_date,
-  rto_tax,
-  rto_tax_expiry_date,
-  customer_name,
-  customer_mobile,
-  customer_email,
-  customer_address,
-  city,
-  state,
-  engineer_id,
-  last_service_date,
-  next_service_due_date,
-  service_interval_days,
+  current_operator_id,
+  health_status,
   status,
-  notes,
-  engineer:users!machines_engineer_id_fkey(id, full_name, phone)
+  created_at,
+  updated_at,
+  current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email),
+  current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email)
 `;
 
 export async function getMachines(params: MachineListParams = {}) {
@@ -67,46 +50,32 @@ export async function getMachines(params: MachineListParams = {}) {
   const {
     search,
     status,
-    city,
-    engineer_id,
-    bucket,
+    health_status,
+    current_supervisor_id,
     page = 1,
     pageSize = 25,
-    sortField = "next_service_due_date",
+    sortField = "machine_id",
     sortOrder = "asc",
   } = params;
 
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  const today = new Date().toISOString().split("T")[0];
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
-
   let query = supabase
     .from("machines")
     .select(MACHINE_LIST_COLUMNS, { count: "estimated" });
 
   // Role scoping
-  if (user.role === "engineer" || user.role === "service_engineer" || user.role === "mechanic") {
-    query = query.eq("engineer_id", user.id);
-  } else if (user.role === "operator") {
+  if (user.role === "operator") {
     query = query.eq("current_operator_id", user.id);
-  } else if (
-    (user.role === "branch_manager" ||
-      user.role === "supervisor" ||
-      user.role === "service_manager" ||
-      user.role === "store_manager" ||
-      user.role === "rental_manager" ||
-      user.role === "sales_executive") &&
-    user.branch_id
-  ) {
-    query = query.eq("branch_id", user.branch_id);
+  } else if (user.role === "supervisor") {
+    query = query.eq("current_supervisor_id", user.id);
   }
 
   // Search
   if (search) {
     query = query.or(
-      `machine_code.ilike.%${search}%,machine_name.ilike.%${search}%,customer_name.ilike.%${search}%,serial_number.ilike.%${search}%,category_name.ilike.%${search}%`
+      `machine_id.ilike.%${search}%,model.ilike.%${search}%,serial_number.ilike.%${search}%`
     );
   }
 
@@ -114,20 +83,11 @@ export async function getMachines(params: MachineListParams = {}) {
   if (status && status !== "all") {
     query = query.eq("status", status);
   }
-  if (city && city !== "all") {
-    query = query.eq("city", city);
+  if (health_status && health_status !== "all") {
+    query = query.eq("health_status", health_status);
   }
-  if (engineer_id && engineer_id !== "all") {
-    query = query.eq("engineer_id", engineer_id);
-  }
-
-  // Due buckets
-  if (bucket === "today") {
-    query = query.eq("next_service_due_date", today).eq("status", "active");
-  } else if (bucket === "tomorrow") {
-    query = query.eq("next_service_due_date", tomorrow).eq("status", "active");
-  } else if (bucket === "overdue") {
-    query = query.lt("next_service_due_date", today).eq("status", "active");
+  if (current_supervisor_id && current_supervisor_id !== "all") {
+    query = query.eq("current_supervisor_id", current_supervisor_id);
   }
 
   // Sorting
@@ -138,12 +98,25 @@ export async function getMachines(params: MachineListParams = {}) {
   const { data, count, error } = await query.range(from, to);
 
   if (error) {
-    console.error("Error fetching machines:", error);
-    throw new Error("Failed to fetch machines");
+    console.error("Error fetching machines:", error.message || error.details || error);
+    return {
+      machines: [],
+      total: 0,
+      page,
+      pageSize,
+      totalPages: 0,
+    };
   }
 
+  // Backwards compatibility mapping for fields machine_code / machine_name
+  const formattedMachines = (data ?? []).map((m: any) => ({
+    ...m,
+    machine_code: m.machine_id,
+    machine_name: m.model ? `${m.machine_id} (${m.model})` : m.machine_id,
+  }));
+
   return {
-    machines: (data as unknown as MachineWithEngineer[]) ?? [],
+    machines: formattedMachines as unknown as Machine[],
     total: count ?? 0,
     page,
     pageSize,
@@ -153,73 +126,41 @@ export async function getMachines(params: MachineListParams = {}) {
 
 // Cached Machine Details by ID using admin client & dynamic tag
 const getCachedMachineById = unstable_cache(
-  async (id: string, role: string, userId: string): Promise<MachineWithEngineer | null> => {
+  async (id: string): Promise<Machine | null> => {
     const supabase = createSupabaseAdminClient();
-    let query = supabase
+    const { data, error } = await supabase
       .from("machines")
-      .select(
-        `
-        id,
-        machine_code,
-        machine_name,
-        model,
-        serial_number,
-        manufacturer,
-        year_of_mfg,
-        category_id,
-        category_name,
-        hour_meter,
-        service_count,
-        engine_serial_no,
-        engine_mot_no,
-        insurance_policy_no,
-        insurance_expiry_date,
-        third_party_certificate,
-        third_party_expiry_date,
-        rto_tax,
-        rto_tax_expiry_date,
-        customer_name,
-        customer_mobile,
-        customer_email,
-        customer_address,
-        city,
-        state,
-        engineer_id,
-        last_service_date,
-        next_service_due_date,
-        service_interval_days,
-        status,
-        notes,
-        engineer:users!machines_engineer_id_fkey(id, full_name, phone, email)
-      `
-      )
-      .eq("id", id);
+      .select(MACHINE_LIST_COLUMNS)
+      .eq("id", id)
+      .single();
 
-    if (role === "engineer" || role === "service_engineer" || role === "mechanic") {
-      query = query.eq("engineer_id", userId);
-    } else if (role === "operator") {
-      query = query.eq("current_operator_id", userId);
+    if (error) {
+      console.error("Error fetching machine by id:", error.message || error.details || error);
+      return null;
     }
 
-    const { data, error } = await query.single();
-    if (error) return null;
-    return data as unknown as MachineWithEngineer;
+    const machineData = data as any;
+    return {
+      ...machineData,
+      machine_code: machineData.machine_id,
+      machine_name: machineData.model ? `${machineData.machine_id} (${machineData.model})` : machineData.machine_id,
+    } as unknown as Machine;
   },
-  ["machine-detail-by-id-v2"],
+  ["machine-detail-by-id-v3"],
   { revalidate: CACHE_TIERS.CLASS_B_FLEET, tags: [TAGS.machines] }
 );
 
-export const getMachineById = cache(async (id: string): Promise<MachineWithEngineer | null> => {
+export const getMachineById = cache(async (id: string): Promise<Machine | null> => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
-  return getCachedMachineById(id, user.role, user.id);
+  return getCachedMachineById(id);
 });
 
 // Cached Machine Service History by Machine ID
 const getCachedMachineServiceHistory = unstable_cache(
-  async (machineId: string, role: string, userId: string): Promise<ServiceRecordWithDetails[]> => {
+  async (machineId: string): Promise<ServiceRecordWithDetails[]> => {
     const supabase = createSupabaseAdminClient();
-    let query = supabase
+    const { data, error } = await supabase
       .from("service_records")
       .select(
         `
@@ -229,7 +170,6 @@ const getCachedMachineServiceHistory = unstable_cache(
         service_date,
         notes,
         next_service_due_date,
-        machine:machines!service_records_machine_id_fkey(id, machine_code, machine_name, customer_name),
         engineer:users!service_records_engineer_id_fkey(id, full_name)
       `
       )
@@ -237,15 +177,10 @@ const getCachedMachineServiceHistory = unstable_cache(
       .order("service_date", { ascending: false })
       .limit(50);
 
-    if (role === "engineer" || role === "service_engineer" || role === "mechanic") {
-      query = query.eq("engineer_id", userId);
-    }
-
-    const { data, error } = await query;
     if (error) return [];
     return (data as unknown as ServiceRecordWithDetails[]) ?? [];
   },
-  ["machine-service-history-v2"],
+  ["machine-service-history-v3"],
   { revalidate: CACHE_TIERS.CLASS_C_OPERATIONAL, tags: [TAGS.services] }
 );
 
@@ -253,26 +188,8 @@ export const getMachineServiceHistory = cache(
   async (machineId: string): Promise<ServiceRecordWithDetails[]> => {
     const user = await getCurrentUser();
     if (!user) throw new Error("Unauthorized");
-    return getCachedMachineServiceHistory(machineId, user.role, user.id);
+    return getCachedMachineServiceHistory(machineId);
   }
-);
-
-export const getActiveEngineers = unstable_cache(
-  async (): Promise<User[]> => {
-    const supabase = createSupabaseAdminClient();
-
-    const { data, error } = await supabase
-      .from("users")
-      .select("id, full_name, phone, email")
-      .eq("role", "engineer")
-      .eq("status", "active")
-      .order("full_name");
-
-    if (error) return [];
-    return (data as User[]) ?? [];
-  },
-  ["active-engineers-v2"],
-  { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta] }
 );
 
 export const getActiveSupervisors = unstable_cache(
@@ -282,44 +199,97 @@ export const getActiveSupervisors = unstable_cache(
     const { data, error } = await supabase
       .from("users")
       .select("id, full_name, phone, email")
-      .in("role", ["supervisor", "admin", "super_admin"])
+      .in("role", ["supervisor", "admin", "super_admin", "service_manager", "branch_manager"])
       .eq("status", "active")
       .order("full_name");
 
     if (error) return [];
     return (data as User[]) ?? [];
   },
-  ["active-supervisors-v2"],
+  ["active-supervisors-v3"],
+  { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta] }
+);
+
+export const getActiveEngineers = unstable_cache(
+  async (): Promise<User[]> => {
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("users")
+      .select("id, full_name, phone, email")
+      .in("role", ["engineer", "service_engineer"])
+      .eq("status", "active")
+      .order("full_name");
+    if (error) return [];
+    return (data as User[]) ?? [];
+  },
+  ["active-engineers-v3"],
+  { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta] }
+);
+
+export const getActiveOperators = unstable_cache(
+  async (): Promise<User[]> => {
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("users")
+      .select("id, full_name, phone, email")
+      .eq("role", "operator")
+      .eq("status", "active")
+      .order("full_name");
+    if (error) return [];
+    return (data as User[]) ?? [];
+  },
+  ["active-operators-v3"],
   { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta] }
 );
 
 export const getMachineCities = unstable_cache(
   async (): Promise<string[]> => {
-    const supabase = createSupabaseAdminClient();
-
-    const { data, error } = await supabase
-      .from("machines")
-      .select("city")
-      .eq("status", "active")
-      .order("city")
-      .limit(1000);
-
-    if (error) return [];
-    return Array.from(new Set(data?.map((d) => d.city).filter(Boolean))) as string[];
+    return [];
   },
-  ["machine-cities-v2"],
+  ["machine-cities-v3"],
   { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta] }
 );
 
-export function getDueBucketLabel(bucket: string | undefined): string {
-  switch (bucket) {
-    case "today":
-      return "Due Today";
-    case "tomorrow":
-      return "Due Tomorrow";
-    case "overdue":
-      return "Overdue";
-    default:
-      return "All Machines";
-  }
+export async function getMachineBreakdownHistory(machineId: string) {
+  const supabase = createSupabaseAdminClient();
+  const { data } = await supabase
+    .from("machine_complaints")
+    .select("*, engineer:users!machine_complaints_engineer_id_fkey(id, full_name)")
+    .eq("machine_id", machineId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  return data || [];
+}
+
+export async function getMachineHourMeterLogs(machineId: string) {
+  const supabase = createSupabaseAdminClient();
+  const { data } = await supabase
+    .from("machine_hour_logs")
+    .select("*, operator:users!operator_id(id, full_name)")
+    .eq("machine_id", machineId)
+    .order("log_date", { ascending: false })
+    .limit(50);
+  return data || [];
+}
+
+export async function getMachinePartsUsedHistory(machineId: string) {
+  const supabase = createSupabaseAdminClient();
+  const { data } = await supabase
+    .from("inventory_transactions")
+    .select("*")
+    .eq("machine_id", machineId)
+    .order("created_at", { ascending: false })
+    .limit(50);
+  return data || [];
+}
+
+export async function getMachineActiveRental(machineId: string) {
+  const supabase = createSupabaseAdminClient();
+  const { data } = await supabase
+    .from("rental_contracts")
+    .select("*")
+    .eq("machine_id", machineId)
+    .eq("status", "active")
+    .maybeSingle();
+  return data || null;
 }

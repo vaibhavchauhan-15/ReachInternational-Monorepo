@@ -9,6 +9,7 @@ import {
   AnimatedWrench,
 } from "@/components/ui/animated-icons";
 import { MapPin, Truck, AlertTriangle } from "lucide-react";
+import { formatDate } from "@reachinternational/utils";
 
 interface PartDetailModalProps {
   open: boolean;
@@ -170,7 +171,7 @@ export function PartDetailModal({
                       </td>
                       <td className="px-3 py-2 text-[11px] text-[var(--color-mute)]">{t.remarks || "Stock Movement"}</td>
                       <td className="px-3 py-2 font-mono text-[10px]">
-                        {new Date(t.created_at).toLocaleDateString("en-GB")}
+                        {formatDate(t.created_at)}
                       </td>
                     </tr>
                   ))

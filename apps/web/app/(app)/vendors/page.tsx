@@ -1,4 +1,4 @@
-import { getCurrentUser } from "@/lib/dal";
+import { getCurrentUser, protectDisabledRoute } from "@/lib/dal";
 import { redirect } from "next/navigation";
 import { VendorsClient } from "@/components/vendors/VendorsClient";
 
@@ -8,6 +8,8 @@ export default async function VendorsPage() {
   if (!user) {
     redirect("/login");
   }
+
+  protectDisabledRoute(user.role);
 
   return <VendorsClient user={user} />;
 }

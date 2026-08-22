@@ -43,6 +43,7 @@ import { PartIssueModal } from "./PartIssueModal";
 import { PrintablePurchaseOrder } from "./PrintablePurchaseOrder";
 import { PrintableDeliveryChallan } from "./PrintableDeliveryChallan";
 import { PrintablePartsIssueChallan } from "./PrintablePartsIssueChallan";
+import { formatDate } from "@reachinternational/utils";
 
 import {
   createOrUpdatePartAction,
@@ -1726,7 +1727,7 @@ export function StockLedgerClient({
                     <td className="p-3 text-[var(--color-ink)] font-bold">{t.user?.full_name || "System"}</td>
                     <td className="p-3 text-[var(--color-mute)]">{t.remarks || t.reference_id || "-"}</td>
                     <td className="p-3 text-right font-mono text-[10px]">
-                      {new Date(t.created_at).toLocaleDateString("en-GB")}
+                      {formatDate(t.created_at)}
                     </td>
                   </tr>
                 ))}

@@ -1,4 +1,4 @@
-import { getCurrentUser } from "@/lib/dal";
+import { getCurrentUser, protectDisabledRoute } from "@/lib/dal";
 import { redirect } from "next/navigation";
 import { CrmClient } from "@/components/crm/CrmClient";
 import {
@@ -21,6 +21,8 @@ export default async function CrmPage() {
   if (!user) {
     redirect("/login");
   }
+
+  protectDisabledRoute(user.role);
 
   const branchId = user.branch_id;
 

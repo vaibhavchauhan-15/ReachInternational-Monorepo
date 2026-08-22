@@ -41,9 +41,17 @@ export function NavigationItem({
   const buttonRef = useRef<HTMLButtonElement>(null);
   const Icon = item.icon;
 
-  const isActive =
-    pathname === item.href ||
-    (item.href !== "/dashboard" && pathname.startsWith(item.href));
+  let isActive = false;
+  if (item.href.includes("?")) {
+    const [itemPath, itemQuery] = item.href.split("?");
+    const itemParams = new URLSearchParams(itemQuery);
+    const itemTab = itemParams.get("tab");
+    isActive = pathname === itemPath && currentTab === itemTab;
+  } else if (item.href === "/dashboard") {
+    isActive = pathname === "/dashboard" && (!currentTab || currentTab !== "history");
+  } else {
+    isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+  }
 
   const hasSubItems = Boolean(item.subItems && item.subItems.length > 0);
   const isFlyoutOpen = flyoutHref === item.href;

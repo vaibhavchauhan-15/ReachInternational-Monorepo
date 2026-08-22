@@ -39,7 +39,18 @@ export function AppShellClient({
 
   return (
     <SidebarProvider collapsed={collapsed} onCollapsedChange={setCollapsedState}>
-      <div className="min-h-screen flex flex-col bg-[var(--color-canvas)]">
+      <div
+        className="min-h-screen flex flex-col bg-[var(--color-canvas)]"
+        style={
+          {
+            "--sidebar-width": mounted
+              ? collapsed
+                ? `${SIDEBAR_WIDTH_COLLAPSED}px`
+                : `${SIDEBAR_WIDTH_EXPANDED}px`
+              : `${SIDEBAR_WIDTH_EXPANDED}px`,
+          } as React.CSSProperties
+        }
+      >
         {/* Desktop Left Sidebar */}
         <AppSidebar
           user={user}
@@ -51,14 +62,9 @@ export function AppShellClient({
         <MobileBottomNav user={user} />
 
         {/* Main Workspace Column */}
-        <div
-          className="flex-1 flex flex-col min-w-0 transition-[padding] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
-          style={{
-            paddingLeft: mounted ? (collapsed ? `${SIDEBAR_WIDTH_COLLAPSED}px` : `${SIDEBAR_WIDTH_EXPANDED}px`) : undefined,
-          }}
-        >
+        <div className="flex-1 flex flex-col min-w-0 md:pl-[var(--sidebar-width)] transition-[padding] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]">
           {/* Main Content Viewport */}
-          <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 lg:px-6 pt-4 md:pt-6 pb-24 md:pb-8">
+          <main className="flex-1 w-full max-w-[1400px] mx-auto px-3 sm:px-6 pt-3 md:pt-6 pb-24 md:pb-8">
             {children}
           </main>
         </div>

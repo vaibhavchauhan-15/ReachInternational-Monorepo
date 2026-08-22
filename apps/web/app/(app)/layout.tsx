@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/dal";
 import { AppShellClient } from "@/components/layout/AppShellClient";
-import { ToastProvider } from "@/components/ui";
 
 export default async function AppLayout({
   children,
@@ -22,9 +21,5 @@ export default async function AppLayout({
     redirect("/login");
   }
 
-  return (
-    <ToastProvider>
-      <AppShellClient user={user}>{children}</AppShellClient>
-    </ToastProvider>
-  );
+  return <AppShellClient user={user}>{children}</AppShellClient>;
 }

@@ -2,46 +2,37 @@
 
 import { memo } from "react";
 import Link from "next/link";
-import { AnimatedMapPin, AnimatedEye, AnimatedEdit, AnimatedTrash } from "@/components/ui/animated-icons";
+import { AnimatedEye, AnimatedEdit, AnimatedTrash } from "@/components/ui/animated-icons";
 import { TableRow, TableCell, Badge, TooltipWrapper } from "@/components/ui";
-import type { MachineWithEngineer } from "@/lib/types/database";
+import type { Machine } from "@/lib/types/database";
 
 interface MachineRowProps {
-  machine: MachineWithEngineer;
+  machine: Machine;
   isAdmin: boolean;
-  today: string;
-  tomorrow: string;
-  onEdit: (machine: MachineWithEngineer) => void;
-  onDelete: (machine: MachineWithEngineer) => void;
+  onEdit: (machine: Machine) => void;
+  onDelete: (machine: Machine) => void;
 }
 
-function getStatusBadge(machine: MachineWithEngineer, today: string, tomorrow: string) {
-  if (machine.status === "inactive") {
-    return <Badge variant="neutral">Inactive</Badge>;
+function getHealthBadge(healthStatus: string) {
+  if (healthStatus === "breakdown") {
+    return <Badge variant="overdue" dot>Breakdown</Badge>;
   }
-  if (machine.status === "on_rent") {
-    return <Badge variant="info" dot>On Rent</Badge>;
-  }
-  if (machine.status === "under_maintenance") {
+  if (healthStatus === "under_maintenance") {
     return <Badge variant="warning" dot>Under Maintenance</Badge>;
   }
-  if (machine.next_service_due_date < today) {
-    return <Badge variant="overdue" dot>Overdue ({machine.next_service_due_date})</Badge>;
+  return <Badge variant="success" dot>Active</Badge>;
+}
+
+function getRentalStatusBadge(status: string) {
+  if (status === "rented") {
+    return <Badge variant="info" dot>Rented</Badge>;
   }
-  if (machine.next_service_due_date === today) {
-    return <Badge variant="today" dot>Due Today</Badge>;
-  }
-  if (machine.next_service_due_date === tomorrow) {
-    return <Badge variant="tomorrow" dot>Due Tomorrow</Badge>;
-  }
-  return <Badge variant="default">Due {machine.next_service_due_date}</Badge>;
+  return <Badge variant="neutral">Available</Badge>;
 }
 
 export const MachineRow = memo(function MachineRow({
   machine,
   isAdmin,
-  today,
-  tomorrow,
   onEdit,
   onDelete,
 }: MachineRowProps) {
@@ -51,49 +42,62 @@ export const MachineRow = memo(function MachineRow({
         <div className="flex flex-col">
           <Link
             href={`/machines/${machine.id}`}
-            className="label-sm text-[var(--color-ink)] hover:underline font-bold font-mono flex items-center gap-1.5"
+            className="label-sm text-[var(--color-ink)] hover:underline font-bold font-mono text-sm flex items-center gap-1.5"
           >
-            {machine.machine_code}
+            {machine.machine_id}
           </Link>
-          <span className="body-sm text-[var(--color-body)] font-medium">{machine.machine_name}</span>
+          {machine.model && <span className="body-sm text-[var(--color-ink)] font-semibold">{machine.model}</span>}
           <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-[var(--color-mute)] mt-0.5">
-            {machine.manufacturer && <span>{machine.manufacturer}</span>}
-            {machine.model && <span>• Model: {machine.model}</span>}
-            {machine.serial_number && <span>• Sr: {machine.serial_number}</span>}
+            {machine.serial_number && <span>Sr: {machine.serial_number}</span>}
+            {machine.year_of_mfg && <span>• YUM: {machine.year_of_mfg}</span>}
+            {machine.manufacturer && <span>• Mfg: {machine.manufacturer}</span>}
           </div>
         </div>
       </TableCell>
 
       <TableCell>
         <div className="flex flex-col">
-          <span className="body-md text-[var(--color-ink)]">{machine.customer_name}</span>
-          <span className="body-sm text-[var(--color-mute)]">{machine.customer_mobile}</span>
+          <span className="font-mono font-bold text-xs text-[var(--color-ink)]">{machine.hour_meter ?? 0} hrs</span>
+          <span className="text-[11px] text-[var(--color-mute)]">HMR Reading</span>
         </div>
       </TableCell>
 
       <TableCell>
-        <div className="flex items-center gap-1 text-[var(--color-body)] body-sm">
-          <AnimatedMapPin size={14} className="text-[var(--color-mute)] flex-shrink-0" />
-          {machine.city}, {machine.state}
+        <div className="flex flex-col">
+          <span className="font-bold text-xs text-[var(--color-ink)]">{machine.service_count ?? 0}</span>
+          <span className="text-[11px] text-[var(--color-mute)]">Services Logged</span>
         </div>
       </TableCell>
 
       <TableCell>
-        {machine.engineer ? (
-          <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--color-hairline-soft-surface)] text-[10px] font-medium text-[var(--color-ink)]">
-              {machine.engineer.full_name?.charAt(0).toUpperCase()}
+        {machine.current_supervisor ? (
+          <div className="flex items-center gap-1.5">
+            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-hairline-soft-surface)] text-[10px] font-bold text-[var(--color-ink)] border border-[var(--color-hairline)]">
+              {machine.current_supervisor.full_name?.charAt(0).toUpperCase()}
             </div>
-            <span className="body-sm text-[var(--color-ink)]">{machine.engineer.full_name}</span>
+            <span className="body-sm text-[var(--color-ink)] font-medium">{machine.current_supervisor.full_name}</span>
           </div>
         ) : (
-          <span className="badge-base bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)]">
-            Unassigned
-          </span>
+          <span className="text-xs text-[var(--color-mute)] font-normal">-</span>
         )}
       </TableCell>
 
-      <TableCell>{getStatusBadge(machine, today, tomorrow)}</TableCell>
+      <TableCell>
+        {machine.current_operator ? (
+          <div className="flex items-center gap-1.5">
+            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--color-hairline-soft-surface)] text-[10px] font-bold text-[var(--color-ink)] border border-[var(--color-hairline)]">
+              {machine.current_operator.full_name?.charAt(0).toUpperCase()}
+            </div>
+            <span className="body-sm text-[var(--color-ink)] font-medium">{machine.current_operator.full_name}</span>
+          </div>
+        ) : (
+          <span className="text-xs text-[var(--color-mute)] font-normal">-</span>
+        )}
+      </TableCell>
+
+      <TableCell>{getHealthBadge(machine.health_status)}</TableCell>
+
+      <TableCell>{getRentalStatusBadge(machine.status)}</TableCell>
 
       <TableCell className="text-right">
         <div className="flex items-center justify-end gap-1">
@@ -120,17 +124,15 @@ export const MachineRow = memo(function MachineRow({
                 </button>
               </TooltipWrapper>
 
-              {machine.status === "active" && (
-                <TooltipWrapper content="Deactivate machine" side="top">
-                  <button
-                    aria-label="Deactivate machine"
-                    onClick={() => onDelete(machine)}
-                    className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-mute)] hover:bg-[rgba(238,0,0,0.1)] hover:text-[var(--color-error-deep)] active:scale-[0.95] transition-colors cursor-pointer"
-                  >
-                    <AnimatedTrash size={16} />
-                  </button>
-                </TooltipWrapper>
-              )}
+              <TooltipWrapper content="Delete machine" side="top">
+                <button
+                  aria-label="Delete machine"
+                  onClick={() => onDelete(machine)}
+                  className="p-1.5 rounded-[var(--radius-sm)] text-[var(--color-mute)] hover:bg-[rgba(238,0,0,0.1)] hover:text-[var(--color-error-deep)] active:scale-[0.95] transition-colors cursor-pointer"
+                >
+                  <AnimatedTrash size={16} />
+                </button>
+              </TooltipWrapper>
             </>
           )}
         </div>

@@ -508,13 +508,121 @@ export function TasksClient({ user, initialTasks, stats, users }: TasksClientPro
 
       {/* Main View Display */}
       {viewMode === "list" && (
-        <EnterpriseTable
-          data={filteredTasks}
-          columns={columns}
-          onRowClick={(task) => handleOpenDetail(task)}
-          emptyMessage="No tasks found"
-          emptyDescription="There are no tasks matching your selected filters."
-        />
+        <>
+          {/* Desktop Enterprise Data Table */}
+          <div className="hidden sm:block">
+            <EnterpriseTable
+              data={filteredTasks}
+              columns={columns}
+              onRowClick={(task) => handleOpenDetail(task)}
+              emptyMessage="No tasks found"
+              emptyDescription="There are no tasks matching your selected filters."
+            />
+          </div>
+
+          {/* Mobile Touch Card View */}
+          <div className="block sm:hidden space-y-3">
+            {filteredTasks.length === 0 ? (
+              <Card className="p-6 text-center text-xs text-[var(--color-mute)]">
+                No tasks match your active filters.
+              </Card>
+            ) : (
+              filteredTasks.map((task) => {
+                const assignees = task.assignees || [];
+                const isOverdue = task.due_date < new Date().toISOString().split("T")[0] && task.status !== "completed";
+                const hasAttachments = (task.attachments || []).length > 0;
+
+                return (
+                  <Card
+                    key={task.id}
+                    onClick={() => handleOpenDetail(task)}
+                    className="p-4 bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] space-y-3 cursor-pointer hover:border-[var(--color-link)]/40 transition-all shadow-xs"
+                  >
+                    {/* Header Row */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-mono font-bold text-[var(--color-link)] bg-[var(--color-link)]/10 px-2 py-0.5 rounded-full border border-[var(--color-link)]/20">
+                        #{task.task_no}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border ${
+                            task.priority === "critical"
+                              ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+                              : task.priority === "high"
+                              ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+                              : task.priority === "medium"
+                              ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20"
+                              : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                          }`}
+                        >
+                          {task.priority}
+                        </span>
+                        <Badge variant={task.status === "completed" ? "success" : task.status === "overdue" ? "error" : "info"}>
+                          {task.status.replace(/_/g, " ")}
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {/* Title & Description */}
+                    <div>
+                      <h4 className="text-sm font-bold text-[var(--color-ink)] leading-snug">{task.title}</h4>
+                      {task.description && (
+                        <p className="text-xs text-[var(--color-mute)] line-clamp-2 mt-0.5">{task.description}</p>
+                      )}
+                    </div>
+
+                    {/* Assigned Employee */}
+                    {assignees.length > 0 && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <div className="w-6 h-6 rounded-full bg-[var(--color-link)]/15 border border-[var(--color-hairline)] flex items-center justify-center text-[10px] font-bold text-[var(--color-link)] shrink-0">
+                          {assignees[0].user?.full_name?.charAt(0).toUpperCase() || "U"}
+                        </div>
+                        <span className="text-xs font-semibold text-[var(--color-ink)] truncate">
+                          {assignees[0].user?.full_name}
+                        </span>
+                        {assignees.length > 1 && (
+                          <span className="text-[10px] text-[var(--color-mute)] font-medium">
+                            +{assignees.length - 1} more
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Footer Row with Due Date & Action Buttons */}
+                    <div className="flex items-center justify-between pt-2 border-t border-[var(--color-hairline)] text-xs">
+                      <div className="flex items-center gap-1">
+                        <span className={isOverdue ? "text-rose-500 font-bold" : "text-[var(--color-body)]"}>
+                          Due: {formatDisplayDate(task.due_date)}
+                        </span>
+                        {isOverdue && <span className="text-[10px] text-rose-500 font-bold ml-1">Overdue</span>}
+                      </div>
+
+                      {/* Action Triggers */}
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                        {(task.status === "pending" || task.status === "in_progress" || task.status === "reopened") && (
+                          <button
+                            onClick={() => handleOpenComplete(task)}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold text-[11px] border border-emerald-500/20 active:scale-95 transition-all"
+                          >
+                            Complete
+                          </button>
+                        )}
+                        {isManager && task.status === "completed" && (
+                          <button
+                            onClick={() => handleOpenVerify(task)}
+                            className="px-2.5 py-1 rounded-lg bg-sky-600 text-white font-semibold text-[11px] flex items-center gap-1 active:scale-95 transition-all"
+                          >
+                            <Camera className="w-3 h-3" /> Verify
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+        </>
       )}
 
       {/* Kanban Board View */}

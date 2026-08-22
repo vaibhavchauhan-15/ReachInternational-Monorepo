@@ -13,7 +13,6 @@ import {
   AnimatedAlertCircle,
   AnimatedCheckCircle,
   AnimatedArrowRight,
-  AnimatedArrowLeft,
 } from "@/components/ui/animated-icons";
 import { 
   CheckCircle2, 
@@ -32,7 +31,6 @@ import {
 import { signup, type AuthFormState } from "@/app/actions/auth";
 import { Button, Input, SearchableSelect, ReachInternationalLogo } from "@/components/ui";
 import type { SelectOption } from "@/components/ui/SearchableSelect";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 const signupRoleOptions: SelectOption[] = [
   {
@@ -140,6 +138,18 @@ export default function SignupPage() {
     }
   };
 
+function isRedirectError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const err = error as Record<string, unknown>;
+  if (typeof err.digest === "string" && err.digest.startsWith("NEXT_REDIRECT")) {
+    return true;
+  }
+  if (err.message === "NEXT_REDIRECT") {
+    return true;
+  }
+  return false;
+}
+
   async function handleSubmit(formData: FormData) {
     setPending(true);
     setState({});
@@ -166,7 +176,10 @@ export default function SignupPage() {
           router.push("/login?message=Signup successful! Please wait for admin approval.");
         }, 2000);
       }
-    } catch {
+    } catch (err: unknown) {
+      if (isRedirectError(err)) {
+        throw err;
+      }
       setState({ error: "An unexpected error occurred. Please try again." });
     } finally {
       setPending(false);
@@ -175,18 +188,6 @@ export default function SignupPage() {
 
   return (
     <div className="flex min-h-screen lg:h-screen w-full flex-col lg:flex-row bg-background text-foreground relative overflow-hidden">
-      {/* Top Floating Controls */}
-      <div className="absolute top-4 right-4 z-50 flex items-center gap-2.5">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/80 bg-card/80 backdrop-blur-md text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-card hover:border-border transition-all shadow-xs"
-        >
-          <AnimatedArrowLeft size={14} />
-          <span>Home</span>
-        </Link>
-        <ThemeToggle />
-      </div>
-
       {/* Left: Hero panel with mesh gradient & ambient glow */}
       <div className="mesh-gradient relative flex flex-col justify-between p-6 sm:p-10 lg:w-[45%] xl:w-[42%] lg:p-12 border-b lg:border-b-0 lg:border-r border-border overflow-hidden">
         {/* Soft background glow decoration */}

@@ -4,68 +4,52 @@ import { Card, Badge, Input, Button, useTheme, MobileHeader } from '../../compon
 import { MachineDetailModal } from '../../components/machines/MachineDetailModal';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { formatMachineCode } from '@reachinternational/utils';
 import { Search } from 'lucide-react-native';
 
-export type StatusFilter = 'all' | 'active' | 'on_rent' | 'under_maintenance' | 'inactive';
+export type StatusFilter = 'all' | 'available' | 'rented';
 
 const FLEET_DATA = [
   {
-    id: 'mch-004',
-    machine_code: 'MCH-004',
-    machine_name: 'Toyota 8FG 3.0T Forklift',
+    id: 'mch-001',
+    machine_id: 'RI-MC-0001',
     model: '8FG30',
     serial_number: 'TY8FG-99214',
-    category: 'Forklift Counterbalance',
-    status: 'active',
+    year_of_mfg: '2025',
+    manufacturer: 'Toyota',
+    status: 'available',
+    health_status: 'active',
     hour_meter: 1420,
-    customer_name: 'Delhi Logistics Private Limited',
-    customer_mobile: '+91 98765 43210',
-    city: 'Delhi',
-    state: 'Delhi',
-    insurance_policy_no: 'POL-ICICI-883219',
-    insurance_expiry_date: '2026-12-31',
-    third_party_certificate: 'TPC-2026-4412',
-    next_service_due_date: '2026-09-15',
+    service_count: 3,
+    supervisor_name: 'Rajesh Kumar',
     operator_name: 'Vikram Singh',
   },
   {
-    id: 'mch-012',
-    machine_code: 'MCH-012',
-    machine_name: 'Linde H30T Forklift',
+    id: 'mch-002',
+    machine_id: 'RI-MC-0002',
     model: 'H30T-02',
     serial_number: 'LND-30T-4401',
-    category: 'Forklift IC Engine',
-    status: 'under_maintenance',
+    year_of_mfg: '2024',
+    manufacturer: 'Linde',
+    status: 'rented',
+    health_status: 'under_maintenance',
     hour_meter: 890,
-    customer_name: 'Gurgaon Auto Ancillaries',
-    customer_mobile: '+91 98111 22334',
-    city: 'Gurgaon',
-    state: 'Haryana',
-    insurance_policy_no: 'POL-BAJAJ-771120',
-    insurance_expiry_date: '2026-11-20',
-    third_party_certificate: 'TPC-2026-8911',
-    next_service_due_date: '2026-08-30',
+    service_count: 5,
+    supervisor_name: 'Sunil Sharma',
     operator_name: 'Amit Kumar',
   },
   {
-    id: 'mch-009',
-    machine_code: 'MCH-009',
-    machine_name: 'Komatsu FD30 Forklift',
+    id: 'mch-003',
+    machine_id: 'RI-MC-0003',
     model: 'FD30-17',
     serial_number: 'KM-FD30-8812',
-    category: 'Heavy Forklift',
-    status: 'on_rent',
+    year_of_mfg: '2025',
+    manufacturer: 'Komatsu',
+    status: 'rented',
+    health_status: 'breakdown',
     hour_meter: 2150,
-    customer_name: 'Noida Container Depot',
-    customer_mobile: '+91 99000 55443',
-    city: 'Noida',
-    state: 'Uttar Pradesh',
-    insurance_policy_no: 'POL-HDFC-991204',
-    insurance_expiry_date: '2027-01-15',
-    third_party_certificate: 'TPC-2026-1102',
-    next_service_due_date: '2026-10-10',
-    operator_name: 'Ramesh Verma',
+    service_count: 8,
+    supervisor_name: 'Ramesh Verma',
+    operator_name: 'Pankaj Patel',
   },
 ];
 
@@ -81,7 +65,7 @@ export default function MachinesScreen() {
   const [detailModalVisible, setDetailModalVisible] = useState(false);
 
   const [meterModalVisible, setMeterModalVisible] = useState(false);
-  const [meterMachineCode, setMeterMachineCode] = useState('MCH-004');
+  const [meterMachineCode, setMeterMachineCode] = useState('RI-MC-0001');
 
   const onRefresh = React.useCallback(() => {
     setRefreshing(true);
@@ -100,9 +84,9 @@ export default function MachinesScreen() {
 
   const filteredMachines = FLEET_DATA.filter((m) => {
     const matchesSearch =
-      m.machine_code.toLowerCase().includes(search.toLowerCase()) ||
-      m.machine_name.toLowerCase().includes(search.toLowerCase()) ||
-      m.customer_name.toLowerCase().includes(search.toLowerCase());
+      m.machine_id.toLowerCase().includes(search.toLowerCase()) ||
+      m.model.toLowerCase().includes(search.toLowerCase()) ||
+      m.serial_number.toLowerCase().includes(search.toLowerCase());
 
     const matchesStatus = activeFilter === 'all' || m.status === activeFilter;
 
@@ -115,13 +99,13 @@ export default function MachinesScreen() {
       <MobileHeader
         eyebrow="FLEET DIRECTORY"
         title="Machine Fleet Directory"
-        subtitle="Industrial machinery assets, spec sheets & site assignments"
+        subtitle="Industrial machinery assets, HMR meter readings & personnel assignments"
       />
 
       {/* Search & Filter Bar */}
       <View style={[styles.searchFilterContainer, { backgroundColor: theme.colors.canvas, borderBottomColor: theme.colors.hairline }]}>
         <Input
-          placeholder="Search code, model, customer..."
+          placeholder="Search ID, model, serial no..."
           value={search}
           onChangeText={setSearch}
           leftIcon={<Search size={16} color={theme.colors.mute} />}
@@ -132,9 +116,8 @@ export default function MachinesScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
           {[
             { key: 'all', label: 'All Fleet (3)' },
-            { key: 'active', label: 'Active' },
-            { key: 'on_rent', label: 'On Rent' },
-            { key: 'under_maintenance', label: 'Under Service' },
+            { key: 'available', label: 'Available' },
+            { key: 'rented', label: 'Rented' },
           ].map((f) => {
             const isActive = activeFilter === f.key;
             return (
@@ -168,28 +151,31 @@ export default function MachinesScreen() {
           <Card key={m.id} style={styles.card}>
             <View style={styles.cardHeader}>
               <Text style={[styles.code, { color: theme.colors.link }]}>
-                {formatMachineCode(m.machine_code)}
+                {m.machine_id}
               </Text>
               <Badge status={m.status} />
             </View>
 
-            <Text style={[styles.model, { color: theme.colors.ink }]}>{m.machine_name}</Text>
+            <Text style={[styles.model, { color: theme.colors.ink }]}>Model: {m.model}</Text>
             <Text style={[styles.meta, { color: theme.colors.mute }]}>
-              Hour Meter: <Text style={{ color: theme.colors.ink, fontWeight: '600' }}>{m.hour_meter} hrs</Text>
+              Serial: {m.serial_number} • YUM: {m.year_of_mfg}
             </Text>
             <Text style={[styles.meta, { color: theme.colors.mute }]}>
-              Customer / Site: {m.customer_name} ({m.city})
+              HMR: <Text style={{ color: theme.colors.ink, fontWeight: '600' }}>{m.hour_meter} hrs</Text> • Services: {m.service_count}
+            </Text>
+            <Text style={[styles.meta, { color: theme.colors.mute }]}>
+              Supervisor: <Text style={{ color: theme.colors.ink }}>{m.supervisor_name}</Text>
             </Text>
 
-            <View style={styles.actionRow}>
-              <Button label="View Details" onPress={() => openDetail(m)} size="sm" variant="primary" />
-              <Button label="Log Meter" onPress={() => openMeter(m.machine_code)} size="sm" variant="outline" />
+            <View style={styles.cardActions}>
+              <Button label="View Specs" onPress={() => openDetail(m)} size="sm" variant="secondary" />
+              <Button label="Log Meter" onPress={() => openMeter(m.machine_id)} size="sm" variant="outline" />
             </View>
           </Card>
         ))}
       </ScrollView>
 
-      {/* Detail Modal */}
+      {/* Modals */}
       {selectedMachine && (
         <MachineDetailModal
           visible={detailModalVisible}
@@ -198,12 +184,11 @@ export default function MachinesScreen() {
         />
       )}
 
-      {/* Meter Log Modal */}
       <MeterLogModal
         visible={meterModalVisible}
         onClose={() => setMeterModalVisible(false)}
         machineCode={meterMachineCode}
-        onSubmit={() => {}}
+        onSubmit={() => setMeterModalVisible(false)}
       />
     </View>
   );
@@ -214,59 +199,59 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   searchFilterContainer: {
-    paddingHorizontal: spacingNumeric.md,
-    paddingTop: spacingNumeric.xs,
-    paddingBottom: spacingNumeric.xs,
+    paddingHorizontal: spacingNumeric.lg,
+    paddingTop: spacingNumeric.sm,
+    paddingBottom: spacingNumeric.md,
     borderBottomWidth: 1,
+    gap: spacingNumeric.xs,
   },
   searchInput: {
-    marginBottom: spacingNumeric.xs,
+    marginBottom: 0,
   },
   filterScroll: {
-    flexDirection: 'row',
     gap: spacingNumeric.xs,
-    paddingBottom: 4,
+    paddingVertical: spacingNumeric.xs,
   },
   filterPill: {
-    paddingVertical: 6,
-    paddingHorizontal: spacingNumeric.sm,
+    paddingHorizontal: spacingNumeric.md,
+    paddingVertical: spacingNumeric.xs + 2,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
-    marginRight: spacingNumeric.xxs,
   },
   filterText: {
     fontSize: 12,
     fontWeight: '600',
   },
   feedContent: {
-    padding: spacingNumeric.md,
-    paddingBottom: 40,
+    padding: spacingNumeric.lg,
+    gap: spacingNumeric.md,
   },
   card: {
-    marginVertical: spacingNumeric.xs,
+    gap: spacingNumeric.xs,
   },
   cardHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacingNumeric.xs,
+    justifyContent: 'space-between',
   },
   code: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
   },
   model: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
+    fontSize: 15,
+    fontWeight: 'bold',
   },
   meta: {
     fontSize: 12,
-    marginBottom: 2,
   },
-  actionRow: {
+  cardActions: {
     flexDirection: 'row',
-    gap: spacingNumeric.xs,
-    marginTop: spacingNumeric.sm,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: spacingNumeric.sm,
+    marginTop: spacingNumeric.xs,
+    paddingTop: spacingNumeric.xs,
   },
 });

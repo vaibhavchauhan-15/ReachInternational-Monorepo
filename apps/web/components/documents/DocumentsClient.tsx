@@ -140,7 +140,7 @@ export function DocumentsClient({ user }: DocumentsClientProps) {
   };
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-[1400px] mx-auto space-y-6">
+    <div className="w-full space-y-6 max-w-[1400px] mx-auto">
       {/* HEADER & UPLOAD ACTION */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--color-hairline)] pb-5">
         <div>

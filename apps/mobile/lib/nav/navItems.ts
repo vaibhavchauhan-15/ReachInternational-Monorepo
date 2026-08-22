@@ -53,7 +53,7 @@ export const mobileNavItems: MobileNavItem[] = [
     icon: Star,
     roles: [
       'super_admin', 'admin', 'branch_manager', 'service_manager', 'service_engineer', 'engineer',
-      'supervisor', 'store_manager', 'operator', 'mechanic',
+      'supervisor', 'store_manager', 'mechanic',
       'hr_manager', 'finance_manager', 'sales_executive', 'rental_manager'
     ],
   },
@@ -63,7 +63,7 @@ export const mobileNavItems: MobileNavItem[] = [
     icon: ClipboardList,
     roles: [
       'super_admin', 'admin', 'branch_manager', 'service_manager', 'service_engineer', 'engineer',
-      'supervisor', 'store_manager', 'operator', 'mechanic',
+      'supervisor', 'store_manager', 'mechanic',
       'hr_manager', 'finance_manager', 'sales_executive', 'rental_manager'
     ],
   },
@@ -108,7 +108,7 @@ export const mobileNavItems: MobileNavItem[] = [
     icon: Wrench,
     roles: [
       'super_admin', 'admin', 'branch_manager', 'service_manager', 'service_engineer', 'engineer',
-      'supervisor', 'operator', 'mechanic', 'store_manager', 'sales_executive', 'rental_manager', 'finance_manager'
+      'supervisor', 'mechanic', 'store_manager', 'sales_executive', 'rental_manager', 'finance_manager'
     ],
     subItems: [
       { label: 'Directory', tab: 'inventory', icon: Wrench },
@@ -120,7 +120,7 @@ export const mobileNavItems: MobileNavItem[] = [
     href: '/(app)/operations',
     label: 'Operations',
     icon: Gauge,
-    roles: ['super_admin', 'admin', 'branch_manager', 'service_manager', 'supervisor', 'operator'],
+    roles: ['super_admin', 'admin', 'branch_manager', 'service_manager', 'supervisor'],
     subItems: [
       { label: 'Daily Hours', tab: 'logs', icon: Gauge },
       { label: 'Assignments', tab: 'assignments', icon: Star },
@@ -134,7 +134,7 @@ export const mobileNavItems: MobileNavItem[] = [
     icon: ClipboardList,
     roles: [
       'super_admin', 'admin', 'branch_manager', 'service_manager', 'service_engineer', 'engineer',
-      'supervisor', 'mechanic', 'operator', 'rental_manager'
+      'supervisor', 'mechanic', 'rental_manager'
     ],
     subItems: [
       { label: 'Dashboard', tab: 'dashboard', icon: LayoutDashboard },
@@ -147,7 +147,7 @@ export const mobileNavItems: MobileNavItem[] = [
     href: '/(app)/inventory',
     label: 'Inventory',
     icon: Package,
-    roles: ['super_admin', 'admin', 'branch_manager', 'service_manager', 'store_manager', 'service_engineer', 'engineer', 'mechanic', 'operator', 'finance_manager', 'rental_manager'],
+    roles: ['super_admin', 'admin', 'branch_manager', 'service_manager', 'store_manager', 'service_engineer', 'engineer', 'mechanic', 'finance_manager', 'rental_manager'],
     subItems: [
       { label: 'Dashboard', tab: 'dashboard', icon: LayoutDashboard },
       { label: 'Part Master', tab: 'master', icon: Package },
@@ -193,7 +193,7 @@ export const mobileNavItems: MobileNavItem[] = [
     icon: FileText,
     roles: [
       'super_admin', 'admin', 'branch_manager', 'service_manager', 'service_engineer', 'engineer',
-      'store_manager', 'operator', 'mechanic', 'hr_manager', 'rental_manager', 'sales_executive', 'finance_manager'
+      'store_manager', 'mechanic', 'hr_manager', 'rental_manager', 'sales_executive', 'finance_manager'
     ],
   },
   {
@@ -234,7 +234,7 @@ export const mobileNavItems: MobileNavItem[] = [
     href: '/(app)/reports',
     label: 'Reports',
     icon: BarChart3,
-    roles: ['super_admin', 'admin', 'branch_manager', 'service_manager', 'service_engineer', 'engineer', 'mechanic', 'operator', 'store_manager', 'hr_manager', 'rental_manager', 'sales_executive', 'finance_manager'],
+    roles: ['super_admin', 'admin', 'branch_manager', 'service_manager', 'service_engineer', 'engineer', 'mechanic', 'store_manager', 'hr_manager', 'rental_manager', 'sales_executive', 'finance_manager'],
   },
   {
     href: '/(app)/administration',

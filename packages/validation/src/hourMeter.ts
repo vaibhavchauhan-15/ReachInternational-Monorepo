@@ -9,16 +9,13 @@ export const CreateHourLogSchema = z.object({
   remarks: z.string().optional().nullable(),
   fuel_consumed: z.number().min(0).optional().nullable(),
   shift: z.string().optional().nullable(),
+  start_time: z.string().optional().nullable(),
+  end_time: z.string().optional().nullable(),
+  overtime_hours: z.number().min(0).optional().nullable(),
+  is_breakdown: z.boolean().optional().nullable(),
 }).refine((data) => data.end_meter >= data.start_meter, {
   message: "End meter reading cannot be less than start meter reading",
   path: ["end_meter"],
 });
 
-export const VerifyHourLogSchema = z.object({
-  id: z.string().min(1, "Hour log ID is required"),
-  verification_status: z.enum(["approved", "rejected", "correction_requested"]),
-  verification_remarks: z.string().optional().nullable(),
-});
-
 export type CreateHourLogInput = z.infer<typeof CreateHourLogSchema>;
-export type VerifyHourLogInput = z.infer<typeof VerifyHourLogSchema>;

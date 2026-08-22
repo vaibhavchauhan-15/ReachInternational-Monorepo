@@ -19,14 +19,19 @@ async function UsersPageContent() {
   const currentUser = await getCurrentUser();
   if (!currentUser) return null;
 
-  const isAdmin = currentUser.role === "admin" || currentUser.role === "super_admin";
+  const isAuthorized =
+    currentUser.role === "admin" ||
+    currentUser.role === "super_admin" ||
+    currentUser.role === "branch_manager" ||
+    currentUser.role === "service_manager" ||
+    currentUser.role === "hr_manager";
   const isSuperAdmin = currentUser.role === "super_admin";
 
-  if (!isAdmin) {
+  if (!isAuthorized) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
         <div className="text-[var(--color-error)] text-lg font-medium">Access Denied</div>
-        <p className="text-[var(--color-mute)]">You don&rsquo;t have permission to view this page.</p>
+        <p className="text-[var(--color-mute)]">You don&rsquo;t have permission to view employee and user management.</p>
       </div>
     );
   }

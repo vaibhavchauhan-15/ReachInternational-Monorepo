@@ -397,7 +397,7 @@ export function CrmClient({
   };
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 max-w-[1400px] mx-auto space-y-6">
+    <div className="w-full space-y-6 max-w-[1400px] mx-auto">
       {/* STATUS BANNER */}
       {statusMessage && (
         <motion.div

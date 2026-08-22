@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { getCurrentUser } from "@/lib/dal";
+import { getCurrentUser, protectDisabledRoute } from "@/lib/dal";
 import { getNotifications, getNotificationStats } from "@/lib/queries/notifications";
 import { NotificationListClient } from "@/components/notifications/NotificationListClient";
 import { NotificationsSkeleton } from "@/components/ui";
@@ -18,6 +18,7 @@ interface NotificationsPageProps {
 async function NotificationsContent({ searchParams }: NotificationsPageProps) {
   const user = await getCurrentUser();
   if (!user) return null;
+  protectDisabledRoute(user.role);
 
   const resolvedParams = await searchParams;
   const page = parseInt(resolvedParams.page || "1", 10);

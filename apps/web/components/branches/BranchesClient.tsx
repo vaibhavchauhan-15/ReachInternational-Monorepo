@@ -176,7 +176,7 @@ export function BranchesClient({ branches, canCreateBranch = false, canEditBranc
             </div>
 
             {/* Metrics Breakdown */}
-            <div className="grid grid-cols-4 gap-2 pt-2 border-t border-[var(--color-hairline)] text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-[var(--color-hairline)] text-center">
               <div className="p-2 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)]">
                 <p className="text-[10px] font-bold text-[var(--color-mute)] flex items-center justify-center gap-1">
                   <AnimatedWrench size={12} className="text-sky-500" /> Machines

@@ -42,6 +42,18 @@ export function LoginFormClient() {
     }
   };
 
+function isRedirectError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const err = error as Record<string, unknown>;
+  if (typeof err.digest === "string" && err.digest.startsWith("NEXT_REDIRECT")) {
+    return true;
+  }
+  if (err.message === "NEXT_REDIRECT") {
+    return true;
+  }
+  return false;
+}
+
   async function handleSubmit(formData: FormData) {
     setPending(true);
     setState({});
@@ -60,7 +72,10 @@ export function LoginFormClient() {
         if (result.fieldValues.email !== undefined) setEmail(result.fieldValues.email);
         if (result.fieldValues.password !== undefined) setPassword(result.fieldValues.password);
       }
-    } catch {
+    } catch (err: unknown) {
+      if (isRedirectError(err)) {
+        throw err;
+      }
       setState({ error: "An unexpected error occurred. Please try again." });
     } finally {
       setPending(false);

@@ -1,4 +1,4 @@
-import { requirePermission } from "@/lib/dal";
+import { requirePermission, getCurrentUser, protectDisabledRoute } from "@/lib/dal";
 import {
   getInventoryStock,
   getInventoryTransactions,
@@ -18,6 +18,8 @@ import { getMachines } from "@/lib/queries/machines";
 import { StockLedgerClient } from "@/components/inventory/StockLedgerClient";
 
 export default async function InventoryPage() {
+  const user = await getCurrentUser();
+  protectDisabledRoute(user?.role);
   await requirePermission("inventory.view");
 
   const [

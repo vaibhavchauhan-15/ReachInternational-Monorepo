@@ -11,20 +11,36 @@ Your job is **NOT** to rediscover the project every conversation.
 Treat the repository as a long-term software project with persistent memory located in the `AI/` directory.
 
 ====================================
-STEP 1 — READ PROJECT MEMORY FIRST
+STEP 1 — READ PROJECT MEMORY & ALL RULES FIRST (MANDATORY EVERY TASK / SESSION)
 ====================================
-Before planning or editing anything, read these memory files in order:
+Before planning, editing, analyzing, or executing anything in ANY session or task, every AI agent MUST read and strictly adhere to all rule files located in both:
+- `C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\AI\RULES`
+- `C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\.agents\rules`
+
+Read these memory and rule files in order:
 1. `AI/PROJECT_MEMORY.md`
 2. `AI/STATE.md`
 3. `AI/CURRENT_TASK.md`
 4. `AI/CHANGELOG_AI.md`
-5. `AI/CODING_RULES.md`
-6. `AI/UI_RULES.md`
-7. `AI/PERFORMANCE_RULES.md`
-8. `AI/SECURITY_RULES.md`
-9. `AI/TESTING_RULES.md`
+5. **Authoritative Rules (`AI/RULES/`)**:
+   - `AI/RULES/ARCHITECTURE.md`
+   - `AI/RULES/DESIGN-SYSTEM.md`
+   - `AI/RULES/UI-UX.md`
+   - `AI/RULES/PERFORMANCE.md`
+   - `AI/RULES/SECURITY.md`
+   - `AI/RULES/AUTHENTICATION-AUTHORIZATION.md`
+   - `AI/RULES/DATA-PROTECTION-PRIVACY.md`
+   - `AI/RULES/VALIDATION-ERROR-RESILIENCE.md`
+   - `AI/RULES/TESTING-QA.md`
+   - `AI/RULES/SEO-METADATA-DISCOVERABILITY.md`
+   - `AI/RULES/OBSERVABILITY-MONITORING-LOGGING.md`
+   - `AI/RULES/DEPLOYMENT-DEVOPS-RELEASE.md`
+6. **Cross-Platform UI & Agent Rules (`.agents/rules/`)**:
+   - `.agents/rules/mandatory_rules_reading_and_enforcement.md`
+   - `.agents/rules/responsive_cross_platform_design.md`
+   - `.agents/rules/web_mobile_ui_consistency.md`
 
-Never scan the entire repository unless these files explicitly instruct you to.
+Never scan the entire repository unless these files explicitly instruct you to. All AI coding agents MUST strictly follow and enforce all rules in both `AI/RULES/` and `.agents/rules/` without exception on EVERY single task, session, and change.
 
 ====================================
 STEP 2 — UNDERSTAND TASK & CATEGORY
@@ -56,6 +72,8 @@ STEP 5 — IMPLEMENT
 - Make the smallest possible change.
 - Do NOT rewrite unrelated code.
 - Reuse existing components (`components/ui/*`), hooks, utilities (`lib/*`), and styles.
+- **STRICT UI/UX & RESPONSIVE RULE**: Every page, component, and module MUST strictly adhere to `DESIGN.md` (Vercel Geist System tokens: `#171717` ink, `#fafafa` canvas, `#ffffff` elevated, `#ebebeb` 1px hairline border, `#0070f3` link blue, Geist Sans/Mono fonts) and `AI/UI_RULES.md` / `.agents/rules/responsive_cross_platform_design.md`.
+- **3-TIER VIEWPORT RESPONSIVENESS**: Every feature MUST be highly optimized for Mobile (≤640px touch card views `block sm:hidden`, scrollable filter strips `overflow-x-auto`, min 44px touch targets), Tablet (641px–1023px 2-col grids `grid-cols-1 sm:grid-cols-2`, adaptive modals), and Desktop (≥1024px high-density tables `hidden sm:block`, full multi-col grid, hover tooltips `<TooltipWrapper>`), maintaining identical visual identity, colors, and theme.
 - Respect existing architecture.
 
 ====================================

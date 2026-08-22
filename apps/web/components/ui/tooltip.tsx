@@ -45,6 +45,9 @@ export function TooltipWrapper({
   align = "center",
   delayDuration,
   disabled = false,
+  open,
+  defaultOpen,
+  onOpenChange,
 }: {
   content: React.ReactNode;
   children: React.ReactNode;
@@ -52,11 +55,19 @@ export function TooltipWrapper({
   align?: "start" | "center" | "end";
   delayDuration?: number;
   disabled?: boolean;
+  open?: boolean;
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  if (!content) return <>{children}</>;
+  if (!content || disabled) return <>{children}</>;
 
   return (
-    <Tooltip delayDuration={delayDuration} open={disabled ? false : undefined}>
+    <Tooltip
+      delayDuration={delayDuration}
+      open={open}
+      defaultOpen={defaultOpen}
+      onOpenChange={onOpenChange}
+    >
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       <TooltipContent side={side} align={align}>
         {content}
@@ -140,10 +151,10 @@ export function SidebarTooltip({
   enabled?: boolean;
   delayMs?: number;
 }) {
-  if (!content) return <>{children}</>;
+  if (!content || !enabled) return <>{children}</>;
 
   return (
-    <Tooltip delayDuration={delayMs} open={enabled ? undefined : false}>
+    <Tooltip delayDuration={delayMs}>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
       <TooltipContent side="right" sideOffset={12} className="font-semibold text-xs py-1.5 px-3">
         {content}

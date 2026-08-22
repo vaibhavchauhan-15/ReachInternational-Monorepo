@@ -11,19 +11,23 @@ Manages machine registry, serial numbers, client assignments, engineer assignmen
 
 ## Key Functions & Workflows
 - `getMachines()`: Fetches paginated/filtered list of machines with client and engineer profile relations.
-- `createMachine()`: Adds new machine to registry, logs audit event.
-- `updateMachine()`: Updates machine details or changes status (`operational`, `maintenance_required`, `out_of_service`).
+- `getMachineById()`: Fetches machine details by ID with technical parameters and compliance dates.
+- `getMachineBreakdownHistory()`: Fetches malfunction complaints and FSR records for a machine.
+- `getMachineHourMeterLogs()`: Fetches daily operator hour meter logs with start/end readings, overtime, client, and operator profile.
+- `getMachinePartsUsedHistory()`: Fetches inventory spare part issue challans and item quantities issued to a machine.
+- `getMachineActiveRental()`: Fetches active rental contract and client company details for machines with status `on_rent`.
+- `createMachine()`: Adds new machine to registry with technical parameters, logs audit event.
+- `updateMachine()`: Updates machine details, technical specs, compliance dates, or changes status (`active`, `on_rent`, `under_maintenance`, `inactive`).
 - `deleteMachine()`: Soft-deletes (marks inactive) a machine record.
 - `importMachinesFromExcel()`: Bulk imports machines from Excel file with validation and error reporting.
 - `getSampleExcelTemplate()`: Generates sample Excel template with correct column headers.
 
-## Form Fields (MachineModal)
-- Equipment Details & Specs: machine_code (auto-generated e.g. S374), model (e.g. S3246EE), serial_number (e.g. 3605417), manufacturer (e.g. JCB), year_of_mfg (e.g. 2026), machine_name (required)
-- Engine & Motor: engine_serial_no (e.g. Electric), engine_mot_no (e.g. Electric)
-- Compliance & Certificates: insurance_policy_no & insurance_expiry_date (e.g. 1st January 1970), third_party_certificate & third_party_expiry_date (e.g. 1st January 1970), rto_tax & rto_tax_expiry_date (e.g. 1st January 1970)
-- Customer: customer_name (required), customer_mobile - 10 digit Indian (required), customer_email (optional)
-- Location: city (required), state (required), customer_address (optional)
-- Assignment & Status: engineer_id (optional), service_interval_days (default 90), status (`on_rent`, `active`, `under_maintenance`, `inactive`), notes (optional)
+## Form Fields & Technical Parameters (MachineModal & Machine Detail Page)
+- Equipment Details & Specs: `machine_code` (auto-generated e.g. S374), `machine_name` (required), `model` (e.g. S3246EE), `serial_number` (e.g. 3605417), `category_name`, `manufacturer` (e.g. JCB), `year_of_mfg` (e.g. 2026), `hour_meter`
+- Engine, Motor & Tyres: `engine_serial_no`, `engine_mot_no`, `front_tyre_size`, `back_tyre_size`, `starter_motor_teeth`, `air_filter_no`, `headgas_kit_notch`, `diesel_filter_no`
+- Compliance & Certificates: `insurance_policy_no` & `insurance_expiry_date` (formatted `1st January 1970`), `third_party_certificate` & `third_party_expiry_date`, `rto_tax` & `rto_tax_expiry_date`
+- Customer & Client (On Rent): `customer_name` (required), `customer_mobile` - 10 digit Indian (required), `customer_email`, `customer_address`, `city` (required), `state` (required), rental contract number, start/end dates, rental rate
+- Assignment & Status: `engineer_id` (optional), `service_interval_days` (default 90), `status` (`on_rent`, `active`, `under_maintenance`, `inactive`), `notes` (optional)
 
 ## Bulk Import Feature
 - Excel upload with drag-and-drop support

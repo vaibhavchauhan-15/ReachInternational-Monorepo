@@ -40,7 +40,7 @@ export const metadata: Metadata = {
   manifest: "/site.webmanifest",
 };
 
-import { TooltipProvider } from "@/components/ui";
+import { TooltipProvider, ToastProvider } from "@/components/ui";
 
 export default function RootLayout({
   children,
@@ -70,11 +70,13 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider>
-          <TooltipProvider delayDuration={200}>
-            {children}
-            <AgentationWrapper />
-            <CookieConsent />
-          </TooltipProvider>
+          <ToastProvider>
+            <TooltipProvider delayDuration={200}>
+              {children}
+              <AgentationWrapper />
+              <CookieConsent />
+            </TooltipProvider>
+          </ToastProvider>
         </ThemeProvider>
       </body>
     </html>

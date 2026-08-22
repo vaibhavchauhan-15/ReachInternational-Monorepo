@@ -42,9 +42,11 @@ export function SidebarNavigation({ items, collapsed }: SidebarNavigationProps) 
           {items.map((item) => {
             const defaultTab = item.subItems ? item.subItems[0].tab : "";
             const currentTab = searchParams.get("tab") || defaultTab;
+            const isTabMatch = item.href.includes("?")
+              ? searchParams.get("tab") === new URLSearchParams(item.href.split("?")[1]).get("tab")
+              : (!searchParams.get("tab") || searchParams.get("tab") !== "history");
             const isActive =
-              pathname === item.href ||
-              (item.href !== "/dashboard" && pathname.startsWith(item.href));
+              pathname === item.href.split("?")[0] && isTabMatch;
 
             const isMenuOpen =
               openMenus[item.href] !== undefined ? openMenus[item.href] : isActive;

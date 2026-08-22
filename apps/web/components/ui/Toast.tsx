@@ -42,6 +42,16 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 640px)");
+    setIsDesktop(media.matches);
+    const listener = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
+    media.addEventListener("change", listener);
+    return () => media.removeEventListener("change", listener);
+  }, []);
+
   const removeToast = useCallback((id: string) => {
     // Clear any pending auto-dismiss timer for this toast
     const timer = timersRef.current.get(id);
@@ -76,7 +86,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={contextValue}>
       {children}
-      <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
+      <div className="fixed top-4 left-4 right-4 sm:left-auto sm:right-4 z-[100] flex flex-col items-center sm:items-end gap-2 pointer-events-none">
         <AnimatePresence>
           {toasts.map((t) => {
             const config = toastConfig[t.type];
@@ -84,11 +94,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             return (
               <motion.div
                 key={t.id}
-                initial={{ opacity: 0, y: 12, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95, y: 8 }}
-                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                className="pointer-events-auto card-elevated flex items-start gap-3 p-4 min-w-[300px] max-w-[400px] shadow-xl border border-[var(--color-hairline)]"
+                initial={
+                  isDesktop
+                    ? { opacity: 0, y: -30, x: 30, scale: 0.95 }
+                    : { opacity: 0, y: -30, scale: 0.95 }
+                }
+                animate={{ opacity: 1, y: 0, x: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -30, x: 0, scale: 0.95 }}
+                transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+                className="pointer-events-auto card-elevated flex items-start gap-3 p-4 min-w-[280px] sm:min-w-[320px] max-w-[400px] shadow-xl border border-[var(--color-hairline)] rounded-xl"
               >
                 <div className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full ${config.bg}`}>
                   <Icon size={16} className={config.color} />

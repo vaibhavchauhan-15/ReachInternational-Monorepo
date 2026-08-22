@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   AnimatedDashboard,
+  AnimatedGauge,
+  AnimatedClock,
   AnimatedWrench,
   AnimatedClipboardList,
   AnimatedBell,
@@ -57,6 +59,7 @@ const roleLabels: Record<UserRole, string> = {
 
 export function MobileBottomNav({ user }: MobileBottomNavProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
 
@@ -72,52 +75,77 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const isOperator = user.role === "operator";
+
   // Build responsive nav items based on user role
-  const navItems: NavItemConfig[] = [
-    {
-      id: "dashboard",
-      href: "/dashboard",
-      label: "Dashboard",
-      icon: AnimatedDashboard,
-    },
-    {
-      id: "machines",
-      href: "/machines",
-      label: "Machines",
-      icon: AnimatedWrench,
-    },
-    {
-      id: "search",
-      label: "Search",
-      icon: AnimatedSearch,
-      isAction: true,
-      actionType: "search",
-    },
-    {
-      id: "notifications",
-      href: "/notifications",
-      label: "Alerts",
-      icon: AnimatedBell,
-      roles: ["super_admin", "admin"],
-    },
-    ...(user.role === "super_admin" || user.role === "admin"
-      ? [
-          {
-            id: "users",
-            href: "/users",
-            label: "Users",
-            icon: AnimatedUsers,
-          },
-        ]
-      : []),
-    {
-      id: "profile",
-      label: "Profile",
-      icon: AnimatedUser,
-      isAction: true,
-      actionType: "profile",
-    },
-  ];
+  const navItems: NavItemConfig[] = isOperator
+    ? [
+        {
+          id: "operations",
+          href: "/operations",
+          label: "Operations",
+          icon: AnimatedGauge,
+        },
+        {
+          id: "search",
+          label: "Search",
+          icon: AnimatedSearch,
+          isAction: true,
+          actionType: "search",
+        },
+        {
+          id: "profile",
+          label: "Profile",
+          icon: AnimatedUser,
+          isAction: true,
+          actionType: "profile",
+        },
+      ]
+    : [
+        {
+          id: "machines",
+          href: "/machines",
+          label: "Machines",
+          icon: AnimatedWrench,
+        },
+        {
+          id: "operations",
+          href: "/operations",
+          label: "Operations",
+          icon: AnimatedGauge,
+        },
+        {
+          id: "search",
+          label: "Search",
+          icon: AnimatedSearch,
+          isAction: true,
+          actionType: "search",
+        },
+        {
+          id: "notifications",
+          href: "/notifications",
+          label: "Alerts",
+          icon: AnimatedBell,
+          roles: ["super_admin", "admin"],
+        },
+        ...(user.role === "super_admin" || user.role === "admin"
+          ? [
+              {
+                id: "users",
+                href: "/users",
+                label: "Users",
+                icon: AnimatedUsers,
+              },
+            ]
+          : []),
+        {
+          id: "profile",
+          label: "Profile",
+          icon: AnimatedUser,
+          isAction: true,
+          actionType: "profile",
+        },
+      ];
 
   // Filter items permitted for user role
   const visibleItems = navItems.filter(
@@ -139,9 +167,12 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
         >
           {visibleItems.map((item) => {
             const Icon = item.icon;
+            const isTabMatch = item.href?.includes("?")
+              ? searchParams.get("tab") === new URLSearchParams(item.href.split("?")[1]).get("tab")
+              : true;
+
             const isActive = item.href
-              ? pathname === item.href ||
-                (item.href !== "/" && pathname.startsWith(item.href + "/"))
+              ? pathname === item.href.split("?")[0] && isTabMatch
               : item.actionType === "profile" && profileSheetOpen;
 
             const handleItemClick = (e: React.MouseEvent) => {

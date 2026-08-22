@@ -106,7 +106,7 @@ const getCachedEngineerServicesData = unstable_cache(
       (m) => m.next_service_due_date === tomorrow
     ).length;
     const overdue = assigned.filter(
-      (m) => m.next_service_due_date < today
+      (m) => m.next_service_due_date ? m.next_service_due_date < today : false
     ).length;
 
     let completedTodayQuery = supabase

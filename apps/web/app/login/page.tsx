@@ -5,27 +5,13 @@ import {
   AnimatedCpu,
   AnimatedBellRing,
   AnimatedActivity,
-  AnimatedArrowLeft,
 } from "@/components/ui/animated-icons";
 import { LoginFormClient } from "./login-form";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { ReachInternationalLogo } from "@/components/ui";
 
 export default function LoginPage() {
   return (
     <div className="flex min-h-screen w-full flex-col lg:flex-row bg-background text-foreground relative overflow-hidden">
-      {/* Top Floating Controls */}
-      <div className="absolute top-4 right-4 z-50 flex items-center gap-2.5">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/80 bg-card/80 backdrop-blur-md text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-card hover:border-border transition-all shadow-xs"
-        >
-          <AnimatedArrowLeft size={14} />
-          <span>Home</span>
-        </Link>
-        <ThemeToggle />
-      </div>
-
       {/* Left: Hero panel with mesh gradient & ambient glow */}
       <div className="mesh-gradient relative flex flex-col justify-between p-8 sm:p-12 lg:w-[50%] xl:w-[52%] lg:p-16 border-b lg:border-b-0 lg:border-r border-border overflow-hidden">
         {/* Soft background glow decoration */}

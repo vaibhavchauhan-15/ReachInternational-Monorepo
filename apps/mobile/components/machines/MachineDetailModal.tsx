@@ -1,15 +1,8 @@
-/**
- * ServiceCentric Mobile — Machine Detail Modal (Phase 15)
- * Native detail modal showing technical specs, site/customer assignment,
- * compliance & insurance, hour meter, and service history for a machine.
- */
-
-import React, { useState } from 'react';
+import React from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Badge, Button, useTheme } from '../ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { formatMachineCode, formatDate, formatINR } from '@reachinternational/utils';
-import { X, Truck, ShieldCheck, Wrench, Calendar, MapPin, UserCheck } from 'lucide-react-native';
+import { X, Truck, Wrench, UserCheck } from 'lucide-react-native';
 
 export interface MachineDetailModalProps {
   visible: boolean;
@@ -17,21 +10,16 @@ export interface MachineDetailModalProps {
   machineId?: string;
   machineData?: {
     id: string;
-    machine_code: string;
-    machine_name: string;
+    machine_id: string;
     model: string;
     serial_number: string;
-    category: string;
+    year_of_mfg?: string;
+    manufacturer?: string;
     status: string;
+    health_status: string;
     hour_meter: number;
-    customer_name: string;
-    customer_mobile: string;
-    city: string;
-    state: string;
-    insurance_policy_no: string;
-    insurance_expiry_date: string;
-    third_party_certificate: string;
-    next_service_due_date: string;
+    service_count: number;
+    supervisor_name?: string;
     operator_name?: string;
   };
 }
@@ -40,171 +28,115 @@ export const MachineDetailModal: React.FC<MachineDetailModalProps> = ({
   visible,
   onClose,
   machineData = {
-    id: 'mch-004',
-    machine_code: 'MCH-004',
-    machine_name: 'Toyota 8FG 3.0T Forklift',
+    id: 'mch-001',
+    machine_id: 'RI-MC-0001',
     model: '8FG30',
     serial_number: 'TY8FG-99214',
-    category: 'Forklift Counterbalance',
-    status: 'active',
+    year_of_mfg: '2025',
+    status: 'available',
+    health_status: 'active',
     hour_meter: 1420,
-    customer_name: 'Delhi Logistics Private Limited',
-    customer_mobile: '+91 98765 43210',
-    city: 'Delhi',
-    state: 'Delhi',
-    insurance_policy_no: 'POL-ICICI-883219',
-    insurance_expiry_date: '2026-12-31',
-    third_party_certificate: 'TPC-2026-4412',
-    next_service_due_date: '2026-09-15',
+    service_count: 3,
+    supervisor_name: 'Rajesh Kumar',
     operator_name: 'Vikram Singh',
   },
 }) => {
   const { theme } = useTheme();
-  const [activeTab, setActiveTab] = useState<'specs' | 'site' | 'compliance' | 'history'>('specs');
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.overlay}>
-        <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-          {/* Header Bar */}
-          <View style={styles.header}>
-            <View>
-              <Text style={[styles.code, { color: theme.colors.link }]}>
-                {formatMachineCode(machineData.machine_code)}
-              </Text>
-              <Text style={[styles.title, { color: theme.colors.ink }]}>{machineData.machine_name}</Text>
+        <View style={[styles.sheet, { backgroundColor: theme.colors.canvasElevated }]}>
+          {/* Header */}
+          <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
+            <View style={styles.headerLeft}>
+              <View style={[styles.iconWrap, { backgroundColor: theme.colors.canvas }]}>
+                <Truck size={20} color={theme.colors.link} />
+              </View>
+              <View>
+                <Text style={[styles.title, { color: theme.colors.ink }]}>
+                  {machineData.machine_id}
+                </Text>
+                <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
+                  Model: {machineData.model || 'N/A'} • Sr: {machineData.serial_number || 'N/A'}
+                </Text>
+              </View>
             </View>
+
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-              <X size={22} color={theme.colors.mute} />
+              <X size={20} color={theme.colors.mute} />
             </TouchableOpacity>
           </View>
 
-          {/* Status & Meter Banner */}
-          <View style={[styles.banner, { backgroundColor: theme.colors.hairlineSoft }]}>
-            <Badge status={machineData.status} />
-            <Text style={[styles.meterText, { color: theme.colors.ink }]}>
-              Hour Meter: <Text style={{ color: theme.colors.link, fontWeight: '700' }}>{machineData.hour_meter} hrs</Text>
-            </Text>
-          </View>
+          <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
+            {/* Status Chips */}
+            <View style={styles.statusRow}>
+              <Badge status={machineData.health_status} />
+              <Badge status={machineData.status} />
+            </View>
 
-          {/* Detail Tabs */}
-          <View style={styles.tabRow}>
-            {[
-              { key: 'specs', label: 'Technical Specs' },
-              { key: 'site', label: 'Customer & Site' },
-              { key: 'compliance', label: 'Compliance' },
-              { key: 'history', label: 'Service History' },
-            ].map((tab) => {
-              const isActive = activeTab === tab.key;
-              return (
-                <TouchableOpacity
-                  key={tab.key}
-                  onPress={() => setActiveTab(tab.key as any)}
-                  style={[
-                    styles.tabItem,
-                    { borderBottomColor: isActive ? theme.colors.link : 'transparent' },
-                  ]}
-                >
-                  <Text style={[styles.tabText, { color: isActive ? theme.colors.link : theme.colors.mute }]}>
-                    {tab.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+            {/* Specifications Card */}
+            <View style={[styles.sectionCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+              <View style={styles.sectionTitleRow}>
+                <Wrench size={16} color={theme.colors.link} />
+                <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>Master Specifications</Text>
+              </View>
 
-          {/* Tab Content */}
-          <ScrollView style={styles.bodyScroll}>
-            {activeTab === 'specs' && (
-              <View style={styles.section}>
-                <View style={styles.infoRow}>
-                  <Text style={[styles.label, { color: theme.colors.mute }]}>Category:</Text>
-                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.category}</Text>
+              <View style={styles.grid}>
+                <View style={styles.gridItem}>
+                  <Text style={[styles.lbl, { color: theme.colors.mute }]}>Machine ID</Text>
+                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.machine_id}</Text>
                 </View>
-                <View style={styles.infoRow}>
-                  <Text style={[styles.label, { color: theme.colors.mute }]}>Model Number:</Text>
-                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.model}</Text>
+                <View style={styles.gridItem}>
+                  <Text style={[styles.lbl, { color: theme.colors.mute }]}>Model</Text>
+                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.model || '-'}</Text>
                 </View>
-                <View style={styles.infoRow}>
-                  <Text style={[styles.label, { color: theme.colors.mute }]}>Serial Number:</Text>
-                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.serial_number}</Text>
+                <View style={styles.gridItem}>
+                  <Text style={[styles.lbl, { color: theme.colors.mute }]}>Serial No</Text>
+                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.serial_number || '-'}</Text>
                 </View>
-                <View style={styles.infoRow}>
-                  <Text style={[styles.label, { color: theme.colors.mute }]}>Next Service Due:</Text>
-                  <Text style={[styles.val, { color: theme.colors.warning }]}>
-                    {formatDate(machineData.next_service_due_date)}
-                  </Text>
+                <View style={styles.gridItem}>
+                  <Text style={[styles.lbl, { color: theme.colors.mute }]}>Year of Mfg (YUM)</Text>
+                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.year_of_mfg || '-'}</Text>
+                </View>
+                <View style={styles.gridItem}>
+                  <Text style={[styles.lbl, { color: theme.colors.mute }]}>Manufacturer</Text>
+                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.manufacturer || '-'}</Text>
+                </View>
+                <View style={styles.gridItem}>
+                  <Text style={[styles.lbl, { color: theme.colors.mute }]}>Hour Meter (HMR)</Text>
+                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.hour_meter} hrs</Text>
+                </View>
+                <View style={styles.gridItem}>
+                  <Text style={[styles.lbl, { color: theme.colors.mute }]}>Services Logged</Text>
+                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.service_count}</Text>
                 </View>
               </View>
-            )}
+            </View>
 
-            {activeTab === 'site' && (
-              <View style={styles.section}>
-                <View style={styles.infoRow}>
-                  <Text style={[styles.label, { color: theme.colors.mute }]}>Customer Name:</Text>
-                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.customer_name}</Text>
+            {/* Personnel Assignment Card */}
+            <View style={[styles.sectionCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+              <View style={styles.sectionTitleRow}>
+                <UserCheck size={16} color={theme.colors.link} />
+                <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>Assigned Personnel</Text>
+              </View>
+
+              <View style={styles.grid}>
+                <View style={styles.gridItem}>
+                  <Text style={[styles.lbl, { color: theme.colors.mute }]}>Supervisor</Text>
+                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.supervisor_name || 'Unassigned'}</Text>
                 </View>
-                <View style={styles.infoRow}>
-                  <Text style={[styles.label, { color: theme.colors.mute }]}>Contact Mobile:</Text>
-                  <Text style={[styles.val, { color: theme.colors.link }]}>{machineData.customer_mobile}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={[styles.label, { color: theme.colors.mute }]}>Location Site:</Text>
-                  <Text style={[styles.val, { color: theme.colors.ink }]}>
-                    {machineData.city}, {machineData.state}
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={[styles.label, { color: theme.colors.mute }]}>Assigned Operator:</Text>
-                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.operator_name}</Text>
+                <View style={styles.gridItem}>
+                  <Text style={[styles.lbl, { color: theme.colors.mute }]}>Operator</Text>
+                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.operator_name || 'Unassigned'}</Text>
                 </View>
               </View>
-            )}
-
-            {activeTab === 'compliance' && (
-              <View style={styles.section}>
-                <View style={styles.infoRow}>
-                  <Text style={[styles.label, { color: theme.colors.mute }]}>Insurance Policy #:</Text>
-                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.insurance_policy_no}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={[styles.label, { color: theme.colors.mute }]}>Insurance Expiry:</Text>
-                  <Text style={[styles.val, { color: theme.colors.success }]}>
-                    {formatDate(machineData.insurance_expiry_date)}
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={[styles.label, { color: theme.colors.mute }]}>3rd Party Cert #:</Text>
-                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.third_party_certificate}</Text>
-                </View>
-              </View>
-            )}
-
-            {activeTab === 'history' && (
-              <View style={styles.section}>
-                <View style={[styles.historyItem, { borderColor: theme.colors.hairline }]}>
-                  <Text style={[styles.historyTitle, { color: theme.colors.ink }]}>
-                    1000 Hours Periodic Service
-                  </Text>
-                  <Text style={[styles.historyMeta, { color: theme.colors.mute }]}>
-                    Completed on 12/07/2026 • Meter: 1,000 hrs
-                  </Text>
-                </View>
-                <View style={[styles.historyItem, { borderColor: theme.colors.hairline }]}>
-                  <Text style={[styles.historyTitle, { color: theme.colors.ink }]}>
-                    Breakdown Repair — Hydraulic Hose
-                  </Text>
-                  <Text style={[styles.historyMeta, { color: theme.colors.mute }]}>
-                    Resolved on 04/05/2026 • Meter: 840 hrs
-                  </Text>
-                </View>
-              </View>
-            )}
+            </View>
           </ScrollView>
 
-          {/* Footer */}
-          <View style={styles.footer}>
-            <Button label="Close" onPress={onClose} variant="primary" fullWidth />
+          {/* Footer Action */}
+          <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
+            <Button label="Close" onPress={onClose} variant="outline" size="md" />
           </View>
         </View>
       </View>
@@ -215,95 +147,92 @@ export const MachineDetailModal: React.FC<MachineDetailModalProps> = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
-  modalContent: {
+  sheet: {
     borderTopLeftRadius: radiusNumeric.lg,
     borderTopRightRadius: radiusNumeric.lg,
-    borderWidth: 1,
-    padding: spacingNumeric.lg,
-    maxHeight: '90%',
+    maxHeight: '85%',
   },
   header: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: spacingNumeric.xs,
+    paddingHorizontal: spacingNumeric.lg,
+    paddingVertical: spacingNumeric.md,
+    borderBottomWidth: 1,
   },
-  code: {
-    fontSize: 13,
-    fontWeight: '700',
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingNumeric.md,
+  },
+  iconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: radiusNumeric.md,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  subtitle: {
+    fontSize: 12,
   },
   closeBtn: {
-    padding: 4,
+    padding: spacingNumeric.xs,
   },
-  banner: {
-    padding: spacingNumeric.sm,
-    borderRadius: radiusNumeric.md,
+  body: {
+    flexGrow: 0,
+  },
+  bodyContent: {
+    padding: spacingNumeric.lg,
+    gap: spacingNumeric.md,
+  },
+  statusRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: spacingNumeric.sm,
+  },
+  sectionCard: {
+    padding: spacingNumeric.md,
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    gap: spacingNumeric.sm,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacingNumeric.md,
+    gap: spacingNumeric.xs,
   },
-  meterText: {
+  sectionTitle: {
     fontSize: 13,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
   },
-  tabRow: {
+  grid: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#333',
-    marginBottom: spacingNumeric.sm,
+    flexWrap: 'wrap',
+    gap: spacingNumeric.md,
+    marginTop: spacingNumeric.xs,
   },
-  tabItem: {
-    paddingVertical: spacingNumeric.xs,
-    marginRight: spacingNumeric.md,
-    borderBottomWidth: 2,
+  gridItem: {
+    width: '45%',
+    gap: 2,
   },
-  tabText: {
-    fontSize: 12,
+  lbl: {
+    fontSize: 10,
+    textTransform: 'uppercase',
     fontWeight: '600',
-  },
-  bodyScroll: {
-    marginBottom: spacingNumeric.md,
-  },
-  section: {
-    paddingVertical: spacingNumeric.xs,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: spacingNumeric.xs,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#222',
-  },
-  label: {
-    fontSize: 13,
   },
   val: {
     fontSize: 13,
-    fontWeight: '600',
-  },
-  historyItem: {
-    padding: spacingNumeric.sm,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-    marginVertical: 4,
-  },
-  historyTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  historyMeta: {
-    fontSize: 12,
-    marginTop: 2,
+    fontWeight: 'bold',
   },
   footer: {
-    marginTop: spacingNumeric.xs,
+    padding: spacingNumeric.lg,
+    borderTopWidth: 1,
   },
 });

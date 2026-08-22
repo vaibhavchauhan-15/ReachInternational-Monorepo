@@ -1,4 +1,4 @@
-import { getCurrentUser } from "@/lib/dal";
+import { getCurrentUser, protectDisabledRoute } from "@/lib/dal";
 import { redirect } from "next/navigation";
 import { ChallansClient } from "@/components/challans/ChallansClient";
 
@@ -8,6 +8,8 @@ export default async function ChallansPage() {
   if (!user) {
     redirect("/login");
   }
+
+  protectDisabledRoute(user.role);
 
   return <ChallansClient user={user} />;
 }

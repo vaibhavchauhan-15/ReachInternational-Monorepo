@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/animated-icons";
 import { forgotPassword, type AuthFormState } from "@/app/actions/auth";
 import { Button, Input } from "@/components/ui";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
 export default function ForgotPasswordPage() {
   const [state, setState] = useState<AuthFormState>({});
@@ -32,6 +31,18 @@ export default function ForgotPasswordPage() {
     }
   };
 
+function isRedirectError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const err = error as Record<string, unknown>;
+  if (typeof err.digest === "string" && err.digest.startsWith("NEXT_REDIRECT")) {
+    return true;
+  }
+  if (err.message === "NEXT_REDIRECT") {
+    return true;
+  }
+  return false;
+}
+
   async function handleSubmit(formData: FormData) {
     setPending(true);
     setState({});
@@ -49,7 +60,10 @@ export default function ForgotPasswordPage() {
       if (result.fieldValues?.email !== undefined) {
         setEmail(result.fieldValues.email);
       }
-    } catch {
+    } catch (err: unknown) {
+      if (isRedirectError(err)) {
+        throw err;
+      }
       setState({ error: "An unexpected error occurred. Please try again." });
     } finally {
       setPending(false);
@@ -58,17 +72,6 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background p-6 sm:p-12 text-foreground relative overflow-hidden">
-      {/* Top Floating Controls */}
-      <div className="absolute top-4 right-4 z-50 flex items-center gap-2.5">
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/80 bg-card/80 backdrop-blur-md text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-card hover:border-border transition-all shadow-xs"
-        >
-          <AnimatedArrowLeft size={14} />
-          <span>Home</span>
-        </Link>
-        <ThemeToggle />
-      </div>
 
       {/* Ambient background glow decoration */}
       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

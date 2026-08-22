@@ -50,9 +50,9 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL("/login", req.nextUrl));
   }
 
-  // Redirect authenticated user visiting root '/' to /dashboard for instant edge navigation
+  // Redirect authenticated user visiting root '/' to /machines for instant edge navigation
   if (path === "/" && session?.user) {
-    return NextResponse.redirect(new URL("/dashboard", req.nextUrl));
+    return NextResponse.redirect(new URL("/machines", req.nextUrl));
   }
 
   return NextResponse.next({
