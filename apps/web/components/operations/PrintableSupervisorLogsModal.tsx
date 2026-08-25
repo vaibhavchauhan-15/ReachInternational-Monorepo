@@ -172,6 +172,7 @@ function SupervisorLogsReportContent({
               ) : viewMode === "machine" && selectedEntityId !== "all" ? (
                 <>
                   <div><strong>Machine:</strong> {selectedMachineObj?.machine_name || (logs[0]?.machine as any)?.machine_name || "Machine"}</div>
+                  <div><strong>Manufacturer:</strong> {selectedMachineObj?.manufacturer || (logs[0]?.machine as any)?.manufacturer || "—"}</div>
                   <div><strong>Model:</strong> {selectedMachineObj?.model || (logs[0]?.machine as any)?.model || "—"}</div>
                   <div><strong>Serial/Code:</strong> {selectedMachineObj?.serial_number || selectedMachineObj?.machine_code || (logs[0]?.machine as any)?.serial_number || (logs[0]?.machine as any)?.machine_code || "—"}</div>
                   <div><strong>Total Run:</strong> {Math.round(totalRunningHours * 10) / 10} hrs</div>

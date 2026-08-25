@@ -50,12 +50,15 @@ export function formatMachineSelectLabel(m: {
   machine_code?: string;
   id?: string;
   model?: string | null;
+  manufacturer?: string | null;
   serial_number?: string | null;
   machine_name?: string;
 }): string {
   if (!m) return "Machine";
   const code = m.machine_id || m.machine_code || m.id || "Machine";
-  const model = m.model ? m.model : null;
+  const mfr = m.manufacturer ? m.manufacturer.trim() : null;
+  const modelRaw = m.model ? m.model.trim() : null;
+  const model = mfr && modelRaw ? `${mfr} ${modelRaw}` : mfr || modelRaw;
   const rawSerial = m.serial_number ? m.serial_number : null;
   const serial = rawSerial && rawSerial !== code ? rawSerial : null;
 
@@ -767,17 +770,23 @@ export function OperationsClient({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 text-xs pt-0.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs pt-0.5">
                 <div>
-                  <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Serial No / Code</span>
-                  <span className="font-bold font-mono text-[var(--color-ink)]">
-                    {activeMachineObj.serial_number || activeMachineObj.machine_code || "—"}
+                  <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Manufacturer</span>
+                  <span className="font-bold text-[var(--color-ink)]">
+                    {activeMachineObj.manufacturer || "—"}
                   </span>
                 </div>
                 <div>
                   <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Model</span>
                   <span className="font-bold text-[var(--color-ink)]">
                     {activeMachineObj.model || "—"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Serial No / Code</span>
+                  <span className="font-bold font-mono text-[var(--color-ink)]">
+                    {activeMachineObj.serial_number || activeMachineObj.machine_code || "—"}
                   </span>
                 </div>
                 <div>

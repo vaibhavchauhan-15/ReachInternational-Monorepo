@@ -106,9 +106,10 @@ export function exportSupervisorRunningLogsToExcel({
   } else if (viewMode === "machine" && selectedEntityId !== "all") {
     const mName = (filtered[0]?.machine as any)?.machine_name || "Selected Machine";
     const mCode = (filtered[0]?.machine as any)?.machine_code || "";
+    const mMfr = (filtered[0]?.machine as any)?.manufacturer || "—";
     const mModel = (filtered[0]?.machine as any)?.model || "—";
     const mSerial = (filtered[0]?.machine as any)?.serial_number || mCode || "—";
-    filterScopeText = `Machine: ${mName} | Model: ${mModel} | Serial/Code: ${mSerial}`;
+    filterScopeText = `Machine: ${mName} | Manufacturer: ${mMfr} | Model: ${mModel} | Serial/Code: ${mSerial}`;
   }
 
   let totalRunningHoursAcc = 0;

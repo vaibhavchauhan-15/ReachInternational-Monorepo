@@ -1,11 +1,16 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: Phase 87 Complete — Page Feedback: `/operations?tab=entry` `<OperationsClient>` & `<OperatorDashboard>` Full Space Expansion & Dynamic Sidebar Expand/Collapse Support (`AppShellClient.tsx`, `operations/page.tsx`, `OperationsClient.tsx`, `OperatorDashboard.tsx`, Monorepo Client Viewports)
+- **Phase**: Phase 88 Complete — Page Feedback: `/operations?tab=logs` Machine Manufacturer Display in Machine Tab & PDF Export Report (`OperationsClient.tsx`, `PrintableSupervisorLogsModal.tsx`, `supervisor-logs-export.ts`)
 - **Overall Health**: Healthy & Stable (0 TypeScript Errors across Monorepo)
 - **Last Memory Update**: 2026-08-25
 
-- [x] **Page Feedback: /operations?tab=entry `<OperationsClient>` & `<OperatorDashboard>` Full Space Expansion & Sidebar Expand/Collapse Support (`AppShellClient.tsx`, `operations/page.tsx`, `OperationsClient.tsx`, `OperatorDashboard.tsx`, Monorepo Client Viewports) (2026-08-25)**:
+- [x] **Page Feedback: /operations?tab=logs Machine Manufacturer Display in Machine Tab & PDF Export Report (`OperationsClient.tsx`, `PrintableSupervisorLogsModal.tsx`, `supervisor-logs-export.ts`) (2026-08-25)**:
+  - **Machine Details Summary Header Card (`OperationsClient.tsx`)**: Refactored summary grid (`logsViewMode === "machine"`) to 6 columns (`grid-cols-2 sm:grid-cols-3 lg:grid-cols-6`) and added a dedicated **Manufacturer** block displaying `activeMachineObj.manufacturer || "—"` (e.g. `HYUNDAI`).
+  - **Machine Select Dropdown Options (`OperationsClient.tsx`)**: Updated `formatMachineSelectLabel(m)` helper function to include `m.manufacturer` if present (e.g. `RI-MC-0001 (HYUNDAI 50B-9 — S/N: HHKHB303EF0000877)`).
+  - **PDF Export Report Metadata (`PrintableSupervisorLogsModal.tsx`)**: Added `<div><strong>Manufacturer:</strong> {selectedMachineObj?.manufacturer || (logs[0]?.machine as any)?.manufacturer || "—"}</div>` to top metadata header block in Machine mode PDF export (`viewMode === "machine"`).
+  - **Excel Export Utility (`supervisor-logs-export.ts`)**: Updated Machine mode Excel export `filterScopeText` to output `Manufacturer: ${mMfr}`.
+  - **Verification**: Executed `pnpm typecheck` across all 9 monorepo workspace packages (**Passed cleanly with 0 TypeScript compilation errors across 9/9 packages**).
   - **App Layout Max-Width Teardown (`AppShellClient.tsx`)**: Replaced fixed `max-w-[1400px] mx-auto` container restriction on `<main>` with `max-w-full w-full`. Guarantees main content viewport expands across 100% of available screen width and dynamically resizes when desktop sidebar toggles between expanded (`260px`) and collapsed (`68px`).
   - **Operations Route Double Padding Cleanup (`apps/web/app/(app)/operations/page.tsx`)**: Removed redundant outer `<div className="p-4 sm:p-6">` wrapper around `<OperationsClient>`, eliminating double padding and permitting `<OperationsClient>` to stretch full width.
   - **Operations Client Root Layout (`OperationsClient.tsx`)**: Updated root container to `w-full space-y-6`.
