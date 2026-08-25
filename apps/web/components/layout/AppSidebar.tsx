@@ -10,6 +10,7 @@ import {
   AnimatedPackage,
   AnimatedAlertTriangle,
   AnimatedGauge,
+  AnimatedBuilding2,
 } from "@/components/ui/animated-icons";
 import type { User } from "@/lib/types/database";
 import { CommandPalette } from "@/components/ui/CommandPalette";
@@ -37,7 +38,7 @@ export const mainNavItems: NavItem[] = [
     label: "Machines",
     icon: AnimatedWrench,
     roles: [
-      "super_admin", "admin", "branch_manager", "service_manager", "service_engineer", "engineer",
+      "super_admin", "admin", "service_manager", "service_engineer", "engineer",
       "supervisor", "mechanic", "store_manager", "sales_executive", "rental_manager", "finance_manager"
     ],
     subItems: [
@@ -50,7 +51,7 @@ export const mainNavItems: NavItem[] = [
     href: "/operations",
     label: "Operations",
     icon: AnimatedGauge,
-    roles: ["super_admin", "admin", "branch_manager", "service_manager", "supervisor", "operator"],
+    roles: ["super_admin", "admin", "service_manager", "supervisor", "operator"],
     subItems: [
       { label: "Running Hours", tab: "logs", icon: AnimatedGauge },
       { label: "Operator Machine Assignments", tab: "assignments", icon: AnimatedStar },
@@ -59,10 +60,19 @@ export const mainNavItems: NavItem[] = [
     ],
   },
   {
+    href: "/clients",
+    label: "Clients & Customers",
+    icon: AnimatedBuilding2,
+    roles: ["super_admin", "admin", "service_manager", "rental_manager", "sales_executive"],
+    subItems: [
+      { label: "Client Directory", tab: "all", icon: AnimatedBuilding2 },
+    ],
+  },
+  {
     href: "/users",
     label: "Employees & Users",
     icon: AnimatedUsers,
-    roles: ["super_admin", "admin", "branch_manager", "service_manager", "hr_manager"],
+    roles: ["super_admin", "admin", "service_manager", "hr_manager"],
     subItems: [
       { label: "All Employee Accounts", tab: "all", icon: AnimatedUsers },
     ],

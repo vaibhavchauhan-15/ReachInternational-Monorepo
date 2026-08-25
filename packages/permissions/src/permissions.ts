@@ -140,12 +140,6 @@ export const PERMISSIONS = {
   USER_DELETE: "user.delete",
   USER_ASSIGN_ROLE: "user.assign_role",
 
-  // Branches
-  BRANCH_VIEW: "branch.view",
-  BRANCH_CREATE: "branch.create",
-  BRANCH_EDIT: "branch.edit",
-  BRANCH_DELETE: "branch.delete",
-
   // Operator & Meter Logs
   OPERATOR_VIEW: "operator.view",
   OPERATOR_ASSIGN: "operator.assign",

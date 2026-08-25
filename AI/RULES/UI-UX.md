@@ -5,6 +5,13 @@
 
 ---
 
+## MANDATORY AGENT RULE: WEB-TO-MOBILE CHANGE SYNCHRONIZATION
+
+> **CRITICAL MANDATE FOR ALL AI AGENTS**:
+> Whenever ANY change, feature, component, style, theme, color, modal, drawer, page, module, form field, status badge, navigation item, database/API hook, or workflow is added, modified, refactored, or fixed in the **Web App (`apps/web`)**, the AI agent **MUST MANDATORILY apply and synchronize the exact same change in the Mobile App (`apps/mobile`)** with full mobile compatibility (touch cards, bottom sheets, min 44px touch targets) in the same session/task.
+
+---
+
 ## 1. Purpose
 
 The purpose of ReachInternational's UI/UX engineering policy is to build an **industrial-grade, low-friction, high-density, error-resistant operational platform** for Service Managers, Field Engineers, Mechanics, Supervisors, Operators, Store Managers, HR Managers, Rental Managers, Sales Executives, Finance Managers, and Admins.

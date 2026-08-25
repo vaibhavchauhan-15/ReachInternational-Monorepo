@@ -13,8 +13,8 @@ export default async function TasksPage() {
   protectDisabledRoute(user.role);
 
   const [initialTasks, stats, users] = await Promise.all([
-    getTasks(user.id, user.role, user.branch_id),
-    getTaskDashboardStats(user.id, user.role, user.branch_id),
+    getTasks(user.id, user.role),
+    getTaskDashboardStats(user.id, user.role),
     getAllEmployeesForAssignment(),
   ]);
 

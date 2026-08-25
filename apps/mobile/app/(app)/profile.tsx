@@ -4,10 +4,10 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { Card, Badge, Button, useTheme, MobileHeader } from '../../components/ui';
 import { spacingNumeric } from '@reachinternational/design-tokens';
-import { LogOut, Sun, Moon, Shield, Building } from 'lucide-react-native';
+import { LogOut, Sun, Moon, Shield, Building, MapPin } from 'lucide-react-native';
 
 export default function ProfileScreen() {
-  const { user, role, branchId, signOut } = useAuth();
+  const { user, role, signOut } = useAuth();
   const { theme, isDark, setMode } = useTheme();
   const router = useRouter();
 
@@ -21,7 +21,7 @@ export default function ProfileScreen() {
       <MobileHeader
         eyebrow="USER ACCOUNT"
         title="Field Staff Profile"
-        subtitle="Account security, branch assignment & app preferences"
+        subtitle="Account security & app preferences"
       />
 
       <ScrollView contentContainerStyle={styles.content}>
@@ -41,11 +41,21 @@ export default function ProfileScreen() {
 
           <View style={styles.divider} />
 
-          <Text style={[styles.label, { color: theme.colors.mute }]}>Branch & Facility Scope</Text>
+          <Text style={[styles.label, { color: theme.colors.mute }]}>User Address & Location</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+            <MapPin size={14} color={theme.colors.success} />
+            <Text style={[styles.value, { color: theme.colors.ink, marginTop: 0 }]}>
+              {user?.user_metadata?.city || 'Mumbai'}, {user?.user_metadata?.district || 'Mumbai'}, {user?.user_metadata?.state || 'Maharashtra'}
+            </Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          <Text style={[styles.label, { color: theme.colors.mute }]}>Operational Scope</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
             <Building size={14} color={theme.colors.mute} />
             <Text style={[styles.value, { color: theme.colors.ink, marginTop: 0 }]}>
-              {branchId || 'Headquarters (Default Branch)'}
+              India Operations (Pan-India)
             </Text>
           </View>
         </Card>

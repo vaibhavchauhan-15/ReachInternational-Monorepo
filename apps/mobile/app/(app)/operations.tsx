@@ -28,6 +28,7 @@ const SHIFT_LOGS_DATA = [
     fuel_consumed: 14.5,
     location: 'Delhi Logistics Hub',
     status: 'approved',
+    is_breakdown: false,
   },
   {
     id: 'log-102',
@@ -41,6 +42,8 @@ const SHIFT_LOGS_DATA = [
     fuel_consumed: 11.0,
     location: 'Gurgaon Warehouse',
     status: 'pending',
+    is_breakdown: true,
+    breakdown_duration: '1h 30m',
   },
 ];
 
@@ -141,7 +144,12 @@ export default function OperationsScreen() {
                   <Text style={[styles.code, { color: theme.colors.link }]}>
                     {formatMachineCode(log.machine_code)} — {log.shift}
                   </Text>
-                  <Badge status={log.status} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {log.is_breakdown && (
+                      <Badge status="error" customLabel={log.breakdown_duration || '1h 30m'} />
+                    )}
+                    <Badge status={log.status} />
+                  </View>
                 </View>
 
                 <Text style={[styles.title, { color: theme.colors.ink }]}>
@@ -168,6 +176,11 @@ export default function OperationsScreen() {
                 <Text style={[styles.metaText, { color: theme.colors.mute }]}>
                   Location: {log.location}
                 </Text>
+                {log.is_breakdown && (
+                  <Text style={[styles.metaText, { color: '#dc2626', fontWeight: '700' }]}>
+                    Breakdown: {log.breakdown_duration || '1h 30m'}
+                  </Text>
+                )}
 
                 <View style={styles.actionRow}>
                   <Button label="Log New Shift" onPress={() => openMeter(log.machine_code)} size="sm" variant="outline" />

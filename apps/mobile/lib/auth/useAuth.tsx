@@ -13,7 +13,6 @@ export interface AuthContextType {
   session: Session | null;
   user: User | null;
   role: UserRole | null;
-  branchId: string | null;
   isLoading: boolean;
   can: (permission: PermissionCode) => boolean;
   canAny: (permissions: PermissionCode[]) => boolean;
@@ -24,7 +23,6 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   user: null,
   role: null,
-  branchId: null,
   isLoading: true,
   can: () => false,
   canAny: () => false,
@@ -35,7 +33,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
-  const [branchId, setBranchId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
@@ -44,7 +41,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(session?.user ?? null);
       if (session?.user) {
         setRole((session.user.user_metadata?.role as UserRole) || 'service_engineer');
-        setBranchId((session.user.user_metadata?.branch_id as string) || null);
       }
       setIsLoading(false);
     });
@@ -54,10 +50,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(session?.user ?? null);
       if (session?.user) {
         setRole((session.user.user_metadata?.role as UserRole) || 'service_engineer');
-        setBranchId((session.user.user_metadata?.branch_id as string) || null);
       } else {
         setRole(null);
-        setBranchId(null);
       }
       setIsLoading(false);
     });
@@ -87,7 +81,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         session,
         user,
         role,
-        branchId,
         isLoading,
         can,
         canAny,

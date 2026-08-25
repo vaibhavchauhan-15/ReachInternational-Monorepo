@@ -6,7 +6,6 @@ import type { Task, TaskFilterParams, TaskStats, User } from "@reachinternationa
 export const getTasks = cache(async (
   userId: string,
   userRole: string,
-  branchId: string | null,
   params: TaskFilterParams = {}
 ): Promise<Task[]> => {
   const supabase = createSupabaseAdminClient();
@@ -27,7 +26,7 @@ export const getTasks = cache(async (
 
   // Role scoping: Employees only see tasks created by them or assigned to them
   const isManager = [
-    "super_admin", "admin", "service_manager", "branch_manager",
+    "super_admin", "admin", "service_manager",
     "supervisor", "hr_manager", "rental_manager", "sales_manager",
     "finance_manager", "store_manager"
   ].includes(userRole);
@@ -123,10 +122,9 @@ export const getTaskById = cache(async (taskId: string): Promise<Task | null> =>
 
 export const getTaskDashboardStats = cache(async (
   userId: string,
-  userRole: string,
-  branchId: string | null
+  userRole: string
 ): Promise<TaskStats> => {
-  const tasks = await getTasks(userId, userRole, branchId);
+  const tasks = await getTasks(userId, userRole);
   const todayStr = new Date().toISOString().split("T")[0];
 
   const totalTasks = tasks.length;

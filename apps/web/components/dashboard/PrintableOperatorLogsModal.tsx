@@ -85,13 +85,29 @@ function OperatorLogsReportContent({
   return (
     <div className="bg-white text-black p-2.5 sm:p-4 rounded-xl border border-neutral-300 shadow-sm flex flex-col justify-between text-xs font-sans max-w-[210mm] mx-auto space-y-2 sm:space-y-2.5 w-full">
       {/* ========================================================= */}
-      {/* 1. TOP CENTER HEADING & CONSOLIDATED METADATA STRIP        */}
+      {/* 1. TOP HEADING & CONSOLIDATED METADATA STRIP              */}
       {/* ========================================================= */}
-      <div className="text-center pb-2 border-b-2 border-neutral-900 space-y-1">
-        <h2 className="text-sm sm:text-base font-black uppercase text-neutral-900 tracking-wider">
-          OPERATOR DAILY MACHINE LOG REPORT
-        </h2>
-        <div className="flex flex-wrap items-center justify-center gap-x-4 sm:gap-x-5 gap-y-1 text-[9.5px] sm:text-[10px] text-neutral-800 font-medium leading-tight">
+      <div className="pb-2 border-b-2 border-neutral-900 space-y-1.5">
+        <div className="flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+          {/* Top Left Logo */}
+          <div className="flex items-center gap-2 shrink-0">
+            {/* eslint-disable-next-html-element-suppress */}
+            <img
+              src="/pdf-logo.png"
+              alt="Reach International"
+              className="h-10 sm:h-12 w-auto object-contain"
+            />
+          </div>
+
+          {/* Report Title */}
+          <div className="text-right flex-1 min-w-[200px]">
+            <h2 className="text-sm sm:text-base font-black uppercase text-neutral-900 tracking-wider">
+              OPERATOR DAILY MACHINE LOG REPORT
+            </h2>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-center sm:justify-between gap-x-4 sm:gap-x-5 gap-y-1 text-[9.5px] sm:text-[10px] text-neutral-800 font-medium leading-tight pt-1 border-t border-neutral-200">
           <div><strong>Operator:</strong> {operatorName}</div>
           <div><strong>Number:</strong> {operatorPhone}</div>
           {selectedMonth !== "all" && (
@@ -140,7 +156,7 @@ function OperatorLogsReportContent({
               <th className="p-0.5 border border-neutral-800 w-[12%] sm:w-[75px] font-mono text-center align-middle whitespace-nowrap">TIMINGS</th>
               <th className="p-0.5 border border-neutral-800 text-center w-[5%] sm:w-[28px] align-middle whitespace-nowrap">OP</th>
               <th className="p-0.5 border border-neutral-800 text-center w-[5%] sm:w-[28px] align-middle whitespace-nowrap">OT</th>
-              <th className="p-0.5 border border-neutral-800 text-center w-[7%] sm:w-[45px] align-middle whitespace-nowrap">STATUS</th>
+              <th className="p-0.5 border border-neutral-800 text-center w-[7%] sm:w-[45px] align-middle whitespace-nowrap">BREAKDOWN</th>
               <th className="p-1 border border-neutral-800 w-[18%] sm:auto align-middle">REMARKS</th>
             </tr>
           </thead>
@@ -151,9 +167,14 @@ function OperatorLogsReportContent({
                 const opHrs = log.running_hours || computeDurationHours(log.start_time, log.end_time);
                 const otHrs = log.overtime_hours || 0;
 
-                const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*([^\]]+)\]/);
-                const bkdDetails = bkdMatch ? bkdMatch[1] : isBkd ? "Breakdown" : null;
-                const cleanRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/, "").trim() || "—";
+                const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*([^\]]+)\]/i) || (log.remarks || "").match(/Breakdown\s*(?:Duration)?:?\s*(\d+h?\s*\d*m?)/i);
+                const bkdDetails = bkdMatch ? bkdMatch[1].trim() : isBkd ? "Breakdown" : null;
+                const cleanRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim() || "—";
+                let bkdDurationOnly = bkdDetails;
+                if (bkdDurationOnly) {
+                  bkdDurationOnly = bkdDurationOnly.replace(/^Breakdown\s*\((.*)\)$/i, "$1").replace(/^Machine Breakdown\s*\((.*)\)$/i, "$1").replace(/^Breakdown\s*/i, "").replace(/\s*duration$/i, "").trim();
+                }
+                const displayBkdText = isBkd ? (bkdDurationOnly && bkdDurationOnly.toLowerCase() !== "breakdown" ? bkdDurationOnly : "Breakdown") : "Normal";
 
                 return (
                   <tr key={log.id || idx} className="bg-white">
@@ -181,8 +202,8 @@ function OperatorLogsReportContent({
                     </td>
                     <td className="p-0.5 border border-neutral-300 text-[8px] text-center align-middle whitespace-nowrap">
                       {isBkd ? (
-                        <span className="font-bold text-rose-700 block text-[8px] text-center whitespace-nowrap">
-                          Breakdown {bkdDetails ? `(${bkdDetails})` : ""}
+                        <span className="font-extrabold text-rose-700 block text-[8px] font-mono text-center whitespace-nowrap">
+                          {displayBkdText}
                         </span>
                       ) : (
                         <span className="font-bold text-emerald-700 block text-[8px] text-center whitespace-nowrap">
@@ -212,6 +233,7 @@ function OperatorLogsReportContent({
       {/* ========================================================= */}
       {(() => {
         const clientDisplayName =
+          (logs[0] as any)?.client?.client_name ||
           (logs[0]?.machine as any)?.customer_name ||
           assignedMachine?.customer_name ||
           "Client Representative";

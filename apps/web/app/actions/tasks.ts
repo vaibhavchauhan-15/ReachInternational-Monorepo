@@ -33,7 +33,6 @@ export async function createTask(input: CreateTaskInput) {
         due_time: validated.due_time || null,
         priority: validated.priority,
         reminder_offset: validated.reminder_offset,
-        branch_id: validated.branch_id || currentUser.branch_id || null,
         created_by: currentUser.id,
         status: "pending",
       })

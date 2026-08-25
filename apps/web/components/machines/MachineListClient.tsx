@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition, useMemo, useCallback, useDeferredValue } from "react";
+import { useState, useTransition, useMemo, useCallback, useDeferredValue, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -9,6 +10,8 @@ import {
   AnimatedTrash,
   AnimatedRefresh,
   AnimatedClipboardList,
+  AnimatedWrench,
+  AnimatedAlertTriangle,
 } from "@/components/ui/animated-icons";
 import { MoreVertical, Download } from "lucide-react";
 import {
@@ -87,16 +90,103 @@ function RowActionsMenu({
   isAdmin: boolean;
   onEdit: (m: Machine) => void;
   onDelete: (m: Machine) => void;
-  onNavigate: (path: string) => void;
+  onNavigate: (tab: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number; openUpwards: boolean }>({
+    top: 0,
+    left: 0,
+    openUpwards: false,
+  });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const updatePosition = useCallback(() => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const menuWidth = 176; // 11rem = 176px (w-44)
+    const menuHeight = isAdmin ? 140 : 96;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const shouldOpenUpwards = spaceBelow < menuHeight + 16;
+
+    let leftPos = rect.right - menuWidth;
+    if (leftPos < 12) leftPos = 12;
+    if (leftPos + menuWidth > window.innerWidth - 12) {
+      leftPos = window.innerWidth - menuWidth - 12;
+    }
+
+    let topPos = shouldOpenUpwards ? rect.top - menuHeight - 4 : rect.bottom + 4;
+    if (topPos < 12) topPos = 12;
+
+    setCoords({
+      top: topPos,
+      left: leftPos,
+      openUpwards: shouldOpenUpwards,
+    });
+  }, [isAdmin]);
+
+  const toggleOpen = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.stopPropagation();
+      if (!open) {
+        updatePosition();
+      }
+      setOpen((prev) => !prev);
+    },
+    [open, updatePosition]
+  );
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handleScrollOrResize = () => {
+      updatePosition();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(target) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
+
+    window.addEventListener("scroll", handleScrollOrResize, true);
+    window.addEventListener("resize", handleScrollOrResize);
+    window.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+
+    return () => {
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize);
+      window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [open, updatePosition]);
 
   return (
     <div className="relative" onClick={(e) => e.stopPropagation()}>
       <TooltipWrapper content="More actions">
         <button
+          ref={buttonRef}
           type="button"
-          onClick={() => setOpen(!open)}
+          onClick={toggleOpen}
+          aria-expanded={open}
           className="p-1.5 rounded-lg text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
           aria-label="More actions"
         >
@@ -104,63 +194,72 @@ function RowActionsMenu({
         </button>
       </TooltipWrapper>
 
-      <AnimatePresence>
-        {open && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: -4 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: -4 }}
-              transition={{ type: "spring", stiffness: 450, damping: 30 }}
-              className="absolute right-0 top-full mt-1 z-50 w-44 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1 shadow-xl text-xs space-y-0.5"
-            >
-              {canEdit && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    onEdit(machine);
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
-                >
-                  <AnimatedEdit size={14} className="text-amber-500" />
-                  <span>Edit Machine</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  onNavigate(`/machines?tab=services`);
+      {mounted &&
+        open &&
+        createPortal(
+          <AnimatePresence>
+            <div className="fixed inset-0 z-50 pointer-events-none">
+              <motion.div
+                ref={menuRef}
+                initial={{ opacity: 0, scale: 0.95, y: coords.openUpwards ? 4 : -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: coords.openUpwards ? 4 : -4 }}
+                transition={{ type: "spring", stiffness: 450, damping: 30 }}
+                style={{
+                  position: "fixed",
+                  top: `${coords.top}px`,
+                  left: `${coords.left}px`,
+                  width: "176px",
                 }}
-                className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
+                className="pointer-events-auto z-50 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1 shadow-xl text-xs space-y-0.5"
               >
-                <AnimatedClipboardList size={14} className="text-emerald-500" />
-                <span>Update Service</span>
-              </button>
-
-              {isAdmin && (
-                <>
-                  <div className="my-1 border-t border-[var(--color-hairline)]" />
+                {canEdit && (
                   <button
                     type="button"
                     onClick={() => {
                       setOpen(false);
-                      onDelete(machine);
+                      onEdit(machine);
                     }}
-                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
                   >
-                    <AnimatedTrash size={14} className="text-rose-500" />
-                    <span>Delete Machine</span>
+                    <AnimatedEdit size={14} className="text-amber-500" />
+                    <span>Edit Machine</span>
                   </button>
-                </>
-              )}
-            </motion.div>
-          </>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    onNavigate("services");
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
+                >
+                  <AnimatedClipboardList size={14} className="text-emerald-500" />
+                  <span>Update Service</span>
+                </button>
+
+                {isAdmin && (
+                  <>
+                    <div className="my-1 border-t border-[var(--color-hairline)]" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpen(false);
+                        onDelete(machine);
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                    >
+                      <AnimatedTrash size={14} className="text-rose-500" />
+                      <span>Delete Machine</span>
+                    </button>
+                  </>
+                )}
+              </motion.div>
+            </div>
+          </AnimatePresence>,
+          document.body
         )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -178,70 +277,166 @@ function HeaderMoreMenu({
   onRefresh: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [coords, setCoords] = useState<{ top: number; left: number; openUpwards: boolean }>({
+    top: 0,
+    left: 0,
+    openUpwards: false,
+  });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const updatePosition = useCallback(() => {
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const menuWidth = 192; // 12rem = 192px (w-48)
+    const menuHeight = isAdmin ? 140 : 96;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const shouldOpenUpwards = spaceBelow < menuHeight + 16;
+
+    let leftPos = rect.right - menuWidth;
+    if (leftPos < 12) leftPos = 12;
+    if (leftPos + menuWidth > window.innerWidth - 12) {
+      leftPos = window.innerWidth - menuWidth - 12;
+    }
+
+    let topPos = shouldOpenUpwards ? rect.top - menuHeight - 4 : rect.bottom + 4;
+    if (topPos < 12) topPos = 12;
+
+    setCoords({
+      top: topPos,
+      left: leftPos,
+      openUpwards: shouldOpenUpwards,
+    });
+  }, [isAdmin]);
+
+  const toggleOpen = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.stopPropagation();
+      if (!open) {
+        updatePosition();
+      }
+      setOpen((prev) => !prev);
+    },
+    [open, updatePosition]
+  );
+
+  useEffect(() => {
+    if (!open) return;
+
+    const handleScrollOrResize = () => {
+      updatePosition();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+
+    const handlePointerDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(target) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(target)
+      ) {
+        setOpen(false);
+      }
+    };
+
+    window.addEventListener("scroll", handleScrollOrResize, true);
+    window.addEventListener("resize", handleScrollOrResize);
+    window.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+
+    return () => {
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize);
+      window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [open, updatePosition]);
 
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setOpen(!open)}
+        onClick={toggleOpen}
+        aria-expanded={open}
         className="flex items-center gap-1 px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs font-semibold text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors shadow-2xs cursor-pointer"
         title="More options"
       >
         <span>⋮ More</span>
       </button>
 
-      <AnimatePresence>
-        {open && (
-          <>
-            <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: -4 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: -4 }}
-              transition={{ type: "spring", stiffness: 450, damping: 30 }}
-              className="absolute right-0 top-full mt-1 z-50 w-48 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1 shadow-xl text-xs space-y-0.5"
-            >
-              {isAdmin && (
+      {mounted &&
+        open &&
+        createPortal(
+          <AnimatePresence>
+            <div className="fixed inset-0 z-50 pointer-events-none">
+              <motion.div
+                ref={menuRef}
+                initial={{ opacity: 0, scale: 0.95, y: coords.openUpwards ? 4 : -4 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: coords.openUpwards ? 4 : -4 }}
+                transition={{ type: "spring", stiffness: 450, damping: 30 }}
+                style={{
+                  position: "fixed",
+                  top: `${coords.top}px`,
+                  left: `${coords.left}px`,
+                  width: "192px",
+                }}
+                className="pointer-events-auto z-50 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1 shadow-xl text-xs space-y-0.5"
+              >
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      onOpenImport();
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
+                  >
+                    <AnimatedClipboardList size={16} className="text-sky-500" />
+                    <span>Bulk Excel Import</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => {
                     setOpen(false);
-                    onOpenImport();
+                    onExportCSV();
                   }}
                   className="w-full flex items-center gap-2 px-2.5 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
                 >
-                  <AnimatedClipboardList size={16} className="text-sky-500" />
-                  <span>Bulk Excel Import</span>
+                  <Download size={16} className="text-emerald-500" />
+                  <span>Export CSV</span>
                 </button>
-              )}
 
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  onExportCSV();
-                }}
-                className="w-full flex items-center gap-2 px-2.5 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
-              >
-                <Download size={16} className="text-emerald-500" />
-                <span>Export CSV</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setOpen(false);
-                  onRefresh();
-                }}
-                className="w-full flex items-center gap-2 px-2.5 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
-              >
-                <AnimatedRefresh size={16} className="text-amber-500" />
-                <span>Refresh Data</span>
-              </button>
-            </motion.div>
-          </>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    onRefresh();
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
+                >
+                  <AnimatedRefresh size={16} className="text-amber-500" />
+                  <span>Refresh Data</span>
+                </button>
+              </motion.div>
+            </div>
+          </AnimatePresence>,
+          document.body
         )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -280,8 +475,8 @@ export function MachineListClient({
   const [healthStatusFilter, setHealthStatusFilter] = useState<string>("all");
 
   const isAdmin = userRole === "super_admin" || userRole === "admin";
-  const canEdit = isAdmin || userRole === "branch_manager" || userRole === "service_manager" || userRole === "rental_manager" || userRole === "supervisor";
-  const canCreateMachine = isAdmin || userRole === "branch_manager" || userRole === "service_manager";
+  const canEdit = isAdmin || userRole === "service_manager" || userRole === "rental_manager" || userRole === "supervisor";
+  const canCreateMachine = isAdmin || userRole === "service_manager";
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -325,10 +520,14 @@ export function MachineListClient({
     if (!deletingMachine) return;
     startTransition(async () => {
       try {
-        await deleteMachine(deletingMachine.id);
-        toast("success", `Machine ${deletingMachine.machine_id} deleted successfully`);
-        setDeletingMachine(null);
-        router.refresh();
+        const res = await deleteMachine(deletingMachine.id);
+        if (res?.error) {
+          toast("error", "Failed to delete machine", res.error);
+        } else {
+          toast("success", `Machine ${deletingMachine.machine_id} deleted successfully`);
+          setDeletingMachine(null);
+          router.refresh();
+        }
       } catch (err: unknown) {
         const errorMsg = err instanceof Error ? err.message : "An error occurred";
         toast("error", "Failed to delete machine", errorMsg);
@@ -434,10 +633,11 @@ export function MachineListClient({
         header: "MACHINE ID",
         accessorKey: "machine_id" as const,
         sortable: true,
+        width: "11%",
         cell: (row: Machine) => (
           <Link
             href={`/machines/${row.id}`}
-            className="font-mono text-xs font-bold text-[var(--color-ink)] hover:text-sky-600 dark:hover:text-sky-400 hover:underline"
+            className="font-mono text-xs font-bold text-[var(--color-ink)] hover:text-sky-600 dark:hover:text-sky-400 hover:underline whitespace-nowrap"
           >
             {row.machine_id}
           </Link>
@@ -448,8 +648,9 @@ export function MachineListClient({
         header: "MODEL",
         accessorKey: "model" as const,
         sortable: true,
+        width: "10%",
         cell: (row: Machine) => (
-          <span className="text-xs font-semibold text-[var(--color-ink)]">
+          <span className="text-xs font-semibold text-[var(--color-ink)] whitespace-nowrap">
             {row.model || "—"}
           </span>
         ),
@@ -459,8 +660,9 @@ export function MachineListClient({
         header: "SERIAL NO.",
         accessorKey: "serial_number" as const,
         sortable: true,
+        width: "11%",
         cell: (row: Machine) => (
-          <span className="font-mono text-xs text-[var(--color-body)] font-medium">
+          <span className="font-mono text-xs text-[var(--color-body)] font-medium whitespace-nowrap">
             {row.serial_number || "—"}
           </span>
         ),
@@ -470,8 +672,9 @@ export function MachineListClient({
         header: "YUM",
         accessorKey: "year_of_mfg" as const,
         sortable: true,
+        width: "6%",
         cell: (row: Machine) => (
-          <span className="text-xs text-[var(--color-mute)] font-medium">
+          <span className="text-xs text-[var(--color-mute)] font-medium whitespace-nowrap">
             {row.year_of_mfg || "—"}
           </span>
         ),
@@ -481,8 +684,9 @@ export function MachineListClient({
         header: "HMR (HRS)",
         accessorKey: "hour_meter" as const,
         sortable: true,
+        width: "9%",
         cell: (row: Machine) => (
-          <span className="font-mono text-xs font-bold text-[var(--color-ink)]">
+          <span className="font-mono text-xs font-bold text-[var(--color-ink)] whitespace-nowrap">
             {row.hour_meter || 0}
           </span>
         ),
@@ -492,8 +696,9 @@ export function MachineListClient({
         header: "SERVICES",
         accessorKey: "service_count" as const,
         sortable: true,
+        width: "8%",
         cell: (row: Machine) => (
-          <span className="font-mono text-xs font-bold text-[var(--color-ink)]">
+          <span className="font-mono text-xs font-bold text-[var(--color-ink)] whitespace-nowrap">
             {row.service_count || 0}
           </span>
         ),
@@ -501,30 +706,45 @@ export function MachineListClient({
       {
         id: "supervisor",
         header: "SUPERVISOR",
-        cell: (row: Machine) => (
-          <span className="text-xs font-medium text-[var(--color-body)]">
-            {row.current_supervisor?.full_name || "Unassigned"}
-          </span>
-        ),
+        width: "12%",
+        cell: (row: Machine) => {
+          const name = row.current_supervisor?.full_name || "Unassigned";
+          return (
+            <span
+              className="text-xs font-medium text-[var(--color-body)] truncate block max-w-[110px]"
+              title={name}
+            >
+              {name}
+            </span>
+          );
+        },
       },
       {
         id: "operator",
         header: "OPERATOR",
-        cell: (row: Machine) => (
-          <span className="text-xs font-medium text-[var(--color-body)]">
-            {row.current_operator?.full_name || "Unassigned"}
-          </span>
-        ),
+        width: "12%",
+        cell: (row: Machine) => {
+          const name = row.current_operator?.full_name || "Unassigned";
+          return (
+            <span
+              className="text-xs font-medium text-[var(--color-body)] truncate block max-w-[110px]"
+              title={name}
+            >
+              {name}
+            </span>
+          );
+        },
       },
       {
         id: "health_status",
         header: "HEALTH",
         accessorKey: "health_status" as const,
         sortable: true,
+        width: "9%",
         cell: (row: Machine) => {
-          if (row.health_status === "breakdown") return <Badge variant="overdue" dot>Breakdown</Badge>;
-          if (row.health_status === "under_maintenance") return <Badge variant="warning" dot>Maintenance</Badge>;
-          return <Badge variant="success" dot>Active</Badge>;
+          if (row.health_status === "breakdown") return <Badge variant="overdue" dot className="whitespace-nowrap">Breakdown</Badge>;
+          if (row.health_status === "under_maintenance") return <Badge variant="warning" dot className="whitespace-nowrap">Maintenance</Badge>;
+          return <Badge variant="success" dot className="whitespace-nowrap">Active</Badge>;
         },
       },
       {
@@ -532,14 +752,16 @@ export function MachineListClient({
         header: "STATUS",
         accessorKey: "status" as const,
         sortable: true,
+        width: "8%",
         cell: (row: Machine) => {
-          if (row.status === "rented") return <Badge variant="info" dot>Rented</Badge>;
-          return <Badge variant="neutral">Available</Badge>;
+          if (row.status === "rented") return <Badge variant="info" dot className="whitespace-nowrap">Rented</Badge>;
+          return <Badge variant="neutral" className="whitespace-nowrap">Available</Badge>;
         },
       },
       {
         id: "actions",
         header: "",
+        width: "4%",
         cell: (row: Machine) => (
           <RowActionsMenu
             machine={row}
@@ -550,16 +772,67 @@ export function MachineListClient({
               setModalOpen(true);
             }}
             onDelete={(m) => setDeletingMachine(m)}
-            onNavigate={(path) => router.push(path)}
+            onNavigate={(tab) => updateFilters({ tab, page: 1 })}
           />
         ),
       },
     ],
-    [canEdit, isAdmin, router]
+    [canEdit, isAdmin, updateFilters]
   );
 
   return (
     <div className="flex flex-col gap-5 pb-20 md:pb-6">
+      {/* Top Page Navigation Tabs — Mobile/Tablet Only (lg:hidden, as Desktop Sidebar already has sub-items) */}
+      <div className="flex lg:hidden items-center justify-between border-b border-[var(--color-hairline)] pb-3 overflow-x-auto w-full max-w-full gap-2 no-scrollbar">
+        <div className="flex items-center gap-1 bg-[var(--color-hairline-soft-surface)] p-1 rounded-xl border border-[var(--color-hairline)] shrink-0 w-full sm:w-auto overflow-x-auto no-scrollbar">
+          <button
+            type="button"
+            onClick={() => updateFilters({ tab: "inventory", page: 1 })}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap min-h-[40px] ${
+              activeTab === "inventory"
+                ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-xs"
+                : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+            }`}
+          >
+            <AnimatedWrench size={15} className={activeTab === "inventory" ? "text-sky-500" : ""} />
+            <span>Machine Directory</span>
+            <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-full font-mono bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold">
+              {total}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => updateFilters({ tab: "services", page: 1 })}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap min-h-[40px] ${
+              activeTab === "services"
+                ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-xs"
+                : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+            }`}
+          >
+            <AnimatedClipboardList size={15} className={activeTab === "services" ? "text-emerald-500" : ""} />
+            <span>Service Logs</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => updateFilters({ tab: "complaints", page: 1 })}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap min-h-[40px] ${
+              activeTab === "complaints"
+                ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-xs"
+                : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+            }`}
+          >
+            <AnimatedAlertTriangle size={15} className={activeTab === "complaints" ? "text-rose-500" : ""} />
+            <span>Breakdown Complaints</span>
+            {complaints.length > 0 && (
+              <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-full font-mono bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold">
+                {complaints.length}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
       {/* TAB 2: Service Logs View */}
       {activeTab === "services" && serviceData && (
         <ServicesClient data={serviceData} />
@@ -755,24 +1028,47 @@ export function MachineListClient({
               </AnimatePresence>
             </div>
           ) : (
-            <EnterpriseTable
-              columns={tableColumns}
-              data={machines}
-              loading={isPending}
-              selectable={true}
-              selectedIds={selectedIds}
-              onSelectionChange={setSelectedIds}
-              bulkActions={[
-                {
-                  label: "Export Selected CSV",
-                  icon: Download,
-                  onClick: handleExportCSV,
-                },
-              ]}
-              emptyMessage="No machines match your criteria"
-              emptyDescription="Try adjusting filters or search terms."
-              onRowClick={(row) => router.push(`/machines/${row.id}`)}
-            />
+            <>
+              {/* Desktop Table View (hidden sm:hidden md:block) */}
+              <div className="hidden sm:block">
+                <EnterpriseTable
+                  columns={tableColumns}
+                  data={machines}
+                  loading={isPending}
+                  selectable={true}
+                  selectedIds={selectedIds}
+                  onSelectionChange={setSelectedIds}
+                  bulkActions={[
+                    {
+                      label: "Export Selected CSV",
+                      icon: Download,
+                      onClick: handleExportCSV,
+                    },
+                  ]}
+                  emptyMessage="No machines match your criteria"
+                  emptyDescription="Try adjusting filters or search terms."
+                  onRowClick={(row) => router.push(`/machines/${row.id}`)}
+                />
+              </div>
+
+              {/* Mobile Card Grid View (block sm:hidden) */}
+              <div className="block sm:hidden space-y-3">
+                <AnimatePresence mode="popLayout">
+                  {machines.map((m) => (
+                    <MobileMachineCard
+                      key={m.id}
+                      machine={m}
+                      isAdmin={isAdmin}
+                      onEdit={(mach: Machine) => {
+                        setEditingMachine(mach);
+                        setModalOpen(true);
+                      }}
+                      onDelete={(mach: Machine) => setDeletingMachine(mach)}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
+            </>
           )}
 
           {/* Pagination */}

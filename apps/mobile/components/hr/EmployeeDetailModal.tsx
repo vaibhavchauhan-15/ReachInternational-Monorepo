@@ -70,7 +70,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
           <ScrollView style={styles.bodyScroll}>
             {/* Contact Details */}
             <View style={styles.section}>
-              <Text style={[styles.secTitle, { color: theme.colors.link }]}>Contact & Branch Info</Text>
+              <Text style={[styles.secTitle, { color: theme.colors.link }]}>Contact & Work Location</Text>
 
               <View style={styles.infoRow}>
                 <Text style={[styles.label, { color: theme.colors.mute }]}>Phone Number:</Text>
@@ -83,8 +83,8 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
               </View>
 
               <View style={styles.infoRow}>
-                <Text style={[styles.label, { color: theme.colors.mute }]}>Assigned Branch:</Text>
-                <Text style={[styles.val, { color: theme.colors.ink }]}>{employeeData.branch_name}</Text>
+                <Text style={[styles.label, { color: theme.colors.mute }]}>Work Location:</Text>
+                <Text style={[styles.val, { color: theme.colors.ink }]}>{employeeData.branch_name || 'India Operations'}</Text>
               </View>
 
               <View style={styles.infoRow}>

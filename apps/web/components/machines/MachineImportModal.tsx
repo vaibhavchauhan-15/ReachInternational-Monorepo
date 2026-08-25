@@ -131,7 +131,7 @@ export function MachineImportModal({ open, onClose, onSuccess }: MachineImportMo
       open={open}
       onClose={handleClose}
       title="Bulk Import Machines"
-      description="Upload an Excel file to import multiple machines at once. Machine codes will be auto-generated."
+      description="Upload an Excel file to import multiple machines into inventory. Machine IDs will be auto-generated if left blank."
       size="lg"
     >
       <div className="flex flex-col gap-5">
@@ -268,10 +268,10 @@ export function MachineImportModal({ open, onClose, onSuccess }: MachineImportMo
         {/* Info Text */}
         {!result && !isPending && (
           <div className="text-xs text-[var(--color-mute)] space-y-1">
-            <p>• Machine codes will be auto-generated (format: MCH-XXXXXX)</p>
-            <p>• Required columns: Machine Name, Customer Name, Customer Mobile, City, State</p>
-            <p>• Assigned Engineer column accepts either engineer name or engineer email ID</p>
-            <p>• Mobile numbers must be valid 10-digit Indian numbers</p>
+            <p>• Supported columns: Machine ID, Model, Manufacturer, Serial Number, Year of MFG, Hour Meter, Service Count, Status, Health Status.</p>
+            <p>• Machine ID is optional (auto-generated format: RI-MC-0001 if left blank).</p>
+            <p>• Status options: &quot;available&quot; or &quot;rented&quot; (default: &quot;available&quot;).</p>
+            <p>• Health Status options: &quot;active&quot;, &quot;under_maintenance&quot;, or &quot;breakdown&quot; (default: &quot;active&quot;).</p>
           </div>
         )}
       </div>

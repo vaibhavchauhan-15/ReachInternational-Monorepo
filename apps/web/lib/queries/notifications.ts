@@ -112,7 +112,7 @@ export async function getNotifications(params: NotificationListParams = {}) {
       email_message_id,
       payload,
       provider_response,
-      machine:machines!notifications_machine_id_fkey(id, machine_code, machine_name, customer_name, customer_mobile, customer_email),
+      machine:machines(id, model, serial_number),
       recipient:users!notifications_recipient_id_fkey(id, full_name, phone, email)
     `,
       { count: "estimated" }
@@ -130,10 +130,8 @@ export async function getNotifications(params: NotificationListParams = {}) {
   }
 
   if (search) {
-    // Search across recipient email/name, machine code/name, error messages,
-    // and message IDs. We use a nested `or` filter against related tables.
     query = query.or(
-      `error_message.ilike.%${search}%,whatsapp_message_id.ilike.%${search}%,email_message_id.ilike.%${search}%,machine.machine_code.ilike.%${search}%,machine.machine_name.ilike.%${search}%,recipient.email.ilike.%${search}%,recipient.full_name.ilike.%${search}%`
+      `error_message.ilike.%${search}%,whatsapp_message_id.ilike.%${search}%,email_message_id.ilike.%${search}%,machine.model.ilike.%${search}%,recipient.email.ilike.%${search}%,recipient.full_name.ilike.%${search}%`
     );
   }
 

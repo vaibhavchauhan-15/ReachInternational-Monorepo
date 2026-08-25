@@ -436,14 +436,22 @@ export function FieldServiceReportModal({
         {/* Printable FSR Report Container */}
         <div id="printable-fsr-report" className="bg-white text-black p-6 rounded-xl border border-neutral-300 shadow-sm flex flex-col gap-4 text-xs font-sans">
           {/* FSR Header */}
-          <div className="flex items-start justify-between border-b-2 border-neutral-900 pb-3">
-            <div>
-              <h2 className="text-xl font-extrabold uppercase tracking-wide text-neutral-900">
-                FIELD SERVICE REPORT
-              </h2>
-              <p className="text-[11px] text-neutral-600 font-medium">REACH INTERNATIONAL Maintenance & Operational Log</p>
+          <div className="flex items-start justify-between border-b-2 border-neutral-900 pb-3 gap-3">
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-html-element-suppress */}
+              <img
+                src="/pdf-logo.png"
+                alt="Reach International"
+                className="h-12 w-auto object-contain shrink-0"
+              />
+              <div>
+                <h2 className="text-xl font-extrabold uppercase tracking-wide text-neutral-900">
+                  FIELD SERVICE REPORT
+                </h2>
+                <p className="text-[11px] text-neutral-600 font-medium">REACH INTERNATIONAL Maintenance & Operational Log</p>
+              </div>
             </div>
-            <div className="text-right text-[11px]">
+            <div className="text-right text-[11px] shrink-0">
               <div className="font-bold text-neutral-900">FSR No: <span className="font-mono text-blue-700">{fsrNo}</span></div>
               <div>Date: <strong>{reportDate}</strong></div>
               <div className="text-[10px] text-neutral-500 mt-1 max-w-[220px]">

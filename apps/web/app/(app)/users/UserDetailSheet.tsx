@@ -3,6 +3,7 @@
 import {
   AnimatedX,
   AnimatedBuilding2,
+  AnimatedMapPin,
   AnimatedKey,
   AnimatedEdit,
   AnimatedTrash2,
@@ -159,8 +160,8 @@ export function UserDetailSheet({
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-[var(--color-hairline)]">
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-ink)] text-[var(--color-canvas)] font-bold text-lg shadow-sm">
-                {user.full_name.charAt(0).toUpperCase()}
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] shadow-xs">
+                {getRoleIcon(user.role)}
               </div>
               <div>
                 <h3 className="text-base font-bold text-[var(--color-ink)] leading-snug">
@@ -223,10 +224,26 @@ export function UserDetailSheet({
             <div className="p-3.5 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2.5 text-xs text-[var(--color-body)]">
               <div className="flex items-center justify-between">
                 <span className="text-[var(--color-mute)] font-medium flex items-center gap-1">
-                  <AnimatedBuilding2 size={14} className="text-indigo-500" /> Assigned Branch Location
+                  <AnimatedMapPin size={14} className="text-emerald-500" /> City
                 </span>
                 <span className="font-semibold text-[var(--color-ink)]">
-                  {user.branch ? `${user.branch.name} (${user.branch.city})` : "HQ / Global"}
+                  {user.city || "Mumbai"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1">
+                  <AnimatedMapPin size={14} className="text-emerald-500" /> District
+                </span>
+                <span className="font-semibold text-[var(--color-ink)]">
+                  {user.district || "Mumbai"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1">
+                  <AnimatedMapPin size={14} className="text-emerald-500" /> State
+                </span>
+                <span className="font-semibold text-[var(--color-ink)]">
+                  {user.state || "Maharashtra"}
                 </span>
               </div>
               <div className="flex items-center justify-between">

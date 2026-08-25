@@ -1,7 +1,6 @@
 export type UserRole = 
   | "super_admin"
   | "admin"
-  | "branch_manager"
   | "service_manager"
   | "engineer"
   | "service_engineer"
@@ -17,7 +16,6 @@ export type UserRole =
 export type PermissionScope = 
   | "ORGANIZATION"
   | "REGION"
-  | "BRANCH"
   | "DEPARTMENT"
   | "WAREHOUSE"
   | "ASSIGNED"
@@ -67,20 +65,6 @@ export type NotificationStatus = "pending" | "sent" | "failed";
 export type NotificationChannel = "whatsapp" | "sms" | "email" | "in_app";
 export type ImportBatchStatus = "processing" | "completed" | "failed";
 
-export interface Branch {
-  id: string;
-  code: string;
-  name: string;
-  city: string;
-  state: string;
-  address: string | null;
-  phone: string | null;
-  email: string | null;
-  status: "active" | "inactive";
-  created_at: string;
-  updated_at: string;
-}
-
 export interface Role {
   id: string;
   code: UserRole;
@@ -103,12 +87,14 @@ export interface User {
   phone: string | null;
   role: UserRole;
   status: UserStatus;
-  branch_id: string | null;
+  branch_id?: string | null;
   location?: string | null;
+  city?: string | null;
+  district?: string | null;
+  state?: string | null;
   email: string;
   created_at: string;
   updated_at: string;
-  branch?: Pick<Branch, "id" | "code" | "name" | "city"> | null;
 }
 
 export interface Employee {
@@ -119,7 +105,7 @@ export interface Employee {
   email: string | null;
   designation: string;
   department: string | null;
-  branch_id: string | null;
+  branch_id?: string | null;
   user_id: string | null;
   joining_date: string;
   employment_type: EmploymentType;
@@ -131,7 +117,6 @@ export interface Employee {
   status: EmployeeStatus;
   created_at: string;
   updated_at: string;
-  branch?: Pick<Branch, "id" | "code" | "name"> | null;
   user?: Pick<User, "id" | "email" | "role"> | null;
   reporting_manager?: Pick<Employee, "id" | "full_name" | "employee_code"> | null;
 }
@@ -197,7 +182,6 @@ export interface UserAccountRequest {
   updated_at: string;
   employee?: Pick<Employee, "id" | "employee_code" | "full_name" | "email"> | null;
   requester?: Pick<User, "id" | "full_name" | "email"> | null;
-  branch?: Pick<Branch, "id" | "code" | "name"> | null;
 }
 
 export interface Manufacturer {
@@ -298,6 +282,8 @@ export interface MachineHourLog {
   id: string;
   machine_id: string;
   operator_id: string;
+  supervisor_id?: string | null;
+  client_id?: string | null;
   log_date: string;
   start_meter: number;
   end_meter: number;
@@ -311,8 +297,10 @@ export interface MachineHourLog {
   overtime_hours?: number | null;
   is_breakdown?: boolean | null;
   created_at: string;
-  operator?: Pick<User, "id" | "full_name"> | null;
-  machine?: Pick<Machine, "id" | "machine_code" | "machine_name"> | null;
+  operator?: Pick<User, "id" | "full_name" | "phone" | "email"> | null;
+  supervisor?: Pick<User, "id" | "full_name" | "phone" | "email"> | null;
+  machine?: Pick<Machine, "id" | "machine_code" | "machine_name" | "model" | "serial_number"> | null;
+  client?: CRMClient | null;
 }
 
 export interface MachineComplaint {
@@ -421,7 +409,6 @@ export interface StorageLocation {
   capacity: number;
   notes?: string | null;
   created_at: string;
-  branch?: Pick<Branch, "id" | "code" | "name"> | null;
 }
 
 export interface PurchaseRequestItem {
@@ -453,7 +440,6 @@ export interface PurchaseRequest {
   approved_at?: string | null;
   created_at: string;
   updated_at: string;
-  branch?: Pick<Branch, "id" | "code" | "name"> | null;
   requester?: Pick<User, "id" | "full_name" | "email" | "role"> | null;
   target_manager?: Pick<User, "id" | "full_name" | "email" | "role"> | null;
   approver?: Pick<User, "id" | "full_name" | "email" | "role"> | null;
@@ -511,7 +497,6 @@ export interface GoodsReceipt {
   received_by: string;
   remarks?: string | null;
   created_at: string;
-  branch?: Pick<Branch, "id" | "code" | "name"> | null;
   receiver?: Pick<User, "id" | "full_name" | "email"> | null;
   items?: GoodsReceiptItem[];
   po?: PurchaseOrder | null;
@@ -548,7 +533,6 @@ export interface PartIssue {
   remarks?: string | null;
   created_at: string;
   updated_at: string;
-  branch?: Pick<Branch, "id" | "code" | "name"> | null;
   machine?: Pick<Machine, "id" | "machine_code" | "machine_name"> | null;
   issuer?: Pick<User, "id" | "full_name"> | null;
   recipient?: Pick<User, "id" | "full_name"> | null;
@@ -602,7 +586,6 @@ export interface InventoryStock {
   quantity: number;
   updated_at: string;
   product?: InventoryProduct | null;
-  branch?: Pick<Branch, "id" | "code" | "name"> | null;
 }
 
 export interface InventoryTransaction {
@@ -617,7 +600,6 @@ export interface InventoryTransaction {
   remarks: string | null;
   created_at: string;
   product?: InventoryProduct | null;
-  branch?: Pick<Branch, "id" | "code" | "name"> | null;
   user?: Pick<User, "id" | "full_name" | "email"> | null;
 }
 
@@ -634,8 +616,6 @@ export interface StockTransfer {
   remarks: string | null;
   created_at: string;
   updated_at: string;
-  from_branch?: Pick<Branch, "id" | "code" | "name"> | null;
-  to_branch?: Pick<Branch, "id" | "code" | "name"> | null;
   product?: InventoryProduct | null;
   requester?: Pick<User, "id" | "full_name"> | null;
   accepter?: Pick<User, "id" | "full_name"> | null;
@@ -749,17 +729,23 @@ export interface CRMClient {
   id: string;
   client_name: string;
   code: string;
+  company_name?: string | null;
   contact_person: string | null;
   email: string | null;
   phone: string | null;
+  gstin?: string | null;
+  address?: string | null;
   city: string;
   state: string;
-  branch_id: string | null;
+  pincode?: string | null;
+  branch_id?: string | null;
+  notes?: string | null;
   machine_count: number;
   open_complaints: number;
   status: "active" | "inactive";
+  deleted_at?: string | null;
   created_at: string;
-  branch?: Pick<Branch, "id" | "name" | "code"> | null;
+  updated_at?: string;
 }
 
 export interface Vendor {
@@ -864,7 +850,6 @@ export interface SalesLead {
   created_at: string;
   updated_at: string;
   assignee?: Pick<User, "id" | "full_name" | "email"> | null;
-  branch?: Pick<Branch, "id" | "code" | "name"> | null;
 }
 
 export interface SalesCustomer {
@@ -885,7 +870,6 @@ export interface SalesCustomer {
   created_by: string | null;
   created_at: string;
   updated_at: string;
-  branch?: Pick<Branch, "id" | "code" | "name"> | null;
   orders_count?: number;
   quotations_count?: number;
 }
@@ -927,7 +911,6 @@ export interface SalesOpportunity {
   updated_at: string;
   customer?: Pick<SalesCustomer, "id" | "company_name" | "contact_person" | "phone"> | null;
   salesperson?: Pick<User, "id" | "full_name"> | null;
-  branch?: Pick<Branch, "id" | "code" | "name"> | null;
 }
 
 export interface SalesQuotation {
@@ -1103,7 +1086,6 @@ export interface FinanceInvoice {
   finalized_at: string | null;
   created_at: string;
   updated_at: string;
-  branch?: Pick<Branch, "id" | "name" | "code"> | null;
   creator?: Pick<User, "id" | "full_name"> | null;
   finalizer?: Pick<User, "id" | "full_name"> | null;
   items?: FinanceInvoiceItem[];
@@ -1187,7 +1169,6 @@ export interface FinanceExpense {
   approved_by: string | null;
   recorded_by: string | null;
   created_at: string;
-  branch?: Pick<Branch, "id" | "name"> | null;
   department?: Pick<Department, "id" | "name"> | null;
   approver?: Pick<User, "id" | "full_name"> | null;
   recorder?: Pick<User, "id" | "full_name"> | null;

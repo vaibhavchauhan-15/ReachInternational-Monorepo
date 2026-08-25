@@ -21,7 +21,8 @@ import {
 import { ShieldAlert, ShieldCheck, Building2, Wrench, Package, Activity, Users, CreditCard, TrendingUp, Truck } from "lucide-react";
 import { Modal, Input, SearchableSelect, Button } from "@/components/ui";
 import type { SelectOption } from "@/components/ui/SearchableSelect";
-import type { UserRole, Branch } from "@/lib/types/database";
+import type { UserRole } from "@/lib/types/database";
+import type { Branch } from "@/lib/queries/branches";
 
 const allRoleSelectOptions: SelectOption[] = [
   {
@@ -35,12 +36,6 @@ const allRoleSelectOptions: SelectOption[] = [
     label: "Admin",
     description: "Platform & user management",
     icon: <ShieldCheck className="h-4 w-4 text-amber-500" />,
-  },
-  {
-    value: "branch_manager",
-    label: "Branch Manager",
-    description: "Branch fleet, staff & store control",
-    icon: <Building2 className="h-4 w-4 text-indigo-500" />,
   },
   {
     value: "service_manager",
@@ -128,7 +123,9 @@ export function UserCreateModal({
     password: "",
     role: "service_engineer" as UserRole,
     branch_id: "none",
-    location: "",
+    city: "",
+    district: "",
+    state: "",
   });
 
   const roleOptions = isSuperAdmin
@@ -154,8 +151,8 @@ export function UserCreateModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Create New User Account"
-      description="Register a new employee, field engineer, manager or administrator with branch access control."
+      title="Add Employee / User Account"
+      description="Register a new employee or manager with immediate active access. Login credentials will be emailed directly to the user."
       size="lg"
     >
       <form
@@ -167,6 +164,12 @@ export function UserCreateModal({
         {/* Hidden inputs for custom select values */}
         <input type="hidden" name="branch_id" value={createForm.branch_id} />
         <input type="hidden" name="role" value={createForm.role} />
+
+        {/* Informational banner: Direct activation without approval request */}
+        <div className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs font-medium text-emerald-800 dark:text-emerald-300">
+          <ShieldCheck className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <span>Accounts created via dashboard are activated immediately. Credentials will be emailed directly to the user without admin approval requests.</span>
+        </div>
 
         {/* Section 1: User Identity & Login Credentials */}
         <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3.5">
@@ -200,13 +203,14 @@ export function UserCreateModal({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
-              label="Phone Number"
+              label="Mobile Phone Number *"
               name="phone"
               type="tel"
               icon={<AnimatedPhone size={16} className="text-[var(--color-link)]" />}
               value={createForm.phone}
               onChange={(e) => setCreateForm((prev) => ({ ...prev, phone: e.target.value }))}
               placeholder="+91 98765 43210"
+              required
             />
             <Input
               label="Account Password"
@@ -221,33 +225,41 @@ export function UserCreateModal({
           </div>
         </div>
 
-        {/* Section 2: Branch & Employee Work Location */}
+        {/* Section 2: User Address & Work Location */}
         <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3.5">
           <div className="pb-2 border-b border-[var(--color-hairline)]">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-              2. Branch & Employee Work Location
+              2. User Address & Work Location
             </h3>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Custom Branch Selector */}
-            <SearchableSelect
-              label="Assigned Company Branch"
-              options={branchOptions}
-              value={createForm.branch_id}
-              onChange={(val) => setCreateForm((prev) => ({ ...prev, branch_id: val }))}
-              placeholder="Search or select branch..."
-              clearable={false}
-            />
-
-            {/* Employee Work Location / Base City */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Input
-              label="Employee Work Location / Base City"
-              name="location"
+              label="City"
+              name="city"
               icon={<AnimatedMapPin size={16} className="text-emerald-500" />}
-              value={createForm.location}
-              onChange={(e) => setCreateForm((prev) => ({ ...prev, location: e.target.value }))}
-              placeholder="e.g. Vapi, Gujarat or Mumbai HQ"
+              value={createForm.city}
+              onChange={(e) => setCreateForm((prev) => ({ ...prev, city: e.target.value }))}
+              placeholder="e.g. Mumbai"
+              required
+            />
+            <Input
+              label="District"
+              name="district"
+              icon={<AnimatedMapPin size={16} className="text-emerald-500" />}
+              value={createForm.district}
+              onChange={(e) => setCreateForm((prev) => ({ ...prev, district: e.target.value }))}
+              placeholder="e.g. Mumbai Suburban"
+              required
+            />
+            <Input
+              label="State"
+              name="state"
+              icon={<AnimatedMapPin size={16} className="text-emerald-500" />}
+              value={createForm.state}
+              onChange={(e) => setCreateForm((prev) => ({ ...prev, state: e.target.value }))}
+              placeholder="e.g. Maharashtra"
+              required
             />
           </div>
         </div>

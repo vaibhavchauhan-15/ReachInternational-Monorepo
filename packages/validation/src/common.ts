@@ -16,7 +16,6 @@ export const DateRangeSchema = z.object({
 export const FilterParamsSchema = z.object({
   search: z.string().optional(),
   status: z.string().optional(),
-  branchId: z.string().optional(),
   dateRange: DateRangeSchema.optional(),
 });
 

@@ -93,6 +93,7 @@ async function checkShiftOverlapServer(
 
 export async function submitOperatorHourLogAction(payload: {
   machineId: string;
+  clientId?: string;
   startMeter?: number;
   endMeter?: number;
   startTime?: string;
@@ -144,6 +145,7 @@ export async function submitOperatorHourLogAction(payload: {
     .insert({
       machine_id: payload.machineId,
       operator_id: user.id,
+      client_id: payload.clientId || null,
       log_date: todayDate,
       start_meter: startMtr,
       end_meter: endMtr,
@@ -215,6 +217,7 @@ export async function submitOperatorHourLogAction(payload: {
 
 export async function updateOperatorHourLogAction(payload: {
   logId: string;
+  clientId?: string;
   startMeter?: number;
   endMeter?: number;
   startTime?: string;
@@ -276,6 +279,7 @@ export async function updateOperatorHourLogAction(payload: {
   const { data, error } = await supabase
     .from("machine_hour_logs")
     .update({
+      client_id: payload.clientId ?? existingLog.client_id ?? null,
       start_meter: startMtr,
       end_meter: endMtr,
       start_time: targetStartTime || null,
@@ -455,7 +459,6 @@ export async function hireOperatorAction(payload: {
 
   if (
     user.role !== "supervisor" &&
-    user.role !== "branch_manager" &&
     user.role !== "admin" &&
     user.role !== "super_admin"
   ) {

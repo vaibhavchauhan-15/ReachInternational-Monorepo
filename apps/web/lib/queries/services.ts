@@ -82,7 +82,7 @@ const getCachedEngineerServicesData = unstable_cache(
         pdf_report_url,
         notes,
         next_service_due_date,
-        machine:machines!service_records_machine_id_fkey(id, machine_code, machine_name, model, serial_number, customer_name, city, state),
+        machine:machines(id, model, serial_number, status, health_status),
         engineer:users!service_records_engineer_id_fkey(id, full_name, phone, email),
         supervisor:users!service_records_supervisor_id_fkey(id, full_name, phone, email)
       `
@@ -96,7 +96,20 @@ const getCachedEngineerServicesData = unstable_cache(
       historyQuery = historyQuery.in("machine_id", assigned.map((m) => m.id));
     }
 
-    const { data: serviceHistory } = await historyQuery;
+    const { data: rawServiceHistory } = await historyQuery;
+
+    const serviceHistory = (rawServiceHistory ?? []).map((s: any) => {
+      if (s.machine) {
+        const code = s.machine.machine_id || s.machine.machine_code || s.machine.id;
+        s.machine = {
+          ...s.machine,
+          machine_id: code,
+          machine_code: code,
+          machine_name: s.machine.model ? `${code} (${s.machine.model})` : code,
+        };
+      }
+      return s;
+    });
 
     const activeMachines = assigned.filter((m) => m.status === "active" || m.status === "on_rent").length;
     const todayDue = assigned.filter(

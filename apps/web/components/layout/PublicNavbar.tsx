@@ -64,8 +64,8 @@ export const defaultPublicNavLinks: NavItem[] = [
 export const appNavItems: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: AnimatedDashboard },
   { href: "/machines", label: "Machines", icon: AnimatedWrench },
-  { href: "/notifications", label: "Notifications", icon: AnimatedBell, roles: ["super_admin", "admin", "branch_manager", "service_engineer", "engineer"] },
-  { href: "/users", label: "Users", icon: AnimatedUsers, roles: ["super_admin", "admin", "branch_manager", "hr_manager"] },
+  { href: "/notifications", label: "Notifications", icon: AnimatedBell, roles: ["super_admin", "admin", "service_engineer", "engineer"] },
+  { href: "/users", label: "Users", icon: AnimatedUsers, roles: ["super_admin", "admin", "hr_manager"] },
   { href: "/audit-logs", label: "Audit Logs", icon: AnimatedFileText, roles: ["super_admin", "admin"] },
   { href: "/settings", label: "Settings", icon: AnimatedSettings, roles: ["super_admin"] },
 ];
@@ -73,7 +73,6 @@ export const appNavItems: NavItem[] = [
 const roleLabels: Record<UserRole, string> = {
   super_admin: "Super Admin",
   admin: "Admin",
-  branch_manager: "Branch Manager",
   service_manager: "Service Manager",
   engineer: "Service Engineer",
   service_engineer: "Service Engineer",

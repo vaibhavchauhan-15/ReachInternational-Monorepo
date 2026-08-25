@@ -26,7 +26,7 @@ export default async function HRPage({
   const { tab } = await searchParams;
   const supabase = createSupabaseAdminClient();
 
-  const branchIdFilter = (user.role === "branch_manager" || user.role === "service_manager" || user.role === "supervisor") && user.branch_id ? user.branch_id : undefined;
+  const branchIdFilter = undefined;
 
   const [
     employees, 

@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { Modal, Button, Input, Textarea, Select, Badge, useToast } from "@/components/ui";
 import { createPurchaseRequestAction } from "@/app/actions/inventory";
-import type { InventoryProduct, InventoryStock, Branch, User } from "@/lib/types/database";
+import type { InventoryProduct, InventoryStock, User } from "@/lib/types/database";
+import type { Branch } from "@/lib/queries/branches";
 import { AnimatedPlus, AnimatedTrash } from "@/components/ui/animated-icons";
 import { Send, UserCheck, AlertTriangle } from "lucide-react";
 

@@ -14,8 +14,8 @@ import {
   AnimatedSearch,
   AnimatedUserCheck,
 } from "@/components/ui/animated-icons";
-import { Badge, Button, Select, useToast } from "@/components/ui";
-import type { Machine, User, MachineAssignment, MachineHourLog, MachineWithEngineer } from "@/lib/types/database";
+import { Badge, Button, Select, useToast, TooltipWrapper } from "@/components/ui";
+import type { Machine, User, MachineAssignment, MachineHourLog, MachineWithEngineer, CRMClient } from "@/lib/types/database";
 import { OperatorDashboard, type OperatorHourLog } from "@/components/dashboard/OperatorDashboard";
 import {
   assignOperatorToMachineAction,
@@ -31,6 +31,7 @@ import { Printer } from "lucide-react";
 
 export interface OperationsClientProps {
   machines: Machine[];
+  dbClients?: CRMClient[];
   operators: User[];
   assignments: MachineAssignment[];
   hourLogs: MachineHourLog[];
@@ -44,8 +45,35 @@ export interface OperationsClientProps {
   initialTab?: string;
 }
 
+export function formatMachineSelectLabel(m: {
+  machine_id?: string;
+  machine_code?: string;
+  id?: string;
+  model?: string | null;
+  serial_number?: string | null;
+  machine_name?: string;
+}): string {
+  if (!m) return "Machine";
+  const code = m.machine_id || m.machine_code || m.id || "Machine";
+  const model = m.model ? m.model : null;
+  const rawSerial = m.serial_number ? m.serial_number : null;
+  const serial = rawSerial && rawSerial !== code ? rawSerial : null;
+
+  if (model && serial) {
+    return `${code} (${model} — S/N: ${serial})`;
+  }
+  if (model) {
+    return `${code} (${model})`;
+  }
+  if (serial) {
+    return `${code} (S/N: ${serial})`;
+  }
+  return code;
+}
+
 export function OperationsClient({
   machines,
+  dbClients = [],
   operators,
   assignments,
   hourLogs,
@@ -157,11 +185,12 @@ export function OperationsClient({
     (hourLogs.find((l) => l.machine_id === activeMachineId)?.machine as any) ||
     orderedMachines[0];
 
-  // Derived ordered operators list (ordered by most recent activity in logs)
+  // Derived ordered operators list (ordered by most recent activity in logs - strictly role=operator)
+  const operatorOnlyUsers = operators.filter((op) => op.role === "operator");
   const logOperatorIdsInOrder = Array.from(new Set(hourLogs.map((l) => l.operator_id).filter(Boolean)));
-  const remainingOperators = operators.filter((op) => !logOperatorIdsInOrder.includes(op.id));
+  const remainingOperators = operatorOnlyUsers.filter((op) => !logOperatorIdsInOrder.includes(op.id));
   const orderedOperators: User[] = [
-    ...logOperatorIdsInOrder.map((id) => operators.find((op) => op.id === id)).filter(Boolean) as User[],
+    ...logOperatorIdsInOrder.map((id) => operatorOnlyUsers.find((op) => op.id === id)).filter(Boolean) as User[],
     ...remainingOperators,
   ];
 
@@ -170,11 +199,12 @@ export function OperationsClient({
       ? logsSelectedOperatorId
       : orderedOperators[0]?.id || "";
 
-  // Derived unique clients list (ordered by most recent activity in logs)
+  // Derived unique clients list (ordered by database clients and log activity)
   const uniqueClients = Array.from(
     new Set(
       [
-        ...hourLogs.map((l) => (l.machine as any)?.customer_name),
+        ...dbClients.map((c) => c.client_name),
+        ...hourLogs.map((l) => (l as any)?.client?.client_name || (l.machine as any)?.customer_name),
         ...machines.map((m) => (m as any)?.customer_name),
       ].filter(Boolean)
     )
@@ -185,9 +215,28 @@ export function OperationsClient({
       ? logsSelectedClientName
       : uniqueClients[0] || "";
 
+  const activeDbClient = dbClients.find(
+    (c) => c.client_name.toLowerCase() === activeClientName.toLowerCase()
+  );
+
+  // Derived machine IDs associated with active selected client from logs
+  const clientMachineIdsFromLogs = Array.from(
+    new Set(
+      hourLogs
+        .filter((l) => {
+          const cName = (l as any)?.client?.client_name || (l.machine as any)?.customer_name || "";
+          return cName.toLowerCase() === activeClientName.toLowerCase();
+        })
+        .map((l) => l.machine_id)
+        .filter(Boolean)
+    )
+  );
+
   // Derived machines rented by active selected client
   const clientMachines = machines.filter(
-    (m) => ((m as any)?.customer_name || "").toLowerCase() === activeClientName.toLowerCase()
+    (m) =>
+      ((m as any)?.customer_name || "").toLowerCase() === activeClientName.toLowerCase() ||
+      clientMachineIdsFromLogs.includes(m.id)
   );
 
   // Derived unique site locations for active selected client
@@ -203,7 +252,10 @@ export function OperationsClient({
           return null;
         }),
         ...hourLogs
-          .filter((l) => ((l.machine as any)?.customer_name || "").toLowerCase() === activeClientName.toLowerCase())
+          .filter((l) => {
+            const cName = (l as any)?.client?.client_name || (l.machine as any)?.customer_name || "";
+            return cName.toLowerCase() === activeClientName.toLowerCase();
+          })
           .map((l) => {
             const loc = l.location;
             const addr = (l.machine as any)?.customer_address;
@@ -232,18 +284,23 @@ export function OperationsClient({
 
   // Active selected client details object (for Client Header Card)
   const clientMachineObj = (
-    hourLogs.find((l) => (l.machine as any)?.customer_name?.toLowerCase() === activeClientName.toLowerCase())?.machine ||
+    hourLogs.find((l) => {
+      const cName = (l as any)?.client?.client_name || (l.machine as any)?.customer_name || "";
+      return cName.toLowerCase() === activeClientName.toLowerCase();
+    })?.machine ||
     machines.find((m) => (m as any)?.customer_name?.toLowerCase() === activeClientName.toLowerCase())
   ) as any;
 
-  const clientMobile = clientMachineObj?.customer_mobile || "—";
-  const clientEmail = clientMachineObj?.customer_email || "—";
-  const clientCityState = clientMachineObj?.city
+  const clientMobile = activeDbClient?.phone || clientMachineObj?.customer_mobile || "—";
+  const clientEmail = activeDbClient?.email || clientMachineObj?.customer_email || "—";
+  const clientCityState = activeDbClient?.city
+    ? `${activeDbClient.city}${activeDbClient.state ? `, ${activeDbClient.state}` : ""}`
+    : clientMachineObj?.city
     ? `${clientMachineObj.city}${clientMachineObj.state ? `, ${clientMachineObj.state}` : ""}`
     : "—";
-  const clientAddress = clientMachineObj?.customer_address || "—";
+  const clientAddress = activeDbClient?.address || clientMachineObj?.customer_address || "—";
   const clientFleetCount = clientMachines.length || hourLogs.filter(
-    (l) => ((l.machine as any)?.customer_name || "").toLowerCase() === activeClientName.toLowerCase()
+    (l) => ((l as any)?.client?.client_name || (l.machine as any)?.customer_name || "").toLowerCase() === activeClientName.toLowerCase()
   ).length;
 
   // Filtered running hour logs
@@ -263,7 +320,7 @@ export function OperationsClient({
     );
   } else if (logsViewMode === "client") {
     filteredHourLogs = filteredHourLogs.filter((log) => {
-      const clientName = (log.machine as any)?.customer_name || "Unassigned Client";
+      const clientName = (log as any)?.client?.client_name || (log.machine as any)?.customer_name || "Unassigned Client";
       const matchesClient = clientName.toLowerCase() === activeClientName.toLowerCase();
       if (!matchesClient) return false;
 
@@ -443,7 +500,7 @@ export function OperationsClient({
   const currentTitle = TAB_TITLES[activeTab] || "Operations & Fleet Management";
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-6">
       {/* SUPERVISOR / MANAGEMENT HEADER */}
       {userRole !== "operator" && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -468,6 +525,7 @@ export function OperationsClient({
           assignedMachine={assignedMachine}
           recentLogs={recentLogs}
           allMachines={allMachines}
+          dbClients={dbClients}
         />
       )}
 
@@ -585,13 +643,13 @@ export function OperationsClient({
                       clientMachines.length === 1
                         ? clientMachines.map((m) => ({
                             value: m.id,
-                            label: `${m.machine_name} (${m.machine_code})`,
+                            label: formatMachineSelectLabel(m),
                           }))
                         : [
                             { value: "all", label: "All Client Rented Machines" },
                             ...clientMachines.map((m) => ({
                               value: m.id,
-                              label: `${m.machine_name} (${m.machine_code})`,
+                              label: formatMachineSelectLabel(m),
                             })),
                           ]
                     }
@@ -620,7 +678,7 @@ export function OperationsClient({
                       onChange={(e) => setLogsSelectedMachineId(e.target.value)}
                       options={orderedMachines.map((m) => ({
                         value: m.id,
-                        label: `${m.machine_name} (${m.machine_code})`,
+                        label: formatMachineSelectLabel(m),
                       }))}
                     />
                   )}
@@ -826,38 +884,129 @@ export function OperationsClient({
               <table className="w-full text-left text-xs min-w-[850px]">
                 <thead className="bg-[var(--color-canvas)] text-[var(--color-mute)] uppercase font-extrabold border-b border-[var(--color-hairline)]">
                   <tr>
-                    <th className="px-3 py-3 w-[45px] text-center font-mono">S.N</th>
-                    <th className="px-4 py-3 whitespace-nowrap font-mono">Date</th>
+                    <th className="px-3 py-3 w-[45px] text-center font-mono">
+                      <TooltipWrapper content="Serial Number">
+                        <span>S.N</span>
+                      </TooltipWrapper>
+                    </th>
+                    <th className="px-4 py-3 whitespace-nowrap font-mono">
+                      <TooltipWrapper content="Log Date">
+                        <span>Date</span>
+                      </TooltipWrapper>
+                    </th>
                     {logsViewMode === "operator" ? (
                       <>
-                        <th className="px-4 py-3 whitespace-nowrap">Machine</th>
-                        <th className="px-4 py-3 font-mono text-center whitespace-nowrap">Code</th>
-                        <th className="px-4 py-3 font-mono text-center whitespace-nowrap">Model</th>
-                        <th className="px-4 py-3 font-mono text-center whitespace-nowrap">Timings</th>
-                        <th className="px-4 py-3 font-mono text-center whitespace-nowrap">OP(h)</th>
-                        <th className="px-4 py-3 font-mono text-center whitespace-nowrap">OT(h)</th>
-                        <th className="px-4 py-3 text-center whitespace-nowrap">Status</th>
-                        <th className="px-4 py-3 whitespace-nowrap">Remarks</th>
+                        <th className="px-4 py-3 whitespace-nowrap font-mono">
+                          <TooltipWrapper content="Machine Model">
+                            <span>Model</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 whitespace-nowrap font-mono">
+                          <TooltipWrapper content="Machine Serial Number / Code">
+                            <span>Serial Number</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 whitespace-nowrap">
+                          <TooltipWrapper content="Client Name & Site Location">
+                            <span>Client & Location</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 font-mono text-center whitespace-nowrap">
+                          <TooltipWrapper content="Shift Start Time & End Time">
+                            <span>Timings</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 font-mono text-center whitespace-nowrap">
+                          <TooltipWrapper content="Operating Hours (Hours)">
+                            <span>OP(h)</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 font-mono text-center whitespace-nowrap">
+                          <TooltipWrapper content="Overtime Hours">
+                            <span>OT(h)</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 text-center whitespace-nowrap">
+                          <TooltipWrapper content="Breakdown Duration & Status">
+                            <span>Breakdown</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 whitespace-nowrap">
+                          <TooltipWrapper content="Log Remarks & Breakdown Notes">
+                            <span>Remarks</span>
+                          </TooltipWrapper>
+                        </th>
                       </>
                     ) : logsViewMode === "client" ? (
                       <>
-                        <th className="px-4 py-3 whitespace-nowrap">Machine</th>
-                        <th className="px-4 py-3 whitespace-nowrap">Site / Location</th>
-                        <th className="px-4 py-3 whitespace-nowrap">Operator</th>
-                        <th className="px-4 py-3 font-mono text-center whitespace-nowrap">Timings</th>
-                        <th className="px-4 py-3 font-mono text-center whitespace-nowrap">RT(h)</th>
-                        <th className="px-4 py-3 font-mono text-center whitespace-nowrap">OT(h)</th>
-                        <th className="px-4 py-3 text-center whitespace-nowrap">Breakdown</th>
-                        <th className="px-4 py-3 whitespace-nowrap">Remarks</th>
+                        <th className="px-4 py-3 whitespace-nowrap font-mono">
+                          <TooltipWrapper content="Machine Model">
+                            <span>Model</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 whitespace-nowrap font-mono">
+                          <TooltipWrapper content="Machine Serial Number">
+                            <span>Serial Number</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 whitespace-nowrap">
+                          <TooltipWrapper content="Assigned Operator Name & Mobile">
+                            <span>Operator</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 font-mono text-center whitespace-nowrap">
+                          <TooltipWrapper content="Shift Start Time & End Time">
+                            <span>Timings</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 font-mono text-center whitespace-nowrap">
+                          <TooltipWrapper content="Work Time (Hours)">
+                            <span>WT</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 text-center whitespace-nowrap">
+                          <TooltipWrapper content="Breakdown Duration & Status">
+                            <span>Breakdown</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 whitespace-nowrap">
+                          <TooltipWrapper content="Log Remarks & Notes">
+                            <span>Remarks</span>
+                          </TooltipWrapper>
+                        </th>
                       </>
                     ) : (
                       <>
-                        <th className="px-4 py-3 whitespace-nowrap">Client / Site</th>
-                        <th className="px-4 py-3 whitespace-nowrap">Operator</th>
-                        <th className="px-4 py-3 font-mono text-center whitespace-nowrap">MR(h)</th>
-                        <th className="px-4 py-3 font-mono text-center whitespace-nowrap">RT(h)</th>
-                        <th className="px-4 py-3 text-center whitespace-nowrap">Status</th>
-                        <th className="px-4 py-3 whitespace-nowrap">Remarks</th>
+                        <th className="px-4 py-3 whitespace-nowrap">
+                          <TooltipWrapper content="Client Name & Site Location">
+                            <span>Client & Location</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 whitespace-nowrap">
+                          <TooltipWrapper content="Assigned Operator Name & Mobile">
+                            <span>Operator</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 font-mono text-center whitespace-nowrap">
+                          <TooltipWrapper content="Hour Meter Reading">
+                            <span>HMR</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 font-mono text-center whitespace-nowrap">
+                          <TooltipWrapper content="Running Time (Hours)">
+                            <span>RT(h)</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 text-center whitespace-nowrap">
+                          <TooltipWrapper content="Breakdown Duration & Status">
+                            <span>Breakdown</span>
+                          </TooltipWrapper>
+                        </th>
+                        <th className="px-4 py-3 whitespace-nowrap">
+                          <TooltipWrapper content="Log Remarks & Notes">
+                            <span>Remarks</span>
+                          </TooltipWrapper>
+                        </th>
                       </>
                     )}
                   </tr>
@@ -865,7 +1014,7 @@ export function OperationsClient({
                 <tbody className="divide-y divide-[var(--color-hairline)] font-medium text-[var(--color-ink)]">
                   {filteredHourLogs.length === 0 ? (
                     <tr>
-                      <td colSpan={logsViewMode === "operator" ? 10 : logsViewMode === "client" ? 10 : 8} className="px-4 py-8 text-center text-[var(--color-mute)]">
+                      <td colSpan={logsViewMode === "operator" ? 10 : logsViewMode === "client" ? 9 : 8} className="px-4 py-8 text-center text-[var(--color-mute)]">
                         No daily running hour logs found matching the active filter selection.
                       </td>
                     </tr>
@@ -880,10 +1029,17 @@ export function OperationsClient({
 
                       const mObj = log.machine as any;
                       const opObj = log.operator as any;
+                      const clientName = (log as any)?.client?.client_name || mObj?.customer_name || "Unassigned Client";
+                      const locationStr = log.location || ((log as any)?.client?.city ? `${(log as any).client.city}, ${(log as any).client.state || ""}` : mObj?.customer_address ? `${mObj.customer_address}${mObj.city ? `, ${mObj.city}` : ""}` : mObj?.city || "—");
 
-                      const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*([^\]]+)\]/);
-                      const bkdDetails = bkdMatch ? bkdMatch[1] : log.is_breakdown ? "Breakdown" : null;
-                      const cleanRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/, "").trim() || "—";
+                      const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*([^\]]+)\]/i) || (log.remarks || "").match(/Breakdown\s*(?:Duration)?:?\s*(\d+h?\s*\d*m?)/i);
+                      const bkdDetails = bkdMatch ? bkdMatch[1].trim() : log.is_breakdown ? "Breakdown" : null;
+                      const cleanRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim() || "—";
+                      let bkdDurationOnly = bkdDetails;
+                      if (bkdDurationOnly) {
+                        bkdDurationOnly = bkdDurationOnly.replace(/^Breakdown\s*\((.*)\)$/i, "$1").replace(/^Machine Breakdown\s*\((.*)\)$/i, "$1").replace(/^Breakdown\s*/i, "").replace(/\s*duration$/i, "").trim();
+                      }
+                      const displayBkdText = log.is_breakdown ? (bkdDurationOnly && bkdDurationOnly.toLowerCase() !== "breakdown" ? bkdDurationOnly : "Breakdown") : "Normal";
 
                       return (
                         <tr key={log.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
@@ -891,16 +1047,19 @@ export function OperationsClient({
                           <td className="px-4 py-3 font-semibold font-mono whitespace-nowrap">{formatDate(log.log_date)}</td>
                           {logsViewMode === "operator" ? (
                             <>
+                              <td className="px-4 py-3 font-semibold font-mono whitespace-nowrap">
+                                <span className="font-bold text-[var(--color-ink)]">{mObj?.model || "—"}</span>
+                              </td>
+                              <td className="px-4 py-3 font-semibold font-mono whitespace-nowrap">
+                                <span className="font-bold text-[var(--color-ink)]">{mObj?.serial_number || mObj?.machine_code || "—"}</span>
+                              </td>
                               <td className="px-4 py-3 font-semibold">
                                 <div className="font-bold text-[var(--color-ink)]">
-                                  {mObj?.machine_name || "Machine"}
+                                  {clientName}
                                 </div>
-                              </td>
-                              <td className="px-4 py-3 font-mono text-xs text-center font-semibold text-[var(--color-ink)] whitespace-nowrap">
-                                {mObj?.machine_code || "—"}
-                              </td>
-                              <td className="px-4 py-3 font-mono text-xs text-center font-semibold text-[var(--color-ink)] whitespace-nowrap">
-                                {mObj?.model || "—"}
+                                <div className="text-[10px] text-[var(--color-mute)] truncate max-w-[180px]" title={locationStr}>
+                                  {locationStr}
+                                </div>
                               </td>
                               <td className="px-4 py-3 font-mono font-semibold text-center text-[var(--color-ink)] whitespace-nowrap">
                                 {formatCompactTiming(log.start_time, log.end_time)}
@@ -913,8 +1072,8 @@ export function OperationsClient({
                               </td>
                               <td className="px-4 py-3 text-center whitespace-nowrap">
                                 {log.is_breakdown ? (
-                                  <span className="inline-flex items-center justify-center gap-1 font-bold text-rose-600 dark:text-rose-400 text-xs">
-                                    <AnimatedAlertTriangle size={13} className="shrink-0" /> Breakdown {bkdDetails ? `(${bkdDetails})` : ""}
+                                  <span className="inline-flex items-center justify-center gap-1 font-extrabold text-rose-600 dark:text-rose-400 text-xs font-mono">
+                                    <AnimatedAlertTriangle size={13} className="shrink-0 text-rose-600 dark:text-rose-400" /> {displayBkdText}
                                   </span>
                                 ) : (
                                   <span className="font-semibold text-emerald-600 dark:text-emerald-400 text-xs">Normal</span>
@@ -928,18 +1087,11 @@ export function OperationsClient({
                             </>
                           ) : logsViewMode === "client" ? (
                             <>
-                              <td className="px-4 py-3">
-                                <div className="font-bold text-[var(--color-ink)]">
-                                  {mObj?.machine_name || "Machine"}
-                                </div>
-                                <div className="text-[10px] text-[var(--color-mute)] font-mono">
-                                  {mObj?.machine_code || "—"} {mObj?.model ? `(${mObj.model})` : ""}
-                                </div>
+                              <td className="px-4 py-3 font-semibold font-mono whitespace-nowrap">
+                                <span className="font-bold text-[var(--color-ink)]">{mObj?.model || "—"}</span>
                               </td>
-                              <td className="px-4 py-3">
-                                <div className="font-semibold text-[var(--color-ink)]">
-                                  {log.location || (mObj?.customer_address ? `${mObj.customer_address}${mObj.city ? `, ${mObj.city}` : ""}` : mObj?.city || "—")}
-                                </div>
+                              <td className="px-4 py-3 font-semibold font-mono whitespace-nowrap">
+                                <span className="font-bold text-[var(--color-ink)]">{mObj?.serial_number || mObj?.machine_code || "—"}</span>
                               </td>
                               <td className="px-4 py-3 font-semibold whitespace-nowrap">
                                 <div className="font-bold text-[var(--color-ink)]">{opObj?.full_name || "Unassigned"}</div>
@@ -953,13 +1105,10 @@ export function OperationsClient({
                               <td className="px-4 py-3 font-bold font-mono text-center whitespace-nowrap">
                                 <span className="text-sky-600 dark:text-sky-400">{runningHours}h</span>
                               </td>
-                              <td className="px-4 py-3 font-bold font-mono text-center whitespace-nowrap">
-                                <span className="text-amber-600 dark:text-amber-400">{otHours > 0 ? `${otHours}h` : "0h"}</span>
-                              </td>
                               <td className="px-4 py-3 text-center whitespace-nowrap">
                                 {log.is_breakdown ? (
-                                  <span className="inline-flex items-center justify-center gap-1 font-bold text-rose-600 dark:text-rose-400 text-xs">
-                                    <AnimatedAlertTriangle size={13} className="shrink-0" /> Breakdown {bkdDetails ? `(${bkdDetails})` : ""}
+                                  <span className="inline-flex items-center justify-center gap-1 font-extrabold text-rose-600 dark:text-rose-400 text-xs font-mono">
+                                    <AnimatedAlertTriangle size={13} className="shrink-0 text-rose-600 dark:text-rose-400" /> {displayBkdText}
                                   </span>
                                 ) : (
                                   <span className="font-semibold text-emerald-600 dark:text-emerald-400 text-xs">Normal</span>
@@ -975,10 +1124,10 @@ export function OperationsClient({
                             <>
                               <td className="px-4 py-3">
                                 <div className="font-bold text-[var(--color-ink)]">
-                                  {mObj?.customer_name || "Unassigned Client"}
+                                  {(log as any)?.client?.client_name || mObj?.customer_name || "Unassigned Client"}
                                 </div>
                                 <div className="text-[10px] text-[var(--color-mute)]">
-                                  {mObj?.city ? `${mObj.city}, ${mObj.state || ""}` : "—"}
+                                  {log.location || ((log as any)?.client?.city ? `${(log as any).client.city}, ${(log as any).client.state || ""}` : mObj?.city ? `${mObj.city}, ${mObj.state || ""}` : "—")}
                                 </div>
                               </td>
                               <td className="px-4 py-3 font-semibold whitespace-nowrap">
@@ -1005,8 +1154,8 @@ export function OperationsClient({
                               </td>
                               <td className="px-4 py-3 text-center whitespace-nowrap">
                                 {log.is_breakdown ? (
-                                  <span className="inline-flex items-center justify-center gap-1 font-bold text-rose-600 dark:text-rose-400 text-xs">
-                                    <AnimatedAlertTriangle size={13} className="shrink-0" /> Breakdown
+                                  <span className="inline-flex items-center justify-center gap-1 font-extrabold text-rose-600 dark:text-rose-400 text-xs font-mono">
+                                    <AnimatedAlertTriangle size={13} className="shrink-0 text-rose-600 dark:text-rose-400" /> {displayBkdText}
                                   </span>
                                 ) : (
                                   <span className="font-semibold text-emerald-600 dark:text-emerald-400 text-xs">Normal</span>
@@ -1043,9 +1192,14 @@ export function OperationsClient({
                 const mObj = log.machine as any;
                 const opObj = log.operator as any;
 
-                const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*([^\]]+)\]/);
-                const bkdDetails = bkdMatch ? bkdMatch[1] : log.is_breakdown ? "Breakdown" : null;
-                const cleanRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/, "").trim() || "—";
+                const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*([^\]]+)\]/i) || (log.remarks || "").match(/Breakdown\s*(?:Duration)?:?\s*(\d+h?\s*\d*m?)/i);
+                const bkdDetails = bkdMatch ? bkdMatch[1].trim() : log.is_breakdown ? "Breakdown" : null;
+                const cleanRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim() || "—";
+                let bkdDurationOnly = bkdDetails;
+                if (bkdDurationOnly) {
+                  bkdDurationOnly = bkdDurationOnly.replace(/^Breakdown\s*\((.*)\)$/i, "$1").replace(/^Machine Breakdown\s*\((.*)\)$/i, "$1").replace(/^Breakdown\s*/i, "").replace(/\s*duration$/i, "").trim();
+                }
+                const displayBkdText = log.is_breakdown ? (bkdDurationOnly && bkdDurationOnly.toLowerCase() !== "breakdown" ? bkdDurationOnly : "Breakdown") : "Normal";
 
                 return (
                   <div
@@ -1055,11 +1209,13 @@ export function OperationsClient({
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <span className="text-[10px] font-mono text-[var(--color-mute)] block font-bold">{log.log_date}</span>
-                        <h4 className="font-extrabold text-sm text-[var(--color-ink)]">{mObj?.machine_name || "Machine"}</h4>
-                        <span className="text-[11px] font-mono text-[var(--color-mute)]">{mObj?.machine_code}</span>
+                        <h4 className="font-extrabold text-sm text-[var(--color-ink)]">{mObj?.model || mObj?.machine_code || "—"}</h4>
+                        <span className="text-[11px] font-mono text-[var(--color-mute)]">
+                          {mObj?.serial_number ? `S/N: ${mObj.serial_number}` : mObj?.machine_code ? `S/N: ${mObj.machine_code}` : "—"}
+                        </span>
                       </div>
                       {log.is_breakdown ? (
-                        <Badge variant="error" className="font-bold">Breakdown</Badge>
+                        <Badge variant="error" className="font-extrabold">{displayBkdText}</Badge>
                       ) : (
                         <Badge variant="success" className="font-bold">Normal</Badge>
                       )}
@@ -1069,9 +1225,15 @@ export function OperationsClient({
                       <div className="p-2.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-2 text-xs">
                         <div className="grid grid-cols-2 gap-2">
                           <div>
-                            <span className="text-[10px] text-[var(--color-mute)] block font-semibold">Model / Code:</span>
+                            <span className="text-[10px] text-[var(--color-mute)] block font-semibold">Model:</span>
                             <span className="font-bold text-[var(--color-ink)]">
-                              {mObj?.model || "—"} ({mObj?.machine_code || "—"})
+                              {mObj?.model || "—"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-[var(--color-mute)] block font-semibold">Serial Number:</span>
+                            <span className="font-bold text-[var(--color-ink)] font-mono">
+                              {mObj?.serial_number || mObj?.machine_code || "—"}
                             </span>
                           </div>
                           <div className="text-right">
@@ -1080,6 +1242,15 @@ export function OperationsClient({
                               {formatCompactTiming(log.start_time, log.end_time)}
                             </span>
                           </div>
+                        </div>
+                        <div className="pt-1.5 border-t border-[var(--color-hairline)]">
+                          <span className="text-[10px] text-[var(--color-mute)] block font-semibold">Client & Location:</span>
+                          <span className="font-bold text-[var(--color-ink)] block">
+                            {(log as any)?.client?.client_name || mObj?.customer_name || "Unassigned Client"}
+                          </span>
+                          <span className="text-[10px] text-[var(--color-mute)] block truncate">
+                            {log.location || ((log as any)?.client?.city ? `${(log as any).client.city}, ${(log as any).client.state || ""}` : mObj?.customer_address ? `${mObj.customer_address}${mObj.city ? `, ${mObj.city}` : ""}` : mObj?.city || "—")}
+                          </span>
                         </div>
                         <div className="grid grid-cols-2 gap-2 pt-1 border-t border-[var(--color-hairline)]">
                           <div>
@@ -1096,10 +1267,10 @@ export function OperationsClient({
                           </div>
                         </div>
                         <div className="pt-1.5 border-t border-[var(--color-hairline)] flex items-center justify-between">
-                          <span className="text-[10px] text-[var(--color-mute)] font-semibold">Status:</span>
+                          <span className="text-[10px] text-[var(--color-mute)] font-semibold">Breakdown:</span>
                           {log.is_breakdown ? (
-                            <span className="font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1 text-[11px]">
-                              <AnimatedAlertTriangle size={12} /> Breakdown {bkdDetails ? `(${bkdDetails})` : ""}
+                            <span className="font-extrabold text-rose-600 dark:text-rose-400 flex items-center gap-1 text-[11px] font-mono">
+                              <AnimatedAlertTriangle size={12} className="text-rose-600 dark:text-rose-400" /> {displayBkdText}
                             </span>
                           ) : (
                             <span className="font-semibold text-emerald-600 dark:text-emerald-400 text-[11px]">
@@ -1118,7 +1289,7 @@ export function OperationsClient({
                         <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-[var(--color-hairline)]">
                           <div>
                             <span className="text-[10px] text-[var(--color-mute)] block">Client / Site:</span>
-                            <span className="font-bold text-[var(--color-ink)]">{mObj?.customer_name || "Unassigned"}</span>
+                            <span className="font-bold text-[var(--color-ink)]">{(log as any)?.client?.client_name || mObj?.customer_name || "Unassigned"}</span>
                           </div>
                           <div>
                             <span className="text-[10px] text-[var(--color-mute)] block">Operator:</span>
@@ -1128,12 +1299,6 @@ export function OperationsClient({
 
                         {logsViewMode === "client" ? (
                           <div className="p-2.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-2 text-xs">
-                            <div className="flex items-center justify-between gap-2 border-b border-[var(--color-hairline)] pb-1.5">
-                              <span className="text-[10px] text-[var(--color-mute)] font-semibold uppercase">Site / Location:</span>
-                              <span className="font-bold text-[var(--color-ink)] truncate">
-                                {log.location || (mObj?.customer_address ? `${mObj.customer_address}${mObj.city ? `, ${mObj.city}` : ""}` : mObj?.city || "—")}
-                              </span>
-                            </div>
                             <div className="grid grid-cols-2 gap-2">
                               <div>
                                 <span className="text-[10px] text-[var(--color-mute)] block font-semibold">Operator:</span>
@@ -1150,20 +1315,20 @@ export function OperationsClient({
                             </div>
                             <div className="grid grid-cols-2 gap-2 pt-1 border-t border-[var(--color-hairline)]">
                               <div>
-                                <span className="text-[10px] text-[var(--color-mute)] block font-semibold">Run / Overtime:</span>
+                                <span className="text-[10px] text-[var(--color-mute)] block font-semibold">Work Time (WT):</span>
                                 <span className="font-extrabold font-mono text-sky-600 dark:text-sky-400">
-                                  {runningHours}h {otHours > 0 && `(+${otHours}h OT)`}
+                                  {runningHours} hrs
                                 </span>
                               </div>
                               <div className="text-right">
-                                <span className="text-[10px] text-[var(--color-mute)] block font-semibold">Breakdown Status:</span>
+                                <span className="text-[10px] text-[var(--color-mute)] block font-semibold">Breakdown:</span>
                                 {log.is_breakdown ? (
-                                  <span className="font-bold text-rose-600 dark:text-rose-400 inline-flex items-center gap-1 text-[11px]">
-                                    <AnimatedAlertTriangle size={12} /> Yes (Breakdown)
+                                  <span className="font-extrabold text-rose-600 dark:text-rose-400 inline-flex items-center gap-1 text-[11px] font-mono">
+                                    <AnimatedAlertTriangle size={12} className="text-rose-600 dark:text-rose-400" /> {displayBkdText}
                                   </span>
                                 ) : (
                                   <span className="font-semibold text-emerald-600 dark:text-emerald-400 text-[11px]">
-                                    No Breakdown
+                                    Normal
                                   </span>
                                 )}
                               </div>
@@ -1453,7 +1618,7 @@ export function OperationsClient({
                   const currentOp = operators.find((op) => op.id === currentOpId);
                   return {
                     value: m.id,
-                    label: `${m.machine_name} (${m.machine_code})${currentOp ? ` — Current: ${currentOp.full_name}` : ""}`,
+                    label: `${formatMachineSelectLabel(m)}${currentOp ? ` — Current: ${currentOp.full_name}` : ""}`,
                   };
                 })}
               />
@@ -1470,7 +1635,7 @@ export function OperationsClient({
                     : machines.find((m) => m.current_operator_id === op.id);
                   return {
                     value: op.id,
-                    label: `${op.full_name}${assignedMach ? ` (Operating: ${assignedMach.machine_name} - ${assignedMach.machine_code})` : " (Unassigned / Available)"}`,
+                    label: `${op.full_name}${assignedMach ? ` (Operating: ${formatMachineSelectLabel(assignedMach)})` : " (Unassigned / Available)"}`,
                   };
                 })}
               />
@@ -1492,7 +1657,7 @@ export function OperationsClient({
                       </div>
                       <div>
                         <strong>{selectedOp?.full_name || "Selected Operator"}</strong> is currently assigned to{" "}
-                        <strong>{currentMach.machine_name} ({currentMach.machine_code})</strong>. Assigning them here will transfer their assignment to the target machine.
+                        <strong>{formatMachineSelectLabel(currentMach)}</strong>. Assigning them here will transfer their assignment to the target machine.
                       </div>
                     </div>
                   );
@@ -1627,7 +1792,7 @@ export function OperationsClient({
                 onChange={(e) => setMoveMachineId(e.target.value)}
                 options={machines.map((m) => ({
                   value: m.id,
-                  label: `${m.machine_name} (${m.machine_code})`,
+                  label: formatMachineSelectLabel(m),
                 }))}
               />
 

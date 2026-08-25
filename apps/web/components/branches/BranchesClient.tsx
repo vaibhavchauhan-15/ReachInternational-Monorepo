@@ -13,7 +13,7 @@ import {
   AnimatedMail,
   AnimatedEdit,
 } from "@/components/ui/animated-icons";
-import type { Branch } from "@/lib/types/database";
+import type { Branch } from "@/lib/queries/branches";
 import { createBranchAction, updateBranchAction } from "@/app/actions/branches";
 
 export interface BranchWithMetrics extends Branch {

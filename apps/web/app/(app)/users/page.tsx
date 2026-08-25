@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/dal";
 import { getAllUsers, getPendingUsers } from "@/app/actions/users";
-import { getBranchesAction } from "@/app/actions/branches";
 import { UsersPageClient } from "./users-client";
 import { UsersSkeleton } from "@/components/ui";
 
@@ -22,7 +21,6 @@ async function UsersPageContent() {
   const isAuthorized =
     currentUser.role === "admin" ||
     currentUser.role === "super_admin" ||
-    currentUser.role === "branch_manager" ||
     currentUser.role === "service_manager" ||
     currentUser.role === "hr_manager";
   const isSuperAdmin = currentUser.role === "super_admin";
@@ -31,24 +29,20 @@ async function UsersPageContent() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
         <div className="text-[var(--color-error)] text-lg font-medium">Access Denied</div>
-        <p className="text-[var(--color-mute)]">You don&rsquo;t have permission to view employee and user management.</p>
+        <p className="text-[var(--color-mute)]">You don&rsquo;t have permission to view user management.</p>
       </div>
     );
   }
 
-  const [allUsers, pendingUsers, branchesRes] = await Promise.all([
+  const [allUsers, pendingUsers] = await Promise.all([
     getAllUsers(),
     getPendingUsers(),
-    getBranchesAction(),
   ]);
-
-  const branches = branchesRes.data || [];
 
   return (
     <UsersPageClient
       users={allUsers}
       pendingUsers={pendingUsers}
-      branches={branches}
       currentUser={currentUser}
       isSuperAdmin={isSuperAdmin}
     />

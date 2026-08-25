@@ -7,7 +7,6 @@ export const CreateEmployeeSchema = z.object({
   email: z.string().email().optional().nullable().or(z.literal("")),
   designation: z.string().min(1, "Designation is required"),
   department: z.string().optional().nullable(),
-  branch_id: z.string().optional().nullable(),
   user_id: z.string().optional().nullable(),
   joining_date: z.string().min(1, "Joining date is required"),
   employment_type: z.enum(["full_time", "contract", "part_time"]).optional().default("full_time"),

@@ -42,7 +42,7 @@ export function ClientDetailClient({ user, clientId }: ClientDetailClientProps) 
   };
 
   return (
-    <div className="w-full space-y-6 max-w-[1400px] mx-auto">
+    <div className="w-full space-y-6">
       {/* Top Breadcrumb */}
       <Link
         href="/crm"

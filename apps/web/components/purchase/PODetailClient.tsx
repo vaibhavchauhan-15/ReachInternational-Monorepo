@@ -38,7 +38,7 @@ export function PODetailClient({ user, poId }: PODetailClientProps) {
   };
 
   return (
-    <div className="w-full space-y-6 max-w-[1400px] mx-auto">
+    <div className="w-full space-y-6">
       {/* Top Breadcrumb */}
       <Link
         href="/purchase-orders"

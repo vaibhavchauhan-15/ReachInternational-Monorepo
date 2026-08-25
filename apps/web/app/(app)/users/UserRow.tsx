@@ -29,7 +29,6 @@ import type { User, UserRole } from "@/lib/types/database";
 const allRoleOptions = [
   { value: "super_admin", label: "Super Admin" },
   { value: "admin", label: "Admin" },
-  { value: "branch_manager", label: "Branch Manager" },
   { value: "service_manager", label: "Service Manager" },
   { value: "service_engineer", label: "Service Engineer" },
   { value: "supervisor", label: "Supervisor" },
@@ -162,6 +161,7 @@ export const UserRow = memo(function UserRow({
   onDelete,
 }: UserRowProps) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [openUpwards, setOpenUpwards] = useState(false);
 
   const canViewContactInfo = (targetUser: User) => {
     if (currentUser.role === "super_admin" || currentUser.role === "admin") return true;
@@ -175,9 +175,14 @@ export const UserRow = memo(function UserRow({
     return false;
   };
 
-  const toggleDropdown = useCallback(() => {
+  const toggleDropdown = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    if (!dropdownOpen) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      setOpenUpwards(spaceBelow < 250);
+    }
     setDropdownOpen((prev) => !prev);
-  }, []);
+  }, [dropdownOpen]);
 
   const closeDropdown = useCallback(() => {
     setDropdownOpen(false);
@@ -191,34 +196,28 @@ export const UserRow = memo(function UserRow({
 
   return (
     <tr className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors border-b border-[var(--color-hairline)]">
-      {/* 1. User Name & Avatar */}
-      <td className="py-3 px-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] font-bold text-sm border border-[var(--color-hairline)] shadow-xs">
-            {user.full_name.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <div className="text-sm font-bold text-[var(--color-ink)]">{user.full_name}</div>
-            <div className="text-xs text-[var(--color-mute)] truncate font-mono">{user.email}</div>
-          </div>
+      {/* 1. User Name */}
+      <td className="py-2.5 px-3">
+        <div className="text-sm font-bold text-[var(--color-ink)] truncate" title={user.full_name}>
+          {user.full_name}
         </div>
       </td>
 
       {/* 2. Contact Phone & Email */}
-      <td className="py-3 px-4">
+      <td className="py-2.5 px-3">
         {canViewContactInfo(user) ? (
-          <div className="flex flex-col gap-1 text-xs">
+          <div className="flex flex-col gap-0.5 text-xs">
             {user.phone ? (
-              <span className="flex items-center gap-1.5 text-[var(--color-ink)] font-mono font-medium">
-                <AnimatedPhone size={14} className="text-emerald-500" />
+              <span className="flex items-center gap-1.5 text-[var(--color-ink)] font-mono font-medium whitespace-nowrap">
+                <AnimatedPhone size={13} className="text-emerald-500 shrink-0" />
                 {user.phone}
               </span>
             ) : (
               <span className="text-[var(--color-mute)] italic">No Phone</span>
             )}
-            <span className="flex items-center gap-1.5 text-[var(--color-mute)] font-mono">
-              <AnimatedMail size={14} className="text-blue-500" />
-              {user.email}
+            <span className="flex items-center gap-1.5 text-[var(--color-mute)] font-mono truncate max-w-[200px]" title={user.email}>
+              <AnimatedMail size={13} className="text-blue-500 shrink-0" />
+              <span className="truncate">{user.email}</span>
             </span>
           </div>
         ) : (
@@ -227,43 +226,40 @@ export const UserRow = memo(function UserRow({
       </td>
 
       {/* 3. Role & Permissions */}
-      <td className="py-3 px-4">
-        <div className="flex items-center gap-2">
+      <td className="py-2.5 px-3">
+        <div className="flex items-center gap-1.5 whitespace-nowrap">
           {getRoleIcon(user.role)}
           {getRoleBadge(user.role)}
         </div>
       </td>
 
-      {/* 4. Assigned Company Branch & Location */}
-      <td className="py-3 px-4">
-        {user.branch ? (
-          <div className="flex flex-col gap-0.5">
-            <span className="text-xs font-bold text-[var(--color-ink)] flex items-center gap-1.5">
-              <AnimatedBuilding2 size={14} className="text-indigo-500 shrink-0" />
-              {user.branch.name}
+      {/* 4. Employee City */}
+      <td className="py-2.5 px-3">
+        {user.city || user.location ? (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] truncate max-w-full">
+            <AnimatedMapPin size={12} className="text-emerald-500 shrink-0" />
+            <span className="truncate" title={(user.city || user.location) ?? undefined}>
+              {user.city || user.location}
             </span>
-            <span className="text-[11px] text-[var(--color-mute)] font-medium">
-              {user.branch.city} ({user.branch.code})
-            </span>
-          </div>
+          </span>
         ) : (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-medium bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] border border-[var(--color-hairline)]">
-            <AnimatedMapPin size={12} className="text-slate-400" />
-            HQ / Unassigned
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] border border-[var(--color-hairline)] whitespace-nowrap">
+            <AnimatedMapPin size={12} className="text-slate-400 shrink-0" />
+            —
           </span>
         )}
       </td>
 
       {/* 5. Status Badge */}
-      <td className="py-3 px-4">{getStatusBadge(user.status)}</td>
+      <td className="py-2.5 px-3 whitespace-nowrap">{getStatusBadge(user.status)}</td>
 
       {/* 6. Created Date */}
-      <td suppressHydrationWarning className="py-3 px-4 text-xs font-mono text-[var(--color-mute)]">
+      <td suppressHydrationWarning className="py-2.5 px-3 text-xs font-mono text-[var(--color-mute)] whitespace-nowrap">
         {formatDate(user.created_at)}
       </td>
 
       {/* 7. Actions Menu */}
-      <td className="py-3 px-4">
+      <td className="py-2.5 px-3">
         <div className="flex items-center justify-end relative">
           <TooltipWrapper content="More actions" side="left">
             <Button variant="ghost-sm" onClick={toggleDropdown} aria-label="More actions">
@@ -274,7 +270,7 @@ export const UserRow = memo(function UserRow({
           {dropdownOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={closeDropdown} />
-              <div className="absolute right-0 top-full mt-1 z-20 bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] rounded-lg shadow-xl py-1 min-w-[190px] text-[var(--color-ink)]">
+              <div className={`absolute right-0 ${openUpwards ? "bottom-full mb-1" : "top-full mt-1"} z-20 bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] rounded-lg shadow-xl py-1 min-w-[190px] text-[var(--color-ink)]`}>
                 {canManageUser(user) ? (
                   <>
                     <button
@@ -312,7 +308,7 @@ export const UserRow = memo(function UserRow({
                       disabled={isLoading}
                     >
                       <AnimatedUser size={16} className="text-[var(--color-link)]" />
-                      Edit User & Branch
+                      Edit User Account
                     </button>
                     
                     <div className="border-t border-[var(--color-hairline)] my-1" />

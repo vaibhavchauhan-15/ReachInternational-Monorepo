@@ -42,6 +42,7 @@ export default function AppLayout() {
         <Tabs.Screen name="fsr" options={{ title: 'Field Service Reports' }} />
         <Tabs.Screen name="operations" options={{ title: 'Operations Hub' }} />
         <Tabs.Screen name="inventory" options={{ title: 'Inventory' }} />
+        <Tabs.Screen name="clients" options={{ title: 'Clients & Customers' }} />
         <Tabs.Screen name="rentals" options={{ title: 'Rentals' }} />
         <Tabs.Screen name="crm" options={{ title: 'CRM' }} />
         <Tabs.Screen name="finance" options={{ title: 'Finance' }} />

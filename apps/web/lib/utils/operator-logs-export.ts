@@ -194,7 +194,7 @@ export function exportOperatorLogsToExcel(
     "End Time",
     "Operating Hours",
     "Overtime Hours",
-    "Machine Status",
+    "Breakdown",
     "Breakdown Duration",
     "Breakdown Reason / Action",
     "Remarks / Notes",
@@ -220,9 +220,14 @@ export function exportOperatorLogsToExcel(
     totalOpHours += opHrs;
     totalOtHours += otHrs;
 
-    const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*([^\]]+)\]/);
-    const bkdDetails = bkdMatch ? bkdMatch[1] : isBkd ? "Breakdown Logged" : "—";
-    const cleanRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/, "").trim() || "—";
+    const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*([^\]]+)\]/i) || (log.remarks || "").match(/Breakdown\s*(?:Duration)?:?\s*(\d+h?\s*\d*m?)/i);
+    const bkdDetails = bkdMatch ? bkdMatch[1].trim() : isBkd ? "Breakdown" : null;
+    const cleanRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim() || "—";
+    let bkdDurationOnly = bkdDetails;
+    if (bkdDurationOnly) {
+      bkdDurationOnly = bkdDurationOnly.replace(/^Breakdown\s*\((.*)\)$/i, "$1").replace(/^Machine Breakdown\s*\((.*)\)$/i, "$1").replace(/^Breakdown\s*/i, "").replace(/\s*duration$/i, "").trim();
+    }
+    const displayBkdText = isBkd ? (bkdDurationOnly && bkdDurationOnly.toLowerCase() !== "breakdown" ? bkdDurationOnly : "Breakdown") : "Normal";
 
     return [
       index + 1,
@@ -237,9 +242,9 @@ export function exportOperatorLogsToExcel(
       log.end_time || "02:00 PM",
       `${opHrs} hrs`,
       `${otHrs} hrs`,
-      isBkd ? "Breakdown" : "Normal",
-      isBkd ? bkdDetails : "—",
-      isBkd ? bkdDetails : "—",
+      displayBkdText,
+      isBkd ? (bkdDetails || "Breakdown") : "—",
+      isBkd ? (bkdDetails || "Breakdown") : "—",
       cleanRemarks,
     ];
   });

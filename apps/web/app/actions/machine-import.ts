@@ -6,6 +6,7 @@ import { TAGS } from "@/lib/cache";
 import { requireRole } from "@/lib/dal";
 import { revalidateTag } from "next/cache";
 import * as XLSX from "xlsx";
+import { formatMachineDatabaseError } from "@/lib/utils/machine-errors";
 
 export interface BulkImportResult {
   success: number;
@@ -52,22 +53,37 @@ export async function importMachinesFromExcel(formData: FormData): Promise<BulkI
     "machine code": "machine_id",
     "model": "model",
     "model number": "model",
+    "machine name": "model",
+    "name": "model",
     "serial no": "serial_number",
     "serial_number": "serial_number",
     "serial number": "serial_number",
+    "serial": "serial_number",
+    "serial_no": "serial_number",
     "yum": "year_of_mfg",
     "year of mfg": "year_of_mfg",
     "year_of_mfg": "year_of_mfg",
     "year": "year_of_mfg",
+    "manufacturing year": "year_of_mfg",
     "manufacturer": "manufacturer",
     "mfg": "manufacturer",
     "make": "manufacturer",
+    "brand": "manufacturer",
     "hmr": "hour_meter",
     "hour meter": "hour_meter",
     "hour_meter": "hour_meter",
+    "hour meter (hmr)": "hour_meter",
+    "hour meter reading (hmr)": "hour_meter",
+    "hours": "hour_meter",
     "service count": "service_count",
+    "service_count": "service_count",
+    "services": "service_count",
+    "total services": "service_count",
     "health status": "health_status",
+    "health_status": "health_status",
+    "health": "health_status",
     "status": "status",
+    "machine status": "status",
   };
 
   const mappedHeaders = headers.map((h) => headerMap[h] || h);
@@ -103,15 +119,30 @@ export async function importMachinesFromExcel(formData: FormData): Promise<BulkI
       const manufacturer = colManufacturer >= 0 ? String(row[colManufacturer] || "").trim() : "";
       const hourMeter = colHourMeter >= 0 ? parseFloat(String(row[colHourMeter] || "0")) || 0 : 0;
       const serviceCount = colServiceCount >= 0 ? parseInt(String(row[colServiceCount] || "0"), 10) || 0 : 0;
-      const rawHealthStatus = colHealthStatus >= 0 ? String(row[colHealthStatus] || "").trim().toLowerCase() : "active";
-      const rawStatus = colStatus >= 0 ? String(row[colStatus] || "").trim().toLowerCase() : "available";
-
-      const healthStatus = ["active", "under_maintenance", "breakdown"].includes(rawHealthStatus)
-        ? rawHealthStatus
+      
+      const rawHealthStatus = colHealthStatus >= 0
+        ? String(row[colHealthStatus] || "").trim().toLowerCase().replace(/[\s-]+/g, "_")
         : "active";
-      const status = ["available", "rented"].includes(rawStatus)
-        ? rawStatus
+      
+      const rawStatus = colStatus >= 0
+        ? String(row[colStatus] || "").trim().toLowerCase().replace(/[\s-]+/g, "_")
         : "available";
+
+      let healthStatus = "active";
+      if (["active", "under_maintenance", "breakdown"].includes(rawHealthStatus)) {
+        healthStatus = rawHealthStatus;
+      } else if (rawHealthStatus === "maintenance") {
+        healthStatus = "under_maintenance";
+      }
+
+      let status = "available";
+      if (["available", "rented"].includes(rawStatus)) {
+        status = rawStatus;
+      } else if (["on_rent", "in_use", "rent"].includes(rawStatus)) {
+        status = "rented";
+      } else if (["idle", "free"].includes(rawStatus)) {
+        status = "available";
+      }
 
       const insertPayload: Record<string, any> = {
         model: model || null,
@@ -133,14 +164,18 @@ export async function importMachinesFromExcel(formData: FormData): Promise<BulkI
 
       if (error) {
         result.failed++;
-        result.errors.push({ row: rowNum, reason: error.message });
+        const formatted = formatMachineDatabaseError(error);
+        result.errors.push({ row: rowNum, reason: formatted.error });
       } else {
         result.success++;
       }
     } catch (err: unknown) {
       result.failed++;
-      const errorMsg = err instanceof Error ? err.message : "Unknown error";
-      result.errors.push({ row: rowNum, reason: errorMsg });
+      const rawMsg = err instanceof Error ? err.message : "Unknown error";
+      const friendlyReason = rawMsg.includes("row-level security")
+        ? "Permission denied: Account role unauthorized to add machines."
+        : rawMsg;
+      result.errors.push({ row: rowNum, reason: friendlyReason });
     }
   }
 

@@ -129,7 +129,7 @@ export function CrmClient({
     phone: "",
     email: "",
     location: "",
-    city: user.branch?.city || "Delhi",
+    city: user.location || "Delhi",
     state: "Delhi",
     requirement: "",
     machineModel: "JCB 3DX Super Backhoe Loader",
@@ -397,7 +397,7 @@ export function CrmClient({
   };
 
   return (
-    <div className="w-full space-y-6 max-w-[1400px] mx-auto">
+    <div className="w-full space-y-6">
       {/* STATUS BANNER */}
       {statusMessage && (
         <motion.div

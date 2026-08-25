@@ -120,9 +120,9 @@ export function EnterpriseTable<T extends { id: string | number }>({
   const [showColumnMenu, setShowColumnMenu] = useState(false);
 
   const densityPadding: Record<TableDensity, string> = {
-    compact: "py-1.5 px-3 text-xs",
-    default: "py-2.5 px-3.5 text-xs",
-    comfortable: "py-3 px-4 text-xs font-medium",
+    compact: "py-1.5 px-2 text-xs",
+    default: "py-2 px-2.5 text-xs",
+    comfortable: "py-2.5 px-3 text-xs font-medium",
   };
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -366,19 +366,19 @@ export function EnterpriseTable<T extends { id: string | number }>({
                   } ${col.sortable ? "cursor-pointer hover:text-[var(--color-ink)]" : ""}`}
                   onClick={() => col.sortable && handleSort(col.id)}
                 >
-                  <div className="flex items-center gap-1.5">
-                    <span>{col.header}</span>
+                  <div className="flex items-center gap-1">
+                    <span className="whitespace-nowrap">{col.header}</span>
                     {col.tooltip && <InfoTooltip content={col.tooltip} />}
                     {col.sortable && (
-                      <span className="text-[var(--color-mute)]">
+                      <span className="text-[var(--color-mute)] shrink-0">
                         {sortColumn === col.id ? (
                           sortDirection === "asc" ? (
-                            <AnimatedChevronUp size={14} className="text-[var(--color-ink)]" />
+                            <AnimatedChevronUp size={12} className="text-[var(--color-ink)]" />
                           ) : (
-                            <AnimatedChevronDown size={14} className="text-[var(--color-ink)]" />
+                            <AnimatedChevronDown size={12} className="text-[var(--color-ink)]" />
                           )
                         ) : (
-                          <AnimatedChevronsUpDown size={14} className="opacity-40 hover:opacity-100" />
+                          <AnimatedChevronsUpDown size={12} className="opacity-40 hover:opacity-100" />
                         )}
                       </span>
                     )}

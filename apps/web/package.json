@@ -13,13 +13,13 @@
     "@base-ui/react": "^1.6.0",
     "@radix-ui/react-dialog": "^1.1.23",
     "@radix-ui/react-tooltip": "^1.2.16",
-    "@sendgrid/mail": "^8.1.6",
     "@reachinternational/api-client": "workspace:*",
     "@reachinternational/design-tokens": "workspace:*",
     "@reachinternational/permissions": "workspace:*",
     "@reachinternational/types": "workspace:*",
     "@reachinternational/utils": "workspace:*",
     "@reachinternational/validation": "workspace:*",
+    "@sendgrid/mail": "^8.1.6",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.111.0",
     "@upstash/qstash": "^2.11.3",
@@ -41,11 +41,13 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "agentation": "^3.0.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
+    "pg": "^8.23.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

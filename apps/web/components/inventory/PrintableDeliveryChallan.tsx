@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { ReachInternationalLogo } from "@/components/branding/ReachInternationalLogo";
 import type { DeliveryChallan, DeliveryChallanItem } from "@/lib/types/database";
 
 import { formatDate } from "@reachinternational/utils";
@@ -35,8 +34,13 @@ export function PrintableDeliveryChallan({ challan }: PrintableDeliveryChallanPr
         {/* Header Block matching Physical Reference Image */}
         <div className="border border-neutral-900 grid grid-cols-12 divide-x divide-neutral-900">
           {/* Logo & Company Info */}
-          <div className="col-span-8 p-3 flex flex-col gap-2">
-            <ReachInternationalLogo variant="full" />
+          <div className="col-span-8 p-3 flex flex-col gap-1.5">
+            {/* eslint-disable-next-html-element-suppress */}
+            <img
+              src="/pdf-logo.png"
+              alt="Reach International"
+              className="h-12 w-auto object-contain self-start"
+            />
             <div className="text-[10px] text-neutral-800 leading-tight">
               PLOT NO. 21, PALAM MATIALA ROAD, MADHU VIHAR, OPPOSITE SECTOR-5,<br />
               DWARKA, NEW DELHI-110059<br />

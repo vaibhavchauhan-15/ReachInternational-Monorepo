@@ -42,7 +42,7 @@ import { UserRow } from "./UserRow";
 import { MobileUserCard } from "./MobileUserCard";
 import { UserDetailSheet } from "./UserDetailSheet";
 import dynamic from "next/dynamic";
-import type { User, UserRole, Branch } from "@/lib/types/database";
+import type { User, UserRole } from "@/lib/types/database";
 
 const UserCreateModal = dynamic(() => import("./UserCreateModal").then(mod => mod.UserCreateModal), { ssr: false });
 const UserEditModal = dynamic(() => import("./UserEditModal").then(mod => mod.UserEditModal), { ssr: false });
@@ -50,7 +50,6 @@ const UserEditModal = dynamic(() => import("./UserEditModal").then(mod => mod.Us
 interface UsersPageClientProps {
   users: User[];
   pendingUsers: User[];
-  branches?: Branch[];
   currentUser: User;
   isSuperAdmin: boolean;
 }
@@ -58,7 +57,6 @@ interface UsersPageClientProps {
 export function UsersPageClient({
   users,
   pendingUsers,
-  branches = [],
   currentUser,
   isSuperAdmin,
 }: UsersPageClientProps) {
@@ -217,16 +215,15 @@ export function UsersPageClient({
   // Filter Users List
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
-      // Search filter (name, email, phone, branch, location, role)
+      // Search filter (name, email, phone, location, role)
       if (deferredSearch.trim()) {
         const query = deferredSearch.toLowerCase();
         const matchesName = u.full_name.toLowerCase().includes(query);
         const matchesEmail = u.email.toLowerCase().includes(query);
         const matchesPhone = u.phone ? u.phone.toLowerCase().includes(query) : false;
-        const matchesBranch = u.branch?.name ? u.branch.name.toLowerCase().includes(query) : false;
-        const matchesCity = u.branch?.city ? u.branch.city.toLowerCase().includes(query) : false;
+        const matchesLocation = u.location ? u.location.toLowerCase().includes(query) : false;
         const matchesRole = u.role.toLowerCase().includes(query);
-        if (!matchesName && !matchesEmail && !matchesPhone && !matchesBranch && !matchesCity && !matchesRole) return false;
+        if (!matchesName && !matchesEmail && !matchesPhone && !matchesLocation && !matchesRole) return false;
       }
 
       // Role filter
@@ -261,9 +258,8 @@ export function UsersPageClient({
     <div className="flex flex-col gap-6 pb-28 md:pb-6">
       {/* Page Header */}
       <PageHeader
-        title="Employee & User Management"
-        description="View all employees, manage staff roles and access credentials, assign company branch locations, reset passwords, and onboard new employees."
-        breadcrumbs={[{ label: "Employees & Users" }]}
+        title="User Management"
+        breadcrumbs={[{ label: "Users" }]}
         actions={
           <div className="flex items-center gap-2">
             {/* View Switcher for Desktop / Mobile */}
@@ -308,11 +304,13 @@ export function UsersPageClient({
               </button>
             </div>
 
-            <RefreshButton path="/users" tag="users" />
-
-            <Button onClick={() => setShowCreateModal(true)} className="shadow-sm hidden sm:inline-flex">
-              <AnimatedUserPlus size={16} className="mr-2" />
-              Add Employee / User
+            <Button
+              variant="primary"
+              onClick={() => setShowCreateModal(true)}
+              className="h-9 px-4 text-xs font-bold rounded-lg shadow-sm hidden sm:inline-flex items-center gap-2 tracking-tight active:scale-95 transition-all cursor-pointer"
+            >
+              <AnimatedUserPlus size={16} />
+              <span>Add Employee / User</span>
             </Button>
           </div>
         }
@@ -621,38 +619,29 @@ export function UsersPageClient({
         }
       >
         <Card padding="lg" className="shadow-xs">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="heading-md text-[var(--color-ink)]">All System Accounts</h2>
-              <p className="body-sm text-[var(--color-mute)] text-xs mt-0.5">
-                Showing {filteredUsers.length} of {users.length} registered accounts
-              </p>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--color-hairline)]">
-            <table className="w-full text-left">
-              <thead className="bg-[var(--color-canvas)] border-b border-[var(--color-hairline)]">
+          <div className="overflow-x-auto lg:overflow-x-visible rounded-[var(--radius-sm)] border border-[var(--color-hairline)]">
+            <table className="w-full text-left table-fixed sm:table-auto lg:table-fixed">
+              <thead className="bg-[var(--color-canvas)] border-b border-[var(--color-hairline)] text-xs font-semibold text-[var(--color-mute)]">
                 <tr>
-                  <th className="py-3 px-4 text-xs font-semibold text-[var(--color-mute)]">
+                  <th className="py-2.5 px-3 w-[22%] whitespace-nowrap">
                     User Account
                   </th>
-                  <th className="py-3 px-4 text-xs font-semibold text-[var(--color-mute)]">
+                  <th className="py-2.5 px-3 w-[26%] whitespace-nowrap">
                     Contact Info
                   </th>
-                  <th className="py-3 px-4 text-xs font-semibold text-[var(--color-mute)]">
+                  <th className="py-2.5 px-3 w-[18%] whitespace-nowrap">
                     Role & Access Level
                   </th>
-                  <th className="py-3 px-4 text-xs font-semibold text-[var(--color-mute)]">
-                    Assigned Branch & Location
+                  <th className="py-2.5 px-3 w-[16%] whitespace-nowrap">
+                    City
                   </th>
-                  <th className="py-3 px-4 text-xs font-semibold text-[var(--color-mute)]">
+                  <th className="py-2.5 px-3 w-[10%] whitespace-nowrap">
                     Status
                   </th>
-                  <th className="py-3 px-4 text-xs font-semibold text-[var(--color-mute)]">
+                  <th className="py-2.5 px-3 w-[10%] whitespace-nowrap">
                     Joined Date
                   </th>
-                  <th className="py-3 px-4 text-xs font-semibold text-[var(--color-mute)] text-right">
+                  <th className="py-2.5 px-3 w-[8%] whitespace-nowrap text-right">
                     Actions
                   </th>
                 </tr>
@@ -710,7 +699,6 @@ export function UsersPageClient({
           open={showCreateModal}
           onClose={() => setShowCreateModal(false)}
           isSuperAdmin={isSuperAdmin}
-          branches={branches}
           loading={loading?.type === "create"}
           onSubmit={handleCreateUser}
         />
@@ -771,7 +759,6 @@ export function UsersPageClient({
       {showEditModal && (
         <UserEditModal
           user={showEditModal}
-          branches={branches}
           isSuperAdmin={isSuperAdmin}
           onClose={() => setShowEditModal(null)}
           loading={loading?.type === "edit"}

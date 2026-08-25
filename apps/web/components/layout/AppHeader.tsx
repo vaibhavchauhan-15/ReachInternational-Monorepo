@@ -13,7 +13,6 @@ import {
 import type { User } from "@/lib/types/database";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { CommandPalette } from "@/components/ui/CommandPalette";
-import { BranchSelector } from "@/components/layout/BranchSelector";
 import { GlobalCreateModal } from "@/components/layout/GlobalCreateModal";
 
 import { TooltipWrapper } from "@/components/ui";
@@ -70,9 +69,6 @@ export function AppHeader({ user }: AppHeaderProps) {
         <div className="flex items-center gap-3">
           {/* Top Bar + Create Action Button */}
           <GlobalCreateModal userRole={user.role} />
-
-          {/* Branch Scoping Selector */}
-          <BranchSelector currentBranchId={user.branch_id} />
 
           {/* Quick Access Search Trigger */}
           <TooltipWrapper content={`Quick Search (${isMac ? "⌘" : "Ctrl"}K)`} side="bottom">

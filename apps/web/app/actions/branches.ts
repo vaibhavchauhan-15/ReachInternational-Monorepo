@@ -9,18 +9,7 @@ import { logAudit } from "@/lib/audit";
 
 export async function getBranchesAction() {
   await getCurrentUser();
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase
-    .from("branches")
-    .select("*")
-    .order("name", { ascending: true });
-
-  if (error) {
-    console.error("Error fetching branches:", error);
-    return { success: false, error: error.message, data: [] };
-  }
-
-  return { success: true, data };
+  return { success: true, data: [] };
 }
 
 // Branch creation is strictly Super Admin only

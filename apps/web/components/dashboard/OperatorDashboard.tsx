@@ -39,6 +39,7 @@ import type {
   User,
   Machine,
   MachineWithEngineer,
+  CRMClient,
 } from "@/lib/types/database";
 import {
   submitOperatorHourLogAction,
@@ -49,6 +50,15 @@ import { formatDate } from "@reachinternational/utils";
 import { PrintableOperatorLogsModal } from "./PrintableOperatorLogsModal";
 
 const DRAFT_STORAGE_KEY = "reach_operator_daily_log_draft";
+
+// Helper to format client location string
+function getClientFormattedLocation(client?: CRMClient | null, fallbackLocation?: string | null): string {
+  if (client) {
+    const parts = [client.address, client.city, client.state].filter(Boolean);
+    if (parts.length > 0) return parts.join(", ");
+  }
+  return fallbackLocation || "";
+}
 
 // Time string parser (e.g. "08:00 AM", "05:30 PM", "17:00") -> total minutes from midnight
 function parseTimeToMinutes(timeStr?: string): number | null {
@@ -96,6 +106,7 @@ export interface OperatorHourLog {
   id: string;
   machine_id: string;
   operator_id: string;
+  client_id?: string | null;
   log_date: string;
   start_meter?: number;
   end_meter?: number;
@@ -113,6 +124,7 @@ export interface OperatorHourLog {
   status?: string;
   created_at?: string;
   machine?: Machine;
+  client?: CRMClient;
 }
 
 export interface OperatorDashboardProps {
@@ -120,6 +132,7 @@ export interface OperatorDashboardProps {
   assignedMachine?: Machine | null;
   recentLogs?: OperatorHourLog[];
   allMachines?: MachineWithEngineer[];
+  dbClients?: CRMClient[];
 }
 
 export function OperatorDashboard({
@@ -127,6 +140,7 @@ export function OperatorDashboard({
   assignedMachine,
   recentLogs = [],
   allMachines = [],
+  dbClients = [],
 }: OperatorDashboardProps) {
   const { toast } = useToast();
   const router = useRouter();
@@ -226,22 +240,94 @@ export function OperatorDashboard({
     [availableMachines, selectedMachineId, assignedMachine]
   );
 
+  // Client Selection State & Dropdown
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [clientLocation, setClientLocation] = useState<string>("");
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState<boolean>(false);
+  const [clientSearchQuery, setClientSearchQuery] = useState<string>("");
+  const clientDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Helper to find associated client for a machine from recent logs, machine customer_name, or dbClients
+  const findClientForMachine = useCallback(
+    (mId: string, machineObj?: Machine | null) => {
+      if (!mId) return null;
+      const logForMachine = recentLogs.find((l) => l.machine_id === mId && (l.client_id || (l as any).client));
+      if (logForMachine) {
+        if (logForMachine.client_id) {
+          const found = dbClients.find((c) => c.id === logForMachine.client_id);
+          if (found) return found;
+        }
+        if ((logForMachine as any).client) {
+          return (logForMachine as any).client as CRMClient;
+        }
+      }
+      const custName = machineObj?.customer_name?.trim().toLowerCase();
+      if (custName && dbClients.length > 0) {
+        const match = dbClients.find(
+          (c) =>
+            c.client_name.toLowerCase() === custName ||
+            c.company_name?.toLowerCase() === custName ||
+            c.code.toLowerCase() === custName
+        );
+        if (match) return match;
+      }
+      return dbClients.length > 0 ? dbClients[0] : null;
+    },
+    [recentLogs, dbClients]
+  );
+
   // Custom Searchable Dropdown State for Machine Selector
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close custom dropdown on click outside
+  // Close custom dropdowns on click outside
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsDropdownOpen(false);
         setSearchQuery("");
       }
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(e.target as Node)) {
+        setIsClientDropdownOpen(false);
+        setClientSearchQuery("");
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Selected Client derived object
+  const selectedClient = useMemo(
+    () => dbClients.find((c) => c.id === selectedClientId) || null,
+    [dbClients, selectedClientId]
+  );
+
+  // Search filter for clients
+  const filteredClients = useMemo(() => {
+    if (!clientSearchQuery.trim()) return dbClients;
+    const q = clientSearchQuery.toLowerCase().trim();
+    return dbClients.filter((c) => {
+      const nameMatch = c.client_name?.toLowerCase().includes(q);
+      const companyMatch = c.company_name?.toLowerCase().includes(q);
+      const codeMatch = c.code?.toLowerCase().includes(q);
+      const cityMatch = c.city?.toLowerCase().includes(q);
+      const stateMatch = c.state?.toLowerCase().includes(q);
+      const addressMatch = c.address?.toLowerCase().includes(q);
+      return nameMatch || companyMatch || codeMatch || cityMatch || stateMatch || addressMatch;
+    });
+  }, [dbClients, clientSearchQuery]);
+
+  const handleSelectClient = (clientId: string) => {
+    setSelectedClientId(clientId);
+    setIsClientDropdownOpen(false);
+    setClientSearchQuery("");
+    const targetClient = dbClients.find((c) => c.id === clientId);
+    if (targetClient) {
+      const loc = getClientFormattedLocation(targetClient);
+      setClientLocation(loc);
+    }
+  };
 
   // Search filter matching machine name, serial no, model, machine code, engine serial
   const filteredMachines = useMemo(() => {
@@ -348,7 +434,7 @@ export function OperatorDashboard({
     return null;
   }, [startMeter, endMeter]);
 
-  // Update machine details & auto-fetch latest starting meter reading when selection changes
+  // Update machine details & auto-fetch latest starting meter reading & client when selection changes
   const handleSelectMachine = (mId: string) => {
     setSelectedMachineId(mId);
     setIsDropdownOpen(false);
@@ -361,8 +447,49 @@ export function OperatorDashboard({
       const latestMtr = getLatestMeterForMachine(mId);
       setStartMeter(String(latestMtr));
       setEndMeter(String(latestMtr));
+
+      // Auto-detect and pre-fill client & location
+      const autoClient = findClientForMachine(mId, target);
+      if (autoClient) {
+        setSelectedClientId(autoClient.id);
+        const loc = getClientFormattedLocation(autoClient, target.customer_address || target.city || null);
+        setClientLocation(loc);
+      } else {
+        setClientLocation(target.customer_address || target.city || "");
+      }
     }
   };
+
+  // Auto-fetch client & location from database whenever selected machine changes
+  useEffect(() => {
+    if (!selectedMachineId) return;
+    const targetMachine = availableMachines.find((m) => m.id === selectedMachineId) || assignedMachine;
+    const autoClient = findClientForMachine(selectedMachineId, targetMachine);
+
+    try {
+      const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.selectedMachineId === selectedMachineId && parsed.selectedClientId) {
+          setSelectedClientId(parsed.selectedClientId);
+          if (parsed.clientLocation !== undefined) {
+            setClientLocation(parsed.clientLocation);
+          }
+          return;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    if (autoClient) {
+      setSelectedClientId(autoClient.id);
+      const loc = getClientFormattedLocation(autoClient, targetMachine?.customer_address || targetMachine?.city || null);
+      setClientLocation(loc);
+    } else if (targetMachine?.customer_name) {
+      setClientLocation(targetMachine.customer_address || targetMachine.city || "");
+    }
+  }, [selectedMachineId, availableMachines, assignedMachine, findClientForMachine]);
 
   // Auto-fetch and update starting meter reading from database whenever selected machine or recent logs change
   useEffect(() => {
@@ -444,6 +571,8 @@ export function OperatorDashboard({
             setModel(target.model || "");
           }
         }
+        if (parsed.selectedClientId) setSelectedClientId(parsed.selectedClientId);
+        if (parsed.clientLocation !== undefined) setClientLocation(parsed.clientLocation);
         if (parsed.startMeter !== undefined) setStartMeter(parsed.startMeter);
         if (parsed.endMeter !== undefined) setEndMeter(parsed.endMeter);
         if (parsed.startTime) setStartTime(parsed.startTime);
@@ -473,6 +602,8 @@ export function OperatorDashboard({
     if (activeTab !== "entry") return;
     const draft = {
       selectedMachineId,
+      selectedClientId,
+      clientLocation,
       startMeter,
       endMeter,
       startTime,
@@ -495,6 +626,8 @@ export function OperatorDashboard({
     }
   }, [
     selectedMachineId,
+    selectedClientId,
+    clientLocation,
     startMeter,
     endMeter,
     startTime,
@@ -591,6 +724,8 @@ export function OperatorDashboard({
 
     const res = await submitOperatorHourLogAction({
       machineId: selectedMachineId,
+      clientId: selectedClientId || undefined,
+      location: clientLocation.trim() || undefined,
       startMeter: startMtrNum,
       endMeter: endMtrNum,
       startTime,
@@ -684,6 +819,8 @@ export function OperatorDashboard({
 
     const res = await updateOperatorHourLogAction({
       logId: editingLog.id,
+      clientId: selectedClientId || undefined,
+      location: clientLocation.trim() || undefined,
       startMeter: startMtrNum,
       endMeter: endMtrNum,
       startTime: editStartTime,
@@ -711,7 +848,7 @@ export function OperatorDashboard({
   });
 
   return (
-    <div className="w-full space-y-3 sm:space-y-6 p-0 sm:p-6">
+    <div className="w-full space-y-3 sm:space-y-6">
       {/* ============================================ */}
       {/* 1. HEADER BANNER                             */}
       {/* ============================================ */}
@@ -791,14 +928,14 @@ export function OperatorDashboard({
 
           <form onSubmit={handleOpenSubmitModal} className="space-y-3 sm:space-y-6">
             {/* ============================================ */}
-            {/* SECTION A: MACHINE INFORMATION               */}
+            {/* SECTION A: MACHINE & CLIENT DETAILS          */}
             {/* ============================================ */}
-            <div className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/40 space-y-2.5 sm:space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2.5 sm:gap-4">
-                {/* Machine Name - Primary Custom Searchable Dropdown */}
-                <div className="col-span-2 md:col-span-1">
+            <div className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/40 space-y-3 sm:space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+                {/* Model - Primary Custom Searchable Dropdown */}
+                <div>
                   <label className="block text-xs font-bold text-[var(--color-ink)] mb-1 flex items-center gap-1.5">
-                    Machine Name *
+                    Model *
                   </label>
 
                   {availableMachines.length > 0 ? (
@@ -811,13 +948,15 @@ export function OperatorDashboard({
                         <span className="truncate flex items-center gap-2">
                           {selectedMachine ? (
                             <>
-                              <span className="truncate">{selectedMachine.machine_name}</span>
+                              <span className="truncate font-bold">
+                                {selectedMachine.model || selectedMachine.machine_name}
+                              </span>
                               <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 font-mono text-[10px] shrink-0">
                                 {selectedMachine.machine_code}
                               </span>
                             </>
                           ) : (
-                            <span className="text-[var(--color-mute)] font-normal">Search or select machine...</span>
+                            <span className="text-[var(--color-mute)] font-normal">Search or select model...</span>
                           )}
                         </span>
                         <AnimatedChevronDown
@@ -837,7 +976,7 @@ export function OperatorDashboard({
                               type="text"
                               value={searchQuery}
                               onChange={(e) => setSearchQuery(e.target.value)}
-                              placeholder="Search by Machine Name, Code, Model, S/N..."
+                              placeholder="Search by Model, Code, S/N..."
                               className="w-full bg-transparent text-xs text-[var(--color-ink)] focus:outline-none placeholder:text-[var(--color-mute)] py-1"
                               autoFocus
                             />
@@ -860,6 +999,7 @@ export function OperatorDashboard({
                             ) : (
                               filteredMachines.map((m) => {
                                 const isSelected = m.id === selectedMachineId;
+                                const modelTitle = m.model || m.machine_name;
                                 return (
                                   <button
                                     key={m.id}
@@ -873,15 +1013,16 @@ export function OperatorDashboard({
                                   >
                                     <div className="min-w-0 pr-2">
                                       <div className="font-bold flex items-center gap-2 truncate">
-                                        <span className="truncate">{m.machine_name}</span>
+                                        <span className="truncate">{modelTitle}</span>
                                         <span className="font-mono text-[10px] text-sky-600 dark:text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded shrink-0">
                                           {m.machine_code}
                                         </span>
                                       </div>
-                                      <div className="text-[10px] text-[var(--color-mute)] font-normal truncate mt-0.5 flex items-center gap-2">
-                                        <span>Model: {m.model || "—"}</span>
-                                        {m.serial_number && <span>• S/N: {m.serial_number}</span>}
-                                      </div>
+                                      {m.serial_number && (
+                                        <div className="text-[10px] text-[var(--color-mute)] font-mono truncate mt-0.5">
+                                          S/N: {m.serial_number}
+                                        </div>
+                                      )}
                                     </div>
                                     {isSelected && (
                                       <AnimatedCheck size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
@@ -898,39 +1039,162 @@ export function OperatorDashboard({
                     <input
                       type="text"
                       required
-                      value={machineName || selectedMachine?.machine_name || "Assigned Machine"}
-                      onChange={(e) => setMachineName(e.target.value)}
+                      value={model || selectedMachine?.model || selectedMachine?.machine_name || "Assigned Machine"}
+                      onChange={(e) => setModel(e.target.value)}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)]"
-                      placeholder="e.g. Godrej Reach Truck"
+                      placeholder="e.g. 50B-9"
                     />
                   )}
                 </div>
 
-                {/* Machine No / Code (Read-Only Auto-Populated) */}
-                <div className="col-span-1 md:col-span-1">
+                {/* Serial Number (Read-Only Auto-Populated) */}
+                <div>
                   <label className="block text-xs font-bold text-[var(--color-ink)] mb-1">
-                    Machine Code / No. *
+                    Serial Number
                   </label>
                   <input
                     type="text"
                     readOnly
-                    value={machineNo || selectedMachine?.machine_code || ""}
+                    value={selectedMachine?.serial_number || selectedMachine?.machine_code || "—"}
                     placeholder="Auto-populated"
                     className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] cursor-not-allowed opacity-80"
                   />
                 </div>
+              </div>
 
-                {/* Model (Read-Only Auto-Populated) */}
-                <div className="col-span-1 md:col-span-1">
+              {/* Client & Site Location Strip */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-4 pt-2.5 border-t border-[var(--color-hairline)]/60">
+                {/* Client / Customer Name - Searchable Dropdown */}
+                <div>
+                  <label className="block text-xs font-bold text-[var(--color-ink)] mb-1 flex items-center justify-between">
+                    <span>Client / Customer Name *</span>
+                    {selectedClient?.code && (
+                      <span className="text-[10px] text-sky-600 dark:text-sky-400 font-mono font-bold">
+                        {selectedClient.code}
+                      </span>
+                    )}
+                  </label>
+
+                  {dbClients.length > 0 ? (
+                    <div className="relative w-full" ref={clientDropdownRef}>
+                      <button
+                        type="button"
+                        onClick={() => setIsClientDropdownOpen((prev) => !prev)}
+                        className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)] flex items-center justify-between hover:border-sky-500/50 transition-all cursor-pointer shadow-2xs min-h-[42px]"
+                      >
+                        <span className="truncate flex items-center gap-2">
+                          {selectedClient ? (
+                            <>
+                              <span className="truncate font-extrabold">{selectedClient.client_name}</span>
+                              <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 font-mono text-[10px] shrink-0">
+                                {selectedClient.code}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="text-[var(--color-mute)] font-normal">Search or select client...</span>
+                          )}
+                        </span>
+                        <AnimatedChevronDown
+                          size={16}
+                          className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
+                            isClientDropdownOpen ? "rotate-180 text-sky-500" : ""
+                          }`}
+                        />
+                      </button>
+
+                      {/* Searchable Client Dropdown Popover */}
+                      {isClientDropdownOpen && (
+                        <div className="absolute z-50 top-full left-0 right-0 mt-1.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden max-h-72 flex flex-col backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-150">
+                          <div className="p-2 border-b border-[var(--color-hairline)] flex items-center gap-2 bg-[var(--color-canvas)]">
+                            <Search className="h-3.5 w-3.5 text-[var(--color-mute)] shrink-0 ml-1" />
+                            <input
+                              type="text"
+                              value={clientSearchQuery}
+                              onChange={(e) => setClientSearchQuery(e.target.value)}
+                              placeholder="Search by Client Name, Code, City, Location..."
+                              className="w-full bg-transparent text-xs text-[var(--color-ink)] focus:outline-none placeholder:text-[var(--color-mute)] py-1"
+                              autoFocus
+                            />
+                            {clientSearchQuery && (
+                              <button
+                                type="button"
+                                onClick={() => setClientSearchQuery("")}
+                                className="text-[var(--color-mute)] hover:text-[var(--color-ink)] p-1"
+                              >
+                                <AnimatedX size={12} />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
+                            {filteredClients.length === 0 ? (
+                              <div className="py-4 text-center text-xs text-[var(--color-mute)]">
+                                No matching clients found
+                              </div>
+                            ) : (
+                              filteredClients.map((c) => {
+                                const isSelected = c.id === selectedClientId;
+                                const cLoc = getClientFormattedLocation(c);
+                                return (
+                                  <button
+                                    key={c.id}
+                                    type="button"
+                                    onClick={() => handleSelectClient(c.id)}
+                                    className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
+                                      isSelected
+                                        ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold"
+                                        : "hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
+                                    }`}
+                                  >
+                                    <div className="min-w-0 pr-2">
+                                      <div className="font-bold flex items-center gap-2 truncate">
+                                        <span className="truncate">{c.client_name}</span>
+                                        <span className="font-mono text-[10px] text-sky-600 dark:text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded shrink-0">
+                                          {c.code}
+                                        </span>
+                                      </div>
+                                      {cLoc && (
+                                        <div className="text-[10px] text-[var(--color-mute)] font-normal truncate mt-0.5">
+                                          📍 {cLoc}
+                                        </div>
+                                      )}
+                                    </div>
+                                    {isSelected && (
+                                      <AnimatedCheck size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                                    )}
+                                  </button>
+                                );
+                              })
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <input
+                      type="text"
+                      value={selectedClient?.client_name || selectedMachine?.customer_name || ""}
+                      onChange={(e) => {
+                        // fallback input
+                      }}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)]"
+                      placeholder="Client Name..."
+                    />
+                  )}
+                </div>
+
+                {/* Client Site Location (Auto-Filled, Editable) */}
+                <div>
                   <label className="block text-xs font-bold text-[var(--color-ink)] mb-1">
-                    Model *
+                    Client Site Location *
                   </label>
                   <input
                     type="text"
-                    readOnly
-                    value={model || selectedMachine?.model || ""}
-                    placeholder="Auto-populated"
-                    className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)] cursor-not-allowed opacity-80"
+                    required
+                    value={clientLocation}
+                    onChange={(e) => setClientLocation(e.target.value)}
+                    placeholder="e.g. Sriperumbudur Industrial Park, Chennai"
+                    className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                   />
                 </div>
               </div>
@@ -1305,7 +1569,7 @@ export function OperatorDashboard({
                         </div>
                         {isBkd ? (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 inline-flex items-center gap-1">
-                            🔴 Breakdown {bkdDurationStr ? `(${bkdDurationStr})` : ""}
+                            🔴 {bkdDurationStr || "Breakdown"}
                           </span>
                         ) : (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
@@ -1430,7 +1694,7 @@ export function OperatorDashboard({
                           <td className="p-3.5 whitespace-nowrap">
                             {isBkd ? (
                               <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 inline-flex items-center gap-1">
-                                🔴 Breakdown {bkdDurationStr ? `(${bkdDurationStr})` : ""}
+                                🔴 {bkdDurationStr || "Breakdown"}
                               </span>
                             ) : (
                               <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
@@ -1474,29 +1738,23 @@ export function OperatorDashboard({
       <Modal
         open={showConfirmModal}
         onClose={() => setShowConfirmModal(false)}
-        title={
-          <div className="flex items-center gap-2">
-            <Send className="h-5 w-5 text-sky-500" />
-            <span className="text-base font-extrabold text-[var(--color-ink)]">Submit Daily Machine Log?</span>
-          </div>
-        }
-        description="Please confirm daily machine log summary details before recording."
+        title="Submit Daily Machine Log?"
         size="md"
         footer={
-          <div className="flex items-center justify-end gap-3 w-full pt-2">
+          <div className="flex items-center justify-end gap-2.5 w-full pt-2">
             <button
               type="button"
               onClick={() => setShowConfirmModal(false)}
-              className="px-4 py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] font-bold text-xs hover:bg-[var(--color-hairline-soft-surface)] transition-all cursor-pointer"
+              className="px-4 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] font-semibold text-xs hover:bg-[var(--color-hairline-soft-surface)] transition-all cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={() => handleExecuteSubmit("submitted")}
-              className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md transition-all cursor-pointer flex items-center gap-2"
+              className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs shadow-2xs transition-all cursor-pointer flex items-center gap-1.5"
             >
-              <Send className="h-3.5 w-3.5" /> Confirm & Submit Log
+              Confirm & Submit Log
             </button>
           </div>
         }
@@ -1505,36 +1763,47 @@ export function OperatorDashboard({
           <div className="p-3.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-3">
             <div className="grid grid-cols-2 gap-3 border-b border-[var(--color-hairline)] pb-3">
               <div>
-                <span className="text-[10px] text-[var(--color-mute)] font-extrabold uppercase block">Machine Name</span>
-                <span className="font-bold text-[var(--color-ink)] text-sm">{selectedMachine?.machine_name}</span>
+                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Machine Model</span>
+                <span className="font-bold text-[var(--color-ink)] text-sm">{selectedMachine?.model || selectedMachine?.machine_name || "Machine"}</span>
               </div>
               <div>
-                <span className="text-[10px] text-[var(--color-mute)] font-extrabold uppercase block">Machine Code & Model</span>
-                <span className="font-mono font-bold text-sky-600 dark:text-sky-400">{machineNo} · {model}</span>
+                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Machine Serial No.</span>
+                <span className="font-mono font-bold text-sky-600 dark:text-sky-400">{selectedMachine?.serial_number || machineNo || "—"}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 border-b border-[var(--color-hairline)] pb-3">
+              <div>
+                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Client Name</span>
+                <span className="font-bold text-[var(--color-ink)]">{selectedClient?.client_name || selectedMachine?.customer_name || "Unassigned Client"}</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Site Location</span>
+                <span className="font-bold text-[var(--color-ink)]">{clientLocation || "—"}</span>
               </div>
             </div>
 
             <div className="grid grid-cols-4 gap-3 border-b border-[var(--color-hairline)] pb-3">
               <div>
-                <span className="text-[10px] text-[var(--color-mute)] font-extrabold uppercase block">Log Date</span>
+                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Log Date</span>
                 <span className="font-bold text-[var(--color-ink)]">{formatDate(new Date())}</span>
               </div>
               <div>
-                <span className="text-[10px] text-[var(--color-mute)] font-extrabold uppercase block">Hour Meter</span>
+                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Hour Meter</span>
                 <span className="font-mono font-bold text-[var(--color-ink)]">{startMeter} → {endMeter} (+{meterRunningHours}h)</span>
               </div>
               <div>
-                <span className="text-[10px] text-[var(--color-mute)] font-extrabold uppercase block">Timings</span>
+                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Timings</span>
                 <span className="font-bold text-[var(--color-ink)]">{startTime} → {endTime} ({operatingStats.durationHours}h)</span>
               </div>
               <div>
-                <span className="text-[10px] text-[var(--color-mute)] font-extrabold uppercase block">Overtime</span>
+                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Overtime</span>
                 <span className="font-bold text-amber-600 dark:text-amber-400">{overtimeHours} hrs</span>
               </div>
             </div>
 
             <div>
-              <span className="text-[10px] text-[var(--color-mute)] font-extrabold uppercase block mb-1">Machine Status</span>
+              <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-1">Machine Status</span>
               {isBreakdown ? (
                 <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 font-bold">
                   🔴 Machine Breakdown ({breakdownHours}h {breakdownMinutes}m duration)

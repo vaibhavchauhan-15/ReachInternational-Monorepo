@@ -47,7 +47,7 @@ const getCachedMachineComplaints = unstable_cache(
         status,
         created_at,
         updated_at,
-        machine:machines!machine_complaints_machine_id_fkey(id, machine_code, machine_name, model, serial_number, city, state),
+        machine:machines(id, model, serial_number, status, health_status),
         supervisor:users!machine_complaints_supervisor_id_fkey(id, full_name, phone, email),
         engineer:users!machine_complaints_engineer_id_fkey(id, full_name, phone, email)
       `,
@@ -90,15 +90,61 @@ const getCachedMachineComplaints = unstable_cache(
     const from = (page - 1) * pageSize;
     const to = from + pageSize - 1;
 
-    const { data, count, error } = await query.range(from, to);
+    let { data, count, error } = await query.range(from, to);
+
+    // If query fails, handle missing table schema cache gracefully or attempt fallback query
+    if (error) {
+      const errMsg = String(error.message || error.details || (error as any).hint || error || "");
+      const isMissingTable =
+        errMsg.includes("Could not find the table") ||
+        (error as any).code === "PGRST204" ||
+        (error as any).code === "42P01";
+
+      if (isMissingTable) {
+        return { complaints: [], total: 0, page, pageSize, totalPages: 0 };
+      }
+
+      const fallbackQuery = supabase
+        .from("machine_complaints")
+        .select("*, machine:machines(*)", { count: "estimated" })
+        .order("created_at", { ascending: false });
+
+      const fallbackRes = await fallbackQuery.range(from, to);
+      if (!fallbackRes.error) {
+        data = fallbackRes.data;
+        count = fallbackRes.count;
+        error = null;
+      } else {
+        const fallbackErrMsg = String(fallbackRes.error.message || fallbackRes.error.details || fallbackRes.error || "");
+        if (
+          !fallbackErrMsg.includes("Could not find the table") &&
+          (fallbackRes.error as any).code !== "PGRST204" &&
+          (fallbackRes.error as any).code !== "42P01"
+        ) {
+          console.error("Error fetching machine complaints:", fallbackErrMsg);
+        }
+      }
+    }
 
     if (error) {
-      console.error("Error fetching machine complaints:", error);
       return { complaints: [], total: 0, page, pageSize, totalPages: 0 };
     }
 
+    const formattedComplaints = (data ?? []).map((c: any) => {
+      if (c.machine) {
+        const code = c.machine.machine_id || c.machine.machine_code || c.machine.id;
+        c.machine = {
+          ...c.machine,
+          machine_id: code,
+          machine_code: code,
+          machine_name: c.machine.model ? `${code} (${c.machine.model})` : code,
+        };
+      }
+      return c;
+    });
+
     return {
-      complaints: (data as unknown as ComplaintWithDetails[]) ?? [],
+      complaints: formattedComplaints as unknown as ComplaintWithDetails[],
       total: count ?? 0,
       page,
       pageSize,

@@ -83,7 +83,6 @@ export function ComplaintsClient({
   const canRaiseComplaint =
     userRole === "super_admin" ||
     userRole === "admin" ||
-    userRole === "branch_manager" ||
     userRole === "service_manager" ||
     userRole === "supervisor" ||
     userRole === "mechanic" ||
@@ -95,7 +94,6 @@ export function ComplaintsClient({
     userRole === "super_admin" ||
     userRole === "admin" ||
     userRole === "service_manager" ||
-    userRole === "branch_manager" ||
     userRole === "supervisor";
 
   useEffect(() => {

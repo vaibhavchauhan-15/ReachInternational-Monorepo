@@ -2,45 +2,50 @@ import * as XLSX from "xlsx";
 
 export function getSampleExcelTemplate(): Blob {
   const headers = [
-    "Machine Name",
+    "Machine ID",
     "Model",
-    "Customer Name",
-    "Customer Mobile",
-    "Customer Email",
-    "City",
-    "State",
-    "Customer Address",
-    "Assigned Engineer",
-    "Service Interval Days",
-    "Notes",
+    "Manufacturer",
+    "Serial Number",
+    "Year of MFG",
+    "Hour Meter (HMR)",
+    "Service Count",
+    "Status",
+    "Health Status",
   ];
 
   const sampleRows = [
     [
-      "Industrial Hydraulic Press 50T",
-      "HP-50-2024",
-      "Apex Manufacturing Solutions",
-      "9876543210",
-      "contact@apexindustrial.com",
-      "Mumbai",
-      "Maharashtra",
-      "Plot 42, MIDC Industrial Area, Phase II",
-      "rajesh.engineer@example.com",
-      "90",
-      "Special maintenance instructions apply",
+      "RI-MC-0001",
+      "JCB 3DX EcoXcellence",
+      "JCB",
+      "SN-JCB-2024-001",
+      "2024",
+      1250.5,
+      4,
+      "available",
+      "active",
     ],
     [
-      "CNC Milling Machine VMC 850",
-      "VMC-850-X",
-      "TechFab Industries",
-      "9876543211",
-      "info@techfab.com",
-      "Pune",
-      "Maharashtra",
-      "Survey 123, Chakan Industrial Zone",
-      "rajesh.engineer@example.com",
-      "60",
-      "",
+      "RI-MC-0002",
+      "CAT 320D Hydraulic Excavator",
+      "Caterpillar",
+      "SN-CAT-2023-992",
+      "2023",
+      2480.0,
+      8,
+      "rented",
+      "active",
+    ],
+    [
+      "", // Leave blank for auto-generated Machine ID
+      "SANY SY215C Excavator",
+      "SANY",
+      "SN-SNY-2024-412",
+      "2024",
+      450.0,
+      1,
+      "available",
+      "under_maintenance",
     ],
   ];
 
@@ -48,17 +53,15 @@ export function getSampleExcelTemplate(): Blob {
 
   // Set column widths
   worksheet["!cols"] = [
-    { wch: 30 }, // Machine Name
-    { wch: 20 }, // Model
-    { wch: 30 }, // Customer Name
-    { wch: 18 }, // Mobile
-    { wch: 30 }, // Email
-    { wch: 15 }, // City
-    { wch: 15 }, // State
-    { wch: 40 }, // Address
-    { wch: 25 }, // Engineer
-    { wch: 20 }, // Interval
-    { wch: 40 }, // Notes
+    { wch: 18 }, // Machine ID
+    { wch: 32 }, // Model
+    { wch: 20 }, // Manufacturer
+    { wch: 24 }, // Serial Number
+    { wch: 15 }, // Year of MFG
+    { wch: 20 }, // Hour Meter (HMR)
+    { wch: 15 }, // Service Count
+    { wch: 15 }, // Status
+    { wch: 20 }, // Health Status
   ];
 
   const workbook = XLSX.utils.book_new();
@@ -66,4 +69,4 @@ export function getSampleExcelTemplate(): Blob {
 
   const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
   return new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-}
+}

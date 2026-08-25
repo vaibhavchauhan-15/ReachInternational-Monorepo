@@ -8,7 +8,7 @@ import { requireRole } from "@/lib/dal";
 
 export async function completeService(formData: FormData) {
   const supabase = await createSupabaseServerClient();
-  const user = await requireRole("engineer", "service_engineer", "service_manager", "branch_manager", "supervisor", "mechanic", "admin", "super_admin");
+  const user = await requireRole("engineer", "service_engineer", "service_manager", "supervisor", "mechanic", "admin", "super_admin");
   const role = user.role;
 
   const machine_id = formData.get("machine_id") as string;
@@ -95,7 +95,7 @@ export async function completeService(formData: FormData) {
 
 export async function deleteServiceRecord(machineId: string) {
   const supabase = await createSupabaseServerClient();
-  const user = await requireRole("engineer", "service_engineer", "service_manager", "branch_manager", "supervisor", "mechanic", "admin", "super_admin");
+  const user = await requireRole("engineer", "service_engineer", "service_manager", "supervisor", "mechanic", "admin", "super_admin");
 
   const { data: machine } = await supabase
     .from("machines")

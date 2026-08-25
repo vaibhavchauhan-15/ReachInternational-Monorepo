@@ -10,6 +10,7 @@ import {
   AnimatedMail,
   AnimatedPhone,
   AnimatedMoreHorizontal,
+  AnimatedMapPin,
   AnimatedKey,
   AnimatedUserCheck,
   AnimatedUserX,
@@ -136,14 +137,11 @@ export const MobileUserCard = memo(function MobileUserCard({
     >
       {/* Top Hairline Sheen Gradient on Hover */}
       <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[var(--color-link)]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-      {/* Top Header section: Avatar, Name, Role badge, Status indicator */}
+      {/* Top Header section: Name, Role badge, Status indicator */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="relative flex-shrink-0 flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] font-bold text-xs border border-[var(--color-hairline)] shadow-xs">
-            {user.full_name.charAt(0).toUpperCase()}
-            <div className="absolute -bottom-1 -right-1 p-0.5 rounded-full bg-[var(--color-canvas-elevated)]">
-              {getRoleIcon(user.role)}
-            </div>
+          <div className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] shadow-xs">
+            {getRoleIcon(user.role)}
           </div>
 
           <div className="flex flex-col min-w-0">
@@ -174,17 +172,12 @@ export const MobileUserCard = memo(function MobileUserCard({
 
       {/* Inset Details Box */}
       <div className="p-2.5 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-xs flex flex-col gap-1.5">
-        {user.branch ? (
-          <div className="flex items-center gap-2 text-[var(--color-ink)] font-semibold text-[11px] truncate">
-            <AnimatedBuilding2 size={14} className="flex-shrink-0 text-indigo-500" />
-            <span className="truncate">{user.branch.name} ({user.branch.city})</span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2 text-[var(--color-mute)] text-[11px]">
-            <AnimatedBuilding2 size={14} className="flex-shrink-0 text-slate-400" />
-            <span>HQ / Global Branch</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2 text-[var(--color-ink)] font-semibold text-[11px] truncate">
+          <AnimatedMapPin size={14} className="flex-shrink-0 text-emerald-500" />
+          <span className="truncate">
+            {user.city || user.location || "India Operations"}
+          </span>
+        </div>
         {showContact ? (
           <>
             <div className="flex items-center gap-2 text-[var(--color-body)] font-mono text-[11px] truncate">

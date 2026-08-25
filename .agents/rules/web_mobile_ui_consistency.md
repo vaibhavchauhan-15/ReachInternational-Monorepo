@@ -1,16 +1,32 @@
-# Global Rule: Web & Mobile UI/UX Consistency
+# Global Rule: Web & Mobile UI/UX Consistency & Mandatory Change Synchronization
+
+> **MANDATORY RULE FOR ALL AI AGENTS**:
+> Whenever ANY change, feature, component, style, theme, color, modal, drawer, page, module, form field, status badge, navigation item, database/API hook, or workflow is added, modified, refactored, or fixed in the **Web App (`apps/web`)**, the AI agent **MUST MANDATORILY apply and synchronize the exact same change in the Mobile App (`apps/mobile`)** with full mobile compatibility in the same session/task.
 
 ## Objective
 
-The **Web App and Mobile App must be designed as one unified product**.
+The **Web App and Mobile App must be designed and maintained as ONE UNIFIED PRODUCT**.
 
-Both platforms must have the same visual identity, design language, navigation logic, terminology, interaction patterns, and overall user experience.
+Both platforms must have the exact same visual identity, design language, navigation logic, terminology, interaction patterns, feature capabilities, and overall user experience.
 
 The UI should feel like:
 
-> **One application adapted to two screen sizes — NOT two separately designed applications.**
+> **One single application adapted to two screen sizes — NOT two separately designed or updated applications.**
 
-The mobile app may adapt layouts and interactions for smaller screens, but it must **never introduce a completely different visual or UX language**.
+The mobile app may adapt layouts and interactions for smaller touch screens (e.g. touch cards instead of data tables, bottom sheets instead of popover modals, scrollable filter strips, minimum 44px touch targets), but it must **NEVER introduce a different visual/UX language OR lag behind web app feature updates**.
+
+---
+
+## 0. MANDATORY WEB-TO-MOBILE CHANGE SYNCHRONIZATION RULE
+
+### The Zero-Drift Mandate
+Web (`apps/web`) and Mobile (`apps/mobile`) MUST NEVER drift out of sync.
+
+Whenever an AI agent modifies `apps/web`:
+1. **Automatic Mirroring**: The agent MUST immediately inspect `apps/mobile` and implement the corresponding feature, component, style, theme, color token, modal, or module change.
+2. **Mobile Compatibility**: The mirrored implementation in `apps/mobile` MUST be fully optimized for mobile devices (touch card lists, bottom sheet modals, horizontal scroll filter strips, min 44px touch targets, zero horizontal page overflow).
+3. **Identical UX & Business Logic**: Button labels, validation rules, status badges, API hooks, and user steps MUST match word-for-word between Web and Mobile.
+4. **Prohibited Shortcut**: An AI agent is **STRICTLY FORBIDDEN** from completing a Web app feature change while leaving the Mobile app outdated, incomplete, or out of sync.
 
 ---
 

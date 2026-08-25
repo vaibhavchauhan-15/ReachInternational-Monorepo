@@ -60,8 +60,6 @@ const getCachedMyWorkData = unstable_cache(
       machinesQuery = machinesQuery.eq("engineer_id", userId);
     } else if (role === "operator") {
       machinesQuery = machinesQuery.eq("current_operator_id", userId);
-    } else if ((role === "branch_manager" || role === "supervisor") && branchId) {
-      machinesQuery = machinesQuery.eq("branch_id", branchId);
     }
 
     const { data: rawMachines } = await machinesQuery;
@@ -94,7 +92,7 @@ const getCachedMyWorkData = unstable_cache(
           city,
           state_name,
           location,
-          machine:machines!machine_complaints_machine_id_fkey(machine_code, machine_name, model)
+          machine:machines(id, model, serial_number)
         `)
         .neq("status", "closed")
         .neq("status", "resolved")
@@ -103,17 +101,13 @@ const getCachedMyWorkData = unstable_cache(
 
       if (role === "engineer" || role === "service_engineer" || role === "mechanic") {
         complaintQuery = complaintQuery.or(`engineer_id.eq.${userId},supervisor_id.eq.${userId}`);
-      } else if (role === "supervisor" || role === "branch_manager") {
-        if (branchId) {
-          complaintQuery = complaintQuery.eq("branch_id", branchId);
-        }
       }
 
       const { data: complaints } = await complaintQuery;
       if (complaints && complaints.length > 0) {
         for (const c of complaints) {
-          const machineObj = Array.isArray(c.machine) ? c.machine[0] : c.machine;
-          const machineCode = machineObj?.machine_code || "Machine";
+          const machineObj = (Array.isArray(c.machine) ? c.machine[0] : c.machine) as any;
+          const machineCode = machineObj?.machine_id || machineObj?.machine_code || machineObj?.model || "Machine";
           const isUrgent = c.status === "open";
           rawTasks.push({
             id: `cmp-${c.id}`,
@@ -140,7 +134,7 @@ const getCachedMyWorkData = unstable_cache(
           service_category,
           service_status,
           service_due_date,
-          machine:machines!service_records_machine_id_fkey(machine_code, machine_name, customer_name)
+          machine:machines(id, model, serial_number)
         `)
         .neq("service_status", "completed")
         .order("service_due_date", { ascending: true })
@@ -153,7 +147,8 @@ const getCachedMyWorkData = unstable_cache(
       const { data: services } = await serviceQuery;
       if (services && services.length > 0) {
         for (const s of services) {
-          const machineObj = Array.isArray(s.machine) ? s.machine[0] : s.machine;
+          const machineObj = (Array.isArray(s.machine) ? s.machine[0] : s.machine) as any;
+          const machineCode = machineObj?.machine_id || machineObj?.machine_code || machineObj?.model || "Equipment";
           const dueDate = s.service_due_date || today;
           const isOverdue = dueDate < today;
           const isToday = dueDate === today;
@@ -161,7 +156,7 @@ const getCachedMyWorkData = unstable_cache(
             id: `srv-${s.id}`,
             code: `SRV-${s.id.slice(0, 6).toUpperCase()}`,
             title: `${s.service_category || "Preventive Maintenance"} Service`,
-            subtitle: `Machine: ${machineObj?.machine_code || "Equipment"} • ${machineObj?.customer_name || "Assigned Customer"}`,
+            subtitle: `Machine: ${machineCode}`,
             urgency: isOverdue ? "urgent" : isToday ? "due_today" : "pending",
             dueText: isOverdue ? "Overdue" : isToday ? "Scheduled Today" : `Due ${dueDate}`,
             actionText: "Fill FSR Report",
@@ -174,16 +169,12 @@ const getCachedMyWorkData = unstable_cache(
     }
 
     // 4. Fetch Role-Specific Approval Work Items
-    if ((role === "store_manager" || role === "branch_manager" || role === "admin" || role === "super_admin") && roleHasPermission(role, PERMISSIONS.PO_VIEW)) {
+    if ((role === "store_manager" || role === "admin" || role === "super_admin") && roleHasPermission(role, PERMISSIONS.PO_VIEW)) {
       let poQuery = supabase
         .from("purchase_orders")
         .select("id, po_number, vendor_name, amount, status, created_at")
         .eq("status", "pending_approval")
         .limit(5);
-
-      if (branchId && (role === "store_manager" || role === "branch_manager")) {
-        poQuery = poQuery.eq("branch_id", branchId);
-      }
 
       const { data: pos } = await poQuery;
       if (pos && pos.length > 0) {

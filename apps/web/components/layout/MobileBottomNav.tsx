@@ -43,7 +43,6 @@ interface NavItemConfig {
 const roleLabels: Record<UserRole, string> = {
   super_admin: "Super Admin",
   admin: "Admin",
-  branch_manager: "Branch Manager",
   service_manager: "Service Manager",
   engineer: "Service Engineer",
   service_engineer: "Service Engineer",

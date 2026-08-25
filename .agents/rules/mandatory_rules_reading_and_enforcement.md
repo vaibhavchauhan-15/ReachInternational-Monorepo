@@ -40,6 +40,7 @@ Every AI session, task, user prompt, and code edit MUST strictly adhere to the f
 
 ### Phase 3: Implementation with Zero-Tolerance Enforcement
 - Implement changes making the minimum required edits while maintaining full backward compatibility and strict rule compliance.
+- **Mandatory Web-to-Mobile Synchronization**: Whenever ANY feature, component, style, theme, color, modal, drawer, page, module, form field, status badge, or workflow is added or modified in the Web App (`apps/web`), the AI agent MUST MANDATORILY apply and synchronize the exact same change in the Mobile App (`apps/mobile`) with mobile-compatible adaptations in the same session/task.
 - Never hardcode dynamic layout dimensions, never swallow errors silently, never introduce unverified state mutations, and never ignore responsive design specifications.
 
 ### Phase 4: Compliance Verification & Memory Updates

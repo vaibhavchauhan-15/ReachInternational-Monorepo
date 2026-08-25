@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { AnimatedChevronDown } from "@/components/ui/animated-icons";
 import { SidebarTooltip } from "@/components/ui";
@@ -38,7 +38,7 @@ export function NavigationItem({
   flyoutHref,
   setFlyoutHref,
 }: NavigationItemProps) {
-  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const Icon = item.icon;
 
   let isActive = false;
@@ -56,54 +56,51 @@ export function NavigationItem({
   const hasSubItems = Boolean(item.subItems && item.subItems.length > 0);
   const isFlyoutOpen = flyoutHref === item.href;
 
-  const firstTabHref = item.subItems?.[0]
-    ? `${item.href}?tab=${item.subItems[0].tab}`
-    : item.href;
-
   // Collapsed Mode Renderer
   if (collapsed) {
     return (
       <SidebarMenuItem key={item.href}>
-        <SidebarTooltip content={item.label} enabled={!isFlyoutOpen}>
-          {hasSubItems ? (
-            <div className="w-full flex justify-center">
+        <div className="w-full flex justify-center relative">
+          <SidebarTooltip content={item.label} enabled={!isFlyoutOpen}>
+            {hasSubItems ? (
               <SidebarMenuButton
-                ref={buttonRef}
+                ref={setAnchorEl}
                 active={isActive || isFlyoutOpen}
+                aria-expanded={isFlyoutOpen}
+                aria-label={item.label}
                 onClick={() => {
                   setFlyoutHref(isFlyoutOpen ? null : item.href);
                 }}
-                aria-expanded={isFlyoutOpen}
-                aria-label={item.label}
-                className="focus:outline-none focus:ring-2 focus:ring-sky-500/30"
+                className="focus:outline-none focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
               >
                 <Icon className={`h-4 w-4 shrink-0 ${(isActive || isFlyoutOpen) ? "text-sky-600 dark:text-sky-400 font-bold" : ""}`} />
               </SidebarMenuButton>
-            </div>
-          ) : (
-            <Link href={item.href} className="w-full flex justify-center focus:outline-none">
-              <SidebarMenuButton
-                active={isActive}
-                aria-label={item.label}
-                className="focus:outline-none focus:ring-2 focus:ring-sky-500/30"
-              >
-                <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-sky-600 dark:text-sky-400 font-bold" : ""}`} />
-              </SidebarMenuButton>
-            </Link>
-          )}
-        </SidebarTooltip>
+            ) : (
+              <Link href={item.href} className="w-full flex justify-center focus:outline-none">
+                <SidebarMenuButton
+                  ref={setAnchorEl}
+                  active={isActive}
+                  aria-label={item.label}
+                  className="focus:outline-none focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
+                >
+                  <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-sky-600 dark:text-sky-400 font-bold" : ""}`} />
+                </SidebarMenuButton>
+              </Link>
+            )}
+          </SidebarTooltip>
 
-        {/* Floating Flyout Submenu */}
-        {hasSubItems && (
-          <CollapsedSidebarFlyout
-            item={item}
-            anchorEl={buttonRef.current}
-            isOpen={isFlyoutOpen}
-            onClose={() => setFlyoutHref(null)}
-            currentTab={currentTab}
-            isActiveParent={isActive}
-          />
-        )}
+          {/* Floating Flyout Submenu */}
+          {hasSubItems && (
+            <CollapsedSidebarFlyout
+              item={item}
+              anchorEl={anchorEl}
+              isOpen={isFlyoutOpen}
+              onClose={() => setFlyoutHref(null)}
+              currentTab={currentTab}
+              isActiveParent={isActive}
+            />
+          )}
+        </div>
       </SidebarMenuItem>
     );
   }
@@ -117,22 +114,19 @@ export function NavigationItem({
           onOpenChange={onToggleMenu}
         >
           <div
+            onClick={() => onToggleMenu(!isMenuOpen)}
             className={`relative flex items-center justify-between rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all duration-150 cursor-pointer ${
               isActive
                 ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold border border-sky-500/20 shadow-2xs"
                 : "text-[var(--color-body)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
             }`}
           >
-            <Link
-              href={firstTabHref}
-              onClick={() => onToggleMenu(true)}
-              className="flex items-center gap-3 min-w-0 flex-1 focus:outline-none"
-            >
+            <div className="flex items-center gap-3 min-w-0 flex-1 select-none">
               <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-sky-600 dark:text-sky-400" : ""}`} />
               <span className="truncate">{item.label}</span>
-            </Link>
+            </div>
 
-            <CollapsibleTrigger asChild>
+            <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
               <button
                 type="button"
                 aria-label={`Toggle ${item.label} sub-menu`}

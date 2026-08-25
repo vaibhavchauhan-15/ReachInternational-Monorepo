@@ -23,7 +23,6 @@ import type {
   InventoryStock,
   InventoryTransaction,
   StockTransfer,
-  Branch,
   InventoryProduct,
   PurchaseRequest,
   PurchaseOrder,
@@ -35,6 +34,7 @@ import type {
   User,
   Machine,
 } from "@/lib/types/database";
+import type { Branch } from "@/lib/queries/branches";
 
 import { PartDetailModal } from "./PartDetailModal";
 import { PurchaseRequestModal } from "./PurchaseRequestModal";
@@ -1719,7 +1719,7 @@ export function StockLedgerClient({
                       </span>
                     </td>
                     <td className="p-3 font-bold">{t.product?.name || "Spare Part"}</td>
-                    <td className="p-3 text-[var(--color-mute)]">{t.branch?.name || "Delhi HQ"}</td>
+                    <td className="p-3 text-[var(--color-mute)]">India Operations</td>
                     <td className="p-3 text-center font-mono font-bold text-sm">
                       {["STOCK_IN", "PURCHASE", "PURCHASE_RECEIPT", "PART_RETURN", "RETURN"].includes(t.type) ? "+" : "-"}
                       {t.quantity}
@@ -1759,8 +1759,8 @@ export function StockLedgerClient({
                 {transfers.map((tr) => (
                   <tr key={tr.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
                     <td className="p-3 font-mono font-bold text-purple-600 dark:text-purple-400">{tr.transfer_no}</td>
-                    <td className="p-3">{tr.from_branch?.name}</td>
-                    <td className="p-3 font-bold">{tr.to_branch?.name}</td>
+                    <td className="p-3">Main Store</td>
+                    <td className="p-3 font-bold">Field Site</td>
                     <td className="p-3 font-bold">{tr.product?.name}</td>
                     <td className="p-3 text-center font-mono font-bold">{tr.quantity} Pcs</td>
                     <td className="p-3 text-center">

@@ -14,7 +14,9 @@ export interface MeterLogModalProps {
   onClose: () => void;
   machineId?: string;
   machineCode?: string;
-  onSubmit: (log: { machineId: string; startMeter: number; endMeter: number; runningHours: number; remarks: string }) => void;
+  model?: string;
+  serialNumber?: string;
+  onSubmit: (log: { machineId: string; startMeter: number; endMeter: number; runningHours: number; location?: string; remarks: string }) => void;
 }
 
 export const MeterLogModal: React.FC<MeterLogModalProps> = ({
@@ -22,12 +24,15 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   onClose,
   machineId = '',
   machineCode = 'MCH-004',
+  model,
+  serialNumber,
   onSubmit,
 }) => {
   const { theme } = useTheme();
 
   const [startMeter, setStartMeter] = useState('1420');
   const [endMeter, setEndMeter] = useState('1428');
+  const [location, setLocation] = useState('');
   const [remarks, setRemarks] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -51,6 +56,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         startMeter: startVal,
         endMeter: endVal,
         runningHours,
+        location,
         remarks,
       });
       setIsSubmitting(false);
@@ -96,8 +102,15 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
             </View>
 
             <Input
-              label="Operational Remarks / Location"
-              placeholder="e.g. Normal shift operation at Delhi Site"
+              label="Client Site Location"
+              placeholder="e.g. Sriperumbudur Industrial Park, Chennai"
+              value={location}
+              onChangeText={setLocation}
+            />
+
+            <Input
+              label="Operational Remarks"
+              placeholder="e.g. Normal shift operation at site"
               value={remarks}
               onChangeText={setRemarks}
               multiline

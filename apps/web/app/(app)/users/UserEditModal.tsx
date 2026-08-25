@@ -19,13 +19,14 @@ import {
 import { ShieldAlert, ShieldCheck, Building2, Wrench, Package, Activity, Users, CreditCard, TrendingUp, Truck } from "lucide-react";
 import { Modal, Input, SearchableSelect, Button } from "@/components/ui";
 import type { SelectOption } from "@/components/ui/SearchableSelect";
-import type { User, UserRole, Branch } from "@/lib/types/database";
+import type { User, UserRole } from "@/lib/types/database";
+import type { Branch } from "@/lib/queries/branches";
 
 const allRoleSelectOptions: SelectOption[] = [
   {
     value: "super_admin",
     label: "Super Admin",
-    description: "Entire company & multi-branch control",
+    description: "Entire company control",
     icon: <ShieldAlert className="h-4 w-4 text-red-500" />,
   },
   {
@@ -33,12 +34,6 @@ const allRoleSelectOptions: SelectOption[] = [
     label: "Admin",
     description: "Platform & user management",
     icon: <ShieldCheck className="h-4 w-4 text-amber-500" />,
-  },
-  {
-    value: "branch_manager",
-    label: "Branch Manager",
-    description: "Branch fleet, staff & store control",
-    icon: <Building2 className="h-4 w-4 text-indigo-500" />,
   },
   {
     value: "service_manager",
@@ -113,7 +108,6 @@ interface UserEditModalProps {
 
 export function UserEditModal({
   user,
-  branches = [],
   isSuperAdmin = false,
   onClose,
   loading,
@@ -123,35 +117,21 @@ export function UserEditModal({
     full_name: user.full_name,
     phone: user.phone || "+91 ",
     role: user.role,
-    branch_id: user.branch_id || "none",
-    location: user.location || "",
+    city: user.city || "",
+    district: user.district || "",
+    state: user.state || "",
   });
 
   const roleOptions = isSuperAdmin
     ? allRoleSelectOptions
     : allRoleSelectOptions.filter((r) => r.value !== "super_admin");
 
-  const branchOptions: SelectOption[] = [
-    {
-      value: "none",
-      label: "HQ / Global / Unassigned Branch",
-      description: "Corporate HQ & Company-wide Access",
-      icon: <Building2 className="h-4 w-4 text-slate-400" />,
-    },
-    ...branches.map((b) => ({
-      value: b.id,
-      label: b.name,
-      description: `${b.city}, ${b.state} (${b.code})`,
-      icon: <Building2 className="h-4 w-4 text-indigo-500" />,
-    })),
-  ];
-
   return (
     <Modal
       open={true}
       onClose={onClose}
       title="Edit User Account Details"
-      description="Update employee contact info, assigned company branch, work location, and role permissions."
+      description="Update employee contact info, work location address, and role permissions."
       size="lg"
     >
       <form
@@ -160,7 +140,6 @@ export function UserEditModal({
         }}
         className="flex flex-col gap-5"
       >
-        <input type="hidden" name="branch_id" value={editForm.branch_id} />
         <input type="hidden" name="role" value={editForm.role} />
 
         {/* Section 1: User Identity */}
@@ -181,41 +160,52 @@ export function UserEditModal({
               required
             />
             <Input
-              label="Phone Number"
+              label="Mobile Phone Number *"
               name="phone"
               type="tel"
               icon={<AnimatedPhone size={16} className="text-[var(--color-link)]" />}
               value={editForm.phone}
               onChange={(e) => setEditForm((prev) => ({ ...prev, phone: e.target.value }))}
+              required
             />
           </div>
         </div>
 
-        {/* Section 2: Branch & Work Location */}
+        {/* Section 2: User Address & Work Location */}
         <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3.5">
           <div className="pb-2 border-b border-[var(--color-hairline)]">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-              Assigned Branch & Work Location
+              User Address & Work Location
             </h3>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <SearchableSelect
-              label="Assigned Company Branch"
-              options={branchOptions}
-              value={editForm.branch_id}
-              onChange={(val) => setEditForm((prev) => ({ ...prev, branch_id: val }))}
-              placeholder="Select branch..."
-              clearable={false}
-            />
-
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Input
-              label="Employee Work Location / Base City"
-              name="location"
+              label="City"
+              name="city"
               icon={<AnimatedMapPin size={16} className="text-emerald-500" />}
-              value={editForm.location}
-              onChange={(e) => setEditForm((prev) => ({ ...prev, location: e.target.value }))}
-              placeholder="e.g. Vapi, Gujarat or Mumbai HQ"
+              value={editForm.city}
+              onChange={(e) => setEditForm((prev) => ({ ...prev, city: e.target.value }))}
+              placeholder="e.g. Mumbai"
+              required
+            />
+            <Input
+              label="District"
+              name="district"
+              icon={<AnimatedMapPin size={16} className="text-emerald-500" />}
+              value={editForm.district}
+              onChange={(e) => setEditForm((prev) => ({ ...prev, district: e.target.value }))}
+              placeholder="e.g. Mumbai Suburban"
+              required
+            />
+            <Input
+              label="State"
+              name="state"
+              icon={<AnimatedMapPin size={16} className="text-emerald-500" />}
+              value={editForm.state}
+              onChange={(e) => setEditForm((prev) => ({ ...prev, state: e.target.value }))}
+              placeholder="e.g. Maharashtra"
+              required
             />
           </div>
         </div>

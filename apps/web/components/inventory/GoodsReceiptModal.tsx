@@ -3,7 +3,8 @@
 import { useState, useTransition } from "react";
 import { Modal, Button, Input, Textarea, Select, useToast } from "@/components/ui";
 import { recordGoodsReceiptAction } from "@/app/actions/inventory";
-import type { InventoryProduct, InventoryStock, Branch, PurchaseOrder } from "@/lib/types/database";
+import type { InventoryProduct, InventoryStock, PurchaseOrder } from "@/lib/types/database";
+import type { Branch } from "@/lib/queries/branches";
 import { AnimatedPlus, AnimatedUpload, AnimatedCheckCircle } from "@/components/ui/animated-icons";
 import { FileText, Truck, MapPin } from "lucide-react";
 

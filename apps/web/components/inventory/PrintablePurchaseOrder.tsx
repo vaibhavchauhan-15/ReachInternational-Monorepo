@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { ReachInternationalLogo } from "@/components/branding/ReachInternationalLogo";
 import type { PurchaseOrder, PurchaseOrderItem } from "@/lib/types/database";
 
 import { formatDate } from "@reachinternational/utils";
@@ -50,8 +49,13 @@ export function PrintablePurchaseOrder({ po }: PrintablePurchaseOrderProps) {
       <div className="flex flex-col gap-4">
         {/* Header Branding */}
         <div className="flex items-start justify-between border-b-2 border-neutral-900 pb-4">
-          <div className="flex flex-col gap-2">
-            <ReachInternationalLogo variant="full" />
+          <div className="flex flex-col gap-1.5">
+            {/* eslint-disable-next-html-element-suppress */}
+            <img
+              src="/pdf-logo.png"
+              alt="Reach International"
+              className="h-12 w-auto object-contain self-start"
+            />
             <div className="text-[11px] text-neutral-700 leading-tight mt-1">
               Plot No.21, Palam Matiala Road, Opp Sec-5, Dwarka, New Delhi - 110 059<br />
               <strong>GST No:</strong> 07AALFR3906M1ZS | <strong>Contact:</strong> 011-23736256<br />

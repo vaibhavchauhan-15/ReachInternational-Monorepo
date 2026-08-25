@@ -64,7 +64,7 @@ export function AppShellClient({
         {/* Main Workspace Column */}
         <div className="flex-1 flex flex-col min-w-0 md:pl-[var(--sidebar-width)] transition-[padding] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]">
           {/* Main Content Viewport */}
-          <main className="flex-1 w-full max-w-[1400px] mx-auto px-3 sm:px-6 pt-3 md:pt-6 pb-24 md:pb-8">
+          <main className="flex-1 w-full max-w-full px-3 sm:px-6 pt-3 md:pt-6 pb-24 md:pb-8">
             {children}
           </main>
         </div>

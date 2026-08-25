@@ -21,12 +21,20 @@ export function PrintablePartsIssueChallan({ issue }: PrintablePartsIssueChallan
     >
       <div className="flex flex-col gap-3">
         {/* Document Header matching Physical Slip Reference */}
-        <div className="border border-neutral-900 p-3 bg-neutral-50 flex items-center justify-between">
-          <div>
-            <div className="text-sm font-mono font-bold text-neutral-900">
-              S.No.: <span className="text-blue-800 text-base">{issue.challan_number || "2201"}</span>
+        <div className="border border-neutral-900 p-3 bg-neutral-50 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            {/* eslint-disable-next-html-element-suppress */}
+            <img
+              src="/pdf-logo.png"
+              alt="Reach International"
+              className="h-11 w-auto object-contain shrink-0"
+            />
+            <div>
+              <div className="text-sm font-mono font-bold text-neutral-900">
+                S.No.: <span className="text-blue-800 text-base">{issue.challan_number || "2201"}</span>
+              </div>
+              <div className="text-[10px] text-neutral-600">Yard / Reach Store Dept</div>
             </div>
-            <div className="text-[10px] text-neutral-600">Yard / Reach Store Dept</div>
           </div>
 
           <div className="text-center">
@@ -35,7 +43,7 @@ export function PrintablePartsIssueChallan({ issue }: PrintablePartsIssueChallan
             <div className="text-[10px] font-mono text-neutral-600">www.reachinternational.co.in | Cont. 011-23736256</div>
           </div>
 
-          <div className="text-right font-mono font-bold text-xs">
+          <div className="text-right font-mono font-bold text-xs shrink-0">
             <div>DATE: {formatDate(issue.issue_date || new Date())}</div>
             <div className="text-[10px] text-neutral-500 font-normal mt-0.5">
               Issue No: {issue.issue_number}

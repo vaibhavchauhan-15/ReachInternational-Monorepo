@@ -1,8 +1,8 @@
 # ReachInternational — Enterprise Heavy Machinery, Field Service & Operations Platform
 
-> **ReachInternational** — Enterprise-grade industrial machine tracking, multi-branch operations, field service maintenance, breakdown complaint handling, rental fleet management, CRM & sales pipelines, finance & accounting governance, HR lifecycle management, and automated notification system.
+> **ReachInternational** — Enterprise-grade industrial machine tracking, pan-India fleet operations, field service maintenance, breakdown complaint handling, rental fleet management, CRM & sales pipelines, finance & accounting governance, HR lifecycle management, and automated notification system.
 
-ReachInternational transforms heavy machinery fleet management and end-to-end industrial operations into an automated, multi-tenant capable, branch-aware enterprise platform. Built for Service Managers, Branch Managers, Field Engineers, Mechanics, Supervisors, Operators, Store Managers, HR Managers, Rental Managers, Sales Executives, Finance Managers, and Admins, it automatically tracks machinery lifecycles, processes digital Field Service Reports (FSR), manages breakdown complaints, orchestrates rental agreements and sales pipelines, handles multi-way financial matching & invoicing, logs daily operator hour meters & site movements, and dispatches multi-channel alerts via SendGrid and Twilio.
+ReachInternational transforms heavy machinery fleet management and end-to-end industrial operations into an automated, multi-tenant capable, enterprise platform. Built for Service Managers, Field Engineers, Mechanics, Supervisors, Operators, Store Managers, HR Managers, Rental Managers, Sales Executives, Finance Managers, and Admins, it automatically tracks machinery lifecycles, processes digital Field Service Reports (FSR), manages breakdown complaints, orchestrates rental agreements and sales pipelines, handles multi-way financial matching & invoicing, logs daily operator hour meters & site movements, and dispatches multi-channel alerts via SendGrid and Twilio.
 
 ---
 
@@ -14,7 +14,7 @@ ReachInternational transforms heavy machinery fleet management and end-to-end in
 - [Tech Stack](#-tech-stack)
 - [Getting Started](#-getting-started)
 - [Environment Variables](#-environment-variables)
-- [13-Role RBAC & Data Scoping Architecture](#-13-role-rbac--data-scoping-architecture)
+- [12-Role RBAC & Data Scoping Architecture](#-12-role-rbac--data-scoping-architecture)
 - [Database Schema](#-database-schema)
 - [Breakdown Complaints & Digital FSR System](#-breakdown-complaints--digital-fsr-system)
 - [Notification Engine](#-notification-engine)
@@ -30,7 +30,7 @@ ReachInternational transforms heavy machinery fleet management and end-to-end in
 
 ## 🚀 Project Overview
 
-**ReachInternational** is an enterprise platform engineered to manage large-scale heavy machinery fleets, field service operations, multi-branch inventory, rental fleet workflows, customer relationships, corporate finance, and workforce lifecycle management. Designed to scale seamlessly from 500+ machines to 50,000+ units across regional branches without architectural friction.
+**ReachInternational** is an enterprise platform engineered to manage large-scale heavy machinery fleets, field service operations, multi-location inventory, rental fleet workflows, customer relationships, corporate finance, and workforce lifecycle management. Designed to scale seamlessly from 500+ machines to 50,000+ units across India without architectural friction.
 
 ### Key Operational Challenges Solved
 
@@ -39,17 +39,16 @@ ReachInternational transforms heavy machinery fleet management and end-to-end in
 - ❌ **Unstructured Field Reports**: Standardizes field service documentation with digital Field Service Reports (FSR) featuring interactive checklists, replacement parts tables, and 1-click A4 PDF export.
 - ❌ **Uncontrolled Rental & Sales Lifecycle**: Integrates agreement creation with automated discount approval thresholds (>15% discounts flag for manager approval), delivery challan generation, return inspection logs, and damage auto-routing.
 - ❌ **Opaque Financials & Manual Matching**: Provides an 11-tab Finance Suite featuring 3-Way Matching (PO ↔ GRN ↔ Supplier Invoice), receivables aging breakdown, partial payment ledgers, and expense approvals (>₹50,000 flagged).
-- ❌ **Lack of Role & Scope Isolation**: Enforces a 13-Role RBAC permissions matrix with data scoping levels (`ORGANIZATION`, `BRANCH`, `ASSIGNED`).
+- ❌ **Lack of Role & Scope Isolation**: Enforces a 12-Role RBAC permissions matrix with data scoping levels (`ORGANIZATION` and `ASSIGNED`).
 
 ---
 
 ## ✨ Key Features
 
-### 🏢 13-Role RBAC & Granular Security Matrix
-- **13 Operational Roles + Client**: `super_admin`, `admin`, `branch_manager`, `service_manager`, `service_engineer` (and `engineer`), `supervisor`, `mechanic`, `operator`, `store_manager`, `hr_manager`, `rental_manager`, `sales_executive` (Sales Manager/Exec), `finance_manager`, and `client`.
-- **Data Access Scoping**: Strict scoping levels (`ORGANIZATION` global scope, `BRANCH` single-branch scope, and `ASSIGNED` user-specific scope) enforced in Data Access Layer (`lib/dal.ts`) and RLS policies.
-- **Single Branch Consolidation**: Consolidated multi-node operations into Delhi Branch HQ (`DEL-HQ`), managing users, employees, machinery catalog, stock ledger, purchase requests, POs, GRNs, and delivery challans.
-- **Top-Bar Branch Selector**: Instant global vs. branch-specific data scoping via `<BranchSelector />` in `AppHeader`.
+### 🏢 12-Role RBAC & Granular Security Matrix
+- **12 Operational Roles + Client**: `super_admin`, `admin`, `service_manager`, `service_engineer` (and `engineer`), `supervisor`, `mechanic`, `operator`, `store_manager`, `hr_manager`, `rental_manager`, `sales_executive` (Sales Manager/Exec), `finance_manager`, and `client`.
+- **Data Access Scoping**: Strict scoping levels (`ORGANIZATION` global scope, and `ASSIGNED` user-specific scope) enforced in Data Access Layer (`lib/dal.ts`) and RLS policies.
+- **Pan-India Fleet Consolidation**: Unified all fleet operations, machine hour logs, breakdown complaints, clients, and staff accounts under a single national operations model across India.
 
 ### ⚡ My Work — Live Task & Assignment Hub (`/my-work`)
 - **Role-Scoped Workload Workspace**: Personalized task hub for field engineers, mechanics, operators, store managers, and admins querying live data from Supabase.
@@ -64,6 +63,13 @@ ReachInternational transforms heavy machinery fleet management and end-to-end in
 - **Task Discussions & Audit Timeline**: Threaded comments between employees and managers per task, accompanied by complete audit activity logs (`task_activity_logs`).
 - **Unified Web & Mobile Experience**: Full feature parity between Next.js Web App (List View, Kanban Board, Multi-Filter toolbar, KPI stats) and Expo Mobile App matching native wireframe designs.
 
+
+### 🏢 Client & Customer Management Directory (`/clients`)
+- **Admin & Manager Client Governance**: Dedicated client management suite for `super_admin`, `admin`, `branch_manager`, `service_manager`, `rental_manager`, and `sales_manager` roles to add, edit, and manage client profiles.
+- **Automated Client Code Sequencing**: PostgreSQL sequence and trigger (`CLI-0001`, `CLI-0002`...) auto-generate client codes upon registration.
+- **Historical Log Soft-Delete Protection**: Soft deletion policy (`deleted_at = NOW()`, `status = 'inactive'`) ensures that historical machine running logs, delivery challans, and monthly billing reports associated with past clients remain 100% intact and traceable.
+- **Monthly Running Logs Integration**: Stored database client details (Company Name, Contact Person, Phone, Email, GSTIN, Address) are dynamically fetched and presented during monthly log inspections (`/operations?tab=logs`) and report PDF/Excel exports.
+- **Web & Mobile Synchronization**: Full feature parity between Next.js Web App and Expo Mobile App matching native responsive designs.
 
 ### 🏭 Machine Directory & Compliance Master (`/machines`, `/machines/[id]`)
 - **Machine Taxonomy**: Dynamic categories (`machine_categories`) including Forklifts, Scissor Lifts, Boom Lifts, Reach Trucks, Pallet Trucks, and Industrial Generators.
@@ -141,6 +147,11 @@ ReachInternational transforms heavy machinery fleet management and end-to-end in
   5. *Salary & Payroll History*: Fixed, variable, and CTC breakdown with auditable revision entry history to prevent overwriting past salary records.
   6. *User Account Requests*: Internal requests for provisioning system user accounts.
   7. *Document Repository*: Upload and manage employee document attachments.
+
+### 👤 Employee & User Management (`/users`)
+- **Direct Active Dashboard Onboarding**: Admins and Super Admins adding employees or managers via the `/users` dashboard create active accounts immediately with credentials emailed directly to the new user without sending admin approval requests.
+- **Isolated Public Signup Approval Flow**: External users registering via the public Request Access page (`/signup`) default to `pending` status, generating admin approval notification emails and requiring manual sign-off in the "Pending User Approvals" dashboard section.
+- **Dual Table Synchronization**: Automatically synchronizes user profile updates across `public.users` and `public.employees` directories.
 
 ### 📦 Multi-Branch Inventory & Stock Ledger (`/inventory`)
 - **Multi-Branch Stock Balances**: Real-time product inventory ledger per storage location.
@@ -256,42 +267,11 @@ Create a `.env` file in the project root (see [Environment Variables](#-environm
 
 Execute the SQL migration files in sequence in your Supabase SQL Editor or via Supabase CLI:
 
-1. `supabase/migrations/001_initial_schema.sql`
-2. `supabase/migrations/002_update_notifications_channel.sql`
-3. `supabase/migrations/002_user_email_and_gmail_notifications.sql`
-4. `supabase/migrations/003_add_in_app_notifications.sql`
-5. `supabase/migrations/003_performance_indexes.sql`
-6. `supabase/migrations/004_dashboard_rpc.sql`
-7. `supabase/migrations/005_fix_dashboard_rpc_user_context.sql`
-8. `supabase/migrations/006_email_notifications.sql`
-9. `supabase/migrations/007_user_pending_status.sql`
-10. `supabase/migrations/008_daily_summary_notifications.sql`
-11. `supabase/migrations/009_machine_extended_details.sql`
-12. `supabase/migrations/010_machine_categories_complaints_services.sql`
-13. `supabase/migrations/011_enterprise_rbac_branches_inventory.sql`
-14. `supabase/migrations/012_multi_layer_performance_indexes.sql`
-15. `supabase/migrations/013_additional_performance_indexes.sql`
-16. `supabase/migrations/014_store_manager_inventory_erp.sql`
-17. `supabase/migrations/015_seed_dummy_data.sql`
-18. `supabase/migrations/016_add_manufacturer_to_inventory.sql`
-19. `supabase/migrations/017_comprehensive_13_roles_rbac.sql`
-20. `supabase/migrations/018_branch_manager_role_refinements.sql`
-21. `supabase/migrations/019_admin_role_refinements.sql`
-22. `supabase/migrations/019_super_admin_role_refinements.sql`
-23. `supabase/migrations/020_service_manager_role_refinements.sql`
-24. `supabase/migrations/021_service_engineer_role_refinements.sql`
-25. `supabase/migrations/022_supervisor_role_refinements.sql`
-26. `supabase/migrations/023_mechanic_role_refinements.sql`
-27. `supabase/migrations/024_operator_role_refinements.sql`
-28. `supabase/migrations/025_store_manager_role_refinements.sql`
-29. `supabase/migrations/026_hr_manager_role_refinements.sql`
-30. `supabase/migrations/027_rental_manager_role_refinements.sql`
-31. `supabase/migrations/028_sales_manager_role_refinements.sql`
-32. `supabase/migrations/029_finance_manager_role_refinements.sql`
-33. `supabase/migrations/030_single_delhi_branch_consolidation.sql`
-34. `supabase/migrations/031_fix_machines_rls_scoping.sql`
-35. `supabase/migrations/032_supervisor_operations_enhancements.sql`
-36. `supabase/migrations/042_refactor_machines_table.sql` (Machines table refactoring, machine_id sequence, health_status & status constraints)
+1. `supabase/migrations/001_create_users_table.sql` (Creates `public.users` table, auth triggers, RLS policies, and indexes)
+2. `supabase/migrations/002_create_machines_table.sql` (Creates `public.machines` table, sequence `RI-MC-XXXX`, RLS policies, and indexes)
+3. `supabase/migrations/003_create_clients_table.sql` (Creates `public.clients` table, sequence `CLI-XXXX`, RLS policies, and indexes)
+4. `supabase/migrations/004_create_machine_hour_logs_table.sql` (Creates `public.machine_hour_logs` operation logs, shift integrity, overtime triggers, RLS, and indexes)
+5. `supabase/migrations/005_drop_unwanted_tables.sql` (Drops legacy non-core tables and unlinks orphan columns)
 
 ### 5. Run Development Server
 
@@ -385,7 +365,7 @@ The platform relies on Supabase PostgreSQL with **38+ core tables**, all protect
 
 ### Core Domain Tables Summary
 
-- **Core & Org**: `branches`, `user_branches`, `users`, `employees`, `departments`, `designations`, `employee_salary_history`, `employee_documents`, `user_account_requests`.
+- **Core & Org**: `users` (with PostgreSQL unique constraints & indexes on lower(email) and 10-digit mobile phone number), `employees`, `user_account_requests`.
 - **Machinery Master**: `machines`, `machine_categories`, `machine_assignments`, `machine_hour_logs`, `machine_site_movements`.
 - **Field Service**: `machine_complaints`, `service_records`, `field_service_reports`, `service_part_usage`.
 - **Inventory & Procurement**: `inventory_products`, `inventory_stock`, `inventory_transactions`, `stock_transfers`, `purchase_orders`, `purchase_order_items`, `vendors`, `delivery_challans`.

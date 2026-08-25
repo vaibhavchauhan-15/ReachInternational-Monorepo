@@ -19,19 +19,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "operator.view", "operator.assign", "operator.log_approve",
     "notification.view", "notification.send",
     "user.view", "user.create", "user.edit", "user.assign_role",
-    "branch.view", "branch.edit",
     "report.view", "report.export", "audit.view", "settings.view"
-  ],
-
-  branch_manager: [
-    "machine.view", "machine.create", "machine.edit", "machine.assign",
-    "complaint.view", "complaint.create", "complaint.assign", "complaint.update", "complaint.close",
-    "service.view", "service.plan", "service.create", "service.assign", "service.update", "service.close",
-    "fsr.view", "fsr.review",
-    "inventory.view", "inventory.transfer", "inventory.approve_transfer", "inventory.request", "part_request.approve",
-    "employee.view", "rental.view", "sales.view", "finance.view", "user.view",
-    "branch.view", "branch.edit",
-    "report.view", "report.export", "audit.view"
   ],
 
   service_manager: [
@@ -120,7 +108,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "employee.view",
     "rental.view",
     "finance.view",
-    "branch.view",
     "notification.view", "notification.send",
     "report.view", "report.export", "audit.view",
     "settings.view", "settings.edit"
@@ -132,7 +119,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "department.manage", "designation.manage",
     "employee.document.manage",
     "user_request.create", "user_request.view", "user.view",
-    "branch.view",
     "notification.view", "notification.send",
     "report.view", "report.export",
     "audit.view",
@@ -150,7 +136,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "employee.view",
     "sales.view", "sales.create", "sales.edit",
     "finance.view",
-    "branch.view",
     "notification.view", "notification.send",
     "report.view", "report.export", "audit.view",
     "settings.view", "settings.edit"
@@ -175,7 +160,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "finance.payment", "finance.payment.record", "finance.receivable.manage", "finance.payable.manage",
     "finance.3way_match", "finance.expense.manage", "finance.expense.approve", "finance.approval",
     "finance.report", "finance.settings.manage", "rental.view", "sales.view", "po.view", "grn.view",
-    "supplier.view", "challan.view", "service.view", "complaint.view", "fsr.view", "branch.view",
+    "supplier.view", "challan.view", "service.view", "complaint.view", "fsr.view",
     "notification.view", "notification.send", "report.view", "report.export", "audit.view",
     "settings.view", "settings.edit"
   ],
@@ -236,7 +221,6 @@ function normalizePermissionKey(perm: string): string {
     "finance:read": "finance.view",
     "user:read": "user.view",
     "user:create": "user.create",
-    "branch:read": "branch.view",
     "audit:read": "audit.view",
   };
   return map[perm] || perm;

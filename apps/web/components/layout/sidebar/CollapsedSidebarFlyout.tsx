@@ -14,6 +14,8 @@ interface CollapsedSidebarFlyoutProps {
   onClose: () => void;
   currentTab: string;
   isActiveParent: boolean;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
 }
 
 interface Position {
@@ -29,6 +31,8 @@ export function CollapsedSidebarFlyout({
   onClose,
   currentTab,
   isActiveParent,
+  onMouseEnter,
+  onMouseLeave,
 }: CollapsedSidebarFlyoutProps) {
   const [mounted, setMounted] = useState(false);
   const [position, setPosition] = useState<Position | null>(null);
@@ -140,6 +144,8 @@ export function CollapsedSidebarFlyout({
           ref={flyoutRef}
           role="dialog"
           aria-label={`${item.label} submenu`}
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
           initial={{ opacity: 0, x: -10 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -8 }}

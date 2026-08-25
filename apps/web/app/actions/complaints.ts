@@ -279,7 +279,6 @@ export async function deleteComplaint(
     user.role === "super_admin" ||
     user.role === "admin" ||
     user.role === "service_manager" ||
-    user.role === "branch_manager" ||
     user.role === "supervisor";
 
   if (!canDelete) {

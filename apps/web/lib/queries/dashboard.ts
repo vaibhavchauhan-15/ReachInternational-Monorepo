@@ -51,11 +51,9 @@ const getCachedDashboardKpis = unstable_cache(
     const today = new Date().toISOString().split("T")[0];
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
 
-    let mQuery = supabase.from("machines").select("status, next_service_due_date, engineer_id, branch_id");
+    let mQuery = supabase.from("machines").select("status, next_service_due_date, engineer_id");
     if (role === "engineer" || role === "service_engineer" || role === "mechanic") {
       mQuery = mQuery.eq("engineer_id", userId);
-    } else if ((role === "branch_manager" || role === "supervisor") && branchId) {
-      mQuery = mQuery.eq("branch_id", branchId);
     }
     const { data: machines } = await mQuery;
     const allMachines = machines ?? [];
@@ -130,11 +128,9 @@ const getCachedDashboardCharts = unstable_cache(
       count: monthsMap[m] || 0,
     }));
 
-    let mQuery = supabase.from("machines").select("next_service_due_date, branch_id").eq("status", "active");
+    let mQuery = supabase.from("machines").select("next_service_due_date").eq("status", "active");
     if (role === "engineer" || role === "service_engineer" || role === "mechanic") {
       mQuery = mQuery.eq("engineer_id", userId);
-    } else if ((role === "branch_manager" || role === "supervisor") && branchId) {
-      mQuery = mQuery.eq("branch_id", branchId);
     }
     const { data: machines } = await mQuery;
 
@@ -175,20 +171,25 @@ const getCachedDashboardDueLists = unstable_cache(
 
     let mQuery = supabase
       .from("machines")
-      .select("id, machine_code, customer_name, next_service_due_date, branch_id")
-      .eq("status", "active");
+      .select("*");
     if (role === "engineer" || role === "service_engineer" || role === "mechanic") {
-      mQuery = mQuery.eq("engineer_id", userId);
-    } else if ((role === "branch_manager" || role === "supervisor") && branchId) {
-      mQuery = mQuery.eq("branch_id", branchId);
+      mQuery = mQuery.eq("current_operator_id", userId);
     }
-    const { data: machines } = await mQuery;
-    const all = machines ?? [];
+    const { data: rawMachines } = await mQuery;
+    const all = (rawMachines ?? []).map((m: any) => {
+      const code = m.machine_id || m.machine_code || m.id;
+      return {
+        ...m,
+        machine_code: code,
+        machine_id: code,
+        customer_name: m.customer_name || m.model || code,
+      };
+    });
 
     return {
       due_today: all.filter((m) => m.next_service_due_date === today).slice(0, 5),
       due_tomorrow: all.filter((m) => m.next_service_due_date === tomorrow).slice(0, 5),
-      overdue_machines: all.filter((m) => m.next_service_due_date < today).slice(0, 5),
+      overdue_machines: all.filter((m) => m.next_service_due_date && m.next_service_due_date < today).slice(0, 5),
     };
   },
   ["dashboard-due-lists-v3"],

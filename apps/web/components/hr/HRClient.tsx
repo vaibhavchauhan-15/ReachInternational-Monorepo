@@ -22,7 +22,6 @@ import {
 } from "@/components/ui/animated-icons";
 import type { 
   Employee, 
-  Branch, 
   User, 
   Department, 
   Designation, 
@@ -34,6 +33,7 @@ import type {
   UserRole
 } from "@/lib/types/database";
 import type { HRDashboardMetrics } from "@/lib/queries/hr";
+import type { Branch } from "@/lib/queries/branches";
 import { 
   createEmployeeAction, 
   updateEmployeeAction,
@@ -703,9 +703,7 @@ export function HRClient({
                         <p className="font-bold">{emp.designation}</p>
                         <p className="text-[11px] text-[var(--color-mute)]">{emp.department || "Operations"}</p>
                       </td>
-                      <td className="px-4 py-3 font-bold">
-                        {emp.branch?.name || "Unassigned HQ"}
-                      </td>
+                      <td className="px-4 py-3 font-bold">India Operations</td>
                       <td className="px-4 py-3 text-[11px]">
                         {emp.reporting_manager ? (
                           <span className="font-semibold text-purple-600 dark:text-purple-400">{emp.reporting_manager.full_name}</span>
@@ -839,7 +837,7 @@ export function HRClient({
                       </div>
                       <div className="text-xs space-y-1 text-[var(--color-mute)]">
                         <p><strong className="text-[var(--color-ink)]">Designation:</strong> {emp.designation}</p>
-                        <p><strong className="text-[var(--color-ink)]">Branch:</strong> {emp.branch?.name || "Pending"}</p>
+                        <p><strong className="text-[var(--color-ink)]">Location:</strong> India Operations</p>
                         <p><strong className="text-[var(--color-ink)]">Joining Date:</strong> {emp.joining_date}</p>
                       </div>
                       <div className="flex gap-2 pt-2 border-t border-[var(--color-hairline)]">
@@ -1019,7 +1017,7 @@ export function HRClient({
                       <td className="px-4 py-3 font-bold">{r.employee?.full_name || "Employee"} ({r.employee?.employee_code})</td>
                       <td className="px-4 py-3 font-semibold capitalize">{r.request_type.replace("_", " ")}</td>
                       <td className="px-4 py-3 font-mono font-bold text-purple-600">{r.requested_role}</td>
-                      <td className="px-4 py-3">{r.branch?.name || "Main HQ"}</td>
+                      <td className="px-4 py-3">India Operations</td>
                       <td className="px-4 py-3">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold capitalize ${
                           r.status === "approved" || r.status === "completed"

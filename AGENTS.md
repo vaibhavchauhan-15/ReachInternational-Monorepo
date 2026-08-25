@@ -72,7 +72,8 @@ STEP 5 — IMPLEMENT
 - Make the smallest possible change.
 - Do NOT rewrite unrelated code.
 - Reuse existing components (`components/ui/*`), hooks, utilities (`lib/*`), and styles.
-- **STRICT UI/UX & RESPONSIVE RULE**: Every page, component, and module MUST strictly adhere to `DESIGN.md` (Vercel Geist System tokens: `#171717` ink, `#fafafa` canvas, `#ffffff` elevated, `#ebebeb` 1px hairline border, `#0070f3` link blue, Geist Sans/Mono fonts) and `AI/UI_RULES.md` / `.agents/rules/responsive_cross_platform_design.md`.
+- **STRICT UI/UX & RESPONSIVE RULE**: Every page, component, and module MUST strictly adhere to `DESIGN.md` (Vercel Geist System tokens: `#171717` ink, `#fafafa` canvas, `#ffffff` elevated, `#ebebeb` 1px hairline border, `#0070f3` link blue, Geist Sans/Mono fonts) and `AI/RULES/UI-UX.md` / `.agents/rules/responsive_cross_platform_design.md` / `.agents/rules/web_mobile_ui_consistency.md`.
+- **MANDATORY WEB-TO-MOBILE CHANGE SYNCHRONIZATION**: Whenever ANY change, feature, component, style, theme, color, modal, drawer, page, module, status badge, form field, or workflow is added or modified in the Web App (`apps/web`), every AI agent **MUST MANDATORILY apply and synchronize the exact same change in the Mobile App (`apps/mobile`)** with mobile-compatible adaptations (touch cards, bottom sheets, scrollable filter strips, min 44px touch targets) in the same task. Web and Mobile MUST NEVER drift out of sync.
 - **3-TIER VIEWPORT RESPONSIVENESS**: Every feature MUST be highly optimized for Mobile (≤640px touch card views `block sm:hidden`, scrollable filter strips `overflow-x-auto`, min 44px touch targets), Tablet (641px–1023px 2-col grids `grid-cols-1 sm:grid-cols-2`, adaptive modals), and Desktop (≥1024px high-density tables `hidden sm:block`, full multi-col grid, hover tooltips `<TooltipWrapper>`), maintaining identical visual identity, colors, and theme.
 - Respect existing architecture.
 

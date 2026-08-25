@@ -277,6 +277,54 @@ export async function signup(
     };
   }
 
+  // Admin client check to enforce unique email and mobile number rule
+  const adminSupabase = createSupabaseAdminClient();
+
+  // 1. Check duplicate email in public.users
+  const { data: existingEmailUser } = await adminSupabase
+    .from("users")
+    .select("id")
+    .ilike("email", emailLower)
+    .maybeSingle();
+
+  if (existingEmailUser) {
+    return {
+      error: "A user account with this email address already exists.",
+      fieldErrors: {
+        email: "A user account with this email address already exists.",
+      },
+      fieldValues,
+    };
+  }
+
+  // 2. Check duplicate mobile number in public.users
+  if (phone) {
+    const { data: existingPhoneUsers } = await adminSupabase
+      .from("users")
+      .select("id, phone")
+      .not("phone", "is", null);
+
+    const targetDigits = phone.replace(/\D/g, "");
+    const hasDuplicatePhone = existingPhoneUsers?.some((u) => {
+      if (!u.phone) return false;
+      const uDigits = u.phone.replace(/\D/g, "");
+      if (targetDigits.length >= 10 && uDigits.length >= 10) {
+        return targetDigits.slice(-10) === uDigits.slice(-10);
+      }
+      return targetDigits === uDigits;
+    });
+
+    if (hasDuplicatePhone) {
+      return {
+        error: "A user account with this mobile number already exists.",
+        fieldErrors: {
+          phone: "A user account with this mobile number already exists.",
+        },
+        fieldValues,
+      };
+    }
+  }
+
   const supabase = await createSupabaseServerClient();
 
   // Create the auth user. The handle_new_user() DB trigger automatically
@@ -359,10 +407,7 @@ export async function signup(
 
   const userId = data.user.id;
 
-  // Use the admin client (bypasses RLS) to fetch admin emails for the
-  // notification. The user-session client has no session at this point
-  // (email confirmation is pending), so RLS would block the query.
-  const adminSupabase = createSupabaseAdminClient();
+  // Use the existing admin client to fetch admin emails for notification
   const { data: adminUsers } = await adminSupabase
     .from("users")
     .select("email")

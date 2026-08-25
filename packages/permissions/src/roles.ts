@@ -3,7 +3,6 @@ import type { UserRole } from "@reachinternational/types";
 export const CANONICAL_ROLES: UserRole[] = [
   "super_admin",
   "admin",
-  "branch_manager",
   "service_manager",
   "engineer",
   "service_engineer",
@@ -36,12 +35,6 @@ export const ROLE_METADATA: Record<UserRole, RoleMetadata> = {
     name: "System Admin",
     description: "Organization-wide administrative access.",
     category: "admin",
-  },
-  branch_manager: {
-    code: "branch_manager",
-    name: "Branch Manager",
-    description: "Branch operations oversight and approval authority.",
-    category: "management",
   },
   service_manager: {
     code: "service_manager",

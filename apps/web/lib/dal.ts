@@ -52,19 +52,9 @@ const getCachedUserRow = unstable_cache(
       return null;
     }
 
-    let branch = null;
-    if (data.branch_id) {
-      const { data: branchData } = await supabase
-        .from("branches")
-        .select("id, code, name, city")
-        .eq("id", data.branch_id)
-        .maybeSingle();
-      branch = branchData ?? null;
-    }
-
-    return { ...data, branch };
+    return data;
   },
-  ["dal-user-row-v3"],
+  ["dal-user-row-v4"],
   { revalidate: 60, tags: [CACHE_TAGS.users] }
 );
 
@@ -156,23 +146,7 @@ export const requireAnyPermission = cache(async (...permissionCodes: string[]) =
 });
 
 export const getUserBranchIds = cache(async (): Promise<string[] | null> => {
-  const user = await getCurrentUser();
-  if (!user) return null;
-  // Super admin can access all branches (null = unrestricted)
-  if (user.role === "super_admin") return null;
-
-  const supabase = createSupabaseAdminClient();
-  const { data } = await supabase
-    .from("user_branches")
-    .select("branch_id")
-    .eq("user_id", user.id);
-
-  const branchIds = (data || []).map((row) => row.branch_id);
-  if (user.branch_id && !branchIds.includes(user.branch_id)) {
-    branchIds.push(user.branch_id);
-  }
-
-  return branchIds.length > 0 ? branchIds : null;
+  return null;
 });
 
 export const getCurrentUserOrNull = cache(async (): Promise<User | null> => {
@@ -199,15 +173,5 @@ export const getCurrentUserOrNull = cache(async (): Promise<User | null> => {
 
   if (error || !data) return null;
 
-  let branch = null;
-  if (data.branch_id) {
-    const { data: branchData } = await supabase
-      .from("branches")
-      .select("id, code, name, city")
-      .eq("id", data.branch_id)
-      .maybeSingle();
-    branch = branchData ?? null;
-  }
-
-  return { ...data, branch, email: user.email } as User;
+  return { ...data, email: user.email } as User;
 });

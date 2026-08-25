@@ -128,43 +128,47 @@ export function exportSupervisorRunningLogsToExcel({
 
     const mObj = log.machine as any;
     const opObj = log.operator as any;
+    const clientName = (log as any)?.client?.client_name || mObj?.customer_name || "Unassigned Client";
 
-    const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*([^\]]+)\]/);
-    const bkdDetails = bkdMatch ? bkdMatch[1] : isBkd ? "Breakdown" : null;
-    const cleanRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/, "").trim() || "—";
+    const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*([^\]]+)\]/i) || (log.remarks || "").match(/Breakdown\s*(?:Duration)?:?\s*(\d+h?\s*\d*m?)/i);
+    const bkdDetails = bkdMatch ? bkdMatch[1].trim() : isBkd ? "Breakdown" : null;
+    const cleanRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim() || "—";
+    let bkdDurationOnly = bkdDetails;
+    if (bkdDurationOnly) {
+      bkdDurationOnly = bkdDurationOnly.replace(/^Breakdown\s*\((.*)\)$/i, "$1").replace(/^Machine Breakdown\s*\((.*)\)$/i, "$1").replace(/^Breakdown\s*/i, "").replace(/\s*duration$/i, "").trim();
+    }
+    const displayBkdText = isBkd ? (bkdDurationOnly && bkdDurationOnly.toLowerCase() !== "breakdown" ? bkdDurationOnly : "Breakdown") : "Normal";
+
+    const locationStr = log.location || ((log as any)?.client?.city ? `${(log as any).client.city}, ${(log as any).client.state || ""}` : mObj?.customer_address ? `${mObj.customer_address}${mObj.city ? `, ${mObj.city}` : ""}` : mObj?.city || "—");
 
     if (isOperatorView) {
       return [
         idx + 1,
         formatDate(log.log_date),
-        mObj?.machine_name || "Machine",
-        mObj?.machine_code || "—",
         mObj?.model || "—",
+        mObj?.serial_number || mObj?.machine_code || "—",
+        mObj?.machine_code || "—",
+        clientName,
+        locationStr,
         formatCompactTiming(log.start_time, log.end_time),
         `${runningHrs} hrs`,
         `${otHrs} hrs`,
-        isBkd ? `Breakdown${bkdDetails ? ` (${bkdDetails})` : ""}` : "Normal",
+        displayBkdText,
         cleanRemarks,
       ];
     }
 
     if (viewMode === "client") {
-      const siteLoc = log.location || (mObj?.customer_address ? `${mObj.customer_address}${mObj.city ? `, ${mObj.city}` : ""}` : mObj?.city || "—");
       return [
         idx + 1,
         formatDate(log.log_date),
-        mObj?.machine_name || "Machine",
-        mObj?.machine_code || "—",
         mObj?.model || "—",
-        mObj?.customer_name || "Unassigned Client",
-        siteLoc,
-        mObj?.city ? `${mObj.city}${mObj.state ? `, ${mObj.state}` : ""}` : "—",
+        mObj?.serial_number || mObj?.machine_code || "—",
         opObj?.full_name || "Unassigned",
         log.start_time || "—",
         log.end_time || "—",
         `${runningHrs} hrs`,
-        `${otHrs} hrs`,
-        isBkd ? "Yes (Breakdown)" : "No Breakdown",
+        displayBkdText,
         cleanRemarks,
       ];
     }
@@ -173,13 +177,14 @@ export function exportSupervisorRunningLogsToExcel({
       return [
         idx + 1,
         formatDate(log.log_date),
-        mObj?.customer_name || "Unassigned Client",
+        clientName,
         mObj?.city ? `${mObj.city}, ${mObj.state || ""}` : "—",
         opObj?.full_name || "Unassigned",
         startMtr,
         endMtr,
         `${runningHrs} hrs`,
-        log.remarks || "—",
+        displayBkdText,
+        cleanRemarks,
       ];
     }
 
@@ -189,13 +194,14 @@ export function exportSupervisorRunningLogsToExcel({
       mObj?.machine_name || "Machine",
       mObj?.machine_code || "—",
       mObj?.model || "—",
-      mObj?.customer_name || "Unassigned Client",
+      clientName,
       mObj?.city ? `${mObj.city}, ${mObj.state || ""}` : "—",
       opObj?.full_name || "Unassigned",
       startMtr,
       endMtr,
       `${runningHrs} hrs`,
-      log.remarks || "—",
+      displayBkdText,
+      cleanRemarks,
     ];
   });
 
@@ -224,29 +230,26 @@ export function exportSupervisorRunningLogsToExcel({
   const tableHeaders = isOperatorView ? [
     "S.No",
     "Log Date",
-    "Machine Name",
-    "Machine Code",
     "Model",
+    "Serial Number",
+    "Machine Code",
+    "Client Name",
+    "Site / Location",
     "Timings",
     "Operating Hours (OP)",
     "Overtime Hours (OT)",
-    "Status",
+    "Breakdown",
     "Remarks / Notes",
   ] : viewMode === "client" ? [
     "S.No",
     "Log Date",
-    "Machine Name",
-    "Machine Code",
     "Model",
-    "Client / Customer Name",
-    "Site / Location",
-    "City / State",
+    "Serial Number",
     "Operator Name",
     "Start Time",
     "End Time",
-    "Running Hours",
-    "Overtime Hours",
-    "Breakdown Status",
+    "Work Time (WT)",
+    "Breakdown",
     "Remarks / Notes",
   ] : viewMode === "machine" ? [
     "S.No",
@@ -257,6 +260,7 @@ export function exportSupervisorRunningLogsToExcel({
     "Start Meter (hrs)",
     "End Meter (hrs)",
     "Run Hours (RT)",
+    "Breakdown",
     "Remarks / Notes",
   ] : [
     "S.No",
@@ -270,6 +274,7 @@ export function exportSupervisorRunningLogsToExcel({
     "Start Meter (hrs)",
     "End Meter (hrs)",
     "Run Hours (RT)",
+    "Breakdown",
     "Remarks / Notes",
   ];
 
@@ -280,10 +285,11 @@ export function exportSupervisorRunningLogsToExcel({
     "",
     "",
     "",
+    "",
+    "",
     `Total Run: ${Math.round(totalRunningHoursAcc * 10) / 10} hrs`,
     `Total OT: ${Math.round(totalOtHoursAcc * 10) / 10} hrs`,
     `Breakdowns: ${totalBreakdownsAcc}`,
-    "",
     "",
   ] : viewMode === "client" ? [
     "SUMMARY TOTALS",
@@ -293,12 +299,7 @@ export function exportSupervisorRunningLogsToExcel({
     "",
     "",
     "",
-    "",
-    "",
-    "",
-    "",
     `Total Run: ${Math.round(totalRunningHoursAcc * 10) / 10} hrs`,
-    `Total OT: ${Math.round(totalOtHoursAcc * 10) / 10} hrs`,
     `Breakdowns: ${totalBreakdownsAcc}`,
     "",
   ] : viewMode === "machine" ? [
@@ -310,6 +311,7 @@ export function exportSupervisorRunningLogsToExcel({
     "",
     "",
     `Total Run: ${Math.round(totalRunningHoursAcc * 10) / 10} hrs`,
+    `Breakdowns: ${totalBreakdownsAcc}`,
     "",
   ] : [
     "SUMMARY TOTALS",
@@ -342,29 +344,26 @@ export function exportSupervisorRunningLogsToExcel({
   worksheet["!cols"] = isOperatorView ? [
     { wch: 8 },  // S.No
     { wch: 15 }, // Log Date
-    { wch: 30 }, // Machine Name
-    { wch: 18 }, // Machine Code
     { wch: 18 }, // Model
+    { wch: 22 }, // Serial Number
+    { wch: 18 }, // Machine Code
+    { wch: 24 }, // Client Name
+    { wch: 24 }, // Site / Location
     { wch: 20 }, // Timings
     { wch: 20 }, // Operating Hours
     { wch: 16 }, // Overtime Hours
-    { wch: 18 }, // Status
+    { wch: 18 }, // Breakdown
     { wch: 35 }, // Remarks
   ] : viewMode === "client" ? [
     { wch: 8 },  // S.No
     { wch: 15 }, // Log Date
-    { wch: 30 }, // Machine Name
-    { wch: 18 }, // Machine Code
     { wch: 18 }, // Model
-    { wch: 28 }, // Client Name
-    { wch: 25 }, // Site Location
-    { wch: 20 }, // City / State
+    { wch: 22 }, // Serial Number
     { wch: 22 }, // Operator Name
     { wch: 14 }, // Start Time
     { wch: 14 }, // End Time
-    { wch: 18 }, // Running Hours
-    { wch: 16 }, // Overtime Hours
-    { wch: 20 }, // Breakdown Status
+    { wch: 18 }, // Work Time (WT)
+    { wch: 18 }, // Breakdown
     { wch: 35 }, // Remarks
   ] : viewMode === "machine" ? [
     { wch: 8 },  // S.No
@@ -375,6 +374,7 @@ export function exportSupervisorRunningLogsToExcel({
     { wch: 18 }, // Start Meter
     { wch: 18 }, // End Meter
     { wch: 18 }, // Running Hours
+    { wch: 18 }, // Breakdown
     { wch: 35 }, // Remarks
   ] : [
     { wch: 8 },  // S.No
@@ -388,6 +388,7 @@ export function exportSupervisorRunningLogsToExcel({
     { wch: 18 }, // Start Meter
     { wch: 18 }, // End Meter
     { wch: 18 }, // Running Hours
+    { wch: 18 }, // Breakdown
     { wch: 35 }, // Remarks
   ];
 

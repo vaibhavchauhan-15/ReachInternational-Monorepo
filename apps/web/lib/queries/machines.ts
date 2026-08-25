@@ -95,10 +95,71 @@ export async function getMachines(params: MachineListParams = {}) {
     query = query.order(sortField, { ascending: sortOrder === "asc" });
   }
 
-  const { data, count, error } = await query.range(from, to);
+  let { data, count, error } = await query.range(from, to);
+
+  // If primary query fails (e.g. "column machines.machine_id does not exist" on unmigrated DB), execute fallback query with machine_code
+  if (error) {
+    const FALLBACK_COLUMNS = `
+      id,
+      machine_code,
+      model,
+      serial_number,
+      year_of_mfg,
+      manufacturer,
+      current_supervisor_id,
+      hour_meter,
+      service_count,
+      current_operator_id,
+      health_status,
+      status,
+      created_at,
+      updated_at,
+      current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email),
+      current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email)
+    `;
+
+    let fallbackQuery = supabase
+      .from("machines")
+      .select(FALLBACK_COLUMNS, { count: "estimated" });
+
+    if (user.role === "operator") {
+      fallbackQuery = fallbackQuery.eq("current_operator_id", user.id);
+    } else if (user.role === "supervisor") {
+      fallbackQuery = fallbackQuery.eq("current_supervisor_id", user.id);
+    }
+
+    if (search) {
+      fallbackQuery = fallbackQuery.or(
+        `machine_code.ilike.%${search}%,model.ilike.%${search}%,serial_number.ilike.%${search}%`
+      );
+    }
+
+    if (status && status !== "all") {
+      fallbackQuery = fallbackQuery.eq("status", status);
+    }
+    if (health_status && health_status !== "all") {
+      fallbackQuery = fallbackQuery.eq("health_status", health_status);
+    }
+    if (current_supervisor_id && current_supervisor_id !== "all") {
+      fallbackQuery = fallbackQuery.eq("current_supervisor_id", current_supervisor_id);
+    }
+
+    const fallbackSortField = sortField === "machine_id" ? "machine_code" : sortField;
+    if (fallbackSortField) {
+      fallbackQuery = fallbackQuery.order(fallbackSortField, { ascending: sortOrder === "asc" });
+    }
+
+    const fallbackRes = await fallbackQuery.range(from, to);
+    if (!fallbackRes.error) {
+      data = fallbackRes.data as any;
+      count = fallbackRes.count;
+      error = null;
+    } else {
+      console.error("Error fetching machines:", error.message || error.details || error);
+    }
+  }
 
   if (error) {
-    console.error("Error fetching machines:", error.message || error.details || error);
     return {
       machines: [],
       total: 0,
@@ -108,12 +169,16 @@ export async function getMachines(params: MachineListParams = {}) {
     };
   }
 
-  // Backwards compatibility mapping for fields machine_code / machine_name
-  const formattedMachines = (data ?? []).map((m: any) => ({
-    ...m,
-    machine_code: m.machine_id,
-    machine_name: m.model ? `${m.machine_id} (${m.model})` : m.machine_id,
-  }));
+  // Backwards & forwards compatibility mapping for machine_id / machine_code / machine_name
+  const formattedMachines = (data ?? []).map((m: any) => {
+    const code = m.machine_id || m.machine_code || m.id;
+    return {
+      ...m,
+      machine_id: code,
+      machine_code: code,
+      machine_name: m.model ? `${code} (${m.model})` : code,
+    };
+  });
 
   return {
     machines: formattedMachines as unknown as Machine[],
@@ -128,22 +193,56 @@ export async function getMachines(params: MachineListParams = {}) {
 const getCachedMachineById = unstable_cache(
   async (id: string): Promise<Machine | null> => {
     const supabase = createSupabaseAdminClient();
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from("machines")
       .select(MACHINE_LIST_COLUMNS)
       .eq("id", id)
       .single();
 
     if (error) {
-      console.error("Error fetching machine by id:", error.message || error.details || error);
+      const FALLBACK_COLUMNS = `
+        id,
+        machine_code,
+        model,
+        serial_number,
+        year_of_mfg,
+        manufacturer,
+        current_supervisor_id,
+        hour_meter,
+        service_count,
+        current_operator_id,
+        health_status,
+        status,
+        created_at,
+        updated_at,
+        current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email),
+        current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email)
+      `;
+
+      const fallbackRes = await supabase
+        .from("machines")
+        .select(FALLBACK_COLUMNS)
+        .eq("id", id)
+        .single();
+
+      if (!fallbackRes.error) {
+        data = fallbackRes.data as any;
+        error = null;
+      }
+    }
+
+    if (error || !data) {
+      console.error("Error fetching machine by id:", error?.message || error?.details || error);
       return null;
     }
 
     const machineData = data as any;
+    const code = machineData.machine_id || machineData.machine_code || machineData.id;
     return {
       ...machineData,
-      machine_code: machineData.machine_id,
-      machine_name: machineData.model ? `${machineData.machine_id} (${machineData.model})` : machineData.machine_id,
+      machine_id: code,
+      machine_code: code,
+      machine_name: machineData.model ? `${code} (${machineData.model})` : code,
     } as unknown as Machine;
   },
   ["machine-detail-by-id-v3"],
@@ -196,17 +295,58 @@ export const getActiveSupervisors = unstable_cache(
   async (): Promise<User[]> => {
     const supabase = createSupabaseAdminClient();
 
-    const { data, error } = await supabase
+    // Query users table strictly for users with role = 'supervisor' and active/non-inactive status
+    const { data: usersData } = await supabase
       .from("users")
-      .select("id, full_name, phone, email")
-      .in("role", ["supervisor", "admin", "super_admin", "service_manager", "branch_manager"])
-      .eq("status", "active")
+      .select("id, full_name, phone, email, role")
+      .eq("role", "supervisor")
+      .neq("status", "inactive")
       .order("full_name");
 
-    if (error) return [];
-    return (data as User[]) ?? [];
+    const userMap = new Map<string, User>();
+
+    (usersData || []).forEach((u: any) => {
+      userMap.set(u.id, {
+        id: u.id,
+        full_name: u.full_name || u.email || "Supervisor",
+        phone: u.phone,
+        email: u.email,
+        role: u.role,
+        status: "active",
+      } as User);
+    });
+
+    // Also query employees table strictly for employees with supervisor designation
+    const { data: empData } = await supabase
+      .from("employees")
+      .select("id, full_name, phone, email, designation, user_id")
+      .neq("status", "inactive")
+      .order("full_name");
+
+    (empData || []).forEach((e: any) => {
+      const isSupervisorEmp =
+        e.designation && e.designation.toLowerCase().includes("supervisor");
+
+      if (isSupervisorEmp) {
+        const key = e.user_id || e.id;
+        if (!userMap.has(key)) {
+          userMap.set(key, {
+            id: key,
+            full_name: e.full_name || e.email || "Supervisor",
+            phone: e.phone,
+            email: e.email,
+            role: "supervisor",
+            status: "active",
+          } as User);
+        }
+      }
+    });
+
+    return Array.from(userMap.values()).sort((a, b) =>
+      a.full_name.localeCompare(b.full_name)
+    );
   },
-  ["active-supervisors-v3"],
+  ["active-supervisors-v5"],
   { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta] }
 );
 
@@ -217,7 +357,7 @@ export const getActiveEngineers = unstable_cache(
       .from("users")
       .select("id, full_name, phone, email")
       .in("role", ["engineer", "service_engineer"])
-      .eq("status", "active")
+      .neq("status", "inactive")
       .order("full_name");
     if (error) return [];
     return (data as User[]) ?? [];
@@ -229,16 +369,59 @@ export const getActiveEngineers = unstable_cache(
 export const getActiveOperators = unstable_cache(
   async (): Promise<User[]> => {
     const supabase = createSupabaseAdminClient();
-    const { data, error } = await supabase
+
+    const { data: usersData } = await supabase
       .from("users")
-      .select("id, full_name, phone, email")
+      .select("id, full_name, phone, email, role")
       .eq("role", "operator")
-      .eq("status", "active")
+      .neq("status", "inactive")
       .order("full_name");
-    if (error) return [];
-    return (data as User[]) ?? [];
+
+    const userMap = new Map<string, User>();
+
+    (usersData || []).forEach((u: any) => {
+      userMap.set(u.id, {
+        id: u.id,
+        full_name: u.full_name || u.email || "Operator",
+        phone: u.phone,
+        email: u.email,
+        role: u.role,
+        status: "active",
+      } as User);
+    });
+
+    const { data: empData } = await supabase
+      .from("employees")
+      .select("id, full_name, phone, email, designation, user_id")
+      .neq("status", "inactive")
+      .order("full_name");
+
+    (empData || []).forEach((e: any) => {
+      const isOperatorEmp =
+        e.designation &&
+        (e.designation.toLowerCase().includes("operator") ||
+          e.designation.toLowerCase().includes("driver"));
+
+      if (isOperatorEmp) {
+        const key = e.user_id || e.id;
+        if (!userMap.has(key)) {
+          userMap.set(key, {
+            id: key,
+            full_name: e.full_name || e.email || "Operator",
+            phone: e.phone,
+            email: e.email,
+            role: "operator",
+            status: "active",
+          } as User);
+        }
+      }
+    });
+
+    return Array.from(userMap.values()).sort((a, b) =>
+      a.full_name.localeCompare(b.full_name)
+    );
   },
-  ["active-operators-v3"],
+  ["active-operators-v5"],
   { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta] }
 );
 

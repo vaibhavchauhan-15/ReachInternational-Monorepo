@@ -29,14 +29,14 @@ function generateRandomPassword(length = 12): string {
   return password;
 }
 
-// Get all users (admin only) — includes assigned branch details
+// Get all users (admin only)
 export async function getAllUsers(): Promise<User[]> {
-  await requireRole("admin", "super_admin", "branch_manager", "service_manager", "hr_manager");
+  await requireRole("admin", "super_admin", "service_manager", "hr_manager");
   const supabase = await createSupabaseServerClient();
   
   const { data, error } = await supabase
     .from("users")
-    .select("id, full_name, email, phone, role, status, branch_id, created_at, branch:branches!users_branch_id_fkey(id, code, name, city, state)")
+    .select("id, full_name, email, phone, role, status, city, district, state, created_at")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -47,14 +47,14 @@ export async function getAllUsers(): Promise<User[]> {
   return (data as unknown as User[]) || [];
 }
 
-// Get pending users — includes assigned branch details
+// Get pending users
 export async function getPendingUsers(): Promise<User[]> {
-  await requireRole("admin", "super_admin", "branch_manager", "service_manager", "hr_manager");
+  await requireRole("admin", "super_admin", "service_manager", "hr_manager");
   const supabase = await createSupabaseServerClient();
   
   const { data, error } = await supabase
     .from("users")
-    .select("id, full_name, email, phone, role, status, branch_id, created_at, branch:branches!users_branch_id_fkey(id, code, name, city, state)")
+    .select("id, full_name, email, phone, role, status, city, district, state, created_at")
     .eq("status", "pending")
     .order("created_at", { ascending: true });
 
@@ -214,12 +214,22 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
     const role = formData.get("role") as UserRole;
-    const phone = formData.get("phone") as string;
-    const branchId = formData.get("branch_id") as string;
-    const location = formData.get("location") as string;
+    const phone = (formData.get("phone") as string)?.trim() || "";
+    const city = (formData.get("city") as string)?.trim() || "";
+    const district = (formData.get("district") as string)?.trim() || "";
+    const state = (formData.get("state") as string)?.trim() || "";
 
-    if (!fullName || !email || !password || !role) {
-      return { error: "Name, email, password and role fields are required." };
+    if (!fullName || !email || !password || !role || !phone) {
+      return { error: "Full name, email, mobile number, password, and role fields are required." };
+    }
+
+    if (!city || !district || !state) {
+      return { error: "City, District, and State are required address fields." };
+    }
+
+    const digitsOnly = phone.replace(/\D/g, "");
+    if (digitsOnly.length < 10) {
+      return { error: "Please enter a valid 10-digit mobile number." };
     }
 
     // Role validation: super_admin can create any role; admin can create any role except super_admin
@@ -233,8 +243,39 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
       return { error: "Please enter a valid email address." };
     }
 
-    // Create user with admin client
     const adminSupabase = createSupabaseAdminClient();
+
+    // 1. Database check for duplicate email
+    const { data: existingEmailUser } = await adminSupabase
+      .from("users")
+      .select("id")
+      .ilike("email", email.trim())
+      .maybeSingle();
+
+    if (existingEmailUser) {
+      return { error: "A user account with this email address already exists." };
+    }
+
+    // 2. Database check for duplicate phone number
+    const { data: existingPhoneUsers } = await adminSupabase
+      .from("users")
+      .select("id, phone")
+      .not("phone", "is", null);
+
+    const hasDuplicatePhone = existingPhoneUsers?.some((u) => {
+      if (!u.phone) return false;
+      const uDigits = u.phone.replace(/\D/g, "");
+      if (digitsOnly.length >= 10 && uDigits.length >= 10) {
+        return digitsOnly.slice(-10) === uDigits.slice(-10);
+      }
+      return digitsOnly === uDigits;
+    });
+
+    if (hasDuplicatePhone) {
+      return { error: "A user account with this mobile number already exists." };
+    }
+
+    // Create user with admin client (default status: active, no admin approval required)
     const { data, error } = await adminSupabase.auth.admin.createUser({
       email,
       password,
@@ -243,15 +284,19 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
         full_name: fullName,
         role: role,
         phone: phone || null,
-        branch_id: branchId && branchId !== "none" ? branchId : null,
-        location: location || null,
+        city,
+        district,
+        state,
+        location: `${city}, ${district}, ${state}`,
+        status: "active",
       },
     });
 
     if (error) {
       console.error("Error creating user:", error);
-      if (error.message.includes("already registered")) {
-        return { error: "A user with this email already exists." };
+      const msg = error.message.toLowerCase();
+      if (msg.includes("already registered") || msg.includes("already exists")) {
+        return { error: "A user account with this email or mobile number already exists." };
       }
       return { error: "Failed to create user. Please try again." };
     }
@@ -260,19 +305,21 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
       return { error: "Failed to create user. Please try again." };
     }
 
-    // Update the status to active and sync role, phone, and branch_id
-    const { error: updateError } = await supabase
+    // Update status to active and sync role, phone, city, district, state
+    const { error: updateError } = await adminSupabase
       .from("users")
       .update({
         status: "active",
         role: role,
         phone: phone || null,
-        branch_id: branchId && branchId !== "none" ? branchId : null,
+        city,
+        district,
+        state,
       })
       .eq("id", data.user.id);
 
     if (updateError) {
-      console.error("Error updating user status:", updateError);
+      console.error("Error updating user profile:", updateError);
     }
 
     // Synchronize user account into public.employees directory table
@@ -288,7 +335,6 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
           phone: phone || null,
           email: email.trim(),
           designation: designationLabel,
-          branch_id: branchId && branchId !== "none" ? branchId : null,
           status: "active",
         });
     } catch (empErr: any) {
@@ -307,8 +353,10 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
         user_email: email, 
         user_name: fullName,
         role: role,
-        branch_id: branchId || null,
-        location: location || null,
+        city,
+        district,
+        state,
+        location: `${city}, ${district}, ${state}`,
         created_by: currentUser.email,
         created_by_name: currentUser.full_name,
         created_by_role: currentUser.role,
@@ -318,7 +366,7 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
     revalidatePath("/users");
     revalidateTag(CACHE_TAGS.users, "max");
     revalidateTag(CACHE_TAGS.machineMeta, "max");
-    return { message: `User ${fullName} has been created successfully.` };
+    return { message: `User ${fullName} has been created successfully with active access. Credentials sent to email.` };
   } catch (error) {
     console.error("Error in createUser:", error);
     return { error: "Unauthorized or an error occurred." };
@@ -601,26 +649,62 @@ export async function editUser(userId: string, formData: FormData): Promise<User
       return { error: "Only Super Admins can edit Super Admin accounts." };
     }
 
-    const fullName = formData.get("full_name") as string;
-    const phone = formData.get("phone") as string;
-    const branchId = formData.get("branch_id") as string;
+    const fullName = (formData.get("full_name") as string)?.trim() || "";
+    const phone = (formData.get("phone") as string)?.trim() || "";
     const role = formData.get("role") as UserRole;
-    const location = formData.get("location") as string;
+    const city = (formData.get("city") as string)?.trim() || "";
+    const district = (formData.get("district") as string)?.trim() || "";
+    const state = (formData.get("state") as string)?.trim() || "";
     
     if (!fullName) {
       return { error: "Full name is required." };
     }
 
+    if (!phone) {
+      return { error: "Mobile number is required." };
+    }
+
+    const digitsOnly = phone.replace(/\D/g, "");
+    if (digitsOnly.length < 10) {
+      return { error: "Please enter a valid 10-digit mobile number." };
+    }
+
+    if (!city || !district || !state) {
+      return { error: "City, District, and State are required address fields." };
+    }
+
     const adminSupabase = createSupabaseAdminClient();
+
+    // Check duplicate mobile number for other user accounts (id != userId)
+    const { data: existingPhoneUsers } = await adminSupabase
+      .from("users")
+      .select("id, phone")
+      .neq("id", userId)
+      .not("phone", "is", null);
+
+    const hasDuplicatePhone = existingPhoneUsers?.some((u) => {
+      if (!u.phone) return false;
+      const uDigits = u.phone.replace(/\D/g, "");
+      if (digitsOnly.length >= 10 && uDigits.length >= 10) {
+        return digitsOnly.slice(-10) === uDigits.slice(-10);
+      }
+      return digitsOnly === uDigits;
+    });
+
+    if (hasDuplicatePhone) {
+      return { error: "Another user account with this mobile number already exists." };
+    }
     
     // Update auth user metadata
     const { error: authError } = await adminSupabase.auth.admin.updateUserById(userId, {
       user_metadata: { 
         full_name: fullName, 
         phone: phone || null,
-        location: location || null,
+        city,
+        district,
+        state,
+        location: `${city}, ${district}, ${state}`,
         ...(role ? { role } : {}),
-        ...(branchId ? { branch_id: branchId === "none" ? null : branchId } : {}),
       }
     });
     
@@ -632,7 +716,9 @@ export async function editUser(userId: string, formData: FormData): Promise<User
     const updatePayload: Record<string, unknown> = {
       full_name: fullName,
       phone: phone || null,
-      branch_id: branchId && branchId !== "none" ? branchId : null,
+      city,
+      district,
+      state,
     };
     if (role && (currentUser.role === "super_admin" || role !== "super_admin")) {
       updatePayload.role = role;
@@ -654,7 +740,6 @@ export async function editUser(userId: string, formData: FormData): Promise<User
       const empUpdatePayload: Record<string, unknown> = {
         full_name: fullName.trim(),
         phone: phone || null,
-        branch_id: branchId && branchId !== "none" ? branchId : null,
       };
       if (role) {
         empUpdatePayload.designation = role.replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
@@ -675,8 +760,10 @@ export async function editUser(userId: string, formData: FormData): Promise<User
       metadata: { 
         user_email: targetUser.email,
         user_name: targetUser.full_name,
-        branch_id: branchId || null,
-        location: location || null,
+        city,
+        district,
+        state,
+        location: `${city}, ${district}, ${state}`,
         role: role || targetUser.role,
         updated_by_name: currentUser.full_name,
         updated_by: currentUser.email,

@@ -8,7 +8,6 @@ export const createTaskSchema = z.object({
   priority: z.enum(["low", "medium", "high", "critical"]).default("medium"),
   assignee_ids: z.array(z.string().uuid("Invalid assignee user ID")).min(1, "Assign task to at least one employee"),
   reminder_offset: z.enum(["none", "10m", "30m", "1h", "1d"]).default("none"),
-  branch_id: z.string().uuid().optional().nullable(),
 });
 
 export const updateTaskSchema = createTaskSchema.partial().extend({

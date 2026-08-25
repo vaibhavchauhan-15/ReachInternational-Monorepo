@@ -31,16 +31,19 @@ Manages machine registry, serial numbers, client assignments, engineer assignmen
 
 ## Bulk Import Feature
 - Excel upload with drag-and-drop support
-- Auto-generated machine codes (MCH-XXXXXX format)
-- Required columns: Machine Name, Customer Name, Customer Mobile, City, State
-- Optional columns: Model, Customer Email, Customer Address, Assigned Engineer, Service Interval Days, Notes
-- Engineer name matching (must match existing active engineers)
-- Indian mobile number validation (10 digits starting with 6-9)
-- Comprehensive error reporting with row numbers
-- Sample template download
-- Audit logging for bulk imports
-- Cache invalidation on successful import
+- Auto-generated Machine IDs (e.g. `RI-MC-0001` format via trigger/sequence if left blank)
+- Supported columns: `Machine ID`, `Model`, `Manufacturer`, `Serial Number`, `Year of MFG`, `Hour Meter`, `Service Count`, `Status`, `Health Status`
+- Flexible column header aliases (`Machine ID`, `Model`, `Manufacturer`, `Serial Number`, `Year of MFG`, `Hour Meter`, `Service Count`, `Status`, `Health Status`)
+- Health status normalization (`active`, `under_maintenance`, `breakdown`) and status normalization (`available`, `rented`)
+- Comprehensive error reporting with row numbers and failure reasons
+- Sample Excel template generator (`getSampleExcelTemplate()`) matching `public.machines` database schema
+- Audit logging (`machine.bulk_import`) and tag-based cache revalidation on successful import
 
 ## UI/UX & Card Grid Styling
 - Quick filter status pills (`Overdue`, `Due Tomorrow`, `Due Today`) with semantic red, light blue, and yellow themes for dark and light mode contrast.
 - Harmonized machine card grid view matching `/notifications` cards with top hairline sheen glow, inset details container, status border accents, and card hover lift.
+
+## RLS Security Policies & Error Handling
+- **Database Migration (`043_fix_machines_rls_policies.sql`)**: PostgreSQL RLS policies on `public.machines` updated for `INSERT`, `UPDATE`, and `DELETE` operations, authorizing `super_admin`, `admin`, `company_admin`, `branch_manager`, `service_manager`, `rental_manager`, `store_manager`, and `supervisor` roles.
+- **Canonical Error Sanitization (`formatMachineDatabaseError`)**: Converts raw database error codes (`42501` RLS, `23505` unique key violation, `23503` foreign key, `23502` null constraint) into clean, polite, user-friendly notices without technical stack traces.
+- **Modal Error Banners (`MachineModal.tsx`)**: Renders red error banners with AlertCircle icons and inline field validation notices.

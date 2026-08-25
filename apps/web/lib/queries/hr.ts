@@ -92,8 +92,8 @@ export const getHRDashboardData = cache(async (branchId?: string): Promise<HRDas
   employees.forEach((emp) => {
     if (emp.status === "archived") return;
 
-    // Branch
-    const bName = emp.branch?.name || "Unassigned Branch";
+    // Branch / Operations Scope
+    const bName = "India Operations";
     const bId = emp.branch_id || "unassigned";
     if (!branchMap[bId]) {
       branchMap[bId] = { name: bName, count: 0 };
