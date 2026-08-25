@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { CustomTimePicker } from "@/components/ui/CustomTimePicker";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -348,13 +349,12 @@ export function CreateTaskModal({
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--color-mute)] mb-1 flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" /> Due Time (Optional)
-            </label>
-            <Input
-              type="time"
+            <CustomTimePicker
+              label="Due Time (Optional)"
               value={dueTime}
-              onChange={(e) => setDueTime(e.target.value)}
+              onChange={setDueTime}
+              placeholder="e.g. 05:00 PM"
+              iconColor="text-sky-500"
             />
           </div>
         </div>

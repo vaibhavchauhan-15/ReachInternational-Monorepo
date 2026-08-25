@@ -11,7 +11,7 @@ import {
   AnimatedArrowRight,
 } from "@/components/ui/animated-icons";
 import { login, type AuthFormState } from "@/app/actions/auth";
-import { Button, Input } from "@/components/ui";
+import { Button, Input, ReachInternationalLogo } from "@/components/ui";
 
 export function LoginFormClient() {
   const [state, setState] = useState<AuthFormState>({});
@@ -89,6 +89,13 @@ function isRedirectError(error: unknown): boolean {
       transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
       className="w-full max-w-md bg-card/80 backdrop-blur-xl rounded-2xl border border-border p-7 sm:p-9 shadow-2xl text-card-foreground relative overflow-hidden"
     >
+      {/* Mobile Logo Branding */}
+      <div className="flex lg:hidden justify-center mb-6">
+        <Link href="/" className="flex items-center group focus:outline-none">
+          <ReachInternationalLogo variant="full" size={32} />
+        </Link>
+      </div>
+
       {/* Decorative top hairline glow */}
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-sky-500/50 to-transparent" />
 

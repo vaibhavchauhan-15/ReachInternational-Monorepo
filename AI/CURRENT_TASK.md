@@ -1,24 +1,23 @@
 # Current Task Context
 
-## Completed Task (2026-08-25) — Page Feedback: `/operations?tab=logs` Machine Manufacturer Display in Machine Tab & PDF Export Report (`OperationsClient.tsx`, `PrintableSupervisorLogsModal.tsx`, `supervisor-logs-export.ts`)
+## Completed Task (2026-08-25) — Page Feedback: `/login` Mesh Gradient Desktop-Only Responsive Visibility (`login/page.tsx`, `login-form.tsx`, `signup/page.tsx`)
 
-**Goal**: Display the machine manufacturer (e.g. HYUNDAI, ACE, JCB) in the Machine Tab on `/operations?tab=logs` and in exported PDF running hours reports per user page feedback.
+**Goal**: Address user page feedback on `/login` by hiding the `.mesh-gradient` hero section on mobile devices (< 1024px) so mobile viewports display strictly the login/signup form (with centered mobile brand logo).
 
 ### Key Changes & Implementation Details
 
-1. **Machine Details Summary Header Card (`OperationsClient.tsx`)**:
-   - Refactored Machine Details Summary Header Card grid (`logsViewMode === "machine"`) from 5 columns to 6 columns on desktop (`grid-cols-2 sm:grid-cols-3 lg:grid-cols-6`).
-   - Added a dedicated **Manufacturer** block displaying `activeMachineObj.manufacturer || "—"` (e.g. `HYUNDAI`).
+1. **Desktop-Only Mesh Gradient Hero Panel (`apps/web/app/login/page.tsx`)**:
+   - Updated `.mesh-gradient` container class to `hidden lg:flex flex-col justify-between ...`, hiding the hero panel on mobile/tablet viewports (< 1024px) and displaying it exclusively on desktop screens (≥ 1024px).
+   - Configured form container to `min-h-screen lg:min-h-0` for full height vertical centering on mobile.
 
-2. **Machine Selector Dropdown Options (`OperationsClient.tsx`)**:
-   - Updated `formatMachineSelectLabel(m)` helper function to include `m.manufacturer` if present (e.g. `RI-MC-0001 (HYUNDAI 50B-9 — S/N: HHKHB303EF0000877)`).
+2. **Mobile Brand Logo Integration (`apps/web/app/login/login-form.tsx`)**:
+   - Imported `ReachInternationalLogo` from `@/components/ui`.
+   - Rendered centered logo header (`flex lg:hidden justify-center mb-6`) at top of form container for mobile viewports.
 
-3. **PDF Export Report Metadata (`PrintableSupervisorLogsModal.tsx`)**:
-   - Added `<div><strong>Manufacturer:</strong> {selectedMachineObj?.manufacturer || (logs[0]?.machine as any)?.manufacturer || "—"}</div>` to top metadata header block in Machine mode PDF export (`viewMode === "machine"`).
-
-4. **Excel Export Utility (`supervisor-logs-export.ts`)**:
-   - Updated Machine mode Excel export `filterScopeText` to output `Manufacturer: ${mMfr}`.
+3. **Signup Page Cross-Platform Parity (`apps/web/app/signup/page.tsx`)**:
+   - Applied identical desktop-only mesh gradient hero panel rule (`hidden lg:flex flex-col ...`).
+   - Added centered mobile brand logo (`flex lg:hidden justify-center mb-6`) to the signup form card container.
 
 ### Verification Results
 
-- **TypeScript Verification**: Executed `pnpm typecheck` across all 9 monorepo workspace packages (**Passed cleanly with 0 compilation errors across 9/9 packages**).
+- **TypeScript Compilation**: Executed `pnpm typecheck` across all 9 monorepo workspace packages (**Passed cleanly with 0 compilation errors across 9/9 packages**).

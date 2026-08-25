@@ -1,9 +1,35 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: Phase 88 Complete — Page Feedback: `/operations?tab=logs` Machine Manufacturer Display in Machine Tab & PDF Export Report (`OperationsClient.tsx`, `PrintableSupervisorLogsModal.tsx`, `supervisor-logs-export.ts`)
+- **Phase**: Phase 92 Complete — Page Feedback: `/login` Mesh Gradient Desktop-Only Responsive Visibility (`login/page.tsx`, `login-form.tsx`, `signup/page.tsx`)
 - **Overall Health**: Healthy & Stable (0 TypeScript Errors across Monorepo)
 - **Last Memory Update**: 2026-08-25
+
+- [x] **Page Feedback: /login Mesh Gradient Desktop-Only Responsive Visibility (`login/page.tsx`, `login-form.tsx`, `signup/page.tsx`) (2026-08-25)**:
+  - **Desktop-Only Hero Panel (`login/page.tsx`, `signup/page.tsx`)**: Refactored `.mesh-gradient` hero container class to `hidden lg:flex flex-col justify-between ...`, hiding the hero panel on mobile/tablet viewports (< 1024px) so mobile screens display strictly the login/signup form per user feedback.
+  - **Mobile Brand Logo Integration (`login-form.tsx`, `signup/page.tsx`)**: Added centered mobile brand logo (`flex lg:hidden justify-center mb-6`) at top of form cards to ensure clear brand identity on mobile devices.
+  - **Mobile Form Centering (`login/page.tsx`, `signup/page.tsx`)**: Configured form containers to `min-h-screen lg:min-h-0` for full height vertical centering on mobile.
+  - **Verification**: Executed `pnpm typecheck` across all 9 monorepo workspace packages (**Passed cleanly with 0 TypeScript compilation errors across 9/9 packages**).
+
+- [x] **Page Feedback: /operations?tab=logs Machine ID & Client Details Teardown from Machine View Metadata Strip (`PrintableSupervisorLogsModal.tsx`, `supervisor-logs-export.ts`) (2026-08-25)**:
+  - **Machine ID Removal (`PrintableSupervisorLogsModal.tsx`, `supervisor-logs-export.ts`)**: Removed redundant `Machine:` (`machine_name` / `machine_code` / Machine ID `RI-MC-0001`) from top metadata strip and `scopeLabel` in Machine view mode per user feedback item 2.
+  - **Client Details Teardown in Machine View (`PrintableSupervisorLogsModal.tsx`, `supervisor-logs-export.ts`)**: Completely removed `Client:` and `Location:` key-value pairs from the Machine view mode top metadata strip per user feedback item 3, maintaining 100% focus on machine specs (`Manufacturer: HYUNDAI | Model: 50B-9 | Serial No.: HHKHB303EF0000877 | Total Run: 300 hrs | Export Date: 25/08/2026`).
+  - **Clean & Formatted Header Strip (`PrintableSupervisorLogsModal.tsx`)**: Streamlined the metadata strip container (`.bg-white > .pb-2 > .flex`) into a clean, compact, clutter-free single-line metadata bar per user feedback item 1.
+  - **Verification**: Executed `pnpm typecheck` across all 9 monorepo workspace packages (**Passed cleanly with 0 TypeScript compilation errors across 9/9 packages**).
+
+- [x] **Page Feedback: /operations?tab=logs Report Title Centering & Client/Location Formatting (`PrintableSupervisorLogsModal.tsx`, `PrintableOperatorLogsModal.tsx`, `supervisor-logs-export.ts`) (2026-08-25)**:
+  - **Report Titles Centering (`PrintableSupervisorLogsModal.tsx`, `PrintableOperatorLogsModal.tsx`)**: Refactored PDF report top header containers into a balanced 3-column grid (`grid grid-cols-[110px_1fr_110px] sm:grid-cols-[140px_1fr_140px] items-center gap-2`). Centered report title headers (`text-center font-black uppercase text-neutral-900 tracking-wider`) across all report types: `"MACHINE RUNNING HOURS REPORT"`, `"SITE MACHINE RUNNING HOURS REPORT"`, `"OPERATOR DAILY MACHINE LOG REPORT"`, and `"SUPERVISOR MACHINE RUNNING HOURS REPORT"`.
+  - **Client Name & Client Location Formatting (`PrintableSupervisorLogsModal.tsx`)**: Replaced single-client name text with a centered, uppercase subheading displaying both Client Name and resolved Client Location: `CLIENT: SAINT GOBAIN | LOCATION: JHAJJAR, HARYANA`. Dynamically resolves location from site filter or underlying log/client/machine records even when site filter is "All Sites".
+  - **Excel Export Metadata Alignment (`supervisor-logs-export.ts`)**: Updated `filterScopeText` for Client view mode Excel export to output `Client: ${selectedEntityId} | Location: ${siteText}`.
+  - **Verification**: Executed `pnpm typecheck` across all 9 monorepo workspace packages (**Passed cleanly with 0 TypeScript compilation errors across 9/9 packages**).
+
+
+  - **`CustomTimePicker` Component Refactoring (`CustomTimePicker.tsx`)**: Replaced radial circular SVG clock needles and dial face with explicit 1-click grid selectors: 4x3 Hours view (`01`–`12`), 4x3 Minutes view (`00`–`55`), digital time header bar with mode switching (`HH`, `MM`), and AM/PM segmented switcher buttons.
+  - **Quick Shift Presets (`CustomTimePicker.tsx`)**: Added quick action pills for common industrial shifts (`06:00 AM`, `08:00 AM`, `02:00 PM`, `08:00 PM`) and `"Set Now"` (IST Asia/Kolkata current local time).
+  - **Direct Keyboard Typing & Portal Positioning (`CustomTimePicker.tsx`)**: Supported direct text field typing + React Portal (`document.body`) with dynamic space-above / space-below positioning.
+  - **Monorepo-Wide Standardization (`CreateTaskModal.tsx`, `index.ts`)**: Replaced raw native `<Input type="time" ... />` in `<CreateTaskModal>` with `<CustomTimePicker label="Due Time (Optional)" ... />` and exported canonical primitive from `@/components/ui`.
+  - **Operator Dashboard Integration (`OperatorDashboard.tsx`)**: Verified Start Time and End Time selection in Section B (Daily Log Entry) and Edit Log Modal, preserving 100% real-time duration and overtime calculations (`computeOperatingHours`).
+  - **Verification**: Executed `pnpm typecheck` across all 9 monorepo workspace packages (**Passed cleanly with 0 TypeScript compilation errors across 9/9 packages**).
 
 - [x] **Page Feedback: /operations?tab=logs Machine Manufacturer Display in Machine Tab & PDF Export Report (`OperationsClient.tsx`, `PrintableSupervisorLogsModal.tsx`, `supervisor-logs-export.ts`) (2026-08-25)**:
   - **Machine Details Summary Header Card (`OperationsClient.tsx`)**: Refactored summary grid (`logsViewMode === "machine"`) to 6 columns (`grid-cols-2 sm:grid-cols-3 lg:grid-cols-6`) and added a dedicated **Manufacturer** block displaying `activeMachineObj.manufacturer || "—"` (e.g. `HYUNDAI`).

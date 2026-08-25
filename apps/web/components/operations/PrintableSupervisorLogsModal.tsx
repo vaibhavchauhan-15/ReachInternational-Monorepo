@@ -86,9 +86,9 @@ function SupervisorLogsReportContent({
 
   let scopeLabel = "All Operations Fleet";
   if (viewMode === "machine" && selectedEntityId !== "all") {
-    const mName = selectedMachineObj?.machine_name || "Machine";
-    const mCode = selectedMachineObj?.machine_code || "";
-    scopeLabel = `Machine: ${mName} (${mCode})`;
+    const mMfr = selectedMachineObj?.manufacturer || (logs[0]?.machine as any)?.manufacturer || "";
+    const mModel = selectedMachineObj?.model || (logs[0]?.machine as any)?.model || "Machine";
+    scopeLabel = `Machine: ${mMfr ? `${mMfr} ` : ""}${mModel}`;
   } else if (viewMode === "client" && selectedEntityId !== "all") {
     const siteText = selectedSite && selectedSite !== "all" ? ` | Site: ${selectedSite}` : "";
     const machineText = selectedClientMachineId && selectedClientMachineId !== "all"
@@ -101,13 +101,41 @@ function SupervisorLogsReportContent({
 
   const isOperatorView = viewMode === "operator";
 
+  // Resolve client location for Client View Mode or general report header
+  let resolvedClientLocation = "—";
+  if (selectedSite && selectedSite !== "all") {
+    resolvedClientLocation = selectedSite;
+  } else {
+    const logWithLocation = logs.find(
+      (l) =>
+        l.location ||
+        (l as any)?.client?.city ||
+        (l.machine as any)?.customer_address ||
+        (l.machine as any)?.city
+    );
+
+    if (logWithLocation) {
+      const cObj = (logWithLocation as any)?.client;
+      const mObj = logWithLocation.machine as any;
+      if (logWithLocation.location) {
+        resolvedClientLocation = logWithLocation.location;
+      } else if (cObj?.city) {
+        resolvedClientLocation = `${cObj.city}${cObj.state ? `, ${cObj.state}` : ""}`;
+      } else if (mObj?.customer_address) {
+        resolvedClientLocation = `${mObj.customer_address}${mObj.city ? `, ${mObj.city}` : ""}`;
+      } else if (mObj?.city) {
+        resolvedClientLocation = `${mObj.city}${mObj.state ? `, ${mObj.state}` : ""}`;
+      }
+    }
+  }
+
   return (
     <div className="bg-white text-black p-2.5 sm:p-4 rounded-xl border border-neutral-300 shadow-sm flex flex-col justify-between text-xs font-sans max-w-[210mm] mx-auto space-y-2 sm:space-y-2.5 w-full">
       {/* 1. TOP HEADER & METADATA STRIP */}
       <div className="pb-2 border-b-2 border-neutral-900 space-y-1.5">
-        <div className="flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+        <div className="grid grid-cols-[110px_1fr_110px] sm:grid-cols-[140px_1fr_140px] items-center gap-2">
           {/* Top Left Logo */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center justify-start shrink-0">
             {/* eslint-disable-next-html-element-suppress */}
             <img
               src="/pdf-logo.png"
@@ -116,9 +144,9 @@ function SupervisorLogsReportContent({
             />
           </div>
 
-          {/* Report Title */}
-          <div className="text-right flex-1 min-w-[200px]">
-            <h2 className="text-sm sm:text-base font-black uppercase text-neutral-900 tracking-wider">
+          {/* Report Title & Subheading (Middle/Center Aligned) */}
+          <div className="text-center min-w-0">
+            <h2 className="text-sm sm:text-base font-black uppercase text-neutral-900 tracking-wider text-center">
               {isOperatorView
                 ? "OPERATOR DAILY MACHINE LOG REPORT"
                 : viewMode === "client"
@@ -128,18 +156,18 @@ function SupervisorLogsReportContent({
                 : "SUPERVISOR MACHINE RUNNING HOURS REPORT"}
             </h2>
 
-            {/* Large and Bold Client Name & Location Subheading (Smaller than Main Heading) */}
+            {/* Client Name & Client Location Subheading (Proper Format) */}
             {viewMode === "client" && selectedEntityId !== "all" && (
-              <div className="text-xs sm:text-sm font-extrabold uppercase text-neutral-900 tracking-tight py-0.5">
-                <span>CLIENT: {selectedEntityId}</span>
-                {selectedSite && selectedSite !== "all" && (
-                  <span className="ml-2 text-neutral-700">
-                    | LOCATION: <span className="text-neutral-900">{selectedSite}</span>
-                  </span>
-                )}
+              <div className="text-xs sm:text-sm font-extrabold uppercase text-neutral-900 tracking-tight pt-1 text-center flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
+                <span>CLIENT: <span className="text-neutral-900 font-black">{selectedEntityId}</span></span>
+                <span className="text-neutral-400 font-normal">|</span>
+                <span>LOCATION: <span className="text-neutral-900 font-black">{resolvedClientLocation}</span></span>
               </div>
             )}
           </div>
+
+          {/* Right Spacer for Perfect Centering Balance */}
+          <div className="hidden sm:block w-[110px] sm:w-[140px] shrink-0"></div>
         </div>
 
         <div className="flex flex-wrap items-center justify-center sm:justify-between gap-x-4 sm:gap-x-5 gap-y-1 text-[9.5px] sm:text-[10px] text-neutral-800 font-medium leading-tight pt-1 border-t border-neutral-200">
@@ -171,11 +199,13 @@ function SupervisorLogsReportContent({
                 </>
               ) : viewMode === "machine" && selectedEntityId !== "all" ? (
                 <>
-                  <div><strong>Machine:</strong> {selectedMachineObj?.machine_name || (logs[0]?.machine as any)?.machine_name || "Machine"}</div>
                   <div><strong>Manufacturer:</strong> {selectedMachineObj?.manufacturer || (logs[0]?.machine as any)?.manufacturer || "—"}</div>
                   <div><strong>Model:</strong> {selectedMachineObj?.model || (logs[0]?.machine as any)?.model || "—"}</div>
-                  <div><strong>Serial/Code:</strong> {selectedMachineObj?.serial_number || selectedMachineObj?.machine_code || (logs[0]?.machine as any)?.serial_number || (logs[0]?.machine as any)?.machine_code || "—"}</div>
+                  <div><strong>Serial No.:</strong> {selectedMachineObj?.serial_number || (logs[0]?.machine as any)?.serial_number || "—"}</div>
                   <div><strong>Total Run:</strong> {Math.round(totalRunningHours * 10) / 10} hrs</div>
+                  {selectedMonth !== "all" && (
+                    <div><strong>Month:</strong> {monthLabel}</div>
+                  )}
                   <div><strong>Export Date:</strong> {displayDateTime}</div>
                 </>
               ) : (

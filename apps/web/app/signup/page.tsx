@@ -188,8 +188,8 @@ function isRedirectError(error: unknown): boolean {
 
   return (
     <div className="flex min-h-screen lg:h-screen w-full flex-col lg:flex-row bg-background text-foreground relative overflow-hidden">
-      {/* Left: Hero panel with mesh gradient & ambient glow */}
-      <div className="mesh-gradient relative flex flex-col justify-between p-6 sm:p-10 lg:w-[45%] xl:w-[42%] lg:p-12 border-b lg:border-b-0 lg:border-r border-border overflow-hidden">
+      {/* Left: Hero panel with mesh gradient & ambient glow (Desktop only) */}
+      <div className="mesh-gradient relative hidden lg:flex flex-col justify-between p-6 sm:p-10 lg:w-[45%] xl:w-[42%] lg:p-12 border-b lg:border-b-0 lg:border-r border-border overflow-hidden">
         {/* Soft background glow decoration */}
         <div className="absolute -top-24 -left-24 w-96 h-96 bg-sky-500/10 dark:bg-sky-500/15 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-violet-500/10 dark:bg-violet-500/15 rounded-full blur-3xl pointer-events-none" />
@@ -239,7 +239,7 @@ function isRedirectError(error: unknown): boolean {
       </div>
 
       {/* Right: Signup form panel - Takes up half screen width */}
-      <div className="flex flex-1 items-center justify-center p-4 sm:p-6 lg:p-8 xl:p-12 bg-background relative overflow-y-auto lg:overflow-visible">
+      <div className="flex flex-1 items-center justify-center p-4 sm:p-6 lg:p-8 xl:p-12 bg-background relative overflow-y-auto lg:overflow-visible min-h-screen lg:min-h-0">
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-[500px] h-[500px] bg-sky-500/5 dark:bg-sky-500/10 rounded-full blur-3xl" />
         </div>
@@ -250,6 +250,13 @@ function isRedirectError(error: unknown): boolean {
           transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
           className="w-full max-w-xl lg:max-w-2xl xl:max-w-3xl bg-card/80 backdrop-blur-xl rounded-2xl border border-border p-6 sm:p-8 lg:p-10 shadow-2xl text-card-foreground relative overflow-hidden"
         >
+          {/* Mobile Logo Branding */}
+          <div className="flex lg:hidden justify-center mb-6">
+            <Link href="/" className="flex items-center group focus:outline-none">
+              <ReachInternationalLogo variant="full" size={32} />
+            </Link>
+          </div>
+
           {/* Decorative top hairline glow */}
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-sky-500/50 to-transparent" />
 

@@ -88,9 +88,9 @@ function OperatorLogsReportContent({
       {/* 1. TOP HEADING & CONSOLIDATED METADATA STRIP              */}
       {/* ========================================================= */}
       <div className="pb-2 border-b-2 border-neutral-900 space-y-1.5">
-        <div className="flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+        <div className="grid grid-cols-[110px_1fr_110px] sm:grid-cols-[140px_1fr_140px] items-center gap-2">
           {/* Top Left Logo */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center justify-start shrink-0">
             {/* eslint-disable-next-html-element-suppress */}
             <img
               src="/pdf-logo.png"
@@ -99,12 +99,15 @@ function OperatorLogsReportContent({
             />
           </div>
 
-          {/* Report Title */}
-          <div className="text-right flex-1 min-w-[200px]">
-            <h2 className="text-sm sm:text-base font-black uppercase text-neutral-900 tracking-wider">
+          {/* Report Title (Middle/Center Aligned) */}
+          <div className="text-center min-w-0">
+            <h2 className="text-sm sm:text-base font-black uppercase text-neutral-900 tracking-wider text-center">
               OPERATOR DAILY MACHINE LOG REPORT
             </h2>
           </div>
+
+          {/* Right Spacer for Perfect Centering Balance */}
+          <div className="hidden sm:block w-[110px] sm:w-[140px] shrink-0"></div>
         </div>
 
         <div className="flex flex-wrap items-center justify-center sm:justify-between gap-x-4 sm:gap-x-5 gap-y-1 text-[9.5px] sm:text-[10px] text-neutral-800 font-medium leading-tight pt-1 border-t border-neutral-200">

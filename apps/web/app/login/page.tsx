@@ -12,8 +12,8 @@ import { ReachInternationalLogo } from "@/components/ui";
 export default function LoginPage() {
   return (
     <div className="flex min-h-screen w-full flex-col lg:flex-row bg-background text-foreground relative overflow-hidden">
-      {/* Left: Hero panel with mesh gradient & ambient glow */}
-      <div className="mesh-gradient relative flex flex-col justify-between p-8 sm:p-12 lg:w-[50%] xl:w-[52%] lg:p-16 border-b lg:border-b-0 lg:border-r border-border overflow-hidden">
+      {/* Left: Hero panel with mesh gradient & ambient glow (Desktop only) */}
+      <div className="mesh-gradient relative hidden lg:flex flex-col justify-between p-8 sm:p-12 lg:w-[50%] xl:w-[52%] lg:p-16 border-b lg:border-b-0 lg:border-r border-border overflow-hidden">
         {/* Soft background glow decoration */}
         <div className="absolute -top-24 -left-24 w-96 h-96 bg-sky-500/10 dark:bg-sky-500/15 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-violet-500/10 dark:bg-violet-500/15 rounded-full blur-3xl pointer-events-none" />
@@ -82,7 +82,7 @@ export default function LoginPage() {
       </div>
 
       {/* Right: Login form panel */}
-      <div className="flex flex-1 items-center justify-center p-6 sm:p-12 lg:p-16 bg-background relative">
+      <div className="flex flex-1 items-center justify-center p-4 sm:p-8 lg:p-16 bg-background relative min-h-screen lg:min-h-0">
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-[420px] h-[420px] bg-sky-500/5 dark:bg-sky-500/10 rounded-full blur-3xl" />
         </div>

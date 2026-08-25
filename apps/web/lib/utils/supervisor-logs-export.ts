@@ -102,14 +102,18 @@ export function exportSupervisorRunningLogsToExcel({
 
   let filterScopeText = `Filter Scope: ${filterLabel}`;
   if (viewMode === "client" && selectedEntityId !== "all") {
-    filterScopeText = `Client: ${selectedEntityId}`;
+    const siteText = selectedSite && selectedSite !== "all"
+      ? selectedSite
+      : filtered[0]?.location ||
+        ((filtered[0]?.client as any)?.city ? `${(filtered[0]?.client as any).city}${(filtered[0]?.client as any).state ? `, ${(filtered[0]?.client as any).state}` : ""}` : "") ||
+        ((filtered[0]?.machine as any)?.customer_address ? `${(filtered[0]?.machine as any).customer_address}${(filtered[0]?.machine as any).city ? `, ${(filtered[0]?.machine as any).city}` : ""}` : (filtered[0]?.machine as any)?.city) ||
+        "—";
+    filterScopeText = `Client: ${selectedEntityId} | Location: ${siteText}`;
   } else if (viewMode === "machine" && selectedEntityId !== "all") {
-    const mName = (filtered[0]?.machine as any)?.machine_name || "Selected Machine";
-    const mCode = (filtered[0]?.machine as any)?.machine_code || "";
     const mMfr = (filtered[0]?.machine as any)?.manufacturer || "—";
     const mModel = (filtered[0]?.machine as any)?.model || "—";
-    const mSerial = (filtered[0]?.machine as any)?.serial_number || mCode || "—";
-    filterScopeText = `Machine: ${mName} | Manufacturer: ${mMfr} | Model: ${mModel} | Serial/Code: ${mSerial}`;
+    const mSerial = (filtered[0]?.machine as any)?.serial_number || "—";
+    filterScopeText = `Manufacturer: ${mMfr} | Model: ${mModel} | Serial No.: ${mSerial}`;
   }
 
   let totalRunningHoursAcc = 0;
