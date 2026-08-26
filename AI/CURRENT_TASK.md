@@ -1,22 +1,27 @@
 # Current Task Context
 
-## Completed Task (2026-08-25) — Page Feedback: `/login` Mesh Gradient Desktop-Only Responsive Visibility (`login/page.tsx`, `login-form.tsx`, `signup/page.tsx`)
+## Completed Task (2026-08-26) — Navigation Sub-Items & Tabs Soft Removal (Operator Roster & Salary, Site Movement, Service Logs, Breakdown Complaints)
 
-**Goal**: Address user page feedback on `/login` by hiding the `.mesh-gradient` hero section on mobile devices (< 1024px) so mobile viewports display strictly the login/signup form (with centered mobile brand logo).
+**Goal**: Soft remove the 4 unused sidebar menu sub-items and tabs across all roles per user feedback while maintaining zero performance impact and keeping all underlying backend handlers and components intact for seamless future activation.
 
 ### Key Changes & Implementation Details
 
-1. **Desktop-Only Mesh Gradient Hero Panel (`apps/web/app/login/page.tsx`)**:
-   - Updated `.mesh-gradient` container class to `hidden lg:flex flex-col justify-between ...`, hiding the hero panel on mobile/tablet viewports (< 1024px) and displaying it exclusively on desktop screens (≥ 1024px).
-   - Configured form container to `min-h-screen lg:min-h-0` for full height vertical centering on mobile.
+1. **Sidebar Navigation Sub-Items Soft Removal (`apps/web/components/layout/AppSidebar.tsx`)**:
+   - Soft-removed (commented out) **"Operator Roster & Salary"** (`tab: "operators"`) and **"Site Movement / Loading-Unloading"** (`tab: "site-movement"`) from `mainNavItems` and `visibleMainItems` mapping under `/operations` for all user roles.
+   - Soft-removed (commented out) **"Service Logs"** (`tab: "services"`) and **"Breakdown Complaints"** (`tab: "complaints"`) from `mainNavItems` under `/machines` for all user roles.
 
-2. **Mobile Brand Logo Integration (`apps/web/app/login/login-form.tsx`)**:
-   - Imported `ReachInternationalLogo` from `@/components/ui`.
-   - Rendered centered logo header (`flex lg:hidden justify-center mb-6`) at top of form container for mobile viewports.
+2. **Operations Client Route Synchronization (`apps/web/components/operations/OperationsClient.tsx`)**:
+   - Updated `validTabs` array to `["logs", "assignments"]` for non-operators.
+   - Preserved component handlers and view rendering logic so underlying functionality remains 100% stable and performance-optimized.
 
-3. **Signup Page Cross-Platform Parity (`apps/web/app/signup/page.tsx`)**:
-   - Applied identical desktop-only mesh gradient hero panel rule (`hidden lg:flex flex-col ...`).
-   - Added centered mobile brand logo (`flex lg:hidden justify-center mb-6`) to the signup form card container.
+3. **Machine List Sub-Menu Tabs Soft Removal (`apps/web/components/machines/MachineListClient.tsx`)**:
+   - Soft-removed the mobile/tablet sub-menu tab buttons for "Service Logs" and "Breakdown Complaints".
+
+4. **Global Command Palette Clean Up (`apps/web/components/ui/CommandPalette.tsx`)**:
+   - Soft-removed `nav-services` command item ("Go to Service Logs") from quick navigation results.
+
+5. **Mandatory Web-to-Mobile Synchronization (`apps/mobile/lib/nav/navItems.ts`)**:
+   - Soft-removed `Service Logs` and `Complaints` under `/machines` sub-items and `Site Movement` and `Operators` under `/operations` sub-items in `mobileNavItems`.
 
 ### Verification Results
 

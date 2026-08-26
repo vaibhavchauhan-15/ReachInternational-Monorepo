@@ -96,7 +96,7 @@ export function OperationsClient({
 
   const validTabs = userRole === "operator"
     ? ["entry", "history"]
-    : ["logs", "assignments", "site-movement", "operators"];
+    : ["logs", "assignments"]; // Soft-removed "site-movement" and "operators" per user request
   const defaultTab = userRole === "operator" ? "entry" : "logs";
   const initialSelectedTab = (tabParam && validTabs.includes(tabParam))
     ? tabParam

@@ -43,8 +43,8 @@ export const mainNavItems: NavItem[] = [
     ],
     subItems: [
       { label: "Machine Directory", tab: "inventory", icon: AnimatedWrench },
-      { label: "Service Logs", tab: "services", icon: AnimatedClipboardList },
-      { label: "Breakdown Complaints", tab: "complaints", icon: AnimatedAlertTriangle },
+      // { label: "Service Logs", tab: "services", icon: AnimatedClipboardList }, // Soft-removed per user request
+      // { label: "Breakdown Complaints", tab: "complaints", icon: AnimatedAlertTriangle }, // Soft-removed per user request
     ],
   },
   {
@@ -55,8 +55,8 @@ export const mainNavItems: NavItem[] = [
     subItems: [
       { label: "Running Hours", tab: "logs", icon: AnimatedGauge },
       { label: "Operator Machine Assignments", tab: "assignments", icon: AnimatedStar },
-      { label: "Site Movement / Loading-Unloading", tab: "site-movement", icon: AnimatedPackage },
-      { label: "Operator Roster & Salary", tab: "operators", icon: AnimatedUsers },
+      // { label: "Site Movement / Loading-Unloading", tab: "site-movement", icon: AnimatedPackage }, // Soft-removed per user request
+      // { label: "Operator Roster & Salary", tab: "operators", icon: AnimatedUsers }, // Soft-removed per user request
     ],
   },
   {
@@ -103,8 +103,8 @@ export function AppSidebar({ user, collapsed, onToggleCollapse }: AppSidebarProp
               subItems: [
                 { label: "Running Hours", tab: "logs", icon: AnimatedGauge },
                 { label: "Operator Machine Assignments", tab: "assignments", icon: AnimatedStar },
-                { label: "Site Movement / Loading-Unloading", tab: "site-movement", icon: AnimatedPackage },
-                { label: "Operator Roster & Salary", tab: "operators", icon: AnimatedUsers },
+                // { label: "Site Movement / Loading-Unloading", tab: "site-movement", icon: AnimatedPackage }, // Soft-removed per user request
+                // { label: "Operator Roster & Salary", tab: "operators", icon: AnimatedUsers }, // Soft-removed per user request
               ],
             };
           }

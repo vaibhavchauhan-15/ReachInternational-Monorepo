@@ -112,8 +112,8 @@ export const mobileNavItems: MobileNavItem[] = [
     ],
     subItems: [
       { label: 'Directory', tab: 'inventory', icon: Wrench },
-      { label: 'Service Logs', tab: 'services', icon: ClipboardList },
-      { label: 'Complaints', tab: 'complaints', icon: AlertTriangle },
+      // { label: 'Service Logs', tab: 'services', icon: ClipboardList }, // Soft-removed per user request
+      // { label: 'Complaints', tab: 'complaints', icon: AlertTriangle }, // Soft-removed per user request
     ],
   },
   {
@@ -124,8 +124,8 @@ export const mobileNavItems: MobileNavItem[] = [
     subItems: [
       { label: 'Daily Hours', tab: 'logs', icon: Gauge },
       { label: 'Assignments', tab: 'assignments', icon: Star },
-      { label: 'Site Movement', tab: 'site-movement', icon: Package },
-      { label: 'Operators', tab: 'operators', icon: Users },
+      // { label: 'Site Movement', tab: 'site-movement', icon: Package }, // Soft-removed per user request
+      // { label: 'Operators', tab: 'operators', icon: Users }, // Soft-removed per user request
     ],
   },
   {

@@ -1,9 +1,22 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: Phase 92 Complete — Page Feedback: `/login` Mesh Gradient Desktop-Only Responsive Visibility (`login/page.tsx`, `login-form.tsx`, `signup/page.tsx`)
+- **Phase**: Phase 94 Complete — Page Feedback: Unused Sidebar Navigation Sub-Items & Tabs Soft Removal (`AppSidebar.tsx`, `OperationsClient.tsx`, `MachineListClient.tsx`, `CommandPalette.tsx`, `navItems.ts`)
 - **Overall Health**: Healthy & Stable (0 TypeScript Errors across Monorepo)
-- **Last Memory Update**: 2026-08-25
+- **Last Memory Update**: 2026-08-26
+
+- [x] **Page Feedback: Unused Sidebar Navigation Sub-Items & Tabs Soft Removal (`AppSidebar.tsx`, `OperationsClient.tsx`, `MachineListClient.tsx`, `CommandPalette.tsx`, `navItems.ts`) (2026-08-26)**:
+  - **Sidebar Navigation Sub-Items Soft Removal (`AppSidebar.tsx`)**: Soft-removed (commented out) **"Operator Roster & Salary"** (`tab: "operators"`) and **"Site Movement / Loading-Unloading"** (`tab: "site-movement"`) from `mainNavItems` and `visibleMainItems` under `/operations`, and **"Service Logs"** (`tab: "services"`) and **"Breakdown Complaints"** (`tab: "complaints"`) under `/machines` across all roles per user feedback.
+  - **Operations & Machine View Route Alignment (`OperationsClient.tsx`, `MachineListClient.tsx`)**: Updated `validTabs` array to `["logs", "assignments"]` for non-operators in `<OperationsClient>` and soft-removed sub-menu tab buttons in `<MachineListClient>`, keeping underlying component code and handlers intact for future activation.
+  - **Command Palette Clean Up (`CommandPalette.tsx`)**: Soft-removed `nav-services` command item from quick access search results.
+  - **Mandatory Web-to-Mobile Synchronization (`apps/mobile/lib/nav/navItems.ts`)**: Soft-removed matching sub-items (`Service Logs`, `Complaints`, `Site Movement`, `Operators`) in mobile `mobileNavItems`.
+  - **Verification**: Executed `pnpm typecheck` across all 9 monorepo workspace packages (**Passed cleanly with 0 TypeScript compilation errors across 9/9 packages**).
+
+- [x] **Bug Fix: Next.js 16 Edge Proxy Convention Adoption (`apps/web/proxy.ts`, Teardown of `middleware.ts`) (2026-08-26)**:
+  - **Adoption of Next.js 16 `proxy.ts` Convention (`apps/web/proxy.ts`)**: Standardized on a single [`apps/web/proxy.ts`](file:///C:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/web/proxy.ts) file exporting `export async function proxy(request: NextRequest)` and static `export const config = { matcher: [...] }` to align 100% with Next.js 16 Turbopack conventions.
+  - **Deprecation Warning Teardown (`apps/web/middleware.ts`)**: Completely deleted `apps/web/middleware.ts` to eliminate `⚠ The "middleware" file convention is deprecated. Please use "proxy" instead.` warning.
+  - **Empirical Status Verification**: Verified `GET /login` returns **200 OK**, and `GET /operations?tab=logs` returns **307 Redirect to /login** followed by **200 OK** with zero deprecation warnings.
+  - **Verification**: Executed `pnpm typecheck` across all 9 monorepo workspace packages (**Passed cleanly with 0 TypeScript compilation errors across 9/9 packages**).
 
 - [x] **Page Feedback: /login Mesh Gradient Desktop-Only Responsive Visibility (`login/page.tsx`, `login-form.tsx`, `signup/page.tsx`) (2026-08-25)**:
   - **Desktop-Only Hero Panel (`login/page.tsx`, `signup/page.tsx`)**: Refactored `.mesh-gradient` hero container class to `hidden lg:flex flex-col justify-between ...`, hiding the hero panel on mobile/tablet viewports (< 1024px) so mobile screens display strictly the login/signup form per user feedback.

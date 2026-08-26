@@ -783,6 +783,8 @@ export function MachineListClient({
   return (
     <div className="flex flex-col gap-5 pb-20 md:pb-6">
       {/* Top Page Navigation Tabs — Mobile/Tablet Only (lg:hidden, as Desktop Sidebar already has sub-items) */}
+      {/* Soft-removed unused sub-menu tabs per user request (Service Logs, Breakdown Complaints) */}
+      {/*
       <div className="flex lg:hidden items-center justify-between border-b border-[var(--color-hairline)] pb-3 overflow-x-auto w-full max-w-full gap-2 no-scrollbar">
         <div className="flex items-center gap-1 bg-[var(--color-hairline-soft-surface)] p-1 rounded-xl border border-[var(--color-hairline)] shrink-0 w-full sm:w-auto overflow-x-auto no-scrollbar">
           <button
@@ -800,39 +802,9 @@ export function MachineListClient({
               {total}
             </span>
           </button>
-
-          <button
-            type="button"
-            onClick={() => updateFilters({ tab: "services", page: 1 })}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap min-h-[40px] ${
-              activeTab === "services"
-                ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-xs"
-                : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-            }`}
-          >
-            <AnimatedClipboardList size={15} className={activeTab === "services" ? "text-emerald-500" : ""} />
-            <span>Service Logs</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => updateFilters({ tab: "complaints", page: 1 })}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap min-h-[40px] ${
-              activeTab === "complaints"
-                ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-xs"
-                : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-            }`}
-          >
-            <AnimatedAlertTriangle size={15} className={activeTab === "complaints" ? "text-rose-500" : ""} />
-            <span>Breakdown Complaints</span>
-            {complaints.length > 0 && (
-              <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-full font-mono bg-rose-500/10 text-rose-600 dark:text-rose-400 font-bold">
-                {complaints.length}
-              </span>
-            )}
-          </button>
         </div>
       </div>
+      */}
       {/* TAB 2: Service Logs View */}
       {activeTab === "services" && serviceData && (
         <ServicesClient data={serviceData} />
