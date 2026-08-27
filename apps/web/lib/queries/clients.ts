@@ -49,3 +49,25 @@ export const getClientById = cache(async (id: string): Promise<CRMClient | null>
   const clients = await getClients(undefined, true);
   return clients.find((c) => c.id === id) ?? null;
 });
+
+export const getClientOptions = unstable_cache(
+  async (): Promise<{ id: string; label: string; code?: string }[]> => {
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("clients")
+      .select("id, code, client_name")
+      .is("deleted_at", null)
+      .order("client_name", { ascending: true });
+
+    if (error || !data) return [];
+
+    return data.map((c: any) => ({
+      id: c.id,
+      label: c.client_name || c.code || "Unknown Client",
+      code: c.code || undefined,
+    }));
+  },
+  ["client-options-v2"],
+  { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.clients] }
+);
+

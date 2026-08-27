@@ -53,11 +53,12 @@ export async function getMachines(params: MachineListParams = {}) {
     health_status,
     current_supervisor_id,
     page = 1,
-    pageSize = 25,
+    pageSize: rawPageSize = 25,
     sortField = "machine_id",
     sortOrder = "asc",
   } = params;
 
+  const pageSize = Math.min(Math.max(1, rawPageSize), 100);
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
@@ -493,3 +494,26 @@ export async function getMachineActiveRental(machineId: string) {
     .maybeSingle();
   return data || null;
 }
+
+export const getMachineOptions = unstable_cache(
+  async (): Promise<{ id: string; label: string; model?: string }[]> => {
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("machines")
+      .select("id, machine_id, machine_code, model")
+      .order("machine_id", { ascending: true });
+
+    if (error || !data) return [];
+
+    return data.map((m: any) => {
+      const code = m.machine_id || m.machine_code || m.id;
+      return {
+        id: m.id,
+        label: m.model ? `${code} (${m.model})` : code,
+        model: m.model || undefined,
+      };
+    });
+  },
+  ["machine-options-v2"],
+  { revalidate: CACHE_TIERS.CLASS_B_FLEET, tags: [TAGS.machines] }
+);

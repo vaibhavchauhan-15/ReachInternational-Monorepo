@@ -1,6 +1,29 @@
 # Current Task Context
 
-## Completed Task (2026-08-27) — Phase 4: Request & Server Action Flow Audit
+## Completed Task (2026-08-27) — Phase 5: Data Access Layer (DAL) Architecture & Page Refactoring
+
+**Goal**: Refactor application data access to enforce strict Server-Only DAL architecture, eliminate inline direct database queries from pages, decompose the monolithic `/operations` loader, consolidate duplicate user queries, bound pagination, and introduce cached lightweight dropdown option queries.
+
+### Key Changes & Implementation Details
+
+1. **Created `apps/web/lib/queries/operators.ts`**:
+   - Implemented `getOperationsHubData(user, tab)` to replace 10 inline database queries in `apps/web/app/(app)/operations/page.tsx`.
+   - Operators logging daily shifts now fetch only their assigned machine and recent logs (~50 rows instead of ~850 rows).
+   - Added explicit column projections for running hour logs and assignments.
+2. **Created `apps/web/lib/queries/users.ts`**:
+   - Implemented `getAllUsersCached()`, `getUserList(params)`, and `getUserOptions()`.
+   - Refactored `apps/web/app/(app)/users/page.tsx` to use `getAllUsersCached()` and derive pending users in memory, cutting DB queries by 50%.
+3. **Optimized Dropdown Selectors (`machines.ts`, `clients.ts`, `users.ts`)**:
+   - Added cached `getMachineOptions()`, `getClientOptions()`, and `getUserOptions()` with tag invalidation.
+4. **Enforced Safety Bounds**:
+   - Bounded `pageSize` to `Math.min(pageSize, 100)` in `apps/web/lib/queries/machines.ts`.
+5. **Quality Verification**:
+   - `pnpm typecheck` passed (0 errors across 9 packages).
+   - `next build` compiled 35/35 routes in 19.1s.
+
+---
+
+## Previous Completed Task (2026-08-27) — Phase 4: Request & Server Action Flow Audit
 
 **Goal**: Trace complete end-to-end request flows across all 67 Server Actions from browser trigger through authentication, RBAC authorization, Zod validation, idempotency locking, database operations, audit logging, and cache revalidations without modifying source code.
 

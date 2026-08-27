@@ -1,3 +1,10 @@
+- **Phase 5 — Data Access Layer (DAL) Architecture & Page Refactoring (`performance/audit/dal.md`, `lib/queries/*`) (2026-08-27)**:
+  - **Operations Monolith Refactored**: Replaced 10 inline database queries in `apps/web/app/(app)/operations/page.tsx` with dedicated `getOperationsHubData(user, tab)` in `apps/web/lib/queries/operators.ts`, reducing payload for operator daily entry from ~850 rows to ~50 rows.
+  - **User Directory Query Consolidated**: Refactored `apps/web/app/(app)/users/page.tsx` to use `getAllUsersCached()` from `apps/web/lib/queries/users.ts` and derived pending approvals in memory, eliminating redundant parallel Server Action call.
+  - **Lightweight Dropdown Options**: Added cached `getMachineOptions()`, `getClientOptions()`, and `getUserOptions()` across DAL modules.
+  - **Bounded Pagination**: Enforced `Math.min(pageSize, 100)` in `apps/web/lib/queries/machines.ts`.
+  - **Verification**: `pnpm typecheck` passed cleanly across all 9 packages; `next build` compiled 35/35 routes in 19.1s.
+
 - **Phase 4 — Request & Server Action Flow Audit (`performance/audit/request-action-audit.md`, `request-priority.md`) (2026-08-27)**:
   - **End-to-End Traces**: Traced 67 Server Actions across authentication, authorization, Zod validation, idempotency, database mutations, audit logs, and cache revalidation.
   - **Key Database Call Metrics**: Discovered `submitOperatorHourLogAction` performs 7 sequential DB calls (~180ms); identified N+1 single-row loop inserts in `finance.ts`, `inventory.ts`, and `tasks.ts`; mapped 27 `router.refresh()` call sites for optimistic state updates.

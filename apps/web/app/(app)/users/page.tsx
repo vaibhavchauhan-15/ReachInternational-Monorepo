@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/dal";
-import { getAllUsers, getPendingUsers } from "@/app/actions/users";
+import { getAllUsersCached } from "@/lib/queries/users";
 import { UsersPageClient } from "./users-client";
 import { UsersSkeleton } from "@/components/ui";
 
@@ -34,10 +34,8 @@ async function UsersPageContent() {
     );
   }
 
-  const [allUsers, pendingUsers] = await Promise.all([
-    getAllUsers(),
-    getPendingUsers(),
-  ]);
+  const allUsers = await getAllUsersCached();
+  const pendingUsers = allUsers.filter((u) => u.status === "pending");
 
   return (
     <UsersPageClient
@@ -47,4 +45,4 @@ async function UsersPageContent() {
       isSuperAdmin={isSuperAdmin}
     />
   );
-}
+}

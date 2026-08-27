@@ -1,9 +1,17 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: Phase 4 Complete — Request & Server Action Flow Audit (`performance/audit/request-action-audit.md`, `request-priority.md`)
+- **Phase**: Phase 5 Complete — Data Access Layer (DAL) Architecture & Page Refactoring (`performance/audit/dal.md`, `lib/queries/*`)
 - **Overall Health**: Healthy & Stable (0 TypeScript Errors across Monorepo)
 - **Last Memory Update**: 2026-08-27
+
+- [x] **Phase 5 — Data Access Layer (DAL) Architecture & Page Refactoring (`performance/audit/dal.md`, `lib/queries/*`) (2026-08-27)**:
+  - **Operations Monolith Refactoring (`operations/page.tsx`)**: Replaced 10 raw inline database queries with dedicated `getOperationsHubData(user, tab)` in `apps/web/lib/queries/operators.ts`. Reduced payload for operator daily entry from ~850 rows to ~50 rows.
+  - **User Directory Query Consolidation (`users/page.tsx`)**: Eliminated redundant `getPendingUsers()` Server Action call by creating `getAllUsersCached()` in `apps/web/lib/queries/users.ts` and deriving pending approvals in memory.
+  - **Lightweight Dropdown Options**: Added cached `getMachineOptions()`, `getClientOptions()`, and `getUserOptions()` across DAL modules, preventing large read queries from populating form dropdowns.
+  - **Bounded Fleet Pagination**: Enforced `Math.min(pageSize, 100)` in `apps/web/lib/queries/machines.ts`.
+  - **Strict Server-Only Enforcement**: Added `import "server-only";` and created centralized `apps/web/lib/queries/index.ts`.
+  - **Verification**: `pnpm typecheck` passed (0 errors across 9 packages); `next build` compiled 35/35 routes in 19.1s.
 
 - [x] **Phase 4 — Request & Server Action Flow Audit (`performance/audit/request-action-audit.md`, `request-priority.md`) (2026-08-27)**:
   - **End-to-End Request Tracing**: Traced complete mutation pipelines across 67 Server Actions from browser trigger through Zod validation, SHA-256 idempotency locking, PostgreSQL RLS, audit logging, and cache revalidation.

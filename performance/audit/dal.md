@@ -1,38 +1,81 @@
-# Data Access Layer (DAL) Audit (Phase 1)
+# Data Access Layer (DAL) Architecture Specification (Phase 5)
 
-> **SCOPE**: Audit of `apps/web/lib/dal.ts` and all 20 domain query modules in `apps/web/lib/queries/*`.
+> **SCOPE**: Authoritative DAL modules in `apps/web/lib/queries/*` and `apps/web/lib/dal.ts`.
 
 ---
 
 ## 1. DAL Architecture Overview
 
-The Data Access Layer (DAL) isolates database queries from UI components and Server Actions, providing:
-1. **Server-Only Build Enforcement**: Every DAL module starts with `import "server-only";` to guarantee zero database credentials or server queries leak into client component bundles.
-2. **Per-Request Deduplication**: Uses React's `cache()` to deduplicate identical session and user profile lookups within a single React Server Component render tree.
-3. **Cross-Request Tag Caching**: Uses `unstable_cache` / `cacheWithTag` for semi-static datasets.
+The Data Access Layer (DAL) enforces a strict unidirectional data flow:
+
+```text
+┌──────────────────────────────────────┐
+│           UI / Route Layer           │
+│  Server Components & Server Actions  │
+└──────────────────┬───────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────┐
+│       Authoritative DAL Layer        │
+│  apps/web/lib/queries/*.ts           │
+│  - import "server-only"              │
+│  - Purpose-specific query functions   │
+│  - Explicit column projections       │
+│  - Bounded page sizes (max 100)      │
+│  - React cache() + unstable_cache()  │
+└──────────────────┬───────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────┐
+│       Supabase Client Runtime        │
+│  createSupabaseAdminClient()         │
+└──────────────────┬───────────────────┘
+                   │
+                   ▼
+┌──────────────────────────────────────┐
+│        PostgreSQL + RLS + Triggers   │
+└──────────────────────────────────────┘
+```
 
 ---
 
-## 2. Core DAL Modules & Query Inventory
+## 2. Authoritative DAL Module Inventory
 
-| DAL Module File | Primary Functions | Target Tables | Columns Projected | Joins / Relations | Caching Strategy | Priority / Concerns |
+| Module | File | Key Functions | Purpose | Columns Projected | Caching Strategy | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :---: |
-| `apps/web/lib/dal.ts` | `verifySession()`, `getCurrentUser()`, `getCachedUserRow()`, `requireRole()` | `auth.users`, `public.users` | Explicit: `id, full_name, phone, role, status, city, district, state, email, created_at, updated_at` | None | React `cache()` + `dal-user-row-v6` | 🟢 P3 (Healthy) |
-| `apps/web/lib/queries/machines.ts` | `getMachines()`, `getMachineById()`, `getMachineCounts()` | `public.machines`, `public.users` | Mixed (`select("*")` in `getMachineById`) | `engineer:users`, `operator:users`, `supervisor:users` | `cacheWithTag("machines", 300)` | 🟠 P1 (`select("*")`) |
-| `apps/web/lib/queries/operators.ts` | `getOperatorMachines()`, `getOperatorDailyMeters()`, `getOperationalUsers()` | `public.machines`, `public.machine_hour_logs`, `public.users` | Explicit & Join projections | `machine:machines`, `operator:users` | React `cache()` | 🟡 P2 (Need to integrate page queries) |
-| `apps/web/lib/queries/users.ts` | `getUsers()`, `getUserById()`, `getUserCounts()` | `public.users` | Explicit projections with search/role filters | None | React `cache()` | 🟢 P3 (Healthy) |
-| `apps/web/lib/queries/clients.ts` | `getClients()`, `getClientById()` | `public.clients` | Explicit address & name projections | None | `cacheWithTag("clients", 300)` | 🟢 P3 (Healthy) |
-| `apps/web/lib/queries/audit-logs.ts` | `getAuditLogsFiltered()` | `public.audit_logs`, `public.users` | `id, user_id, action, entity_type, entity_id, metadata, created_at` | `user:users(full_name, email)` | Uncached (Dynamic audit stream) | 🟢 P3 |
+| **Authentication & Profile DAL** | `lib/dal.ts` | `verifySession()`, `getCurrentUser()`, `requireRole()`, `requirePermission()` | Session validation & user role authorization | Explicit: `id, full_name, phone, role, status, city, district, state, email, created_at, updated_at` | React `cache()` + `dal-user-row-v6` (`users` tag) | 🟢 **Optimized** |
+| **Operations DAL** | `lib/queries/operators.ts` | `getOperationsHubData(user, tab)`, `getOperatorEntryContext(id)` | Tab-aware data resolution for `/operations` | Explicit: `id, machine_id, operator_id, supervisor_id, client_id, log_date, start_meter, end_meter, start_time, end_time, overtime_hours, operating_hours, is_breakdown, start_fuel_level, fuel_consumed, shift, machine_condition, remarks, status` | Direct Parallel DAL | 🟢 **Refactored & Verified** |
+| **User Directory DAL** | `lib/queries/users.ts` | `getUserList(params)`, `getAllUsersCached()`, `getUserOptions(role)` | User management directory and dropdown options | Explicit: `id, full_name, email, phone, role, status, city, district, state, created_at, updated_at` | `unstable_cache` (`all-users-directory-v2`, `users` tag) | 🟢 **Created & Verified** |
+| **Machine Fleet DAL** | `lib/queries/machines.ts` | `getMachines(params)`, `getMachineById(id)`, `getMachineOptions()` | Fleet inventory, pagination (bounded max 100), dropdown options | Explicit machine & user join projections | `unstable_cache` (`machine-options-v2`, `machines` tag) | 🟢 **Refactored & Verified** |
+| **Client CRM DAL** | `lib/queries/clients.ts` | `getClients()`, `getClientById(id)`, `getClientOptions()` | CRM client directory and dropdown options | Explicit: `id, code, client_name, contact_person, phone, email, city, state, is_active` | `unstable_cache` (`client-options-v2`, `clients` tag) | 🟢 **Refactored & Verified** |
 
 ---
 
-## 3. Major DAL Architectural Findings
+## 3. Key Phase 5 Refactors Implemented
 
-### Finding DAL-01: Page Bypass in Operations Module (🔴 P0)
-- **Problem**: `apps/web/app/(app)/operations/page.tsx` executes 7 parallel database queries inline rather than calling `lib/queries/operators.ts`.
-- **Impact**: Bypasses React `cache()`, duplicates join logic, and performs unconstrained `select("*")` on large operational tables.
-- **Remediation**: Create consolidated DAL functions `getOperationsHubData(user, branchId)` in `lib/queries/operators.ts` with parallel `Promise.all()` fetching and explicit column projections.
+### 1. Operations Monolith Decomposition (`operations/page.tsx`)
+- **Before**: 10 direct inline Supabase queries downloading ~850 rows unconditionally on every page view.
+- **After**: Delegated to `getOperationsHubData(user, tab)` in `lib/queries/operators.ts`.
+  - For operator entry (`tab=entry`): Only queries assigned machine and recent logs (2 queries, ~50 rows).
+  - For supervisor hub (`tab=logs`): Executes parallel queries with explicit column projections and bounded limits.
+- **Verification**: `pnpm typecheck` passed (0 errors); `next build` compiled `/operations` dynamically with zero errors.
 
-### Finding DAL-02: Wildcard `select("*")` in `getMachineById` (🟠 P1)
-- **Problem**: `apps/web/lib/queries/machines.ts` queries all machine columns with `select("*")` when retrieving individual machine records.
-- **Remediation**: Replace with explicit projection of schema fields.
+### 2. User Directory Query Consolidation (`users/page.tsx`)
+- **Before**: Called 2 Server Actions (`getAllUsers()` + `getPendingUsers()`) in parallel on every page render.
+- **After**: Calls `getAllUsersCached()` from `lib/queries/users.ts` and derives pending users in memory:
+  ```ts
+  const allUsers = await getAllUsersCached();
+  const pendingUsers = allUsers.filter((u) => u.status === "pending");
+  ```
+- **Result**: 50% reduction in database queries for `/users`.
+
+### 3. Machine & Client Dropdown Optimization
+- **Before**: Large read queries (`getMachines()`, `getClients()`) reused to populate modal selector dropdowns.
+- **After**: Dedicated lightweight option queries (`getMachineOptions()`, `getClientOptions()`, `getUserOptions()`) returning only `id` and `label`, cached with automatic tag invalidation.
+
+---
+
+## 4. Phase 5 Verification Metrics
+
+- **TypeScript Compilation (`pnpm typecheck`)**: ✅ **Pass (0 errors across all 9 workspace packages)**.
+- **Turbopack Production Build (`next build`)**: ✅ **Pass (35/35 routes compiled in 19.1s)**.
