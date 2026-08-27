@@ -1,3 +1,8 @@
+- **Phase 2 — Route-by-Route Performance Audit (`performance/audit/route-audit.md`) (2026-08-27)**:
+  - **Comprehensive Route Matrix**: Audited all 10 core routes: `/login`, `/signup`, `/forgot-password`, `/machines`, `/users`, `/clients`, `/operations?tab=logs`, `/operations?tab=assignments`, `/operations?tab=entry`, and `/operations?tab=history`.
+  - **Empirical Diagnostics**: Identified that `operations/page.tsx` executes 10 parallel queries fetching ~850 rows on every page render regardless of tab; documented redundant `getPendingUsers()` query on `/users`; documented cross-tab query over-fetching on `/machines`; mapped heavy print modals for dynamic import targets.
+  - **Verification**: Zero code changes or regressions introduced.
+
 - **Phase 1 — Comprehensive Monorepo Architecture & Codebase Audit (`performance/audit/*`) (2026-08-27)**:
   - **Full Workspace Audit**: Scanned 420 source and migration files without modifying application code. Audited 35 Web routes, 23 Mobile screens, 180 React components, 131 `"use client"` components, 65 Server Actions across 19 files, 97 DAL functions, 682 Supabase query lines, 43 database indexes, and 19 migrations.
   - **Comprehensive Audit Suite**: Created 13 audit specifications in `performance/audit/` (`routes.md`, `components.md`, `client-components.md`, `server-actions.md`, `database-calls.md`, `dal.md`, `database-schema.md`, `caching.md`, `network-calls.md`, `authentication.md`, `permissions.md`, `reports.md`, `dependencies.md`).

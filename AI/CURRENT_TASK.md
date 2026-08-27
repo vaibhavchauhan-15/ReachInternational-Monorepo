@@ -1,6 +1,22 @@
 # Current Task Context
 
-## Completed Task (2026-08-27) — Phase 1: Comprehensive Repository & Architecture Audit
+## Completed Task (2026-08-27) — Phase 2: Route-by-Route Performance Audit
+
+**Goal**: Conduct an exhaustive, empirical performance audit of every application route in order (`/login`, `/signup`, `/forgot-password`, `/machines`, `/users`, `/clients`, `/operations?tab=logs`, `assignments`, `entry`, `history`), mapping exact database calls, initial data loads, component hierarchies, cache mechanisms, mutations, waterfalls, and optimization targets without modifying source code.
+
+### Key Changes & Implementation Details
+
+1. **Created `performance/audit/route-audit.md`**:
+   - Mapped all 10 route states using the standardized 9-section template.
+   - Identified root cause of `/operations` latency: `operations/page.tsx` runs **10 parallel database queries** downloading **~850 rows** on every render, regardless of active tab.
+   - Identified redundant `getPendingUsers()` query in `/users/page.tsx`.
+   - Identified cross-tab data over-fetching in `/machines/page.tsx` (`getMachineComplaints` and `getEngineerServicesData` loaded unconditionally).
+   - Documented static inclusion of heavy print preview modals (`PrintableSupervisorLogsModal`, `PrintableOperatorLogsModal`, `xlsx`).
+   - Assigned performance scores: `/login` (A-), `/signup` (A-), `/forgot-password` (A), `/machines` (B+), `/users` (B), `/clients` (A), `/operations` (D).
+
+---
+
+## Previous Completed Task (2026-08-27) — Phase 1: Comprehensive Repository & Architecture Audit
 
 **Goal**: Systematically inspect and document the entire monorepo architecture (`apps/web`, `apps/mobile`, `packages/*`, and `supabase/migrations/*`) across routes, components, client boundaries, Server Actions, DAL functions, database queries, indexes, RLS policies, caching mechanisms, reports, and dependencies without modifying source code.
 

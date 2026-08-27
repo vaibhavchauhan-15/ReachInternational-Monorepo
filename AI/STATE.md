@@ -1,9 +1,18 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: Phase 1 Complete — Comprehensive Repository Audit & Architectural Mapping
+- **Phase**: Phase 2 Complete — Route-by-Route Performance Audit (`performance/audit/route-audit.md`)
 - **Overall Health**: Healthy & Stable (0 TypeScript Errors across Monorepo)
 - **Last Memory Update**: 2026-08-27
+
+- [x] **Phase 2 — Route-by-Route Performance Audit (`performance/audit/route-audit.md`) (2026-08-27)**:
+  - **Comprehensive Route Matrix**: Audited all 10 primary web routes in order: `/login`, `/signup`, `/forgot-password`, `/machines`, `/users`, `/clients`, `/operations?tab=logs`, `/operations?tab=assignments`, `/operations?tab=entry`, and `/operations?tab=history`.
+  - **Empirical Bottlenecks & Metrics Documented**:
+    - 🔴 **The Operations Monolith (`/operations`)**: Identified that `operations/page.tsx` executes **10 parallel database queries** downloading **~850 rows** on every render, regardless of which tab (`logs`, `assignments`, `entry`, `history`) is active. Operators logging daily hours download 500 supervisor hour logs, all assignments, all site movements, all payouts, and 100 active machines.
+    - 🔴 **Synchronous Heavy Modals**: Statically imported `PrintableSupervisorLogsModal` (40.9 KB), `PrintableOperatorLogsModal` (23.4 KB), and `xlsx` SheetJS runtime inflate `/operations` client bundle.
+    - 🟠 **Duplicate Query in `/users`**: `page.tsx` queries `getPendingUsers()` in parallel with `getAllUsers()`, even though `getAllUsers()` already contains all pending users.
+    - 🟠 **Cross-Tab Over-fetch in `/machines`**: Fetches machine complaints and engineer service records on every machine list load.
+  - **Route Performance Scoring**: Assigned empirical route scores (`/login`: A-, `/signup`: A-, `/forgot-password`: A, `/machines`: B+, `/users`: B, `/clients`: A, `/operations`: D).
 
 - [x] **Phase 1 — Comprehensive Repository Audit (`performance/audit/*`) (2026-08-27)**:
   - **Full Monorepo Codebase Scan**: Scanned 420 source and migration files across `apps/web`, `apps/mobile`, `packages/*`, and `supabase/migrations/*` with zero source code changes introduced.
