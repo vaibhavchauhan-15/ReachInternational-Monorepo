@@ -22,12 +22,12 @@
   - **Full Index Inventory (`existing-indexes.md`)**: Catalogued all 29 existing database indexes across `users`, `machines`, `machine_hour_logs`, `clients`, `idempotency_keys`, and `audit_logs`.
   - **Candidate Index Benchmark & Decisions**:
     - `IDX-001` & `IDX-002` (Machine/Operator Hour Logs by Date): Verified active coverage in `004_create_machine_hour_logs_table.sql`.
-    - `IDX-003a` & `IDX-003b` (Active Machine Assignments): Implemented partial indexes `(operator_id)` and `(machine_id)` `WHERE status = 'active'`.
-    - `IDX-004` (Machine Fleet Status & Health): Implemented compound index `(status, health_status)` on `public.machines`.
-    - `IDX-005` (Entity-Specific Audit Log): Implemented composite index `(entity_type, entity_id, created_at DESC)` on `public.audit_logs`.
-    - `IDX-006` (Unread Notifications): Implemented partial index `(recipient_id, created_at DESC)` `WHERE read_at IS NULL` on `public.notifications`.
+    - `IDX-003` (Operator Assigned Machine Lookup): Implemented partial index `(current_operator_id)` `WHERE current_operator_id IS NOT NULL` on `public.machines` (`idx_machines_operator_active`).
+    - `IDX-004` (Machine Fleet Status & Health): Implemented compound index `(status, health_status)` on `public.machines` (`idx_machines_status_health`).
+    - `IDX-005` (Entity-Specific Audit Log): Implemented composite index `(entity_type, entity_id, created_at DESC)` on `public.audit_logs` (`idx_audit_logs_entity_created`).
+    - `IDX-006` (Supervisor Hour Log History): Implemented compound index `(supervisor_id, log_date DESC)` on `public.machine_hour_logs` (`idx_machine_hour_logs_supervisor_date`).
     - `IDX-007` (Low-cardinality boolean indexes): Rejected redundant standalone boolean indexes.
-  - **Created Versioned Migration**: Added `supabase/migrations/020_performance_indexes.sql` with non-blocking `IF NOT EXISTS` syntax.
+  - **Created Versioned Migration & Live Execution**: Updated `supabase/migrations/020_performance_indexes.sql` targeting active schema tables and executed successfully against live database (`dhbbgfzbyatzvqafnsqp`).
   - **Verification**: `pnpm typecheck` passed (0 errors across 9 packages); git tree clean on `performance-optimization` branch.
 
 - [x] **Phase 6 — Database Query Optimization & Index Candidate Register (`performance/audit/query-optimization.md`, `index-candidates.md`) (2026-08-27)**:

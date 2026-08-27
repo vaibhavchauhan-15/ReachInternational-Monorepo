@@ -172,7 +172,45 @@ export async function submitOperatorHourLogAction(payload: {
   // Use manually entered overtime_hours from payload (or default to 0)
   const manualOvertime = payload.overtimeHours ?? 0;
 
-  // 1. Insert machine hour log
+  // Try atomic PostgreSQL RPC execution first (1 round-trip for log insert + machine update + audit)
+  const { data: rpcResult, error: rpcError } = await supabase.rpc("submit_operator_hour_log_atomic", {
+    p_machine_id: payload.machineId,
+    p_operator_id: user.id,
+    p_client_id: payload.clientId || null,
+    p_log_date: todayDate,
+    p_start_meter: startMtr,
+    p_end_meter: endMtr,
+    p_start_time: payload.startTime || null,
+    p_end_time: payload.endTime || null,
+    p_overtime_hours: manualOvertime,
+    p_is_breakdown: payload.isBreakdown ?? (effectiveCondition === "breakdown"),
+    p_start_fuel_level: payload.startFuelLevel || 0,
+    p_fuel_consumed: payload.fuelConsumed || 0,
+    p_shift: payload.shift || null,
+    p_machine_condition: effectiveCondition,
+    p_location: payload.location || null,
+    p_remarks: payload.remarks || null,
+    p_status: payload.status || "submitted",
+    p_idempotency_key: currentIdempotencyKey,
+  });
+
+  if (!rpcError && rpcResult && (rpcResult as { success?: boolean }).success) {
+    const responsePayload = { success: true, data: rpcResult };
+    await completeIdempotencyKey(currentIdempotencyKey, currentExecutionToken, responsePayload);
+
+    revalidateTag(CACHE_TAGS.machines, "max");
+    revalidateTag(CACHE_TAGS.dashboard, "max");
+    return responsePayload;
+  }
+
+  // Fallback: If RPC is not available in environment or returns a business exception
+  if (rpcError && rpcError.code !== "PGRST202" && !rpcError.message?.includes("function public.submit_operator_hour_log_atomic")) {
+    console.error("RPC Error in submit_operator_hour_log_atomic:", rpcError);
+    await failIdempotencyKey(currentIdempotencyKey);
+    return { success: false, error: rpcError.message };
+  }
+
+  // 1. Insert machine hour log (Fallback path)
   const { data: logData, error: logError } = await supabase
     .from("machine_hour_logs")
     .insert({

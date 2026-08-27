@@ -26,16 +26,16 @@
 
 ---
 
-### IDX-003: Active Machine Assignments
-- **Table**: `public.machine_assignments`
-- **Target Query**: `WHERE operator_id = $1 AND status = 'active' LIMIT 1`
+### IDX-003: Operator Assigned Machine Lookup
+- **Table**: `public.machines`
+- **Target Query**: `WHERE current_operator_id = $1` (accelerates operator daily log entry `/operations?tab=entry`)
 - **Proposed Index**:
   ```sql
-  CREATE INDEX IF NOT EXISTS idx_machine_assignments_active_operator
-  ON public.machine_assignments (operator_id)
-  WHERE status = 'active';
+  CREATE INDEX IF NOT EXISTS idx_machines_operator_active
+  ON public.machines (current_operator_id)
+  WHERE current_operator_id IS NOT NULL;
   ```
-- **Benefit**: Partial index covers 100% of active assignment lookups with negligible write overhead and index size (< 100 KB).
+- **Benefit**: Partial index covers 100% of operator machine assignments with zero index footprint for unassigned fleet.
 - **Decision**: 🟢 **APPROVED & MIGRATED in `020_performance_indexes.sql`**
 
 ---
@@ -66,16 +66,15 @@
 
 ---
 
-### IDX-006: Unread User Notifications
-- **Table**: `public.notifications`
-- **Target Query**: `WHERE recipient_id = $1 AND read_at IS NULL ORDER BY created_at DESC`
+### IDX-006: Supervisor Hour Log History Stream
+- **Table**: `public.machine_hour_logs`
+- **Target Query**: `WHERE supervisor_id = $1 ORDER BY log_date DESC`
 - **Proposed Index**:
   ```sql
-  CREATE INDEX IF NOT EXISTS idx_notifications_recipient_unread
-  ON public.notifications (recipient_id, created_at DESC)
-  WHERE read_at IS NULL;
+  CREATE INDEX IF NOT EXISTS idx_machine_hour_logs_supervisor_date
+  ON public.machine_hour_logs (supervisor_id, log_date DESC);
   ```
-- **Benefit**: Partial index enables instant unread badge counts (< 2ms) without scanning read notifications.
+- **Benefit**: Accelerates supervisor operations hub log stream queries ordered chronologically.
 - **Decision**: 🟢 **APPROVED & MIGRATED in `020_performance_indexes.sql`**
 
 ---
@@ -93,9 +92,8 @@
 | :---: | :--- | :--- | :--- | :---: | :--- | :---: | :--- | :---: |
 | **IDX-001** | `machine_hour_logs` | `idx_machine_hour_logs_machine_date` | `machine_id, log_date DESC` | B-Tree | None | Low | High (Instant fleet log history) | 🟢 **KEEP** |
 | **IDX-002** | `machine_hour_logs` | `idx_machine_hour_logs_operator_date` | `operator_id, log_date DESC` | B-Tree | None | Low | High (Instant operator log history) | 🟢 **KEEP** |
-| **IDX-003a**| `machine_assignments` | `idx_machine_assignments_active_operator` | `operator_id` | B-Tree | `WHERE status = 'active'` | Negligible | High (Instant operator assignment) | 🟢 **APPROVED** |
-| **IDX-003b**| `machine_assignments` | `idx_machine_assignments_active_machine` | `machine_id` | B-Tree | `WHERE status = 'active'` | Negligible | High (Instant machine assignment) | 🟢 **APPROVED** |
+| **IDX-003** | `machines` | `idx_machines_operator_active` | `current_operator_id` | B-Tree | `WHERE current_operator_id IS NOT NULL` | Negligible | High (Instant operator assignment) | 🟢 **APPROVED** |
 | **IDX-004** | `machines` | `idx_machines_status_health` | `status, health_status` | B-Tree | None | Low | Medium (Fleet filter tab speed) | 🟢 **APPROVED** |
 | **IDX-005** | `audit_logs` | `idx_audit_logs_entity_created` | `entity_type, entity_id, created_at DESC` | B-Tree | None | Low | High (Fast entity audit inspection) | 🟢 **APPROVED** |
-| **IDX-006** | `notifications` | `idx_notifications_recipient_unread` | `recipient_id, created_at DESC` | B-Tree | `WHERE read_at IS NULL` | Negligible | High (Instant unread badge count) | 🟢 **APPROVED** |
+| **IDX-006** | `machine_hour_logs` | `idx_machine_hour_logs_supervisor_date` | `supervisor_id, log_date DESC` | B-Tree | None | Low | High (Supervisor log stream speed) | 🟢 **APPROVED** |
 | **IDX-007** | Various | Standalone Boolean Indexes | `is_active`, `is_breakdown` | B-Tree | None | Medium | Low (Ignored by planner) | 🔴 **REJECTED** |
