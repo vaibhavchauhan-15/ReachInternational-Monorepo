@@ -1,3 +1,9 @@
+- **Phase 3 — Component Architecture & Lifecycle Audit (`performance/audit/component-audit.md`, `components.txt`, `route-components.txt`) (2026-08-27)**:
+  - **Comprehensive Component Scan**: Audited all 180 React components in `apps/web` (127 Client, 53 Server Components, 89 stateful, 31 effect-bearing).
+  - **Hot Components Ranked**: Analyzed state architectures and re-rendering lifecycles for `OperationsClient.tsx` (100.8 KB), `OperatorDashboard.tsx` (98.4 KB), `MachineListClient.tsx` (39.6 KB), and `users-client.tsx` (32.9 KB).
+  - **Optimization Blueprint**: Mapped heavy print modals (`PrintableSupervisorLogsModal`, `PrintableOperatorLogsModal`, `xlsx`) for dynamic imports; classified all 31 `useEffect` instances (zero client-side data fetching waterfalls discovered).
+  - **Verification**: Zero source code modifications or regressions introduced.
+
 - **Phase 2 — Route-by-Route Performance Audit (`performance/audit/route-audit.md`) (2026-08-27)**:
   - **Comprehensive Route Matrix**: Audited all 10 core routes: `/login`, `/signup`, `/forgot-password`, `/machines`, `/users`, `/clients`, `/operations?tab=logs`, `/operations?tab=assignments`, `/operations?tab=entry`, and `/operations?tab=history`.
   - **Empirical Diagnostics**: Identified that `operations/page.tsx` executes 10 parallel queries fetching ~850 rows on every page render regardless of tab; documented redundant `getPendingUsers()` query on `/users`; documented cross-tab query over-fetching on `/machines`; mapped heavy print modals for dynamic import targets.
