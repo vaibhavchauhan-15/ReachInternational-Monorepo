@@ -10,3 +10,4 @@ export * from "./audit-logs";
 export * from "./branches";
 export * from "./categories";
 export * from "./dashboard";
+export * from "./reports";
