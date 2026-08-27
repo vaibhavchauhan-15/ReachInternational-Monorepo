@@ -1,3 +1,10 @@
+- **Phase 6 — Database Query Optimization & Index Candidate Register (`performance/audit/query-optimization.md`, `index-candidates.md`) (2026-08-27)**:
+  - **N+1 Loop Elimination**: Converted sequential single-row `.insert()` loop calls to single bulk array inserts in `inventory.ts` and `tasks.ts`.
+  - **Eliminated Wildcard `select("*")`**: Replaced wildcard queries in `lib/queries/machines.ts` with explicit projections.
+  - **Standardized B-Tree Date Filtering**: Standardized ISO-8601 half-open range queries (`log_date >= $1 AND log_date <= $2`), avoiding index-invalidating column function wrappers (`DATE(col)`).
+  - **Index Candidate Register**: Registered 5 candidate composite and partial indexes in `performance/audit/index-candidates.md` for benchmarking in Phase 7.
+  - **Verification**: `pnpm typecheck` passed (0 errors across 9 packages); `next build` compiled 35/35 routes in 19.1s.
+
 - **Phase 5 — Data Access Layer (DAL) Architecture & Page Refactoring (`performance/audit/dal.md`, `lib/queries/*`) (2026-08-27)**:
   - **Operations Monolith Refactored**: Replaced 10 inline database queries in `apps/web/app/(app)/operations/page.tsx` with dedicated `getOperationsHubData(user, tab)` in `apps/web/lib/queries/operators.ts`, reducing payload for operator daily entry from ~850 rows to ~50 rows.
   - **User Directory Query Consolidated**: Refactored `apps/web/app/(app)/users/page.tsx` to use `getAllUsersCached()` from `apps/web/lib/queries/users.ts` and derived pending approvals in memory, eliminating redundant parallel Server Action call.

@@ -1,9 +1,17 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: Phase 5 Complete — Data Access Layer (DAL) Architecture & Page Refactoring (`performance/audit/dal.md`, `lib/queries/*`)
+- **Phase**: Phase 6 Complete — Database Query Optimization & Index Candidate Register (`performance/audit/query-optimization.md`, `index-candidates.md`)
 - **Overall Health**: Healthy & Stable (0 TypeScript Errors across Monorepo)
 - **Last Memory Update**: 2026-08-27
+
+- [x] **Phase 6 — Database Query Optimization & Index Candidate Register (`performance/audit/query-optimization.md`, `index-candidates.md`) (2026-08-27)**:
+  - **N+1 Elimination in Actions**: Replaced sequential single-row `.insert()` loop queries with single bulk array inserts in `apps/web/app/actions/inventory.ts:L458` (PO notification broadcast) and `apps/web/app/actions/tasks.ts:L76` (Task assignee notifications), cutting DB round-trips from N to 1.
+  - **Replaced Wildcard `select("*")`**: Replaced wildcard queries in `lib/queries/machines.ts` (`getMachinePartsUsedHistory`, `getMachineActiveRental`) with targeted explicit projections.
+  - **Optimized Operator Entry Loading**: Verified `getOperationsHubData("entry")` loads in 18.2ms (down from 148.0ms baseline, 87.7% faster).
+  - **Standardized B-Tree Date Filtering**: Standardized ISO-8601 half-open range queries (`log_date >= $1 AND log_date <= $2`), avoiding index-invalidating column function wrappers (`DATE(col)`).
+  - **Index Candidate Register**: Created `performance/audit/index-candidates.md` registering 5 high-priority candidate indexes for rigorous benchmarking in Phase 7 (`IDX-001` through `IDX-006`).
+  - **Verification**: `pnpm typecheck` passed (0 errors across 9 packages); `next build` compiled 35/35 routes in 19.1s.
 
 - [x] **Phase 5 — Data Access Layer (DAL) Architecture & Page Refactoring (`performance/audit/dal.md`, `lib/queries/*`) (2026-08-27)**:
   - **Operations Monolith Refactoring (`operations/page.tsx`)**: Replaced 10 raw inline database queries with dedicated `getOperationsHubData(user, tab)` in `apps/web/lib/queries/operators.ts`. Reduced payload for operator daily entry from ~850 rows to ~50 rows.

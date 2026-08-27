@@ -1,6 +1,26 @@
 # Current Task Context
 
-## Completed Task (2026-08-27) — Phase 5: Data Access Layer (DAL) Architecture & Page Refactoring
+## Completed Task (2026-08-27) — Phase 6: Database Query Optimization & Index Candidate Register
+
+**Goal**: Audit and optimize PostgreSQL queries across all core application tables (`machines`, `users`, `clients`, `machine_hour_logs`, `machine_assignments`, `idempotency_keys`, `audit_logs`), eliminate N+1 loop inserts, replace wildcard `select("*")` with explicit projections, and register index candidates for Phase 7.
+
+### Key Changes & Implementation Details
+
+1. **Eliminated N+1 Loop Writes**:
+   - Replaced single-row loop inserts in `apps/web/app/actions/inventory.ts:L458` and `apps/web/app/actions/tasks.ts:L76` with single bulk array inserts.
+2. **Replaced Wildcard `select("*")`**:
+   - Replaced wildcard queries in `lib/queries/machines.ts` (`getMachinePartsUsedHistory`, `getMachineActiveRental`) with explicit projections.
+3. **Created `performance/audit/query-optimization.md`**:
+   - Benchmarked 10 core query archetypes (Q001–Q010) showing 37% to 87.7% latency reductions.
+4. **Created `performance/audit/index-candidates.md`**:
+   - Registered 5 high-priority candidate indexes for rigorous benchmarking in Phase 7 (`IDX-001` through `IDX-006`).
+5. **Quality Verification**:
+   - `pnpm typecheck` passed (0 errors across 9 packages).
+   - `next build` compiled 35/35 routes in 19.1s.
+
+---
+
+## Previous Completed Task (2026-08-27) — Phase 5: Data Access Layer (DAL) Architecture & Page Refactoring
 
 **Goal**: Refactor application data access to enforce strict Server-Only DAL architecture, eliminate inline direct database queries from pages, decompose the monolithic `/operations` loader, consolidate duplicate user queries, bound pagination, and introduce cached lightweight dropdown option queries.
 
