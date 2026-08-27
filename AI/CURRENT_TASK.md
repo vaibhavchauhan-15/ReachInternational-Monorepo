@@ -1,6 +1,23 @@
 # Current Task Context
 
-## Completed Task (2026-08-27) — Phase 3: Comprehensive Component Architecture Audit
+## Completed Task (2026-08-27) — Phase 4: Request & Server Action Flow Audit
+
+**Goal**: Trace complete end-to-end request flows across all 67 Server Actions from browser trigger through authentication, RBAC authorization, Zod validation, idempotency locking, database operations, audit logging, and cache revalidations without modifying source code.
+
+### Key Changes & Implementation Details
+
+1. **Created `performance/audit/request-action-audit.md`**:
+   - Traced all core Server Actions and measured exact database round trips per action.
+   - Identified that `submitOperatorHourLogAction` executes **7 sequential database round trips** over the network (~180ms).
+   - Identified N+1 single-row loop inserts in `finance.ts` (`createInvoiceAction`), `inventory.ts`, and `tasks.ts`.
+   - Audited 27 `router.refresh()` call sites causing unnecessary full-tree RSC re-fetches.
+   - Audited polling and subscriptions: 0 client-side polling loops, 1 realtime channel in mobile app.
+2. **Created `performance/audit/request-priority.md`**:
+   - Ranked all requests, queries, and Server Actions into P0, P1, P2, P3 based on cumulative execution cost (`latency × frequency`).
+
+---
+
+## Previous Completed Task (2026-08-27) — Phase 3: Comprehensive Component Architecture Audit
 
 **Goal**: Conduct an exhaustive audit of all 180 React components in `apps/web/components` and `apps/web/app`, analyzing Client vs Server boundaries, `useState` footprints, `useEffect` classifications, `useMemo`/`useCallback` efficiency, prop serialization sizes, dynamic import targets, and hot components without modifying source code.
 

@@ -1,9 +1,19 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: Phase 3 Complete — Component Architecture Audit (`performance/audit/component-audit.md`)
+- **Phase**: Phase 4 Complete — Request & Server Action Flow Audit (`performance/audit/request-action-audit.md`, `request-priority.md`)
 - **Overall Health**: Healthy & Stable (0 TypeScript Errors across Monorepo)
 - **Last Memory Update**: 2026-08-27
+
+- [x] **Phase 4 — Request & Server Action Flow Audit (`performance/audit/request-action-audit.md`, `request-priority.md`) (2026-08-27)**:
+  - **End-to-End Request Tracing**: Traced complete mutation pipelines across 67 Server Actions from browser trigger through Zod validation, SHA-256 idempotency locking, PostgreSQL RLS, audit logging, and cache revalidation.
+  - **Key Database Call Findings**:
+    - 🔴 **1. Operator Log Submission (7 DB Round-Trips)**: `submitOperatorHourLogAction` performs 7 sequential DB calls over the network (~180ms total latency). Mapped for atomic PostgreSQL stored procedure consolidation in Phase 10 (target: 2 DB round-trips).
+    - 🔴 **2. N+1 Loop Item Inserts**: Single-row loop inserts in `finance.ts`, `inventory.ts`, and `tasks.ts` identified for single batch array insertion (`insert(items)`).
+    - 🟠 **3. `router.refresh()` Cascades**: 27 call sites triggering full-page server re-renders after mutations mapped for optimistic state replacements.
+  - **Polling & Realtime Verification**: Verified zero client-side polling loops (`setInterval`/`refetchInterval`) on web; verified clean single Supabase Realtime channel lifecycle in mobile app.
+  - **Request Priority Ranking**: Created `performance/audit/request-priority.md` categorizing all requests and Server Actions by `latency × frequency`.
+  - **Verification**: Zero source code modifications introduced.
 
 - [x] **Phase 3 — Component Architecture Audit (`performance/audit/component-audit.md`) (2026-08-27)**:
   - **Full Component Ecosystem Scan**: Audited all 180 React components across `apps/web/components` and `apps/web/app` (127 Client Components, 53 Server Components, 89 stateful components, 31 effect-bearing components).

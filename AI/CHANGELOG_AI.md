@@ -1,3 +1,15 @@
+- **Phase 4 — Request & Server Action Flow Audit (`performance/audit/request-action-audit.md`, `request-priority.md`) (2026-08-27)**:
+  - **End-to-End Traces**: Traced 67 Server Actions across authentication, authorization, Zod validation, idempotency, database mutations, audit logs, and cache revalidation.
+  - **Key Database Call Metrics**: Discovered `submitOperatorHourLogAction` performs 7 sequential DB calls (~180ms); identified N+1 single-row loop inserts in `finance.ts`, `inventory.ts`, and `tasks.ts`; mapped 27 `router.refresh()` call sites for optimistic state updates.
+  - **Request Priority Ranking**: Generated `performance/audit/request-priority.md` categorizing all requests and Server Actions by `latency × frequency`.
+  - **Verification**: Zero code modifications or regressions introduced.
+
+- **Bug Fix: Development-Aware Content-Security-Policy with 'unsafe-eval' for React & Turbopack (`apps/web/next.config.ts`) (2026-08-27)**:
+  - **Environment-Aware CSP Configuration**: Updated CSP header generator in `apps/web/next.config.ts` to include `'unsafe-eval'` in `script-src` and `ws: wss:` in `connect-src` during development (`process.env.NODE_ENV !== "production"`).
+  - **Strict Production CSP Preservation**: Preserved strict security policies in production builds (strictly omitting `'unsafe-eval'`, enforcing `upgrade-insecure-requests`, `form-action 'self'`, `frame-ancestors 'none'`, `object-src 'none'`, and `base-uri 'self'`).
+  - **Console Error Elimination**: Resolved browser console error `eval() is not supported in this environment...` during Next.js 16 / Turbopack local development and debugging.
+  - **Verification**: Executed `pnpm typecheck` passing cleanly with 0 compilation errors across all 9 monorepo workspace packages.
+
 - **Phase 3 — Component Architecture & Lifecycle Audit (`performance/audit/component-audit.md`, `components.txt`, `route-components.txt`) (2026-08-27)**:
   - **Comprehensive Component Scan**: Audited all 180 React components in `apps/web` (127 Client, 53 Server Components, 89 stateful, 31 effect-bearing).
   - **Hot Components Ranked**: Analyzed state architectures and re-rendering lifecycles for `OperationsClient.tsx` (100.8 KB), `OperatorDashboard.tsx` (98.4 KB), `MachineListClient.tsx` (39.6 KB), and `users-client.tsx` (32.9 KB).
