@@ -1,3 +1,9 @@
+- **Phase 12 — Reports & Exports Optimization (`report-audit.md`, `lib/queries/reports.ts`) (2026-08-27)**:
+  - **Dedicated Report DAL**: Created `apps/web/lib/queries/reports.ts` with `getOperationsReportData`, decoupling heavy reporting queries from interactive UI loaders and cache tags.
+  - **Server-Enforced Boundaries**: Enforced strict date bounds (max 12 months) and RBAC authorization prior to report query execution.
+  - **Memory & DTO Management**: Standardized `MachineReportRow` DTOs, stripping sensitive user/auth metadata before export compilation.
+  - **Verification**: `pnpm typecheck` passed cleanly across all 9 packages (0 errors).
+
 - **Phase 11 — Operations & Log Subsystem Optimization (`operations-audit.md`, `data-growth.md`) (2026-08-27)**:
   - **Comprehensive Operational Audit**: Documented query execution metrics across all 6 tabs on `/operations` in `performance/audit/operations-audit.md`.
   - **Stable Compound Ordering & Limits**: Verified deterministic `ORDER BY log_date DESC, created_at DESC` sorting and bounded result sets (`LIMIT 50` / `LIMIT 200`) across all log streams.

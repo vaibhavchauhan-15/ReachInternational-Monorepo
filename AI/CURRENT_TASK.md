@@ -1,6 +1,24 @@
 # Current Task Context
 
-## Completed Task (2026-08-27) — Phase 11: Operations & Log Subsystem Optimization
+## Completed Task (2026-08-27) — Phase 12: Reports & Exports Optimization
+
+**Goal**: Audit all PDF, Excel, and CSV export workflows, decouple reporting queries from interactive UI loaders by creating a dedicated server-only Report DAL (`getOperationsReportData`), enforce mandatory server-side date range limits (max 12 months) and RBAC authorization, and document report metrics in `performance/audit/report-audit.md`.
+
+### Key Changes & Implementation Details
+
+1. **Created Server-Only Report DAL (`apps/web/lib/queries/reports.ts`)**:
+   - Implemented `getOperationsReportData` with strict date range bounds (`diffDays <= 366`), role verification (`['admin', 'super_admin', 'supervisor', 'service_manager']`), and explicit column projections.
+   - Decoupled report generation from UI cache tags to eliminate unintended cache invalidation cascades.
+2. **Re-exported in `apps/web/lib/queries/index.ts`**:
+   - Re-exported report queries centrally for server components and route handlers.
+3. **Created `performance/audit/report-audit.md`**:
+   - Documented export scorecard, memory budgets, and security boundaries across Excel, Print/PDF, and structured report streams.
+4. **Verification**:
+   - `pnpm typecheck` passed cleanly across all 9 workspace packages (0 errors).
+
+---
+
+## Previous Completed Task (2026-08-27) — Phase 11: Operations & Log Subsystem Optimization
 
 **Goal**: Audit all operational logging workflows (`machine_hour_logs`, `machine_assignments`, `machines`), verify tab-aware data loading, enforce stable compound ordering (`ORDER BY log_date DESC, created_at DESC`), establish default query limits, document operational scorecard in `performance/audit/operations-audit.md`, and forecast multi-year table growth in `performance/audit/data-growth.md`.
 

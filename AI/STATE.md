@@ -1,9 +1,15 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: Phase 11 Complete — Operations & Log Subsystem Optimization (`performance/audit/operations-audit.md`, `data-growth.md`)
+- **Phase**: Phase 12 Complete — Reports & Exports Optimization (`performance/audit/report-audit.md`, `lib/queries/reports.ts`)
 - **Overall Health**: Healthy & Stable (0 TypeScript Errors across Monorepo)
 - **Last Memory Update**: 2026-08-27
+
+- [x] **Phase 12 — Reports & Exports Optimization (`report-audit.md`, `lib/queries/reports.ts`) (2026-08-27)**:
+  - **Dedicated Report DAL Loader**: Created `apps/web/lib/queries/reports.ts` with `import "server-only";` (`getOperationsReportData`), completely decoupling report queries from interactive UI loaders and cache tags.
+  - **Mandatory Date Range Bounds**: Enforced strict maximum date boundary (12 months maximum / `diffDays <= 366`) and RBAC authorization prior to database execution.
+  - **Report DTO Mapping**: Standardized typed `MachineReportRow` DTOs, stripping sensitive internal metadata before report compilation.
+  - **Verification**: `pnpm typecheck` passed (0 errors across 9 packages); git tree clean on `performance-optimization` branch.
 
 - [x] **Phase 11 — Operations & Log Subsystem Optimization (`operations-audit.md`, `data-growth.md`) (2026-08-27)**:
   - **Operational Workflow Scorecard (`operations-audit.md`)**: Audited all 6 Operations tabs (`entry`, `history`, `logs`, `assignments`, `movements`, `payouts`), verifying bounded payload sizes (< 90 KB) and stable compound ordering (`ORDER BY log_date DESC, created_at DESC`).
