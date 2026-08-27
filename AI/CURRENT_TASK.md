@@ -1,8 +1,40 @@
 # Current Task Context
 
-## Completed Task (2026-08-27) — Phase 0: Monorepo Backup & Performance Baseline
+## Completed Task (2026-08-27) — Phase 1: Comprehensive Repository & Architecture Audit
 
-**Goal**: Establish dedicated Git rollback checkpoint and comprehensively capture empirical baseline metrics across all 9 monorepo workspace packages (`apps/web`, `apps/mobile`, `packages/*`), Next.js 16 production server, route bundle sizes, subresource transfers, database row counts, active indexes, query statistics (`pg_stat_statements`), Server Action inventory, and PostgreSQL timeout safeguards before initiating optimization phases.
+**Goal**: Systematically inspect and document the entire monorepo architecture (`apps/web`, `apps/mobile`, `packages/*`, and `supabase/migrations/*`) across routes, components, client boundaries, Server Actions, DAL functions, database queries, indexes, RLS policies, caching mechanisms, reports, and dependencies without modifying source code.
+
+### Key Changes & Implementation Details
+
+1. **Full Workspace Codebase Scan**:
+   - Analyzed 420 source and migration files across the workspace.
+   - Audited 35 Web App Router routes, 23 Mobile screens, 180 React components (131 client components), 65 Server Actions across 19 files, 97 DAL functions, 682 Supabase query lines, 43 database indexes, and 19 migrations.
+
+2. **Created 13 Comprehensive Audit Documents (`performance/audit/`)**:
+   - `performance/audit/routes.md`: Web & Mobile route inventory, classification, authentication, and data requirements.
+   - `performance/audit/components.md`: Component hierarchy, sizes, line counts, and RSC vs Client boundaries.
+   - `performance/audit/client-components.md`: Audit of all 131 `"use client"` components, reasons for client status, and dynamic import targets.
+   - `performance/audit/server-actions.md`: Audit of all 65 Server Actions and their multi-stage mutation pipelines.
+   - `performance/audit/database-calls.md`: Table access frequency, direct component DB access, and N+1 loop queries.
+   - `performance/audit/dal.md`: Audit of `lib/dal.ts` and 20 domain query files in `lib/queries/*`.
+   - `performance/audit/database-schema.md`: 6 core tables (`users`, `machines`, `machine_hour_logs`, `clients`, `idempotency_keys`, `audit_logs`), constraints, triggers, and RLS policies.
+   - `performance/audit/caching.md`: Caching tiers, `cacheWithTag`, `revalidateTag`, and 27 `router.refresh()` call sites.
+   - `performance/audit/network-calls.md`: Network payloads, server actions, and Edge Proxy evaluation latency.
+   - `performance/audit/authentication.md`: Supabase SSR Auth, cookie validation, and cached profile deduplication.
+   - `performance/audit/permissions.md`: RBAC role scopes, DAL guards, and in-memory permission evaluation.
+   - `performance/audit/reports.md`: A4 PDF print layouts, SheetJS `xlsx` exports, and dynamic loading opportunities.
+   - `performance/audit/dependencies.md`: Monorepo package boundaries, tree-shaking, and heavy libraries.
+
+3. **Core Prioritized Findings**:
+   - 🔴 **P0 (DAL Bypass in Operations)**: Inline Supabase querying in `apps/web/app/(app)/operations/page.tsx`.
+   - 🔴 **P0 (N+1 Loop Inserts in Actions)**: `finance.ts`, `inventory.ts`, and `tasks.ts` performing single inserts in loops.
+   - 🔴 **P0 (Heavy Print Modals)**: `PrintableSupervisorLogsModal.tsx` and `PrintableOperatorLogsModal.tsx` statically bundled in client hubs.
+   - 🟠 **P1 (`router.refresh()` Overuse)**: 27 call sites triggering full-page RSC re-renders.
+   - 🟠 **P1 (`select("*")` Projections)**: 75 call sites in DAL and Server Actions.
+
+---
+
+## Previous Completed Task (2026-08-27) — Phase 0: Monorepo Backup & Performance Baseline
 
 ### Key Changes & Implementation Details
 

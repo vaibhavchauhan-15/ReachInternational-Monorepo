@@ -1,9 +1,20 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: Phase 0 Complete — Performance Optimization: Workspace Backup & Baseline Established
+- **Phase**: Phase 1 Complete — Comprehensive Repository Audit & Architectural Mapping
 - **Overall Health**: Healthy & Stable (0 TypeScript Errors across Monorepo)
 - **Last Memory Update**: 2026-08-27
+
+- [x] **Phase 1 — Comprehensive Repository Audit (`performance/audit/*`) (2026-08-27)**:
+  - **Full Monorepo Codebase Scan**: Scanned 420 source and migration files across `apps/web`, `apps/mobile`, `packages/*`, and `supabase/migrations/*` with zero source code changes introduced.
+  - **Audit Documentation Suite**: Generated 13 comprehensive audit specifications under `performance/audit/`: `routes.md`, `components.md`, `client-components.md`, `server-actions.md`, `database-calls.md`, `dal.md`, `database-schema.md`, `caching.md`, `network-calls.md`, `authentication.md`, `permissions.md`, `reports.md`, and `dependencies.md`.
+  - **Critical Findings Identified (P0 / P1)**:
+    - 🔴 **P0 (DAL Bypass in Operations)**: `apps/web/app/(app)/operations/page.tsx` directly queries Supabase with 7 inline `select("*")` calls rather than using `lib/dal.ts` / `lib/queries/operators.ts`.
+    - 🔴 **P0 (N+1 Loop Inserts in Actions)**: `apps/web/app/actions/finance.ts`, `inventory.ts`, and `tasks.ts` execute single-row `.insert()` queries inside `for` loops instead of bulk batch inserts.
+    - 🔴 **P0 (Oversized Synchronous Print Modals)**: `OperationsClient.tsx` (100.8 KB) and `OperatorDashboard.tsx` (98.4 KB) synchronously import `PrintableSupervisorLogsModal.tsx` (40.9 KB), `PrintableOperatorLogsModal.tsx` (23.4 KB), and `xlsx`, bloating the initial page bundle.
+    - 🟠 **P1 (Over-reliance on `router.refresh()`)**: 27 call sites invoke `router.refresh()` on simple mutations, triggering full-page server re-renders instead of targeted tag revalidations.
+    - 🟠 **P1 (Wildcard `select("*")`)**: 75 call sites in DAL queries and Server Actions retrieve unneeded database columns.
+    - 🟡 **P2 (Redundant Database Indexes)**: 4 redundant B-tree indexes on `public.users.email` and 2 redundant indexes on `public.clients.code`.
 
 - [x] **Phase 0 — Workspace Backup & Performance Baseline (`performance/baseline/*`) (2026-08-27)**:
   - **Git Branch & Checkpoint**: Created and switched to dedicated optimization branch `performance-optimization`. Committed clean working state checkpoint.

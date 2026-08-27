@@ -1,3 +1,15 @@
+- **Phase 1 — Comprehensive Monorepo Architecture & Codebase Audit (`performance/audit/*`) (2026-08-27)**:
+  - **Full Workspace Audit**: Scanned 420 source and migration files without modifying application code. Audited 35 Web routes, 23 Mobile screens, 180 React components, 131 `"use client"` components, 65 Server Actions across 19 files, 97 DAL functions, 682 Supabase query lines, 43 database indexes, and 19 migrations.
+  - **Comprehensive Audit Suite**: Created 13 audit specifications in `performance/audit/` (`routes.md`, `components.md`, `client-components.md`, `server-actions.md`, `database-calls.md`, `dal.md`, `database-schema.md`, `caching.md`, `network-calls.md`, `authentication.md`, `permissions.md`, `reports.md`, `dependencies.md`).
+  - **Key Empirical Bottlenecks Identified**:
+    - 🔴 **P0**: Direct inline Supabase querying inside `apps/web/app/(app)/operations/page.tsx` with wildcard `select("*")`.
+    - 🔴 **P0**: Single-row loop inserts in `finance.ts`, `inventory.ts`, and `tasks.ts` (N+1 candidate).
+    - 🔴 **P0**: Synchronous bundling of `PrintableSupervisorLogsModal` (40.9 KB) and `PrintableOperatorLogsModal` (23.4 KB) in client hubs.
+    - 🟠 **P1**: 27 instances of `router.refresh()` triggering full-page server re-renders.
+    - 🟠 **P1**: 75 wildcard `select("*")` calls across DAL and Server Actions.
+    - 🟡 **P2**: Redundant email and client code indexes in PostgreSQL.
+  - **Verification**: Zero code regressions or modifications introduced.
+
 - **Phase 0 — Monorepo Backup & Performance Baseline (`performance/baseline/*`, `README.md`, `routes.md`, `database.md`, `queries.md`, `actions.md`, `build.md`) (2026-08-27)**:
   - **Git Branching & Safe Checkpoint**: Created and checked out dedicated `performance-optimization` branch. Committed clean baseline state.
   - **Monorepo Quality Gate Baseline**: Executed `pnpm typecheck` passing cleanly across all 9 monorepo workspace packages (Turbo uncached runtime 18.12s); recorded `pnpm lint` status (652 pre-existing problems: 281 errors, 371 warnings); executed `pnpm build` generating 35 routes in 1m 4s.
