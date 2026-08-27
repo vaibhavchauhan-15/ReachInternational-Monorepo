@@ -1,3 +1,9 @@
+- **Phase 14 — Mobile & Low-Bandwidth Performance Optimization (`mobile-audit.md`) (2026-08-27)**:
+  - **Mobile Keyboard Ergonomics**: Added `inputMode="decimal"` to hour meter inputs in `OperatorDashboard.tsx` for fast mobile numerical entry.
+  - **3-Tier Viewport Adaptations**: Verified touch-card mobile views (`block sm:hidden`), scrollable filter strips (`overflow-x-auto`), and ≥44px touch targets.
+  - **Network Failure & Retry Safety**: Verified SHA-256 idempotency key preservation across retry attempts under packet loss or network timeouts.
+  - **Verification**: `pnpm typecheck` passed cleanly across all 9 packages (0 errors).
+
 - **Phase 13 — Frontend Performance & Bundle Hygiene Optimization (`frontend-audit.md`, `bundle-audit.md`) (2026-08-27)**:
   - **Server Component Maximization**: Verified all 35 routes render via Server Components with small client-side interactive boundaries.
   - **Zero Waterfall Execution**: Confirmed 0 client-side `useEffect` data fetching waterfalls across all 31 effect hooks in `apps/web`.

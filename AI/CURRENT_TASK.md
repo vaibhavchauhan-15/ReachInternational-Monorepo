@@ -1,6 +1,23 @@
 # Current Task Context
 
-## Completed Task (2026-08-27) — Phase 13: Frontend Performance & Bundle Hygiene Optimization
+## Completed Task (2026-08-27) — Phase 14: Mobile & Low-Bandwidth Performance Optimization
+
+**Goal**: Audit mobile viewports (360px–412px), enforce touch target standards (≥44px), optimize mobile keyboard inputs (`inputMode="decimal"` for HMR), verify 3-tier responsive adaptations across `apps/web` and `apps/mobile`, and document metrics in `performance/audit/mobile-audit.md`.
+
+### Key Changes & Implementation Details
+
+1. **Enhanced Mobile Input Ergonomics (`OperatorDashboard.tsx`)**:
+   - Added `inputMode="decimal"` to `startMeter` and `endMeter` numeric inputs, opening the native decimal number pad directly on mobile devices.
+2. **Audited 3-Tier Viewport Adaptations**:
+   - Verified touch-card lists on mobile (`block sm:hidden`), horizontal scrolling filter strips (`overflow-x-auto`), and ≥44px touch targets.
+3. **Created `performance/audit/mobile-audit.md`**:
+   - Benchmarked mobile routes under 4× CPU slowdown and Slow 4G network profiles.
+4. **Verification**:
+   - `pnpm typecheck` passed (0 errors across 9 packages).
+
+---
+
+## Previous Completed Task (2026-08-27) — Phase 13: Frontend Performance & Bundle Hygiene Optimization
 
 **Goal**: Audit frontend rendering, hydration boundaries, DOM sizes, and bundle compositions across all primary routes, verify zero `useEffect` client-side data waterfalls, configure package import tree-shaking, and document metrics in `performance/audit/frontend-audit.md` and `performance/audit/bundle-audit.md`.
 
