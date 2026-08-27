@@ -1,0 +1,936 @@
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\app\(app)\machines.tsx:74:.from('machines')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\app\(app)\machines.tsx:75:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\app\(app)\operations.tsx:87:.from('machine_hour_logs')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\app\(app)\operations.tsx:88:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\app\(app)\operations.tsx:125:.from('machines')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\app\(app)\operations.tsx:126:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\app\(app)\users.tsx:52:.from('users')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\app\(app)\users.tsx:53:.select('id, full_name, email, phone, role, status, city, district, state, created_at')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\app\(app)\users.tsx:82:.from('users')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\app\(app)\users.tsx:83:.update({ status: 'active' })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\app\(app)\users.tsx:98:.from('users')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\app\(app)\users.tsx:99:.update({ status: 'inactive' })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\machines\AddMachineModal.tsx:82:.from('users')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\machines\AddMachineModal.tsx:83:.select('id, full_name')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\machines\AddMachineModal.tsx:89:.from('users')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\machines\AddMachineModal.tsx:90:.select('id, full_name')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\machines\AddMachineModal.tsx:130:.from('machines')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\machines\AddMachineModal.tsx:131:.update(payload)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\machines\AddMachineModal.tsx:136:.from('machines')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\machines\AddMachineModal.tsx:137:.insert([payload]);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\users\UserDetailModal.tsx:84:.from('users')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\users\UserDetailModal.tsx:85:.update({ status: newStatus })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\users\UserDetailModal.tsx:113:.from('users')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\users\UserDetailModal.tsx:114:.update({ role: newRole })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\users\UserDetailModal.tsx:131:.from('users')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\users\UserDetailModal.tsx:132:.delete()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\work\MeterLogModal.tsx:73:.from('clients')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\work\MeterLogModal.tsx:74:.select('id, name, address, city, state')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\work\MeterLogModal.tsx:85:.from('machine_hour_logs')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\work\MeterLogModal.tsx:86:.select('end_meter, location, client_id')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\work\MeterLogModal.tsx:174:.from('machine_hour_logs')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\work\MeterLogModal.tsx:175:.insert([payload]);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\work\MeterLogModal.tsx:182:.from('machines')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\components\work\MeterLogModal.tsx:183:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\lib\auth\useAuth.tsx:47:.from('users')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\lib\auth\useAuth.tsx:48:.select('role, status')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\lib\media.ts:81:const { data, error } = await supabase.storage.from(bucket).upload(filePath, fileBytes, {
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\lib\media.ts:92:const { data: signedData } = await supabase.storage.from(bucket).createSignedUrl(filePath, 3600);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\lib\media.ts:100:const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(filePath);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\lib\media.ts:122:const { data, error } = await supabase.storage.from(bucket).createSignedUrl(filePath, expiresInSeconds);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\lib\realtime.ts:65:setTimeout(() => processedEventIds.delete(eventKey), 10000);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\lib\realtime.ts:101:activeChannels.delete(channelName);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\lib\supabase.ts:97:memoryStore.delete(key);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\lib\supabase.ts:101:memoryStore.delete(key);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\mobile\lib\supabase.ts:110:memoryStore.delete(key);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\(app)\hr\page.tsx:44:supabase.from("users").select("*").eq("status", "active"),
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\(app)\operations\page.tsx:28:.from("machine_hour_logs")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\(app)\operations\page.tsx:29:.select("*, machine:machines(*), client:clients(*), operator:users!operator_id(id, full_name, phone, email), supervisor:users!supervisor_id(id, full_name, phone)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\(app)\operations\page.tsx:52:supabase.from("users").select("*").in("role", ["operator", "mechanic", "supervisor", "service_engineer"]),
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\(app)\operations\page.tsx:54:.from("machine_assignments")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\(app)\operations\page.tsx:55:.select("*, machine:machines(*), operator:users!operator_id(id, full_name, phone, email), assigner:users!assigned_by(id, full_name)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\(app)\operations\page.tsx:58:.from("machine_hour_logs")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\(app)\operations\page.tsx:59:.select("*, machine:machines(*), client:clients(*), operator:users!operator_id(id, full_name, phone, email), supervisor:users!supervisor_id(id, full_name, phone)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\(app)\operations\page.tsx:64:.from("machine_site_movements")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\(app)\operations\page.tsx:65:.select("*, machine:machines(*), operator:users!operator_id(id, full_name)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\(app)\operations\page.tsx:69:.from("operator_payouts")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\(app)\operations\page.tsx:70:.select("*, operator:users!operator_id(id, full_name, phone)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\(app)\operations\page.tsx:74:? supabase.from("machines").select("*").eq("current_operator_id", user.id).maybeSingle()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\(app)\operations\page.tsx:77:supabase.from("machines").select("*").order("created_at", { ascending: false }).limit(100),
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\auth.ts:56:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\auth.ts:57:.select("role, status")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\auth.ts:310:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\auth.ts:311:.select("id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\auth.ts:328:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\auth.ts:329:.select("id, phone")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\auth.ts:441:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\auth.ts:442:.select("email")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\branches.ts:29:.from("branches")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\branches.ts:30:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\branches.ts:40:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\branches.ts:77:.from("branches")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\branches.ts:78:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\branches.ts:87:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\branches.ts:113:.from("branches")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\branches.ts:114:.update({ status: "inactive" })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\branches.ts:116:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\categories.ts:26:const { error } = await supabase.from("machine_categories").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\categories.ts:54:.from("machine_categories")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\categories.ts:55:.delete()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\clients.ts:88:.from("clients")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\clients.ts:89:.insert([insertPayload])
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\clients.ts:90:.select("id, code, client_name")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\clients.ts:184:.from("clients")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\clients.ts:185:.update(updatePayload)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\clients.ts:230:.from("clients")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\clients.ts:231:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:53:.from("machine_complaints")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:54:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:71:.select("id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:81:await supabase.from("machines").update({ status: "under_maintenance" }).eq("id", machine_id);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:135:.from("machine_complaints")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:136:.update(updatePayload)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:176:.from("machine_complaints")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:177:.select("machine_id, hour_meter")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:182:.from("machine_complaints")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:183:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:199:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:200:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:252:.from("machine_complaints")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:253:.update(updatePayload)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:292:.from("machine_complaints")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:293:.select("complaint_no, machine_id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:302:.from("machine_complaints")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:303:.delete()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:314:.from("machine_complaints")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:315:.select("id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:321:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\complaints.ts:322:.update({ status: "active" })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:69:.from("finance_invoices")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:70:.select("*", { count: "exact", head: true });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:107:.from("finance_invoices")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:108:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:132:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:144:await supabase.from("finance_invoice_items").insert(itemsToInsert);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:179:.from("finance_invoices")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:180:.select("id, is_finalized, invoice_number, status")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:207:.from("finance_invoices")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:208:.update(updates)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:245:.from("finance_invoices")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:246:.select("id, is_finalized, invoice_number, status")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:254:.from("finance_invoices")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:255:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:321:.from("finance_invoices")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:322:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:338:.from("finance_payments")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:339:.select("*", { count: "exact", head: true });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:346:.from("finance_payments")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:347:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:362:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:373:.from("finance_invoices")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:374:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:427:.from("finance_invoices")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:428:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:436:.from("finance_credit_debit_notes")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:437:.select("*", { count: "exact", head: true });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:443:.from("finance_credit_debit_notes")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:444:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:455:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:470:.from("finance_invoices")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:471:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:514:.from("finance_expenses")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:515:.select("*", { count: "exact", head: true });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:526:.from("finance_expenses")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:527:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:545:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:590:.from("finance_expenses")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:591:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:667:.from("finance_3way_matching_reviews")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:668:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:683:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:725:.from("finance_vendor_payments")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:726:.select("*", { count: "exact", head: true });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:732:.from("finance_vendor_payments")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:733:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:745:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:785:const { error: insErr } = await supabase.from("finance_receivable_followups").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:797:.from("finance_invoices")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:798:.update({ status: "disputed", updated_at: new Date().toISOString() })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:832:.from("finance_settings")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\finance.ts:833:.upsert({ key, value: val, updated_at: new Date().toISOString() });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:14:.from("employees")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:15:.select("*, branch:branches(id, code, name), user:users(id, email, role)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:53:.from("employees")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:54:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:72:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:82:await supabase.from("employee_salary_history").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:125:.from("employees")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:126:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:142:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:171:.from("employees")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:172:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:177:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:211:.from("employee_salary_history")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:212:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:222:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:232:.from("employees")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:233:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:265:.from("departments")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:266:.upsert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:273:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:304:.from("designations")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:305:.upsert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:313:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:344:.from("user_account_requests")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:345:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:354:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:385:.from("employee_documents")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:386:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\hr.ts:394:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:79:.from("inventory_products")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:80:.update(partData)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:82:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:89:.from("inventory_products")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:90:.insert(partData)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:91:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:98:const { data: mainBranch } = await supabase.from("branches").select("id").limit(1).single();
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:100:await supabase.from("inventory_stock").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:136:.from("inventory_products")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:137:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:146:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:187:.from("inventory_purchase_requests")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:188:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:197:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:219:.from("inventory_purchase_request_items")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:220:.insert(itemsToInsert);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:228:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:229:.select("full_name, email")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:234:await supabase.from("notifications").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:276:.from("inventory_purchase_requests")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:277:.select("*, requester:users!requested_by(full_name, email)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:289:.from("inventory_purchase_request_items")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:290:.update({ approved_quantity: item.approvedQuantity })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:297:.from("inventory_purchase_requests")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:298:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:306:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:315:await supabase.from("notifications").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:418:.from("purchase_orders")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:419:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:441:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:452:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:453:.select("id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:458:await supabase.from("notifications").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:482:await supabase.from("inventory_purchase_order_items").insert(poItemsWithId);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:487:.from("inventory_purchase_requests")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:488:.update({ status: "converted_to_po" })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:539:.from("inventory_goods_receipts")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:540:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:555:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:567:await supabase.from("inventory_goods_receipt_items").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:585:.from("inventory_products")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:586:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:610:.from("purchase_orders")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:611:.update({ status: "received" })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:658:.from("inventory_stock")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:659:.select("quantity")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:667:.from("inventory_products")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:668:.select("name, part_number")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:681:.from("inventory_part_issues")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:682:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:697:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:707:await supabase.from("inventory_part_issue_items").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:731:.from("challans")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:732:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:749:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:755:.from("inventory_products")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:756:.select("name, part_number")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:760:await supabase.from("inventory_delivery_challan_items").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:809:.from("inventory_part_issues")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:810:.select("*, items:inventory_part_issue_items(*)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:820:.from("inventory_part_returns")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:821:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:829:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:838:await supabase.from("inventory_part_return_items").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:851:.from("inventory_part_issue_items")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:852:.update({ quantity_returned: newReturnedQty })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:881:.from("inventory_part_issue_items")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:882:.select("quantity_issued, quantity_returned")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:890:.from("inventory_part_issues")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:891:.update({ status: newStatus, updated_at: new Date().toISOString() })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:921:.from("inventory_transactions")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:922:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:932:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:947:.from("inventory_stock")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:948:.select("id, quantity")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:956:.from("inventory_stock")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:957:.upsert(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:992:.from("stock_transfers")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:993:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:1003:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:1025:.from("stock_transfers")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:1026:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:1054:.from("stock_transfers")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:1055:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:1061:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:1086:.from("purchase_orders")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:1087:.select("*, requester:users!requested_by(full_name, email)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:1096:.from("purchase_orders")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:1097:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:1104:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:1113:await supabase.from("notifications").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:1147:.from("inventory_products")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:1148:.update({ status: "inactive", updated_at: new Date().toISOString() })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\inventory.ts:1150:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\machine-import.ts:64:const buffer = Buffer.from(await file.arrayBuffer());
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\machine-import.ts:193:const { error } = await supabase.from("machines").insert(insertPayload);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\machines.ts:74:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\machines.ts:75:.select("machine_id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\machines.ts:113:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\machines.ts:114:.insert(insertPayload)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\machines.ts:115:.select("id, machine_id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\machines.ts:200:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\machines.ts:201:.update(updateData)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\machines.ts:240:const { error } = await supabase.from("machines").delete().eq("id", id);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\machines.ts:278:const { error } = await supabase.from("machines").update({ current_supervisor_id: supervisorId || null }).eq("id", machineId);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\manual-reminder.ts:34:const { data: profile } = await supabase.from("users").select("role, status").eq("id", user.id).single();
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\manual-reminder.ts:43:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\manual-reminder.ts:44:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\manual-reminder.ts:116:await adminSupabase.from("notifications").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\manual-reminder.ts:150:await adminSupabase.from("notifications").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\notifications.ts:33:.from("notifications")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\notifications.ts:34:.select("*, machine:machines(machine_code, machine_name, customer_name, customer_email), recipient:users(phone, email, full_name)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\notifications.ts:45:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\notifications.ts:46:.select("email, full_name")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\notifications.ts:91:.from("notifications")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\notifications.ts:92:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:62:.from("machine_hour_logs")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:63:.select("id, shift, start_time, end_time, log_date")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:177:.from("machine_hour_logs")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:178:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:198:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:222:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:223:.update(machineUpdate)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:280:.from("machine_hour_logs")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:281:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:319:.from("machine_hour_logs")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:320:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:337:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:344:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:345:.update({ hour_meter: endMtr, updated_at: new Date().toISOString() })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:378:.from("machine_assignments")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:379:.update({ status: "ended", unassigned_at: nowIso })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:385:.from("machine_assignments")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:386:.select("machine_id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:392:.from("machine_assignments")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:393:.update({ status: "ended", unassigned_at: nowIso })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:400:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:401:.update({ current_operator_id: null, updated_at: nowIso })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:410:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:411:.update({ current_operator_id: null, updated_at: nowIso })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:417:.from("machine_assignments")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:418:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:426:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:436:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:437:.update({ current_operator_id: payload.operatorId, updated_at: nowIso })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:467:const { data, error } = await supabase.from("notifications").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:535:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:536:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:543:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:553:await supabase.from("employees").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:597:.from("operator_payouts")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:598:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:610:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:648:.from("machine_site_movements")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:649:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:660:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:670:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\operators.ts:671:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:38:.from("rental_customers")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:39:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:53:.select("id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:85:.from("rental_customers")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:86:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:116:.from("rental_agreements")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:117:.select("id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:123:.from("rental_customers")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:124:.update({ status: "archived", updated_at: new Date().toISOString() })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:141:.from("rental_customers")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:142:.update({ status: "inactive", updated_at: new Date().toISOString() })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:178:.from("rental_requests")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:179:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:199:.select("id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:219:.from("rental_requests")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:220:.update({ status: "approved", updated_at: new Date().toISOString() })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:239:.from("rental_requests")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:240:.update({ status: "rejected", remarks: `Rejected: ${reason}`, updated_at: new Date().toISOString() })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:284:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:285:.select("id, status, notes")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:313:.from("rental_agreements")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:314:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:336:.select("id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:343:await supabase.from("machines").update({ status: "reserved" }).eq("id", machine_id);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:348:await supabase.from("rental_requests").update({ status: "converted_to_contract" }).eq("id", rental_request_id);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:367:.from("rental_agreements")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:368:.select("id, machine_id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:375:.from("rental_agreements")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:376:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:386:await supabase.from("machines").update({ status: "reserved" }).eq("id", agreement.machine_id);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:422:.from("rental_agreements")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:423:.select("*, machines(id, machine_code), rental_customers(id, company_name)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:432:.from("rental_delivery_challans")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:433:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:452:.select("id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:459:.from("rental_agreements")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:460:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:469:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:470:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:514:.from("rental_agreements")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:515:.select("*, machines(id)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:526:.from("rental_return_inspections")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:527:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:548:.select("id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:556:await supabase.from("rental_damage_reports").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:575:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:576:.update({ status: "service_due", hour_meter: end_hour_meter, notes: `Returned damaged: ${damage_description}` })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:581:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:582:.update({ status: "available", hour_meter: end_hour_meter })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:588:.from("rental_agreements")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:589:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:625:.from("rental_agreements")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:626:.select("*, machines(id)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:634:.from("rental_agreements")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:635:.select("id, contract_number")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:648:await supabase.from("rental_extension_requests").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:669:.from("rental_agreements")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:670:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:678:await supabase.from("rental_extension_requests").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:723:.from("rental_agreements")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:724:.select("*, rental_customers(id)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:734:.from("rental_billing_requests")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:735:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:752:.select("id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:784:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:785:.select("*, branches(id)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:794:.from("breakdown_complaints")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:795:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:808:.select("id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\rentals.ts:814:await supabase.from("machines").update({ status: "service_due" }).eq("id", machine_id);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:49:.from("sales_leads")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:50:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:68:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:125:.from("sales_leads")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:126:.update(updateData)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:128:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:155:.from("sales_leads")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:156:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:165:.from("sales_customers")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:166:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:179:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:187:.from("sales_opportunities")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:188:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:198:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:205:.from("sales_leads")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:206:.update({ status: "Qualified", updated_at: new Date().toISOString() })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:251:.from("sales_customers")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:252:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:268:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:296:const { data: orders } = await supabase.from("sales_orders").select("id").eq("customer_id", customerId);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:297:const { data: quotes } = await supabase.from("sales_quotations").select("id").eq("customer_id", customerId);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:302:.from("sales_customers")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:303:.update({ status: "archived", updated_at: new Date().toISOString() })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:321:.from("sales_customers")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:322:.update({ status: "inactive", updated_at: new Date().toISOString() })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:352:.from("sales_customer_interactions")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:353:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:363:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:403:.from("sales_opportunities")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:404:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:417:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:478:.from("sales_quotations")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:479:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:502:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:538:.from("sales_quotations")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:539:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:546:.from("sales_quotations")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:547:.update({ status: "revised", updated_at: new Date().toISOString() })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:562:.from("sales_quotations")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:563:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:587:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:633:.from("sales_orders")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:634:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:653:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:682:.from("sales_machine_reservations")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:683:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:692:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:698:.from("sales_orders")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:699:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:734:const { data: order } = await supabase.from("sales_orders").select("*").eq("id", orderId).single();
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:740:.from("sales_delivery_coordinations")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:741:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:753:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:759:.from("sales_orders")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:760:.update({ status: "delivery_requested", updated_at: new Date().toISOString() })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:783:.from("sales_delivery_coordinations")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:784:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:791:.from("sales_delivery_coordinations")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:792:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:798:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:804:.from("sales_orders")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\sales.ts:805:.update({ status: "handover_completed", updated_at: new Date().toISOString() })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\services.ts:32:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\services.ts:33:.select("service_interval_days, next_service_due_date, engineer_id, service_count, hour_meter")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\services.ts:48:await supabase.from("service_records").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\services.ts:69:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\services.ts:70:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\services.ts:101:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\services.ts:102:.select("service_count, id, machine_code")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\services.ts:109:.from("service_records")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\services.ts:110:.select("id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\services.ts:118:.from("service_records")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\services.ts:119:.delete()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\services.ts:129:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\services.ts:130:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:28:.from("tasks")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:29:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:39:.select("id, task_no")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:55:.from("task_assignees")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:56:.insert(assigneeRows);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:63:await supabase.from("task_activity_logs").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:77:await supabase.from("notifications").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:116:.from("tasks")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:117:.update(updatePayload)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:126:await supabase.from("task_assignees").delete().eq("task_id", taskId);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:132:await supabase.from("task_assignees").insert(assigneeRows);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:135:await supabase.from("task_activity_logs").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:176:.from("tasks")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:177:.update(updatePayload)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:179:.select("id, task_no, title, created_by")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:195:await supabase.from("task_attachments").insert(attachmentRows);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:199:await supabase.from("task_activity_logs").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:208:await supabase.from("notifications").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:250:.from("tasks")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:251:.update(updatePayload)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:253:.select("id, task_no, title, completed_by")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:260:await supabase.from("task_activity_logs").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:269:await supabase.from("notifications").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:298:const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:323:.from("task_comments")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:324:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:330:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\tasks.ts:337:await supabase.from("task_activity_logs").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:28:return Array.from(randomBytes, (byte) => charset[byte % charset.length]).join("");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:44:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:45:.select("id, full_name, email, phone, role, status, city, district, state, created_at")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:62:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:63:.select("id, full_name, email, phone, role, status, city, district, state, created_at")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:86:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:87:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:102:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:103:.update({ status: "active" })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:158:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:159:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:256:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:257:.select("id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:267:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:268:.select("id, phone")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:316:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:317:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:336:.from("employees")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:337:.insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:394:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:395:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:453:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:454:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:477:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:478:.update({ status: newStatus })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:489:.from("employees")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:490:.update({ status: newStatus === "active" ? "active" : "inactive" })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:535:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:536:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:554:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:555:.update({ role: newRole })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:599:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:600:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:662:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:663:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:707:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:708:.select("id, phone")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:756:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:757:.update(updatePayload)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:775:.from("employees")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\app\actions\users.ts:776:.update(empUpdatePayload)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\audit-logs\AuditLogsClient.tsx:64:const current = new URLSearchParams(Array.from(searchParams.entries()));
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\audit-logs\AuditLogsClient.tsx:68:current.delete(key);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\machines\MachineListClient.tsx:494:params.delete(key);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\notifications\NotificationListClient.tsx:96:params.delete(key);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\operations\OperationsClient.tsx:174:const logMachineIdsInOrder = Array.from(new Set(hourLogs.map((l) => l.machine_id).filter(Boolean)));
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\operations\OperationsClient.tsx:193:const logOperatorIdsInOrder = Array.from(new Set(hourLogs.map((l) => l.operator_id).filter(Boolean)));
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\operations\OperationsClient.tsx:206:const uniqueClients = Array.from(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\operations\OperationsClient.tsx:226:const clientMachineIdsFromLogs = Array.from(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\operations\OperationsClient.tsx:246:const clientSites = Array.from(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\services\ServicesClient.tsx:70:return Array.from(set);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\tasks\CompleteTaskModal.tsx:51:Array.from(files).forEach((file) => {
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\tasks\CreateTaskModal.tsx:113:const newSelected = Array.from(new Set([...selectedAssigneeIds, ...filteredIds]));
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\ui\Skeleton.tsx:40:{Array.from({ length: count }).map((_, i) => (
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\ui\Skeleton.tsx:64:{Array.from({ length: columns }).map((_, i) => (
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\ui\Skeleton.tsx:71:{Array.from({ length: rows }).map((_, rowIndex) => (
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\ui\Skeleton.tsx:76:{Array.from({ length: columns }).map((_, colIndex) => (
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\ui\Skeleton.tsx:108:{Array.from({ length: 12 }).map((_, i) => (
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\ui\Skeleton.tsx:138:{Array.from({ length: 3 }).map((_, i) => (
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\ui\Skeleton.tsx:145:{Array.from({ length: 4 }).map((_, j) => (
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\ui\Skeleton.tsx:228:{Array.from({ length: 3 }).map((_, i) => (
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\components\ui\Toast.tsx:60:timersRef.current.delete(id);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\audit.ts:23:await supabase.from("audit_logs").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\dal.ts:45:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\dal.ts:46:.select("id, full_name, phone, role, status, city, district, state, email, created_at, updated_at")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\daily-summary.ts:90:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\daily-summary.ts:91:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\daily-summary.ts:116:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\daily-summary.ts:117:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\daily-summary.ts:143:.from("service_records")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\daily-summary.ts:144:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\daily-summary.ts:164:.from("notifications")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\daily-summary.ts:165:.select("status, channel")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\daily-summary.ts:277:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\daily-summary.ts:278:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\daily-summary.ts:311:.from("service_records")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\daily-summary.ts:312:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\daily-summary.ts:379:.from("notifications")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\daily-summary.ts:380:.select("id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\send-reminders.ts:41:const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\send-reminders.ts:62:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\send-reminders.ts:63:.select("id, full_name, email")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\send-reminders.ts:109:await supabase.from("notifications").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\send-reminders.ts:141:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\send-reminders.ts:142:.select("id, full_name, email")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\send-reminders.ts:197:await supabase.from("notifications").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\send-reminders.ts:239:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\send-reminders.ts:240:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\send-reminders.ts:261:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\send-reminders.ts:262:.select("id, full_name, email")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\notifications\send-reminders.ts:424:await supabase.from("notifications").insert(chunk);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\audit-logs.ts:45:.from("audit_logs")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\audit-logs.ts:46:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\audit-logs.ts:57:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\audit-logs.ts:58:.select("id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\audit-logs.ts:118:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\audit-logs.ts:119:.select("email")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\categories.ts:12:.from("machine_categories")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\categories.ts:13:.select("id, name, description, created_at")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\challans.ts:27:.from("challans")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\challans.ts:28:.select("id, challan_number, to_customer_name, to_address, status, approx_value, issue_date, created_at")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\clients.ts:15:.from("clients")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\clients.ts:16:.select(CLIENT_SELECT_COLUMNS)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\complaints.ts:25:.from("machine_complaints")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\complaints.ts:26:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\complaints.ts:109:.from("machine_complaints")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\complaints.ts:110:.select("*, machine:machines(*)", { count: "estimated" })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\dashboard.ts:43:const { data, error } = await supabase.rpc("get_dashboard_kpis", {
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\dashboard.ts:54:let mQuery = supabase.from("machines").select("status, next_service_due_date, engineer_id");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\dashboard.ts:61:let srQuery = supabase.from("service_records").select("id").eq("service_date", today);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\dashboard.ts:67:let nQuery = supabase.from("notifications").select("status").eq("alert_date", today);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\dashboard.ts:93:const { data, error } = await supabase.rpc("get_dashboard_charts", {
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\dashboard.ts:101:let srQuery = supabase.from("service_records").select("service_date");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\dashboard.ts:131:let mQuery = supabase.from("machines").select("next_service_due_date").eq("status", "active");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\dashboard.ts:157:const { data, error } = await supabase.rpc("get_dashboard_due_lists", {
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\dashboard.ts:173:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\dashboard.ts:174:.select("*");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\dashboard.ts:202:const { data, error } = await supabase.rpc("get_recent_activity_slim", {
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\dashboard.ts:213:.from("audit_logs")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\dashboard.ts:214:.select("id, action, created_at, user:users(full_name, role)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\documents.ts:12:.from("documents")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\documents.ts:13:.select("id, document_name, entity_type, entity_id, entity_label, document_type, file_url, status, expiry_date, branch_id, owner_id, created_at")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:44:let invoiceQuery = supabase.from("finance_invoices").select("*");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:50:let expenseQuery = supabase.from("finance_expenses").select("*");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:56:let paymentQuery = supabase.from("finance_payments").select("*");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:62:let vendorPaymentQuery = supabase.from("finance_vendor_payments").select("*");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:182:.from("finance_invoices")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:183:.select("*, items:finance_invoice_items(*), payments:finance_payments(*), branch:branches(id, name, code)");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:219:.from("finance_invoices")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:220:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:247:.from("finance_payments")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:248:.select("*, invoice:finance_invoices(id, invoice_number, customer_name)");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:339:let query = supabase.from("finance_expenses").select("*, branch:branches(id, name)");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:371:.from("finance_expense_categories")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:372:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:391:.from("finance_3way_matching_reviews")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:392:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:410:.from("finance_vendor_payments")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:411:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\finance.ts:428:const { data, error } = await supabase.from("finance_settings").select("*");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\hr.ts:33:.from("employees")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\hr.ts:34:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\hr.ts:154:.from("departments")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\hr.ts:155:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\hr.ts:178:.from("designations")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\hr.ts:179:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\hr.ts:203:.from("employee_salary_history")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\hr.ts:204:.select("*, creator:users!created_by(id, email, full_name)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\hr.ts:223:.from("employee_documents")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\hr.ts:224:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\hr.ts:243:.from("user_account_requests")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\hr.ts:244:.select("*, employee:employees!employee_id(id, employee_code, full_name, email), requester:users!requested_by(id, full_name, email), branch:branches(id, code, name)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:24:.from("inventory_products")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:25:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:50:.from("inventory_stock")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:51:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:84:.from("inventory_transactions")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:85:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:109:.from("stock_transfers")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:110:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:132:.from("inventory_storage_locations")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:133:.select("*, branch:branches(id, code, name)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:152:.from("inventory_purchase_requests")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:153:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:177:.from("inventory_goods_receipts")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:178:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:198:.from("inventory_part_issues")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:199:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:219:.from("inventory_part_returns")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:220:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:240:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\inventory.ts:241:.select("id, full_name, email, role")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:65:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:66:.select(MACHINE_LIST_COLUMNS, { count: "estimated" });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:139:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:140:.select(FALLBACK_COLUMNS, { count: "estimated" });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:214:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:215:.select(MACHINE_LIST_COLUMNS)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:240:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:241:.select(FALLBACK_COLUMNS)
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:280:.from("service_records")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:281:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:317:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:318:.select("id, full_name, phone, email, role")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:338:.from("employees")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:339:.select("id, full_name, phone, email, designation, user_id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:362:return Array.from(userMap.values()).sort((a, b) =>
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:374:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:375:.select("id, full_name, phone, email")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:391:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:392:.select("id, full_name, phone, email, role")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:411:.from("employees")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:412:.select("id, full_name, phone, email, designation, user_id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:437:return Array.from(userMap.values()).sort((a, b) =>
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:456:.from("machine_complaints")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:457:.select("*, engineer:users!machine_complaints_engineer_id_fkey(id, full_name)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:467:.from("machine_hour_logs")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:468:.select("*, operator:users!operator_id(id, full_name)")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:478:.from("inventory_transactions")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:479:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:489:.from("rental_contracts")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\machines.ts:490:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\my-work.ts:54:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\my-work.ts:55:.select("id, machine_code, machine_name, model, serial_number, customer_name, city, state, hour_meter, status, next_service_due_date, engineer_id, current_operator_id, branch_id")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\my-work.ts:85:.from("machine_complaints")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\my-work.ts:86:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\my-work.ts:131:.from("service_records")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\my-work.ts:132:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\my-work.ts:174:.from("purchase_orders")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\my-work.ts:175:.select("id, po_number, vendor_name, amount, status, created_at")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\my-work.ts:226:.from("service_records")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\my-work.ts:227:.select("id", { count: "exact", head: true })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\notifications.ts:43:const { data, error } = await supabase.rpc("get_notification_stats", {
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\notifications.ts:52:let query = supabase.from("notifications").select("status, alert_date");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\notifications.ts:100:.from("notifications")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\notifications.ts:101:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\purchase-orders.ts:12:.from("purchase_orders")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\purchase-orders.ts:13:.select("id, po_number, vendor_id, vendor_name, amount, status, due_date, requested_by, branch_id, created_at")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:27:let machineQuery = supabase.from("machines").select("id, status, notes");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:41:let contractQuery = supabase.from("rental_agreements").select("*");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:69:let requestQuery = supabase.from("rental_requests").select("id").eq("status", "pending");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:77:let inspQuery = supabase.from("rental_return_inspections").select("id").eq("status", "under_inspection");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:107:let query = supabase.from("rental_customers").select("*").order("company_name", { ascending: true });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:125:let query = supabase.from("rental_requests").select("*").order("created_at", { ascending: false });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:144:.from("rental_agreements")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:145:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:168:.from("rental_agreements")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:169:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:181:.from("rental_delivery_challans")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:182:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:187:.from("rental_return_inspections")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:188:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:193:.from("rental_damage_reports")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:194:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:199:.from("rental_billing_requests")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:200:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:205:.from("rental_accessories_log")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:206:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:225:.from("rental_delivery_challans")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:226:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:251:.from("rental_return_inspections")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:252:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:277:.from("rental_damage_reports")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:278:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:303:.from("rental_billing_requests")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\rentals.ts:304:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:24:let leadsQuery = supabase.from("sales_leads").select("id, status, created_at", { count: "exact" });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:25:let oppsQuery = supabase.from("sales_opportunities").select("id, expected_value, stage", { count: "exact" });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:26:let quotesQuery = supabase.from("sales_quotations").select("id, status, grand_total", { count: "exact" });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:27:let ordersQuery = supabase.from("sales_orders").select("id, status, approval_status, total_amount, machine_reserved", { count: "exact" });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:28:let customersQuery = supabase.from("sales_customers").select("id", { count: "exact" }).eq("status", "active");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:117:.from("sales_leads")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:118:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:140:.from("sales_customers")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:141:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:162:.from("sales_customer_interactions")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:163:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:185:.from("sales_opportunities")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:186:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:209:.from("sales_quotations")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:210:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:233:.from("sales_orders")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:234:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:258:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:259:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:281:.from("sales_machine_reservations")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:282:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:305:.from("sales_delivery_coordinations")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:306:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:325:.from("sales_settings")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\sales.ts:326:.select("*")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\services.ts:31:.from("machines")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\services.ts:32:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\services.ts:68:.from("service_records")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\services.ts:69:.select(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\services.ts:126:.from("service_records")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\services.ts:127:.select("id", { count: "exact", head: true })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\tasks.ts:13:.from("tasks")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\tasks.ts:14:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\tasks.ts:106:.from("tasks")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\tasks.ts:107:.select(`
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\tasks.ts:162:.from("users")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\tasks.ts:163:.select("id, full_name, email, role")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\vendors.ts:12:.from("vendors")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\queries\vendors.ts:13:.select("id, vendor_name, code, contact_person, email, phone, category, city, rating, status, created_at")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\security\idempotency.ts:40:return crypto.createHash("sha256").update(stringified || "").digest("hex");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\security\idempotency.ts:42:return crypto.createHash("sha256").update(String(payload)).digest("hex");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\security\idempotency.ts:64:: `${userPrefix}:${actionName}:auto-${crypto.createHash("sha256").update(`${userPrefix}:${actionName}:${requestHash}`).digest("hex")}`;
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\security\idempotency.ts:71:.from("idempotency_keys")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\security\idempotency.ts:72:.select("idempotency_key, request_hash, status, response_payload, created_at, expires_at")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\security\idempotency.ts:85:await supabase.from("idempotency_keys").delete().eq("idempotency_key", resolvedKey);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\security\idempotency.ts:141:await supabase.from("idempotency_keys").delete().eq("idempotency_key", resolvedKey);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\security\idempotency.ts:147:const { error: insertErr } = await supabase.from("idempotency_keys").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\security\idempotency.ts:207:.from("idempotency_keys")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\security\idempotency.ts:208:.update({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\security\idempotency.ts:215:.select("idempotency_key");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\security\idempotency.ts:248:let query = supabase.from("idempotency_keys").delete().eq("idempotency_key", idempotencyKey);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\apps\web\lib\security\rate-limiter.ts:21:rateLimitStore.delete(key);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_matrix.ts:51:return crypto.createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_matrix.ts:81:const { error: err02 } = await supabase.from("idempotency_keys").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_matrix.ts:94:.from("idempotency_keys")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_matrix.ts:95:.update({ status: "COMPLETED", response_payload: cachedResponse })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_matrix.ts:102:.from("idempotency_keys")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_matrix.ts:103:.select("status, response_payload, request_hash")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_matrix.ts:123:const { error: err05 } = await supabase.from("idempotency_keys").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_matrix.ts:136:const { error: err06 } = await supabase.from("idempotency_keys").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_matrix.ts:152:Array.from({ length: 100 }, async (_, idx) => {
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_matrix.ts:153:const { error } = await supabase.from("idempotency_keys").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_matrix.ts:180:await supabase.from("idempotency_keys").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_matrix.ts:189:const { data: staleRow } = await supabase.from("idempotency_keys").select("created_at").eq("idempotency_key", staleScopedKey).single();
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_matrix.ts:194:await supabase.from("idempotency_keys").delete().eq("idempotency_key", staleScopedKey);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_matrix.ts:202:.from("idempotency_keys")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_matrix.ts:203:.delete()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_production_suite.ts:51:return crypto.createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_production_suite.ts:71:Array.from({ length: 100 }, async (_, idx) => {
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_production_suite.ts:74:const { error } = await supabase.from("idempotency_keys").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_production_suite.ts:85:const { error } = await supabase.from("idempotency_keys").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_production_suite.ts:108:.from("idempotency_keys")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_production_suite.ts:109:.select("execution_token")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_production_suite.ts:122:.from("idempotency_keys")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_production_suite.ts:123:.update({ status: "COMPLETED", response_payload: { success: true } })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_production_suite.ts:127:.select();
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_production_suite.ts:137:.from("idempotency_keys")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_production_suite.ts:138:.update({ status: "COMPLETED", response_payload: responsePayload })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_production_suite.ts:142:.select();
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_production_suite.ts:156:await supabase.from("idempotency_keys").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_production_suite.ts:165:const { data: expRow } = await supabase.from("idempotency_keys").select("expires_at").eq("idempotency_key", expiredScopedKey).single();
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_production_suite.ts:169:await supabase.from("idempotency_keys").delete().eq("idempotency_key", expiredScopedKey);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_production_suite.ts:176:await supabase.from("idempotency_keys").delete().in("idempotency_key", [scopedKey, expiredScopedKey]);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_standalone.ts:35:return crypto.createHash("sha256").update(stringified || "").digest("hex");
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_standalone.ts:50:const { error: errA } = await supabase.from("idempotency_keys").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_standalone.ts:64:.from("idempotency_keys")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_standalone.ts:65:.update({ status: "COMPLETED", response_payload: cachedPayload })
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_standalone.ts:72:.from("idempotency_keys")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_standalone.ts:73:.select("status, response_payload, request_hash")
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_standalone.ts:97:const { error: errD } = await supabase.from("idempotency_keys").insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_idempotency_standalone.ts:109:await supabase.from("idempotency_keys").delete().in("idempotency_key", [scopedKey, scopedKeyUserB]);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\scratch\test_security_remediation.mjs:74:const { data: auditData, error: auditErr } = await supabase.from('audit_logs').select('id').limit(1);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\admin.mjs:58:.from('users')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\admin.mjs:59:.select('id, full_name, phone, role, status');
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\exec_migration.mjs:20:const { data, error } = await admin.rpc('exec_sql', { sql_query: sql });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed.mjs:84:.from('users')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed.mjs:85:.select('id, full_name, phone, role, status');
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:108:await admin.from('users').upsert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:139:await admin.from('branches').upsert(branchesToInsert, { onConflict: 'code' });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:140:const { data: delBranch } = await admin.from('branches').select('id').eq('code', 'DEL-HQ').single();
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:145:await admin.from('branches').delete().neq('id', mainBranchId);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:148:const { data: allBranches } = await admin.from('branches').select('*');
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:151:const uniqueUserIds = Array.from(new Set(Object.values(userMap))).filter((id) => typeof id === 'string' && id.includes('-'));
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:153:await admin.from('users').update({ branch_id: mainBranchId }).in('id', uniqueUserIds);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:155:await admin.from('user_branches').upsert(userBranchRows, { onConflict: 'user_id,branch_id' });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:156:await admin.from('user_branches').delete().neq('branch_id', mainBranchId);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:178:await admin.from('employees').upsert(employeesData, { onConflict: 'employee_code' });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:193:await admin.from('manufacturers').upsert(mfrData, { onConflict: 'name' });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:194:const { data: mfrs } = await admin.from('manufacturers').select('*');
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:206:await admin.from('machine_categories').upsert(catData, { onConflict: 'name' });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:207:const { data: cats } = await admin.from('machine_categories').select('*');
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:222:await admin.from('machine_models').upsert(m, { onConflict: 'manufacturer_id,model_name' });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:225:const { data: models } = await admin.from('machine_models').select('*');
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:347:await admin.from('machines').upsert(machinesData, { onConflict: 'machine_code' });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:348:const { data: allMachines } = await admin.from('machines').select('*');
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:358:await admin.from('machine_assignments').insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:371:await admin.from('machine_hour_logs').insert(logs);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:423:await admin.from('machine_complaints').upsert(complaintsData, { onConflict: 'complaint_no' });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:450:await admin.from('service_records').insert(serviceData);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:478:await admin.from('notifications').upsert(notifs, { onConflict: 'machine_id,recipient_id,alert_type,alert_date,channel' });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:493:await admin.from('vendors').upsert(vendorsData, { onConflict: 'code' });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:494:const { data: allVendors } = await admin.from('vendors').select('*');
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:505:await admin.from('inventory_storage_locations').upsert(locationsData, { onConflict: 'branch_id,store_name,zone,rack,shelf,bin' });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:611:await admin.from('inventory_products').upsert(productsData, { onConflict: 'part_number' });
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:612:const { data: allProds } = await admin.from('inventory_products').select('*');
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:618:await admin.from('inventory_stock').upsert(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:631:.from('inventory_purchase_requests')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:632:.upsert(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:646:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:651:await admin.from('inventory_purchase_request_items').insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:664:.from('purchase_orders')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:665:.upsert(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:683:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:688:await admin.from('inventory_purchase_order_items').insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:703:.from('inventory_goods_receipts')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:704:.upsert(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:719:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:724:await admin.from('inventory_goods_receipt_items').insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:745:.from('inventory_part_issues')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:746:.upsert(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:762:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:767:await admin.from('inventory_part_issue_items').insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:779:.from('challans')
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:780:.upsert(
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:800:.select()
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:805:await admin.from('inventory_delivery_challan_items').insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:823:await admin.from('import_batches').insert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:839:await admin.from('audit_logs').insert(logs);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:842:await admin.from('system_settings').upsert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:857:const { data: customerData } = await admin.from('rental_customers').upsert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:869:}).select('id').single();
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:875:const { data: requestData } = await admin.from('rental_requests').upsert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:891:}).select('id').single();
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:894:const { data: machineList } = await admin.from('machines').select('id').limit(1);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:899:const { data: contractData } = await admin.from('rental_agreements').upsert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:915:}).select('id').single();
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:921:await admin.from('rental_delivery_challans').upsert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:935:const { data: inspData } = await admin.from('rental_return_inspections').upsert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:946:}).select('id').single();
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:949:await admin.from('rental_damage_reports').upsert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:963:await admin.from('rental_extension_requests').upsert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:977:await admin.from('rental_billing_requests').upsert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:994:await admin.from('rental_accessories_log').upsert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:1009:const { data: adminUsers } = await admin.from('users').select('id, email, role').limit(10);
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:1014:const { data: seedTask } = await admin.from('tasks').upsert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:1024:}).select('id').single();
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:1027:await admin.from('task_assignees').upsert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:1033:await admin.from('task_comments').upsert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\seed_dummy_data.mjs:1039:await admin.from('task_activity_logs').upsert({
+C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\supabase\verify_seed.mjs:93:const { count, error } = await admin.from(tbl).select('*', { count: 'exact', head: true });

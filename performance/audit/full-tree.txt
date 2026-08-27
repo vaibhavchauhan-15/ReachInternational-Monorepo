@@ -1,0 +1,762 @@
+.
+.agents
+rules
+|   +---mandatory_rules_reading_and_enforcement.md
+|   +---responsive_cross_platform_design.md
+|   +---web_mobile_ui_consistency.md
+skills
+supabase-postgres-best-practices
+    +---CHANGELOG.md
+references
+|   +---advanced-full-text-search.md
+|   +---advanced-jsonb-indexing.md
+|   +---conn-idle-timeout.md
+|   +---conn-limits.md
+|   +---conn-pooling.md
+|   +---conn-prepared-statements.md
+|   +---data-batch-inserts.md
+|   +---data-n-plus-one.md
+|   +---data-pagination.md
+|   +---data-upsert.md
+|   +---lock-advisory.md
+|   +---lock-deadlock-prevention.md
+|   +---lock-short-transactions.md
+|   +---lock-skip-locked.md
+|   +---monitor-explain-analyze.md
+|   +---monitor-pg-stat-statements.md
+|   +---monitor-vacuum-analyze.md
+|   +---query-composite-indexes.md
+|   +---query-covering-indexes.md
+|   +---query-index-types.md
+|   +---query-missing-indexes.md
+|   +---query-partial-indexes.md
+|   +---schema-constraints.md
+|   +---schema-data-types.md
+|   +---schema-foreign-key-indexes.md
+|   +---schema-lowercase-identifiers.md
+|   +---schema-partitioning.md
+|   +---schema-primary-keys.md
+|   +---security-privileges.md
+|   +---security-rls-basics.md
+|   +---security-rls-performance.md
+|   +---_contributing.md
+|   +---_sections.md
+|   +---_template.md
+    +---SKILL.md
+    +---.env
+    +---.env.example
+.github
+workflows
+    +---ci.yml
+    +---deploy-mobile.yml
+    +---deploy-web.yml
+    +---.gitignore
+    +---AGENTS.md
+AI
+|   +---API_MAP.md
+|   +---ARCHITECTURE.md
+|   +---CHANGELOG_AI.md
+|   +---CODING_RULES.md
+|   +---COMPONENT_MAP.md
+|   +---CURRENT_TASK.md
+|   +---DATABASE.md
+|   +---DECISIONS.md
+FEATURES
+|   +---auth.md
+|   +---dashboard.md
+|   +---finance.md
+|   +---hr.md
+|   +---machine.md
+|   +---notification.md
+|   +---rental.md
+|   +---service.md
+|   +---user.md
+|   +---FILE_INDEX.md
+HISTORY
+|   +---sprint1.md
+|   +---KNOWN_ISSUES.md
+|   +---PERFORMANCE_RULES.md
+|   +---PROJECT_MEMORY.md
+|   +---ROUTING_MAP.md
+RULES
+|   +---ARCHITECTURE.md
+|   +---AUTHENTICATION-AUTHORIZATION.md
+|   +---DATA-PROTECTION-PRIVACY.md
+|   +---DEPLOYMENT-DEVOPS-RELEASE.md
+|   +---DESIGN-SYSTEM.md
+|   +---OBSERVABILITY-MONITORING-LOGGING.md
+|   +---PERFORMANCE.md
+|   +---SECURITY.md
+|   +---SEO-METADATA-DISCOVERABILITY.md
+|   +---TESTING-QA.md
+|   +---UI-UX.md
+|   +---VALIDATION-ERROR-RESILIENCE.md
+|   +---SECURITY_RULES.md
+|   +---STATE.md
+|   +---TESTING_RULES.md
+|   +---UI_RULES.md
+apps
+mobile
+|   +---.env
+|   +---.env.example
+app
+(app)
+|   +---clients.tsx
+|   +---complaints.tsx
+|   +---crm.tsx
+|   +---dashboard.tsx
+|   +---finance.tsx
+|   +---fsr.tsx
+|   +---hr.tsx
+|   +---inventory.tsx
+|   +---machines.tsx
+|   +---my-work.tsx
+|   +---notifications.tsx
+|   +---operations.tsx
+|   +---profile.tsx
+|   +---rentals.tsx
+|   +---tasks.tsx
+|   +---users.tsx
+|   +---_layout.tsx
+(auth)
+|   +---forgot-password.tsx
+|   +---login.tsx
+|   +---signup.tsx
+|   +---_layout.tsx
+|   +---index.tsx
+|   +---_layout.tsx
+|   +---app.json
+assets
+|   +---adaptive-icon.png
+|   +---favicon.png
+|   +---icon.png
+|   +---splash.png
+components
+complaints
+|   +---CreateComplaintModal.tsx
+crm
+|   +---CreateLeadModal.tsx
+|   +---LogInteractionModal.tsx
+finance
+|   +---ExpenseClaimModal.tsx
+fsr
+|   +---CreateFsrModal.tsx
+hr
+|   +---AccountRequestModal.tsx
+|   +---EmployeeDetailModal.tsx
+inventory
+|   +---PartRequestModal.tsx
+machines
+|   +---AddMachineModal.tsx
+|   +---MachineDetailModal.tsx
+navigation
+|   +---DynamicBottomNav.tsx
+|   +---MobileDrawer.tsx
+operations
+|   +---SiteMovementModal.tsx
+rentals
+|   +---RentalReturnModal.tsx
+tasks
+|   +---CreateTaskModal.tsx
+ui
+|   +---Badge.tsx
+|   +---Button.tsx
+|   +---Card.tsx
+|   +---CustomBottomTabBar.tsx
+|   +---EmptyState.tsx
+|   +---index.ts
+|   +---Input.tsx
+|   +---MainMenuModal.tsx
+|   +---MobileHeader.tsx
+|   +---OfflineSyncBanner.tsx
+|   +---OptimizedList.tsx
+|   +---Skeleton.tsx
+|   +---ThemeProvider.tsx
+users
+|   +---CreateUserModal.tsx
+|   +---UserDetailModal.tsx
+work
+    +---ComplaintStatusModal.tsx
+    +---MeterLogModal.tsx
+|   +---eas.json
+|   +---env.d.ts
+lib
+|   +---accessibility.ts
+auth
+|   +---useAuth.tsx
+|   +---environment.ts
+|   +---media.ts
+nav
+|   +---DrawerContext.tsx
+|   +---navItems.ts
+|   +---notifications.ts
+|   +---offline-sync.ts
+|   +---performance.ts
+|   +---realtime.ts
+security
+|   +---clipboard.ts
+|   +---security.ts
+|   +---supabase.ts
+|   +---testing-suite.ts
+utils
+|   +---metro.config.js
+|   +---package.json
+|   +---README.md
+|   +---run-tests.mjs
+|   +---tsconfig.json
+web
+    +---.env
+    +---.env.example
+app
+(app)
+administration
+|   +---page.tsx
+audit-logs
+|   +---page.tsx
+branches
+|   +---page.tsx
+challans
+|   +---page.tsx
+clients
+|   +---page.tsx
+[id]
+    +---page.tsx
+complaints
+|   +---page.tsx
+crm
+|   +---page.tsx
+dashboard
+|   +---loading.tsx
+logs
+|   +---page.tsx
+|   +---page.tsx
+docs
+icons
+documents
+|   +---page.tsx
+finance
+|   +---page.tsx
+hr
+|   +---page.tsx
+inventory
+|   +---page.tsx
+|   +---layout.tsx
+machines
+|   +---loading.tsx
+|   +---page.tsx
+[id]
+    +---loading.tsx
+    +---machine-client-view.tsx
+    +---page.tsx
+    +---service-form.tsx
+my-work
+|   +---page.tsx
+notification
+|   +---page.tsx
+notifications
+|   +---loading.tsx
+|   +---page.tsx
+operations
+|   +---page.tsx
+purchase-orders
+|   +---page.tsx
+[id]
+    +---page.tsx
+rentals
+|   +---page.tsx
+reports
+|   +---page.tsx
+service
+|   +---page.tsx
+services
+|   +---loading.tsx
+|   +---page.tsx
+tasks
+|   +---page.tsx
+users
+|   +---loading.tsx
+|   +---MobileUserCard.tsx
+|   +---page.tsx
+|   +---UserCreateModal.tsx
+|   +---UserDetailSheet.tsx
+|   +---UserEditModal.tsx
+|   +---UserRow.tsx
+|   +---users-client.tsx
+vendors
+    +---page.tsx
+[id]
+    +---page.tsx
+actions
+|   +---auth.ts
+|   +---branches.ts
+|   +---categories.ts
+|   +---clients.ts
+|   +---complaints.ts
+|   +---finance.ts
+|   +---hr.ts
+|   +---inventory.ts
+|   +---machine-import.ts
+|   +---machines.ts
+|   +---manual-reminder.ts
+|   +---notifications.ts
+|   +---operators.ts
+|   +---refresh.ts
+|   +---rentals.ts
+|   +---sales.ts
+|   +---services.ts
+|   +---tasks.ts
+|   +---users.ts
+api
+cron
+send-reminders
+    +---route.ts
+seed-locations
+|   +---favicon.ico
+forgot-password
+|   +---page.tsx
+|   +---globals.css
+|   +---layout.tsx
+login
+|   +---login-form.tsx
+|   +---page.tsx
+|   +---not-found.tsx
+|   +---page.tsx
+signin
+|   +---page.tsx
+signup
+|   +---page.tsx
+|   +---sitemap.ts
+components
+admin
+|   +---AdminClient.tsx
+|   +---AgentationWrapper.tsx
+animate-ui
+components
+backgrounds
+radix
+    +---dialog.tsx
+audit-logs
+|   +---AuditLogsClient.tsx
+branches
+|   +---BranchesClient.tsx
+branding
+|   +---index.ts
+|   +---ReachInternationalLogo.tsx
+|   +---ScissorLiftLogoIcon.tsx
+challans
+|   +---ChallansClient.tsx
+clients
+|   +---ClientModal.tsx
+|   +---ClientsClient.tsx
+complaints
+|   +---ComplaintDetailModal.tsx
+|   +---ComplaintsClient.tsx
+|   +---FieldServiceReportModal.tsx
+|   +---MachineComplaintModal.tsx
+crm
+|   +---ClientDetailClient.tsx
+|   +---CrmClient.tsx
+dashboard
+|   +---ChartLoaders.tsx
+|   +---Charts.tsx
+|   +---MechanicDashboard.tsx
+|   +---MobileChartsWrapper.tsx
+|   +---MobileDashboardHeader.tsx
+|   +---MobileDueBuckets.tsx
+|   +---OperatorDashboard.tsx
+|   +---PrintableOperatorLogsModal.tsx
+docs
+documents
+|   +---DocumentsClient.tsx
+finance
+|   +---FinanceClient.tsx
+hr
+|   +---HRClient.tsx
+inventory
+|   +---GoodsReceiptModal.tsx
+|   +---PartDetailModal.tsx
+|   +---PartIssueModal.tsx
+|   +---PrintableDeliveryChallan.tsx
+|   +---PrintablePartsIssueChallan.tsx
+|   +---PrintablePurchaseOrder.tsx
+|   +---PurchaseRequestModal.tsx
+|   +---StockLedgerClient.tsx
+landing
+|   +---AnalyticsShowcaseSection.tsx
+|   +---AnimatedBackground.tsx
+|   +---CtaSection.tsx
+|   +---EngineerMobileSection.tsx
+|   +---EnterpriseSecuritySection.tsx
+|   +---EquipmentGallery.tsx
+|   +---FaqSection.tsx
+|   +---FeatureShowcaseSection.tsx
+|   +---HeroSection.tsx
+|   +---LandingFooter.tsx
+|   +---LandingHeader.tsx
+|   +---NotificationEngineSection.tsx
+|   +---TestimonialsSection.tsx
+|   +---TrustedSection.tsx
+|   +---WorkflowSection.tsx
+_shared
+    +---MachineIcon.tsx
+    +---Section.tsx
+layout
+|   +---AppHeader.tsx
+|   +---AppShellClient.tsx
+|   +---AppSidebar.tsx
+|   +---BranchSelector.tsx
+|   +---GlobalCreateModal.tsx
+|   +---MobileBottomNav.tsx
+|   +---Navbar.tsx
+|   +---PublicNavbar.tsx
+sidebar
+    +---CollapsedSidebarFlyout.tsx
+    +---MobileSidebarDrawer.tsx
+    +---NavigationItem.tsx
+    +---QuickAccessTrigger.tsx
+    +---SidebarHeader.tsx
+    +---SidebarNavigation.tsx
+    +---types.ts
+    +---UserProfileDropdown.tsx
+machines
+|   +---MachineCategoryModal.tsx
+|   +---MachineImportModal.tsx
+|   +---MachineListClient.tsx
+|   +---MachineModal.tsx
+|   +---MachineRow.tsx
+|   +---MobileFilterDrawer.tsx
+|   +---MobileMachineCard.tsx
+my-work
+|   +---MyWorkClient.tsx
+notifications
+|   +---NotificationListClient.tsx
+|   +---NotificationMobileCard.tsx
+|   +---NotificationPreviewModal.tsx
+|   +---NotificationRow.tsx
+operations
+|   +---OperationsClient.tsx
+|   +---PrintableSupervisorLogsModal.tsx
+purchase
+|   +---PODetailClient.tsx
+|   +---PurchaseOrdersClient.tsx
+rentals
+|   +---RentalManagementClient.tsx
+reports
+|   +---ReportsClient.tsx
+service
+|   +---ServiceHubClient.tsx
+services
+|   +---ServicesClient.tsx
+tasks
+|   +---CompleteTaskModal.tsx
+|   +---CreateTaskModal.tsx
+|   +---TaskDetailDrawer.tsx
+|   +---TasksClient.tsx
+|   +---VerifyTaskModal.tsx
+theme
+|   +---ThemeProvider.tsx
+|   +---ThemeScript.tsx
+|   +---ThemeToggle.tsx
+ui
+|   +---animated-icon.tsx
+animated-icons
+|   +---index.ts
+|   +---Avatar.tsx
+|   +---Badge.tsx
+|   +---Button.tsx
+|   +---Card.tsx
+|   +---CommandPalette.tsx
+|   +---ConfirmationDialog.tsx
+|   +---CookieConsent.tsx
+|   +---CustomTimePicker.tsx
+|   +---dialog.tsx
+|   +---EmptyState.tsx
+|   +---EnterpriseTable.tsx
+|   +---FilterToolbar.tsx
+|   +---index.ts
+|   +---Input.tsx
+|   +---Logo.tsx
+|   +---MetricCard.tsx
+|   +---Modal.tsx
+|   +---Motion.tsx
+|   +---PageHeader.tsx
+|   +---RefreshButton.tsx
+|   +---SearchableSelect.tsx
+|   +---Select.tsx
+|   +---sidebar.tsx
+|   +---Skeleton.tsx
+|   +---Sparkline.tsx
+|   +---Spinner.tsx
+|   +---Table.tsx
+|   +---Toast.tsx
+|   +---tooltip.tsx
+vendors
+    +---VendorDetailClient.tsx
+    +---VendorsClient.tsx
+    +---components.json
+    +---eslint.config.mjs
+lib
+|   +---audit-helpers.ts
+|   +---audit.ts
+auth
+|   +---rbac.ts
+|   +---scope.ts
+|   +---server-rbac.ts
+|   +---brand.ts
+cache
+|   +---policies.ts
+|   +---tags.ts
+|   +---cache.ts
+|   +---client.ts
+|   +---dal.ts
+|   +---email.ts
+hooks
+|   +---useMediaQuery.ts
+notifications
+|   +---daily-summary.ts
+|   +---email-templates.tsx
+|   +---index.ts
+|   +---send-reminders.ts
+|   +---sms.ts
+|   +---templates.ts
+|   +---whatsapp.ts
+queries
+|   +---audit-logs.ts
+|   +---branches.ts
+|   +---categories.ts
+|   +---challans.ts
+|   +---clients.ts
+|   +---complaints.ts
+|   +---dashboard.ts
+|   +---documents.ts
+|   +---finance.ts
+|   +---hr.ts
+|   +---inventory.ts
+|   +---machines.ts
+|   +---my-work.ts
+|   +---notifications.ts
+|   +---purchase-orders.ts
+|   +---rentals.ts
+|   +---sales.ts
+|   +---services.ts
+|   +---tasks.ts
+|   +---vendors.ts
+security
+|   +---clipboard.ts
+|   +---idempotency.ts
+|   +---rate-limiter.ts
+|   +---timeout.ts
+|   +---server.ts
+supabase
+|   +---admin.ts
+|   +---browser.ts
+|   +---server.ts
+types
+|   +---database.ts
+utils
+|   +---excel-template.ts
+|   +---machine-errors.ts
+|   +---operator-logs-export.ts
+|   +---supervisor-logs-export.ts
+|   +---utils.ts
+    +---next-env.d.ts
+    +---next.config.ts
+    +---package.json
+    +---postcss.config.mjs
+    +---proxy.ts
+public
+|   +---dark-apple-touch-icon.png
+|   +---dark-favicon-96x96.png
+|   +---dark-favicon.ico
+|   +---dark-favicon.svg
+|   +---dark-web-app-manifest-192x192.png
+|   +---dark-web-app-manifest-512x512.png
+images
+avatars
+    +---avatar-1.jpg
+    +---avatar-2.jpg
+    +---avatar-3.jpg
+    +---avatar-4.jpg
+|   +---light-apple-touch-icon.png
+|   +---light-favicon-96x96.png
+|   +---light-favicon.ico
+|   +---light-favicon.svg
+|   +---light-web-app-manifest-192x192.png
+|   +---light-web-app-manifest-512x512.png
+|   +---pdf-logo.png
+|   +---site.webmanifest
+scripts
+    +---test-notification.ts
+    +---test-notifications.ts
+    +---tsconfig.json
+    +---tsconfig.tsbuildinfo
+    +---DESIGN.md
+docs
+|   +---current-architecture.md
+|   +---current-database.md
+|   +---current-dependencies.md
+|   +---current-security.md
+|   +---phases.md
+    +---NOTIFICATIONS.md
+    +---package-lock.json
+    +---package.json
+packages
+api-client
+|   +---package.json
+src
+endpoints
+|   +---index.ts
+|   +---error.ts
+|   +---index.ts
+|   +---query.ts
+|   +---response.ts
+|   +---tsconfig.json
+config
+|   +---package.json
+src
+|   +---index.ts
+|   +---tsconfig.json
+design-tokens
+|   +---package.json
+src
+adapters
+|   +---cssVariables.ts
+|   +---reactNative.ts
+contracts
+|   +---badge.ts
+|   +---icons.ts
+|   +---index.ts
+tokens
+    +---breakpoints.ts
+    +---colors.ts
+    +---elevation.ts
+    +---motion.ts
+    +---radius.ts
+    +---spacing.ts
+    +---typography.ts
+|   +---tsconfig.json
+permissions
+|   +---package.json
+src
+|   +---index.ts
+|   +---matrix.ts
+|   +---permissions.ts
+|   +---roles.ts
+|   +---scopes.ts
+|   +---tsconfig.json
+types
+|   +---package.json
+src
+|   +---common.ts
+|   +---database.ts
+|   +---index.ts
+|   +---tsconfig.json
+utils
+|   +---package.json
+src
+|   +---clipboard.ts
+|   +---currency.ts
+|   +---date.ts
+|   +---index.ts
+|   +---object.ts
+|   +---sanitize.ts
+|   +---ssti.ts
+|   +---string.ts
+|   +---tsconfig.json
+validation
+    +---package.json
+src
+|   +---auth.ts
+|   +---client.ts
+|   +---clipboard.ts
+|   +---common.ts
+|   +---complaint.ts
+|   +---finance.ts
+|   +---fsr.ts
+|   +---helpers.ts
+|   +---hourMeter.ts
+|   +---hr.ts
+|   +---index.ts
+|   +---inventory.ts
+|   +---machine.ts
+|   +---parts.ts
+|   +---rental.ts
+|   +---sales.ts
+|   +---task.ts
+    +---tsconfig.json
+performance
+audit
+|   +---apps-tree.txt
+|   +---authentication.md
+|   +---caching.md
+|   +---client-components.md
+|   +---components.md
+|   +---dal.md
+|   +---database-calls.md
+|   +---database-schema.md
+|   +---dependencies.md
+|   +---network-calls.md
+|   +---packages-tree.txt
+|   +---permissions.md
+|   +---reports.md
+|   +---routes.md
+|   +---server-actions.md
+|   +---supabase-tree.txt
+baseline
+    +---actions.md
+    +---build.md
+    +---database.md
+    +---queries.md
+    +---README.md
+    +---routes.md
+    +---pnpm-lock.yaml
+    +---pnpm-workspace.yaml
+    +---prd.md
+    +---README.md
+scratch
+|   +---test_idempotency_matrix.ts
+|   +---test_idempotency_production_suite.ts
+|   +---test_idempotency_standalone.ts
+|   +---test_idempotency_suite.ts
+|   +---test_redos_security.ts
+|   +---test_security_audit_fixes.mjs
+|   +---test_security_remediation.mjs
+|   +---test_ssti_security.ts
+    +---skills-lock.json
+supabase
+.temp
+|   +---cli-latest
+|   +---gotrue-version
+|   +---linked-project.json
+|   +---pooler-url
+|   +---postgres-version
+|   +---project-ref
+|   +---rest-version
+|   +---storage-migration
+|   +---storage-version
+|   +---admin.mjs
+|   +---exec_migration.mjs
+migrations
+|   +---001_create_users_table.sql
+|   +---002_create_machines_table.sql
+|   +---003_create_clients_table.sql
+|   +---004_create_machine_hour_logs_table.sql
+|   +---005_drop_unwanted_tables.sql
+|   +---006_remove_branch_manager_role.sql
+|   +---007_add_user_address_columns.sql
+|   +---008_user_unique_email_phone.sql
+|   +---009_allow_admin_manage_users.sql
+|   +---010_fix_shift_time_comparison_trigger.sql
+|   +---011_alter_machine_hour_logs_time_columns.sql
+|   +---012_create_idempotency_keys_table.sql
+|   +---013_create_clipboard_security_and_constraints.sql
+|   +---014_set_statement_timeouts_and_dos_guards.sql
+|   +---015_security_hardening_rls_and_triggers.sql
+|   +---016_enterprise_security_hardening.sql
+|   +---017_mandatory_user_details_and_nullable_address.sql
+|   +---018_mandatory_client_address.sql
+|   +---019_security_remediation_self_mutation_hardening.sql
+|   +---seed.mjs
+|   +---seed_dummy_data.mjs
+|   +---verify_seed.mjs
+    +---turbo.json

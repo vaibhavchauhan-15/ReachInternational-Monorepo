@@ -1,0 +1,139 @@
+001_create_users_table.sql:8:CREATE TABLE IF NOT EXISTS public.users (
+001_create_users_table.sql:24:CREATE INDEX IF NOT EXISTS idx_users_role ON public.users(role);
+001_create_users_table.sql:25:CREATE INDEX IF NOT EXISTS idx_users_status ON public.users(status);
+001_create_users_table.sql:26:CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
+001_create_users_table.sql:38:CREATE TRIGGER trigger_users_updated_at
+001_create_users_table.sql:74:CREATE TRIGGER trigger_on_auth_user_created
+001_create_users_table.sql:90:ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+001_create_users_table.sql:93:CREATE POLICY "users_select_authenticated" ON public.users
+001_create_users_table.sql:97:CREATE POLICY "users_insert_super_admin" ON public.users
+001_create_users_table.sql:101:CREATE POLICY "users_update_super_admin" ON public.users
+001_create_users_table.sql:106:CREATE POLICY "users_delete_super_admin" ON public.users
+001_create_users_table.sql:110:CREATE POLICY "users_update_self" ON public.users
+002_create_machines_table.sql:6:CREATE TABLE IF NOT EXISTS public.machines (
+002_create_machines_table.sql:56:CREATE TRIGGER trg_generate_machine_id
+002_create_machines_table.sql:62:CREATE TRIGGER trigger_machines_updated_at
+002_create_machines_table.sql:67:CREATE INDEX IF NOT EXISTS idx_machines_machine_id ON public.machines(machine_id);
+002_create_machines_table.sql:68:CREATE INDEX IF NOT EXISTS idx_machines_status ON public.machines(status);
+002_create_machines_table.sql:69:CREATE INDEX IF NOT EXISTS idx_machines_health_status ON public.machines(health_status);
+002_create_machines_table.sql:70:CREATE INDEX IF NOT EXISTS idx_machines_current_supervisor ON public.machines(current_supervisor_id);
+002_create_machines_table.sql:71:CREATE INDEX IF NOT EXISTS idx_machines_current_operator ON public.machines(current_operator_id);
+002_create_machines_table.sql:74:ALTER TABLE public.machines ENABLE ROW LEVEL SECURITY;
+002_create_machines_table.sql:77:CREATE POLICY "machines_select_authorized" ON public.machines
+002_create_machines_table.sql:81:CREATE POLICY "machines_insert_authorized" ON public.machines
+002_create_machines_table.sql:91:CREATE POLICY "machines_update_authorized" ON public.machines
+002_create_machines_table.sql:102:CREATE POLICY "machines_delete_authorized" ON public.machines
+003_create_clients_table.sql:6:CREATE TABLE IF NOT EXISTS public.clients (
+003_create_clients_table.sql:49:CREATE TRIGGER trg_generate_client_code
+003_create_clients_table.sql:55:CREATE TRIGGER trigger_clients_updated_at
+003_create_clients_table.sql:60:CREATE INDEX IF NOT EXISTS idx_clients_status ON public.clients(status);
+003_create_clients_table.sql:61:CREATE INDEX IF NOT EXISTS idx_clients_deleted_at ON public.clients(deleted_at);
+003_create_clients_table.sql:62:CREATE INDEX IF NOT EXISTS idx_clients_client_name ON public.clients(client_name);
+003_create_clients_table.sql:63:CREATE INDEX IF NOT EXISTS idx_clients_code ON public.clients(code);
+003_create_clients_table.sql:66:ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
+003_create_clients_table.sql:69:CREATE POLICY "clients_select_policy" ON public.clients
+003_create_clients_table.sql:81:CREATE POLICY "clients_insert_policy" ON public.clients
+003_create_clients_table.sql:92:CREATE POLICY "clients_update_policy" ON public.clients
+003_create_clients_table.sql:103:CREATE POLICY "clients_delete_policy" ON public.clients
+004_create_machine_hour_logs_table.sql:6:CREATE TABLE IF NOT EXISTS public.machine_hour_logs (
+004_create_machine_hour_logs_table.sql:26:ALTER TABLE public.machine_hour_logs
+004_create_machine_hour_logs_table.sql:79:CREATE TRIGGER trg_check_machine_hour_log_shift_overlap
+004_create_machine_hour_logs_table.sql:118:CREATE TRIGGER trg_auto_calculate_machine_hour_log_overtime
+004_create_machine_hour_logs_table.sql:123:CREATE INDEX IF NOT EXISTS idx_machine_hour_logs_machine_id ON public.machine_hour_logs(machine_id);
+004_create_machine_hour_logs_table.sql:124:CREATE INDEX IF NOT EXISTS idx_machine_hour_logs_operator_id ON public.machine_hour_logs(operator_id);
+004_create_machine_hour_logs_table.sql:125:CREATE INDEX IF NOT EXISTS idx_machine_hour_logs_supervisor_id ON public.machine_hour_logs(supervisor_id);
+004_create_machine_hour_logs_table.sql:126:CREATE INDEX IF NOT EXISTS idx_machine_hour_logs_client_id ON public.machine_hour_logs(client_id);
+004_create_machine_hour_logs_table.sql:127:CREATE INDEX IF NOT EXISTS idx_machine_hour_logs_machine_date ON public.machine_hour_logs(machine_id, log_date DESC);
+004_create_machine_hour_logs_table.sql:128:CREATE INDEX IF NOT EXISTS idx_machine_hour_logs_operator_date ON public.machine_hour_logs(operator_id, log_date DESC);
+004_create_machine_hour_logs_table.sql:129:CREATE INDEX IF NOT EXISTS idx_machine_hour_logs_meters ON public.machine_hour_logs(machine_id, start_meter, end_meter);
+004_create_machine_hour_logs_table.sql:132:ALTER TABLE public.machine_hour_logs ENABLE ROW LEVEL SECURITY;
+004_create_machine_hour_logs_table.sql:135:CREATE POLICY "Allow authenticated read machine_hour_logs" ON public.machine_hour_logs
+004_create_machine_hour_logs_table.sql:139:CREATE POLICY "Allow authenticated write machine_hour_logs" ON public.machine_hour_logs
+005_drop_unwanted_tables.sql:10:ALTER TABLE IF EXISTS public.users DROP CONSTRAINT IF EXISTS users_branch_id_fkey CASCADE;
+005_drop_unwanted_tables.sql:11:ALTER TABLE IF EXISTS public.users DROP COLUMN IF EXISTS branch_id;
+005_drop_unwanted_tables.sql:13:ALTER TABLE IF EXISTS public.machines DROP CONSTRAINT IF EXISTS machines_branch_id_fkey CASCADE;
+005_drop_unwanted_tables.sql:14:ALTER TABLE IF EXISTS public.machines DROP CONSTRAINT IF EXISTS machines_category_id_fkey CASCADE;
+005_drop_unwanted_tables.sql:15:ALTER TABLE IF EXISTS public.machines DROP CONSTRAINT IF EXISTS machines_manufacturer_id_fkey CASCADE;
+005_drop_unwanted_tables.sql:16:ALTER TABLE IF EXISTS public.machines DROP CONSTRAINT IF EXISTS machines_model_id_fkey CASCADE;
+005_drop_unwanted_tables.sql:17:ALTER TABLE IF EXISTS public.machines DROP COLUMN IF EXISTS branch_id;
+005_drop_unwanted_tables.sql:18:ALTER TABLE IF EXISTS public.machines DROP COLUMN IF EXISTS category_id;
+005_drop_unwanted_tables.sql:19:ALTER TABLE IF EXISTS public.machines DROP COLUMN IF EXISTS manufacturer_id;
+005_drop_unwanted_tables.sql:20:ALTER TABLE IF EXISTS public.machines DROP COLUMN IF EXISTS model_id;
+005_drop_unwanted_tables.sql:22:ALTER TABLE IF EXISTS public.clients DROP CONSTRAINT IF EXISTS clients_branch_id_fkey CASCADE;
+005_drop_unwanted_tables.sql:23:ALTER TABLE IF EXISTS public.clients DROP COLUMN IF EXISTS branch_id;
+006_remove_branch_manager_role.sql:6:ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_role_check;
+006_remove_branch_manager_role.sql:7:ALTER TABLE public.users ADD CONSTRAINT users_role_check CHECK (
+006_remove_branch_manager_role.sql:20:CREATE POLICY "machines_insert_authorized" ON public.machines
+006_remove_branch_manager_role.sql:30:CREATE POLICY "machines_update_authorized" ON public.machines
+006_remove_branch_manager_role.sql:42:CREATE POLICY "clients_select_policy" ON public.clients
+006_remove_branch_manager_role.sql:54:CREATE POLICY "clients_insert_policy" ON public.clients
+006_remove_branch_manager_role.sql:65:CREATE POLICY "clients_update_policy" ON public.clients
+006_remove_branch_manager_role.sql:76:CREATE POLICY "clients_delete_policy" ON public.clients
+007_add_user_address_columns.sql:6:ALTER TABLE public.users ADD COLUMN IF NOT EXISTS city TEXT DEFAULT '' NOT NULL;
+007_add_user_address_columns.sql:7:ALTER TABLE public.users ADD COLUMN IF NOT EXISTS district TEXT DEFAULT '' NOT NULL;
+007_add_user_address_columns.sql:8:ALTER TABLE public.users ADD COLUMN IF NOT EXISTS state TEXT DEFAULT '' NOT NULL;
+007_add_user_address_columns.sql:16:ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_city_not_empty;
+007_add_user_address_columns.sql:17:ALTER TABLE public.users ADD CONSTRAINT users_city_not_empty CHECK (btrim(city) <> '');
+007_add_user_address_columns.sql:19:ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_district_not_empty;
+007_add_user_address_columns.sql:20:ALTER TABLE public.users ADD CONSTRAINT users_district_not_empty CHECK (btrim(district) <> '');
+007_add_user_address_columns.sql:22:ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_state_not_empty;
+007_add_user_address_columns.sql:23:ALTER TABLE public.users ADD CONSTRAINT users_state_not_empty CHECK (btrim(state) <> '');
+007_add_user_address_columns.sql:26:CREATE INDEX IF NOT EXISTS idx_users_address ON public.users(state, district, city);
+008_user_unique_email_phone.sql:5:-- 1. Create Unique Index on Email (case-insensitive & trimmed)
+008_user_unique_email_phone.sql:6:CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique_idx
+008_user_unique_email_phone.sql:9:-- 2. Create Unique Index on Mobile Phone Number (non-empty & trimmed)
+008_user_unique_email_phone.sql:10:CREATE UNIQUE INDEX IF NOT EXISTS users_phone_unique_idx
+008_user_unique_email_phone.sql:20:ALTER TABLE public.users ADD CONSTRAINT users_email_key UNIQUE (email);
+008_user_unique_email_phone.sql:26:ALTER TABLE public.users ADD CONSTRAINT users_phone_key UNIQUE (phone);
+009_allow_admin_manage_users.sql:13:CREATE POLICY "users_insert_admin"
+009_allow_admin_manage_users.sql:19:CREATE POLICY "users_update_admin"
+009_allow_admin_manage_users.sql:26:CREATE POLICY "users_delete_admin"
+011_alter_machine_hour_logs_time_columns.sql:9:ALTER TABLE public.machine_hour_logs
+011_alter_machine_hour_logs_time_columns.sql:13:ALTER TABLE public.machine_hour_logs
+012_create_idempotency_keys_table.sql:3:CREATE TABLE IF NOT EXISTS public.idempotency_keys (
+012_create_idempotency_keys_table.sql:16:CREATE INDEX IF NOT EXISTS idx_idempotency_keys_user_action ON public.idempotency_keys(user_id, action_name);
+012_create_idempotency_keys_table.sql:17:CREATE INDEX IF NOT EXISTS idx_idempotency_keys_expires_at ON public.idempotency_keys(expires_at);
+012_create_idempotency_keys_table.sql:18:CREATE INDEX IF NOT EXISTS idx_idempotency_keys_hash ON public.idempotency_keys(request_hash);
+012_create_idempotency_keys_table.sql:21:ALTER TABLE public.idempotency_keys ENABLE ROW LEVEL SECURITY;
+012_create_idempotency_keys_table.sql:25:CREATE POLICY "Users can read own idempotency keys" ON public.idempotency_keys
+012_create_idempotency_keys_table.sql:30:CREATE POLICY "Users can insert own idempotency keys" ON public.idempotency_keys
+012_create_idempotency_keys_table.sql:35:CREATE POLICY "Users can update own idempotency keys" ON public.idempotency_keys
+012_create_idempotency_keys_table.sql:40:ALTER TABLE public.machine_hour_logs ADD COLUMN IF NOT EXISTS idempotency_key TEXT UNIQUE;
+013_create_clipboard_security_and_constraints.sql:10:ALTER TABLE public.machine_hour_logs
+013_create_clipboard_security_and_constraints.sql:22:ALTER TABLE public.machine_hour_logs
+013_create_clipboard_security_and_constraints.sql:33:ALTER TABLE public.machine_hour_logs
+013_create_clipboard_security_and_constraints.sql:45:ALTER TABLE public.machines
+015_security_hardening_rls_and_triggers.sql:10:-- Create trigger function that blocks any user from changing their own role or status
+015_security_hardening_rls_and_triggers.sql:32:CREATE TRIGGER trg_prevent_self_role_status_mutation
+015_security_hardening_rls_and_triggers.sql:45:CREATE POLICY "operators_insert_own_logs" ON public.machine_hour_logs
+015_security_hardening_rls_and_triggers.sql:51:CREATE POLICY "users_update_logs" ON public.machine_hour_logs
+015_security_hardening_rls_and_triggers.sql:64:CREATE POLICY "admins_delete_logs" ON public.machine_hour_logs
+016_enterprise_security_hardening.sql:55:CREATE TRIGGER trigger_on_auth_user_created
+016_enterprise_security_hardening.sql:66:CREATE POLICY "machines_update_authorized" ON public.machines
+016_enterprise_security_hardening.sql:86:CREATE TABLE IF NOT EXISTS public.audit_logs (
+016_enterprise_security_hardening.sql:98:CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON public.audit_logs(user_id);
+016_enterprise_security_hardening.sql:99:CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON public.audit_logs(action);
+016_enterprise_security_hardening.sql:100:CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON public.audit_logs(created_at DESC);
+016_enterprise_security_hardening.sql:101:CREATE INDEX IF NOT EXISTS idx_audit_logs_entity ON public.audit_logs(entity_type, entity_id);
+016_enterprise_security_hardening.sql:104:ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+016_enterprise_security_hardening.sql:109:CREATE POLICY "audit_logs_select_admin" ON public.audit_logs
+016_enterprise_security_hardening.sql:116:CREATE POLICY "audit_logs_insert_authenticated" ON public.audit_logs
+017_mandatory_user_details_and_nullable_address.sql:50:CREATE TRIGGER trigger_on_auth_user_created
+017_mandatory_user_details_and_nullable_address.sql:55:ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_email_not_empty;
+017_mandatory_user_details_and_nullable_address.sql:56:ALTER TABLE public.users ADD CONSTRAINT users_email_not_empty CHECK (btrim(email) <> '');
+017_mandatory_user_details_and_nullable_address.sql:58:ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_city_not_empty;
+017_mandatory_user_details_and_nullable_address.sql:59:ALTER TABLE public.users ADD CONSTRAINT users_city_not_empty CHECK (btrim(city) <> '');
+017_mandatory_user_details_and_nullable_address.sql:61:ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_district_not_empty;
+017_mandatory_user_details_and_nullable_address.sql:62:ALTER TABLE public.users ADD CONSTRAINT users_district_not_empty CHECK (btrim(district) <> '');
+017_mandatory_user_details_and_nullable_address.sql:64:ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_state_not_empty;
+017_mandatory_user_details_and_nullable_address.sql:65:ALTER TABLE public.users ADD CONSTRAINT users_state_not_empty CHECK (btrim(state) <> '');
+018_mandatory_client_address.sql:22:ALTER TABLE public.clients ALTER COLUMN address SET NOT NULL;
+018_mandatory_client_address.sql:23:ALTER TABLE public.clients ALTER COLUMN city SET NOT NULL;
+018_mandatory_client_address.sql:24:ALTER TABLE public.clients ALTER COLUMN state SET NOT NULL;
+018_mandatory_client_address.sql:27:ALTER TABLE public.clients DROP CONSTRAINT IF EXISTS clients_address_not_empty;
+018_mandatory_client_address.sql:28:ALTER TABLE public.clients ADD CONSTRAINT clients_address_not_empty CHECK (btrim(address) <> '');
+018_mandatory_client_address.sql:30:ALTER TABLE public.clients DROP CONSTRAINT IF EXISTS clients_city_not_empty;
+018_mandatory_client_address.sql:31:ALTER TABLE public.clients ADD CONSTRAINT clients_city_not_empty CHECK (btrim(city) <> '');
+018_mandatory_client_address.sql:33:ALTER TABLE public.clients DROP CONSTRAINT IF EXISTS clients_state_not_empty;
+018_mandatory_client_address.sql:34:ALTER TABLE public.clients ADD CONSTRAINT clients_state_not_empty CHECK (btrim(state) <> '');
+019_security_remediation_self_mutation_hardening.sql:34:CREATE TRIGGER trg_prevent_self_role_status_mutation
