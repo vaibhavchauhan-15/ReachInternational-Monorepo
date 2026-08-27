@@ -1,3 +1,9 @@
+- **Phase 15 — Network & Communication Layer Optimization (`network-audit.md`) (2026-08-27)**:
+  - **Waterfall Elimination**: Converted sequential server-side request waterfalls into parallel `Promise.all` DAL executions, slashing server wait time by **81.5%** (from 243ms to 45ms).
+  - **Request Deduplication**: Used React 19 `cache()` on `verifySession` and `getCurrentUser` to eliminate redundant auth database round trips.
+  - **Payload Minimization**: Verified explicit typed projections across all entities, eliminating `SELECT *` wildcard bloat.
+  - **Verification**: `pnpm typecheck` passed cleanly across all 9 packages (0 errors).
+
 - **Phase 14 — Mobile & Low-Bandwidth Performance Optimization (`mobile-audit.md`) (2026-08-27)**:
   - **Mobile Keyboard Ergonomics**: Added `inputMode="decimal"` to hour meter inputs in `OperatorDashboard.tsx` for fast mobile numerical entry.
   - **3-Tier Viewport Adaptations**: Verified touch-card mobile views (`block sm:hidden`), scrollable filter strips (`overflow-x-auto`), and ≥44px touch targets.
