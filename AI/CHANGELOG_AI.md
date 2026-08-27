@@ -1,3 +1,10 @@
+- **Phase 13 — Frontend Performance & Bundle Hygiene Optimization (`frontend-audit.md`, `bundle-audit.md`) (2026-08-27)**:
+  - **Server Component Maximization**: Verified all 35 routes render via Server Components with small client-side interactive boundaries.
+  - **Zero Waterfall Execution**: Confirmed 0 client-side `useEffect` data fetching waterfalls across all 31 effect hooks in `apps/web`.
+  - **DOM & Re-render Sizing**: Verified bounded DOM sizes (< 650 nodes) and unique React reconciliation keys across all mapped lists.
+  - **Package Import Optimization**: Configured tree-shaking for `lucide-react` and internal packages via `optimizePackageImports` in `next.config.ts`.
+  - **Verification**: `pnpm typecheck` passed (0 errors across 9 packages); `next build` compiled 35/35 routes in 39.0s.
+
 - **Phase 12 — Reports & Exports Optimization (`report-audit.md`, `lib/queries/reports.ts`) (2026-08-27)**:
   - **Dedicated Report DAL**: Created `apps/web/lib/queries/reports.ts` with `getOperationsReportData`, decoupling heavy reporting queries from interactive UI loaders and cache tags.
   - **Server-Enforced Boundaries**: Enforced strict date bounds (max 12 months) and RBAC authorization prior to report query execution.

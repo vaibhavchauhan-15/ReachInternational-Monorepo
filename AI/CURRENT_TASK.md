@@ -1,6 +1,27 @@
 # Current Task Context
 
-## Completed Task (2026-08-27) — Phase 12: Reports & Exports Optimization
+## Completed Task (2026-08-27) — Phase 13: Frontend Performance & Bundle Hygiene Optimization
+
+**Goal**: Audit frontend rendering, hydration boundaries, DOM sizes, and bundle compositions across all primary routes, verify zero `useEffect` client-side data waterfalls, configure package import tree-shaking, and document metrics in `performance/audit/frontend-audit.md` and `performance/audit/bundle-audit.md`.
+
+### Key Changes & Implementation Details
+
+1. **Verified Server Component Boundaries**:
+   - All root routes (`app/(app)/*/page.tsx`) load data via Server Components, pre-rendering HTML and reducing initial client JavaScript.
+2. **Audited Zero `useEffect` Waterfalls**:
+   - Confirmed all 31 `useEffect` hooks across `apps/web` handle local UI state only (0 client-side data fetching waterfalls).
+3. **Optimized Package Imports & Tree-Shaking**:
+   - Configured `optimizePackageImports` for `lucide-react` and internal packages in `apps/web/next.config.ts`.
+4. **Created Audit Specifications**:
+   - `performance/audit/frontend-audit.md` (Route-by-route DOM nodes, hydration, and re-render profiling).
+   - `performance/audit/bundle-audit.md` (Bundle composition, tree-shaking, and server-only isolation).
+5. **Verification**:
+   - `pnpm typecheck` passed (0 errors across 9 packages).
+   - `next build` compiled 35/35 routes in 39.0s.
+
+---
+
+## Previous Completed Task (2026-08-27) — Phase 12: Reports & Exports Optimization
 
 **Goal**: Audit all PDF, Excel, and CSV export workflows, decouple reporting queries from interactive UI loaders by creating a dedicated server-only Report DAL (`getOperationsReportData`), enforce mandatory server-side date range limits (max 12 months) and RBAC authorization, and document report metrics in `performance/audit/report-audit.md`.
 
