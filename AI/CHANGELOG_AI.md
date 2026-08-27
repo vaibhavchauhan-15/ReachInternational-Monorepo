@@ -1,3 +1,9 @@
+- **Phase 11 — Operations & Log Subsystem Optimization (`operations-audit.md`, `data-growth.md`) (2026-08-27)**:
+  - **Comprehensive Operational Audit**: Documented query execution metrics across all 6 tabs on `/operations` in `performance/audit/operations-audit.md`.
+  - **Stable Compound Ordering & Limits**: Verified deterministic `ORDER BY log_date DESC, created_at DESC` sorting and bounded result sets (`LIMIT 50` / `LIMIT 200`) across all log streams.
+  - **Multi-Year Data Growth Modeling**: Projected 1, 3, and 5-year growth curves for `machine_hour_logs` (~110k logs/year) and defined declarative range partitioning criteria at > 500k rows in `performance/audit/data-growth.md`.
+  - **Verification**: `pnpm typecheck` passed cleanly across all 9 packages (0 errors).
+
 - **Phase 10 — Mutation & Transaction Optimization (`supabase/migrations/022_atomic_mutations_and_rpc.sql`, `mutation-audit.md`, `rpc-candidates.md`) (2026-08-27)**:
   - **Atomic Hour Log RPC (`022_atomic_mutations_and_rpc.sql`)**: Implemented `submit_operator_hour_log_atomic` combining meter validation, log insert, trigger shift overlap check, machine status/meter update, and audit logging into **1 single atomic database round trip**.
   - **Optimized Server Action (`actions/operators.ts`)**: Integrated `submit_operator_hour_log_atomic` into `submitOperatorHourLogAction` with automatic fallback, slashing database round trips from 5 to 1 and reducing mutation latency by **87.7%** (from 148.0ms to 18.2ms).

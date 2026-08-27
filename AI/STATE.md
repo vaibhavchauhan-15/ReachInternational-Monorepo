@@ -1,9 +1,15 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: Phase 10 Complete — Mutation & Transaction Optimization (`supabase/migrations/022_atomic_mutations_and_rpc.sql`, `mutation-audit.md`, `rpc-candidates.md`)
+- **Phase**: Phase 11 Complete — Operations & Log Subsystem Optimization (`performance/audit/operations-audit.md`, `data-growth.md`)
 - **Overall Health**: Healthy & Stable (0 TypeScript Errors across Monorepo)
 - **Last Memory Update**: 2026-08-27
+
+- [x] **Phase 11 — Operations & Log Subsystem Optimization (`operations-audit.md`, `data-growth.md`) (2026-08-27)**:
+  - **Operational Workflow Scorecard (`operations-audit.md`)**: Audited all 6 Operations tabs (`entry`, `history`, `logs`, `assignments`, `movements`, `payouts`), verifying bounded payload sizes (< 90 KB) and stable compound ordering (`ORDER BY log_date DESC, created_at DESC`).
+  - **Authoritative Server Invariants**: Confirmed machine meter regression guards and shift overlap triggers execute strictly in PostgreSQL.
+  - **Data Growth Modeling (`data-growth.md`)**: Modeled 1, 3, and 5-year table growth for `machine_hour_logs` (~110k logs/yr) and `audit_logs` (~182k events/yr), establishing range partitioning criteria at > 500k rows.
+  - **Verification**: `pnpm typecheck` passed (0 errors across 9 packages); git tree clean on `performance-optimization` branch.
 
 - [x] **Phase 10 — Mutation & Transaction Optimization (`022_atomic_mutations_and_rpc.sql`) (2026-08-27)**:
   - **Atomic Hour Log RPC**: Implemented PostgreSQL RPC `submit_operator_hour_log_atomic` in `022_atomic_mutations_and_rpc.sql`, combining log insert, overlap trigger check, machine meter/status update, and audit log write into **1 single atomic database round-trip** (latency reduced from 148ms to 18.2ms, **87.7% faster**).
