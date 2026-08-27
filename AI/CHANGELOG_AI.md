@@ -1,3 +1,9 @@
+- **Phase 18 — Load Testing & Production Capacity Audit (`load-test-report.md`, `performance/load-test/`) (2026-08-27)**:
+  - **Workload Modeling**: Defined 4 user personas (Operator 70%, Supervisor 20%, Admin 8%, Reporting 2%) and built k6 / Node.js concurrency benchmarks.
+  - **High Concurrency Benchmarks**: Tested 100 concurrent virtual users: Operator shift submission p95 = 32.57ms (budget < 50ms), p99 = 32.85ms, Throughput = 3,190 ops/sec, 5xx Error Rate = 0.00%.
+  - **Concurrency & Idempotency Safeguards**: Verified 20 simultaneous duplicate submissions produce exactly 1 atomic DB insert with 0 lost updates.
+  - **Verification**: `pnpm typecheck` passed cleanly across all 9 packages (0 errors).
+
 - **Phase 17 — Combined Security & Performance Review (`security-performance-audit.md`) (2026-08-27)**:
   - **Full Security Boundary Review**: Audited all 19 Server Action modules, 28 PostgreSQL RLS policies, 4 database functions, and DAL data loaders.
   - **IDOR & Role Isolation Verified**: Confirmed resource ownership validation on all mutations (`operator_id = auth.uid()`), preventing unauthorized cross-user modifications.
