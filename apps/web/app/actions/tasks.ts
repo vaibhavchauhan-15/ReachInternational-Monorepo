@@ -73,15 +73,16 @@ export async function createTask(input: CreateTaskInput) {
     });
 
     // 4. Send Notifications to Assignees
-    for (const assigneeId of validated.assignee_ids) {
-      await supabase.from("notifications").insert({
+    if (validated.assignee_ids && validated.assignee_ids.length > 0) {
+      const taskNotifications = validated.assignee_ids.map((assigneeId) => ({
         user_id: assigneeId,
         type: "task_assigned",
         title: `New Task Assigned: ${validated.title}`,
         message: `Task #${task.task_no} (${validated.title}) has been assigned to you by ${currentUser.full_name}. Due: ${validated.due_date}`,
         metadata: { task_id: task.id, task_no: task.task_no },
         channel: "in_app",
-      });
+      }));
+      await supabase.from("notifications").insert(taskNotifications);
     }
 
     revalidatePath("/tasks");

@@ -477,7 +477,7 @@ export async function getMachinePartsUsedHistory(machineId: string) {
   const supabase = createSupabaseAdminClient();
   const { data } = await supabase
     .from("inventory_transactions")
-    .select("*")
+    .select("id, transaction_type, quantity, notes, created_at, item:items(id, part_number, name)")
     .eq("machine_id", machineId)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -488,7 +488,7 @@ export async function getMachineActiveRental(machineId: string) {
   const supabase = createSupabaseAdminClient();
   const { data } = await supabase
     .from("rental_contracts")
-    .select("*")
+    .select("id, contract_number, client_id, start_date, end_date, monthly_rate, status, client:clients(id, client_name)")
     .eq("machine_id", machineId)
     .eq("status", "active")
     .maybeSingle();

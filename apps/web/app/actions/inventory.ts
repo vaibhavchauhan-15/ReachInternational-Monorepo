@@ -454,22 +454,21 @@ export async function createPurchaseOrderAction(payload: {
       .in("role", ["branch_manager", "admin", "super_admin"]);
 
     if (branchManagers && branchManagers.length > 0) {
-      for (const mgr of branchManagers) {
-        await supabase.from("notifications").insert({
-          recipient_id: mgr.id,
-          alert_type: "today",
-          alert_date: new Date().toISOString().split("T")[0],
-          channel: "in_app",
-          status: "sent",
-          payload: {
-            title: "PO Pending High-Value Approval",
-            message: `Purchase Order ${poNumber} (₹${grandTotal.toLocaleString("en-IN")}) exceeds Store Manager approval threshold (₹10,000). Approval required.`,
-            poNumber,
-            requestedBy: user.full_name || user.email,
-            grandTotal,
-          },
-        });
-      }
+      const notificationsToInsert = branchManagers.map((mgr) => ({
+        recipient_id: mgr.id,
+        alert_type: "today" as const,
+        alert_date: new Date().toISOString().split("T")[0],
+        channel: "in_app" as const,
+        status: "sent" as const,
+        payload: {
+          title: "PO Pending High-Value Approval",
+          message: `Purchase Order ${poNumber} (₹${grandTotal.toLocaleString("en-IN")}) exceeds Store Manager approval threshold (₹10,000). Approval required.`,
+          poNumber,
+          requestedBy: user.full_name || user.email,
+          grandTotal,
+        },
+      }));
+      await supabase.from("notifications").insert(notificationsToInsert);
     }
   }
 
