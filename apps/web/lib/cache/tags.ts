@@ -56,6 +56,14 @@ export const TAGS = {
   documents: "documents",
   documentsBranch: (branchId: string) => `documents:branch:${branchId}`,
 
+  hourLogs: "hour-logs",
+  machineHourLogs: (machineId: string) => `hour-logs:machine:${machineId}`,
+  operatorHourLogs: (operatorId: string) => `hour-logs:operator:${operatorId}`,
+
+  assignments: "assignments",
+  operatorAssignment: (operatorId: string) => `assignment:operator:${operatorId}`,
+  machineAssignment: (machineId: string) => `assignment:machine:${machineId}`,
+
   // Class D / User Scoped
   users: "users",
   notifications: "notifications",

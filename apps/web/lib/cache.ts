@@ -25,6 +25,8 @@ export const CACHE_TAGS = {
   machineDetail: TAGS.machineDetail,
   machineServices: TAGS.machineServices,
   userDashboard: TAGS.userDashboard,
+  hourLogs: TAGS.hourLogs,
+  assignments: TAGS.assignments,
 } as const;
 
 export type CacheTag = string;
