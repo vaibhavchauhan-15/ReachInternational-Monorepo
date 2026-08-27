@@ -1,6 +1,24 @@
 # Current Task Context
 
-## Completed Task (2026-08-27) — Phase 15: Network & Communication Layer Optimization
+## Completed Task (2026-08-27) — Phase 16: Error & Loading State Optimization
+
+**Goal**: Audit loading states, error boundaries, empty states, and layout stability across all primary routes, create route-level `loading.tsx` and recoverable `error.tsx` boundaries, prevent cumulative layout shift (CLS), and document specifications in `performance/audit/loading-error-audit.md`.
+
+### Key Changes & Implementation Details
+
+1. **Created Route Loading States & Layout Skeletons**:
+   - Added `OperationsSkeleton` and `ClientsSkeleton` to `apps/web/components/ui/Skeleton.tsx`.
+   - Created `apps/web/app/(app)/operations/loading.tsx` and `apps/web/app/(app)/clients/loading.tsx`.
+2. **Created Recoverable Error Boundary (`apps/web/app/(app)/error.tsx`)**:
+   - Implemented safe error handling with correlation digests, safe client logging, and in-place `reset()` re-attempts without full page reload.
+3. **Created `performance/audit/loading-error-audit.md`**:
+   - Documented route loading matrix, empty state behaviors, double-submit protections, and error recovery policies.
+4. **Verification**:
+   - `pnpm typecheck` passed (0 errors across 9 packages).
+
+---
+
+## Previous Completed Task (2026-08-27) — Phase 15: Network & Communication Layer Optimization
 
 **Goal**: Audit the entire request/fetch stack (Browser ↔ Next.js ↔ DAL ↔ Supabase ↔ PostgreSQL), eliminate request waterfalls via parallel `Promise.all` DAL executions, enforce React 19 `cache()` request deduplication, enforce explicit projections, and document metrics in `performance/audit/network-audit.md`.
 

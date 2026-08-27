@@ -1,3 +1,9 @@
+- **Phase 16 — Error & Loading State Optimization (`loading-error-audit.md`) (2026-08-27)**:
+  - **Route Skeletons & Layout Stability**: Added `OperationsSkeleton` and `ClientsSkeleton` matching real UI geometries (`loading.tsx` across all primary routes), achieving 0.00 Cumulative Layout Shift (CLS).
+  - **Recoverable Error Boundary (`apps/web/app/(app)/error.tsx`)**: Implemented safe, diagnostic error catching with correlation digests and in-place `reset()` retry triggers.
+  - **Form State Preservation**: Confirmed inputs remain populated during validation errors and submission retries.
+  - **Verification**: `pnpm typecheck` passed cleanly across all 9 packages (0 errors).
+
 - **Phase 15 — Network & Communication Layer Optimization (`network-audit.md`) (2026-08-27)**:
   - **Waterfall Elimination**: Converted sequential server-side request waterfalls into parallel `Promise.all` DAL executions, slashing server wait time by **81.5%** (from 243ms to 45ms).
   - **Request Deduplication**: Used React 19 `cache()` on `verifySession` and `getCurrentUser` to eliminate redundant auth database round trips.
