@@ -1,0 +1,69 @@
+{
+  "testDate": "2026-08-27T12:00:02.362Z",
+  "totalUsersPerRun": 10000,
+  "workloadDistribution": {
+    "operator": 7000,
+    "supervisor": 2000,
+    "admin": 800,
+    "reports": 200
+  },
+  "resultsByConcurrency": [
+    {
+      "concurrency": 100,
+      "totalUsers": 10000,
+      "durationSeconds": "3.76",
+      "throughputReqSec": 2660.17,
+      "p50Ms": 31.33,
+      "p90Ms": 47.05,
+      "p95Ms": 47.6,
+      "p99Ms": 155.91,
+      "p999Ms": 161.2,
+      "errorCount": 0,
+      "successRatePct": 100
+    },
+    {
+      "concurrency": 250,
+      "totalUsers": 10000,
+      "durationSeconds": "1.57",
+      "throughputReqSec": 6358.21,
+      "p50Ms": 31.12,
+      "p90Ms": 46.72,
+      "p95Ms": 47.29,
+      "p99Ms": 154.69,
+      "p999Ms": 157.59,
+      "errorCount": 0,
+      "successRatePct": 100
+    },
+    {
+      "concurrency": 500,
+      "totalUsers": 10000,
+      "durationSeconds": "0.87",
+      "throughputReqSec": 11452.57,
+      "p50Ms": 31.4,
+      "p90Ms": 47.28,
+      "p95Ms": 48.36,
+      "p99Ms": 155.22,
+      "p999Ms": 158.18,
+      "errorCount": 0,
+      "successRatePct": 100
+    },
+    {
+      "concurrency": 1000,
+      "totalUsers": 10000,
+      "durationSeconds": "0.53",
+      "throughputReqSec": 19032.41,
+      "p50Ms": 31.82,
+      "p90Ms": 47.95,
+      "p95Ms": 56.24,
+      "p99Ms": 156.78,
+      "p999Ms": 166.21,
+      "errorCount": 0,
+      "successRatePct": 100
+    }
+  ],
+  "memoryMetrics": {
+    "initialHeapMb": 5,
+    "finalHeapMb": 10,
+    "deltaMb": 5
+  }
+}
