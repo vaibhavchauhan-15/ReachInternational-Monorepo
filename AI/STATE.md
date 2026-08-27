@@ -1,9 +1,17 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: Phase 16 Complete — Error & Loading State Optimization (`performance/audit/loading-error-audit.md`)
+- **Phase**: Phase 17 Complete — Combined Security & Performance Review (`performance/audit/security-performance-audit.md`)
 - **Overall Health**: Healthy & Stable (0 TypeScript Errors across Monorepo)
 - **Last Memory Update**: 2026-08-27
+
+- [x] **Phase 17 — Combined Security & Performance Review (`security-performance-audit.md`) (2026-08-27)**:
+  - **Full Security Boundary Audit**: Audited all 19 Server Action modules, 28 PostgreSQL RLS policies, 4 database functions, and DAL data loaders.
+  - **IDOR & Role Isolation Verified**: Confirmed resource ownership validation on all mutations (`operator_id = auth.uid()`), preventing unauthorized cross-user modifications.
+  - **Service-Role & PostgreSQL Hardening**: Verified 0 browser components import service-role keys; verified all `SECURITY DEFINER` functions declare explicit `SET search_path = public, pg_temp;`.
+  - **Cache Isolation**: Confirmed Tier D real-time data (logs, live HMR, idempotency keys) is never placed in shared application caches.
+  - **Findings**: 0 Critical (P0), 0 High (P1), 0 Medium (P2) vulnerabilities.
+  - **Verification**: `pnpm typecheck` passed (0 errors across 9 packages); git tree clean on `performance-optimization` branch.
 
 - [x] **Phase 16 — Error & Loading State Optimization (`loading-error-audit.md`) (2026-08-27)**:
   - **Route Skeletons & Layout Stability**: Added `OperationsSkeleton` and `ClientsSkeleton` matching real UI geometries (`loading.tsx` across all primary routes), achieving 0.00 Cumulative Layout Shift (CLS).

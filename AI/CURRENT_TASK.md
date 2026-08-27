@@ -1,6 +1,26 @@
 # Current Task Context
 
-## Completed Task (2026-08-27) — Phase 16: Error & Loading State Optimization
+## Completed Task (2026-08-27) — Phase 17: Combined Security & Performance Review
+
+**Goal**: Conduct full security-performance audit across all architectural layers, verifying that performance optimizations preserve defense-in-depth security, strict authorization, IDOR protection, cache isolation, and transactional integrity, documented in `performance/audit/security-performance-audit.md`.
+
+### Key Changes & Implementation Details
+
+1. **Full Security Boundary Review**:
+   - Verified session + role validation across all Server Actions, preventing unauthorized direct execution.
+   - Audited RLS policies (28 active) and confirmed `STABLE` function caching does not leak cross-user rows.
+2. **IDOR & Privileged Access Guards**:
+   - Verified operator shift submission checks `operator_id = auth.uid()`.
+   - Verified 0 browser Client Components import service-role admin keys.
+   - Verified all database functions declare explicit `SET search_path = public, pg_temp;`.
+3. **Created `performance/audit/security-performance-audit.md`**:
+   - Comprehensive audit matrix and findings scorecard (0 P0, 0 P1, 0 P2 issues).
+4. **Verification**:
+   - `pnpm typecheck` passed (0 errors across 9 packages).
+
+---
+
+## Previous Completed Task (2026-08-27) — Phase 16: Error & Loading State Optimization
 
 **Goal**: Audit loading states, error boundaries, empty states, and layout stability across all primary routes, create route-level `loading.tsx` and recoverable `error.tsx` boundaries, prevent cumulative layout shift (CLS), and document specifications in `performance/audit/loading-error-audit.md`.
 

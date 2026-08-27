@@ -1,3 +1,10 @@
+- **Phase 17 — Combined Security & Performance Review (`security-performance-audit.md`) (2026-08-27)**:
+  - **Full Security Boundary Review**: Audited all 19 Server Action modules, 28 PostgreSQL RLS policies, 4 database functions, and DAL data loaders.
+  - **IDOR & Role Isolation Verified**: Confirmed resource ownership validation on all mutations (`operator_id = auth.uid()`), preventing unauthorized cross-user modifications.
+  - **Service-Role & PostgreSQL Hardening**: Verified 0 browser components import service-role keys; verified all `SECURITY DEFINER` functions declare explicit `SET search_path = public, pg_temp;`.
+  - **Findings**: 0 Critical (P0), 0 High (P1), 0 Medium (P2) vulnerabilities.
+  - **Verification**: `pnpm typecheck` passed cleanly across all 9 packages (0 errors).
+
 - **Phase 16 — Error & Loading State Optimization (`loading-error-audit.md`) (2026-08-27)**:
   - **Route Skeletons & Layout Stability**: Added `OperationsSkeleton` and `ClientsSkeleton` matching real UI geometries (`loading.tsx` across all primary routes), achieving 0.00 Cumulative Layout Shift (CLS).
   - **Recoverable Error Boundary (`apps/web/app/(app)/error.tsx`)**: Implemented safe, diagnostic error catching with correlation digests and in-place `reset()` retry triggers.
