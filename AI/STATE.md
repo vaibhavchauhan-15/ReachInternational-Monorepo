@@ -1,14 +1,17 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: Phase 107 Complete — Development Rate Limiting Bypass & Production-Only Safeguard Enforcement
+- **Phase**: Phase 108 Complete — Users Table DAL Column Projection Fix & Infinite Auth Redirect Loop Remediation
 - **Overall Health**: Healthy & Stable (0 TypeScript Errors across Monorepo)
 - **Last Memory Update**: 2026-08-27
 
-- [x] **Development Rate Limiting Bypass & Production-Only Enforcement (Phase 107) (2026-08-27)**:
-  - **Edge Proxy Rate Limiting Guard (`apps/web/proxy.ts`)**: Conditioned Step 1 LPDoS edge rate limiting guard on `process.env.NODE_ENV === "production"`. Prevents HTTP 429 "Too Many Requests" ("Request rate limit exceeded. LPDoS / Brute-force safeguard active.") errors during local development.
-  - **Rate Limiter Utility Bypass (`apps/web/lib/security/rate-limiter.ts`)**: Added development bypass in `checkRateLimit` and `checkRateLimitAsync` to return `{ success: true, ... }` whenever `process.env.NODE_ENV !== "production"`.
-  - **Verification**: Executed `pnpm typecheck` across all 9 monorepo workspace packages passing cleanly with 0 compilation errors.
+- [x] **Users Table DAL Column Projection Fix & Infinite Auth Redirect Loop Remediation (Phase 108) (2026-08-27)**:
+  - **DAL Safe Projection (`apps/web/lib/dal.ts`)**: Fixed `getCachedUserRow` by removing non-existent `branch_id` and `location` columns on `public.users` table (`column users.branch_id does not exist` Postgres error 42703). Projected only valid table columns (`id, full_name, phone, role, status, city, district, state, email, created_at, updated_at`) and bumped cache key to `dal-user-row-v6`. Updated `redirect("/dashboard")` calls to `redirect("/machines")`.
+  - **Infinite Redirect Loop Remediation (`apps/web/app/(app)/layout.tsx`)**: Replaced bare `redirect("/login")` with status-bearing error queries (`/login?error=profile_not_found`, `/login?error=account_inactive`, `/login?error=account_pending`), eliminating the ping-pong loop between proxy and layout.
+  - **Edge Proxy Method-Aware Rate Limiting & Query Guards (`apps/web/proxy.ts`)**: Prevented proxy from redirecting `/login` to `/machines` when error query params are present; configured edge rate limiting to apply `RATE_LIMIT_PROFILES.GENERAL_ROUTES` (120 req/min) to navigation `GET` requests on public routes while reserving strict `RATE_LIMIT_PROFILES.AUTH_STRICT` (10 req/min) for mutation `POST` attempts.
+  - **Action & Model Cleanup (`auth.ts`, `operators.ts`, `rentals.ts`)**: Streamlined `login()` to redirect directly to `/machines` or `/operations?tab=entry`; removed non-existent `branch_id` writes to `users` in `operators.ts` and `rentals.ts`.
+  - **Login UX Error Resolution (`apps/web/app/login/login-form.tsx`, `page.tsx`)**: Supported `useSearchParams` to render intuitive error banners when users are redirected to login due to pending approvals or deactivated accounts, wrapped in Suspense boundary.
+  - **Verification**: Verified `GET /login` (200 OK) and `GET /machines` (307 redirect). Executed `pnpm turbo run typecheck --force` passing across all 9 packages (0 compilation errors).
 
 - [x] **Comprehensive Security Audit & Penetration Test Remediation (Phase 106) (2026-08-26)**:
   - **Hardcoded Credentials Eradication (F-01 - P1 / CWE-798)**: Removed hardcoded Supabase project URLs and anon key strings across `apps/mobile/lib/supabase.ts`, `apps/mobile/lib/environment.ts`, `apps/web/app/layout.tsx`, `supabase/admin.mjs`, `supabase/exec_migration.mjs`, `supabase/seed.mjs`, `supabase/seed_dummy_data.mjs`. Enforced fail-fast environment variable validation.
