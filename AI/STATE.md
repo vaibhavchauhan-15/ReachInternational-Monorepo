@@ -1,9 +1,16 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: Phase 8 Complete — Row-Level Security (RLS) Optimization & STABLE Functions (`supabase/migrations/021_optimize_rls_functions.sql`, `rls-audit.md`)
+- **Phase**: Phase 9 Complete — Caching Architecture & Mutation Dependency Mapping (`performance/audit/cache-matrix.md`, `cache-dependencies.md`, `lib/cache/*`)
 - **Overall Health**: Healthy & Stable (0 TypeScript Errors across Monorepo)
 - **Last Memory Update**: 2026-08-27
+
+- [x] **Phase 9 — Caching Architecture & Invalidation Dependency Mapping (`cache-matrix.md`, `cache-dependencies.md`) (2026-08-27)**:
+  - **4-Tier Data Classification (`cache-matrix.md`)**: Categorized all application entities across Tier A (Static, 1d), Tier B (Semi-Dynamic, 1–5m), Tier C (Operational, 15s), and Tier D (Real-Time Zero-Cache: assigned machine, live HMR meter, audit logs, idempotency).
+  - **Standardized Invalidation Tags (`lib/cache/tags.ts`)**: Added granular tags `TAGS.hourLogs`, `TAGS.machineHourLogs(id)`, `TAGS.operatorHourLogs(id)`, `TAGS.assignments`, `TAGS.operatorAssignment(id)`, `TAGS.machineAssignment(id)`.
+  - **Mutation Dependency Mapping (`cache-dependencies.md`)**: Mapped every mutation Server Action to its exact invalidation scope, strictly eliminating global blanket cache evictions.
+  - **Security & Integrity Preservation**: Zero caching on mutations or authorization decisions; per-request deduplication via React 19 `cache()`.
+  - **Verification**: `pnpm typecheck` passed (0 errors across 9 packages); git tree clean on `performance-optimization` branch.
 
 - [x] **Phase 8 — Row-Level Security (RLS) Optimization & STABLE Functions (`021_optimize_rls_functions.sql`) (2026-08-27)**:
   - **Full 28-Policy RLS Audit (`rls-audit.md`)**: Catalogued and evaluated all 28 active RLS policies across `users`, `machines`, `machine_hour_logs`, `clients`, and `audit_logs`.

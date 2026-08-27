@@ -1,6 +1,23 @@
 # Current Task Context
 
-## Completed Task (2026-08-27) — Phase 8: Row-Level Security (RLS) Optimization & STABLE Helper Functions
+## Completed Task (2026-08-27) — Phase 9: Caching Architecture & Invalidation Dependency Mapping
+
+**Goal**: Establish a strict 4-tier data freshness and caching architecture, document all entity TTLs in `performance/audit/cache-matrix.md`, map every mutation Server Action to its precise invalidation tags in `performance/audit/cache-dependencies.md`, eliminate global cache invalidation cascades, and preserve real-time integrity for critical operational state.
+
+### Key Changes & Implementation Details
+
+1. **Created `performance/audit/cache-matrix.md`**:
+   - Categorized all entities across Tier A (Static), Tier B (Semi-Dynamic Directories), Tier C (Operational Streams), and Tier D (Zero-Cache Real-Time).
+2. **Created `performance/audit/cache-dependencies.md`**:
+   - Mapped all 17 mutation Server Actions to specific Next.js cache tags (`revalidateTag`).
+3. **Updated `lib/cache/tags.ts` & `lib/cache.ts`**:
+   - Added granular tags: `TAGS.hourLogs`, `TAGS.machineHourLogs(id)`, `TAGS.operatorHourLogs(id)`, `TAGS.assignments`, `TAGS.operatorAssignment(id)`, `TAGS.machineAssignment(id)`.
+4. **Verification**:
+   - `pnpm typecheck` passed cleanly across all 9 workspace packages (0 errors).
+
+---
+
+## Previous Completed Task (2026-08-27) — Phase 8: Row-Level Security (RLS) Optimization & STABLE Helper Functions
 
 **Goal**: Audit all 28 Row-Level Security (RLS) policies, optimize policy helper functions (`current_user_role`) by marking them `STABLE` with explicit `search_path`, eliminate per-row re-evaluation overhead, verify cross-user isolation boundaries, and create versioned migration `021_optimize_rls_functions.sql`.
 

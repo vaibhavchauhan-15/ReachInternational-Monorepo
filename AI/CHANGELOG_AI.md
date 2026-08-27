@@ -1,3 +1,9 @@
+- **Phase 9 — Caching Architecture & Invalidation Dependency Mapping (`cache-matrix.md`, `cache-dependencies.md`) (2026-08-27)**:
+  - **4-Tier Data Classification**: Established data freshness boundaries across Tier A (Static 1d), Tier B (Semi-Dynamic 1–5m), Tier C (Operational 15s), and Tier D (Zero-Cache Real-Time).
+  - **Granular Operational Tags**: Added tags for hour logs and assignments in `lib/cache/tags.ts` and `lib/cache.ts`.
+  - **Mutation-to-Tag Dependency Mapping**: Mapped all 17 mutation Server Actions to exact invalidation tags in `performance/audit/cache-dependencies.md`.
+  - **Verification**: `pnpm typecheck` passed cleanly across all 9 packages (0 errors).
+
 - **Phase 8 — Row-Level Security (RLS) Optimization & STABLE Helper Functions (`supabase/migrations/021_optimize_rls_functions.sql`, `rls-audit.md`) (2026-08-27)**:
   - **Comprehensive 28-Policy Audit**: Catalogued and evaluated all 28 RLS policies across `users`, `machines`, `machine_hour_logs`, `clients`, and `audit_logs` in `performance/audit/rls-audit.md`.
   - **Optimized Role Resolution**: Re-created `current_user_role()`, `is_admin()`, and `is_supervisor_or_admin()` as `STABLE SECURITY DEFINER` with explicit `SET search_path = public, pg_temp;` in `021_optimize_rls_functions.sql`, eliminating per-row re-execution on multi-row queries.
