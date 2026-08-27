@@ -1224,6 +1224,7 @@ export function OperatorDashboard({
                     type="number"
                     step="0.1"
                     min="0"
+                    inputMode="decimal"
                     required
                     value={startMeter}
                     onChange={(e) => setStartMeter(e.target.value)}
@@ -1249,6 +1250,7 @@ export function OperatorDashboard({
                     type="number"
                     step="0.1"
                     min="0"
+                    inputMode="decimal"
                     required
                     value={endMeter}
                     onChange={(e) => setEndMeter(e.target.value)}
