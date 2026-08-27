@@ -1,3 +1,9 @@
+- **Phase 7 — Database Index Optimization & Migration (`supabase/migrations/020_performance_indexes.sql`) (2026-08-27)**:
+  - **Comprehensive Index Inventory**: Catalogued all 29 active database indexes across public tables in `performance/audit/existing-indexes.md`.
+  - **Targeted Partial & Composite Indexes**: Created `020_performance_indexes.sql` introducing partial indexes on active assignments (`idx_machine_assignments_active_operator`, `idx_machine_assignments_active_machine`), fleet compound index (`idx_machines_status_health`), chronological entity audit index (`idx_audit_logs_entity_created`), and unread notification partial index (`idx_notifications_recipient_unread`).
+  - **Index Candidate Decisions**: Documented `KEEP`, `APPROVED`, and `REJECTED` rationales in `performance/audit/index-candidates.md`.
+  - **Verification**: `pnpm typecheck` passed cleanly across all 9 packages (0 errors).
+
 - **Phase 6 — Database Query Optimization & Index Candidate Register (`performance/audit/query-optimization.md`, `index-candidates.md`) (2026-08-27)**:
   - **N+1 Loop Elimination**: Converted sequential single-row `.insert()` loop calls to single bulk array inserts in `inventory.ts` and `tasks.ts`.
   - **Eliminated Wildcard `select("*")`**: Replaced wildcard queries in `lib/queries/machines.ts` with explicit projections.

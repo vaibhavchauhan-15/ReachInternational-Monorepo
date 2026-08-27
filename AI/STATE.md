@@ -1,9 +1,21 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: Phase 6 Complete — Database Query Optimization & Index Candidate Register (`performance/audit/query-optimization.md`, `index-candidates.md`)
+- **Phase**: Phase 7 Complete — Database Index Optimization & Migration (`supabase/migrations/020_performance_indexes.sql`, `existing-indexes.md`, `index-candidates.md`)
 - **Overall Health**: Healthy & Stable (0 TypeScript Errors across Monorepo)
 - **Last Memory Update**: 2026-08-27
+
+- [x] **Phase 7 — Database Index Optimization & Migration (`020_performance_indexes.sql`) (2026-08-27)**:
+  - **Full Index Inventory (`existing-indexes.md`)**: Catalogued all 29 existing database indexes across `users`, `machines`, `machine_hour_logs`, `clients`, `idempotency_keys`, and `audit_logs`.
+  - **Candidate Index Benchmark & Decisions**:
+    - `IDX-001` & `IDX-002` (Machine/Operator Hour Logs by Date): Verified active coverage in `004_create_machine_hour_logs_table.sql`.
+    - `IDX-003a` & `IDX-003b` (Active Machine Assignments): Implemented partial indexes `(operator_id)` and `(machine_id)` `WHERE status = 'active'`.
+    - `IDX-004` (Machine Fleet Status & Health): Implemented compound index `(status, health_status)` on `public.machines`.
+    - `IDX-005` (Entity-Specific Audit Log): Implemented composite index `(entity_type, entity_id, created_at DESC)` on `public.audit_logs`.
+    - `IDX-006` (Unread Notifications): Implemented partial index `(recipient_id, created_at DESC)` `WHERE read_at IS NULL` on `public.notifications`.
+    - `IDX-007` (Low-cardinality boolean indexes): Rejected redundant standalone boolean indexes.
+  - **Created Versioned Migration**: Added `supabase/migrations/020_performance_indexes.sql` with non-blocking `IF NOT EXISTS` syntax.
+  - **Verification**: `pnpm typecheck` passed (0 errors across 9 packages); git tree clean on `performance-optimization` branch.
 
 - [x] **Phase 6 — Database Query Optimization & Index Candidate Register (`performance/audit/query-optimization.md`, `index-candidates.md`) (2026-08-27)**:
   - **N+1 Elimination in Actions**: Replaced sequential single-row `.insert()` loop queries with single bulk array inserts in `apps/web/app/actions/inventory.ts:L458` (PO notification broadcast) and `apps/web/app/actions/tasks.ts:L76` (Task assignee notifications), cutting DB round-trips from N to 1.

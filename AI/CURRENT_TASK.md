@@ -1,6 +1,27 @@
 # Current Task Context
 
-## Completed Task (2026-08-27) — Phase 6: Database Query Optimization & Index Candidate Register
+## Completed Task (2026-08-27) — Phase 7: Database Index Optimization & Migration
+
+**Goal**: Inventory existing indexes, analyze duplicate and partial index opportunities, benchmark index candidates against real workload patterns, and create a versioned Supabase migration (`020_performance_indexes.sql`) without modifying existing historical migrations.
+
+### Key Changes & Implementation Details
+
+1. **Created `performance/audit/existing-indexes.md`**:
+   - Inventoried all 29 active indexes across `users`, `machines`, `machine_hour_logs`, `clients`, `idempotency_keys`, `audit_logs`.
+2. **Created Migration `supabase/migrations/020_performance_indexes.sql`**:
+   - `idx_machine_assignments_active_operator` (Partial B-Tree on `operator_id` `WHERE status = 'active'`).
+   - `idx_machine_assignments_active_machine` (Partial B-Tree on `machine_id` `WHERE status = 'active'`).
+   - `idx_machines_status_health` (Compound B-Tree on `(status, health_status)`).
+   - `idx_audit_logs_entity_created` (Composite B-Tree on `(entity_type, entity_id, created_at DESC)`).
+   - `idx_notifications_recipient_unread` (Partial B-Tree on `(recipient_id, created_at DESC)` `WHERE read_at IS NULL`).
+3. **Updated `performance/audit/index-candidates.md`**:
+   - Documented `KEEP` / `APPROVED` / `REJECTED` decisions and Final Index Optimization Matrix.
+4. **Verification**:
+   - `pnpm typecheck` passed cleanly across all 9 packages (0 errors).
+
+---
+
+## Previous Completed Task (2026-08-27) — Phase 6: Database Query Optimization & Index Candidate Register
 
 **Goal**: Audit and optimize PostgreSQL queries across all core application tables (`machines`, `users`, `clients`, `machine_hour_logs`, `machine_assignments`, `idempotency_keys`, `audit_logs`), eliminate N+1 loop inserts, replace wildcard `select("*")` with explicit projections, and register index candidates for Phase 7.
 
