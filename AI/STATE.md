@@ -1,11 +1,20 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: Phase 108 Complete — Users Table DAL Column Projection Fix & Infinite Auth Redirect Loop Remediation
+- **Phase**: Phase 0 Complete — Performance Optimization: Workspace Backup & Baseline Established
 - **Overall Health**: Healthy & Stable (0 TypeScript Errors across Monorepo)
 - **Last Memory Update**: 2026-08-27
 
-- [x] **Users Table DAL Column Projection Fix & Infinite Auth Redirect Loop Remediation (Phase 108) (2026-08-27)**:
+- [x] **Phase 0 — Workspace Backup & Performance Baseline (`performance/baseline/*`) (2026-08-27)**:
+  - **Git Branch & Checkpoint**: Created and switched to dedicated optimization branch `performance-optimization`. Committed clean working state checkpoint.
+  - **Monorepo Quality Gate Baseline**: Verified `pnpm typecheck` passing with 0 errors across 9 packages (Turbo uncached 18.12s); recorded `pnpm lint` status (652 pre-existing problems); verified `pnpm build` compiling 35 static/dynamic routes in 1m 4s.
+  - **Route Latency & Transfer Baseline**: Benchmarked Next.js 16 production server (`next start` on port 3005) across `/login` (30.9 KB HTML, 9.85ms, 16 requests, 1.41 MB uncompressed JS assets), `/signup` (39.7 KB HTML, 8.67ms, 16 requests, 1.43 MB JS assets), and protected routes `/machines` (4.01ms), `/users` (3.47ms), `/clients` (3.45ms), `/operations?tab=logs` (3.41ms), `/operations?tab=assignments` (4.12ms), `/operations?tab=entry` (4.31ms), `/operations?tab=history` (3.71ms).
+  - **Database Baseline**: Recorded exact row counts across 6 public tables (`users`: 28, `machines`: 1, `machine_hour_logs`: 25, `clients`: 1, `idempotency_keys`: 2, `audit_logs`: 2). Recorded all 43 active B-tree and unique indexes. Recorded timeout settings (`statement_timeout = 10s`, `lock_timeout = 5s`, `idle_in_transaction_session_timeout = 10s`). Recorded database size (14 MB), compute tier (Free / Micro), and region (`ap-south-1`).
+  - **Query Statistics Baseline**: Analyzed `pg_stat_statements` capturing top execution profiles, mean latencies, and execution frequencies.
+  - **Server Action Inventory**: Catalogued all active Server Actions across `machines.ts`, `users.ts`, `operators.ts`, `clients.ts`, `auth.ts`, and `finance.ts`.
+  - **Baseline Documentation**: Created `performance/baseline/` containing `README.md`, `routes.md`, `database.md`, `queries.md`, `actions.md`, and `build.md`.
+  - **Optimization Targets & Golden Rule**: Formalized measurable performance targets and enforced the Measure ──► Change ──► Measure Again ──► Compare golden rule.
+
   - **DAL Safe Projection (`apps/web/lib/dal.ts`)**: Fixed `getCachedUserRow` by removing non-existent `branch_id` and `location` columns on `public.users` table (`column users.branch_id does not exist` Postgres error 42703). Projected only valid table columns (`id, full_name, phone, role, status, city, district, state, email, created_at, updated_at`) and bumped cache key to `dal-user-row-v6`. Updated `redirect("/dashboard")` calls to `redirect("/machines")`.
   - **Infinite Redirect Loop Remediation (`apps/web/app/(app)/layout.tsx`)**: Replaced bare `redirect("/login")` with status-bearing error queries (`/login?error=profile_not_found`, `/login?error=account_inactive`, `/login?error=account_pending`), eliminating the ping-pong loop between proxy and layout.
   - **Edge Proxy Method-Aware Rate Limiting & Query Guards (`apps/web/proxy.ts`)**: Prevented proxy from redirecting `/login` to `/machines` when error query params are present; configured edge rate limiting to apply `RATE_LIMIT_PROFILES.GENERAL_ROUTES` (120 req/min) to navigation `GET` requests on public routes while reserving strict `RATE_LIMIT_PROFILES.AUTH_STRICT` (10 req/min) for mutation `POST` attempts.

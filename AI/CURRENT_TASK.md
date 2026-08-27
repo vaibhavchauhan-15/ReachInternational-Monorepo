@@ -1,8 +1,41 @@
 # Current Task Context
 
-## Completed Task (2026-08-27) — Bug Fix: Users Table DAL Column Projection & Infinite Auth Redirect Loop Remediation
+## Completed Task (2026-08-27) — Phase 0: Monorepo Backup & Performance Baseline
 
-**Goal**: Resolve `Error fetching user row: column users.branch_id does not exist` (PostgreSQL 42703), eliminate the resulting infinite redirect ping-pong loop between Edge Proxy and App Shell Layout, prevent false-positive LPDoS rate limit locks on navigation, and provide robust UX error messaging.
+**Goal**: Establish dedicated Git rollback checkpoint and comprehensively capture empirical baseline metrics across all 9 monorepo workspace packages (`apps/web`, `apps/mobile`, `packages/*`), Next.js 16 production server, route bundle sizes, subresource transfers, database row counts, active indexes, query statistics (`pg_stat_statements`), Server Action inventory, and PostgreSQL timeout safeguards before initiating optimization phases.
+
+### Key Changes & Implementation Details
+
+1. **Dedicated Git Branch & Checkpoint**:
+   - Switched to dedicated optimization branch `performance-optimization`.
+   - Created clean Git commit checkpoint: `chore: baseline before performance optimization`.
+
+2. **Monorepo Quality Gate Baseline**:
+   - `pnpm typecheck`: Passed cleanly across all 9 packages (Turbo uncached runtime: 18.12s).
+   - `pnpm lint`: Documented 652 pre-existing lint issues (281 errors, 371 warnings).
+   - `pnpm build`: Compiled 35 static and dynamic Next.js 16 App Router routes in 1m 4s.
+
+3. **HTTP & Route Latency Baseline (`next start` on port 3005)**:
+   - `/login`: 200 OK, 30.9 KB HTML, 9.85ms load time, 16 requests, 1.41 MB uncompressed JS assets across 15 chunks.
+   - `/signup`: 200 OK, 39.7 KB HTML, 8.67ms load time, 16 requests, 1.43 MB JS assets.
+   - `/machines`, `/users`, `/clients`, `/operations?tab=logs`, `/operations?tab=assignments`, `/operations?tab=entry`, `/operations?tab=history`: Edge Proxy redirect response in 2.6ms – 4.3ms.
+
+4. **Database Baseline & Query Profiles (Supabase PostgreSQL 17)**:
+   - Recorded exact row counts: `users` (28), `machines` (1), `machine_hour_logs` (25), `clients` (1), `idempotency_keys` (2), `audit_logs` (2).
+   - Recorded complete index inventory (43 public B-tree/unique indexes).
+   - Recorded database safeguards: `statement_timeout = 10s`, `lock_timeout = 5s`, `idle_in_transaction_session_timeout = 10s`.
+   - Profiled `pg_stat_statements` execution history for application queries.
+
+5. **Server Action & Build Inventories**:
+   - Documented full Server Action mutation inventory and execution pipeline (`Action -> Auth -> Authz -> Validation -> DB -> Audit -> Idempotency -> Revalidation`).
+   - Documented Next.js route tree and shared vendor bundles.
+
+6. **Baseline Documentation**:
+   - Created persistent baseline directory `performance/baseline/` with `README.md`, `routes.md`, `database.md`, `queries.md`, `actions.md`, and `build.md`.
+
+---
+
+## Previous Completed Task (2026-08-27) — Bug Fix: Users Table DAL Column Projection & Infinite Auth Redirect Loop Remediation
 
 ### Key Changes & Implementation Details
 
