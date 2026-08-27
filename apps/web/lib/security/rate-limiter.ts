@@ -49,6 +49,16 @@ export function checkRateLimit(
   identifier: string,
   profile: RateLimitConfig = RATE_LIMIT_PROFILES.GENERAL_ROUTES
 ): RateLimitResult {
+  // In development and test environments, bypass rate limiting to prevent developer friction
+  if (process.env.NODE_ENV !== "production") {
+    return {
+      success: true,
+      limit: profile.maxRequests,
+      remaining: profile.maxRequests,
+      resetSeconds: 0,
+    };
+  }
+
   const now = Date.now();
   const key = `${identifier}`;
 
@@ -88,6 +98,16 @@ export async function checkRateLimitAsync(
   identifier: string,
   profile: RateLimitConfig = RATE_LIMIT_PROFILES.GENERAL_ROUTES
 ): Promise<RateLimitResult> {
+  // In development and test environments, bypass rate limiting to prevent developer friction
+  if (process.env.NODE_ENV !== "production") {
+    return {
+      success: true,
+      limit: profile.maxRequests,
+      remaining: profile.maxRequests,
+      resetSeconds: 0,
+    };
+  }
+
   const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
   const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 

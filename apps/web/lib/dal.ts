@@ -43,7 +43,7 @@ const getCachedUserRow = unstable_cache(
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase
       .from("users")
-      .select("id, full_name, phone, role, status, branch_id, location, city, district, state, email, created_at, updated_at")
+      .select("id, full_name, phone, role, status, city, district, state, email, created_at, updated_at")
       .eq("id", userId)
       .single();
 
@@ -54,7 +54,7 @@ const getCachedUserRow = unstable_cache(
 
     return data;
   },
-  ["dal-user-row-v5"],
+  ["dal-user-row-v6"],
   { revalidate: 60, tags: [CACHE_TAGS.users] }
 );
 
@@ -100,7 +100,7 @@ export const requireRole = cache(async (...roles: UserRole[]) => {
   }
 
   if (!roles.includes(user.role)) {
-    redirect("/dashboard");
+    redirect("/machines");
   }
 
   return user;
@@ -118,7 +118,7 @@ export const requirePermission = cache(async (permissionCode: string) => {
   }
 
   if (!roleHasPermission(user.role, permissionCode)) {
-    redirect("/dashboard");
+    redirect("/machines");
   }
 
   return user;
@@ -139,7 +139,7 @@ export const requireAnyPermission = cache(async (...permissionCodes: string[]) =
 
   const hasAny = permissionCodes.some((code) => roleHasPermission(user.role, code));
   if (!hasAny) {
-    redirect("/dashboard");
+    redirect("/machines");
   }
 
   return user;

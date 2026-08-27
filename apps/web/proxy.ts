@@ -47,14 +47,14 @@ export async function proxy(request: NextRequest) {
 
   // Step 1: LPDoS Edge Rate Limiting Guard
   const clientIp = getClientIp(request);
-  const isAuthRoute = isPublicRoute || path.startsWith("/api/auth");
-  const rateLimitProfile = isAuthRoute 
+  const isAuthMutation = (path.startsWith("/api/auth") || isPublicRoute) && request.method !== "GET";
+  const rateLimitProfile = isAuthMutation 
     ? RATE_LIMIT_PROFILES.AUTH_STRICT 
     : request.method === "POST" 
       ? RATE_LIMIT_PROFILES.MUTATION_API 
       : RATE_LIMIT_PROFILES.GENERAL_ROUTES;
 
-  const rateLimitResult = await checkRateLimitAsync(`${clientIp}:${isAuthRoute ? 'auth' : 'gen'}`, rateLimitProfile);
+  const rateLimitResult = await checkRateLimitAsync(`${clientIp}:${isAuthMutation ? 'auth' : 'gen'}`, rateLimitProfile);
   if (!rateLimitResult.success) {
     return new NextResponse(
       JSON.stringify({
@@ -121,8 +121,16 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.nextUrl));
   }
 
+  // Check if request to public route carries an error/message parameter
+  const hasAuthErrorParam =
+    request.nextUrl.searchParams.has("error") ||
+    request.nextUrl.searchParams.has("message") ||
+    request.nextUrl.searchParams.has("reason") ||
+    request.nextUrl.searchParams.has("status");
+
   // Redirect authenticated user visiting public route (/login, /signup) to /machines
-  if (isPublicRoute && authenticatedUser) {
+  // UNLESS they arrived with an error/status parameter (prevents redirect loops on pending/inactive accounts)
+  if (isPublicRoute && authenticatedUser && !hasAuthErrorParam) {
     return NextResponse.redirect(new URL("/machines", request.nextUrl));
   }
 

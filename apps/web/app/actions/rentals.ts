@@ -34,12 +34,6 @@ export async function createRentalCustomerAction(formData: FormData): Promise<Re
 
   const customer_code = `RC-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  const { data: userProfile } = await supabase
-    .from("users")
-    .select("branch_id")
-    .eq("id", user.id)
-    .single();
-
   const { data, error } = await supabase
     .from("rental_customers")
     .insert({
@@ -53,7 +47,7 @@ export async function createRentalCustomerAction(formData: FormData): Promise<Re
       state,
       gstin,
       status: "active",
-      branch_id: userProfile?.branch_id || null,
+      branch_id: null,
       created_by: user.id,
     })
     .select("id")
@@ -180,12 +174,6 @@ export async function createRentalRequestAction(formData: FormData): Promise<Ren
 
   const request_number = `RR-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  const { data: userProfile } = await supabase
-    .from("users")
-    .select("branch_id")
-    .eq("id", user.id)
-    .single();
-
   const { data, error } = await supabase
     .from("rental_requests")
     .insert({
@@ -205,7 +193,7 @@ export async function createRentalRequestAction(formData: FormData): Promise<Ren
       delivery_required,
       remarks,
       status: "pending",
-      branch_id: userProfile?.branch_id || null,
+      branch_id: null,
       created_by: user.id,
     })
     .select("id")
@@ -321,12 +309,6 @@ export async function createRentalAgreementAction(formData: FormData): Promise<R
 
   const contract_number = `RA-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  const { data: userProfile } = await supabase
-    .from("users")
-    .select("branch_id")
-    .eq("id", user.id)
-    .single();
-
   const { data, error } = await supabase
     .from("rental_agreements")
     .insert({
@@ -334,7 +316,7 @@ export async function createRentalAgreementAction(formData: FormData): Promise<R
       rental_request_id,
       customer_id,
       machine_id,
-      branch_id: userProfile?.branch_id || null,
+      branch_id: null,
       start_date,
       end_date,
       rental_rate,
@@ -446,12 +428,6 @@ export async function dispatchRentalMachineAction(formData: FormData): Promise<R
 
   const challan_number = `RDC-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  const { data: userProfile } = await supabase
-    .from("users")
-    .select("branch_id")
-    .eq("id", user.id)
-    .single();
-
   const { data: challan, error } = await supabase
     .from("rental_delivery_challans")
     .insert({
@@ -459,7 +435,7 @@ export async function dispatchRentalMachineAction(formData: FormData): Promise<R
       rental_agreement_id,
       customer_id: agreement.customer_id,
       machine_id: agreement.machine_id,
-      branch_id: userProfile?.branch_id || agreement.branch_id,
+      branch_id: agreement.branch_id || null,
       dispatch_date: new Date().toISOString(),
       site_location,
       transport_details,
@@ -544,12 +520,6 @@ export async function recordMachineReturnAction(formData: FormData): Promise<Ren
 
   const inspection_number = `RI-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  const { data: userProfile } = await supabase
-    .from("users")
-    .select("branch_id")
-    .eq("id", user.id)
-    .single();
-
   const inspectionStatus = has_damage ? "failed_damaged" : "passed";
 
   const { data: inspection, error } = await supabase
@@ -559,7 +529,7 @@ export async function recordMachineReturnAction(formData: FormData): Promise<Ren
       rental_agreement_id,
       machine_id: agreement.machine_id,
       customer_id: agreement.customer_id,
-      branch_id: userProfile?.branch_id || agreement.branch_id,
+      branch_id: agreement.branch_id || null,
       return_date: new Date().toISOString(),
       end_hour_meter,
       end_fuel_level,
@@ -589,7 +559,7 @@ export async function recordMachineReturnAction(formData: FormData): Promise<Ren
       rental_agreement_id,
       machine_id: agreement.machine_id,
       customer_id: agreement.customer_id,
-      branch_id: userProfile?.branch_id || agreement.branch_id,
+      branch_id: agreement.branch_id || null,
       damage_details: damage_description || "Machine returned with damages during return inspection.",
       severity: estimated_repair_cost > 50000 ? "severe" : estimated_repair_cost > 10000 ? "moderate" : "minor",
       service_manager_notified: true,
@@ -760,19 +730,13 @@ export async function createRentalBillingRequestAction(formData: FormData): Prom
   const total_billable_amount = base_rental_amount + additional_hours_amount + transport_charges + damage_charges - security_deposit_adjusted;
   const request_number = `RBR-${Math.floor(1000 + Math.random() * 9000)}`;
 
-  const { data: userProfile } = await supabase
-    .from("users")
-    .select("branch_id")
-    .eq("id", user.id)
-    .single();
-
   const { data, error } = await supabase
     .from("rental_billing_requests")
     .insert({
       request_number,
       rental_agreement_id,
       customer_id: agreement.customer_id,
-      branch_id: userProfile?.branch_id || agreement.branch_id,
+      branch_id: agreement.branch_id || null,
       billing_period_start,
       billing_period_end,
       base_rental_amount,

@@ -1,11 +1,3 @@
-- **Performance Optimization: Monorepo Backup & Baseline (Phase 0: `performance/baseline/*`, Git Branch `performance-optimization`, Quality Gates, Database Stats) (2026-08-27)**:
-  - **Git Branch & Checkpoint**: Created and checked out `performance-optimization` branch. Committed clean baseline snapshot `080b9ca` (`chore: baseline before performance optimization`).
-  - **Quality Gates Verification**: Recorded `pnpm typecheck` (PASS - 9/9 workspace packages), `pnpm lint` (FAIL - 652 problems: 281 errors, 371 warnings in `apps/web`), `pnpm build` (PASS - 35 routes in 2m 6s).
-  - **Production Browser Baseline**: Captured performance metrics on `http://localhost:3000` for `/login`, `/signup`, `/machines`, `/users`, `/clients`, `/operations?tab=logs/assignments/entry/history`.
-  - **Supabase Database Baseline**: Recorded row counts (`users`: 27, `machines`: 1, `machine_hour_logs`: 25, `clients`: 1, `idempotency_keys`: 2, `audit_logs`: 0), index catalog (34 indexes), query execution statistics (`pg_stat_statements`), and timeout configurations (`statement_timeout = 10s`, `lock_timeout = 5s`, `idle_in_transaction_session_timeout = 10s`).
-  - **Server Actions Inventory & Measurable Targets**: Cataloged all core Server Actions across the monorepo and documented measurable optimization targets and the golden rule (`Measure -> Change -> Measure Again -> Compare -> Keep only if improved`).
-  - **Baseline Repository Files**: Created `performance/baseline/README.md`, `routes.md`, `database.md`, `queries.md`, `actions.md`, and `build.md`.
-
 - **Development Rate Limiting Bypass & Production-Only Safeguard (`apps/web/proxy.ts`, `apps/web/lib/security/rate-limiter.ts`) (2026-08-27)**:
   - **Edge Proxy Rate Limiting Bypass (`apps/web/proxy.ts`)**: Conditioned Step 1 LPDoS edge rate limiting guard on `process.env.NODE_ENV === "production"`. Prevents HTTP 429 "Too Many Requests" ("Request rate limit exceeded. LPDoS / Brute-force safeguard active.") errors during local development hot reloading and testing.
   - **Rate Limiter Utility Bypass (`apps/web/lib/security/rate-limiter.ts`)**: Updated `checkRateLimit` and `checkRateLimitAsync` to bypass evaluation and return `{ success: true, ... }` in development/test environments (`process.env.NODE_ENV !== "production"`).
@@ -2226,5 +2218,6 @@
   - Secured cron route and resend actions.
 - **JS Bundle Size Optimization (Dynamic Imports)**:
   - Dynamically loaded heavy React components using `next/dynamic` with `ssr: false`.
--   A d d e d   S Q L   i n j e c t i o n   d e f e n s e s   ( a l l o w e d   s o r t   m a p p i n g s ,   P o s t g R E S T   f i l t e r   s a n i t i z a t i o n ,   U U I D   t y p e   v a l i d a t i o n )  
+-   A d d e d   S Q L   i n j e c t i o n   d e f e n s e s   ( a l l o w e d   s o r t   m a p p i n g s ,   P o s t g R E S T   f i l t e r   s a n i t i z a t i o n ,   U U I D   t y p e   v a l i d a t i o n ) 
+ 
  

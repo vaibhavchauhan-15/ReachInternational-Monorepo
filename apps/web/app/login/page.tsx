@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import {
   AnimatedShieldCheck,
@@ -86,7 +87,9 @@ export default function LoginPage() {
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="w-[420px] h-[420px] bg-sky-500/5 dark:bg-sky-500/10 rounded-full blur-3xl" />
         </div>
-        <LoginFormClient />
+        <Suspense fallback={<div className="w-full max-w-md h-96 animate-pulse rounded-2xl bg-card/50" />}>
+          <LoginFormClient />
+        </Suspense>
       </div>
     </div>
   );

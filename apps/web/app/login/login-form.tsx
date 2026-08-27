@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   AnimatedMail,
@@ -14,6 +15,20 @@ import { login, type AuthFormState } from "@/app/actions/auth";
 import { Button, Input, ReachInternationalLogo } from "@/components/ui";
 
 export function LoginFormClient() {
+  const searchParams = useSearchParams();
+  const urlError = searchParams.get("error");
+  const urlMessage = searchParams.get("message");
+
+  const resolvedUrlError = urlError
+    ? urlError === "account_pending"
+      ? "Your account is pending administrator approval. Please wait for an administrator to approve your account."
+      : urlError === "account_inactive"
+      ? "Your account has been deactivated. Contact your administrator."
+      : urlError === "profile_not_found"
+      ? "User profile not found. Please log in again or contact your administrator."
+      : urlError
+    : null;
+
   const [state, setState] = useState<AuthFormState>({});
   const [pending, setPending] = useState(false);
   const [email, setEmail] = useState("");
@@ -103,14 +118,25 @@ function isRedirectError(error: unknown): boolean {
         <h2 className="text-2xl font-bold tracking-tight text-foreground">Welcome back</h2>
       </div>
 
-      {state.error && Object.keys(fieldErrors).length === 0 && (
+      {(state.error || resolvedUrlError) && Object.keys(fieldErrors).length === 0 && (
         <motion.div
           initial={{ opacity: 0, height: 0 }}
           animate={{ opacity: 1, height: "auto" }}
           className="flex items-start gap-3 rounded-xl bg-rose-500/10 border border-rose-500/20 p-3.5 mb-6 text-xs font-semibold text-rose-700 dark:text-rose-300"
         >
           <AnimatedAlertCircle size={16} className="text-rose-500 shrink-0 mt-0.5" />
-          <span>{state.error}</span>
+          <span>{state.error || resolvedUrlError}</span>
+        </motion.div>
+      )}
+
+      {urlMessage && !state.error && !resolvedUrlError && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          className="flex items-start gap-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3.5 mb-6 text-xs font-semibold text-emerald-700 dark:text-emerald-300"
+        >
+          <AnimatedShieldCheck size={16} className="text-emerald-500 shrink-0 mt-0.5" />
+          <span>{urlMessage}</span>
         </motion.div>
       )}
 

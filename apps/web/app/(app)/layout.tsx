@@ -10,15 +10,15 @@ export default async function AppLayout({
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect("/login");
+    redirect("/login?error=profile_not_found");
   }
 
   if (user.status === "inactive") {
-    redirect("/login");
+    redirect("/login?error=account_inactive");
   }
 
   if (user.status === "pending") {
-    redirect("/login");
+    redirect("/login?error=account_pending");
   }
 
   return <AppShellClient user={user}>{children}</AppShellClient>;

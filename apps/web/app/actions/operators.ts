@@ -522,7 +522,6 @@ export async function hireOperatorAction(payload: {
       role: "operator",
       phone: payload.phone || null,
       status: "active",
-      branch_id: user.branch_id,
     },
   });
 
@@ -539,7 +538,6 @@ export async function hireOperatorAction(payload: {
       phone: payload.phone,
       role: "operator",
       status: "active",
-      branch_id: user.branch_id,
     })
     .eq("id", authData.user.id)
     .select()
@@ -557,7 +555,6 @@ export async function hireOperatorAction(payload: {
     full_name: payload.fullName,
     designation: "Machine Operator",
     department: "Operations",
-    branch_id: user.branch_id,
     user_id: newUser.id,
     phone: payload.phone,
     email,
