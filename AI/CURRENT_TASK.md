@@ -1,6 +1,26 @@
 # Current Task Context
 
-## Completed Task (2026-08-27) — Phase 7: Database Index Optimization & Migration
+## Completed Task (2026-08-27) — Phase 8: Row-Level Security (RLS) Optimization & STABLE Helper Functions
+
+**Goal**: Audit all 28 Row-Level Security (RLS) policies, optimize policy helper functions (`current_user_role`) by marking them `STABLE` with explicit `search_path`, eliminate per-row re-evaluation overhead, verify cross-user isolation boundaries, and create versioned migration `021_optimize_rls_functions.sql`.
+
+### Key Changes & Implementation Details
+
+1. **Created `performance/audit/rls-audit.md`**:
+   - Inventoried and audited all 28 active RLS policies across `users`, `machines`, `machine_hour_logs`, `clients`, and `audit_logs`.
+   - Documented the Role & Permission Access Matrix across all operational roles.
+2. **Created Migration `supabase/migrations/021_optimize_rls_functions.sql`**:
+   - Optimized `public.current_user_role()`, `is_admin()`, and `is_supervisor_or_admin()` as `STABLE SECURITY DEFINER SET search_path = public, pg_temp;`.
+   - Allows PostgreSQL to evaluate and cache the role scalar once per statement rather than re-evaluating on every row.
+3. **Verified Cross-User Isolation**:
+   - Verified that `WITH CHECK (operator_id = auth.uid())` prevents cross-user log tampering.
+   - Verified trigger `trg_prevent_self_role_status_mutation` prevents role self-escalation.
+4. **Verification**:
+   - `pnpm typecheck` passed cleanly across all 9 packages (0 errors).
+
+---
+
+## Previous Completed Task (2026-08-27) — Phase 7: Database Index Optimization & Migration
 
 **Goal**: Inventory existing indexes, analyze duplicate and partial index opportunities, benchmark index candidates against real workload patterns, and create a versioned Supabase migration (`020_performance_indexes.sql`) without modifying existing historical migrations.
 

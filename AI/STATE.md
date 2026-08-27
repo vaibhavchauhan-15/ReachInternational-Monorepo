@@ -1,9 +1,15 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: Phase 7 Complete — Database Index Optimization & Migration (`supabase/migrations/020_performance_indexes.sql`, `existing-indexes.md`, `index-candidates.md`)
+- **Phase**: Phase 8 Complete — Row-Level Security (RLS) Optimization & STABLE Functions (`supabase/migrations/021_optimize_rls_functions.sql`, `rls-audit.md`)
 - **Overall Health**: Healthy & Stable (0 TypeScript Errors across Monorepo)
 - **Last Memory Update**: 2026-08-27
+
+- [x] **Phase 8 — Row-Level Security (RLS) Optimization & STABLE Functions (`021_optimize_rls_functions.sql`) (2026-08-27)**:
+  - **Full 28-Policy RLS Audit (`rls-audit.md`)**: Catalogued and evaluated all 28 active RLS policies across `users`, `machines`, `machine_hour_logs`, `clients`, and `audit_logs`.
+  - **Optimized RLS Role Helper (`current_user_role`)**: Re-created `public.current_user_role()`, `is_admin()`, and `is_supervisor_or_admin()` as `STABLE SECURITY DEFINER` with explicit `SET search_path = public, pg_temp;`. Eliminates per-row re-evaluation overhead on large multi-row queries.
+  - **Defense-in-Depth & Cross-User Isolation Verified**: Validated that `WITH CHECK (operator_id = auth.uid())` prevents cross-user log tampering; validated trigger `trg_prevent_self_role_status_mutation` prevents role self-escalation; validated `audit_logs` append-only immutability.
+  - **Verification**: `pnpm typecheck` passed (0 errors across 9 packages); git tree clean on `performance-optimization` branch.
 
 - [x] **Phase 7 — Database Index Optimization & Migration (`020_performance_indexes.sql`) (2026-08-27)**:
   - **Full Index Inventory (`existing-indexes.md`)**: Catalogued all 29 existing database indexes across `users`, `machines`, `machine_hour_logs`, `clients`, `idempotency_keys`, and `audit_logs`.

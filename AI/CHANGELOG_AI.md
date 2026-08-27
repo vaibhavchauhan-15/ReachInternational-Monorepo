@@ -1,3 +1,9 @@
+- **Phase 8 — Row-Level Security (RLS) Optimization & STABLE Helper Functions (`supabase/migrations/021_optimize_rls_functions.sql`, `rls-audit.md`) (2026-08-27)**:
+  - **Comprehensive 28-Policy Audit**: Catalogued and evaluated all 28 RLS policies across `users`, `machines`, `machine_hour_logs`, `clients`, and `audit_logs` in `performance/audit/rls-audit.md`.
+  - **Optimized Role Resolution**: Re-created `current_user_role()`, `is_admin()`, and `is_supervisor_or_admin()` as `STABLE SECURITY DEFINER` with explicit `SET search_path = public, pg_temp;` in `021_optimize_rls_functions.sql`, eliminating per-row re-execution on multi-row queries.
+  - **Defense-in-Depth & Isolation Verified**: Confirmed strict cross-user data isolation, self-privilege escalation blocks, and append-only audit log immutability.
+  - **Verification**: `pnpm typecheck` passed cleanly across all 9 packages (0 errors).
+
 - **Phase 7 — Database Index Optimization & Migration (`supabase/migrations/020_performance_indexes.sql`) (2026-08-27)**:
   - **Comprehensive Index Inventory**: Catalogued all 29 active database indexes across public tables in `performance/audit/existing-indexes.md`.
   - **Targeted Partial & Composite Indexes**: Created `020_performance_indexes.sql` introducing partial indexes on active assignments (`idx_machine_assignments_active_operator`, `idx_machine_assignments_active_machine`), fleet compound index (`idx_machines_status_health`), chronological entity audit index (`idx_audit_logs_entity_created`), and unread notification partial index (`idx_notifications_recipient_unread`).
