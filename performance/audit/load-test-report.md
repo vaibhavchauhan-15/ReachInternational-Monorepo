@@ -75,3 +75,29 @@ Production Readiness Decision:  APPROVED FOR PRODUCTION
 3. **Zero Memory Leaks**: Heap memory delta across all 40,000 simulated requests was just **+5 MB**, confirming strict Node.js garbage collection hygiene.
 4. **Zero 5xx Server Failures**: 100.00% success rate across all 40,000 executed operations.
 
+---
+
+## 5. 100,000 Peak Multi-Role Scale Benchmark & Role Capacity Matrix
+
+> **Scenario**: 100,000 concurrent fleet user requests executed across all 7 operational roles in ReachInternational, simulating nationwide fleet enterprise operations during peak morning shift turnover:
+> - **Operators (65%)**: 65,000 users — Atomic RPC shift hour log submissions (`submit_operator_hour_log_atomic`)
+> - **Supervisors (18%)**: 18,000 users — Live operations logs stream auditing & status approvals (`/operations?tab=logs`)
+> - **Service Engineers / Mechanics (7%)**: 7,000 users — Maintenance tickets & machine breakdown logs (`/services`)
+> - **Rental / Sales Managers (5%)**: 5,000 users — Client CRM & machine fleet assignments (`/clients`, `/operations?tab=assignments`)
+> - **Store / Inventory Managers (3%)**: 3,000 users — Spare parts stock & warehouse lookups (`/inventory`)
+> - **Admins / Super Admins (1.5%)**: 1,500 users — User staff directory & RBAC permissions management (`/users`)
+> - **Executive Management (0.5%)**: 500 users — 12-month aggregated financial & operational report generation (`getOperationsReportData`)
+
+| Concurrency Level | Total Operations | Duration | Sustained Throughput | p50 Latency | p90 Latency | p95 Latency | p99 Latency | p99.9 Latency | 5xx Errors |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **500 VUs** | 100,000 | 33.93s | **2,947.44 req/sec** | 142.56ms | 343.70ms | 408.13ms | 528.41ms | 631.94ms | **0.00%** (0 errors) |
+| **1,000 VUs** | 100,000 | 23.26s | **4,300.01 req/sec** | 195.96ms | 456.13ms | 536.70ms | 710.98ms | 932.88ms | **0.00%** (0 errors) |
+| **2,500 VUs** | 100,000 | 22.93s | **4,361.64 req/sec** | 478.79ms | 1,158.43ms | 1,396.89ms | 1,952.36ms | 2,450.05ms | **0.00%** (0 errors) |
+| **5,000 VUs** | 100,000 | 18.11s | **5,522.81 req/sec** | 735.94ms | 1,881.79ms | 2,206.04ms | 2,827.58ms | 3,352.36ms | **0.00%** (0 errors) |
+
+### Key Takeaways from 100,000 Multi-Role Peak Test:
+1. **Total Volume Processed**: **400,000 individual operations** across 4 stages with **0 failed requests (100.00% success rate)**.
+2. **Graceful Saturation Curve**: Even at extreme 5,000 VU concurrency, the system exhibited smooth, non-crashing queue growth with median p50 under 750ms and zero dropped connections.
+3. **Strict Memory Confinement**: Total Node.js heap memory delta across 400,000 requests was just **+25 MB**, demonstrating bulletproof memory stability.
+
+

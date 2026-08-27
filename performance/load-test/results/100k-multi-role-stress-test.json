@@ -1,0 +1,72 @@
+{
+  "testDate": "2026-08-27T12:04:19.640Z",
+  "totalUsersPerRun": 100000,
+  "roleDistribution": {
+    "operator": 65000,
+    "supervisor": 18000,
+    "service_engineer": 7000,
+    "rental_manager": 5000,
+    "store_manager": 3000,
+    "admin": 1500,
+    "executive_reporting": 500
+  },
+  "resultsByConcurrency": [
+    {
+      "concurrency": 500,
+      "totalUsers": 100000,
+      "durationSeconds": "33.93",
+      "throughputReqSec": 2947.44,
+      "p50Ms": 142.56,
+      "p90Ms": 343.7,
+      "p95Ms": 408.13,
+      "p99Ms": 528.41,
+      "p999Ms": 631.94,
+      "errorCount": 0,
+      "successRatePct": 100
+    },
+    {
+      "concurrency": 1000,
+      "totalUsers": 100000,
+      "durationSeconds": "23.26",
+      "throughputReqSec": 4300.01,
+      "p50Ms": 195.96,
+      "p90Ms": 456.13,
+      "p95Ms": 536.7,
+      "p99Ms": 710.98,
+      "p999Ms": 932.88,
+      "errorCount": 0,
+      "successRatePct": 100
+    },
+    {
+      "concurrency": 2500,
+      "totalUsers": 100000,
+      "durationSeconds": "22.93",
+      "throughputReqSec": 4361.64,
+      "p50Ms": 478.79,
+      "p90Ms": 1158.43,
+      "p95Ms": 1396.89,
+      "p99Ms": 1952.36,
+      "p999Ms": 2450.05,
+      "errorCount": 0,
+      "successRatePct": 100
+    },
+    {
+      "concurrency": 5000,
+      "totalUsers": 100000,
+      "durationSeconds": "18.11",
+      "throughputReqSec": 5522.81,
+      "p50Ms": 735.94,
+      "p90Ms": 1881.79,
+      "p95Ms": 2206.04,
+      "p99Ms": 2827.58,
+      "p999Ms": 3352.36,
+      "errorCount": 0,
+      "successRatePct": 100
+    }
+  ],
+  "memoryMetrics": {
+    "initialHeapMb": 5,
+    "finalHeapMb": 30,
+    "deltaMb": 25
+  }
+}
