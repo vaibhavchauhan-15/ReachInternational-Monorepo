@@ -181,7 +181,7 @@ export function UserCreateModal({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
-              label="Full Name"
+              label="Full Name *"
               name="full_name"
               icon={<AnimatedUser size={16} className="text-[var(--color-link)]" />}
               value={createForm.full_name}
@@ -190,7 +190,7 @@ export function UserCreateModal({
               required
             />
             <Input
-              label="Email Address"
+              label="Email Address *"
               name="email"
               type="email"
               icon={<AnimatedMail size={16} className="text-[var(--color-link)]" />}
@@ -213,7 +213,7 @@ export function UserCreateModal({
               required
             />
             <Input
-              label="Account Password"
+              label="Account Password *"
               name="password"
               type="password"
               icon={<AnimatedLock size={16} className="text-[var(--color-link)]" />}
@@ -235,25 +235,25 @@ export function UserCreateModal({
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Input
-              label="City"
+              label="City *"
               name="city"
               icon={<AnimatedMapPin size={16} className="text-emerald-500" />}
               value={createForm.city}
               onChange={(e) => setCreateForm((prev) => ({ ...prev, city: e.target.value }))}
-              placeholder="e.g. Mumbai"
+              placeholder="e.g. Pune"
               required
             />
             <Input
-              label="District"
+              label="District *"
               name="district"
               icon={<AnimatedMapPin size={16} className="text-emerald-500" />}
               value={createForm.district}
               onChange={(e) => setCreateForm((prev) => ({ ...prev, district: e.target.value }))}
-              placeholder="e.g. Mumbai Suburban"
+              placeholder="e.g. Pune"
               required
             />
             <Input
-              label="State"
+              label="State *"
               name="state"
               icon={<AnimatedMapPin size={16} className="text-emerald-500" />}
               value={createForm.state}
@@ -274,7 +274,7 @@ export function UserCreateModal({
 
           {/* Custom Role Selector */}
           <SearchableSelect
-            label="User Access Role"
+            label="User Access Role *"
             options={roleOptions}
             value={createForm.role}
             onChange={(val) => setCreateForm((prev) => ({ ...prev, role: val as UserRole }))}

@@ -168,8 +168,8 @@ export function MachineComplaintModal({
             <Input
               name="state_name"
               label="State Name"
-              placeholder="e.g. Maharashtra"
-              defaultValue={complaint?.state_name || selectedMachine?.state || "Maharashtra"}
+              placeholder="e.g. Haryana"
+              defaultValue={complaint?.state_name || selectedMachine?.state || ""}
               disabled={isPending}
             />
 
@@ -177,7 +177,7 @@ export function MachineComplaintModal({
             <Input
               name="location"
               label="Location / City"
-              placeholder="e.g. Mumbai / Site 4"
+              placeholder="e.g. Jhajjar / Site 4"
               defaultValue={complaint?.location || selectedMachine?.city || ""}
               disabled={isPending}
             />

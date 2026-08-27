@@ -2,7 +2,6 @@
 
 import { revalidateTag } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { TAGS } from "@/lib/cache";
 import { requireRole } from "@/lib/dal";
@@ -15,6 +14,12 @@ export interface MachineFormState {
 }
 
 const machineIdRegex = /^RI-MC-\d{4,}$/i;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUuid(id?: string | null): boolean {
+  if (!id || typeof id !== "string") return false;
+  return UUID_REGEX.test(id.trim());
+}
 
 export async function createMachine(state: MachineFormState, formData: FormData): Promise<MachineFormState> {
   try {
@@ -63,11 +68,9 @@ export async function createMachine(state: MachineFormState, formData: FormData)
       return { error: "Please complete all mandatory machine specification fields.", fieldErrors: errors };
     }
 
-    const adminClient = createSupabaseAdminClient();
-
     // Auto-generate next available unique Machine ID if omitted
     if (!machine_id) {
-      const { data: existingMachines } = await adminClient
+      const { data: existingMachines } = await supabase
         .from("machines")
         .select("machine_id")
         .like("machine_id", "RI-MC-%")
@@ -106,7 +109,7 @@ export async function createMachine(state: MachineFormState, formData: FormData)
       created_by: user.id,
     };
 
-    const { data, error } = await adminClient
+    const { data, error } = await supabase
       .from("machines")
       .insert(insertPayload)
       .select("id, machine_id")
@@ -141,6 +144,9 @@ export async function createMachine(state: MachineFormState, formData: FormData)
 }
 
 export async function updateMachine(id: string, state: MachineFormState, formData: FormData): Promise<MachineFormState> {
+  if (!isValidUuid(id)) {
+    return { error: "Invalid machine ID format." };
+  }
   try {
     await requireRole("admin", "super_admin", "service_manager", "rental_manager", "store_manager", "supervisor");
     const supabase = await createSupabaseServerClient();
@@ -190,8 +196,7 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
       updateData.machine_id = machine_id;
     }
 
-    const adminClient = createSupabaseAdminClient();
-    const { error } = await adminClient
+    const { error } = await supabase
       .from("machines")
       .update(updateData)
       .eq("id", id);
@@ -226,10 +231,13 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
 }
 
 export async function deleteMachine(id: string): Promise<{ success?: boolean; error?: string }> {
+  if (!isValidUuid(id)) {
+    return { error: "Invalid machine ID format." };
+  }
   try {
     await requireRole("admin", "super_admin");
-    const adminClient = createSupabaseAdminClient();
-    const { error } = await adminClient.from("machines").delete().eq("id", id);
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase.from("machines").delete().eq("id", id);
     
     if (error) {
       const formatted = formatMachineDatabaseError(error);
@@ -258,10 +266,16 @@ export async function deleteMachine(id: string): Promise<{ success?: boolean; er
 }
 
 export async function reassignMachineSupervisor(machineId: string, supervisorId: string): Promise<{ success?: boolean; error?: string }> {
+  if (!isValidUuid(machineId)) {
+    return { error: "Invalid machine ID format." };
+  }
+  if (supervisorId && !isValidUuid(supervisorId)) {
+    return { error: "Invalid supervisor ID format." };
+  }
   try {
     await requireRole("admin", "super_admin", "service_manager");
-    const adminClient = createSupabaseAdminClient();
-    const { error } = await adminClient.from("machines").update({ current_supervisor_id: supervisorId || null }).eq("id", machineId);
+    const supabase = await createSupabaseServerClient();
+    const { error } = await supabase.from("machines").update({ current_supervisor_id: supervisorId || null }).eq("id", machineId);
     
     if (error) {
       const formatted = formatMachineDatabaseError(error);

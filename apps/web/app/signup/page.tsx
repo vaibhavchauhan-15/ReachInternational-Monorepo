@@ -10,6 +10,7 @@ import {
   AnimatedLock,
   AnimatedUser,
   AnimatedPhone,
+  AnimatedMapPin,
   AnimatedAlertCircle,
   AnimatedCheckCircle,
   AnimatedArrowRight,
@@ -121,6 +122,9 @@ export default function SignupPage() {
     email: "",
     phone: "",
     role: "service_engineer",
+    city: "",
+    district: "",
+    state: "",
     password: "",
     confirm_password: "",
   });
@@ -336,7 +340,7 @@ function isRedirectError(error: unknown): boolean {
                 <input type="hidden" name="role" value={formValues.role} />
                 {/* Role Selector */}
                 <SearchableSelect
-                  label="Account Role Requested"
+                  label="Account Role Requested *"
                   options={signupRoleOptions}
                   value={formValues.role}
                   onChange={(val) => handleChange("role", val)}
@@ -347,7 +351,46 @@ function isRedirectError(error: unknown): boolean {
               </div>
 
               <Input
-                label="Password"
+                label="City *"
+                name="city"
+                type="text"
+                value={formValues.city}
+                onChange={(e) => handleChange("city", e.target.value)}
+                error={fieldErrors.city}
+                placeholder="e.g. Pune"
+                icon={<AnimatedMapPin size={16} />}
+                required
+                autoComplete="address-level2"
+              />
+
+              <Input
+                label="District *"
+                name="district"
+                type="text"
+                value={formValues.district}
+                onChange={(e) => handleChange("district", e.target.value)}
+                error={fieldErrors.district}
+                placeholder="e.g. Pune"
+                icon={<AnimatedMapPin size={16} />}
+                required
+                autoComplete="address-level2"
+              />
+
+              <Input
+                label="State *"
+                name="state"
+                type="text"
+                value={formValues.state}
+                onChange={(e) => handleChange("state", e.target.value)}
+                error={fieldErrors.state}
+                placeholder="e.g. Maharashtra"
+                icon={<AnimatedMapPin size={16} />}
+                required
+                autoComplete="address-level1"
+              />
+
+              <Input
+                label="Password *"
                 name="password"
                 type="password"
                 value={formValues.password}
@@ -360,7 +403,7 @@ function isRedirectError(error: unknown): boolean {
               />
 
               <Input
-                label="Confirm Password"
+                label="Confirm Password *"
                 name="confirm_password"
                 type="password"
                 value={formValues.confirm_password}

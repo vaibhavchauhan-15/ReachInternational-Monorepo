@@ -17,9 +17,22 @@ import type { UserRole } from '@reachinternational/types';
 export function verifyClientSecurityEnvironment(): { secure: boolean; errors: string[] } {
   const errors: string[] = [];
 
-  // Check process.env for leaks
-  if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    errors.push('CRITICAL SECURITY LEAK: SUPABASE_SERVICE_ROLE_KEY detected in mobile client bundle!');
+  // Check process.env for leaks of server secrets
+  const SENSITIVE_KEYS = [
+    'SUPABASE_SECRET_KEY',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'SENDGRID_API_KEY',
+    'TWILIO_AUTH_TOKEN',
+    'TWILIO_ACCOUNT_SID',
+    'QSTASH_TOKEN',
+    'DATABASE_PASSWORD',
+    'CRON_SECRET',
+  ];
+
+  for (const key of SENSITIVE_KEYS) {
+    if (process.env[key]) {
+      errors.push(`CRITICAL SECURITY LEAK: Server secret '${key}' detected in mobile client bundle!`);
+    }
   }
 
   return {
@@ -44,6 +57,7 @@ export function sanitizeDeepLinkRoute(incomingRoute: string): string {
     '/(app)/crm',
     '/(app)/finance',
     '/(app)/hr',
+    '/(app)/users',
     '/(app)/notifications',
   ];
 
@@ -60,4 +74,43 @@ export function sanitizeDeepLinkRoute(incomingRoute: string): string {
  */
 export function canUserAccessDomain(userRole: UserRole, permissionCode: string): boolean {
   return roleHasPermission(userRole, permissionCode);
+}
+
+/**
+ * Mobile Fetch Timeout Guard (LPDoS Protection): Wraps mobile HTTP calls in a 15-second timeout limit.
+ */
+export async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs: number = 15000
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    return response;
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`Mobile request timed out after ${timeoutMs}ms. Please check your network connection.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Mobile Input String Bounds Guard (ReDoS & DoS Protection): Enforces max length limits on client input before submission.
+ */
+export function validateMobileInputLength(input: string, maxLen: number = 500): { valid: boolean; sanitized: string } {
+  if (!input) return { valid: true, sanitized: '' };
+  const trimmed = input.trim();
+  if (trimmed.length > maxLen) {
+    return { valid: false, sanitized: trimmed.substring(0, maxLen) };
+  }
+  return { valid: true, sanitized: trimmed };
 }

@@ -312,7 +312,7 @@ export function ClientsClient({ user, initialClients }: ClientsClientProps) {
                   </td>
 
                   <td className="py-2.5 px-3 font-medium text-neutral-700">
-                    {client.city}, {client.state}
+                    {[client.city, client.state].filter(Boolean).join(", ") || "—"}
                   </td>
 
                   <td className="py-2.5 px-3 font-mono text-[11px] text-neutral-600 uppercase">
@@ -409,7 +409,7 @@ export function ClientsClient({ user, initialClients }: ClientsClientProps) {
                 </div>
                 <div>
                   <span className="block text-[10px] text-neutral-400">Location</span>
-                  <span className="font-semibold text-[var(--color-ink,#171717)]">{client.city}, {client.state}</span>
+                  <span className="font-semibold text-[var(--color-ink,#171717)]">{[client.city, client.state].filter(Boolean).join(", ") || "—"}</span>
                 </div>
                 {client.phone && (
                   <div>

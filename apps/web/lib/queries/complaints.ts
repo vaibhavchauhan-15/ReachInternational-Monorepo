@@ -80,8 +80,9 @@ const getCachedMachineComplaints = unstable_cache(
     }
 
     if (params.search) {
+      const s = params.search.replace(/[,()"\\]/g, "");
       query = query.or(
-        `complaint_no.ilike.%${params.search}%,complaint.ilike.%${params.search}%,location.ilike.%${params.search}%`
+        `complaint_no.ilike.%${s}%,complaint.ilike.%${s}%,location.ilike.%${s}%`
       );
     }
 

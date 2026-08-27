@@ -90,8 +90,8 @@ export const getAuditLogsFiltered = cache(
     }
 
     // Apply Search Filter (action, entity_type, entity_id)
-    if (search.trim()) {
-      const s = search.trim();
+    if (params.search) {
+      const s = params.search.replace(/[,()"\\]/g, "");
       query = query.or(`action.ilike.%${s}%,entity_type.ilike.%${s}%,entity_id.ilike.%${s}%`);
     }
 

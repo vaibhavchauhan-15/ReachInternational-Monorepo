@@ -1,123 +1,208 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  TouchableOpacity,
+  ActivityIndicator,
+} from 'react-native';
 import { Card, Badge, Input, Button, useTheme, MobileHeader } from '../../components/ui';
 import { MachineDetailModal } from '../../components/machines/MachineDetailModal';
+import { AddMachineModal } from '../../components/machines/AddMachineModal';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
+import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { Search } from 'lucide-react-native';
+import { Search, Plus, Wrench, Copy, Check, Edit2 } from 'lucide-react-native';
 
 export type StatusFilter = 'all' | 'available' | 'rented';
 
-const FLEET_DATA = [
-  {
-    id: 'mch-001',
-    machine_id: 'RI-MC-0001',
-    model: '8FG30',
-    serial_number: 'TY8FG-99214',
-    year_of_mfg: '2025',
-    manufacturer: 'Toyota',
-    status: 'available',
-    health_status: 'active',
-    hour_meter: 1420,
-    service_count: 3,
-    supervisor_name: 'Rajesh Kumar',
-    operator_name: 'Vikram Singh',
-  },
-  {
-    id: 'mch-002',
-    machine_id: 'RI-MC-0002',
-    model: 'H30T-02',
-    serial_number: 'LND-30T-4401',
-    year_of_mfg: '2024',
-    manufacturer: 'Linde',
-    status: 'rented',
-    health_status: 'under_maintenance',
-    hour_meter: 890,
-    service_count: 5,
-    supervisor_name: 'Sunil Sharma',
-    operator_name: 'Amit Kumar',
-  },
-  {
-    id: 'mch-003',
-    machine_id: 'RI-MC-0003',
-    model: 'FD30-17',
-    serial_number: 'KM-FD30-8812',
-    year_of_mfg: '2025',
-    manufacturer: 'Komatsu',
-    status: 'rented',
-    health_status: 'breakdown',
-    hour_meter: 2150,
-    service_count: 8,
-    supervisor_name: 'Ramesh Verma',
-    operator_name: 'Pankaj Patel',
-  },
-];
+export interface MachineRecord {
+  id: string;
+  machine_id: string;
+  model: string;
+  serial_number: string;
+  year_of_mfg?: string;
+  manufacturer?: string;
+  status: string;
+  health_status: string;
+  hour_meter: number;
+  service_count: number;
+  supervisor_id?: string;
+  operator_id?: string;
+  current_supervisor?: { full_name: string } | null;
+  current_operator?: { full_name: string } | null;
+}
 
 export default function MachinesScreen() {
   const { theme } = useTheme();
+  const { role } = useAuth();
+
+  const [machines, setMachines] = useState<MachineRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<StatusFilter>('all');
-  const [refreshing, setRefreshing] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Modals
-  const [selectedMachine, setSelectedMachine] = useState<typeof FLEET_DATA[0] | null>(null);
+  const [selectedMachine, setSelectedMachine] = useState<any | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
 
-  const [meterModalVisible, setMeterModalVisible] = useState(false);
-  const [meterMachineCode, setMeterMachineCode] = useState('RI-MC-0001');
+  const [addModalVisible, setAddModalVisible] = useState(false);
+  const [machineToEdit, setMachineToEdit] = useState<any | null>(null);
 
-  const onRefresh = React.useCallback(() => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 800);
+  const [meterModalVisible, setMeterModalVisible] = useState(false);
+  const [meterMachineData, setMeterMachineData] = useState<{ id: string; code: string; model?: string; serial?: string }>({
+    id: '',
+    code: '',
+  });
+
+  const normalizedRole = (role || '').toLowerCase();
+  const isManagerOrAdmin =
+    normalizedRole === 'admin' ||
+    normalizedRole === 'super_admin' ||
+    normalizedRole === 'service_manager' ||
+    normalizedRole === 'supervisor';
+
+  const fetchMachines = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('machines')
+        .select(`
+          id,
+          machine_id,
+          model,
+          serial_number,
+          year_of_mfg,
+          manufacturer,
+          status,
+          health_status,
+          hour_meter,
+          service_count,
+          supervisor_id,
+          operator_id,
+          current_supervisor:users!machines_supervisor_id_fkey(full_name),
+          current_operator:users!machines_operator_id_fkey(full_name)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.warn('Error fetching machines:', error);
+      } else if (data) {
+        setMachines(data as any);
+      }
+    } catch (err) {
+      console.error('Error fetching live machines:', err);
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
   }, []);
 
-  const openDetail = (item: typeof FLEET_DATA[0]) => {
-    setSelectedMachine(item);
+  useEffect(() => {
+    fetchMachines();
+  }, [fetchMachines]);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchMachines();
+  }, [fetchMachines]);
+
+  const handleCopyId = (mId: string) => {
+    setCopiedId(mId);
+    setTimeout(() => setCopiedId(null), 1800);
+  };
+
+  const openDetail = (m: MachineRecord) => {
+    setSelectedMachine({
+      ...m,
+      supervisor_name: m.current_supervisor?.full_name,
+      operator_name: m.current_operator?.full_name,
+    });
     setDetailModalVisible(true);
   };
 
-  const openMeter = (code: string) => {
-    setMeterMachineCode(code);
+  const openEdit = (m: MachineRecord) => {
+    setMachineToEdit(m);
+    setAddModalVisible(true);
+  };
+
+  const openAdd = () => {
+    setMachineToEdit(null);
+    setAddModalVisible(true);
+  };
+
+  const openMeter = (m: MachineRecord) => {
+    setMeterMachineData({
+      id: m.id,
+      code: m.machine_id,
+      model: m.model,
+      serial: m.serial_number,
+    });
     setMeterModalVisible(true);
   };
 
-  const filteredMachines = FLEET_DATA.filter((m) => {
+  const filteredMachines = machines.filter((m) => {
+    const query = search.toLowerCase().trim();
     const matchesSearch =
-      m.machine_id.toLowerCase().includes(search.toLowerCase()) ||
-      m.model.toLowerCase().includes(search.toLowerCase()) ||
-      m.serial_number.toLowerCase().includes(search.toLowerCase());
+      !query ||
+      (m.machine_id && m.machine_id.toLowerCase().includes(query)) ||
+      (m.model && m.model.toLowerCase().includes(query)) ||
+      (m.serial_number && m.serial_number.toLowerCase().includes(query)) ||
+      (m.manufacturer && m.manufacturer.toLowerCase().includes(query));
 
     const matchesStatus = activeFilter === 'all' || m.status === activeFilter;
 
     return matchesSearch && matchesStatus;
   });
 
+  const availableCount = machines.filter((m) => m.status === 'available').length;
+  const rentedCount = machines.filter((m) => m.status === 'rented').length;
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
       {/* Top Header */}
       <MobileHeader
-        eyebrow="FLEET DIRECTORY"
+        eyebrow="FLEET ASSETS"
         title="Machine Fleet Directory"
         subtitle="Industrial machinery assets, HMR meter readings & personnel assignments"
+        rightAction={
+          isManagerOrAdmin ? (
+            <TouchableOpacity
+              onPress={openAdd}
+              style={[
+                styles.addBtn,
+                { backgroundColor: theme.colors.ink },
+              ]}
+              activeOpacity={0.8}
+            >
+              <Plus size={14} color={theme.colors.canvas} />
+              <Text style={[styles.addBtnText, { color: theme.colors.canvas }]}>Add</Text>
+            </TouchableOpacity>
+          ) : undefined
+        }
       />
 
       {/* Search & Filter Bar */}
       <View style={[styles.searchFilterContainer, { backgroundColor: theme.colors.canvas, borderBottomColor: theme.colors.hairline }]}>
         <Input
-          placeholder="Search ID, model, serial no..."
+          placeholder="Search ID, model, serial no, manufacturer..."
           value={search}
           onChangeText={setSearch}
           leftIcon={<Search size={16} color={theme.colors.mute} />}
           containerStyle={styles.searchInput}
         />
 
-        {/* Filter Pills */}
+        {/* Filter Pills Strip */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
           {[
-            { key: 'all', label: 'All Fleet (3)' },
-            { key: 'available', label: 'Available' },
-            { key: 'rented', label: 'Rented' },
+            { key: 'all', label: `All Fleet (${machines.length})` },
+            { key: 'available', label: `Available (${availableCount})` },
+            { key: 'rented', label: `Rented (${rentedCount})` },
           ].map((f) => {
             const isActive = activeFilter === f.key;
             return (
@@ -145,37 +230,143 @@ export default function MachinesScreen() {
       {/* Machine Card List Feed */}
       <ScrollView
         contentContainerStyle={styles.feedContent}
+        showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
       >
-        {filteredMachines.map((m) => (
-          <Card key={m.id} style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Text style={[styles.code, { color: theme.colors.link }]}>
-                {m.machine_id}
-              </Text>
-              <Badge status={m.status} />
-            </View>
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.colors.link} />
+            <Text style={[styles.loadingText, { color: theme.colors.mute }]}>Loading fleet inventory...</Text>
+          </View>
+        ) : filteredMachines.length === 0 ? (
+          <View style={[styles.emptyContainer, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+            <Wrench size={32} color={theme.colors.mute} />
+            <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>No machines found</Text>
+            <Text style={[styles.emptySubtext, { color: theme.colors.mute }]}>
+              Try adjusting your search criteria or clear active status filters.
+            </Text>
+          </View>
+        ) : (
+          filteredMachines.map((m) => {
+            const isCopied = copiedId === m.machine_id;
+            return (
+              <Card key={m.id} style={styles.card}>
+                {/* Top Row: Machine Code, Model & Status Badges */}
+                <View style={styles.cardHeader}>
+                  <View style={styles.headerLeftInfo}>
+                    <TouchableOpacity
+                      onPress={() => handleCopyId(m.machine_id)}
+                      activeOpacity={0.7}
+                      style={styles.codeBtn}
+                    >
+                      <Text style={[styles.codeText, { color: theme.colors.ink }]}>
+                        {m.machine_id}
+                      </Text>
+                      {isCopied ? (
+                        <Check size={12} color={theme.colors.success} />
+                      ) : (
+                        <Copy size={12} color={theme.colors.mute} />
+                      )}
+                    </TouchableOpacity>
+                    {m.model && (
+                      <Text style={[styles.modelText, { color: theme.colors.ink }]} numberOfLines={1}>
+                        • {m.model}
+                      </Text>
+                    )}
+                  </View>
 
-            <Text style={[styles.model, { color: theme.colors.ink }]}>Model: {m.model}</Text>
-            <Text style={[styles.meta, { color: theme.colors.mute }]}>
-              Serial: {m.serial_number} • YUM: {m.year_of_mfg}
-            </Text>
-            <Text style={[styles.meta, { color: theme.colors.mute }]}>
-              HMR: <Text style={{ color: theme.colors.ink, fontWeight: '600' }}>{m.hour_meter} hrs</Text> • Services: {m.service_count}
-            </Text>
-            <Text style={[styles.meta, { color: theme.colors.mute }]}>
-              Supervisor: <Text style={{ color: theme.colors.ink }}>{m.supervisor_name}</Text>
-            </Text>
+                  <View style={styles.badgeColumn}>
+                    {m.health_status === 'breakdown' && <Badge status="breakdown" customLabel="Breakdown" />}
+                    {m.health_status === 'under_maintenance' && <Badge status="under_maintenance" customLabel="Maintenance" />}
+                    {m.health_status === 'active' && <Badge status="active" customLabel="Active" />}
+                    <Badge status={m.status === 'rented' ? 'in_transit' : 'available'} customLabel={m.status === 'rented' ? 'Rented' : 'Available'} />
+                  </View>
+                </View>
 
-            <View style={styles.cardActions}>
-              <Button label="View Specs" onPress={() => openDetail(m)} size="sm" variant="secondary" />
-              <Button label="Log Meter" onPress={() => openMeter(m.machine_id)} size="sm" variant="outline" />
-            </View>
-          </Card>
-        ))}
+                {/* Sub Metadata Row */}
+                <View style={styles.metaRow}>
+                  {m.serial_number && (
+                    <Text style={[styles.metaText, { color: theme.colors.mute }]}>
+                      S/N: {m.serial_number}
+                    </Text>
+                  )}
+                  {m.year_of_mfg && (
+                    <Text style={[styles.metaText, { color: theme.colors.mute }]}>
+                      • YUM: {m.year_of_mfg}
+                    </Text>
+                  )}
+                  {m.manufacturer && (
+                    <Text style={[styles.metaText, { color: theme.colors.mute }]}>
+                      • Mfg: {m.manufacturer}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Inset Specs Well */}
+                <View style={[styles.specsWell, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                  <View style={styles.specsGrid}>
+                    <View style={styles.specsItem}>
+                      <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Hour Meter (HMR):</Text>
+                      <Text style={[styles.specsValue, { color: theme.colors.ink }]}>{m.hour_meter ?? 0} hrs</Text>
+                    </View>
+                    <View style={styles.specsItem}>
+                      <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Service Count:</Text>
+                      <Text style={[styles.specsValue, { color: theme.colors.ink }]}>{m.service_count ?? 0} Services</Text>
+                    </View>
+                  </View>
+
+                  <View style={[styles.specsDivider, { backgroundColor: theme.colors.hairline }]} />
+
+                  <View style={styles.specsGrid}>
+                    <View style={styles.specsItem}>
+                      <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Supervisor:</Text>
+                      <Text style={[styles.personnelText, { color: theme.colors.ink }]} numberOfLines={1}>
+                        {m.current_supervisor?.full_name || 'Unassigned'}
+                      </Text>
+                    </View>
+                    <View style={styles.specsItem}>
+                      <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Operator:</Text>
+                      <Text style={[styles.personnelText, { color: theme.colors.ink }]} numberOfLines={1}>
+                        {m.current_operator?.full_name || 'Unassigned'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Card Actions Footer */}
+                <View style={[styles.cardActions, { borderTopColor: theme.colors.hairline }]}>
+                  <View style={styles.actionsLeft}>
+                    {isManagerOrAdmin && (
+                      <Button
+                        label="Edit"
+                        onPress={() => openEdit(m)}
+                        size="sm"
+                        variant="ghost"
+                        icon={<Edit2 size={12} color={theme.colors.body} />}
+                      />
+                    )}
+                    <Button
+                      label="Log Meter"
+                      onPress={() => openMeter(m)}
+                      size="sm"
+                      variant="outline"
+                    />
+                  </View>
+
+                  <Button
+                    label="View Specs"
+                    onPress={() => openDetail(m)}
+                    size="sm"
+                    variant="primary"
+                  />
+                </View>
+              </Card>
+            );
+          })
+        )}
       </ScrollView>
 
-      {/* Modals */}
+      {/* Machine Details Bottom Sheet Modal */}
       {selectedMachine && (
         <MachineDetailModal
           visible={detailModalVisible}
@@ -184,11 +375,23 @@ export default function MachinesScreen() {
         />
       )}
 
+      {/* Add / Edit Machine Modal */}
+      <AddMachineModal
+        visible={addModalVisible}
+        onClose={() => setAddModalVisible(false)}
+        onSuccess={fetchMachines}
+        machineToEdit={machineToEdit}
+      />
+
+      {/* Meter Log Modal */}
       <MeterLogModal
         visible={meterModalVisible}
         onClose={() => setMeterModalVisible(false)}
-        machineCode={meterMachineCode}
-        onSubmit={() => setMeterModalVisible(false)}
+        machineId={meterMachineData.id}
+        machineCode={meterMachineData.code}
+        model={meterMachineData.model}
+        serialNumber={meterMachineData.serial}
+        onSubmit={fetchMachines}
       />
     </View>
   );
@@ -198,10 +401,22 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radiusNumeric.sm,
+  },
+  addBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
   searchFilterContainer: {
-    paddingHorizontal: spacingNumeric.lg,
-    paddingTop: spacingNumeric.sm,
-    paddingBottom: spacingNumeric.md,
+    paddingHorizontal: spacingNumeric.md,
+    paddingTop: spacingNumeric.xs,
+    paddingBottom: spacingNumeric.sm,
     borderBottomWidth: 1,
     gap: spacingNumeric.xs,
   },
@@ -210,11 +425,11 @@ const styles = StyleSheet.create({
   },
   filterScroll: {
     gap: spacingNumeric.xs,
-    paddingVertical: spacingNumeric.xs,
+    paddingVertical: 2,
   },
   filterPill: {
-    paddingHorizontal: spacingNumeric.md,
-    paddingVertical: spacingNumeric.xs + 2,
+    paddingHorizontal: spacingNumeric.sm + 2,
+    paddingVertical: 6,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
@@ -223,35 +438,122 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   feedContent: {
-    padding: spacingNumeric.lg,
+    padding: spacingNumeric.md,
+    paddingBottom: 40,
     gap: spacingNumeric.md,
+  },
+  loadingContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    gap: 10,
+  },
+  loadingText: {
+    fontSize: 13,
+  },
+  emptyContainer: {
+    padding: 32,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  emptySubtext: {
+    fontSize: 12,
+    textAlign: 'center',
   },
   card: {
     gap: spacingNumeric.xs,
+    padding: spacingNumeric.md,
   },
   cardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    gap: 8,
   },
-  code: {
+  headerLeftInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    flex: 1,
+  },
+  codeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  codeText: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '800',
     fontFamily: 'monospace',
   },
-  model: {
-    fontSize: 15,
-    fontWeight: 'bold',
+  modelText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
-  meta: {
+  badgeColumn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 2,
+  },
+  metaText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  specsWell: {
+    padding: spacingNumeric.sm,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  specsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  specsItem: {
+    flex: 1,
+  },
+  specsLabel: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  specsValue: {
     fontSize: 12,
+    fontWeight: '700',
+    marginTop: 1,
+  },
+  personnelText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  specsDivider: {
+    height: 1,
+    marginVertical: 6,
   },
   cardActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: spacingNumeric.sm,
-    marginTop: spacingNumeric.xs,
+    justifyContent: 'space-between',
     paddingTop: spacingNumeric.xs,
+    borderTopWidth: 1,
+    marginTop: 4,
+  },
+  actionsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
 });

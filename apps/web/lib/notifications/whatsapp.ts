@@ -1,14 +1,20 @@
+import "server-only";
 import twilio from "twilio";
 
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+function getTwilioClient(): { client: ReturnType<typeof twilio>; fromNumber: string } | null {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER;
 
-if (!accountSid || !authToken || !fromNumber) {
-  throw new Error("Twilio credentials are not configured in environment variables.");
+  if (!accountSid || !authToken || !fromNumber) {
+    return null;
+  }
+
+  return {
+    client: twilio(accountSid, authToken),
+    fromNumber,
+  };
 }
-
-const client = twilio(accountSid, authToken);
 
 export interface WhatsAppMessageOptions {
   to: string;
@@ -28,11 +34,24 @@ export async function sendWhatsAppReminder(
   data: WhatsAppTemplateData
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
-    const contentSid = process.env.TWILIO_CONTENT_SID;
-
-    if (!contentSid) {
-      throw new Error("TWILIO_CONTENT_SID is not configured in environment variables.");
+    const twilioSetup = getTwilioClient();
+    if (!twilioSetup) {
+      console.warn("Twilio WhatsApp credentials are not configured in environment variables. Message skipped.");
+      return {
+        success: false,
+        error: "Twilio credentials are not configured in environment variables.",
+      };
     }
+
+    const contentSid = process.env.TWILIO_CONTENT_SID;
+    if (!contentSid) {
+      return {
+        success: false,
+        error: "TWILIO_CONTENT_SID is not configured in environment variables.",
+      };
+    }
+
+    const { client, fromNumber } = twilioSetup;
 
     let formattedTo = to;
     if (!formattedTo.startsWith("+")) {
@@ -70,6 +89,17 @@ export async function sendWhatsAppMessage(
   message: string
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
+    const twilioSetup = getTwilioClient();
+    if (!twilioSetup) {
+      console.warn("Twilio WhatsApp credentials are not configured in environment variables. Message skipped.");
+      return {
+        success: false,
+        error: "Twilio credentials are not configured in environment variables.",
+      };
+    }
+
+    const { client, fromNumber } = twilioSetup;
+
     let formattedTo = to;
     if (!formattedTo.startsWith("+")) {
       formattedTo = formattedTo.length === 10 ? `+91${formattedTo}` : `+${formattedTo}`;
@@ -87,10 +117,10 @@ export async function sendWhatsAppMessage(
     };
   } catch (error) {
     console.error("Twilio WhatsApp send failed:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
+    const msg = error instanceof Error ? error.message : "Unknown error";
     return {
       success: false,
-      error: message,
+      error: msg,
     };
   }
 }

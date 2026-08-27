@@ -15,6 +15,7 @@ interface ClientItem {
   phone?: string;
   email?: string;
   gstin?: string;
+  address: string;
   city: string;
   state: string;
   status: 'active' | 'inactive';
@@ -31,6 +32,7 @@ const INITIAL_CLIENTS: ClientItem[] = [
     phone: '+91 98765 43210',
     email: 'info@pushpainfra.com',
     gstin: '07AAAAA0000A1Z5',
+    address: 'Plot 12, Industrial Area Phase 2',
     city: 'Delhi',
     state: 'Delhi',
     status: 'active',
@@ -44,6 +46,7 @@ const INITIAL_CLIENTS: ClientItem[] = [
     phone: '+91 98123 45678',
     email: 'contact@abcinfra.com',
     gstin: '07BBBBB1111B1Z2',
+    address: 'Sector 34, Cyber City Phase 1',
     city: 'Gurgaon',
     state: 'Haryana',
     status: 'active',
@@ -57,6 +60,7 @@ const INITIAL_CLIENTS: ClientItem[] = [
     phone: '+91 99887 76655',
     email: 'ops@globallogistics.in',
     gstin: '07CCCCC2222C1Z9',
+    address: 'Plot 9, Logistics Park, Ecotech 3',
     city: 'Noida',
     state: 'Uttar Pradesh',
     status: 'inactive',
@@ -82,7 +86,9 @@ export default function ClientsScreen() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [gstin, setGstin] = useState('');
-  const [city, setCity] = useState('Delhi');
+  const [address, setAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [stateName, setStateName] = useState('');
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -99,7 +105,9 @@ export default function ClientsScreen() {
       c.code.toLowerCase().includes(q) ||
       (c.contact_person && c.contact_person.toLowerCase().includes(q)) ||
       (c.phone && c.phone.includes(q)) ||
-      c.city.toLowerCase().includes(q);
+      (c.address && c.address.toLowerCase().includes(q)) ||
+      (c.city && c.city.toLowerCase().includes(q)) ||
+      (c.state && c.state.toLowerCase().includes(q));
 
     const matchesStatus = activeFilter === 'all' || c.status === activeFilter;
     return matchesSearch && matchesStatus;
@@ -113,7 +121,9 @@ export default function ClientsScreen() {
     setPhone('');
     setEmail('');
     setGstin('');
-    setCity('Delhi');
+    setAddress('');
+    setCity('');
+    setStateName('');
     setModalVisible(true);
   };
 
@@ -125,7 +135,9 @@ export default function ClientsScreen() {
     setPhone(client.phone || '');
     setEmail(client.email || '');
     setGstin(client.gstin || '');
-    setCity(client.city);
+    setAddress(client.address || '');
+    setCity(client.city || '');
+    setStateName(client.state || '');
     setModalVisible(true);
   };
 
@@ -135,19 +147,26 @@ export default function ClientsScreen() {
       return;
     }
 
+    if (!address.trim() || !city.trim() || !stateName.trim()) {
+      Alert.alert('Validation Error', 'Address, City, and State are required fields.');
+      return;
+    }
+
     if (editingClient) {
       setClients((prev) =>
         prev.map((c) =>
           c.id === editingClient.id
             ? {
                 ...c,
-                client_name: clientName,
-                company_name: companyName,
-                contact_person: contactPerson,
-                phone,
-                email,
-                gstin,
-                city,
+                client_name: clientName.trim(),
+                company_name: companyName.trim(),
+                contact_person: contactPerson.trim(),
+                phone: phone.trim(),
+                email: email.trim(),
+                gstin: gstin.trim(),
+                address: address.trim(),
+                city: city.trim(),
+                state: stateName.trim(),
               }
             : c
         )
@@ -158,14 +177,15 @@ export default function ClientsScreen() {
       const newClient: ClientItem = {
         id: `cli-${Date.now()}`,
         code,
-        client_name: clientName,
-        company_name: companyName,
-        contact_person: contactPerson,
-        phone,
-        email,
-        gstin,
-        city,
-        state: 'Delhi',
+        client_name: clientName.trim(),
+        company_name: companyName.trim(),
+        contact_person: contactPerson.trim(),
+        phone: phone.trim(),
+        email: email.trim(),
+        gstin: gstin.trim(),
+        address: address.trim(),
+        city: city.trim(),
+        state: stateName.trim(),
         status: 'active',
       };
       setClients([newClient, ...clients]);
@@ -294,7 +314,7 @@ export default function ClientsScreen() {
                     </Text>
                   )}
                   <Text style={[styles.detailRow, { color: theme.colors.ink }]}>
-                    Location: <Text style={{ fontWeight: '600' }}>{item.city}, {item.state}</Text>
+                    Location: <Text style={{ fontWeight: '600' }}>{[item.city, item.state].filter(Boolean).join(', ') || '—'}</Text>
                   </Text>
                 </View>
 
@@ -371,11 +391,33 @@ export default function ClientsScreen() {
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>City</Text>
+                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Office / Plant Address *</Text>
+                <TextInput
+                  value={address}
+                  onChangeText={setAddress}
+                  placeholder="e.g. Plot 42, Sector 18, Industrial Area"
+                  placeholderTextColor={theme.colors.mute}
+                  style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>City *</Text>
                 <TextInput
                   value={city}
                   onChangeText={setCity}
-                  placeholder="Delhi"
+                  placeholder="e.g. Pune"
+                  placeholderTextColor={theme.colors.mute}
+                  style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>State *</Text>
+                <TextInput
+                  value={stateName}
+                  onChangeText={setStateName}
+                  placeholder="e.g. Maharashtra"
                   placeholderTextColor={theme.colors.mute}
                   style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
                 />

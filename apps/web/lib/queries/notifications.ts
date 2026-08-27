@@ -130,8 +130,9 @@ export async function getNotifications(params: NotificationListParams = {}) {
   }
 
   if (search) {
+    const s = search.replace(/[,()"\\]/g, "");
     query = query.or(
-      `error_message.ilike.%${search}%,whatsapp_message_id.ilike.%${search}%,email_message_id.ilike.%${search}%,machine.model.ilike.%${search}%,recipient.email.ilike.%${search}%,recipient.full_name.ilike.%${search}%`
+      `error_message.ilike.%${s}%,whatsapp_message_id.ilike.%${s}%,email_message_id.ilike.%${s}%,machine.model.ilike.%${s}%,recipient.email.ilike.%${s}%,recipient.full_name.ilike.%${s}%`
     );
   }
 

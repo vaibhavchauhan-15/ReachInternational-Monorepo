@@ -1,4 +1,4 @@
-"use server";
+import "server-only";
 
 import { revalidatePath, revalidateTag } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -218,7 +218,7 @@ async function sendEngineerDailySummaries(
 }
 
 // ---------------------------------------------------------------------------
-// Main entry: sendDailyReminders
+// Main entry: sendDailyReminders (Server Internal Job)
 // ---------------------------------------------------------------------------
 
 export async function sendDailyReminders(): Promise<{

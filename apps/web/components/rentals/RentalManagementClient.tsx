@@ -402,8 +402,8 @@ export function RentalManagementClient({
           </div>
           <Input label="Billing Address" name="billing_address" placeholder="Plot 12, Industrial Area" />
           <div className="grid grid-cols-2 gap-3">
-            <Input label="City" name="city" required placeholder="Mumbai" />
-            <Input label="State" name="state" required placeholder="Maharashtra" />
+            <Input label="City" name="city" required placeholder="e.g. Pune" />
+            <Input label="State" name="state" required placeholder="e.g. Maharashtra" />
           </div>
 
           <div className="flex justify-end gap-2 pt-3">
@@ -518,7 +518,7 @@ export function RentalManagementClient({
             <p className="text-[11px]">Verify hour meter, fuel level, accessories, and customer site location before dispatching.</p>
           </div>
 
-          <Input label="Site / Delivery Location" name="site_location" required placeholder="Project Site 4, Navi Mumbai" />
+          <Input label="Site / Delivery Location" name="site_location" required placeholder="Project Site / Delivery Location" />
           <div className="grid grid-cols-2 gap-3">
             <Input label="Current Hour Meter Reading" name="start_hour_meter" type="number" required defaultValue={selectedAgreement?.machines?.hour_meter || 0} />
             <Input label="Fuel Level (%)" name="start_fuel_level" type="number" defaultValue={100} />

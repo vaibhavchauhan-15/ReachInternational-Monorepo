@@ -1,14 +1,20 @@
+import "server-only";
 import twilio from "twilio";
 
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const fromNumber = process.env.TWILIO_SMS_NUMBER;
+function getTwilioClient(): { client: ReturnType<typeof twilio>; fromNumber: string } | null {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID;
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const fromNumber = process.env.TWILIO_SMS_NUMBER;
 
-if (!accountSid || !authToken || !fromNumber) {
-  throw new Error("Twilio SMS credentials are not configured in environment variables.");
+  if (!accountSid || !authToken || !fromNumber) {
+    return null;
+  }
+
+  return {
+    client: twilio(accountSid, authToken),
+    fromNumber,
+  };
 }
-
-const client = twilio(accountSid, authToken);
 
 export interface SMSMessageOptions {
   to: string;
@@ -21,6 +27,16 @@ export async function sendSMS(
   message: string
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   try {
+    const twilioSetup = getTwilioClient();
+    if (!twilioSetup) {
+      console.warn("Twilio SMS is not configured in environment variables. SMS delivery skipped.");
+      return {
+        success: false,
+        error: "Twilio SMS credentials are not configured in environment variables.",
+      };
+    }
+
+    const { client, fromNumber } = twilioSetup;
     const response = await client.messages.create({
       from: fromNumber,
       to: to,
@@ -33,10 +49,10 @@ export async function sendSMS(
     };
   } catch (error) {
     console.error("Twilio SMS send failed:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
+    const msg = error instanceof Error ? error.message : "Unknown error";
     return {
       success: false,
-      error: message,
+      error: msg,
     };
   }
 }

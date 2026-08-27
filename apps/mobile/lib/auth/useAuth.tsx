@@ -35,25 +35,53 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [role, setRole] = useState<UserRole | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  const syncUserProfile = async (currentSession: Session | null) => {
+    if (!currentSession?.user) {
+      setRole(null);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('role, status')
+        .eq('id', currentSession.user.id)
+        .single();
+
+      if (error || !data) {
+        // Safe fallback: use session metadata if strictly present, otherwise null
+        const metaRole = currentSession.user.user_metadata?.role as UserRole | undefined;
+        setRole(metaRole || null);
+      } else if (data.status === 'inactive' || data.status === 'pending') {
+        console.warn(`[useAuth] Account is ${data.status}. Revoking session.`);
+        await supabase.auth.signOut();
+        setSession(null);
+        setUser(null);
+        setRole(null);
+      } else {
+        setRole(data.role as UserRole);
+      }
+    } catch (err) {
+      console.error('[useAuth] Error fetching user role from database:', err);
+      const metaRole = currentSession.user.user_metadata?.role as UserRole | undefined;
+      setRole(metaRole || null);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) {
-        setRole((session.user.user_metadata?.role as UserRole) || 'service_engineer');
-      }
-      setIsLoading(false);
+      syncUserProfile(session);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) {
-        setRole((session.user.user_metadata?.role as UserRole) || 'service_engineer');
-      } else {
-        setRole(null);
-      }
-      setIsLoading(false);
+      syncUserProfile(session);
     });
 
     return () => {

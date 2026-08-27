@@ -1,6 +1,10 @@
+import "server-only";
 import sgMail from "@sendgrid/mail";
+import { escapeHtml } from "@reachinternational/utils";
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY!);
+if (process.env.SENDGRID_API_KEY) {
+  sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+}
 
 export interface EmailOptions {
   to: string;
@@ -136,6 +140,10 @@ export async function sendEmailWithTracking(
 }
 
 export async function sendWelcomeEmail(email: string, name: string, password: string) {
+  const safeName = escapeHtml(name);
+  const safeEmail = escapeHtml(email);
+  const safePassword = escapeHtml(password);
+
   const html = `
     <!DOCTYPE html>
     <html>
@@ -157,14 +165,14 @@ export async function sendWelcomeEmail(email: string, name: string, password: st
         <h1>Welcome to REACH INTERNATIONAL</h1>
       </div>
       <div class="content">
-        <h2>Hello ${name},</h2>
+        <h2>Hello ${safeName},</h2>
         <p>Your account has been created successfully. Here are your login credentials:</p>
         <div class="credentials">
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Password:</strong> ${password}</p>
+          <p><strong>Email:</strong> ${safeEmail}</p>
+          <p><strong>Password:</strong> ${safePassword}</p>
         </div>
         <p>Please login at the link below:</p>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL}/login" class="btn">Login to Dashboard</a>
+        <a href="${process.env.NEXT_PUBLIC_APP_URL || ""}/login" class="btn">Login to Dashboard</a>
         <p style="color: #6b7280; font-size: 14px; margin-top: 15px;">For security, please change your password after first login.</p>
       </div>
       <div class="footer">
@@ -182,6 +190,8 @@ export async function sendWelcomeEmail(email: string, name: string, password: st
 }
 
 export async function sendApprovalEmail(email: string, name: string) {
+  const safeName = escapeHtml(name);
+
   const html = `
     <!DOCTYPE html>
     <html>
@@ -202,9 +212,9 @@ export async function sendApprovalEmail(email: string, name: string) {
         <h1>Account Approved</h1>
       </div>
       <div class="content">
-        <h2>Hello ${name},</h2>
+        <h2>Hello ${safeName},</h2>
         <p>Your REACH INTERNATIONAL account has been approved. You can now login to access the system.</p>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL}/login" class="btn">Login to Dashboard</a>
+        <a href="${process.env.NEXT_PUBLIC_APP_URL || ""}/login" class="btn">Login to Dashboard</a>
       </div>
       <div class="footer">
         <p>This is an automated email from REACH INTERNATIONAL.</p>
@@ -221,6 +231,8 @@ export async function sendApprovalEmail(email: string, name: string) {
 }
 
 export async function sendRejectionEmail(email: string, name: string) {
+  const safeName = escapeHtml(name);
+
   const html = `
     <!DOCTYPE html>
     <html>
@@ -240,7 +252,7 @@ export async function sendRejectionEmail(email: string, name: string) {
         <h1>Account Request Update</h1>
       </div>
       <div class="content">
-        <h2>Hello ${name},</h2>
+        <h2>Hello ${safeName},</h2>
         <p>Thank you for your interest in REACH INTERNATIONAL. Unfortunately, your account request has been declined at this time.</p>
         <p>If you have any questions, please contact your administrator.</p>
       </div>
@@ -259,7 +271,10 @@ export async function sendRejectionEmail(email: string, name: string) {
 }
 
 export async function sendPendingApprovalEmailToAdmins(adminEmails: string[], userName: string, userEmail: string, userRole?: string) {
-  const roleDisplay = userRole ? userRole.replace(/_/g, " ").toUpperCase() : "NOT SPECIFIED";
+  const safeUserName = escapeHtml(userName);
+  const safeUserEmail = escapeHtml(userEmail);
+  const roleDisplay = userRole ? escapeHtml(userRole.replace(/_/g, " ").toUpperCase()) : "NOT SPECIFIED";
+
   const html = `
     <!DOCTYPE html>
     <html>
@@ -282,12 +297,12 @@ export async function sendPendingApprovalEmailToAdmins(adminEmails: string[], us
       <div class="content">
         <p>A new user has signed up and is awaiting approval:</p>
         <div class="credentials" style="background: white; padding: 15px; border-radius: 6px; margin: 15px 0;">
-          <p><strong>Name:</strong> ${userName}</p>
-          <p><strong>Email:</strong> ${userEmail}</p>
+          <p><strong>Name:</strong> ${safeUserName}</p>
+          <p><strong>Email:</strong> ${safeUserEmail}</p>
           <p><strong>Requested Role:</strong> ${roleDisplay}</p>
         </div>
         <p>Please review and approve/reject this request in the admin dashboard.</p>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL}/users" class="btn">Go to Admin Dashboard</a>
+        <a href="${process.env.NEXT_PUBLIC_APP_URL || ""}/users" class="btn">Go to Admin Dashboard</a>
       </div>
       <div class="footer">
         <p>This is an automated email from REACH INTERNATIONAL.</p>
@@ -308,6 +323,10 @@ export async function sendPendingApprovalEmailToAdmins(adminEmails: string[], us
 }
 
 export async function sendPasswordResetNotification(email: string, name: string, newPassword: string) {
+  const safeName = escapeHtml(name);
+  const safeEmail = escapeHtml(email);
+  const safePassword = escapeHtml(newPassword);
+
   const html = `
     <!DOCTYPE html>
     <html>
@@ -329,14 +348,14 @@ export async function sendPasswordResetNotification(email: string, name: string,
         <h1>Password Reset</h1>
       </div>
       <div class="content">
-        <h2>Hello ${name},</h2>
+        <h2>Hello ${safeName},</h2>
         <p>Your password has been reset by an administrator. Here are your new credentials:</p>
         <div class="credentials">
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>New Password:</strong> ${newPassword}</p>
+          <p><strong>Email:</strong> ${safeEmail}</p>
+          <p><strong>New Password:</strong> ${safePassword}</p>
         </div>
         <p>Please login at the link below:</p>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL}/login" class="btn">Login to Dashboard</a>
+        <a href="${process.env.NEXT_PUBLIC_APP_URL || ""}/login" class="btn">Login to Dashboard</a>
         <p style="color: #6b7280; font-size: 14px; margin-top: 15px;">For security, please change your password after logging in.</p>
       </div>
       <div class="footer">

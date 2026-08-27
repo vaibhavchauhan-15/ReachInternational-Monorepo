@@ -30,6 +30,36 @@ export async function importMachinesFromExcel(formData: FormData): Promise<BulkI
     throw new Error("No file uploaded.");
   }
 
+  // SECURITY (F07): Validate file size boundary (Max 10MB) and non-empty content
+  const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+  if (file.size <= 0) {
+    throw new Error("Uploaded file is empty.");
+  }
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    throw new Error("File size exceeds 10MB limit. Please upload a smaller spreadsheet.");
+  }
+
+  // SECURITY (F07): Validate file extension allowlist
+  const fileName = (file.name || "").toLowerCase();
+  const allowedExtensions = [".xlsx", ".xls", ".csv"];
+  const hasValidExtension = allowedExtensions.some((ext) => fileName.endsWith(ext));
+  if (!hasValidExtension) {
+    throw new Error("Invalid file type. Please upload a valid Excel (.xlsx, .xls) or CSV (.csv) spreadsheet.");
+  }
+
+  // SECURITY (F07): Validate MIME type allowlist
+  const allowedMimeTypes = [
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "text/csv",
+    "application/csv",
+    "text/plain",
+    "application/octet-stream",
+  ];
+  if (file.type && !allowedMimeTypes.includes(file.type.toLowerCase())) {
+    throw new Error("Invalid MIME type for spreadsheet file.");
+  }
+
   // Read Excel file
   const buffer = Buffer.from(await file.arrayBuffer());
   const workbook = XLSX.read(buffer, { type: "buffer" });

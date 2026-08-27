@@ -195,7 +195,8 @@ export async function getFinanceInvoices(filters?: {
       query = query.eq("invoice_type", filters.invoice_type);
     }
     if (filters?.search) {
-      query = query.or(`invoice_number.ilike.%${filters.search}%,customer_name.ilike.%${filters.search}%`);
+      const s = filters.search.replace(/[,()"\\]/g, "");
+      query = query.or(`invoice_number.ilike.%${s}%,customer_name.ilike.%${s}%`);
     }
 
     query = query.order("created_at", { ascending: false });
@@ -256,7 +257,8 @@ export async function getFinancePayments(filters?: {
       query = query.eq("payment_method", filters.method);
     }
     if (filters?.search) {
-      query = query.or(`payment_number.ilike.%${filters.search}%,customer_name.ilike.%${filters.search}%,transaction_reference.ilike.%${filters.search}%`);
+      const s = filters.search.replace(/[,()"\\]/g, "");
+      query = query.or(`payment_number.ilike.%${s}%,customer_name.ilike.%${s}%,transaction_reference.ilike.%${s}%`);
     }
 
     query = query.order("payment_date", { ascending: false });

@@ -26,11 +26,11 @@ function loadEnv() {
 
 loadEnv();
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dhbbgfzbyatzvqafnsqp.supabase.co';
-const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!SUPABASE_SECRET_KEY) {
-  console.error('ERROR: Missing SUPABASE_SECRET_KEY env variable.');
+if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) {
+  console.error('ERROR: Missing SUPABASE_URL or SUPABASE_SECRET_KEY env variable.');
   process.exit(1);
 }
 
@@ -48,21 +48,21 @@ async function seed() {
   console.log('1️⃣ Seeding Auth Users & Profiles...');
 
   const testUsers = [
-    { email: 'superadmin@reachinternation.co.in', password: 'Password@123456', role: 'super_admin', full_name: 'Super Admin User', phone: '+91 98765 00001' },
-    { email: 'admin@reachinternation.co.in', password: 'Password@123456', role: 'admin', full_name: 'Rajesh Sharma', phone: '+91 98765 00002' },
-    { email: 'branchmanager@reachinternation.co.in', password: 'Password@123456', role: 'branch_manager', full_name: 'Sanjeev Kapoor', phone: '+91 98765 00012' },
-    { email: 'servicemanager@reachinternation.co.in', password: 'Password@123456', role: 'service_manager', full_name: 'Pankaj Verma', phone: '+91 98765 00015' },
-    { email: 'engineer@reachinternation.co.in', password: 'Password@123456', role: 'service_engineer', full_name: 'Amit Kumar', phone: '+91 98765 00003' },
-    { email: 'engineer2@reachinternation.co.in', password: 'Password@123456', role: 'service_engineer', full_name: 'Rohan Verma', phone: '+91 98765 00004' },
-    { email: 'supervisor@reachinternation.co.in', password: 'Password@123456', role: 'supervisor', full_name: 'Vikram Singh', phone: '+91 98765 00005' },
-    { email: 'storemanager@reachinternation.co.in', password: 'Password@123456', role: 'store_manager', full_name: 'Suresh Gupta', phone: '+91 98765 00006' },
-    { email: 'operator@reachinternation.co.in', password: 'Password@123456', role: 'operator', full_name: 'Deepak Patel', phone: '+91 98765 00007' },
-    { email: 'mechanic@reachinternation.co.in', password: 'Password@123456', role: 'mechanic', full_name: 'Manoj Yadav', phone: '+91 98765 00008' },
-    { email: 'hr@reachinternation.co.in', password: 'Password@123456', role: 'hr_manager', full_name: 'Priya Nair', phone: '+91 98765 00009' },
-    { email: 'finance@reachinternation.co.in', password: 'Password@123456', role: 'finance_manager', full_name: 'Animesh Roy', phone: '+91 98765 00010' },
-    { email: 'sales@reachinternation.co.in', password: 'Password@123456', role: 'sales_executive', full_name: 'Tarun Joshi', phone: '+91 98765 00013' },
-    { email: 'rentalmanager@reachinternation.co.in', password: 'Password@123456', role: 'rental_manager', full_name: 'Neha Saxena', phone: '+91 98765 00014' },
-    { email: 'client@reachinternation.co.in', password: 'Password@123456', role: 'client', full_name: 'Ramesh Pushpa', phone: '+91 98765 00011' },
+    { email: 'superadmin@reachinternation.co.in', password: 'Password@123456', role: 'super_admin', full_name: 'Super Admin User', phone: '+91 98765 00001', city: 'Delhi', district: 'New Delhi', state: 'Delhi' },
+    { email: 'admin@reachinternation.co.in', password: 'Password@123456', role: 'admin', full_name: 'Rajesh Sharma', phone: '+91 98765 00002', city: 'Delhi', district: 'New Delhi', state: 'Delhi' },
+    { email: 'branchmanager@reachinternation.co.in', password: 'Password@123456', role: 'branch_manager', full_name: 'Sanjeev Kapoor', phone: '+91 98765 00012', city: 'Gurugram', district: 'Gurugram', state: 'Haryana' },
+    { email: 'servicemanager@reachinternation.co.in', password: 'Password@123456', role: 'service_manager', full_name: 'Pankaj Verma', phone: '+91 98765 00015', city: 'Noida', district: 'Gautam Buddha Nagar', state: 'Uttar Pradesh' },
+    { email: 'engineer@reachinternation.co.in', password: 'Password@123456', role: 'service_engineer', full_name: 'Amit Kumar', phone: '+91 98765 00003', city: 'Gurugram', district: 'Gurugram', state: 'Haryana' },
+    { email: 'engineer2@reachinternation.co.in', password: 'Password@123456', role: 'service_engineer', full_name: 'Rohan Verma', phone: '+91 98765 00004', city: 'Faridabad', district: 'Faridabad', state: 'Haryana' },
+    { email: 'supervisor@reachinternation.co.in', password: 'Password@123456', role: 'supervisor', full_name: 'Vikram Singh', phone: '+91 98765 00005', city: 'Noida', district: 'Gautam Buddha Nagar', state: 'Uttar Pradesh' },
+    { email: 'storemanager@reachinternation.co.in', password: 'Password@123456', role: 'store_manager', full_name: 'Suresh Gupta', phone: '+91 98765 00006', city: 'Delhi', district: 'North Delhi', state: 'Delhi' },
+    { email: 'operator@reachinternation.co.in', password: 'Password@123456', role: 'operator', full_name: 'Deepak Patel', phone: '+91 98765 00007', city: 'Jhajjar', district: 'Jhajjar', state: 'Haryana' },
+    { email: 'mechanic@reachinternation.co.in', password: 'Password@123456', role: 'mechanic', full_name: 'Manoj Yadav', phone: '+91 98765 00008', city: 'Rewari', district: 'Rewari', state: 'Haryana' },
+    { email: 'hr@reachinternation.co.in', password: 'Password@123456', role: 'hr_manager', full_name: 'Priya Nair', phone: '+91 98765 00009', city: 'Delhi', district: 'South Delhi', state: 'Delhi' },
+    { email: 'finance@reachinternation.co.in', password: 'Password@123456', role: 'finance_manager', full_name: 'Animesh Roy', phone: '+91 98765 00010', city: 'Delhi', district: 'Central Delhi', state: 'Delhi' },
+    { email: 'sales@reachinternation.co.in', password: 'Password@123456', role: 'sales_executive', full_name: 'Tarun Joshi', phone: '+91 98765 00013', city: 'Delhi', district: 'West Delhi', state: 'Delhi' },
+    { email: 'rentalmanager@reachinternation.co.in', password: 'Password@123456', role: 'rental_manager', full_name: 'Neha Saxena', phone: '+91 98765 00014', city: 'Gurugram', district: 'Gurugram', state: 'Haryana' },
+    { email: 'client@reachinternation.co.in', password: 'Password@123456', role: 'client', full_name: 'Ramesh Pushpa', phone: '+91 98765 00011', city: 'Pune', district: 'Pune', state: 'Maharashtra' },
   ];
 
   const userMap = {}; // role or email -> userId
@@ -81,7 +81,15 @@ async function seed() {
         email: u.email,
         password: u.password,
         email_confirm: true,
-        user_metadata: { full_name: u.full_name, phone: u.phone, role: u.role },
+        user_metadata: { 
+          full_name: u.full_name, 
+          phone: u.phone, 
+          role: u.role,
+          city: u.city,
+          district: u.district,
+          state: u.state,
+          location: `${u.city}, ${u.district}, ${u.state}`,
+        },
       });
       if (created?.user) {
         userId = created.user.id;
@@ -104,6 +112,10 @@ async function seed() {
         role: u.role,
         status: 'active',
         email: u.email,
+        city: u.city,
+        district: u.district,
+        state: u.state,
+        location: `${u.city}, ${u.district}, ${u.state}`,
       });
     }
   }

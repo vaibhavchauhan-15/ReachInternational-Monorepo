@@ -48,6 +48,8 @@ import {
 import { useToast, CustomTimePicker, Modal } from "@/components/ui";
 import { formatDate } from "@reachinternational/utils";
 import { PrintableOperatorLogsModal } from "./PrintableOperatorLogsModal";
+import { handleClipboardPaste } from "@/lib/security/clipboard";
+import { HmrSchema, RemarksSchema } from "@reachinternational/validation";
 
 const DRAFT_STORAGE_KEY = "reach_operator_daily_log_draft";
 
@@ -722,6 +724,8 @@ export function OperatorDashboard({
       }
     }
 
+    const idempotencyKey = typeof window !== "undefined" && window.crypto?.randomUUID ? window.crypto.randomUUID() : undefined;
+
     const res = await submitOperatorHourLogAction({
       machineId: selectedMachineId,
       clientId: selectedClientId || undefined,
@@ -735,6 +739,7 @@ export function OperatorDashboard({
       machineCondition: isBreakdown ? "breakdown" : "good",
       remarks: finalRemarks,
       status: statusOverride,
+      idempotencyKey,
     });
 
     setSubmitting(false);
@@ -1222,6 +1227,14 @@ export function OperatorDashboard({
                     required
                     value={startMeter}
                     onChange={(e) => setStartMeter(e.target.value)}
+                    onPaste={(e) =>
+                      handleClipboardPaste({
+                        event: e,
+                        schema: HmrSchema as any,
+                        onSuccess: (val) => setStartMeter(String(val)),
+                        onError: (msg) => toast("error", "Validation Error", msg),
+                      })
+                    }
                     placeholder="e.g. 1250.0"
                     className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                   />
@@ -1239,6 +1252,14 @@ export function OperatorDashboard({
                     required
                     value={endMeter}
                     onChange={(e) => setEndMeter(e.target.value)}
+                    onPaste={(e) =>
+                      handleClipboardPaste({
+                        event: e,
+                        schema: HmrSchema as any,
+                        onSuccess: (val) => setEndMeter(String(val)),
+                        onError: (msg) => toast("error", "Validation Error", msg),
+                      })
+                    }
                     placeholder="e.g. 1258.0"
                     className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                   />
@@ -1279,6 +1300,14 @@ export function OperatorDashboard({
                     min="0"
                     value={overtimeHours}
                     onChange={(e) => setOvertimeHours(e.target.value)}
+                    onPaste={(e) =>
+                      handleClipboardPaste({
+                        event: e,
+                        schema: HmrSchema as any,
+                        onSuccess: (val) => setOvertimeHours(String(val)),
+                        onError: (msg) => toast("error", "Validation Error", msg),
+                      })
+                    }
                     placeholder="e.g. 0.0"
                     className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                   />

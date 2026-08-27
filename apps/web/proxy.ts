@@ -1,17 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { checkRateLimitAsync, getClientIp, RATE_LIMIT_PROFILES } from "@/lib/security/rate-limiter";
 
-const protectedRoutes = [
-  "/dashboard",
+const activeProtectedRoutes = [
   "/machines",
   "/operations",
-  "/services",
-  "/service",
-  "/notifications",
-  "/notification",
   "/users",
-  "/audit-logs",
-  "/settings",
+];
+
+const deprecatedRoutes = [
+  "/dashboard",
+  "/clients",
   "/crm",
   "/inventory",
   "/finance",
@@ -23,20 +22,57 @@ const protectedRoutes = [
   "/rentals",
   "/reports",
   "/vendors",
-  "/clients",
-  "/my-work",
-  "/complaints",
   "/administration",
   "/branches",
+  "/complaints",
+  "/services",
+  "/service",
+  "/notifications",
+  "/notification",
+  "/audit-logs",
+  "/my-work",
   "/docs",
+  "/settings",
 ];
 
 const publicRoutes = ["/login", "/forgot-password", "/signup"];
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  const isProtectedRoute = protectedRoutes.some((route) => path.startsWith(route));
+  const isProtectedRoute =
+    activeProtectedRoutes.some((route) => path.startsWith(route)) ||
+    deprecatedRoutes.some((route) => path.startsWith(route));
+  const isDeprecatedRoute = deprecatedRoutes.some((route) => path.startsWith(route));
   const isPublicRoute = publicRoutes.some((route) => path.startsWith(route));
+
+  // Step 1: LPDoS Edge Rate Limiting Guard
+  const clientIp = getClientIp(request);
+  const isAuthRoute = isPublicRoute || path.startsWith("/api/auth");
+  const rateLimitProfile = isAuthRoute 
+    ? RATE_LIMIT_PROFILES.AUTH_STRICT 
+    : request.method === "POST" 
+      ? RATE_LIMIT_PROFILES.MUTATION_API 
+      : RATE_LIMIT_PROFILES.GENERAL_ROUTES;
+
+  const rateLimitResult = await checkRateLimitAsync(`${clientIp}:${isAuthRoute ? 'auth' : 'gen'}`, rateLimitProfile);
+  if (!rateLimitResult.success) {
+    return new NextResponse(
+      JSON.stringify({
+        error: "Too Many Requests",
+        message: "Request rate limit exceeded. LPDoS / Brute-force safeguard active.",
+        retryAfter: rateLimitResult.resetSeconds,
+      }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": String(rateLimitResult.resetSeconds),
+          "X-RateLimit-Limit": String(rateLimitResult.limit),
+          "X-RateLimit-Remaining": "0",
+        },
+      }
+    );
+  }
 
   let response = NextResponse.next({
     request,
@@ -63,30 +99,35 @@ export async function proxy(request: NextRequest) {
     }
   );
 
-  let session = null;
+  // SECURITY: Use getUser() instead of getSession() — getUser() validates the JWT
+  // against the Supabase Auth server, preventing forged/tampered JWT cookie attacks.
+  // getSession() only decodes the JWT locally without server-side verification.
+  let authenticatedUser = null;
   try {
-    const { data } = await supabase.auth.getSession();
-    session = data?.session ?? null;
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (!userError && user) {
+      authenticatedUser = user;
+    }
   } catch (err: any) {
     if (err?.status === 429 || err?.code === "over_request_rate_limit" || err?.name === "AuthApiError") {
       console.warn("[Auth Proxy] Supabase auth rate limit reached (429). Continuing with request processing.");
     } else {
-      console.error("[Auth Proxy] Error checking session:", err);
+      console.error("[Auth Proxy] Error verifying user:", err);
     }
   }
 
-  // Redirect unauthenticated user accessing protected route to /login
-  if (isProtectedRoute && !session?.user) {
+  // Redirect unauthenticated user accessing protected or deprecated route to /login
+  if (isProtectedRoute && !authenticatedUser) {
     return NextResponse.redirect(new URL("/login", request.nextUrl));
   }
 
   // Redirect authenticated user visiting public route (/login, /signup) to /machines
-  if (isPublicRoute && session?.user) {
+  if (isPublicRoute && authenticatedUser) {
     return NextResponse.redirect(new URL("/machines", request.nextUrl));
   }
 
-  // Redirect authenticated user visiting root '/' to /machines
-  if (path === "/" && session?.user) {
+  // Redirect authenticated user visiting deprecated routes or root '/' to /machines
+  if ((isDeprecatedRoute || path === "/") && authenticatedUser) {
     return NextResponse.redirect(new URL("/machines", request.nextUrl));
   }
 

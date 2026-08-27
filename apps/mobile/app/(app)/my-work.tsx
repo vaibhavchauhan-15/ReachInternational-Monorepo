@@ -230,7 +230,7 @@ export default function MyWorkScreen() {
         visible={meterModalVisible}
         onClose={() => setMeterModalVisible(false)}
         machineCode={selectedMachineCode}
-        onSubmit={(log) => {}}
+        onSubmit={() => {}}
       />
 
       {/* Complaint Status Update Modal */}

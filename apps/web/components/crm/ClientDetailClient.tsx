@@ -32,6 +32,7 @@ export function ClientDetailClient({ user, clientId }: ClientDetailClientProps) 
     contact_person: "Rajesh Sharma (Procurement Head)",
     email: "rajesh@abcinfra.com",
     phone: "+91 98765 43210",
+    address: "Plot 12, Industrial Area Phase 1",
     city: "Delhi",
     state: "Delhi",
     branch_id: "br-1",
@@ -60,7 +61,7 @@ export function ClientDetailClient({ user, clientId }: ClientDetailClientProps) 
             <h1 className="text-2xl font-extrabold text-[var(--color-ink)] tracking-tight">{client.client_name}</h1>
             <p className="text-xs text-[var(--color-mute)] flex items-center gap-2 mt-1">
               <AnimatedMapPin size={14} className="text-sky-500" />
-              {client.city}, {client.state}
+              {[client.city, client.state].filter(Boolean).join(", ") || "—"}
             </p>
           </div>
 

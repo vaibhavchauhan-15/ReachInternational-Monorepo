@@ -1,10 +1,17 @@
 "use server";
 
+import crypto from "crypto";
+
 import { revalidateTag } from "next/cache";
-import { getCurrentUser } from "@/lib/dal";
+import { getCurrentUser, requireRole } from "@/lib/dal";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { CACHE_TAGS } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
+import {
+  checkAndStoreIdempotencyKey,
+  completeIdempotencyKey,
+  failIdempotencyKey,
+} from "@/lib/security/idempotency";
 
 function parseTimeToMinutes(timeStr?: string): number | null {
   if (!timeStr) return null;
@@ -107,14 +114,39 @@ export async function submitOperatorHourLogAction(payload: {
   location?: string;
   remarks?: string;
   status?: "submitted" | "draft";
-}) {
+  idempotencyKey?: string;
+}): Promise<{ success: boolean; data?: unknown; error?: string }> {
+  // SECURITY (F04): Require authenticated user with appropriate role for hour log submission
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
+  if (!["operator", "supervisor", "admin", "super_admin"].includes(user.role)) {
+    return { success: false, error: "Insufficient permissions. Only operators, supervisors, and admins can submit hour logs." };
+  }
+
+  // Replay Attack Protection Guard
+  const idempotency = await checkAndStoreIdempotencyKey({
+    userId: user.id,
+    actionName: "submitOperatorHourLogAction",
+    idempotencyKey: payload.idempotencyKey,
+    payload,
+  });
+
+  if (idempotency.isDuplicate) {
+    return idempotency.cachedResult as { success: boolean; data?: unknown; error?: string };
+  }
+
+  if (idempotency.isProcessing) {
+    return { success: false, error: idempotency.error };
+  }
+
+  const currentIdempotencyKey = idempotency.idempotencyKey;
+  const currentExecutionToken = idempotency.executionToken;
 
   const startMtr = payload.startMeter ?? 0;
   const endMtr = payload.endMeter ?? startMtr;
 
   if (endMtr < startMtr) {
+    await failIdempotencyKey(currentIdempotencyKey);
     return { success: false, error: "End hour meter reading cannot be less than starting hour meter reading." };
   }
 
@@ -133,6 +165,7 @@ export async function submitOperatorHourLogAction(payload: {
   });
 
   if (overlapCheck.hasOverlap) {
+    await failIdempotencyKey(currentIdempotencyKey);
     return { success: false, error: overlapCheck.errorMessage || "Shift time overlap detected." };
   }
 
@@ -160,12 +193,14 @@ export async function submitOperatorHourLogAction(payload: {
       location: payload.location || null,
       remarks: payload.remarks || null,
       status: payload.status || "submitted",
+      idempotency_key: currentIdempotencyKey,
     })
     .select()
     .single();
 
   if (logError) {
     console.error("Error creating machine hour log:", logError);
+    await failIdempotencyKey(currentIdempotencyKey);
     const errMessage = logError.message.includes("Shift time overlap") || logError.message.includes("Shift overlap")
       ? logError.message
       : logError.message;
@@ -207,12 +242,16 @@ export async function submitOperatorHourLogAction(payload: {
       isBreakdown: payload.isBreakdown,
       fuelConsumed: payload.fuelConsumed,
       condition: effectiveCondition,
+      idempotencyKey: currentIdempotencyKey,
     },
   });
 
+  const responsePayload = { success: true, data: logData };
+  await completeIdempotencyKey(currentIdempotencyKey, currentExecutionToken, responsePayload);
+
   revalidateTag(CACHE_TAGS.machines, "max");
   revalidateTag(CACHE_TAGS.dashboard, "max");
-  return { success: true, data: logData };
+  return responsePayload;
 }
 
 export async function updateOperatorHourLogAction(payload: {
@@ -416,8 +455,12 @@ export async function requestOperatorAssignmentChangeAction(payload: {
   currentOperatorId?: string;
   reason: string;
 }) {
+  // SECURITY (F04): Require authenticated user with appropriate role for assignment change requests
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
+  if (!["operator", "supervisor", "admin", "super_admin"].includes(user.role)) {
+    return { success: false, error: "Insufficient permissions." };
+  }
 
   const supabase = createSupabaseAdminClient();
 
@@ -466,29 +509,49 @@ export async function hireOperatorAction(payload: {
   }
 
   const supabase = createSupabaseAdminClient();
-  const email = payload.email || `operator_${Date.now()}@reachinternation.co.in`;
+  const email = payload.email || `operator_${Date.now()}_${crypto.randomInt(1000, 9999)}@reachinternation.co.in`;
+  const temporaryPassword = crypto.randomBytes(16).toString("hex") + "A1!";
 
-  // 1. Create user entry
+  // 1. Create auth user entry
+  const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    email,
+    password: temporaryPassword,
+    email_confirm: true,
+    user_metadata: {
+      full_name: payload.fullName,
+      role: "operator",
+      phone: payload.phone || null,
+      status: "active",
+      branch_id: user.branch_id,
+    },
+  });
+
+  if (authError || !authData.user) {
+    console.error("Error creating auth user for operator:", authError);
+    return { success: false, error: authError?.message || "Failed to create operator authentication record" };
+  }
+
+  // 2. Synchronize profile details in public.users
   const { data: newUser, error: userError } = await supabase
     .from("users")
-    .insert({
+    .update({
       full_name: payload.fullName,
       phone: payload.phone,
-      email,
       role: "operator",
       status: "active",
       branch_id: user.branch_id,
     })
+    .eq("id", authData.user.id)
     .select()
     .single();
 
   if (userError || !newUser) {
-    console.error("Error hiring operator user:", userError);
-    return { success: false, error: userError?.message || "Failed to create operator user" };
+    console.error("Error synchronizing operator user profile:", userError);
+    return { success: false, error: userError?.message || "Failed to create operator profile" };
   }
 
-  // 2. Create employee directory record
-  const empCode = `EMP-OP-${Math.floor(1000 + Math.random() * 9000)}`;
+  // 3. Create employee directory record
+  const empCode = `EMP-OP-${crypto.randomInt(1000, 10000)}`;
   await supabase.from("employees").insert({
     employee_code: empCode,
     full_name: payload.fullName,
@@ -523,8 +586,12 @@ export async function recordOperatorPayoutAction(payload: {
   deductions?: number;
   notes?: string;
 }) {
+  // SECURITY (F04): Require supervisor/admin role for financial payout recording
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
+  if (!["supervisor", "admin", "super_admin"].includes(user.role)) {
+    return { success: false, error: "Insufficient permissions. Only supervisors and admins can record payouts." };
+  }
 
   const supabase = createSupabaseAdminClient();
   const netPayout = payload.baseSalary + (payload.allowance || 0) - (payload.deductions || 0);
@@ -571,8 +638,12 @@ export async function recordMachineSiteMovementAction(payload: {
   operatorId?: string;
   remarks?: string;
 }) {
+  // SECURITY (F04): Require supervisor/admin role for site movement recording
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
+  if (!["supervisor", "admin", "super_admin"].includes(user.role)) {
+    return { success: false, error: "Insufficient permissions. Only supervisors and admins can record site movements." };
+  }
 
   const supabase = createSupabaseAdminClient();
 

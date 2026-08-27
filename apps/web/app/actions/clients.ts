@@ -2,7 +2,6 @@
 
 import { revalidateTag } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { TAGS } from "@/lib/cache";
 import { requireRole } from "@/lib/dal";
@@ -12,6 +11,13 @@ export interface ClientFormState {
   error?: string;
   fieldErrors?: Record<string, string>;
   success?: boolean;
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUuid(id?: string | null): boolean {
+  if (!id || typeof id !== "string") return false;
+  return UUID_REGEX.test(id.trim());
 }
 
 const AUTHORIZED_ROLES = ["super_admin", "admin", "service_manager", "rental_manager", "sales_executive"] as const;
@@ -62,7 +68,6 @@ export async function createClientAction(state: ClientFormState, formData: FormD
     }
 
     const data = parsed.data;
-    const adminSupabase = createSupabaseAdminClient();
 
     const insertPayload = {
       client_name: data.clientName,
@@ -71,15 +76,15 @@ export async function createClientAction(state: ClientFormState, formData: FormD
       phone: data.phone || null,
       email: data.email || null,
       gstin: data.gstin || null,
-      address: data.address || null,
-      city: data.city || "Delhi",
-      state: data.state || "Delhi",
+      address: data.address.trim(),
+      city: data.city.trim(),
+      state: data.state.trim(),
       pincode: data.pincode || null,
       notes: data.notes || null,
       status: data.status,
     };
 
-    const { data: createdClient, error: dbError } = await adminSupabase
+    const { data: createdClient, error: dbError } = await supabase
       .from("clients")
       .insert([insertPayload])
       .select("id, code, client_name")
@@ -123,8 +128,8 @@ export async function updateClientAction(state: ClientFormState, formData: FormD
     }
 
     const id = (formData.get("id") as string)?.trim();
-    if (!id) {
-      return { error: "Client ID is required for update." };
+    if (!id || !isValidUuid(id)) {
+      return { error: "Valid Client ID is required for update." };
     }
 
     const payload = {
@@ -158,7 +163,6 @@ export async function updateClientAction(state: ClientFormState, formData: FormD
     }
 
     const data = parsed.data;
-    const adminSupabase = createSupabaseAdminClient();
 
     const updatePayload = {
       client_name: data.clientName,
@@ -167,16 +171,16 @@ export async function updateClientAction(state: ClientFormState, formData: FormD
       phone: data.phone || null,
       email: data.email || null,
       gstin: data.gstin || null,
-      address: data.address || null,
-      city: data.city || "Delhi",
-      state: data.state || "Delhi",
+      address: data.address.trim(),
+      city: data.city.trim(),
+      state: data.state.trim(),
       pincode: data.pincode || null,
       notes: data.notes || null,
       status: data.status,
       updated_at: new Date().toISOString(),
     };
 
-    const { error: dbError } = await adminSupabase
+    const { error: dbError } = await supabase
       .from("clients")
       .update(updatePayload)
       .eq("id", id);
@@ -218,13 +222,11 @@ export async function softDeleteClientAction(clientId: string): Promise<{ succes
       return { error: "Authentication required. Please log in to perform this action." };
     }
 
-    if (!clientId) {
-      return { error: "Client ID is required for soft deletion." };
+    if (!clientId || !isValidUuid(clientId)) {
+      return { error: "Valid Client ID is required for soft deletion." };
     }
 
-    const adminSupabase = createSupabaseAdminClient();
-
-    const { error: dbError } = await adminSupabase
+    const { error: dbError } = await supabase
       .from("clients")
       .update({
         deleted_at: new Date().toISOString(),

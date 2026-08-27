@@ -1,8 +1,3 @@
-/**
- * ServiceCentric Mobile — Gateway Landing Screen
- * Automatically routes user to dashboard if authenticated, or login screen if unauthenticated.
- */
-
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -16,7 +11,7 @@ export default function GatewayScreen() {
   useEffect(() => {
     if (!isLoading) {
       if (session) {
-        router.replace('/(app)/dashboard');
+        router.replace('/(app)/machines');
       } else {
         router.replace('/(auth)/login');
       }
@@ -26,7 +21,7 @@ export default function GatewayScreen() {
   return (
     <View style={styles.container}>
       <ActivityIndicator size="large" color={colorsDark.link} />
-      <Text style={styles.loadingText}>Initializing ServiceCentric Mobile...</Text>
+      <Text style={styles.loadingText}>Initializing Reach International...</Text>
     </View>
   );
 }
@@ -43,5 +38,6 @@ const styles = StyleSheet.create({
     marginTop: spacingNumeric.md,
     color: colorsDark.body,
     fontSize: 14,
+    fontWeight: '500',
   },
 });

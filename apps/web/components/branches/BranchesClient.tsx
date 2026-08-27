@@ -254,7 +254,7 @@ export function BranchesClient({ branches, canCreateBranch = false, canEditBranc
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Mumbai Main Branch"
+                    placeholder="e.g. Regional Branch Office"
                     className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
                   />
                 </div>
@@ -268,7 +268,7 @@ export function BranchesClient({ branches, canCreateBranch = false, canEditBranc
                     required
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
-                    placeholder="e.g. Mumbai"
+                    placeholder="e.g. Pune"
                     className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
                   />
                 </div>
@@ -313,7 +313,7 @@ export function BranchesClient({ branches, canCreateBranch = false, canEditBranc
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="mumbai@company.com"
+                    placeholder="branch@company.com"
                     className="w-full px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold"
                   />
                 </div>

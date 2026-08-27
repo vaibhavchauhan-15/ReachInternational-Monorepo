@@ -1,3 +1,5 @@
+import { escapeHtml } from "@reachinternational/utils";
+
 export interface ServiceReminderEmailData {
   subject: string;
   message: string;
@@ -32,13 +34,20 @@ export function getServiceReminderEmailHtml(data: ServiceReminderEmailData): str
       ? "#ee0000"
       : "#8f8f8f";
 
+  const safeSubject = escapeHtml(data.subject);
+  const safeRecipientName = escapeHtml(data.recipientName);
+  const safeMessage = escapeHtml(data.message);
+  const safeMachineCode = escapeHtml(data.machineCode);
+  const safeDueDate = escapeHtml(data.dueDate);
+  const safeCustomerName = escapeHtml(data.customerName);
+
   return `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>${data.subject}</title>
+      <title>${safeSubject}</title>
       <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background: #fafafa; color: #171717; }
         .header { background: #ffffff; border: 1px solid #ebebeb; border-radius: 6px 6px 0 0; padding: 24px; text-align: center; }
@@ -64,17 +73,17 @@ export function getServiceReminderEmailHtml(data: ServiceReminderEmailData): str
         <p>Service Notification</p>
       </div>
       <div class="content">
-        <p class="greeting">Hello <strong>${data.recipientName}</strong>,</p>
+        <p class="greeting">Hello <strong>${safeRecipientName}</strong>,</p>
         <span class="badge">${alertTypeLower === "today" ? "Due Today" : alertTypeLower === "tomorrow" ? "Due Tomorrow" : "Overdue"}</span>
-        <p class="message">${data.message}</p>
+        <p class="message">${safeMessage}</p>
         <div class="info-box">
           <table>
             <tr>
               <td>Machine</td>
-              <td><strong>${data.machineCode}</strong></td>
+              <td><strong>${safeMachineCode}</strong></td>
             </tr>
-            ${data.dueDate ? `<tr><td>Due Date</td><td><strong>${data.dueDate}</strong></td></tr>` : ""}
-            ${data.customerName ? `<tr><td>Customer</td><td><strong>${data.customerName}</strong></td></tr>` : ""}
+            ${data.dueDate ? `<tr><td>Due Date</td><td><strong>${safeDueDate}</strong></td></tr>` : ""}
+            ${data.customerName ? `<tr><td>Customer</td><td><strong>${safeCustomerName}</strong></td></tr>` : ""}
           </table>
         </div>
         <a href="${process.env.NEXT_PUBLIC_APP_URL || ""}/dashboard" class="btn">View Dashboard</a>
@@ -253,6 +262,8 @@ export function getDailySummaryEmailText(data: DailySummaryEmailData): string {
 }
 
 export function getImportCompletedEmailHtml(filename: string, totalRows: number, successCount: number, failedCount: number): string {
+  const safeFilename = escapeHtml(filename);
+
   return `
     <!DOCTYPE html>
     <html>
@@ -276,7 +287,7 @@ export function getImportCompletedEmailHtml(filename: string, totalRows: number,
         <h1>Excel Import Completed</h1>
       </div>
       <div class="content">
-        <h2>File: ${filename}</h2>
+        <h2>File: ${safeFilename}</h2>
         <div class="stats">
           <div class="stat-box">
             <div class="stat-value">${totalRows}</div>
@@ -325,8 +336,8 @@ export function getReminderFailedEmailHtml(failedCount: number, errors: { machin
         <p>Please review the errors below and take corrective action:</p>
         ${errors.map((err) => `
           <div class="error-box">
-            <strong>${err.machineCode}</strong><br>
-            Error: ${err.error}
+            <strong>${escapeHtml(err.machineCode)}</strong><br>
+            Error: ${escapeHtml(err.error)}
           </div>
         `).join("")}
       </div>
@@ -396,23 +407,7 @@ export interface AdminDailySummaryData {
   notificationStats: AdminSummaryNotificationStats;
 }
 
-// Escape HTML special characters. We build the entity strings from char codes
-// so the editor's auto-formatter cannot decode them back to raw characters.
-const _AMP = String.fromCharCode(38) + "amp;";
-const _LT = String.fromCharCode(38) + "lt;";
-const _GT = String.fromCharCode(38) + "gt;";
-const _QUOT = String.fromCharCode(38) + "quot;";
-const _APOS = String.fromCharCode(38) + "#039;";
 
-function escapeHtml(value: string | undefined | null): string {
-  if (!value) return "";
-  return value
-    .replace(/&/g, _AMP)
-    .replace(/</g, _LT)
-    .replace(/>/g, _GT)
-    .replace(/"/g, _QUOT)
-    .replace(/'/g, _APOS);
-}
 
 export function getAdminDailySummaryEmailHtml(data: AdminDailySummaryData): string {
   const kpiCards = [

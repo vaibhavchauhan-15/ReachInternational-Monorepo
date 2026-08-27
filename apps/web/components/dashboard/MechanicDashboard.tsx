@@ -133,7 +133,7 @@ export function MechanicDashboard({ user, assignedComplaints = [] }: MechanicDas
                     {selectedComplaint.machine?.machine_name} ({selectedComplaint.machine?.serial_number || selectedComplaint.machine?.machine_code})
                   </h2>
                   <p className="text-xs text-[var(--color-mute)]">
-                    Reported on {selectedComplaint.complaint_date} • Location: {selectedComplaint.city || "Delhi"}
+                    Reported on {selectedComplaint.complaint_date} • Location: {selectedComplaint.city || "—"}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">

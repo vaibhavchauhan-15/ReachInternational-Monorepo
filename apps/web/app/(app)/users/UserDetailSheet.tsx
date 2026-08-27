@@ -227,7 +227,7 @@ export function UserDetailSheet({
                   <AnimatedMapPin size={14} className="text-emerald-500" /> City
                 </span>
                 <span className="font-semibold text-[var(--color-ink)]">
-                  {user.city || "Mumbai"}
+                  {user.city || "—"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -235,7 +235,7 @@ export function UserDetailSheet({
                   <AnimatedMapPin size={14} className="text-emerald-500" /> District
                 </span>
                 <span className="font-semibold text-[var(--color-ink)]">
-                  {user.district || "Mumbai"}
+                  {user.district || "—"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -243,7 +243,7 @@ export function UserDetailSheet({
                   <AnimatedMapPin size={14} className="text-emerald-500" /> State
                 </span>
                 <span className="font-semibold text-[var(--color-ink)]">
-                  {user.state || "Maharashtra"}
+                  {user.state || "—"}
                 </span>
               </div>
               <div className="flex items-center justify-between">

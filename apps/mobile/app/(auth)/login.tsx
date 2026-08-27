@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
-import { Button, Input, Card, useTheme, Badge } from '../../components/ui';
+import { Button, Input, Card, useTheme } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { Mail, Lock, Cpu, BellRing, Activity, ArrowLeft } from 'lucide-react-native';
+import { Mail, Lock, Cpu, BellRing, Activity } from 'lucide-react-native';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -33,7 +33,7 @@ export default function LoginScreen() {
       if (error) {
         setErrorMessage(error.message);
       } else if (data.session) {
-        router.replace('/(app)/dashboard');
+        router.replace('/(app)/machines');
       }
     } catch (err: unknown) {
       setErrorMessage('An unexpected error occurred during login.');
@@ -47,7 +47,7 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={[styles.flexContainer, { backgroundColor: theme.colors.canvas }]}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         {/* Soft Background Glow Circles */}
         <View style={[styles.ambientGlowTop, { backgroundColor: theme.colors.link + '15' }]} />
         <View style={[styles.ambientGlowBottom, { backgroundColor: theme.colors.violet + '15' }]} />
@@ -56,9 +56,9 @@ export default function LoginScreen() {
         <View style={styles.topHeader}>
           <View style={styles.brandRow}>
             <View style={[styles.logoEmblem, { backgroundColor: theme.colors.ink }]}>
-              <Text style={[styles.logoLetter, { color: theme.colors.canvas }]}>S</Text>
+              <Text style={[styles.logoLetter, { color: theme.colors.canvas }]}>R</Text>
             </View>
-            <Text style={[styles.brandTitle, { color: theme.colors.ink }]}>ServiceCentric</Text>
+            <Text style={[styles.brandTitle, { color: theme.colors.ink }]}>Reach International</Text>
           </View>
           <TouchableOpacity
             onPress={() => setMode(isDark ? 'light' : 'dark')}
@@ -73,26 +73,26 @@ export default function LoginScreen() {
         {/* Hero Banner Section */}
         <View style={styles.heroSection}>
           <Text style={[styles.eyebrow, { color: theme.colors.link }]}>
-            ENTERPRISE FLEET TRACKING
+            ENTERPRISE FLEET OPERATIONS
           </Text>
           <Text style={[styles.heroHeadline, { color: theme.colors.ink }]}>
-            Never miss a service deadline again.
+            Industrial machine service & running hours tracking.
           </Text>
           <Text style={[styles.heroSubtext, { color: theme.colors.mute }]}>
-            Centralized industrial fleet service tracking with automated multi-channel dispatch.
+            Centralized fleet management, daily shift logs, and instant operational reporting.
           </Text>
 
           {/* Quick Metrics Bar */}
           <View style={styles.metricsRow}>
             <View style={[styles.metricCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
               <Cpu size={14} color={theme.colors.link} />
-              <Text style={[styles.metricValue, { color: theme.colors.ink }]}>500+</Text>
-              <Text style={[styles.metricLabel, { color: theme.colors.mute }]}>Machines</Text>
+              <Text style={[styles.metricValue, { color: theme.colors.ink }]}>Live</Text>
+              <Text style={[styles.metricLabel, { color: theme.colors.mute }]}>Fleet</Text>
             </View>
             <View style={[styles.metricCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
               <BellRing size={14} color={theme.colors.success} />
-              <Text style={[styles.metricValue, { color: theme.colors.ink }]}>0</Text>
-              <Text style={[styles.metricLabel, { color: theme.colors.mute }]}>Missed</Text>
+              <Text style={[styles.metricValue, { color: theme.colors.ink }]}>IST</Text>
+              <Text style={[styles.metricLabel, { color: theme.colors.mute }]}>Accurate</Text>
             </View>
             <View style={[styles.metricCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
               <Activity size={14} color={theme.colors.violet} />
@@ -105,7 +105,7 @@ export default function LoginScreen() {
         {/* Form Card */}
         <Card variant="elevated" style={styles.card}>
           <Text style={[styles.formTitle, { color: theme.colors.ink }]}>Account Sign In</Text>
-          <Text style={[styles.formSubtitle, { color: theme.colors.mute }]}>Enter your field credentials below</Text>
+          <Text style={[styles.formSubtitle, { color: theme.colors.mute }]}>Enter your credentials below</Text>
 
           {errorMessage ? (
             <View style={[styles.errorContainer, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error }]}>
@@ -141,13 +141,18 @@ export default function LoginScreen() {
             style={styles.loginBtn}
           />
 
-          <Button
-            label="Forgot Password?"
-            onPress={() => router.push('/(auth)/forgot-password')}
-            variant="ghost"
-            size="sm"
-            style={styles.forgotBtn}
-          />
+          <View style={styles.forgotRow}>
+            <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')}>
+              <Text style={[styles.forgotLink, { color: theme.colors.mute }]}>Forgot Password?</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.signupPromptRow}>
+            <Text style={[styles.signupPromptText, { color: theme.colors.mute }]}>Don&apos;t have an account?</Text>
+            <TouchableOpacity onPress={() => router.push('/(auth)/signup')}>
+              <Text style={[styles.signupPromptLink, { color: theme.colors.link }]}>Request Access</Text>
+            </TouchableOpacity>
+          </View>
         </Card>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -162,6 +167,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: spacingNumeric.lg,
     paddingTop: 56,
+    paddingBottom: 40,
     justifyContent: 'center',
     position: 'relative',
   },
@@ -224,10 +230,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   heroHeadline: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
     letterSpacing: -0.8,
-    lineHeight: 32,
+    lineHeight: 30,
     marginBottom: 6,
   },
   heroSubtext: {
@@ -283,7 +289,29 @@ const styles = StyleSheet.create({
   loginBtn: {
     marginTop: spacingNumeric.sm,
   },
-  forgotBtn: {
-    marginTop: spacingNumeric.xs,
+  forgotRow: {
+    alignItems: 'center',
+    marginTop: spacingNumeric.sm,
+  },
+  forgotLink: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  signupPromptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: spacingNumeric.md,
+    paddingTop: spacingNumeric.sm,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(150,150,150,0.15)',
+  },
+  signupPromptText: {
+    fontSize: 12,
+  },
+  signupPromptLink: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

@@ -1,18 +1,11 @@
-/**
- * ServiceCentric Mobile — Standardized Branded App Header
- * Aligns mobile headers with the Web App Vercel Geist design system.
- * Renders logo emblem, live sync dot, role badge, theme toggle button, and section eyebrows.
- */
-
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { useTheme } from './ThemeProvider';
 import { Badge } from './Badge';
-import { Bell, Sun, Moon, Menu } from 'lucide-react-native';
+import { Sun, Moon, Menu } from 'lucide-react-native';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-
 import { useDrawer } from '../../lib/nav/DrawerContext';
 
 export interface MobileHeaderProps {
@@ -58,45 +51,36 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
 
           {/* Brand Emblem & Logo */}
           <TouchableOpacity
-            onPress={() => router.push('/(app)/dashboard')}
+            onPress={() => router.push('/(app)/machines')}
             activeOpacity={0.8}
             style={styles.brandContainer}
           >
             <View style={[styles.logoEmblem, { backgroundColor: theme.colors.ink }]}>
-              <Text style={[styles.logoLetter, { color: theme.colors.canvas }]}>S</Text>
+              <Text style={[styles.logoLetter, { color: theme.colors.canvas }]}>R</Text>
             </View>
             <View>
               <Text style={[styles.brandName, { color: theme.colors.ink }]}>
-                ServiceCentric
+                Reach International
               </Text>
               <View style={styles.syncRow}>
                 <View style={[styles.syncDot, { backgroundColor: theme.colors.success }]} />
-                <Text style={[styles.syncText, { color: theme.colors.mute }]}>Live Sync</Text>
+                <Text style={[styles.syncText, { color: theme.colors.mute }]}>Live Fleet Sync</Text>
               </View>
             </View>
           </TouchableOpacity>
         </View>
 
-        {/* Right Action Icons: Notification, Theme Toggle, Role Pill */}
+        {/* Right Action Icons: Theme Toggle, Role Pill */}
         <View style={styles.actionsRow}>
-          <TouchableOpacity
-            onPress={() => router.push('/(app)/notifications')}
-            style={[styles.iconBtn, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
-            activeOpacity={0.7}
-          >
-            <Bell size={16} color={theme.colors.ink} />
-            <View style={[styles.unreadDot, { backgroundColor: theme.colors.error }]} />
-          </TouchableOpacity>
-
           <TouchableOpacity
             onPress={toggleTheme}
             style={[styles.iconBtn, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
             activeOpacity={0.7}
           >
-            {isDark ? <Sun size={16} color={theme.colors.warning} /> : <Moon size={16} color={theme.colors.ink} />}
+            {isDark ? <Sun size={15} color={theme.colors.warning} /> : <Moon size={15} color={theme.colors.ink} />}
           </TouchableOpacity>
 
-          <Badge status="active" customLabel={role || 'Operator'} />
+          <Badge status="active" customLabel={(role || 'Operator').replace('_', ' ')} />
         </View>
       </View>
 
@@ -104,7 +88,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
       {title && (
         <View style={styles.titleSection}>
           {eyebrow && (
-            <Text style={[styles.eyebrowText, { color: theme.colors.mute }]}>
+            <Text style={[styles.eyebrowText, { color: theme.colors.link }]}>
               {eyebrow.replace(/^\/\/\s*/, '').toUpperCase()}
             </Text>
           )}
@@ -197,22 +181,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
-  },
-  unreadDot: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
   },
   titleSection: {
     marginTop: spacingNumeric.xs,
   },
   eyebrowText: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 10,
+    fontWeight: '700',
     letterSpacing: 0.8,
     marginBottom: 2,
   },
@@ -222,12 +197,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   titleText: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     letterSpacing: -0.5,
   },
   subtitleText: {
-    fontSize: 13,
+    fontSize: 12,
     marginTop: 2,
+    lineHeight: 16,
   },
 });

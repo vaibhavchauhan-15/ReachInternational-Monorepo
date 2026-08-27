@@ -1,10 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dhbbgfzbyatzvqafnsqp.supabase.co';
-const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!SUPABASE_SECRET_KEY) {
-  console.error('Missing SUPABASE_SECRET_KEY env var. Set it in .env or the environment before running the seed script.');
+if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) {
+  console.error('Missing SUPABASE_URL or SUPABASE_SECRET_KEY env var. Set them in .env or the environment before running the seed script.');
   process.exit(1);
 }
 
@@ -12,35 +12,50 @@ const admin = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
+import crypto from 'crypto';
+
+const superAdminPassword = process.env.SEED_SUPER_ADMIN_PASSWORD || `${crypto.randomBytes(10).toString('hex')}S1!`;
+const adminPassword = process.env.SEED_ADMIN_PASSWORD || `${crypto.randomBytes(10).toString('hex')}A1!`;
+const engineerPassword = process.env.SEED_ENGINEER_PASSWORD || `${crypto.randomBytes(10).toString('hex')}E1!`;
+
 const users = [
   {
     email: 'superadmin@reachinternation.com',
-    password: 'Super@123456',
+    password: superAdminPassword,
     email_confirm: true,
     user_metadata: {
       full_name: 'Super Admin',
       phone: '+91 98765 00001',
       role: 'super_admin',
+      city: 'Delhi',
+      district: 'New Delhi',
+      state: 'Delhi',
     },
   },
   {
     email: 'admin@reachinternation.com',
-    password: 'Admin@123456',
+    password: adminPassword,
     email_confirm: true,
     user_metadata: {
       full_name: 'Admin User',
       phone: '+91 98765 00002',
       role: 'admin',
+      city: 'Delhi',
+      district: 'New Delhi',
+      state: 'Delhi',
     },
   },
   {
     email: 'engineer@reachinternation.com',
-    password: 'Engineer@123456',
+    password: engineerPassword,
     email_confirm: true,
     user_metadata: {
       full_name: 'Engineer User',
       phone: '+91 98765 00003',
       role: 'engineer',
+      city: 'Gurugram',
+      district: 'Gurugram',
+      state: 'Haryana',
     },
   },
 ];

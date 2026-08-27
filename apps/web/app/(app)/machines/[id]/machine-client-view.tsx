@@ -596,7 +596,7 @@ export function MachineClientView({
                       </button>
                     </div>
                     <p className="text-xs sm:text-sm text-[var(--color-ink)] leading-relaxed bg-[var(--color-canvas-elevated)] p-3 rounded-xl border border-[var(--color-hairline)] font-medium">
-                      {clientInfo.billing_address || machine.customer_address || "Delhi NCR Site Yard"}
+                      {clientInfo.billing_address || machine.customer_address || "—"}
                     </p>
                   </div>
 

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath, revalidateTag } from "next/cache";
+import crypto from "crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireRole } from "@/lib/dal";
@@ -19,14 +20,19 @@ export interface UserFormState {
   message?: string;
 }
 
-// Generate a random password
-function generateRandomPassword(length = 12): string {
-  const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%";
-  let password = "";
-  for (let i = 0; i < length; i++) {
-    password += charset.charAt(Math.floor(Math.random() * charset.length));
-  }
-  return password;
+// SECURITY (F05): Generate cryptographically secure random passwords using crypto.randomBytes()
+// Math.random() is NOT cryptographically secure — uses a predictable PRNG with recoverable state.
+function generateRandomPassword(length = 16): string {
+  const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
+  const randomBytes = crypto.randomBytes(length);
+  return Array.from(randomBytes, (byte) => charset[byte % charset.length]).join("");
+}
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUuid(id?: string | null): boolean {
+  if (!id || typeof id !== "string") return false;
+  return UUID_REGEX.test(id.trim());
 }
 
 // Get all users (admin only)
@@ -68,6 +74,9 @@ export async function getPendingUsers(): Promise<User[]> {
 
 // Approve user (admin only)
 export async function approveUser(userId: string): Promise<UserFormState> {
+  if (!isValidUuid(userId)) {
+    return { error: "Invalid user ID format." };
+  }
   try {
     const user = await requireRole("admin", "super_admin");
     const supabase = await createSupabaseServerClient();
@@ -109,12 +118,7 @@ export async function approveUser(userId: string): Promise<UserFormState> {
     }
 
     // Send approval email
-    const targetUserEmail = targetUser.email;
-    if (targetUserEmail) {
-      sendApprovalEmail(targetUserEmail, targetUser.full_name).catch((err) =>
-        console.error("Failed to send approval email:", err)
-      );
-    }
+    await sendApprovalEmail(targetUser.email, targetUser.full_name);
 
     await logAudit({
       action: "user.approved",
@@ -122,17 +126,16 @@ export async function approveUser(userId: string): Promise<UserFormState> {
       entity_id: userId,
       user_id: user.id,
       metadata: { 
-        user_email: targetUserEmail, 
+        user_email: targetUser.email, 
         user_name: targetUser.full_name,
-        approved_by_id: user.id,
+        approved_by: user.email,
         approved_by_name: user.full_name,
-        approved_by_email: user.email,
-        approved_by_role: user.role,
       },
     });
 
     revalidatePath("/users");
     revalidateTag(CACHE_TAGS.users, "max");
+    revalidateTag(CACHE_TAGS.dashboard, "max");
     revalidateTag(CACHE_TAGS.machineMeta, "max");
     return { message: `User ${targetUser.full_name} has been approved.` };
   } catch (error) {
@@ -143,6 +146,9 @@ export async function approveUser(userId: string): Promise<UserFormState> {
 
 // Reject user (admin only)
 export async function rejectUser(userId: string): Promise<UserFormState> {
+  if (!isValidUuid(userId)) {
+    return { error: "Invalid user ID format." };
+  }
   try {
     const user = await requireRole("admin", "super_admin");
     const supabase = await createSupabaseServerClient();
@@ -323,7 +329,7 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
     }
 
     // Synchronize user account into public.employees directory table
-    const empCode = `EMP-${Math.floor(1000 + Math.random() * 9000)}`;
+    const empCode = `EMP-${crypto.randomInt(1000, 10000)}`;
     const designationLabel = role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
     try {
       await adminSupabase
@@ -375,6 +381,9 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
 
 // Reset user password (admin only)
 export async function resetUserPassword(userId: string): Promise<{ formState: UserFormState; newPassword?: string }> {
+  if (!isValidUuid(userId)) {
+    return { formState: { error: "Invalid user ID format." } };
+  }
   try {
     const currentUser = await requireRole("admin", "super_admin");
     const supabase = await createSupabaseServerClient();
@@ -421,7 +430,9 @@ export async function resetUserPassword(userId: string): Promise<{ formState: Us
     });
 
     revalidatePath("/users");
-    return { formState: { message: `Password for ${targetUser.full_name} has been reset.` }, newPassword };
+    // SECURITY (F06): Do NOT return plaintext password in the response — it was already sent via email.
+    // Returning it in the API response exposes it in browser dev tools and network logs.
+    return { formState: { message: `Password for ${targetUser.full_name} has been reset. New credentials have been sent to their email.` } };
   } catch (error) {
     console.error("Error in resetUserPassword:", error);
     return { formState: { error: "Unauthorized or an error occurred." } };
@@ -430,6 +441,9 @@ export async function resetUserPassword(userId: string): Promise<{ formState: Us
 
 // Toggle user status (admin only)
 export async function toggleUserStatus(userId: string): Promise<UserFormState> {
+  if (!isValidUuid(userId)) {
+    return { error: "Invalid user ID format." };
+  }
   try {
     const currentUser = await requireRole("admin", "super_admin");
     const supabase = await createSupabaseServerClient();
@@ -509,6 +523,9 @@ export async function toggleUserStatus(userId: string): Promise<UserFormState> {
 
 // Update user role (admin/super_admin)
 export async function updateUserRole(userId: string, newRole: UserRole): Promise<UserFormState> {
+  if (!isValidUuid(userId)) {
+    return { error: "Invalid user ID format." };
+  }
   try {
     const currentUser = await requireRole("admin", "super_admin");
     const supabase = await createSupabaseServerClient();
@@ -570,6 +587,9 @@ export async function updateUserRole(userId: string, newRole: UserRole): Promise
 
 // Delete user (admin can delete non-super_admins, super_admin can delete anyone except self)
 export async function deleteUser(userId: string): Promise<UserFormState> {
+  if (!isValidUuid(userId)) {
+    return { error: "Invalid user ID format." };
+  }
   try {
     const currentUser = await requireRole("admin", "super_admin");
     const supabase = await createSupabaseServerClient();
@@ -630,6 +650,9 @@ export async function deleteUser(userId: string): Promise<UserFormState> {
 
 // Edit user details
 export async function editUser(userId: string, formData: FormData): Promise<UserFormState> {
+  if (!isValidUuid(userId)) {
+    return { error: "Invalid user ID format." };
+  }
   try {
     const currentUser = await requireRole("admin", "super_admin");
     const supabase = await createSupabaseServerClient();
@@ -662,6 +685,10 @@ export async function editUser(userId: string, formData: FormData): Promise<User
 
     if (!phone) {
       return { error: "Mobile number is required." };
+    }
+
+    if (!role) {
+      return { error: "User access role is required." };
     }
 
     const digitsOnly = phone.replace(/\D/g, "");

@@ -734,7 +734,7 @@ export interface CRMClient {
   email: string | null;
   phone: string | null;
   gstin?: string | null;
-  address?: string | null;
+  address: string;
   city: string;
   state: string;
   pincode?: string | null;

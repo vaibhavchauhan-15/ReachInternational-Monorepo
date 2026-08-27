@@ -9,7 +9,17 @@ import { sendEmailWithTracking } from "@/lib/email";
 import { requireRole } from "@/lib/dal";
 import { CACHE_TAGS } from "@/lib/cache";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUuid(id?: string | null): boolean {
+  if (!id || typeof id !== "string") return false;
+  return UUID_REGEX.test(id.trim());
+}
+
 export async function resendNotification(notificationId: string): Promise<{ success: boolean; error?: string }> {
+  if (!isValidUuid(notificationId)) {
+    return { success: false, error: "Invalid notification ID format." };
+  }
   const user = await requireRole("admin", "super_admin");
 
   if (!user) {

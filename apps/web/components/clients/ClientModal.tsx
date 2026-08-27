@@ -36,8 +36,8 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
   const [email, setEmail] = useState("");
   const [gstin, setGstin] = useState("");
   const [address, setAddress] = useState("");
-  const [city, setCity] = useState("Delhi");
-  const [stateName, setStateName] = useState("Delhi");
+  const [city, setCity] = useState("");
+  const [stateName, setStateName] = useState("");
   const [pincode, setPincode] = useState("");
   const [notes, setNotes] = useState("");
   const [status, setStatus] = useState<"active" | "inactive">("active");
@@ -51,8 +51,8 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
       setEmail(client.email || "");
       setGstin(client.gstin || "");
       setAddress(client.address || "");
-      setCity(client.city || "Delhi");
-      setStateName(client.state || "Delhi");
+      setCity(client.city || "");
+      setStateName(client.state || "");
       setPincode(client.pincode || "");
       setNotes(client.notes || "");
       setStatus(client.status || "active");
@@ -64,8 +64,8 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
       setEmail("");
       setGstin("");
       setAddress("");
-      setCity("Delhi");
-      setStateName("Delhi");
+      setCity("");
+      setStateName("");
       setPincode("");
       setNotes("");
       setStatus("active");
@@ -96,6 +96,18 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
     formData.append("pincode", pincode);
     formData.append("notes", notes);
     formData.append("status", status);
+
+    if (!clientName.trim()) {
+      setFormState({ error: "Client Name is required." });
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!address.trim() || !city.trim() || !stateName.trim()) {
+      setFormState({ error: "Office / Site Address, City, and State are required." });
+      setIsSubmitting(false);
+      return;
+    }
 
     const action = isEditing ? updateClientAction : createClientAction;
     const res = await action({}, formData);
@@ -255,10 +267,11 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
 
             <div>
               <label className="block text-xs font-medium text-[var(--color-ink,#171717)] mb-1">
-                Office / Site Address
+                Office / Site Address *
               </label>
               <textarea
                 rows={2}
+                required
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 placeholder="e.g. Plot 42, Sector 18, Industrial Area"
@@ -269,26 +282,28 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label className="block text-xs font-medium text-[var(--color-ink,#171717)] mb-1">
-                  City
+                  City *
                 </label>
                 <input
                   type="text"
+                  required
                   value={city}
                   onChange={(e) => setCity(e.target.value)}
-                  placeholder="Delhi"
+                  placeholder="e.g. Pune"
                   className="w-full rounded-lg border border-[var(--color-border,#ebebeb)] bg-white px-3 py-2 text-xs text-[var(--color-ink,#171717)] focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-[var(--color-ink,#171717)] mb-1">
-                  State
+                  State *
                 </label>
                 <input
                   type="text"
+                  required
                   value={stateName}
                   onChange={(e) => setStateName(e.target.value)}
-                  placeholder="Delhi"
+                  placeholder="e.g. Maharashtra"
                   className="w-full rounded-lg border border-[var(--color-border,#ebebeb)] bg-white px-3 py-2 text-xs text-[var(--color-ink,#171717)] focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                 />
               </div>

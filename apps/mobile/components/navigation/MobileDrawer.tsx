@@ -1,8 +1,3 @@
-/**
- * ServiceCentric Mobile — Left Slide-Out Navigation Drawer
- * Displays role-based navigation menu and bottom profile card matching Web App sidebar.
- */
-
 import React from 'react';
 import {
   View,
@@ -11,17 +6,15 @@ import {
   ScrollView,
   TouchableOpacity,
   Modal,
-  Animated,
   Dimensions,
   TouchableWithoutFeedback,
-  Switch,
 } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { useTheme, Badge } from '../ui';
-import { getVisibleMobileNavItems, type MobileNavItem } from '../../lib/nav/navItems';
+import { getVisibleMobileNavItems } from '../../lib/nav/navItems';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { X, ChevronDown, ChevronRight, LogOut, Sun, Moon, Shield, Settings, User as UserIcon } from 'lucide-react-native';
+import { X, ChevronDown, ChevronRight, LogOut, Sun, Moon } from 'lucide-react-native';
 
 const DRAWER_WIDTH = Math.min(320, Dimensions.get('window').width * 0.82);
 
@@ -71,11 +64,11 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({ isOpen, onClose }) =
           <View style={[styles.drawerHeader, { borderBottomColor: theme.colors.hairline }]}>
             <View style={styles.brandRow}>
               <View style={[styles.logoEmblem, { backgroundColor: theme.colors.ink }]}>
-                <Text style={[styles.logoLetter, { color: theme.colors.canvas }]}>S</Text>
+                <Text style={[styles.logoLetter, { color: theme.colors.canvas }]}>R</Text>
               </View>
               <View>
-                <Text style={[styles.brandTitle, { color: theme.colors.ink }]}>ServiceCentric</Text>
-                <Text style={[styles.brandSubtitle, { color: theme.colors.mute }]}>Reach International</Text>
+                <Text style={[styles.brandTitle, { color: theme.colors.ink }]}>Reach International</Text>
+                <Text style={[styles.brandSubtitle, { color: theme.colors.mute }]}>Industrial Fleet Platform</Text>
               </View>
             </View>
             <TouchableOpacity onPress={onClose} style={[styles.closeBtn, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
@@ -85,11 +78,12 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({ isOpen, onClose }) =
 
           {/* Scrollable Navigation List */}
           <ScrollView contentContainerStyle={styles.navScrollContent} showsVerticalScrollIndicator={false}>
-            <Text style={[styles.sectionEyebrow, { color: theme.colors.mute }]}>CORE OPERATIONS</Text>
+            <Text style={[styles.sectionEyebrow, { color: theme.colors.mute }]}>ACTIVE MODULES</Text>
 
             {visibleItems.map((item) => {
               const IconComp = item.icon;
-              const isActive = pathname.startsWith(item.href.replace('/(app)', ''));
+              const routeKey = item.href.replace('/(app)', '');
+              const isActive = pathname.startsWith(routeKey);
               const hasSubItems = item.subItems && item.subItems.length > 0;
               const isExpanded = expandedItem === item.href;
 
@@ -136,27 +130,27 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({ isOpen, onClose }) =
             })}
           </ScrollView>
 
-          {/* Bottom User Profile Card (Matching User Screenshot) */}
+          {/* Bottom User Profile Card */}
           <View style={[styles.drawerFooter, { borderTopColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated }]}>
             <View style={[styles.profileCard, { borderColor: theme.colors.hairline }]}>
               <View style={styles.profileHeaderRow}>
                 <View style={[styles.avatarCircle, { backgroundColor: theme.colors.ink }]}>
                   <Text style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
-                    {user?.email ? user.email[0].toUpperCase() : 'S'}
+                    {user?.email ? user.email[0].toUpperCase() : 'R'}
                   </Text>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.profileName, { color: theme.colors.ink }]} numberOfLines={1}>
-                    {user?.email ? user.email.split('@')[0] : 'Super Admin'}
+                    {user?.user_metadata?.full_name || (user?.email ? user.email.split('@')[0] : 'User')}
                   </Text>
                   <Text style={[styles.profileEmail, { color: theme.colors.mute }]} numberOfLines={1}>
-                    {user?.email || 'admin@reachinternation.com'}
+                    {user?.email || 'user@reachinternation.com'}
                   </Text>
                 </View>
               </View>
 
               <View style={styles.badgeRow}>
-                <Badge status="active" customLabel={role || 'Admin'} />
+                <Badge status="active" customLabel={(role || 'Operator').replace('_', ' ')} />
                 <View style={[styles.activeStatusPill, { backgroundColor: theme.colors.success + '22', borderColor: theme.colors.success }]}>
                   <View style={[styles.activeDot, { backgroundColor: theme.colors.success }]} />
                   <Text style={[styles.activeText, { color: theme.colors.success }]}>Active</Text>
@@ -167,7 +161,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({ isOpen, onClose }) =
 
               {/* Theme Selector Strip */}
               <View style={styles.themeRow}>
-                <Text style={[styles.themeLabel, { color: theme.colors.body }]}>Theme</Text>
+                <Text style={[styles.themeLabel, { color: theme.colors.body }]}>Appearance</Text>
                 <TouchableOpacity
                   onPress={toggleTheme}
                   activeOpacity={0.8}
@@ -330,7 +324,6 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: 13,
     fontWeight: '700',
-    textTransform: 'capitalize',
   },
   profileEmail: {
     fontSize: 11,

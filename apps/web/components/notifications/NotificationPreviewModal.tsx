@@ -1,6 +1,7 @@
 "use client";
 
 import { Modal, Badge, Button } from "@/components/ui";
+import { sanitizeHtml } from "@reachinternational/utils";
 import {
   AnimatedMessageSquare,
   AnimatedMail,
@@ -117,10 +118,10 @@ export function NotificationPreviewModal({ open, onClose, notification }: Notifi
                 </span>
               </div>
               <div className="text-[11px] leading-relaxed max-h-[420px] overflow-y-auto">
-                {/* Rendered HTML email body — the exact content sent to the recipient */}
+                {/* Rendered HTML email body — sanitized with sanitizeHtml() to prevent XSS */}
                 <div
                   className="summary-email-preview"
-                  dangerouslySetInnerHTML={{ __html: summaryPayload.html }}
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(summaryPayload.html) }}
                 />
               </div>
               <div className="px-3.5 py-2 border-t border-slate-200 dark:border-slate-700 text-[10px] text-slate-400 flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-900/50">

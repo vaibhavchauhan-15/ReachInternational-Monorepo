@@ -60,15 +60,6 @@ export const mainNavItems: NavItem[] = [
     ],
   },
   {
-    href: "/clients",
-    label: "Clients & Customers",
-    icon: AnimatedBuilding2,
-    roles: ["super_admin", "admin", "service_manager", "rental_manager", "sales_executive"],
-    subItems: [
-      { label: "Client Directory", tab: "all", icon: AnimatedBuilding2 },
-    ],
-  },
-  {
     href: "/users",
     label: "Employees & Users",
     icon: AnimatedUsers,

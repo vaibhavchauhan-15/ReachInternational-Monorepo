@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath, revalidateTag } from "next/cache";
+import { verifySession } from "@/lib/dal";
 import { CACHE_TAGS } from "@/lib/cache";
 
 /**
@@ -10,6 +11,9 @@ import { CACHE_TAGS } from "@/lib/cache";
  */
 export async function refreshPageDataAction(path?: string, tag?: string) {
   try {
+    // SECURITY: Authenticate caller session to prevent unauthenticated LPDoS cache purges
+    await verifySession();
+
     if (tag) {
       revalidateTag(tag, "default");
     }

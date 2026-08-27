@@ -13,7 +13,19 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/dal";
 import { roleHasPermission } from "@/lib/auth/rbac";
 import { logAudit } from "@/lib/audit";
+import {
+  checkAndStoreIdempotencyKey,
+  completeIdempotencyKey,
+  failIdempotencyKey,
+} from "@/lib/security/idempotency";
 import { z } from "zod";
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUuid(id?: string | null): boolean {
+  if (!id || typeof id !== "string") return false;
+  return UUID_REGEX.test(id.trim());
+}
 
 const ThreeWayMatchSchema = z.object({
   po_id: z.string().min(1, "PO is required"),
@@ -151,6 +163,9 @@ export async function createInvoiceAction(input: CreateInvoiceInput) {
  * Update Invoice Action (Only allowed before finalization!)
  */
 export async function updateInvoiceAction(invoiceId: string, input: Partial<CreateInvoiceInput>) {
+  if (!isValidUuid(invoiceId)) {
+    return { success: false, error: "Invalid invoice ID format." };
+  }
   const user = await getCurrentUser();
   if (!user || !roleHasPermission(user.role, "finance.invoice.edit")) {
     return { success: false, error: "Unauthorized. Permission 'finance.invoice.edit' required." };
@@ -215,6 +230,9 @@ export async function updateInvoiceAction(invoiceId: string, input: Partial<Crea
  * Finalize Invoice Action (Locks direct editing)
  */
 export async function finalizeInvoiceAction(invoiceId: string) {
+  if (!isValidUuid(invoiceId)) {
+    return { success: false, error: "Invalid invoice ID format." };
+  }
   const user = await getCurrentUser();
   if (!user || !roleHasPermission(user.role, "finance.invoice.finalize")) {
     return { success: false, error: "Unauthorized. Permission 'finance.invoice.finalize' required." };
@@ -264,7 +282,7 @@ export async function finalizeInvoiceAction(invoiceId: string) {
 /**
  * Record Customer Payment Action (Supports partial payments)
  */
-export async function recordPaymentAction(input: z.infer<typeof RecordPaymentSchema>) {
+export async function recordPaymentAction(input: z.infer<typeof RecordPaymentSchema>): Promise<{ success: boolean; payment?: unknown; error?: string }> {
   const user = await getCurrentUser();
   if (!user || !roleHasPermission(user.role, "finance.payment.record")) {
     return { success: false, error: "Unauthorized. Permission 'finance.payment.record' required." };
@@ -276,6 +294,25 @@ export async function recordPaymentAction(input: z.infer<typeof RecordPaymentSch
   }
 
   const data = parsed.data;
+
+  // Replay Attack Protection Guard
+  const idempotency = await checkAndStoreIdempotencyKey({
+    userId: user.id,
+    actionName: "recordPaymentAction",
+    idempotencyKey: data.idempotency_key,
+    payload: data,
+  });
+
+  if (idempotency.isDuplicate) {
+    return idempotency.cachedResult as { success: boolean; payment?: unknown; error?: string };
+  }
+
+  if (idempotency.isProcessing) {
+    return { success: false, error: idempotency.error };
+  }
+
+  const currentIdempotencyKey = idempotency.idempotencyKey;
+  const currentExecutionToken = idempotency.executionToken;
   const supabase = await createSupabaseServerClient();
 
   try {
@@ -286,8 +323,14 @@ export async function recordPaymentAction(input: z.infer<typeof RecordPaymentSch
       .eq("id", data.invoice_id)
       .single();
 
-    if (invErr || !invoice) return { success: false, error: "Referenced invoice not found." };
-    if (invoice.status === "cancelled") return { success: false, error: "Cannot record payment for a cancelled invoice." };
+    if (invErr || !invoice) {
+      await failIdempotencyKey(currentIdempotencyKey, currentExecutionToken);
+      return { success: false, error: "Referenced invoice not found." };
+    }
+    if (invoice.status === "cancelled") {
+      await failIdempotencyKey(currentIdempotencyKey, currentExecutionToken);
+      return { success: false, error: "Cannot record payment for a cancelled invoice." };
+    }
 
     // Generate Payment Number
     const prefix = "PAY-" + new Date().getFullYear() + "-";
@@ -314,6 +357,7 @@ export async function recordPaymentAction(input: z.infer<typeof RecordPaymentSch
         status: "completed",
         recorded_by: user.id,
         branch_id: invoice.branch_id || user.branch_id || null,
+        idempotency_key: currentIdempotencyKey,
       })
       .select()
       .single();
@@ -344,14 +388,19 @@ export async function recordPaymentAction(input: z.infer<typeof RecordPaymentSch
         invoice_number: invoice.invoice_number,
         amount: data.amount,
         new_status: newStatus,
+        idempotency_key: currentIdempotencyKey,
       },
       user_id: user.id,
     });
 
+    const responseResult = { success: true, payment: newPayment };
+    await completeIdempotencyKey(currentIdempotencyKey, currentExecutionToken, responseResult);
+
     revalidatePath("/finance");
-    return { success: true, payment: newPayment };
+    return responseResult;
   } catch (error) {
     console.error("Error in recordPaymentAction:", error);
+    await failIdempotencyKey(currentIdempotencyKey, currentExecutionToken);
     return { success: false, error: (error as Error).message || "Failed to record payment." };
   }
 }
@@ -518,6 +567,9 @@ export async function createExpenseAction(input: z.infer<typeof CreateExpenseSch
  * Approve or Reject Expense Action
  */
 export async function approveExpenseAction(expenseId: string, action: "approve" | "reject" | "hold") {
+  if (!isValidUuid(expenseId)) {
+    return { success: false, error: "Invalid expense ID format." };
+  }
   const user = await getCurrentUser();
   if (!user || !roleHasPermission(user.role, "finance.expense.approve")) {
     return { success: false, error: "Unauthorized. Permission 'finance.expense.approve' required." };
@@ -719,6 +771,9 @@ export async function addReceivableFollowupAction(input: {
   action_type: "reminder_sent" | "disputed" | "escalated" | "note_added";
   notes: string;
 }) {
+  if (!isValidUuid(input.invoice_id)) {
+    return { success: false, error: "Invalid invoice ID format." };
+  }
   const user = await getCurrentUser();
   if (!user || !roleHasPermission(user.role, "finance.receivable.manage")) {
     return { success: false, error: "Unauthorized. Permission 'finance.receivable.manage' required." };

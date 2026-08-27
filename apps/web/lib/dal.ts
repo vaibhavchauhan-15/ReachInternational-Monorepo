@@ -43,7 +43,7 @@ const getCachedUserRow = unstable_cache(
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase
       .from("users")
-      .select("*")
+      .select("id, full_name, phone, role, status, branch_id, location, city, district, state, email, created_at, updated_at")
       .eq("id", userId)
       .single();
 
@@ -54,7 +54,7 @@ const getCachedUserRow = unstable_cache(
 
     return data;
   },
-  ["dal-user-row-v4"],
+  ["dal-user-row-v5"],
   { revalidate: 60, tags: [CACHE_TAGS.users] }
 );
 
@@ -165,13 +165,8 @@ export const getCurrentUserOrNull = cache(async (): Promise<User | null> => {
 
   if (!user) return null;
 
-  const { data, error } = await supabase
-    .from("users")
-    .select("*")
-    .eq("id", user.id)
-    .single();
+  const data = await getCachedUserRow(user.id);
+  if (!data) return null;
 
-  if (error || !data) return null;
-
-  return { ...data, email: user.email } as User;
+  return { ...data, email: user.email || data.email || "" } as User;
 });

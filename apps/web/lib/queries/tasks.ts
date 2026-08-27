@@ -62,8 +62,16 @@ export const getTasks = cache(async (
     query = query.eq("due_date", params.dueDate);
   }
 
-  const sortBy = params.sortBy || "due_date";
-  const sortOrder = params.sortOrder || "asc";
+  const allowedTaskSorts = {
+    due_date: "due_date",
+    created_at: "created_at",
+    priority: "priority",
+    status: "status",
+    title: "title"
+  } as const;
+
+  const sortBy = allowedTaskSorts[params.sortBy as keyof typeof allowedTaskSorts] || "due_date";
+  const sortOrder = params.sortOrder === "desc" ? "desc" : "asc";
   query = query.order(sortBy, { ascending: sortOrder === "asc" });
 
   const { data, error } = await query;

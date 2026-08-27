@@ -62,11 +62,13 @@ export default function RootLayout({
         <link rel="icon" href="/dark-favicon.svg" type="image/svg+xml" media="(prefers-color-scheme: dark)" />
         <link rel="apple-touch-icon" href="/light-apple-touch-icon.png" media="(prefers-color-scheme: light)" />
         <link rel="apple-touch-icon" href="/dark-apple-touch-icon.png" media="(prefers-color-scheme: dark)" />
-        <link
-          rel="preconnect"
-          href="https://dhbbgfzbyatzvqafnsqp.supabase.co"
-          crossOrigin="anonymous"
-        />
+        {process.env.NEXT_PUBLIC_SUPABASE_URL ? (
+          <link
+            rel="preconnect"
+            href={process.env.NEXT_PUBLIC_SUPABASE_URL}
+            crossOrigin="anonymous"
+          />
+        ) : null}
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <ThemeProvider>

@@ -74,8 +74,9 @@ export async function getMachines(params: MachineListParams = {}) {
 
   // Search
   if (search) {
+    const s = search.replace(/[,()"\\]/g, "");
     query = query.or(
-      `machine_id.ilike.%${search}%,model.ilike.%${search}%,serial_number.ilike.%${search}%`
+      `machine_code.ilike.%${s}%,model.ilike.%${s}%,serial_number.ilike.%${s}%`
     );
   }
 
@@ -91,9 +92,25 @@ export async function getMachines(params: MachineListParams = {}) {
   }
 
   // Sorting
-  if (sortField) {
-    query = query.order(sortField, { ascending: sortOrder === "asc" });
-  }
+  const allowedSorts = {
+    machine_id: "machine_id",
+    machine_code: "machine_code",
+    model: "model",
+    serial_number: "serial_number",
+    year_of_mfg: "year_of_mfg",
+    manufacturer: "manufacturer",
+    current_supervisor_id: "current_supervisor_id",
+    hour_meter: "hour_meter",
+    service_count: "service_count",
+    current_operator_id: "current_operator_id",
+    health_status: "health_status",
+    status: "status",
+    created_at: "created_at",
+    updated_at: "updated_at",
+  } as const;
+
+  const sortColumn = allowedSorts[sortField as keyof typeof allowedSorts] || "machine_id";
+  query = query.order(sortColumn, { ascending: sortOrder === "asc" });
 
   let { data, count, error } = await query.range(from, to);
 
@@ -129,8 +146,9 @@ export async function getMachines(params: MachineListParams = {}) {
     }
 
     if (search) {
+      const s = search.replace(/[,()"\\]/g, "");
       fallbackQuery = fallbackQuery.or(
-        `machine_code.ilike.%${search}%,model.ilike.%${search}%,serial_number.ilike.%${search}%`
+        `machine_code.ilike.%${s}%,model.ilike.%${s}%,serial_number.ilike.%${s}%`
       );
     }
 
@@ -145,9 +163,8 @@ export async function getMachines(params: MachineListParams = {}) {
     }
 
     const fallbackSortField = sortField === "machine_id" ? "machine_code" : sortField;
-    if (fallbackSortField) {
-      fallbackQuery = fallbackQuery.order(fallbackSortField, { ascending: sortOrder === "asc" });
-    }
+    const fallbackSortColumn = allowedSorts[fallbackSortField as keyof typeof allowedSorts] || "machine_code";
+    fallbackQuery = fallbackQuery.order(fallbackSortColumn, { ascending: sortOrder === "asc" });
 
     const fallbackRes = await fallbackQuery.range(from, to);
     if (!fallbackRes.error) {

@@ -1,10 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://dhbbgfzbyatzvqafnsqp.supabase.co';
-const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!SUPABASE_SECRET_KEY) {
-  console.error('Missing SUPABASE_SECRET_KEY env var. Set it in .env or the environment before running the seed script.');
+if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) {
+  console.error('Missing SUPABASE_URL or SUPABASE_SECRET_KEY env var. Set them in .env or the environment before running the seed script.');
   process.exit(1);
 }
 
@@ -12,19 +12,26 @@ const admin = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
 });
 
+import crypto from 'crypto';
+
+const adminEmail = process.env.SEED_ADMIN_EMAIL || 'admin@reachinternation.com';
+const adminPassword = process.env.SEED_ADMIN_PASSWORD || `${crypto.randomBytes(10).toString('hex')}A1!`;
+const adminPhone = process.env.SEED_ADMIN_PHONE || '+91 98765 00002';
+
 const users = [
-  
   {
-    email: 'vaibhav5chauhan123532@gmail.com',
-    password: 'Admin@123456',
+    email: adminEmail,
+    password: adminPassword,
     email_confirm: true,
     user_metadata: {
-      full_name: 'Vaibhav Chauhan',
-      phone: '+91 9867732204',
+      full_name: 'Administrator',
+      phone: adminPhone,
       role: 'admin',
+      city: 'Delhi',
+      district: 'New Delhi',
+      state: 'Delhi',
     },
-  }
- 
+  },
 ];
 
 const results = [];

@@ -486,3 +486,21 @@ After completing code modifications, every AI agent MUST perform the following v
 4. **Memory Synchronization**: Update `AI/STATE.md`, `AI/CURRENT_TASK.md`, `AI/CHANGELOG_AI.md`, and `README.md`.
 
 ---
+
+## 47. Server-Side Template Injection (SSTI) Security Policy
+
+1. **Zero Dynamic Expression Evaluation**:
+   - Dynamic code evaluation functions (`eval()`, `new Function()`, `vm.runInContext()`, or custom expression parsers) are **STRICTLY PROHIBITED**.
+   - User inputs MUST NEVER be parsed or evaluated as code, mathematical expressions, or server-side template logic.
+2. **Separation of Template Logic & User Data**:
+   - Template structures MUST be hardcoded, static server code. User-supplied parameters MUST strictly be treated as literal data values.
+   - Un-sandboxed template engines (Handlebars, EJS, Pug, Nunjucks, Liquid) MUST NOT be introduced without explicit security architecture approval.
+3. **Mandatory Context-Aware HTML Escaping**:
+   - All server-side generated HTML strings (email templates in `lib/email.ts` and `lib/notifications/email-templates.tsx`, export summaries, or notifications) MUST pass dynamic variables through `escapeHtml()` from `@reachinternational/utils`.
+4. **Single-Pass Non-Recursive Template Substitution**:
+   - Dynamic string formatting MUST use non-evaluating, single-pass substitution helpers (`renderSafeTemplate()` in `@reachinternational/utils`).
+   - Replaced parameter values MUST NOT be re-scanned, eliminating double-evaluation / nested template injection vulnerabilities.
+5. **React JSX Escaping**:
+   - React components automatically escape expressions rendered in JSX `{}`. Using `dangerouslySetInnerHTML` is FORBIDDEN unless sanitizing rich text backed by DOMPurify with an explicit security review comment.
+
+---

@@ -6,10 +6,20 @@ import { logAudit } from "@/lib/audit";
 import { sendNotification } from "@/lib/notifications";
 import { getServiceReminderMessage, ServiceReminderData } from "@/lib/notifications/templates";
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUuid(id?: string | null): boolean {
+  if (!id || typeof id !== "string") return false;
+  return UUID_REGEX.test(id.trim());
+}
+
 export async function sendManualReminder(
   machineId: string,
   alertType: "today" | "tomorrow" | "overdue"
 ): Promise<{ success: boolean; sent: number; error?: string }> {
+  if (!isValidUuid(machineId)) {
+    return { success: false, sent: 0, error: "Invalid machine ID format." };
+  }
   try {
     const supabase = await createSupabaseServerClient();
     const {

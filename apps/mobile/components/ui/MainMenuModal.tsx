@@ -1,8 +1,3 @@
-/**
- * ServiceCentric Mobile — Main Navigation Menu Modal
- * Displays all main pages in the application when the 3-line hamburger menu is tapped.
- */
-
 import React from 'react';
 import {
   Modal,
@@ -15,20 +10,12 @@ import {
 } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useTheme } from './ThemeProvider';
+import { useAuth } from '../../lib/auth/useAuth';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import {
-  LayoutDashboard,
-  CheckSquare,
-  Truck,
-  AlertTriangle,
-  FileText,
-  Sliders,
-  Package,
-  Key,
-  TrendingUp,
-  Receipt,
+  Wrench,
+  Gauge,
   Users,
-  Bell,
   User,
   X,
   ChevronRight,
@@ -40,137 +27,9 @@ export interface MainMenuModalProps {
   onClose: () => void;
 }
 
-export interface MenuItemDef {
-  id: string;
-  title: string;
-  subtitle: string;
-  route: string;
-  icon: React.ElementType;
-}
-
-export interface MenuSectionDef {
-  category: string;
-  items: MenuItemDef[];
-}
-
-const MENU_SECTIONS: MenuSectionDef[] = [
-  {
-    category: 'CORE OPERATIONS',
-    items: [
-      {
-        id: 'dashboard',
-        title: 'Dashboard',
-        subtitle: 'Executive overview & KPIs',
-        route: '/(app)/dashboard',
-        icon: LayoutDashboard,
-      },
-      {
-        id: 'my-work',
-        title: 'My Work',
-        subtitle: 'Central field task queue',
-        route: '/(app)/my-work',
-        icon: CheckSquare,
-      },
-      {
-        id: 'tasks',
-        title: 'To-Do / Tasks',
-        subtitle: 'Daily task list & assignments',
-        route: '/(app)/tasks',
-        icon: CheckSquare,
-      },
-      {
-        id: 'machines',
-        title: 'Machines Fleet',
-        subtitle: 'Directory & service history',
-        route: '/(app)/machines',
-        icon: Truck,
-      },
-      {
-        id: 'complaints',
-        title: 'Breakdown Complaints',
-        subtitle: 'Log & manage equipment issues',
-        route: '/(app)/complaints',
-        icon: AlertTriangle,
-      },
-      {
-        id: 'fsr',
-        title: 'Field Service Reports',
-        subtitle: 'Digital FSRs & sign-offs',
-        route: '/(app)/fsr',
-        icon: FileText,
-      },
-      {
-        id: 'operations',
-        title: 'Operations Hub',
-        subtitle: 'Shift logs, roster & transport',
-        route: '/(app)/operations',
-        icon: Sliders,
-      },
-    ],
-  },
-  {
-    category: 'RESOURCE & COMMERCIAL',
-    items: [
-      {
-        id: 'inventory',
-        title: 'Inventory & Store',
-        subtitle: 'Stock directory & requisitions',
-        route: '/(app)/inventory',
-        icon: Package,
-      },
-      {
-        id: 'rentals',
-        title: 'Rentals Suite',
-        subtitle: 'Agreements, returns & clients',
-        route: '/(app)/rentals',
-        icon: Key,
-      },
-      {
-        id: 'crm',
-        title: 'CRM & Sales',
-        subtitle: 'Leads, pipeline & logs',
-        route: '/(app)/crm',
-        icon: TrendingUp,
-      },
-    ],
-  },
-  {
-    category: 'ADMINISTRATION & STAFF',
-    items: [
-      {
-        id: 'finance',
-        title: 'Finance & Accounting',
-        subtitle: 'Expenses & tax invoices',
-        route: '/(app)/finance',
-        icon: Receipt,
-      },
-      {
-        id: 'hr',
-        title: 'HR & Directory',
-        subtitle: 'Staff directory & requests',
-        route: '/(app)/hr',
-        icon: Users,
-      },
-      {
-        id: 'notifications',
-        title: 'Alerts & Notifications',
-        subtitle: 'Realtime alerts & feed',
-        route: '/(app)/notifications',
-        icon: Bell,
-      },
-      {
-        id: 'profile',
-        title: 'Profile & Settings',
-        subtitle: 'Account details & security',
-        route: '/(app)/profile',
-        icon: User,
-      },
-    ],
-  },
-];
-
 export const MainMenuModal: React.FC<MainMenuModalProps> = ({ visible, onClose }) => {
   const { theme } = useTheme();
+  const { role } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
@@ -178,6 +37,48 @@ export const MainMenuModal: React.FC<MainMenuModalProps> = ({ visible, onClose }
     onClose();
     router.push(route as any);
   };
+
+  const normalizedRole = (role || '').toLowerCase();
+  const isManagerOrAdmin =
+    normalizedRole === 'admin' ||
+    normalizedRole === 'super_admin' ||
+    normalizedRole === 'service_manager' ||
+    normalizedRole === 'hr_manager';
+
+  const menuItems = [
+    {
+      id: 'machines',
+      title: 'Machines Fleet',
+      subtitle: 'Directory, HMR meter readings & machine specs',
+      route: '/(app)/machines',
+      icon: Wrench,
+    },
+    {
+      id: 'operations',
+      title: 'Operations Hub',
+      subtitle: 'Daily running hours, shift logs & operator assignments',
+      route: '/(app)/operations',
+      icon: Gauge,
+    },
+    ...(isManagerOrAdmin
+      ? [
+          {
+            id: 'users',
+            title: 'Employees & Users',
+            subtitle: 'Account approvals, roles & employee directory',
+            route: '/(app)/users',
+            icon: Users,
+          },
+        ]
+      : []),
+    {
+      id: 'profile',
+      title: 'Profile & Settings',
+      subtitle: 'User account, location details & appearance',
+      route: '/(app)/profile',
+      icon: User,
+    },
+  ];
 
   return (
     <Modal
@@ -205,10 +106,10 @@ export const MainMenuModal: React.FC<MainMenuModalProps> = ({ visible, onClose }
               </View>
               <View>
                 <Text style={[styles.headerTitle, { color: theme.colors.ink }]}>
-                  Main Menu Navigation
+                  Reach International
                 </Text>
                 <Text style={[styles.headerSubtitle, { color: theme.colors.mute }]}>
-                  Select a module to view its pages & submenus
+                  Active Operations & Management Modules
                 </Text>
               </View>
             </View>
@@ -233,108 +134,106 @@ export const MainMenuModal: React.FC<MainMenuModalProps> = ({ visible, onClose }
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
           >
-            {MENU_SECTIONS.map((section) => (
-              <View key={section.category} style={styles.sectionContainer}>
-                <Text style={[styles.sectionEyebrow, { color: theme.colors.mute }]}>
-                  {section.category}
-                </Text>
+            <View style={styles.sectionContainer}>
+              <Text style={[styles.sectionEyebrow, { color: theme.colors.mute }]}>
+                CORE FLEET MODULES
+              </Text>
 
-                <View
-                  style={[
-                    styles.sectionBox,
-                    {
-                      backgroundColor: theme.colors.canvasElevated,
-                      borderColor: theme.colors.hairline,
-                    },
-                  ]}
-                >
-                  {section.items.map((item, index) => {
-                    const IconComponent = item.icon;
-                    const isActive = pathname.includes(item.id);
-                    const isLast = index === section.items.length - 1;
+              <View
+                style={[
+                  styles.sectionBox,
+                  {
+                    backgroundColor: theme.colors.canvasElevated,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                {menuItems.map((item, index) => {
+                  const IconComponent = item.icon;
+                  const isActive = pathname.includes(item.id);
+                  const isLast = index === menuItems.length - 1;
 
-                    return (
-                      <TouchableOpacity
-                        key={item.id}
-                        onPress={() => handleNavigate(item.route)}
-                        activeOpacity={0.7}
-                        style={[
-                          styles.menuItemRow,
-                          {
-                            borderBottomColor: theme.colors.hairline,
-                            borderBottomWidth: isLast ? 0 : 1,
-                            backgroundColor: isActive
-                              ? theme.colors.hairlineSoft
-                              : 'transparent',
-                          },
-                        ]}
-                      >
-                        <View style={styles.itemLeft}>
-                          <View
-                            style={[
-                              styles.itemIconContainer,
-                              {
-                                backgroundColor: isActive
-                                  ? theme.colors.link
-                                  : theme.colors.canvas,
-                                borderColor: theme.colors.hairline,
-                              },
-                            ]}
-                          >
-                            <IconComponent
-                              size={18}
-                              color={isActive ? theme.colors.onPrimary : theme.colors.ink}
-                            />
-                          </View>
-
-                          <View>
-                            <View style={styles.itemTitleRow}>
-                              <Text
-                                style={[
-                                  styles.itemTitle,
-                                  {
-                                    color: isActive
-                                      ? theme.colors.link
-                                      : theme.colors.ink,
-                                    fontWeight: isActive ? '800' : '600',
-                                  },
-                                ]}
-                              >
-                                {item.title}
-                              </Text>
-                              {isActive && (
-                                <View
-                                  style={[
-                                    styles.activePill,
-                                    { backgroundColor: theme.colors.link },
-                                  ]}
-                                >
-                                  <Text style={styles.activePillText}>ACTIVE</Text>
-                                </View>
-                              )}
-                            </View>
-
-                            <Text
-                              style={[
-                                styles.itemSubtitle,
-                                { color: theme.colors.mute },
-                              ]}
-                            >
-                              {item.subtitle}
-                            </Text>
-                          </View>
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      onPress={() => handleNavigate(item.route)}
+                      activeOpacity={0.7}
+                      style={[
+                        styles.menuItemRow,
+                        {
+                          borderBottomColor: theme.colors.hairline,
+                          borderBottomWidth: isLast ? 0 : 1,
+                          backgroundColor: isActive
+                            ? theme.colors.hairlineSoft
+                            : 'transparent',
+                        },
+                      ]}
+                    >
+                      <View style={styles.itemLeft}>
+                        <View
+                          style={[
+                            styles.itemIconContainer,
+                            {
+                              backgroundColor: isActive
+                                ? theme.colors.link
+                                : theme.colors.canvas,
+                              borderColor: theme.colors.hairline,
+                            },
+                          ]}
+                        >
+                          <IconComponent
+                            size={18}
+                            color={isActive ? theme.colors.onPrimary : theme.colors.ink}
+                          />
                         </View>
 
-                        <ChevronRight
-                          size={16}
-                          color={isActive ? theme.colors.link : theme.colors.mute}
-                        />
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
+                        <View>
+                          <View style={styles.itemTitleRow}>
+                            <Text
+                              style={[
+                                styles.itemTitle,
+                                {
+                                  color: isActive
+                                    ? theme.colors.link
+                                    : theme.colors.ink,
+                                  fontWeight: isActive ? '800' : '600',
+                                },
+                              ]}
+                            >
+                              {item.title}
+                            </Text>
+                            {isActive && (
+                              <View
+                                style={[
+                                  styles.activePill,
+                                  { backgroundColor: theme.colors.link },
+                                ]}
+                              >
+                                <Text style={styles.activePillText}>ACTIVE</Text>
+                              </View>
+                            )}
+                          </View>
+
+                          <Text
+                            style={[
+                              styles.itemSubtitle,
+                              { color: theme.colors.mute },
+                            ]}
+                          >
+                            {item.subtitle}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <ChevronRight
+                        size={16}
+                        color={isActive ? theme.colors.link : theme.colors.mute}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-            ))}
+            </View>
           </ScrollView>
         </View>
       </View>
@@ -424,6 +323,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
   },
   itemIconContainer: {
     width: 36,

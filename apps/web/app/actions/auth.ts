@@ -24,7 +24,7 @@ export async function login(state: AuthFormState, formData: FormData): Promise<A
     return {
       error: "Email and password are required.",
       fieldErrors,
-      fieldValues: { email, password },
+      fieldValues: { email },
     };
   }
 
@@ -41,13 +41,13 @@ export async function login(state: AuthFormState, formData: FormData): Promise<A
       return {
         error: "Your email is not confirmed yet. Please wait for an administrator to approve your account.",
         fieldErrors: { email: "Email pending administrator confirmation." },
-        fieldValues: { email, password },
+        fieldValues: { email },
       };
     }
     return {
       error: "Invalid email or password.",
       fieldErrors: { email: "Invalid email or password.", password: "Invalid email or password." },
-      fieldValues: { email, password },
+      fieldValues: { email },
     };
   }
 
@@ -63,7 +63,7 @@ export async function login(state: AuthFormState, formData: FormData): Promise<A
     return {
       error: "User profile not found. Contact your administrator.",
       fieldErrors: { email: "User profile not found." },
-      fieldValues: { email, password },
+      fieldValues: { email },
     };
   }
 
@@ -72,7 +72,7 @@ export async function login(state: AuthFormState, formData: FormData): Promise<A
     return {
       error: "Your account has been deactivated. Contact your administrator.",
       fieldErrors: { email: "Account is deactivated." },
-      fieldValues: { email, password },
+      fieldValues: { email },
     };
   }
 
@@ -81,7 +81,7 @@ export async function login(state: AuthFormState, formData: FormData): Promise<A
     return {
       error: "Your account is pending approval. Please wait for an administrator to approve your account.",
       fieldErrors: { email: "Account pending admin approval." },
-      fieldValues: { email, password },
+      fieldValues: { email },
     };
   }
 
@@ -156,10 +156,8 @@ export async function forgotPassword(
   const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(
-      ".supabase.co",
-      ""
-    )}/reset-password`,
+    // SECURITY (F16): Use NEXT_PUBLIC_APP_URL for redirect, not the Supabase project URL
+    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || ""}/reset-password`,
   });
 
   if (error) {
@@ -180,14 +178,16 @@ export async function signup(
   const fullName = ((formData.get("full_name") as string) || "").trim();
   const email = ((formData.get("email") as string) || "").trim();
   const phone = ((formData.get("phone") as string) || "").trim();
+  const city = ((formData.get("city") as string) || "").trim();
+  const district = ((formData.get("district") as string) || "").trim();
+  const stateName = ((formData.get("state") as string) || "").trim();
   const password = (formData.get("password") as string) || "";
   const confirmPassword = (formData.get("confirm_password") as string) || "";
-  const requestedRole = (formData.get("role") as string) || "service_engineer";
+  const requestedRole = (formData.get("role") as string) || "operator";
 
-  const validRoles = [
-    "super_admin",
-    "admin",
-    "branch_manager",
+  // SECURITY (F07): Only allow non-admin roles during self-registration signup.
+  // Admin and super_admin roles must be explicitly assigned by existing admins post-approval.
+  const allowedSignupRoles = [
     "service_engineer",
     "engineer",
     "supervisor",
@@ -201,13 +201,16 @@ export async function signup(
     "client",
   ];
 
-  const role = validRoles.includes(requestedRole) ? requestedRole : "service_engineer";
+  const role = allowedSignupRoles.includes(requestedRole) ? requestedRole : "operator";
 
   const fieldValues = {
     full_name: fullName,
     email,
     phone,
     role,
+    city,
+    district,
+    state: stateName,
     password,
     confirm_password: confirmPassword,
   };
@@ -217,6 +220,9 @@ export async function signup(
   if (!fullName) fieldErrors.full_name = "Full name is required.";
   if (!email) fieldErrors.email = "Email address is required.";
   if (!phone) fieldErrors.phone = "Mobile number is required.";
+  if (!city) fieldErrors.city = "City is required.";
+  if (!district) fieldErrors.district = "District is required.";
+  if (!stateName) fieldErrors.state = "State is required.";
   if (!password) fieldErrors.password = "Password is required.";
   if (!confirmPassword) fieldErrors.confirm_password = "Confirm password is required.";
 
@@ -239,11 +245,26 @@ export async function signup(
     };
   }
 
-  if (password.length < 6) {
+  // SECURITY (F08): Enforce minimum 8-character passwords with complexity requirements
+  if (password.length < 8) {
     return {
-      error: "Password must be at least 6 characters long.",
+      error: "Password must be at least 8 characters long.",
       fieldErrors: {
-        password: "Password must be at least 6 characters long.",
+        password: "Password must be at least 8 characters long.",
+      },
+      fieldValues,
+    };
+  }
+
+  // Require at least one uppercase, one lowercase, and one digit
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasLowercase = /[a-z]/.test(password);
+  const hasDigit = /\d/.test(password);
+  if (!hasUppercase || !hasLowercase || !hasDigit) {
+    return {
+      error: "Password must contain at least one uppercase letter, one lowercase letter, and one number.",
+      fieldErrors: {
+        password: "Password must include uppercase, lowercase, and a number.",
       },
       fieldValues,
     };
@@ -339,6 +360,10 @@ export async function signup(
         full_name: fullName,
         phone,
         role: role,
+        city,
+        district,
+        state: stateName,
+        location: `${city}, ${district}, ${stateName}`,
       },
       emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/login`,
     },
@@ -430,7 +455,16 @@ export async function signup(
     entity_type: "user",
     entity_id: userId,
     user_id: userId,
-    metadata: { user_name: fullName, user_email: email, phone, role: role },
+    metadata: { 
+      user_name: fullName, 
+      user_email: email, 
+      phone, 
+      role: role, 
+      city, 
+      district, 
+      state: stateName, 
+      location: `${city}, ${district}, ${stateName}` 
+    },
   });
 
   return { message: "Signup successful! Your account is pending approval. You will be notified once an administrator approves your account." };

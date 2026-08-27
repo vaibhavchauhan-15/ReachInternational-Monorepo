@@ -6,6 +6,9 @@ const nextConfig: NextConfig = {
       dynamic: 60,
       static: 180,
     },
+    serverActions: {
+      bodySizeLimit: "1mb",
+    },
     optimizePackageImports: [
       "lucide-react",
       "@base-ui/react",
@@ -53,7 +56,17 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Permissions-Policy",
-            value: "camera=(), microphone=(), geolocation=()",
+            value: "camera=(), microphone=(), geolocation=(), clipboard-read=(self), clipboard-write=(self)",
+          },
+          // SECURITY (F12): Enforce HTTPS via HSTS — prevents SSL stripping attacks
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=63072000; includeSubDomains; preload",
+          },
+          // SECURITY (F11): Enforce tightened production CSP — blocks XSS & frame injection attacks at browser level
+          {
+            key: "Content-Security-Policy",
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; worker-src 'self' blob:; media-src 'self' data: blob:; manifest-src 'self'; upgrade-insecure-requests;",
           },
         ],
       },

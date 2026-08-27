@@ -35,7 +35,7 @@ export const CreateLeadModal: React.FC<CreateLeadModalProps> = ({
   const [contactName, setContactName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [city, setCity] = useState('Mumbai');
+  const [city, setCity] = useState('');
   const [estimatedValue, setEstimatedValue] = useState('180000');
   const [machineRequirement, setMachineRequirement] = useState('3.0T Forklift (2 Units, 6 Months Rental)');
   const [stage, setStage] = useState('qualified');
@@ -112,6 +112,7 @@ export const CreateLeadModal: React.FC<CreateLeadModalProps> = ({
               />
               <Input
                 label="City / Location"
+                placeholder="e.g. Pune"
                 value={city}
                 onChangeText={setCity}
                 containerStyle={{ flex: 1, marginLeft: 6 }}

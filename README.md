@@ -1,217 +1,99 @@
-# ReachInternational — Enterprise Heavy Machinery, Field Service & Operations Platform
+# ReachInternational — Industrial Machine Running Logs & Fleet Operations Platform
 
-> **ReachInternational** — Enterprise-grade industrial machine tracking, pan-India fleet operations, field service maintenance, breakdown complaint handling, rental fleet management, CRM & sales pipelines, finance & accounting governance, HR lifecycle management, and automated notification system.
-
-ReachInternational transforms heavy machinery fleet management and end-to-end industrial operations into an automated, multi-tenant capable, enterprise platform. Built for Service Managers, Field Engineers, Mechanics, Supervisors, Operators, Store Managers, HR Managers, Rental Managers, Sales Executives, Finance Managers, and Admins, it automatically tracks machinery lifecycles, processes digital Field Service Reports (FSR), manages breakdown complaints, orchestrates rental agreements and sales pipelines, handles multi-way financial matching & invoicing, logs daily operator hour meters & site movements, and dispatches multi-channel alerts via SendGrid and Twilio.
+> **ReachInternational** — Enterprise platform engineered to automate daily machine running hour logs, operator shift entries, operator-to-machine assignments, machinery fleet management (add/edit/delete), user role governance, and PDF/Excel report exports.
 
 ---
 
 ## 📋 Table of Contents
 
 - [Project Overview](#-project-overview)
-- [Key Features](#-key-features)
-- [Monorepo System Architecture & Boundary Rules](#-monorepo-system-architecture--boundary-rules)
+- [Active Core Modules](#-active-core-modules)
+- [Monorepo Architecture](#-monorepo-architecture)
 - [Tech Stack](#-tech-stack)
 - [Getting Started](#-getting-started)
-- [Environment Variables](#-environment-variables)
-- [12-Role RBAC & Data Scoping Architecture](#-12-role-rbac--data-scoping-architecture)
+- [User Roles & RBAC](#-user-roles--rbac)
 - [Database Schema](#-database-schema)
-- [Breakdown Complaints & Digital FSR System](#-breakdown-complaints--digital-fsr-system)
-- [Notification Engine](#-notification-engine)
-- [Project Structure](#-project-structure)
-- [Server Actions & API Routes](#-server-actions--api-routes)
-- [Dashboard & Analytics](#-dashboard--analytics)
-- [Deployment](#-deployment)
-- [Documentation](#-documentation)
-- [Roadmap](#-roadmap)
-- [License](#-license)
+- [Verification & Quality Gate](#-verification--quality-gate)
 
 ---
 
 ## 🚀 Project Overview
 
-**ReachInternational** is an enterprise platform engineered to manage large-scale heavy machinery fleets, field service operations, multi-location inventory, rental fleet workflows, customer relationships, corporate finance, and workforce lifecycle management. Designed to scale seamlessly from 500+ machines to 50,000+ units across India without architectural friction.
+**ReachInternational** automates daily industrial machine running hour logs and operator workflow management across India. Built for Service Managers, Supervisors, Operators, and Admins, it eliminates paper logbooks, enforces non-overlapping shift validations, tracks operator machine assignments, and generates instant PDF print reports and Excel exports for monthly client billing.
 
-### Key Operational Challenges Solved
+### Core Problems Solved
 
-- ❌ **Fragmented Operational Spreadsheets**: Replaces manual spreadsheets with a unified PostgreSQL database protected by Row Level Security (RLS).
-- ❌ **Unmonitored Machine Hours & Breakdown Downtime**: Replaces paper logs with daily operator hour meter tracking, shift condition checks, fuel logs, and real-time breakdown complaint dispatch.
-- ❌ **Unstructured Field Reports**: Standardizes field service documentation with digital Field Service Reports (FSR) featuring interactive checklists, replacement parts tables, and 1-click A4 PDF export.
-- ❌ **Uncontrolled Rental & Sales Lifecycle**: Integrates agreement creation with automated discount approval thresholds (>15% discounts flag for manager approval), delivery challan generation, return inspection logs, and damage auto-routing.
-- ❌ **Opaque Financials & Manual Matching**: Provides an 11-tab Finance Suite featuring 3-Way Matching (PO ↔ GRN ↔ Supplier Invoice), receivables aging breakdown, partial payment ledgers, and expense approvals (>₹50,000 flagged).
-- ❌ **Lack of Role & Scope Isolation**: Enforces a 12-Role RBAC permissions matrix with data scoping levels (`ORGANIZATION` and `ASSIGNED`).
+- ❌ **Manual & Error-Prone Paper Logbooks**: Replaces paper logs with daily operator hour meter tracking, automated HMR calculation, overtime computation, and breakdown duration logging.
+- ❌ **Overlapping Operator Shifts**: Enforces database-level PostgreSQL trigger validations preventing shift time overlaps.
+- ❌ **Uncontrolled Fleet Catalog**: Provides centralized Machine Management (`/machines`) for adding, editing, and deleting heavy machinery units with detailed specs (Model, Serial No, YUM, HMR, Client).
+- ❌ **Manual Report Preparation**: Generates 1-click A4 PDF reports (Machine Running Hours Report, Site Machine Report, Operator Daily Report) and formatted Excel spreadsheet exports.
 
 ---
 
-## ✨ Key Features
+## ✨ Active Core Modules
 
-### 🏢 12-Role RBAC & Granular Security Matrix
-- **12 Operational Roles + Client**: `super_admin`, `admin`, `service_manager`, `service_engineer` (and `engineer`), `supervisor`, `mechanic`, `operator`, `store_manager`, `hr_manager`, `rental_manager`, `sales_executive` (Sales Manager/Exec), `finance_manager`, and `client`.
-- **Data Access Scoping**: Strict scoping levels (`ORGANIZATION` global scope, and `ASSIGNED` user-specific scope) enforced in Data Access Layer (`lib/dal.ts`) and RLS policies.
-- **Pan-India Fleet Consolidation**: Unified all fleet operations, machine hour logs, breakdown complaints, clients, and staff accounts under a single national operations model across India.
+### 1. 🚜 Machine Management (`/machines`)
+- **Fleet Directory & Specifications**: Track machinery fleet details including Model Name, Serial Number, Manufacturer, Year of Manufacture (YUM), Current HMR (Hour Meter Reading), Assigned Supervisor, Assigned Operator, and Client details.
+- **Full Machine Lifecycle**: Add new machines, edit machine parameters, and delete machines with admin authorization.
+- **Search & Filters**: Multi-option filters by Model Name, Serial Number, Manufacturer, and Client Name.
 
-### ⚡ My Work — Live Task & Assignment Hub (`/my-work`)
-- **Role-Scoped Workload Workspace**: Personalized task hub for field engineers, mechanics, operators, store managers, and admins querying live data from Supabase.
-- **Assigned Items Scoping**: Scopes assigned breakdown complaints (`machine_complaints`), assigned service jobs (`service_records`), assigned equipment cards (`machines`), role-specific approval tasks (`purchase_orders`), and daily meter log tasks.
-- **Permission-Gated UI Controls**: Integrated `roleHasPermission()` access controls on task actions and clean empty states ("No Assigned Work Items Today") for field staff with zero active tasks.
+### 2. 👥 User & Employee Management (`/users`)
+- **System Accounts Directory**: Unified management of system users and staff accounts with active status tracking.
+- **Mandatory Profile Fields**: Strictly enforces Full Name, Email Address, 10-digit Mobile Phone Number, System Role, and Complete Address (City, District, State) across all user profiles and self-registration.
+- **Role Assignment**: Assign system roles (`super_admin`, `admin`, `service_manager`, `supervisor`, `operator`, etc.).
+- **Account Actions**: Create new user accounts, edit employee profiles, and delete user accounts with full audit logging.
 
-### 📋 To-Do & Task Management System (`/tasks`)
-- **Boss → Employee Task Delegation**: Boss/Managers create and assign daily or scheduled tasks to single or multiple employees with due dates, due times, priority levels (`low`, `medium`, `high`, `critical`), and reminder offsets (`10m`, `30m`, `1h`, `1d`).
-- **Full Task Lifecycle & Statuses**: Complete tracking through `pending`, `in_progress`, `completed`, `overdue`, `cancelled`, and `reopened` states.
-- **Employee Task Execution & Completion Proof**: Employees view assigned tasks, update progress, add completion notes, and upload completion proof attachments (photos/documents).
-- **Manager Verification & Reopening**: Managers review submitted task completion details and proof attachments with options to **Approve & Verify** or **Reject & Reopen** with revision feedback.
-- **Task Discussions & Audit Timeline**: Threaded comments between employees and managers per task, accompanied by complete audit activity logs (`task_activity_logs`).
-- **Unified Web & Mobile Experience**: Full feature parity between Next.js Web App (List View, Kanban Board, Multi-Filter toolbar, KPI stats) and Expo Mobile App matching native wireframe designs.
+### 3. ⏱️ Operations Hub (`/operations`)
+- **Running Hours Logs (`tab=logs`)**:
+  - **3 View Modes**: Machine View (group by equipment), Client View (group by client site), and Operator View (group by operator).
+  - **A4 PDF Reports**: 1-click printable PDF report exports featuring official top-left company branding, centered titles (`MACHINE RUNNING HOURS REPORT`), and client location sub-headers (`CLIENT: SAINT GOBAIN | LOCATION: JHAJJAR, HARYANA`).
+  - **Excel Exports**: Export formatted Excel spreadsheets capturing daily logs, HMR totals, operating hours, overtime, and breakdown durations.
+- **Operator Machine Assignments (`tab=assignments`)**:
+  - Reassign operators to machinery units and inspect historical operator assignment logs.
 
+### 4. 📝 Operator Daily Machine Logs & Log History (`/operations` for operators)
+- **Daily Machine Log Entry (`tab=entry`)**:
+  - **Section A (Machine & Client Info)**: Auto-populates Machine Model, Serial Number, Client Name, and Client Site Location.
+  - **Section B (Time & Meter Readings)**: Interactive `CustomTimePicker` for Start/End times, quick shift action pills (`06:00 AM`, `08:00 AM`, `02:00 PM`, `08:00 PM`), automatic operating hours & overtime calculation, starting/ending HMR, breakdown duration toggle, and remarks.
+- **Log History (`tab=history`)**:
+  - Operators inspect past submitted daily machine logs with real-time status and breakdown duration indicators.
 
-### 🏢 Client & Customer Management Directory (`/clients`)
-- **Admin & Manager Client Governance**: Dedicated client management suite for `super_admin`, `admin`, `branch_manager`, `service_manager`, `rental_manager`, and `sales_manager` roles to add, edit, and manage client profiles.
-- **Automated Client Code Sequencing**: PostgreSQL sequence and trigger (`CLI-0001`, `CLI-0002`...) auto-generate client codes upon registration.
-- **Historical Log Soft-Delete Protection**: Soft deletion policy (`deleted_at = NOW()`, `status = 'inactive'`) ensures that historical machine running logs, delivery challans, and monthly billing reports associated with past clients remain 100% intact and traceable.
-- **Monthly Running Logs Integration**: Stored database client details (Company Name, Contact Person, Phone, Email, GSTIN, Address) are dynamically fetched and presented during monthly log inspections (`/operations?tab=logs`) and report PDF/Excel exports.
-- **Web & Mobile Synchronization**: Full feature parity between Next.js Web App and Expo Mobile App matching native responsive designs.
+### 5. 🏢 Client Directory & Address Policy (`/clients`)
+- **Mandatory Client Address Policy**: Every client record strictly requires complete address parameters (Office/Site Street Address, City, and State) across PostgreSQL constraints, Zod schemas, web dialogs, and mobile apps.
+- **Client Lifecycle Management**: Add new clients, update client parameters, inspect machine fleet counts, and manage contact persons.
 
-### 🏭 Machine Directory & Compliance Master (`/machines`, `/machines/[id]`)
-- **Machine Taxonomy**: Dynamic categories (`machine_categories`) including Forklifts, Scissor Lifts, Boom Lifts, Reach Trucks, Pallet Trucks, and Industrial Generators.
-- **Extended Technical Specifications**: Tracks equipment specs, model details, serial numbers, manufacturer, year of mfg, engine serial number, engine MOT number, front & back tyre sizes, starter motor teeth, air filter number, headgas kit notch, and diesel filter number.
-- **Client & On-Rent Status Integration**: Real-time Client Details card on machine detail page when status is `On Rent`, displaying Customer Company, Contact Person, Mobile, Email, Site Address, City, State, active rental contract details, and touch quick actions (Call, WhatsApp, Map Site).
-- **Compliance & Insurance Tracking**: Monitors Insurance Policy numbers & expiry dates, Third-Party Certificates & expiry dates, and RTO Tax registrations & expiry dates (with default formatting `1st January 1970`).
-- **Unified Multi-Tab History & Operations Hub**:
-  - *Service & Breakdown History*: Combined timeline table of completed maintenance services and malfunction breakdown reports (FSR).
-  - *Hour Meter Running History*: Operator daily machine logs with Client Name, Operator Name, start/end meter readings (`start_meter → end_meter`), operating hours, shift timings, overtime, and remarks.
-  - *All Parts Used History*: Complete inventory issue ledger for the machine featuring part numbers, names, quantities issued, returnable status, and issued-to technician details.
-  - *Service Interval Schedule*: Frequency cycle (90 days, 180 days, 250h, 500h), last service date, next service due countdown, and preventive maintenance checklist rules.
-- **Machine Lifecycle**: `active`, `inactive`, `on_rent`, and `under_maintenance`.
-- **Universal Table Selection & CSV Export**: Row checkboxes enabled for all employee roles viewing the directory with CSV export capturing Category, Machine Code, Name, Model, Serial Number, Hour Meter, Total Services, Status, Customer Name, City, State, Assigned Engineer, Assigned Operator, and Next Service Due Date.
-
-### 🛠 Breakdown Complaints & Digital Field Service Report (FSR) (`/service`)
-- **Direct Malfunction Reporting**: Breakdown complaint logging (`machine_complaints`) by Supervisors, Service Engineers, Mechanics, and Admins with complaint tracking numbers, hour meter readings, required parts, and location.
-- **Digital FSR Checklist**: Interactive field service report with 1-click **"Mark All Passed (Y)"** helpers, component inspections, and work completed/pending logs.
-- **Replacement Parts Ledger**: In-report parts table tracking replacement part names, quantities, statuses, and replacement dates.
-- **Crisp A4 PDF & Print Engine**: Purpose-built iframe printer generating clean single-page A4 PDF documents (`210mm x 297mm`) with input sanitization and browser header/footer stripping.
-- **FSR Manager Review & Approval**: Dual read-only and edit modes with approval buttons ("Approve FSR", "Send Back for Revision") for Service Managers and Branch Managers.
-
-### 🚜 Operations & Workforce Directory (`/operations`)
-- **4-Tab Operations Suite**:
-  1. *Daily Running Hour Logs*: Daily start & end hour meter readings (`start_meter` & `end_meter`), calculated meter running hours (`running_hours`), start/end shift timings, overtime hours, breakdown status checks, draft local persistence, printable PDF reports, Excel exports, and direct database storage with auto-updating current machine hour meter readings (`machines.hour_meter = end_meter`).
-  2. *Operator Assignments*: Assign and track operators assigned to specific machinery units.
-  3. *Loading/Unloading Ledger*: Record rental machine loading at yard, transport vehicle numbers, dispatch, and client site unloading/relocation (`machine_site_movements`).
-  4. *Operator Workforce Directory & Payroll*: Direct operator hiring workflow (`hireOperatorAction`), workforce directory under branch, and monthly salary payout recorder (`recordOperatorPayoutAction`).
-
-### 🔑 Rental Operations Hub (`/rentals`)
-- **Customer Directory & Rental Requests**: Track rental customer profiles, soft-delete archiving, and rental requests.
-- **Agreements & Discount Threshold Governance**: Contract creation with automatic discount approval thresholds (discounts > 15% require higher Admin/Sales approval).
-- **Dispatch & Delivery Challans**: Pre-dispatch inspection, automated delivery challan generation, and machine status transition to `on_rent`.
-- **Return Inspections & Damage Routing**: Record return meter, fuel level, and condition; auto-creates Damage Reports and notifies Service & Finance modules if damaged.
-- **Contract Extensions & Billing Requests**: Check machine reservation availability for contract extensions, and auto-calculate base rental, extra hours, transport, damage charges, and deposit adjustments for Finance.
-
-### 📈 Sales & CRM Management Suite (`/crm`)
-- **10-Tab Sales Operations Hub**:
-  1. *Sales Dashboard*: 14 KPI metric cards and sales activity toolbar.
-  2. *Lead Pipeline*: Track leads with multi-stage deal statuses and 1-click lead-to-customer conversion wizard.
-  3. *Customer Directory*: Complete customer profiles with soft-delete archiving.
-  4. *Interaction Logger*: Record client calls, site visits, emails, and meetings.
-  5. *Opportunity Management*: Track sales deal pipelines, values, and probability.
-  6. *Multi-Version Quotations*: Create versioned quotations (`V1` $\rightarrow$ `V2`) without overwriting sent quotes, with discount approval guardrails (0–5% auto-approved, >5% manager approval required).
-  7. *Sales Orders*: Convert accepted quotes into confirmed sales orders.
-  8. *Machine Sales & Reservations*: Reserve machines for sales orders without physical stock dispatch.
-  9. *Delivery & Handover*: Request delivery and upload signed handover proof documents.
-  10. *Sales Settings*: Configure sales defaults and thresholds.
-
-### 🚜 Operator Multi-Shift Daily Machine Log System (`/dashboard`)
-- **Multi-Shift Entry Support**: Operators working two or more shifts (e.g. Shift 1: 06:00 AM – 02:00 PM, Shift 2: 02:00 PM – 10:00 PM, Shift 3: 10:00 PM – 06:00 AM, Custom Shift) can log separate entries per shift worked on the same day.
-- **Non-Overlapping Shift Validation**: Enforces strict shift non-overlap validation across Database triggers (`036_operator_multi_shift_non_overlap.sql`), Server Actions (`checkShiftOverlapServer`), and real-time Frontend client form guards.
-- **Direct Database Storage**: Operator logs automatically store as approved records in database with full audit trails (`logAudit`).
-- **Breakdown & Remarks Disclosure**: Breakdown toggle dynamically opens breakdown duration, cause input, action taken, and quick remark shortcuts.
-
-### 💰 Finance & Financial Governance Suite (`/finance`)
-- **11-Tab Enterprise Finance Hub**:
-  1. *Financial KPIs & Cash Flow*: Live metrics on total revenue, outstanding receivables, accounts payable, and cash-flow summaries.
-  2. *Sales & Rental Billing*: Unified review of incoming billing requests from Sales and Rentals.
-  3. *Invoices & Notes Directory*: Multi-filter invoice directory, draft/finalized states, and Credit/Debit Note generation for finalized invoices.
-  4. *Payment Ledger*: Record client payments supporting partial payments with auto-calculated remaining balances.
-  5. *Receivables Aging Report*: Aging analysis categorized into 0–30, 31–60, 61–90, and 90+ days aging buckets with follow-up tracking.
-  6. *Payables & Supplier Settlements*: Manage vendor payables and supplier payment disbursements.
-  7. *3-Way Match Verification Matrix*: Verifies PO ↔ GRN ↔ Supplier Invoice with payment hold triggers on discrepancies.
-  8. *Expense Tracker*: Record operational expenses with auto-approval thresholds (expenses > ₹50,000 flagged for manager review).
-  9. *HR Payroll Summaries*: Aggregated salary and payroll summary views.
-  10. *Financial Reports*: Exportable financial summary reports with 1-click CSV download.
-  11. *Finance Settings*: Manage default tax rates, payment terms, and invoicing configurations.
-
-### 👥 HR & Employee Lifecycle Suite (`/hr`)
-- **7-Tab Workforce Management Suite**:
-  1. *Workforce Dashboard*: 12 KPI metric cards, department/designation breakdowns, and employee distribution charts.
-  2. *Employee Directory*: Complete staff profiles with status lifecycle tracking (`pending_onboarding`, `active`, `on_leave`, `notice_period`, `resigned`, `terminated`, `retired`, `inactive`, `archived`). Soft-delete protection prevents hard deletion of staff with historical records.
-  3. *Onboarding*: Onboard new employees with structured details.
-  4. *Departments & Designations*: Master creation and management of organizational departments and designations.
-  5. *Salary & Payroll History*: Fixed, variable, and CTC breakdown with auditable revision entry history to prevent overwriting past salary records.
-  6. *User Account Requests*: Internal requests for provisioning system user accounts.
-  7. *Document Repository*: Upload and manage employee document attachments.
-
-### 👤 Employee & User Management (`/users`)
-- **Direct Active Dashboard Onboarding**: Admins and Super Admins adding employees or managers via the `/users` dashboard create active accounts immediately with credentials emailed directly to the new user without sending admin approval requests.
-- **Isolated Public Signup Approval Flow**: External users registering via the public Request Access page (`/signup`) default to `pending` status, generating admin approval notification emails and requiring manual sign-off in the "Pending User Approvals" dashboard section.
-- **Dual Table Synchronization**: Automatically synchronizes user profile updates across `public.users` and `public.employees` directories.
-
-### 📦 Multi-Branch Inventory & Stock Ledger (`/inventory`)
-- **Multi-Branch Stock Balances**: Real-time product inventory ledger per storage location.
-- **Stock Movements**: Stock In, Stock Out, Purchase Receipts (GRN), and Stock Adjustments (`ADJUSTMENT`, `DAMAGE`, `LOSS`) with document references.
-- **PO Approval Thresholds**: Purchase orders $\le ₹10,000$ auto-approve; POs $> ₹10,000$ flag as `pending_approval` requiring manager authorization.
-- **Inter-Branch Stock Transfers**: Orchestrate inter-branch transfers (`stock_transfers`) with status tracking (`draft`, `in_transit`, `completed`, `cancelled`).
-- **Product Archiving**: Soft-archive inactive products preventing deletion of items with historical stock ledger entries.
-
-### 📢 Multi-Channel Notification Engine
-- **Email (via SendGrid)**: Daily consolidated summary emails for Super Admins and individualized task emails for Service Engineers; transactional auth & password reset emails.
-- **WhatsApp & SMS (via Twilio)**: Real-time service due alerts for assigned engineers and customer contacts.
-- **In-App Alerts**: Real-time toast notifications and notification center history with date filters and alert type tags.
-- **Automated Daily Reminders**: Scheduled QStash cron endpoint (`/api/cron/send-reminders`) dispatching daily reminders at 08:00 AM.
-
-### 🎨 Vercel Geist Design System & App Shell
-- **App Shell & 2-Column Layout**: Smooth 2-column workspace shell with Framer Motion spring transitions (`280px` expanded / `72px` collapsed).
-- **ChatGPT-Style Collapsed Logo Toggle**: Hovering over the collapsed sidebar logo smoothly morphs into the expand button (`PanelLeftOpen`).
-- **Vercel Geist Day/Night Theme Switch**: Animated dark/light toggle switch (`ThemeToggle`) with spring physics and sun/moon micro-animations.
-- **Universal Reusable Custom Dropdown (`Select.tsx`)**: Reusable custom dropdown component built with Framer Motion popover slide & fade animations, dark/light theme tokens, checkmark indicators (`AnimatedCheck`), search filtering for long option lists (> 6 items), and full keyboard navigation (`ArrowUp`, `ArrowDown`, `Enter`, `Escape`), replacing 100% of native browser `<select>` dropdowns across the web application.
-- **Landing Page Authentication Routing (`/`)**: Root landing page automatically redirects unauthenticated users to signin (`/login`) and active authenticated users to their workspace dashboard (`/dashboard`), with explicit `/signin` route alias redirection.
-- **Reusable FilterToolbar & Table Primitives**: Standardized search input with filter toggle button, active filter count badge, and expandable multi-field filter panel.
-- **Platform-Aware Command Palette (`⌘K` / `Ctrl+K`)**: Weighted relevance search engine mapping commands and alias keywords.
+### 6. 🔑 Login & Access Control (`/login`, `/signup`, `/forgot-password`)
+- Secure authentication flow backed by Supabase SSR Auth and Next.js 16 Edge proxy security middleware with mandatory City, District, State registration fields.
 
 ---
 
-## 🏗 Monorepo System Architecture & Boundary Rules
+## 🏗 Monorepo Architecture
 
-ReachInternational is orchestrated as a high-performance pnpm workspace with Turborepo task pipeline management (`turbo.json`).
+ReachInternational is structured as a pnpm workspace managed by Turborepo (`turbo.json`).
 
 ```
-              [ apps/* ]
-     (apps/web [@reachinternational/web], 
-      apps/mobile [@reachinternational/mobile])
-                    │
-                    ▼
-        [ shared/domain packages ]
-   (@reachinternational/api-client, @reachinternational/validation, 
-    @reachinternational/permissions, @reachinternational/design-tokens)
-                    │
-                    ▼
-         [ foundation packages ]
-     (@reachinternational/types, @reachinternational/utils)
+ReachInternational-Monorepo/
+├── apps/
+│   ├── web/                          # Next.js 16 App Router Web Application (@reachinternational/web)
+│   │   ├── app/                      # App Router routes (/machines, /operations, /users, /login, /signup)
+│   │   ├── components/               # Geist system UI components, forms & print modals
+│   │   └── lib/                      # Data Access Layer (DAL), query helpers & server actions
+│   └── mobile/                       # Expo / React Native Mobile Application (@reachinternational/mobile)
+│       ├── app/                      # Expo Router screens ((auth)/login, (auth)/signup, (app)/machines, (app)/operations, (app)/users, (app)/profile)
+│       ├── components/               # Native design system primitives, action sheets & modal dialogs
+│       └── lib/                      # Supabase client, secure storage adapter, auth hooks & nav registry
+├── packages/                         # Canonical Shared Monorepo Packages
+│   ├── types/                        # @reachinternational/types — TypeScript interfaces & database types
+│   ├── validation/                   # @reachinternational/validation — Zod validation schemas
+│   ├── permissions/                  # @reachinternational/permissions — RBAC matrix & scoping rules
+│   ├── design-tokens/                # @reachinternational/design-tokens — Geist visual tokens & adapters
+│   ├── api-client/                   # @reachinternational/api-client — Shared API client contracts
+│   ├── config/                       # @reachinternational/config — Shared TypeScript/ESLint configs
+│   └── utils/                        # @reachinternational/utils — Platform-neutral date, INR currency & string helpers
+├── supabase/migrations/              # Idempotent PostgreSQL schema migration scripts
+├── pnpm-workspace.yaml               # pnpm workspace declaration
+└── turbo.json                        # Turborepo task pipeline orchestration
 ```
-
-### Layer & Boundary Enforcement Rules
-1. **One-Way Dependency Flow**: Dependencies flow strictly from `apps/*` → `shared domain packages` → `foundation packages`.
-2. **Forbidden Dependencies**:
-   - ❌ `packages/*` → `apps/*` (Packages MUST NOT import from applications)
-   - ❌ `foundation packages` → `shared domain packages`
-   - ❌ `apps/web` ↔ `apps/mobile` (No cross-app imports)
-   - ❌ Circular dependencies (Direct or indirect)
-   - ❌ Deep internal imports (Import strictly through canonical package export barrels `index.ts`)
-3. **Workspace Packages**:
-   - **`@reachinternational/types`**: Pure TypeScript interfaces, DTOs, and Supabase Database Types (zero runtime dependencies).
-   - **`@reachinternational/validation`**: Canonical Zod schemas shared across forms, API handlers, and Server Actions.
-   - **`@reachinternational/permissions`**: Universal 14-role RBAC matrix, permissions, and 3-tier scoping rules.
-   - **`@reachinternational/design-tokens`**: Visual tokens with Web (CSS custom variables) and Mobile (React Native theme objects) adapters.
-   - **`@reachinternational/api-client`**: Standardized response envelopes (`ApiResponse<T>`), endpoint contracts, and error handlers.
-   - **`@reachinternational/utils`**: Platform-neutral helper functions (date formatters `"en-GB"`, INR currency, string formatters).
-   - **`@reachinternational/config`**: Tooling and linting configurations.
 
 ---
 
@@ -219,19 +101,14 @@ ReachInternational is orchestrated as a high-performance pnpm workspace with Tur
 
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
-| **Framework** | [Next.js 16.2](https://nextjs.org) (App Router) | React Server Components, Server Actions, API Routes |
-| **UI Library** | [React 19.2](https://react.dev) | Modern component-based UI |
-| **Language** | [TypeScript 5](https://www.typescriptlang.org) | Strict type safety across DAL, actions, and UI |
-| **Database** | [Supabase PostgreSQL](https://supabase.com) | PostgreSQL database with Row Level Security (RLS) |
-| **Auth** | [Supabase Auth (SSR)](https://supabase.com/docs/guides/auth) | Server-side cookie sessions, auth flow, JWT |
-| **Email** | [SendGrid Mail API](https://sendgrid.com) | Transactional, daily summary, and task notification emails |
-| **SMS & WhatsApp**| [Twilio API](https://www.twilio.com) | Direct SMS and WhatsApp message dispatch |
-| **Scheduler** | [Upstash QStash](https://upstash.com/qstash) | Cron scheduling for daily reminder automation |
-| **Styling** | [Tailwind CSS 4](https://tailwindcss.com) | Utility-first styling with Geist design tokens |
-| **UI Components** | [shadcn/ui](https://ui.shadcn.com) + [Base UI](https://base-ui.com) | Accessible interactive UI primitives |
-| **Animations** | [Framer Motion 12](https://www.framer.com/motion/) | Layout transitions, spring physics, flyouts, and modals |
-| **Charts** | [Recharts 3](https://recharts.org) | Responsive dashboard charts |
-| **Validation** | [Zod 4](https://zod.dev) | Schema validation for forms and server actions |
+| **Framework** | Next.js 16.2 (App Router) | React Server Components, Server Actions, Edge Proxy |
+| **Mobile** | Expo React Native | iOS & Android Cross-Platform Mobile Application |
+| **Language** | TypeScript 5 (Strict Mode) | End-to-end type safety across web, mobile, and packages |
+| **Database** | Supabase PostgreSQL | Relational database with Row Level Security (RLS) & Triggers |
+| **Auth** | Supabase Auth (SSR) | Server-side cookie sessions & JWT authentication |
+| **Styling** | Tailwind CSS v4 | Utility-first styling with Geist design system tokens |
+| **Animations** | Framer Motion 12 | Fluid UI transitions, modals, and drawers |
+| **PDF & Export**| HTML5 Print Engine / XLSX | Single-page A4 PDF documents & formatted Excel exports |
 
 ---
 
@@ -239,340 +116,97 @@ ReachInternational is orchestrated as a high-performance pnpm workspace with Tur
 
 ### Prerequisites
 
-- **Node.js** 20+ (LTS recommended)
-- **pnpm** (Required monorepo package manager)
-- **Supabase** account & project
-- **SendGrid** API Key (for transactional & daily summary emails)
-- **Twilio** Account SID & Auth Token (optional for SMS/WhatsApp)
-- **Upstash QStash** token (optional for automated cron trigger)
+- **Node.js**: 20+ (LTS)
+- **pnpm**: `pnpm@11.21.0` (Required monorepo package manager)
+- **Supabase**: Account & PostgreSQL database project
 
-### 1. Clone the Repository
+### Installation & Run
 
-```bash
-git clone https://github.com/vaibhavchauhan-15/reachinternation.com.git
-cd reachinternation.com
-```
+1. **Clone repository**:
+   ```bash
+   git clone https://github.com/vaibhavchauhan-15/reachinternation.com.git
+   cd reachinternation.com
+   ```
 
-### 2. Install Dependencies
+2. **Install dependencies**:
+   ```bash
+   pnpm install
+   ```
 
-```bash
-pnpm install
-```
+3. **Configure Environment Variables**:
+   Copy `.env.example` to `.env` in the project root:
+   ```env
+   # Public / Publishable Keys (Safe for Web Browser & Mobile App)
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key_here
+   EXPO_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_your_key_here
 
-### 3. Set Up Environment Variables
+   # Server-Only Secrets (STRICTLY RESTRICTED TO SERVER RUNTIMES — NEVER EXPOSE TO FRONTEND/MOBILE)
+   SUPABASE_SECRET_KEY=your_service_role_key_here
+   NEXT_PUBLIC_APP_URL=http://localhost:3000
+   ```
 
-Create a `.env` file in the project root (see [Environment Variables](#-environment-variables)).
-
-### 4. Run Database Migrations
-
-Execute the SQL migration files in sequence in your Supabase SQL Editor or via Supabase CLI:
-
-1. `supabase/migrations/001_create_users_table.sql` (Creates `public.users` table, auth triggers, RLS policies, and indexes)
-2. `supabase/migrations/002_create_machines_table.sql` (Creates `public.machines` table, sequence `RI-MC-XXXX`, RLS policies, and indexes)
-3. `supabase/migrations/003_create_clients_table.sql` (Creates `public.clients` table, sequence `CLI-XXXX`, RLS policies, and indexes)
-4. `supabase/migrations/004_create_machine_hour_logs_table.sql` (Creates `public.machine_hour_logs` operation logs, shift integrity, overtime triggers, RLS, and indexes)
-5. `supabase/migrations/005_drop_unwanted_tables.sql` (Drops legacy non-core tables and unlinks orphan columns)
-
-### 5. Run Development Server
-
-```bash
-pnpm dev
-```
-
-Navigate to `http://localhost:3000` in your browser.
+4. **Run Development Server**:
+   ```bash
+   pnpm dev
+   ```
+   Open `http://localhost:3000` in your browser.
 
 ---
 
-## 🔑 Environment Variables
+## 🔐 User Roles & RBAC
 
-```env
-# Supabase Configuration
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your_publishable_key
-SUPABASE_SECRET_KEY=your_service_role_key
-
-# Application Settings
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-
-# SendGrid Email Integration
-SENDGRID_API_KEY=your_sendgrid_api_key
-SENDGRID_FROM_EMAIL=notifications@yourdomain.com
-SENDGRID_FROM_NAME=ReachInternational
-
-# Twilio Messaging (WhatsApp / SMS)
-TWILIO_ACCOUNT_SID=your_twilio_sid
-TWILIO_AUTH_TOKEN=your_twilio_token
-TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
-TWILIO_SMS_NUMBER=+14155238886
-
-# Upstash QStash Cron Security
-QSTASH_CURRENT_SIGNING_KEY=your_qstash_key
-QSTASH_NEXT_SIGNING_KEY=your_next_qstash_key
-```
-
----
-
-## 🔐 13-Role RBAC & Data Scoping Architecture
-
-ReachInternational implements a granular permission matrix enforced across Server Actions (`lib/auth/rbac.ts`), Data Access Layer (`lib/dal.ts`), database RLS policies, and UI elements.
-
-### Supported System Roles
-
-| Role | Scope | Primary Responsibilities |
-|------|-------|--------------------------|
-| `super_admin` | Global (`ORGANIZATION`) | Unrestricted global governance, branch configuration, audit log protection, user role management. |
-| `admin` | Global / Branch | User onboarding, machine master operations, breakdown handling, system oversight. |
-| `branch_manager` | Branch (`BRANCH`) | Branch operational control, equipment catalog, service planning, inventory oversight, FSR review. |
-| `service_manager` | Branch (`BRANCH`) | Service schedule planning, breakdown assignment, engineer dispatch, FSR review & approvals. |
-| `service_engineer` | Assigned (`ASSIGNED`) | Field service execution, breakdown resolution, digital FSR creation, parts usage logging. |
-| `supervisor` | Branch (`BRANCH`) | Machinery breakdown complaint logging, daily operator hour meter log tracking, site movements. |
-| `mechanic` | Assigned (`ASSIGNED`) | Equipment maintenance, repair detail logging, part requests, breakdown assistance. |
-| `operator` | Assigned (`ASSIGNED`) | Streamlined Daily Machine Logs (Machine Name/No/Model, Start/End Timings, Overtime Hours, Breakdown toggle, Remarks). |
-| `store_manager` | Branch (`BRANCH`) | Inventory stock ledger, stock receiving/dispatch, PO creation/approvals, inter-branch transfers. |
-| `hr_manager` | Global (`ORGANIZATION`) | Employee directory, staff onboarding, department/designation management, salary history, user requests. |
-| `rental_manager` | Branch (`BRANCH`) | Rental customer directory, contract agreements, dispatch challans, return inspections, damage routing. |
-| `sales_executive` | Branch (`BRANCH`) | Lead pipeline, customer interactions, opportunities, versioned quotations, sales orders, delivery requests. |
-| `finance_manager` | Global (`ORGANIZATION`) | Billing review, multi-filter invoicing, payment ledgers, receivables aging, 3-way PO matching, expenses. |
-| `client` | Customer Portal | View owned machinery fleet, service history, compliance certificates, and contract status. |
+| Role | Operational Scope | Access Rights |
+|------|-------------------|---------------|
+| `super_admin` | Global System | Full control over machines, operations, user accounts, and system configuration. |
+| `admin` | Global Operations | Add/edit/delete machines, manage users, review all running hour logs, reassign operators. |
+| `service_manager` | Fleet Operations | Oversee machine directory, review running hour logs, export PDF/Excel reports. |
+| `supervisor` | Site Operations | Monitor daily running hour logs, track operator machine assignments, record logs. |
+| `operator` | Field Operations | Submit daily machine running hour logs (`/operations?tab=entry`) and view log history (`/operations?tab=history`). |
 
 ---
 
 ## 🗄 Database Schema
 
-The platform relies on Supabase PostgreSQL with **38+ core tables**, all protected by Row Level Security (RLS) policies and triggers.
+The core database is built on 6 central tables in Supabase PostgreSQL:
 
+1. `public.users`: System user accounts (email, phone, role, city, district, state, status).
+2. `public.machines`: Machine fleet master (machine_code, model, serial_number, manufacturer, year_of_manufacture, hour_meter, customer_name, status).
+3. `public.machine_hour_logs`: Daily running hour logs (machine_id, client_id, operator_id, supervisor_id, log_date, start_time, end_time, start_meter, end_meter, running_hours, overtime_hours, is_breakdown, location, remarks, idempotency_key).
+4. `public.clients`: Registered clients & customer sites (client_code, client_name, contact_person, phone, email, address, city, state).
+5. `public.idempotency_keys`: Replay attack protection & state mutation deduplication key ledger (idempotency_key, user_id, action_name, request_hash, status, response_payload, created_at, expires_at).
+6. `public.audit_logs`: Immutable, append-only security & compliance audit trail (id, user_id, action, entity_type, entity_id, metadata, ip_address, created_at).
+
+---
+
+## 🛡️ Enterprise Security & Defense-in-Depth Architecture
+
+ReachInternational enforces a multi-layered security architecture conforming to **OWASP ASVS 5.0** and **OWASP Top 10** baselines:
+
+1. **Self-Registration Privilege Escalation Guard (`handle_new_user()` trigger & `016_enterprise_security_hardening.sql`)**: PostgreSQL trigger ignores untrusted client metadata, forcing all self-signups to `role = 'operator'` and `status = 'pending'`, requiring explicit administrator dashboard approval before activation.
+2. **Tamper-Proof Append-Only Audit Logging (`public.audit_logs`)**: Security events, state mutations, and replay attack blocks are recorded in an append-only PostgreSQL table protected by RLS (no UPDATE or DELETE policies exist).
+3. **Restricted Machine Mutation RLS (`machines_update_authorized`)**: Operators cannot update machine master records directly via PostgREST; all running hour logs are submitted through audited Server Actions.
+4. **Server-Side Template Injection (SSTI) Defense (`packages/utils/src/ssti.ts`)**: Single-pass, non-evaluating template substitution (`renderSafeTemplate`) with zero dynamic code execution (`eval()`, `new Function()`) and non-recursive replacement.
+5. **Context-Aware HTML Entity Escaping (`apps/web/lib/email.ts` & `email-templates.tsx`)**: All dynamic fields in server HTML email and notification templates pass through `escapeHtml()` to neutralize script and tag injection vectors.
+6. **Spoof-Proof Edge Rate Limiting (`apps/web/proxy.ts` & `lib/security/rate-limiter.ts`)**: Sliding-window rate limiter inspecting canonical platform headers (`cf-connecting-ip`, `x-real-ip`, `true-client-ip`) and extracting rightmost proxy IPs to prevent header-rotation rate limit bypasses.
+7. **Payload & Timeout Bounds (`apps/web/next.config.ts` & `lib/security/timeout.ts`)**: Enforces 1MB Server Action payload limit, 10MB file upload limits on bulk spreadsheets with MIME/extension validation, and 10-second `AbortController` request execution timeout guard (`withExecutionTimeout`).
+8. **OWASP ReDoS Hardening (`packages/validation`)**: Enforces `User Input ↓ Max Length Check ↓ Simple Validation ↓ Safe Linear Regex ↓ Business Validation`. String length bounds (`.max(...)`) are applied on ALL Zod schema fields (`email: max 255`, `password: max 128`, `full_name: max 100`, etc.) before executing non-backtracking linear regexes.
+9. **PostgreSQL Statement Timeouts (`014_set_statement_timeouts_and_dos_guards.sql`)**: Configures `statement_timeout = '10000ms'` (10s), `lock_timeout = '5000ms'`, and `idle_in_transaction_session_timeout = '10000ms'` on PostgreSQL to prevent database connection pool starvation.
+10. **Mobile Client Security & Role Synchronization (`apps/mobile/lib/auth/useAuth.tsx` & `lib/security.ts`)**: Authoritatively verifies user role/status from `public.users` (eliminating insecure role fallbacks), and enforces 15-second client fetch timeouts (`fetchWithTimeout`).
+11. **Server-Only Build Boundaries & Action De-exposure (`lib/notifications/send-reminders.ts`)**: System cron batch jobs are quarantined in internal server modules guarded with `import "server-only"` rather than public `"use server"` Server Action boundaries, preventing unauthorized external HTTP RPC execution.
+12. **Cache Purge Authorization Guard (`apps/web/app/actions/refresh.ts`)**: All cache purging and page revalidation actions strictly enforce `await verifySession()`, neutralizing unauthenticated LPDoS cache invalidation attacks.
+13. **DOM XSS Sanitization (`packages/utils/src/sanitize.ts` & `NotificationPreviewModal.tsx`)**: Raw HTML email previews pass through `sanitizeHtml()` before DOM injection, stripping script tags, iframe embeds, event handlers (`onerror`, `onload`), and pseudo-protocols (`javascript:`).
+14. **Hardware-Backed Mobile Session Persistence (`apps/mobile/lib/supabase.ts`)**: Mobile auth storage utilizes `expo-secure-store` on native iOS (Keychain) and Android (Keystore) for hardware-encrypted token persistence across app lifecycles.
+15. **Strict Content-Security-Policy (`apps/web/next.config.ts`)**: Production CSP enforces `upgrade-insecure-requests`, `form-action 'self'`, `frame-ancestors 'none'`, `object-src 'none'`, and `base-uri 'self'`.
+
+---
+
+## 🧪 Verification & Quality Gate
+
+Run full typecheck across all 9 monorepo workspace packages:
+
+```bash
+pnpm typecheck
 ```
-                           +-------------------+
-                           |     branches      |
-                           +---------+---------+
-                                     | 1:N
-     +-------------------------------+-------------------------------+
-     |                               |                               |
-+----v----+                     +----v----+                     +----v----+
-|  users  |                     |employees|                     |inventory|
-+----+----+                     +----+----+                     +---------+
-     | 1:N                           | 1:N
-+----v----+                     +----v----+
-|machines |<----+ 1:N           |  salary |
-+----+----+     |               +---------+
-     | 1:N      |
-     +----------+----------+-----------------+-----------------+
-     |                     |                 |                 |
-+----v----+           +----v----+       +----v----+       +----v----+
-|services |           |complaint|       |meter log|       | rentals |
-+---------+           +---------+       +---------+       +---------+
-```
-
-### Core Domain Tables Summary
-
-- **Core & Org**: `users` (with PostgreSQL unique constraints & indexes on lower(email) and 10-digit mobile phone number), `employees`, `user_account_requests`.
-- **Machinery Master**: `machines`, `machine_categories`, `machine_assignments`, `machine_hour_logs`, `machine_site_movements`.
-- **Field Service**: `machine_complaints`, `service_records`, `field_service_reports`, `service_part_usage`.
-- **Inventory & Procurement**: `inventory_products`, `inventory_stock`, `inventory_transactions`, `stock_transfers`, `purchase_orders`, `purchase_order_items`, `vendors`, `delivery_challans`.
-- **Rental Operations**: `rental_customers`, `rental_requests`, `rental_agreements`, `rental_delivery_challans`, `rental_return_inspections`, `rental_damage_reports`, `rental_extension_requests`, `rental_billing_requests`, `rental_accessories_log`.
-- **Sales & CRM**: `sales_leads`, `sales_customers`, `sales_customer_interactions`, `sales_opportunities`, `sales_quotations`, `sales_orders`, `sales_machine_reservations`, `sales_delivery_coordinations`, `sales_settings`.
-- **Finance & Accounting**: `finance_invoices`, `finance_invoice_items`, `finance_payments`, `finance_credit_debit_notes`, `finance_expense_categories`, `finance_expenses`, `finance_3way_matching_reviews`, `finance_vendor_payments`, `finance_receivable_followups`, `finance_settings`.
-- **System & Security**: `permissions`, `role_permissions`, `notifications`, `audit_logs`.
-
----
-
-## 🛠 Breakdown Complaints & Digital FSR System
-
-ReachInternational features a complete field service workflow for breakdown complaints:
-
-1. **Malfunction Reporting**: A Supervisor, Admin, Service Manager, or Field Engineer logs a breakdown complaint via `<MachineComplaintModal />` on `/machines?tab=complaints` or via `action=create_complaint`.
-2. **Engineer Dispatch & Multi-Option Filtering**: The complaint is assigned to a Service Engineer or Mechanic with status set to `open`, `in_progress`, or `pending_parts`. The `/machines?tab=complaints` view provides multi-option filters for Status, Machine/Model, Assigned Engineer, and Spare Parts Required.
-3. **Interactive Complaint Detail Modal**: Clicking any row in the complaints table opens `<ComplaintDetailModal />`, providing comprehensive machine specs, reported malfunction details, required spare parts & quantities, hour meter reading, assigned personnel, work log, and direct action triggers.
-4. **Field Service Report (FSR)**: The engineer opens `<FieldServiceReportModal />` via the compact icon-only FSR button, completes component checklists, records work completed/pending, specifies replacement parts, and resolves the issue.
-5. **Managerial Governance & Deletion**: Service Managers and Admins can perform complaint management, editing, or deletion via `deleteComplaint` server action with automatic machine status restoration.
-6. **Digital A4 PDF Generation**: Clicking **"Print / Save PDF"** invokes an iframe print handler generating an exact A4 portrait PDF output with clean text inputs and zero browser header/footer artifacts.
-
----
-
-## 📢 Notification Engine
-
-The system supports automated multi-channel messaging:
-
-- **Daily Operations Summary (Super Admins)**: Automated email containing key operational metrics (total active machines, machines added/completed today, due tomorrow, overdue list, and notification delivery stats).
-- **Personalized Engineer Daily Summary**: Individualized email sent to each active Service Engineer with their assigned machines due tomorrow, overdue items, and recent completion log.
-- **Service Due Reminders**: Automated WhatsApp/SMS/Email notifications dispatched for machines due today, due tomorrow, or overdue.
-
----
-
-## 📁 Monorepo Structure & Shared Packages
-
-```
-reachinternation.com/
-├── apps/
-│   ├── web/                          # Next.js App Router Application (@reachinternational/web)
-│   │   ├── app/                      # Next.js App Router (25 route modules, actions, API routes)
-│   │   ├── components/               # Geist design system UI components & feature modules
-│   │   └── lib/                      # Data Access Layer (DAL), query helpers, & auth re-exports
-│   └── mobile/                       # Expo / React Native Application (@reachinternational/mobile)
-│       ├── app/                      # Expo Router navigation ((auth)/login, (app)/dashboard, my-work, machines)
-│       ├── components/ui/            # Native design system primitives (Button, Input, Card, Badge, ThemeProvider)
-│       ├── components/work/          # My Work field task modals (MeterLogModal, ComplaintStatusModal)
-│       ├── components/machines/      # Fleet machine detail modals (MachineDetailModal)
-│       ├── components/complaints/    # Breakdown complaint reporting modals (CreateComplaintModal)
-│       ├── components/fsr/           # Field Service Report modals (CreateFsrModal)
-│       ├── components/operations/    # Operations & site relocation modals (SiteMovementModal)
-│       ├── components/inventory/     # Inventory part requisition modals (PartRequestModal)
-│       ├── components/rentals/       # Rental return inspection modals (RentalReturnModal)
-│       ├── components/crm/           # CRM lead & activity modals (CreateLeadModal, LogInteractionModal)
-│       ├── components/finance/       # Finance expense claim modals (ExpenseClaimModal)
-│       ├── components/hr/            # HR employee & request modals (EmployeeDetailModal, AccountRequestModal)
-│       ├── components/ui/            # Native design system primitives, OfflineSyncBanner & OptimizedList
-│       └── lib/                      # Supabase client, useAuth, notifications, media, offline-sync, realtime, performance, accessibility, security, testing & environment manager
-├── packages/                         # Canonical Shared Monorepo Packages
-│   ├── types/                        # @reachinternational/types — 22 domain category TypeScript definitions
-│   ├── validation/                   # @reachinternational/validation — Zod schemas across 12 domain categories
-│   ├── permissions/                  # @reachinternational/permissions — 14 roles, 100+ permissions & 3-tier scoping
-│   ├── design-tokens/                # @reachinternational/design-tokens — Light/Dark tokens & Web/RN theme adapters
-│   ├── api-client/                   # @reachinternational/api-client — Shared API response envelopes, error classes & 11 domain endpoint contracts
-│   ├── config/                       # @reachinternational/config — Shared TypeScript/ESLint workspace configs
-│   └── utils/                        # @reachinternational/utils — Platform-neutral date, currency, string, and object helpers
-├── supabase/migrations/              # SQL schema migration scripts (001 - 032)
-├── pnpm-workspace.yaml               # pnpm workspace package declaration
-└── turbo.json                        # Turborepo task pipeline orchestration
-```
-│   ├── layout/                       # AppSidebar, AppHeader, AppShellClient, PublicNavbar
-│   ├── my-work/                      # MyWorkClient task cards & action buttons
-│   ├── machines/                     # MachineListClient, MachineModal, MobileMachineCard
-│   ├── complaints/                   # ComplaintsClient, FieldServiceReportModal, MachineComplaintModal
-│   ├── crm/                          # CrmClient sales suite & quotation builder
-│   ├── rentals/                      # RentalManagementClient hub & delivery modals
-│   ├── finance/                      # FinanceClient 11-tab accounting suite
-│   ├── hr/                           # HRClient employee lifecycle & salary modals
-│   ├── operations/                   # OperationsClient meter logs, site movement & hiring
-│   ├── inventory/                    # StockLedgerClient, StockTransferModal
-│   ├── theme/                        # ThemeToggle (Day/Night & Geist switch)
-│   └── ui/                           # Reusable UI primitives (FilterToolbar, SearchableSelect, etc.)
-├── lib/
-│   ├── auth/rbac.ts                  # Central 13-role permission matrix & capability checks
-│   ├── auth/scope.ts                 # Data access scoping rules (ORGANIZATION, BRANCH, ASSIGNED)
-│   ├── dal.ts                        # Data Access Layer & cached currentUser()
-│   ├── notifications/                # Multi-channel notification engine (SendGrid, Twilio)
-│   ├── queries/                      # Batched database query helpers (finance, sales, rentals, hr, etc.)
-│   └── types/database.ts             # TypeScript database schemas & interface types
-└── supabase/migrations/              # SQL schema migration scripts (001 - 032)
-```
-
----
-
-## ⚙️ Server Actions & API Routes
-
-| Domain | Action File | Core Server Actions |
-|--------|-------------|---------------------|
-| **Machines** | `app/actions/machines.ts` | `createMachine`, `updateMachine`, `deleteMachine`, `reassignMachine` |
-| **Complaints & FSR**| `app/actions/complaints.ts` | `createComplaint`, `updateComplaintStatus`, `resolveComplaintFSR` |
-| **Services** | `app/actions/services.ts` | `completeService`, `updateServiceLog` |
-| **Rentals** | `app/actions/rentals.ts` | `createRentalCustomerAction`, `createRentalAgreementAction`, `dispatchRentalMachineAction`, `recordMachineReturnAction`, `extendRentalContractAction`, `createRentalBillingRequestAction` |
-| **Sales & CRM** | `app/actions/sales.ts` | `createSalesLeadAction`, `convertLeadAction`, `createSalesQuotationAction`, `reviseSalesQuotationAction`, `createSalesOrderAction`, `reserveMachineForSalesAction`, `completeSalesHandoverAction` |
-| **Finance** | `app/actions/finance.ts` | `createInvoiceAction`, `finalizeInvoiceAction`, `recordPaymentAction`, `review3WayMatchAction`, `createExpenseAction`, `approveExpenseAction` |
-| **HR & Payroll** | `app/actions/hr.ts` | `createEmployeeAction`, `changeEmployeeStatusAction`, `createSalaryRevisionAction`, `manageDepartmentAction`, `requestUserAccountAction` |
-| **Operators & Fleet**| `app/actions/operators.ts` | `submitOperatorHourLogAction`, `updateOperatorHourLogAction`, `hireOperatorAction`, `recordOperatorPayoutAction` |
-| **Inventory** | `app/actions/inventory.ts` | `createInventoryProduct`, `recordStockTransaction`, `createStockTransfer`, `approvePurchaseOrderAction`, `archiveProductAction` |
-| **Branches** | `app/actions/branches.ts` | `updateBranchAction`, `deactivateBranchAction`, `getBranches` |
-| **Users & RBAC** | `app/actions/users.ts` | `getAllUsers`, `getPendingUsers`, `createUser`, `editUser`, `approveUser`, `rejectUser` |
-| **Cron API** | `app/api/cron/send-reminders` | Automated daily reminder dispatch (08:00 AM) |
-
----
-
-## 📊 Dashboard & Analytics
-
-Role-tailored home dashboards (`app/(app)/dashboard/page.tsx`):
-
-- **Super Admin / Admin**: Global machinery counts, overdue trend area chart, monthly services completed bar chart, notification delivery stats, and recent activity log.
-- **Finance Manager**: Outstanding receivables aging summary, accounts payable, monthly sales & rental revenues, cash flow overview.
-- **Sales Manager / Executive**: Lead conversion pipeline funnel, open opportunities total value, monthly quotations sent vs. orders won.
-- **Rental Manager**: Rental fleet availability matrix, active rental contracts, machines on rent, pending return inspections.
-- **Store Manager**: Total inventory items, low stock warnings, pending PO approvals (>₹10k), pending inter-branch stock transfers.
-- **HR Manager**: Total employee count, workforce department & designation breakdowns, recent onboardings.
-- **Service Engineer & Mechanic**: Assigned machines due today/tomorrow, overdue service list, assigned breakdown complaints, and quick FSR Launcher.
-- **Operator**: Assigned machine details, current hour meter reading, shift log shortcut.
-
----
-
-## 🚀 Deployment
-
-### Vercel Deployment
-
-1. Connect repository to [Vercel](https://vercel.com).
-2. Configure all environment variables in Vercel project settings.
-3. Deploy build.
-
-### Scheduled Cron Automation
-
-Configure Upstash QStash or Vercel Cron to invoke `POST /api/cron/send-reminders` daily at `08:00 AM`.
-
----
-
-## 📚 Documentation
-
-- [`AGENTS.md`](AGENTS.md) — AI Software Engineer protocol & codebase guidelines.
-- [`AI/RULES/ARCHITECTURE.md`](AI/RULES/ARCHITECTURE.md) — Authoritative Production Architecture Policy for AI Coding Agents.
-- [`AI/RULES/DESIGN-SYSTEM.md`](AI/RULES/DESIGN-SYSTEM.md) — Authoritative Production Design System Policy for AI Coding Agents.
-- [`AI/RULES/UI-UX.md`](AI/RULES/UI-UX.md) — Authoritative Production UI/UX Engineering Policy for AI Coding Agents.
-- [`AI/RULES/PERFORMANCE.md`](AI/RULES/PERFORMANCE.md) — Authoritative Production Performance & Optimization Policy for AI Coding Agents.
-- [`AI/RULES/SECURITY.md`](AI/RULES/SECURITY.md) — Authoritative Production Security Engineering Policy for AI Coding Agents.
-- [`AI/RULES/AUTHENTICATION-AUTHORIZATION.md`](AI/RULES/AUTHENTICATION-AUTHORIZATION.md) — Authoritative Production Authentication & Authorization Policy for AI Coding Agents.
-- [`AI/RULES/DATA-PROTECTION-PRIVACY.md`](AI/RULES/DATA-PROTECTION-PRIVACY.md) — Authoritative Production Data Protection & Privacy Policy for AI Coding Agents.
-- [`AI/RULES/VALIDATION-ERROR-RESILIENCE.md`](AI/RULES/VALIDATION-ERROR-RESILIENCE.md) — Authoritative Production Validation, Error Handling & Resilience Policy for AI Coding Agents.
-- [`AI/RULES/TESTING-QA.md`](AI/RULES/TESTING-QA.md) — Authoritative Production Testing & Quality Assurance Policy for AI Coding Agents.
-- [`AI/RULES/SEO-METADATA-DISCOVERABILITY.md`](AI/RULES/SEO-METADATA-DISCOVERABILITY.md) — Authoritative Production SEO, Metadata & Discoverability Policy for AI Coding Agents.
-- [`AI/RULES/OBSERVABILITY-MONITORING-LOGGING.md`](AI/RULES/OBSERVABILITY-MONITORING-LOGGING.md) — Authoritative Production Observability, Monitoring & Logging Policy for AI Coding Agents.
-- [`AI/RULES/DEPLOYMENT-DEVOPS-RELEASE.md`](AI/RULES/DEPLOYMENT-DEVOPS-RELEASE.md) — Authoritative Production Deployment, DevOps & Release Policy for AI Coding Agents.
-- [`.agents/rules/responsive_cross_platform_design.md`](.agents/rules/responsive_cross_platform_design.md) — Cross-Platform Responsive UI & Touch Standards for AI Coding Agents.
-- [`.agents/rules/web_mobile_ui_consistency.md`](.agents/rules/web_mobile_ui_consistency.md) — Web & Mobile UI Consistency & Design System Rules for AI Coding Agents.
-- [`Mobile/phases.md`](Mobile/phases.md) — AI Agent Execution Plan for Web + Mobile Monorepo Migration.
-- [`docs/current-architecture.md`](docs/current-architecture.md) — Phase 0 Architecture Audit & System Inventory.
-- [`docs/current-dependencies.md`](docs/current-dependencies.md) — Phase 0 Package Manager, Dependency & Environment Audit.
-- [`docs/current-security.md`](docs/current-security.md) — Phase 0 RBAC Matrix, Security Boundaries & RLS Audit.
-- [`docs/current-database.md`](docs/current-database.md) — Phase 0 Database Schema, 35 Migrations & Storage Bucket Audit.
-- [`AI/PROJECT_MEMORY.md`](AI/PROJECT_MEMORY.md) — High-level architecture overview and stack rules.
-- [`AI/STATE.md`](AI/STATE.md) — Persistent project state, health status, and feature completion index.
-- [`AI/CHANGELOG_AI.md`](AI/CHANGELOG_AI.md) — Detailed feature implementation logs.
-
----
-
-## 🗺 Roadmap
-
-### Web + Mobile Monorepo Plan 🚀
-- [x] **Phase 0 — Repository and Production Audit Baseline**: Full inventory of 25 web routes, 18 Server Actions, 19 DAL queries, 35 database migrations, 38+ tables, 13 system roles, and environment secrets protection rules.
-- [x] **Phase 1 — Monorepo Foundation**: Convert repository into pnpm workspace (`apps/web`, `apps/mobile`, `packages/*`) with Turborepo task pipeline orchestration (`turbo.json`).
-- [x] **Phase 2 — Shared Type System**: Modularize canonical domain types into `@reachinternational/types` covering all 22 domain categories.
-- [x] **Phase 3 — Shared Validation Package**: Modularize Zod validation schemas into `@reachinternational/validation` covering all 12 domain categories.
-- [x] **Phase 4 — Shared Permissions Package**: Modularize RBAC matrix & scope definitions into `@reachinternational/permissions` covering 14 roles, 100+ permissions, and 3-tier scoping rules.
-- [x] **Phase 5 — Shared Design Tokens Package**: Modularize brand colors, semantic tokens, typography, and bimodal radius into `@reachinternational/design-tokens` with Web CSS variables and React Native adapters.
-- [x] **Phase 6 — Shared API / Data Contracts**: Create shared API client package `@reachinternational/api-client`.
-- [x] **Phase 7 — Mobile App Foundation**: Initialize Expo React Native application (`apps/mobile`) with Expo Router & Supabase Auth.
-- [x] **Phase 8 — Mobile Shared Layer Integration**: Wire mobile client to shared types, Zod schemas, and design tokens.
-- [x] **Phase 9 — Mobile UI System**: Build mobile design primitives (`Button`, `Card`, `Badge`, `Input`, `MobileHeader`), top/bottom navigation, cards, and bottom sheets.
-- [x] **Phase 10 — Mobile Auth & Profile**: Implement mobile login (mesh gradient hero bloom, platform metrics), password reset, and profile management.
-- [x] **Phase 11 — Mobile Core Role Workflows**: Implement mobile Field Service FSRs, Operator hour meter logs, Breakdown Complaints, Sales, Rentals, HR, and Finance.
-- [x] **Phase 12–33 — Mobile Alignment & Production Distribution**: Web-identical Vercel Geist theme system alignment (`#0a0a0a` canvas, `#171717` cards, `#262626` / `#ebebeb` hairlines, micro-dot status badges, pill CTAs, uppercase Geist Mono eyebrows, branded top header bar) + EAS Internal APK build distribution.
-- [x] **Phase 34 — AI Agent Rule: Strict DESIGN.md & Cross-Platform Responsiveness Protocol**: Authoritative AI agent rules (`.agents/rules/responsive_cross_platform_design.md`, `AI/UI_RULES.md`, `AGENTS.md`) mandating strict Vercel Geist design token compliance (`#171717`, `#fafafa`, `#ffffff`, `#ebebeb`, `#0070f3`) and 3-tier viewport responsiveness across Mobile (≤640px touch cards `block sm:hidden`, scrollable toolbars), Tablet (641px–1023px 2-col grids), and Desktop (≥1024px high-density data tables `hidden sm:block`, hover tooltips `<TooltipWrapper>`).
-
-### Completed Features ✅
-- [x] Mobile Navigation System: 3-Line Hamburger Menu Icon Modal (all 13 main pages) & Contextual Bottom Navbar Submenus (`@reachinternational/mobile`)
-- [x] Comprehensive 13-Role RBAC & Data Access Scoping Architecture (`super_admin`, `admin`, `branch_manager`, `service_manager`, `service_engineer`, `supervisor`, `mechanic`, `operator`, `store_manager`, `hr_manager`, `rental_manager`, `sales_executive`, `finance_manager`, `client`)
-- [x] Live Task & Assignment Workspace (`/my-work`)
-- [x] Breakdown Complaints Management & Malfunction Logging (`/service?tab=complaints`)
-- [x] Digital Field Service Report (FSR) with interactive checklists & A4 PDF / Print export
-- [x] Machine Categories taxonomy & Extended Technical / Compliance tracking (Insurance, RTO Tax, 3rd Party Cert)
-- [x] Multi-Branch Inventory Stock Ledger, PO approval thresholds (>₹10k), & Inter-Branch Stock Transfers (`/inventory`)
-- [x] 7-Tab HR Employee Lifecycle Suite, Payroll Revision History, & Document Repository (`/hr`)
-- [x] 4-Tab Operations Hub (`/operations`), Operator Meter Logbook (`/operations?tab=entry`), Operator History (`/operations?tab=history`), Supervisor Running Hours Logs by Machine, Client, Operator with Month-Wise Filtering & Excel/PDF Exports (`/operations?tab=logs`), Machine Site Movement Ledger (`/operations?tab=site-movement`), & Operator Directory/Payroll (`/operations?tab=operators`)
-- [x] Employee & User Management Hub (`/users`), Admin employee onboarding, staff role assignments, branch location mapping, status toggle (Active/Inactive), temporary password resets, and automatic `users` + `employees` dual-table synchronization
-- [x] 9-Tab Rental Fleet Hub, Agreements, Delivery Challans, Return Inspections, & Damage Routing (`/rentals`)
-- [x] 10-Tab Sales & CRM Suite, Lead Pipeline, Versioned Quotations, & Discount Approvals (`/crm`)
-- [x] 11-Tab Finance Management Suite, 3-Way PO Matching, Receivables Aging, Payments, & Expenses (`/finance`)
-- [x] Vercel Geist Day/Night Theme Switch & 2-Column App Shell with smooth collapsed sidebar
-- [x] Reusable `FilterToolbar` & `SearchableSelect` animated popovers
-- [x] SendGrid multi-channel summary email dispatch & Twilio integration
-
----
-
-## 📄 License
-
-This is an internal enterprise application for **ReachInternational**. All rights reserved.
+Guarantees 0 TypeScript errors across `apps/web`, `apps/mobile`, and `packages/*`.
