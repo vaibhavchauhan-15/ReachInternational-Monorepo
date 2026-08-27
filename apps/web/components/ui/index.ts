@@ -42,6 +42,8 @@ export {
   NotificationsSkeleton,
   ServicesSkeleton,
   UsersSkeleton,
+  OperationsSkeleton,
+  ClientsSkeleton,
 } from "./Skeleton";
 
 // New Enterprise & Motion UI Components

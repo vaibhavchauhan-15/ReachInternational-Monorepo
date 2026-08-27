@@ -358,3 +358,59 @@ export function UsersSkeleton() {
     </div>
   );
 }
+
+export function OperationsSkeleton() {
+  return (
+    <div className="flex flex-col gap-6" aria-label="Loading operations hub...">
+      <SkeletonHeader hasEyebrow hasSubtitle hasAction />
+
+      {/* Tab Strip */}
+      <div className="flex gap-2 overflow-x-auto pb-2 border-b border-[var(--color-hairline)]">
+        <Skeleton className="h-9 w-24 rounded-[var(--radius-md)] shrink-0" />
+        <Skeleton className="h-9 w-28 rounded-[var(--radius-md)] shrink-0" />
+        <Skeleton className="h-9 w-32 rounded-[var(--radius-md)] shrink-0" />
+        <Skeleton className="h-9 w-24 rounded-[var(--radius-md)] shrink-0" />
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <SkeletonKPI count={4} />
+      </div>
+
+      {/* Operations Table / Feed Card */}
+      <Card padding="md" className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row justify-between gap-3">
+          <Skeleton className="h-10 w-full sm:w-72 rounded-[var(--radius-md)]" />
+          <div className="flex gap-2">
+            <Skeleton className="h-10 w-28 rounded-[var(--radius-md)]" />
+            <Skeleton className="h-10 w-28 rounded-[var(--radius-md)]" />
+          </div>
+        </div>
+        <SkeletonTable columns={6} rows={8} />
+      </Card>
+    </div>
+  );
+}
+
+export function ClientsSkeleton() {
+  return (
+    <div className="flex flex-col gap-6" aria-label="Loading clients directory...">
+      <SkeletonHeader hasEyebrow hasSubtitle hasAction />
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <SkeletonKPI count={4} />
+      </div>
+
+      {/* Clients Table Card */}
+      <Card padding="md" className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row justify-between gap-3">
+          <Skeleton className="h-10 w-full sm:w-72 rounded-[var(--radius-md)]" />
+          <Skeleton className="h-10 w-32 rounded-[var(--radius-md)]" />
+        </div>
+        <SkeletonTable columns={5} rows={8} />
+      </Card>
+    </div>
+  );
+}
+
