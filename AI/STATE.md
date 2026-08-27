@@ -1,9 +1,22 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: Phase 106 Complete — Comprehensive Security Audit & Penetration Test Remediation (Mobile Credential Hardening, Self-Mutation RLS Protection, Auth Admin User Creation, Distributed Rate Limiting Safeguards, UUID Format Validation, DAL Caching Optimization, Credential Leakage Elimination)
+- **Phase**: Phase 0 Complete — Performance Optimization: Monorepo Backup & Baseline (Branch: `performance-optimization`, Quality Gates, DB Stats, Route Timing, Index Inventory, Server Actions Map)
 - **Overall Health**: Healthy & Stable (0 TypeScript Errors across Monorepo)
-- **Last Memory Update**: 2026-08-26
+- **Last Memory Update**: 2026-08-27
+
+- [x] **Performance Optimization: Monorepo Backup & Baseline (Phase 0) (2026-08-27)**:
+  - **Git Branch Checkpoint**: Switched to branch `performance-optimization` and created clean snapshot commit `080b9ca`.
+  - **Monorepo Quality Gates**: `pnpm typecheck` PASS (9/9 packages, 0 errors), `pnpm lint` FAIL (652 problems: 281 errors, 371 warnings — legacy `@typescript-eslint/no-explicit-any` in `apps/web`), `pnpm build` PASS (35 routes in 2m 6s).
+  - **Production Browser Baseline (`http://localhost:3000`)**: `/login` (34 reqs, 408.6 KB, 424ms), `/signup` (28 reqs, 11.9 KB, 984ms), protected routes (`/machines`, `/users`, `/clients`, `/operations?tab=logs/assignments/entry/history`) return 307 Redirects via `proxy.ts` in 32–90 ms.
+  - **Database Baseline (Supabase `dhbbgfzbyatzvqafnsqp` / `ap-south-1`)**: Row counts (`users`: 27, `machines`: 1, `machine_hour_logs`: 25, `clients`: 1, `idempotency_keys`: 2, `audit_logs`: 0), 34 active indexes, `statement_timeout = 10s`, `lock_timeout = 5s`, `idle_in_transaction_session_timeout = 10s`.
+  - **Baseline Documentation**: Created `performance/baseline/README.md`, `routes.md`, `database.md`, `queries.md`, `actions.md`, and `build.md`.
+  - **Verification**: Verified 21/21 checklist requirements for Phase 0.
+
+- [x] **Development Rate Limiting Bypass & Production-Only Enforcement (Phase 107) (2026-08-27)**:
+  - **Edge Proxy Rate Limiting Guard (`apps/web/proxy.ts`)**: Conditioned Step 1 LPDoS edge rate limiting guard on `process.env.NODE_ENV === "production"`. Prevents HTTP 429 "Too Many Requests" ("Request rate limit exceeded. LPDoS / Brute-force safeguard active.") errors during local development.
+  - **Rate Limiter Utility Bypass (`apps/web/lib/security/rate-limiter.ts`)**: Added development bypass in `checkRateLimit` and `checkRateLimitAsync` to return `{ success: true, ... }` whenever `process.env.NODE_ENV !== "production"`.
+  - **Verification**: Executed `pnpm typecheck` across all 9 monorepo workspace packages passing cleanly with 0 compilation errors.
 
 - [x] **Comprehensive Security Audit & Penetration Test Remediation (Phase 106) (2026-08-26)**:
   - **Hardcoded Credentials Eradication (F-01 - P1 / CWE-798)**: Removed hardcoded Supabase project URLs and anon key strings across `apps/mobile/lib/supabase.ts`, `apps/mobile/lib/environment.ts`, `apps/web/app/layout.tsx`, `supabase/admin.mjs`, `supabase/exec_migration.mjs`, `supabase/seed.mjs`, `supabase/seed_dummy_data.mjs`. Enforced fail-fast environment variable validation.
