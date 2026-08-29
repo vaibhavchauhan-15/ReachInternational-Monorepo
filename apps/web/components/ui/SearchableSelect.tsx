@@ -132,13 +132,12 @@ export function SearchableSelect({
         type="button"
         disabled={disabled}
         onClick={handleOpenToggle}
-        className={`flex items-center justify-between h-9 w-full px-3 rounded-[var(--radius-sm)] border text-left body-md transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 ${
-          error
+        className={`flex items-center justify-between h-9 w-full px-3 rounded-[var(--radius-sm)] border text-left body-md transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 ${error
             ? "!border-rose-500 dark:!border-rose-400 !bg-rose-500/5 dark:!bg-rose-500/10 focus:!ring-rose-500/20"
             : isOpen
-            ? "border-primary bg-card ring-1 ring-primary text-foreground"
-            : "border-border bg-card text-foreground hover:border-muted-foreground/50"
-        } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+              ? "border-primary bg-card ring-1 ring-primary text-foreground"
+              : "border-border bg-card text-foreground hover:border-muted-foreground/50"
+          } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
@@ -230,11 +229,10 @@ export function SearchableSelect({
                         setSearch("");
                       }}
                       onMouseEnter={() => setHighlightedIndex(idx)}
-                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-[var(--radius-sm)] text-xs text-left transition-colors ${
-                        isHighlighted
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-[var(--radius-sm)] text-xs text-left transition-colors ${isHighlighted
                           ? "bg-muted text-foreground"
                           : "text-foreground hover:bg-muted/60"
-                      } ${isSelected ? "font-semibold text-primary" : ""}`}
+                        } ${isSelected ? "font-semibold text-primary" : ""}`}
                     >
                       <span className="flex items-center gap-2 truncate">
                         {option.icon}

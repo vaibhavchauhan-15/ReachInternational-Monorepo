@@ -466,7 +466,29 @@ export async function getMachineHourMeterLogs(machineId: string) {
   const supabase = createSupabaseAdminClient();
   const { data } = await supabase
     .from("machine_hour_logs")
-    .select("*, operator:users!operator_id(id, full_name)")
+    .select(`
+      id,
+      machine_id,
+      operator_id,
+      supervisor_id,
+      client_id,
+      log_date,
+      start_meter,
+      end_meter,
+      running_hours,
+      start_time,
+      end_time,
+      overtime_hours,
+      normal_working_hours,
+      is_breakdown,
+      shift,
+      machine_condition,
+      location,
+      remarks,
+      idempotency_key,
+      created_at,
+      operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone, email)
+    `)
     .eq("machine_id", machineId)
     .order("log_date", { ascending: false })
     .limit(50);

@@ -1,3 +1,71 @@
+- **Machine Hour Logs Simplification, 12-Hour AM/PM Standardization & Idempotency Fix (`024_remove_fuel_status_and_fix_idempotency.sql`, `OperatorDashboard.tsx`, `operations.tsx`, `packages/`) (2026-08-29)**:
+  - **Removed Fuel Tracking**: Dropped `fuel_consumed` and `start_fuel_level` columns from `public.machine_hour_logs` table, atomic RPC `submit_operator_hour_log_atomic`, Server Actions (`submitOperatorHourLogAction`, `updateOperatorHourLogAction`), DAL queries, and shared types (`MachineHourLog`, `CreateHourLogSchema`).
+  - **Removed Status & Approval System**: Dropped `status` column and `machine_hour_logs_status_check` constraint from the database. Removed status checks, approval workflows, and status overrides from Server Actions, Web components (`OperatorDashboard.tsx`, `OperationsClient.tsx`), and Mobile app (`operations.tsx`, `MeterLogModal.tsx`). Hour logs are now directly recorded and editable on the current date.
+  - **12-Hour AM/PM Standardization**: Implemented universal formatters `formatTo12Hour`, `formatShiftTimingRange`, and `formatCompactTiming` in `@reachinternational/utils`. Applied 12-hour AM/PM formatting across Web tables, mobile touch cards, PDF modal reports, and Excel exports (`06:00 AM — 06:00 PM`).
+  - **Fixed NULL `idempotency_key`**: Identified root causes (missing default value + unkeyed direct inserts). Backfilled all existing records with unique keys, set column-level `DEFAULT ('ihl_' || replace(gen_random_uuid()::text, '-', ''))` on `machine_hour_logs`, and ensured all Web and Mobile submit actions supply unique keys.
+  - **Verification**: `pnpm turbo run typecheck --force` passed with 0 errors across 9 packages in 32.0s; `pnpm --filter @reachinternational/web build` compiled all 35 routes cleanly.
+
+- **Operations Normal Working Time (Excl. OT & 1h Break) & UI Refinements (`OperatorDashboard.tsx`, `023_add_normal_working_hours.sql`, `operators.ts`, `reports.ts`, `machines.ts`, `apps/mobile/`) (2026-08-29)**:
+  - **Redundant CTA Button Removal**: Removed redundant `+ New Log Entry` button from Logs History section header in `<OperatorDashboard>` and updated empty-state guidance to direct users to the dedicated "Log Entry" tab.
+  - **Database Migration & Auto-Calculation Trigger**: Created and executed `023_add_normal_working_hours.sql` adding `normal_working_hours NUMERIC NOT NULL DEFAULT 0` to `public.machine_hour_logs`. Updated PostgreSQL trigger `auto_calculate_machine_hour_log_overtime` and atomic RPC `submit_operator_hour_log_atomic` to automatically enforce: $\text{Normal Working Time} = \max(0, \text{Total Shift Duration} - \text{Overtime} - 1.0\text{h Break})$. Backfilled existing database records.
+  - **Shared Types & Validation**: Added `normal_working_hours` to `MachineHourLog` interface in `packages/types` and `CreateHourLogSchema` in `packages/validation`.
+  - **Backend Server Actions & DAL Queries**: Updated `submitOperatorHourLogAction` and `updateOperatorHourLogAction` in `apps/web/app/actions/operators.ts` to compute and persist `normal_working_hours` and record it in audit logs. Updated `HOUR_LOG_PROJECTION` and `formatHourLogsData` in `apps/web/lib/queries/operators.ts`, as well as `reports.ts` and `machines.ts`.
+  - **Web Frontend & Exports**: Updated `<OperatorDashboard>`, `<OperationsClient>`, `PrintableOperatorLogsModal`, `PrintableSupervisorLogsModal`, and Excel export utilities (`operator-logs-export.ts`, `supervisor-logs-export.ts`) to display timings alongside normal working time (excl. OT and 1h break).
+  - **Mobile App Synchronization**: Updated `apps/mobile/app/(app)/operations.tsx` and `MeterLogModal.tsx` to query, calculate, and display `normal_working_hours` and overtime chips on touch cards and modal dialogs.
+  - **Verification**: `pnpm turbo run typecheck --force` passed with 0 errors across 9 packages in 34.6s; `pnpm --filter @reachinternational/web build` compiled all 35 routes cleanly in 18.2s.
+
+- **Collapsed Sidebar Flyout Dynamic Centering & Measurement Fix (`apps/web/components/layout/sidebar/CollapsedSidebarFlyout.tsx`) (2026-08-29)**:
+  - **Root Cause Remediation**: Resolved bug where initial click positioned the flyout popup ~80px too high due to unmeasured DOM node defaulting to `220px` height before commit phase.
+  - **Item-Count Derived Initial Measurement**: Implemented `getEstimatedFlyoutHeight(subItemCount)` to calculate accurate pixel height for initial render frame (`59 + 40 * count`), preventing any visual shift or upward bias.
+  - **Accurate DOM Height Synchronization**: Added synchronous `setFlyoutRef` ref callback measuring exact DOM height upon element mount, combined with `useIsomorphicLayoutEffect` and `ResizeObserver` for dynamic content changes.
+  - **Caret Beak Dynamic Alignment**: Bound diamond caret beak (`caretTop`) to track the exact vertical center of the clicked icon button (`buttonCenterY - constrainedTop - 6`), with radius boundary clamping (`16px` to `H - 28px`) preventing corner clipping.
+  - **Verification**: `pnpm turbo run typecheck --force` passed with 0 errors across 9 packages in 23.5s; `pnpm --filter @reachinternational/web build` compiled all 35 routes cleanly in 28.6s.
+
+- **Machine Hour Logs Data Fetching & Visibility Fix (`apps/web/lib/queries/operators.ts`, `reports.ts`, `machines.ts`, `apps/mobile/app/(app)/operations.tsx`, `MeterLogModal.tsx`) (2026-08-29)**:
+  - **Schema & Projection Alignment**: Corrected `HOUR_LOG_PROJECTION` in `apps/web/lib/queries/operators.ts` to match the exact schema of `public.machine_hour_logs` (`running_hours`, `location`, `machine:machines!machine_hour_logs_machine_id_fkey`, `client:clients!machine_hour_logs_client_id_fkey`, `operator:users!machine_hour_logs_operator_id_fkey`, `supervisor:users!machine_hour_logs_supervisor_id_fkey`), eliminating schema cache errors (`PGRST100`) and enabling all 26+ logs to fetch properly.
+  - **Data Normalization & Assignments**: Implemented `formatHourLogsData()` for number normalization and `deriveAssignmentsFromMachines()` to populate operator machine assignments.
+  - **Report & Machine Query Hardening**: Updated `apps/web/lib/queries/reports.ts` and `machines.ts` with explicit column projections and foreign key joins.
+  - **Mobile App Synchronization**: Updated `apps/mobile/app/(app)/operations.tsx` and `apps/mobile/components/work/MeterLogModal.tsx` for complete parity across Web and Mobile.
+  - **Verification**: Verified live retrieval of all 26 logs from Supabase; `pnpm turbo run typecheck --force` passed with 0 errors across 9 packages in 26.1s; `pnpm --filter @reachinternational/web build` compiled all 35 routes cleanly in 28.7s.
+
+- **Login Page UI Refinement & Sizing Optimization (`apps/web/app/login/`, `apps/mobile/app/(auth)/login.tsx`) (2026-08-29)**:
+  - **Slightly Wider Authentication Card**: Expanded login card max-width to `max-w-[480px] sm:max-w-[500px]` (from `440px`), giving inputs and controls improved breathing room on widescreen viewports (1536×702+).
+  - **Clean Header**: Removed the subtext paragraph `"Sign in to access your fleet operations and machine activity."` under `"Welcome back"` for an uncluttered header hierarchy.
+  - **Streamlined Footer**: Removed the security badge (`🔐 Authorized personnel only`) to match the clean aesthetic of the registration page.
+  - **Web-to-Mobile Parity**: Synchronized mobile login screen `apps/mobile/app/(auth)/login.tsx` by removing the subtext paragraph and security badge.
+  - **Verification**: `pnpm turbo run typecheck --force` passed with 0 errors across 9 packages in 25.2s; `pnpm --filter @reachinternational/web build` compiled all 35 routes cleanly in 48s.
+
+- **DESIGN.md Button Alignment & Synchronous Double Submission Lock (`apps/web/app/login/`, `apps/web/app/signup/`, `apps/mobile/app/(auth)/`) (2026-08-29)**:
+  - **DESIGN.md App Button Alignment**: Aligned login and signup submit buttons strictly with `button-primary-sm` specification (`rounded-[6px]`, `h-11`, `text-sm font-medium`, `#171717` light / `#fafafa` dark, `active:scale-[0.98]`).
+  - **Synchronous Double Submission Lock**: Replaced form `action` with `onSubmit`, added synchronous `isSubmittingRef = useRef(false)` guard, and locked button instantly on the first tick before asynchronous network dispatch to completely eliminate duplicate server calls.
+  - **High-Visibility Loader2 Spinner**: Integrated native SVG `<Loader2 className="w-4 h-4 animate-spin shrink-0" />` with `"Signing in..."` and `"Creating account..."` labels.
+  - **Navigation State Preservation**: Maintained disabled/loading spinner state during Next.js router redirections.
+  - **Mobile Parity**: Synchronized `shape="square"` and submission ref locks across `apps/mobile/app/(auth)/login.tsx`, `signup.tsx`, and `forgot-password.tsx`.
+  - **Verification**: `pnpm turbo run typecheck --force` passed with 0 errors across 9 packages in 20.1s; `pnpm --filter @reachinternational/web build` compiled all 35 routes cleanly in 59s.
+
+- **Clean & Responsive Login/Signup Optimization (`apps/web/app/login/`, `apps/web/app/signup/`, `apps/mobile/app/(auth)/`) (2026-08-29)**:
+  - **Login Page Cleanup & Responsiveness**: Removed bottom status bar (`ENCRYPTED TLS 1.3` + `SYSTEM OPERATIONAL`) and theme toggle button from `/login`; made left showcase typography and machine visual responsive with fluid scaling (`text-3xl sm:text-4xl lg:text-4xl xl:text-5xl 2xl:text-6xl`, max width 3xl) to fill widescreen (1707×780, 1920×1080) and laptop displays gracefully.
+  - **Signup Page Modernization**: Refactored `/signup` to match the exact 55/45 split industrial enterprise aesthetic as `/login`; removed feature checkmarks cluster and redundant subtext paragraph; implemented responsive 2-column input grid with 48px inputs, password show/hide toggles, animated icons, and high-contrast CTA.
+  - **Mobile Synchronization**: Streamlined mobile signup header and verified zero-clutter authentication experience across all viewports.
+  - **Verification**: `pnpm turbo run typecheck --force` passed (0 errors across 9 packages); `pnpm --filter @reachinternational/web build` compiled all 35 routes cleanly in 29.9s.
+
+- **Enterprise Fleet Login Redesign (`apps/web/app/login/`, `apps/mobile/app/(auth)/login.tsx`) (2026-08-29)**:
+  - **Enterprise Industrial SaaS Direction**: Restructured the authentication experience from a bold marketing landing page to a restrained, technical, sophisticated enterprise fleet platform workspace.
+  - **55/45 Desktop Split & Zero-Scroll Fit**: Bound desktop container to `h-screen h-[100dvh] max-h-screen overflow-hidden` with a 55% visual panel and 45% authentication workspace, guaranteeing zero vertical scrolling on standard desktop and laptop displays.
+  - **Mobile Pure Focus**: Mobile viewports (<1024px) cleanly conceal the left visual showcase to present a dedicated, responsive login card with brand logo and theme switcher.
+  - **Restrained Color Palette & Pure Surfaces**: Removed purple/violet glows and background grid lines; applied Reach Blue (`#00AEEF` dark / `#008FD0` light) for ~7% visual surface, structured near-black/charcoal dark mode surfaces (`#080909`, `#0E1011`, `#111314`, `#17191B`), and cool-gray/white light mode surfaces (`#F7F8FA`, `#F4F6F8`, `#FFFFFF`, `#F1F3F5`).
+  - **Refined 440px Authentication Card**: Floating card with 14px radius, 48px inputs with Reach Blue focus rings, high-contrast action button with micro-animated arrow (`→`), custom checkbox, and subtle security badge (`🔐 Authorized personnel only`).
+  - **Mobile Synchronization**: Synchronized mobile login screen `apps/mobile/app/(auth)/login.tsx` with Reach Fleet copy, Reach Blue accent, and security badge.
+  - **Verification**: `pnpm typecheck` passed (0 compilation errors across all 9 packages); `pnpm --filter @reachinternational/web build` compiled all 35 Next.js App Router routes cleanly in 57s.
+
+- **Login Page Equipment Showcase & Operator Daily Logs System (`apps/web/app/login/`, `OperatorDashboard.tsx`) (2026-08-29)**:
+  - **Login Equipment Showcase**: Integrated `apps/web/public/loginpageimage.png` (transparent PNG boom lift) into `apps/web/app/login/page.tsx` with Next.js `<Image />`, dual-theme technical background grid (`rgba(0,0,0,0.035)` in light / `rgba(255,255,255,0.03)` in dark), soft radial ambient backlight, and grounded elliptical shadow pedestal under the equipment tires.
+  - **Floating Live Telemetry Badges**: Added live floating chips (`Live HMR Tracking` with pulsing emerald dot, `Shift Audit Verified`).
+  - **Role-Aware Messaging**: Updated hero typography, headings, and feature chips to spotlight Operators, Supervisors, and Service Managers for daily shift logging, running hour meters (HMR), supervisor approvals, and 24/7 service dispatch.
+  - **Web-to-Mobile Parity**: Synchronized mobile login screen `apps/mobile/app/(auth)/login.tsx` with identical hero copy, metrics, and role positioning.
+  - **Operator Daily Logs Entry Verification**: Audited and tested the entire Operator Daily Log Entry flow in `apps/web/components/dashboard/OperatorDashboard.tsx` including Section A machine/client auto-detection, Section B HMR meter & shift calculations with IST clock time pickers, Section C pre-shift safety checklists & breakdown progressive disclosure, Section D fuel logging & localStorage draft auto-saving, atomic DB RPC submission, and the Log History tab.
+  - **Quality Gates**: `pnpm typecheck` passed (0 errors across 9 packages); `pnpm --filter @reachinternational/web build` compiled all 35 routes cleanly in 46s.
+
 - **Phase 20 — Final Production Gate & Release Certification (`performance/FINAL-PRODUCTION-GATE.md`) (2026-08-27)**:
   - **Release Certification**: 20-phase master verification audit passed across all subsystems.
   - **Quality Gates**: `pnpm typecheck` passed (0 errors across 9 packages); `pnpm build` compiled all 36 routes cleanly in 51.7s.

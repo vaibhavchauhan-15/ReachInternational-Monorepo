@@ -54,9 +54,9 @@
 ### 4. 📝 Operator Daily Machine Logs & Log History (`/operations` for operators)
 - **Daily Machine Log Entry (`tab=entry`)**:
   - **Section A (Machine & Client Info)**: Auto-populates Machine Model, Serial Number, Client Name, and Client Site Location.
-  - **Section B (Time & Meter Readings)**: Interactive `CustomTimePicker` for Start/End times, quick shift action pills (`06:00 AM`, `08:00 AM`, `02:00 PM`, `08:00 PM`), automatic operating hours & overtime calculation, starting/ending HMR, breakdown duration toggle, and remarks.
+  - **Section B (Time, Meter Readings & Normal Working Time)**: Interactive `CustomTimePicker` for Start/End times, quick shift action pills (`06:00 AM`, `08:00 AM`, `02:00 PM`, `08:00 PM`), automatic 1-hour break deduction, live shift duration breakdown, Overtime computation, Normal Working Time calculation ($\text{Duration} - \text{OT} - 1.0\text{h}$), starting/ending HMR, breakdown duration toggle, and remarks.
 - **Log History (`tab=history`)**:
-  - Operators inspect past submitted daily machine logs with real-time status and breakdown duration indicators.
+  - Operators inspect past submitted daily machine logs with real-time shift timings alongside normal working time (excl. OT), overtime badges, and breakdown duration indicators.
 
 ### 5. 🏢 Client Directory & Address Policy (`/clients`)
 - **Mandatory Client Address Policy**: Every client record strictly requires complete address parameters (Office/Site Street Address, City, and State) across PostgreSQL constraints, Zod schemas, web dialogs, and mobile apps.
@@ -173,7 +173,7 @@ The core database is built on 6 central tables in Supabase PostgreSQL:
 
 1. `public.users`: System user accounts (email, phone, role, city, district, state, status).
 2. `public.machines`: Machine fleet master (machine_code, model, serial_number, manufacturer, year_of_manufacture, hour_meter, customer_name, status).
-3. `public.machine_hour_logs`: Daily running hour logs (machine_id, client_id, operator_id, supervisor_id, log_date, start_time, end_time, start_meter, end_meter, running_hours, overtime_hours, is_breakdown, location, remarks, idempotency_key).
+3. `public.machine_hour_logs`: Daily running hour logs (machine_id, client_id, operator_id, supervisor_id, log_date, start_time, end_time, start_meter, end_meter, running_hours, normal_working_hours, overtime_hours, is_breakdown, location, remarks, idempotency_key).
 4. `public.clients`: Registered clients & customer sites (client_code, client_name, contact_person, phone, email, address, city, state).
 5. `public.idempotency_keys`: Replay attack protection & state mutation deduplication key ledger (idempotency_key, user_id, action_name, request_hash, status, response_payload, created_at, expires_at).
 6. `public.audit_logs`: Immutable, append-only security & compliance audit trail (id, user_id, action, entity_type, entity_id, metadata, ip_address, created_at).

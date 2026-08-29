@@ -18,43 +18,105 @@ const HOUR_LOG_PROJECTION = `
   log_date,
   start_meter,
   end_meter,
+  running_hours,
   start_time,
   end_time,
   overtime_hours,
-  operating_hours,
-  breakdown_hours,
-  breakdown_reason,
+  normal_working_hours,
   is_breakdown,
-  start_fuel_level,
-  fuel_consumed,
   shift,
   machine_condition,
-  site_location,
   location,
   remarks,
-  status,
+  idempotency_key,
   created_at,
-  updated_at,
-  machine:machines(id, machine_id, machine_code, model, serial_number, hour_meter, status),
-  client:clients(id, code, client_name),
+  machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number, hour_meter, status, manufacturer),
+  client:clients!machine_hour_logs_client_id_fkey(id, code, client_name, address, city, state, phone, email),
   operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone, email),
-  supervisor:users!machine_hour_logs_supervisor_id_fkey(id, full_name, phone)
+  supervisor:users!machine_hour_logs_supervisor_id_fkey(id, full_name, phone, email)
 `;
 
-const ASSIGNMENT_PROJECTION = `
-  id,
-  machine_id,
-  operator_id,
-  assigned_by,
-  status,
-  site_location,
-  start_date,
-  end_date,
-  created_at,
-  machine:machines(id, machine_id, machine_code, model, serial_number, hour_meter, status),
-  operator:users!operator_id(id, full_name, phone, email),
-  assigner:users!assigned_by(id, full_name)
-`;
+function formatHourLogsData(rawLogs: any[]): any[] {
+  return (rawLogs || []).map((log) => {
+    const m = log.machine;
+    const code = m?.machine_id || m?.id || "";
+    const startMtr = log.start_meter !== undefined && log.start_meter !== null ? Number(log.start_meter) : 0;
+    const endMtr = log.end_meter !== undefined && log.end_meter !== null ? Number(log.end_meter) : startMtr;
+    const running = log.running_hours !== undefined && log.running_hours !== null
+      ? Number(log.running_hours)
+      : Math.max(0, Math.round((endMtr - startMtr) * 10) / 10);
+    const ot = log.overtime_hours !== undefined && log.overtime_hours !== null ? Number(log.overtime_hours) : 0;
+    
+    // Normal working hours calculation: if stored, use it; otherwise compute from shift duration - ot - 1h break
+    let normalWorking = log.normal_working_hours !== undefined && log.normal_working_hours !== null ? Number(log.normal_working_hours) : null;
+    if (normalWorking === null && log.start_time && log.end_time) {
+      const parseMins = (t: string) => {
+        const match = t.trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
+        if (!match) return null;
+        let h = parseInt(match[1], 10);
+        const mins = parseInt(match[2], 10);
+        if (match[3] === "PM" && h < 12) h += 12;
+        if (match[3] === "AM" && h === 12) h = 0;
+        return h * 60 + mins;
+      };
+      const s = parseMins(log.start_time);
+      const e = parseMins(log.end_time);
+      if (s !== null && e !== null) {
+        let diff = e - s;
+        if (diff < 0) diff += 24 * 60;
+        const dur = Math.round((diff / 60) * 10) / 10;
+        normalWorking = Math.max(0, Math.round((dur - ot - 1.0) * 10) / 10);
+      }
+    }
+
+    return {
+      ...log,
+      start_meter: startMtr,
+      end_meter: endMtr,
+      running_hours: running,
+      overtime_hours: ot,
+      normal_working_hours: normalWorking ?? 8,
+      machine: m
+        ? {
+            ...m,
+            machine_id: code,
+            machine_code: code,
+            machine_name: m.model ? `${code} (${m.model})` : code,
+          }
+        : null,
+    };
+  });
+}
+
+function deriveAssignmentsFromMachines(machines: Machine[]): any[] {
+  return (machines || [])
+    .filter((m: any) => m.current_operator_id || m.current_supervisor_id)
+    .map((m: any) => {
+      const code = m.machine_id || m.machine_code || m.id || "";
+      return {
+        id: `assign-${m.id}`,
+        machine_id: m.id,
+        operator_id: m.current_operator_id,
+        supervisor_id: m.current_supervisor_id,
+        assigned_by: m.current_supervisor_id,
+        status: "active",
+        assigned_at: m.updated_at || m.created_at || new Date().toISOString(),
+        created_at: m.created_at || new Date().toISOString(),
+        machine: {
+          id: m.id,
+          machine_id: code,
+          machine_code: code,
+          machine_name: m.model ? `${code} (${m.model})` : code,
+          model: m.model,
+          serial_number: m.serial_number,
+          hour_meter: m.hour_meter,
+          status: m.status,
+        },
+        operator: m.current_operator || null,
+        assigner: m.current_supervisor || null,
+      };
+    });
+}
 
 /**
  * High-performance, tab-aware operations hub data loader.
@@ -65,10 +127,10 @@ export async function getOperationsHubData(user: User, tab: string = "logs") {
 
   // 1. Operator Entry Tab: Only fetch operator assignment + recent logs
   if (user.role === "operator" || tab === "entry" || tab === "history") {
-    const [assignedMachineRes, recentLogsRes, clientsList] = await Promise.all([
+    const [assignedMachineRes, recentLogsRes, clientsList, allMachinesRes] = await Promise.all([
       supabase
         .from("machines")
-        .select("id, machine_id, machine_code, model, serial_number, hour_meter, status")
+        .select("id, machine_id, model, serial_number, hour_meter, status, manufacturer")
         .eq("current_operator_id", user.id)
         .maybeSingle(),
       supabase
@@ -77,14 +139,19 @@ export async function getOperationsHubData(user: User, tab: string = "logs") {
         .eq("operator_id", user.id)
         .order("log_date", { ascending: false })
         .order("created_at", { ascending: false })
-        .limit(50),
+        .limit(100),
       getClients(undefined, true),
+      getMachines(),
     ]);
+
+    if (recentLogsRes.error) {
+      console.error("Error fetching operator recent logs:", recentLogsRes.error);
+    }
 
     const formattedAssignedMachine = assignedMachineRes.data
       ? (() => {
           const m = assignedMachineRes.data as any;
-          const code = m.machine_id || m.machine_code || m.id;
+          const code = m.machine_id || m.id;
           return {
             ...m,
             machine_id: code,
@@ -94,17 +161,19 @@ export async function getOperationsHubData(user: User, tab: string = "logs") {
         })()
       : null;
 
+    const formattedLogs = formatHourLogsData(recentLogsRes.data || []);
+
     return {
-      machines: [],
+      machines: allMachinesRes.machines,
       dbClients: clientsList,
       operators: [],
       assignments: [],
-      hourLogs: (recentLogsRes.data || []) as any[],
+      hourLogs: formattedLogs,
       siteMovements: [],
       operatorPayouts: [],
       assignedMachine: (formattedAssignedMachine as unknown as Machine) || null,
-      recentLogs: (recentLogsRes.data || []) as unknown as OperatorHourLog[],
-      allMachines: [],
+      recentLogs: formattedLogs as unknown as OperatorHourLog[],
+      allMachines: allMachinesRes.machines as unknown as MachineWithEngineer[],
     };
   }
 
@@ -113,49 +182,39 @@ export async function getOperationsHubData(user: User, tab: string = "logs") {
     machinesRes,
     clientsList,
     operatorsRes,
-    assignmentsRes,
     hourLogsRes,
-    siteMovementsRes,
-    payoutsRes,
   ] = await Promise.all([
     getMachines(),
     getClients(undefined, true),
     supabase
       .from("users")
       .select("id, full_name, email, phone, role, status")
-      .in("role", ["operator", "mechanic", "supervisor", "service_engineer"])
-      .neq("status", "inactive"),
-    supabase
-      .from("machine_assignments")
-      .select(ASSIGNMENT_PROJECTION)
-      .order("created_at", { ascending: false })
-      .limit(100),
+      .in("role", ["operator", "mechanic", "supervisor", "service_engineer", "admin", "super_admin", "service_manager"])
+      .neq("status", "inactive")
+      .order("full_name"),
     supabase
       .from("machine_hour_logs")
       .select(HOUR_LOG_PROJECTION)
       .order("log_date", { ascending: false })
       .order("created_at", { ascending: false })
-      .limit(200),
-    supabase
-      .from("machine_site_movements")
-      .select("id, machine_id, movement_date, from_site, to_site, remarks, created_at, machine:machines(id, machine_code, model), operator:users!operator_id(id, full_name)")
-      .order("movement_date", { ascending: false })
-      .limit(50),
-    supabase
-      .from("operator_payouts")
-      .select("id, operator_id, amount, status, period_start, period_end, created_at, operator:users!operator_id(id, full_name, phone)")
-      .order("created_at", { ascending: false })
-      .limit(50),
+      .limit(500),
   ]);
+
+  if (hourLogsRes.error) {
+    console.error("Error fetching supervisor hour logs:", hourLogsRes.error);
+  }
+
+  const formattedLogs = formatHourLogsData(hourLogsRes.data || []);
+  const derivedAssignments = deriveAssignmentsFromMachines(machinesRes.machines);
 
   return {
     machines: machinesRes.machines,
     dbClients: clientsList,
     operators: (operatorsRes.data || []) as User[],
-    assignments: (assignmentsRes.data || []) as any[],
-    hourLogs: (hourLogsRes.data || []) as any[],
-    siteMovements: (siteMovementsRes.data || []) as any[],
-    operatorPayouts: (payoutsRes.data || []) as any[],
+    assignments: derivedAssignments,
+    hourLogs: formattedLogs,
+    siteMovements: [],
+    operatorPayouts: [],
     assignedMachine: null,
     recentLogs: [],
     allMachines: machinesRes.machines as unknown as MachineWithEngineer[],
@@ -166,7 +225,7 @@ export async function getOperatorEntryContext(operatorId: string) {
   const supabase = createSupabaseAdminClient();
   const { data: machine } = await supabase
     .from("machines")
-    .select("id, machine_id, machine_code, model, serial_number, hour_meter, status")
+    .select("id, machine_id, model, serial_number, hour_meter, status, manufacturer")
     .eq("current_operator_id", operatorId)
     .maybeSingle();
 

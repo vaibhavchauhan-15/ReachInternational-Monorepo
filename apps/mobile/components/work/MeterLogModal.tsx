@@ -42,19 +42,44 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   const [endMeter, setEndMeter] = useState('0');
   const [startTime, setStartTime] = useState('08:00 AM');
   const [endTime, setEndTime] = useState('05:00 PM');
+  const [overtimeHours, setOvertimeHours] = useState('0');
   const [location, setLocation] = useState('');
   const [remarks, setRemarks] = useState('');
   const [isBreakdown, setIsBreakdown] = useState(false);
   const [breakdownDuration, setBreakdownDuration] = useState('1h 30m');
 
   // Client Selection
-  const [clients, setClients] = useState<Array<{ id: string; name: string; address?: string; city?: string; state?: string }>>([]);
+  const [clients, setClients] = useState<Array<{ id: string; name: string; client_name?: string; address?: string; city?: string; state?: string }>>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [clientModalVisible, setClientModalVisible] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+
+  // Shift normal working time and overtime calculation
+  const shiftStats = React.useMemo(() => {
+    const parseMins = (t: string) => {
+      const match = t.trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
+      if (!match) return null;
+      let h = parseInt(match[1], 10);
+      const m = parseInt(match[2], 10);
+      if (match[3] === 'PM' && h < 12) h += 12;
+      if (match[3] === 'AM' && h === 12) h = 0;
+      return h * 60 + m;
+    };
+    const s = parseMins(startTime);
+    const e = parseMins(endTime);
+    if (s === null || e === null) {
+      return { duration: 9, normal: 8, ot: parseFloat(overtimeHours) || 0 };
+    }
+    let diff = e - s;
+    if (diff <= 0) diff += 24 * 60;
+    const dur = Math.round((diff / 60) * 10) / 10;
+    const ot = parseFloat(overtimeHours) || (dur > 9 ? Math.round((dur - 9) * 10) / 10 : 0);
+    const normal = Math.max(0, Math.round((dur - ot - 1.0) * 10) / 10);
+    return { duration: dur, normal, ot };
+  }, [startTime, endTime, overtimeHours]);
 
   useEffect(() => {
     if (visible) {
@@ -71,9 +96,18 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     try {
       const { data } = await supabase
         .from('clients')
-        .select('id, name, address, city, state')
-        .order('name');
-      if (data) setClients(data);
+        .select('id, client_name, address, city, state')
+        .order('client_name');
+      if (data) {
+        setClients(data.map((c: any) => ({
+          id: c.id,
+          name: c.client_name || 'Client',
+          client_name: c.client_name,
+          address: c.address,
+          city: c.city,
+          state: c.state,
+        })));
+      }
     } catch (e) {
       console.warn('Error fetching clients:', e);
     }
@@ -153,9 +187,10 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         remarksPayload = `[Breakdown Duration: ${breakdownDuration.trim()}] ${remarksPayload}`.trim();
       }
 
+      const idempotencyKey = `ihl_m_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+
       const payload: any = {
         machine_id: machineId || null,
-        machine_code: machineCode || 'MCH-001',
         client_id: selectedClientId || null,
         location: location.trim() || null,
         start_meter: startVal,
@@ -163,10 +198,12 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         running_hours: runningHours,
         start_time: startTime.trim(),
         end_time: endTime.trim(),
+        overtime_hours: shiftStats.ot,
+        normal_working_hours: shiftStats.normal,
         is_breakdown: isBreakdown,
         remarks: remarksPayload || null,
         operator_id: userId || null,
-        status: 'approved',
+        idempotency_key: idempotencyKey,
         log_date: new Date().toISOString().split('T')[0],
       };
 
@@ -310,6 +347,26 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                   value={endTime}
                   onChangeText={setEndTime}
                 />
+              </View>
+            </View>
+
+            <Input
+              label="Overtime Hours (Optional)"
+              placeholder="e.g. 0.0"
+              value={overtimeHours}
+              onChangeText={setOvertimeHours}
+              keyboardType="numeric"
+            />
+
+            {/* Shift Breakdown Box */}
+            <View style={[styles.calcBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, padding: spacingNumeric.sm }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={{ fontSize: 11, color: theme.colors.mute }}>Shift Duration:</Text>
+                <Text style={{ fontSize: 11, fontFamily: 'GeistMono_700Bold', color: theme.colors.ink }}>{shiftStats.duration} hrs (1h break)</Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 11, color: theme.colors.link, fontWeight: '700' }}>Normal Working Time:</Text>
+                <Text style={{ fontSize: 11, fontFamily: 'GeistMono_700Bold', color: theme.colors.link }}>{shiftStats.normal} hrs (excl. OT)</Text>
               </View>
             </View>
 

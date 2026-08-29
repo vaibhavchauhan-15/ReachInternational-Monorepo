@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -12,10 +12,12 @@ export default function ForgotPasswordScreen() {
 
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [message, setMessage] = useState('');
   const [isSuccess, setIsSuccess] = useState(false);
 
   const handleReset = async () => {
+    if (isSubmittingRef.current || isLoading) return;
     if (!email || !email.includes('@')) {
       setMessage('Please enter a valid registered email address.');
       setIsSuccess(false);
@@ -23,6 +25,7 @@ export default function ForgotPasswordScreen() {
     }
 
     setMessage('');
+    isSubmittingRef.current = true;
     setIsLoading(true);
 
     try {
@@ -38,6 +41,7 @@ export default function ForgotPasswordScreen() {
       setMessage('Failed to send reset email. Please try again.');
       setIsSuccess(false);
     } finally {
+      isSubmittingRef.current = false;
       setIsLoading(false);
     }
   };
@@ -114,7 +118,7 @@ export default function ForgotPasswordScreen() {
             label="Send Reset Instructions"
             onPress={handleReset}
             isLoading={isLoading}
-            shape="pill"
+            shape="square"
             fullWidth
             style={styles.btn}
           />

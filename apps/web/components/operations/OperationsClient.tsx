@@ -1071,7 +1071,10 @@ export function OperationsClient({
                                 </div>
                               </td>
                               <td className="px-4 py-3 font-mono font-semibold text-center text-[var(--color-ink)] whitespace-nowrap">
-                                {formatCompactTiming(log.start_time, log.end_time)}
+                                <div>{formatCompactTiming(log.start_time, log.end_time)}</div>
+                                <div className="text-[10px] text-sky-600 dark:text-sky-400 font-bold">
+                                  {(log as any).normal_working_hours ?? 8}h normal
+                                </div>
                               </td>
                               <td className="px-4 py-3 font-bold font-mono text-center whitespace-nowrap">
                                 <span className="text-sky-600 dark:text-sky-400">{runningHours}h</span>
@@ -1109,7 +1112,10 @@ export function OperationsClient({
                                 )}
                               </td>
                               <td className="px-4 py-3 font-mono font-semibold text-center text-[var(--color-ink)] whitespace-nowrap">
-                                {formatCompactTiming(log.start_time, log.end_time)}
+                                <div>{formatCompactTiming(log.start_time, log.end_time)}</div>
+                                <div className="text-[10px] text-sky-600 dark:text-sky-400 font-bold">
+                                  {(log as any).normal_working_hours ?? 8}h normal
+                                </div>
                               </td>
                               <td className="px-4 py-3 font-bold font-mono text-center whitespace-nowrap">
                                 <span className="text-sky-600 dark:text-sky-400">{runningHours}h</span>

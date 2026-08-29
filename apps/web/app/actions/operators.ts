@@ -98,6 +98,26 @@ async function checkShiftOverlapServer(
   return { hasOverlap: false };
 }
 
+function computeNormalWorkingHours(startStr?: string, endStr?: string, overtimeHours: number = 0): number {
+  if (!startStr || !endStr) return 0;
+  const parseMins = (t: string) => {
+    const match = t.trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
+    if (!match) return null;
+    let h = parseInt(match[1], 10);
+    const m = parseInt(match[2], 10);
+    if (match[3] === "PM" && h < 12) h += 12;
+    if (match[3] === "AM" && h === 12) h = 0;
+    return h * 60 + m;
+  };
+  const s = parseMins(startStr);
+  const e = parseMins(endStr);
+  if (s === null || e === null) return 0;
+  let diff = e - s;
+  if (diff < 0) diff += 24 * 60;
+  const duration = Math.round((diff / 60) * 10) / 10;
+  return Math.max(0, Math.round((duration - overtimeHours - 1.0) * 10) / 10);
+}
+
 export async function submitOperatorHourLogAction(payload: {
   machineId: string;
   clientId?: string;
@@ -107,13 +127,10 @@ export async function submitOperatorHourLogAction(payload: {
   endTime?: string;
   overtimeHours?: number;
   isBreakdown?: boolean;
-  startFuelLevel?: number;
-  fuelConsumed?: number;
   shift?: string;
   machineCondition?: "good" | "fair" | "needs_attention" | "breakdown";
   location?: string;
   remarks?: string;
-  status?: "submitted" | "draft";
   idempotencyKey?: string;
 }): Promise<{ success: boolean; data?: unknown; error?: string }> {
   // SECURITY (F04): Require authenticated user with appropriate role for hour log submission
@@ -171,6 +188,7 @@ export async function submitOperatorHourLogAction(payload: {
 
   // Use manually entered overtime_hours from payload (or default to 0)
   const manualOvertime = payload.overtimeHours ?? 0;
+  const normalWorkingHours = computeNormalWorkingHours(payload.startTime, payload.endTime, manualOvertime);
 
   // Try atomic PostgreSQL RPC execution first (1 round-trip for log insert + machine update + audit)
   const { data: rpcResult, error: rpcError } = await supabase.rpc("submit_operator_hour_log_atomic", {
@@ -184,14 +202,12 @@ export async function submitOperatorHourLogAction(payload: {
     p_end_time: payload.endTime || null,
     p_overtime_hours: manualOvertime,
     p_is_breakdown: payload.isBreakdown ?? (effectiveCondition === "breakdown"),
-    p_start_fuel_level: payload.startFuelLevel || 0,
-    p_fuel_consumed: payload.fuelConsumed || 0,
     p_shift: payload.shift || null,
     p_machine_condition: effectiveCondition,
     p_location: payload.location || null,
     p_remarks: payload.remarks || null,
-    p_status: payload.status || "submitted",
     p_idempotency_key: currentIdempotencyKey,
+    p_normal_working_hours: normalWorkingHours,
   });
 
   if (!rpcError && rpcResult && (rpcResult as { success?: boolean }).success) {
@@ -223,14 +239,12 @@ export async function submitOperatorHourLogAction(payload: {
       start_time: payload.startTime || null,
       end_time: payload.endTime || null,
       overtime_hours: manualOvertime,
+      normal_working_hours: normalWorkingHours,
       is_breakdown: payload.isBreakdown ?? (effectiveCondition === "breakdown"),
-      start_fuel_level: payload.startFuelLevel || 0,
-      fuel_consumed: payload.fuelConsumed || 0,
       shift: payload.shift || null,
       machine_condition: effectiveCondition,
       location: payload.location || null,
       remarks: payload.remarks || null,
-      status: payload.status || "submitted",
       idempotency_key: currentIdempotencyKey,
     })
     .select()
@@ -278,7 +292,6 @@ export async function submitOperatorHourLogAction(payload: {
       endTime: payload.endTime,
       overtimeHours: payload.overtimeHours,
       isBreakdown: payload.isBreakdown,
-      fuelConsumed: payload.fuelConsumed,
       condition: effectiveCondition,
       idempotencyKey: currentIdempotencyKey,
     },
@@ -301,8 +314,6 @@ export async function updateOperatorHourLogAction(payload: {
   endTime?: string;
   overtimeHours?: number;
   isBreakdown?: boolean;
-  startFuelLevel?: number;
-  fuelConsumed?: number;
   shift?: string;
   machineCondition?: "good" | "fair" | "needs_attention" | "breakdown";
   location?: string;
@@ -313,7 +324,7 @@ export async function updateOperatorHourLogAction(payload: {
 
   const supabase = createSupabaseAdminClient();
 
-  // Fetch existing log to verify ownership and status
+  // Fetch existing log to verify ownership
   const { data: existingLog } = await supabase
     .from("machine_hour_logs")
     .select("*")
@@ -352,6 +363,7 @@ export async function updateOperatorHourLogAction(payload: {
   }
 
   const manualOvertime = payload.overtimeHours ?? 0;
+  const normalWorkingHours = computeNormalWorkingHours(targetStartTime, targetEndTime, manualOvertime);
 
   const { data, error } = await supabase
     .from("machine_hour_logs")
@@ -362,14 +374,12 @@ export async function updateOperatorHourLogAction(payload: {
       start_time: targetStartTime || null,
       end_time: targetEndTime || null,
       overtime_hours: manualOvertime,
+      normal_working_hours: normalWorkingHours,
       is_breakdown: payload.isBreakdown ?? (effectiveCondition === "breakdown"),
-      start_fuel_level: payload.startFuelLevel || 0,
-      fuel_consumed: payload.fuelConsumed || 0,
       shift: payload.shift || existingLog.shift || null,
       machine_condition: effectiveCondition,
       location: payload.location || null,
       remarks: payload.remarks || null,
-      status: "submitted",
     })
     .eq("id", payload.logId)
     .select()
@@ -388,7 +398,13 @@ export async function updateOperatorHourLogAction(payload: {
     action: "operator.log_corrected",
     entity_type: "machine_hour_log",
     entity_id: payload.logId,
-    metadata: { endMeter: endMtr, startTime: payload.startTime, endTime: payload.endTime },
+    metadata: {
+      endMeter: endMtr,
+      startTime: payload.startTime,
+      endTime: payload.endTime,
+      overtimeHours: manualOvertime,
+      normalWorkingHours,
+    },
   });
 
   revalidateTag(CACHE_TAGS.machines, "max");

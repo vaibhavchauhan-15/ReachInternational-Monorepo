@@ -290,12 +290,14 @@ export interface MachineHourLog {
   running_hours: number;
   location: string | null;
   remarks: string | null;
-  fuel_consumed?: number | null;
   shift?: "shift_1" | "shift_2" | "shift_3" | "custom" | string | null;
+  machine_condition?: "good" | "fair" | "needs_attention" | "breakdown" | string | null;
   start_time?: string | null;
   end_time?: string | null;
   overtime_hours?: number | null;
+  normal_working_hours?: number | null;
   is_breakdown?: boolean | null;
+  idempotency_key?: string | null;
   created_at: string;
   operator?: Pick<User, "id" | "full_name" | "phone" | "email"> | null;
   supervisor?: Pick<User, "id" | "full_name" | "phone" | "email"> | null;

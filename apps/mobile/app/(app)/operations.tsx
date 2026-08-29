@@ -13,6 +13,7 @@ import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { formatShiftTimingRange, formatTo12Hour } from '@reachinternational/utils';
 import {
   Clock,
   Gauge,
@@ -38,8 +39,9 @@ export interface HourLogRecord {
   running_hours: number;
   start_time?: string;
   end_time?: string;
+  overtime_hours?: number;
+  normal_working_hours?: number;
   location?: string;
-  status: string;
   is_breakdown: boolean;
   remarks?: string;
   operator_id?: string;
@@ -71,24 +73,22 @@ export default function OperationsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'approved' | 'pending' | 'breakdowns'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'breakdowns'>('all');
 
-  // Meter Log Modal
+  // Modal State
   const [meterModalVisible, setMeterModalVisible] = useState(false);
-  const [selectedMachineForLog, setSelectedMachineForLog] = useState<{ id: string; code: string; model?: string; serial?: string }>({
-    id: '',
-    code: '',
-  });
+  const [selectedMachineForLog, setSelectedMachineForLog] = useState<{ id?: string; code: string; model?: string; serial?: string }>({ code: '' });
 
   const fetchOperationsData = useCallback(async () => {
     try {
+      setIsLoading(true);
+
       // 1. Fetch Hour Logs
       let query = supabase
         .from('machine_hour_logs')
         .select(`
           id,
           machine_id,
-          machine_code,
           log_date,
           shift,
           start_meter,
@@ -96,18 +96,19 @@ export default function OperationsScreen() {
           running_hours,
           start_time,
           end_time,
+          overtime_hours,
+          normal_working_hours,
           location,
-          status,
           is_breakdown,
           remarks,
           operator_id,
           client_id,
-          machine:machines!machine_hour_logs_machine_id_fkey(machine_id, model, serial_number),
-          operator:users!machine_hour_logs_operator_id_fkey(full_name),
-          client:clients!machine_hour_logs_client_id_fkey(name)
+          machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number),
+          operator:users!machine_hour_logs_operator_id_fkey(id, full_name),
+          client:clients!machine_hour_logs_client_id_fkey(id, client_name)
         `)
         .order('log_date', { ascending: false })
-        .limit(60);
+        .limit(100);
 
       if (isOperator && user?.id) {
         query = query.eq('operator_id', user.id);
@@ -117,7 +118,12 @@ export default function OperationsScreen() {
       if (logsError) {
         console.warn('Error fetching logs:', logsError);
       } else if (logsData) {
-        setLogs(logsData as any);
+        const formatted = logsData.map((l: any) => ({
+          ...l,
+          machine_code: l.machine?.machine_id || l.machine_id || 'Machine',
+          client: l.client ? { name: l.client.client_name } : null,
+        }));
+        setLogs(formatted as any);
       }
 
       // 2. Fetch Assignments
@@ -129,8 +135,10 @@ export default function OperationsScreen() {
           model,
           serial_number,
           status,
-          supervisor:users!machines_supervisor_id_fkey(full_name),
-          operator:users!machines_operator_id_fkey(full_name)
+          current_operator_id,
+          current_supervisor_id,
+          supervisor:users!machines_current_supervisor_id_fkey(id, full_name),
+          operator:users!machines_current_operator_id_fkey(id, full_name)
         `)
         .order('created_at', { ascending: false });
 
@@ -175,8 +183,6 @@ export default function OperationsScreen() {
       (log.location && log.location.toLowerCase().includes(q));
 
     let matchesStatus = true;
-    if (statusFilter === 'approved') matchesStatus = log.status === 'approved';
-    if (statusFilter === 'pending') matchesStatus = log.status === 'pending';
     if (statusFilter === 'breakdowns') matchesStatus = log.is_breakdown === true;
 
     return matchesSearch && matchesStatus;
@@ -363,8 +369,6 @@ export default function OperationsScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
               {[
                 { key: 'all', label: `All Logs (${logs.length})` },
-                { key: 'approved', label: 'Approved' },
-                { key: 'pending', label: 'Pending' },
                 { key: 'breakdowns', label: 'Breakdowns' },
               ].map((f) => {
                 const isActive = statusFilter === f.key;
@@ -427,15 +431,20 @@ export default function OperationsScreen() {
                       </View>
 
                       <View style={styles.badgeColumn}>
-                        {log.is_breakdown && (
+                        {log.is_breakdown ? (
                           <View style={[styles.breakdownBadge, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error }]}>
                             <AlertTriangle size={11} color={theme.colors.error} />
                             <Text style={[styles.breakdownBadgeText, { color: theme.colors.error }]}>
                               {breakdownText}
                             </Text>
                           </View>
+                        ) : (
+                          <View style={[styles.breakdownBadge, { backgroundColor: theme.colors.success + '1a', borderColor: theme.colors.success }]}>
+                            <Text style={[styles.breakdownBadgeText, { color: theme.colors.success }]}>
+                              Normal
+                            </Text>
+                          </View>
                         )}
-                        <Badge status={log.status === 'approved' ? 'success' : 'pending'} customLabel={log.status === 'approved' ? 'Approved' : 'Pending'} />
                       </View>
                     </View>
 
@@ -465,10 +474,32 @@ export default function OperationsScreen() {
                           <Text style={[styles.specsValue, { color: theme.colors.ink }]}>{log.end_meter} hrs</Text>
                         </View>
                         <View style={styles.specsItem}>
-                          <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Running (WT)</Text>
+                          <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Running Meter</Text>
                           <Text style={[styles.specsValue, { color: theme.colors.link }]}>{log.running_hours} hrs</Text>
                         </View>
                       </View>
+
+                      {/* Shift Timings & Normal Working Time */}
+                      <View style={[styles.specsDivider, { backgroundColor: theme.colors.hairline }]} />
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacingNumeric.xs, paddingVertical: 2 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Clock size={11} color={theme.colors.mute} />
+                          <Text style={{ fontSize: 11, fontFamily: 'GeistMono_700Bold', color: theme.colors.ink }}>
+                            {formatShiftTimingRange(log.start_time, log.end_time)}
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 11, fontFamily: 'GeistMono_700Bold', color: theme.colors.link }}>
+                          {log.normal_working_hours ?? 8}h normal
+                        </Text>
+                      </View>
+
+                      {log.overtime_hours ? (
+                        <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: spacingNumeric.xs }}>
+                          <Text style={{ fontSize: 10, fontFamily: 'GeistMono_700Bold', color: '#d97706' }}>
+                            +{log.overtime_hours}h Overtime
+                          </Text>
+                        </View>
+                      ) : null}
 
                       {(log.client?.name || log.location) && (
                         <>

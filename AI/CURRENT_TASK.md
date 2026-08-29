@@ -1,22 +1,148 @@
 # Current Task Context
 
-## Completed Task (2026-08-27) — Phase 20: Final Production Gate & Release Certification
+## Completed Task (2026-08-29) — Machine Hour Logs Simplification, 12-Hour AM/PM Standardization & Idempotency Fix (`024_remove_fuel_status_and_fix_idempotency.sql`, `OperatorDashboard.tsx`, `operations.tsx`, `packages/`)
 
-**Goal**: Execute comprehensive 20-phase master verification audit, run monorepo typecheck and production build, evaluate hard NO-GO conditions, and issue formal production sign-off in `performance/FINAL-PRODUCTION-GATE.md`.
+**Goal**: 
+1. **Remove Fuel Tracking**: Eliminate `fuel_consumed` and `start_fuel_level` columns from `machine_hour_logs` table, RPC function, Server Actions, DAL queries, shared types, and web/mobile forms since fuel logs are not tracked.
+2. **Remove Approval System & Status**: Drop `status` column and `machine_hour_logs_status_check` constraint from database, removing verification/approval requirements so all hour logs are directly recorded in the database.
+3. **12-Hour AM/PM Time Format**: Enforce canonical 12-hour AM/PM format (e.g. `06:00 AM — 06:00 PM`) for all shift timings across Web tables, Mobile touch cards, PDF modals, and Excel export reports.
+4. **Fix Null `idempotency_key`**: Backfilled all existing NULL keys, added a PostgreSQL column-level `DEFAULT ('ihl_' || replace(gen_random_uuid()::text, '-', ''))` generator, and ensured all Web & Mobile insertion pathways generate and provide unique keys.
 
-### Key Verification & Deliverables
+### Key Deliverables & Implementation Details
 
-1. **Master Release Audit (`performance/FINAL-PRODUCTION-GATE.md`)**:
-   - Release Candidate `v2026.08.27-rc1` certified for immediate rollout.
-   - Master verification matrix: 20/20 phases marked 🟢 PASS.
-   - NO-GO Checklist: 0 P0, 0 P1, 0 P2 issues.
-2. **Quality Gates Passed**:
-   - `pnpm typecheck`: 0 errors across all 9 monorepo packages.
-   - `pnpm build`: 36/36 Next.js routes compiled cleanly in 51.7s.
-3. **Final Production Gate Decision**:
-   - **🟢 GO LIVE — APPROVED FOR PRODUCTION**.
+1. **Database Migration (`supabase/migrations/024_remove_fuel_status_and_fix_idempotency.sql`)**:
+   - Dropped `fuel_consumed` and `start_fuel_level` columns from `public.machine_hour_logs`.
+   - Dropped `machine_hour_logs_status_check` constraint and `status` column from `public.machine_hour_logs`.
+   - Backfilled all existing rows where `idempotency_key IS NULL` with unique `ihl_<uuid>` values.
+   - Set default expression on `public.machine_hour_logs.idempotency_key`: `('ihl_' || replace(gen_random_uuid()::text, '-', ''))`.
+   - Re-created atomic RPC `public.submit_operator_hour_log_atomic` without fuel/status arguments and with idempotency key fallback.
+   - Applied migration cleanly to live Supabase project `dhbbgfzbyatzvqafnsqp`.
+
+2. **Shared Packages (`packages/utils`, `packages/types`, `packages/validation`)**:
+   - Added `formatTo12Hour`, `formatShiftTimingRange`, `formatCompactTiming` in `packages/utils/src/date.ts` and exported via `@reachinternational/utils`.
+   - Removed `fuel_consumed`, `start_fuel_level`, and `status` from `MachineHourLog` interface in `packages/types/src/database.ts`.
+   - Removed `fuel_consumed` and `status` from `CreateHourLogSchema` in `packages/validation/src/hourMeter.ts`.
+
+3. **Web Backend Server Actions & DAL (`apps/web/app/actions/operators.ts`, `apps/web/lib/queries/`)**:
+   - Updated `submitOperatorHourLogAction` and `updateOperatorHourLogAction` to omit fuel/status properties and pass required fields to RPC/DB.
+   - Updated `HOUR_LOG_PROJECTION` in `apps/web/lib/queries/operators.ts` to select `idempotency_key` and omit fuel/status columns.
+   - Updated `getMachineHourMeterLogs` in `apps/web/lib/queries/machines.ts` and `getOperationsReportData` in `apps/web/lib/queries/reports.ts`.
+
+4. **Web Frontend Components & Exports (`OperatorDashboard.tsx`, `OperationsClient.tsx`, PDF Modals, Excel)**:
+   - Formatted all shift timings using `formatShiftTimingRange` and `formatTo12Hour` across desktop tables, mobile history cards, and confirmation modal.
+   - Removed status checks and status overrides, enabling direct editing for today's logs.
+   - Updated `operator-logs-export.ts`, `supervisor-logs-export.ts`, `PrintableOperatorLogsModal.tsx`, `PrintableSupervisorLogsModal.tsx`, and `machine-client-view.tsx` with 12-hour AM/PM formatting.
+
+5. **Mobile App Synchronization (`apps/mobile/app/(app)/operations.tsx`, `MeterLogModal.tsx`)**:
+   - Updated `HourLogRecord` interface and select query to remove `status`.
+   - Updated filter strip from `['All', 'Approved', 'Pending', 'Breakdowns']` to `['All Logs', 'Breakdowns']`.
+   - Removed status badges from log cards and formatted shift timings using `formatShiftTimingRange`.
+   - Updated `MeterLogModal.tsx` to generate unique `idempotency_key` on insert and omit `status`.
+
+6. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed with 0 errors across all 9 monorepo packages.
+   - `pnpm --filter @reachinternational/web build`: Compiled successfully across all 35 App Router routes in Next.js 16.2.12 with Turbopack.
 
 ---
+
+---
+
+## Previous Completed Task (2026-08-29) — Collapsed Sidebar Flyout Dynamic Vertical Centering & Position Measurement Fix (`apps/web/components/layout/sidebar/CollapsedSidebarFlyout.tsx`)
+
+---
+
+## Previous Completed Task (2026-08-29) — Machine Hour Logs Data Fetching & Visibility Fix (`apps/web/lib/queries/operators.ts`, `reports.ts`, `machines.ts`, `apps/mobile/app/(app)/operations.tsx`, `MeterLogModal.tsx`)
+
+**Goal**: Fix the fetching and display of machine hour logs from Supabase so that all running hour logs for machines, clients, and operators are retrieved and rendered properly on the web and mobile applications.
+
+### Key Deliverables & Implementation Details
+
+1. **Schema & Projection Alignment (`apps/web/lib/queries/operators.ts`)**:
+   - Corrected `HOUR_LOG_PROJECTION` to match the exact schema of `public.machine_hour_logs`:
+     - Replaced non-existent `operating_hours` with `running_hours`.
+     - Replaced non-existent `site_location` with `location`.
+     - Removed non-existent fields `breakdown_hours`, `breakdown_reason`, and `updated_at`.
+     - Fixed `machines` relation join to `machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number, hour_meter, status, manufacturer)`.
+     - Fixed `clients` relation join to `client:clients!machine_hour_logs_client_id_fkey(id, code, client_name, address, city, state, phone, email)`.
+     - Fixed `operator` and `supervisor` foreign key joins to `machine_hour_logs_operator_id_fkey` and `machine_hour_logs_supervisor_id_fkey`.
+   - Added `formatHourLogsData()` to ensure numeric fields (`start_meter`, `end_meter`, `running_hours`, `overtime_hours`) and machine metadata are properly normalized.
+   - Added `deriveAssignmentsFromMachines()` to populate active assignments from machines assigned to operators or supervisors.
+
+2. **Report & Machine Query Hardening (`apps/web/lib/queries/reports.ts`, `machines.ts`)**:
+   - Corrected `getOperationsReportData` projection in `reports.ts` to use `running_hours` and explicit foreign key joins.
+   - Updated `getMachineHourMeterLogs` in `machines.ts` with explicit projections and foreign key constraints.
+
+3. **Web-to-Mobile Parity Synchronization (`apps/mobile/app/(app)/operations.tsx`, `MeterLogModal.tsx`)**:
+   - Updated `machine_hour_logs` query in `apps/mobile/app/(app)/operations.tsx` with clean projections and joins.
+   - Updated `MeterLogModal.tsx` to query `client_name` on `clients` and removed non-existent `machine_code` from the insert payload.
+
+4. **Quality Gates & Verification**:
+   - Live query test: Successfully retrieved all 26 logs with joined machine, client, and operator records.
+   - `pnpm turbo run typecheck --force`: Passed cleanly across all 9 packages (0 compilation errors in 26.1s).
+   - `pnpm --filter @reachinternational/web build`: Compiled all 35 routes cleanly with code 0.
+
+---
+
+## Previous Completed Task (2026-08-29) — Login Page UI Refinement & Sizing Optimization (`apps/web/app/login/`, `apps/mobile/app/(auth)/login.tsx`)
+
+**Goal**: Make the login card slightly wider (`max-w-[480px] sm:max-w-[500px]`), remove the subtext paragraph (`"Sign in to access your fleet operations..."`), and remove the security badge (`🔐 Authorized personnel only`) from the footer across web and mobile.
+
+### Key Deliverables & Implementation Details
+
+1. **Slightly Wider Authentication Card**:
+   - Expanded login card in `apps/web/app/login/login-form.tsx` from `max-w-[430px] sm:max-w-[440px]` to `max-w-[480px] sm:max-w-[500px]`.
+   - Updated Suspense fallback skeleton in `apps/web/app/login/page.tsx` to match.
+
+2. **Clean Header & Footer Refinements**:
+   - Removed subtext paragraph `<p>Sign in to access your fleet operations and machine activity.</p>` under `"Welcome back"`.
+   - Removed `<div className="flex items-center justify-center gap-1.5 ...">🔐 Authorized personnel only</div>` from the card footer.
+
+3. **Web & Mobile Parity Synchronization**:
+   - Synchronized `apps/mobile/app/(auth)/login.tsx` by removing the subtext paragraph and security badge.
+
+4. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed cleanly across all 9 packages (0 compilation errors in 25.2s).
+   - `pnpm --filter @reachinternational/web build`: Compiled all 35 routes cleanly with code 0.
+
+---
+
+## Previous Completed Task (2026-08-29) — DESIGN.md Button Alignment & Synchronous Double Submission Lock (`apps/web/app/login/`, `apps/web/app/signup/`, `apps/mobile/app/(auth)/`)
+
+**Goal**: Follow `DESIGN.md` for auth action buttons (`button-primary-sm` 6px square `#171717` light / `#fafafa` dark, `h-11`, Geist Sans 500), show `<Loader2>` spinning wheel indicator during submission, synchronously lock buttons on click via `isSubmittingRef` to eliminate duplicate server calls, and maintain the button disabled/spinning state during redirects across web and mobile.
+
+### Key Deliverables & Implementation Details
+
+1. **DESIGN.md Button Alignment**:
+   - Web Login (`apps/web/app/login/login-form.tsx`): Styled button with `rounded-[6px]`, `h-11`, `font-medium`, `text-sm`, `bg-[#171717] hover:bg-[#262626] text-[#ffffff] dark:bg-[#fafafa] dark:hover:bg-[#ebebeb] dark:text-[#0a0a0a]`, `disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.98]`.
+   - Web Signup (`apps/web/app/signup/page.tsx`): Aligned submit button with identical `DESIGN.md` styling.
+   - Mobile Screens (`apps/mobile/app/(auth)/login.tsx`, `signup.tsx`, `forgot-password.tsx`): Configured `shape="square"` (6px corner radius) matching the Geist system app control specification.
+
+2. **Synchronous Submission Lock & Zero Duplicate Server Calls**:
+   - Replaced `<form action={handleSubmit}>` with `<form onSubmit={handleSubmit}>` and `e.preventDefault()`.
+   - Added `isSubmittingRef = useRef(false)` checked and set synchronously on the first JavaScript event tick before async processing begins.
+   - Guaranteed that rapid double-clicks or multiple enter presses immediately return on subsequent calls (`if (isSubmittingRef.current || pending) return;`).
+   - Retained `pending = true` and `isSubmittingRef.current = true` during success navigation (`NEXT_REDIRECT` error re-throw / redirect timeout), ensuring the button never re-enables while the browser or router navigates.
+
+3. **High-Visibility Loading Wheel**:
+   - Replaced Framer Motion animated loader with native SVG `<Loader2 className="w-4 h-4 animate-spin shrink-0 text-current" />` from `lucide-react` for smooth, uninterrupted spinning across all browsers.
+   - Displays `"Signing in..."` on login and `"Creating account..."` on signup.
+
+4. **Web & Mobile Parity Synchronization**:
+   - Synchronized double-submission ref locking and square button radius across `apps/mobile/app/(auth)/login.tsx`, `signup.tsx`, and `forgot-password.tsx`.
+
+5. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed cleanly across all 9 workspace packages (0 compilation errors in 20.1s).
+   - `pnpm --filter @reachinternational/web build`: Compiled all 35 Next.js App Router routes and static pages cleanly with code 0.
+
+---
+
+## Previous Completed Task (2026-08-29) — Enterprise Fleet Login Redesign (`apps/web/app/login/`, `apps/mobile/app/(auth)/login.tsx`)
+
+---
+
+## Previous Completed Task (2026-08-29) — Login Page Equipment Image Integration & Operator Daily Logs Entry Workflow
+
+## Previous Completed Task (2026-08-27) — Phase 20: Final Production Gate & Release Certification
 
 ## Previous Completed Task (2026-08-27) — Phase 19: Production Monitoring & Observability
 

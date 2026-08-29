@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -13,15 +13,18 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleLogin = async () => {
+    if (isSubmittingRef.current || isLoading) return;
     if (!email || !password) {
       setErrorMessage('Please enter both email and password.');
       return;
     }
 
     setErrorMessage('');
+    isSubmittingRef.current = true;
     setIsLoading(true);
 
     try {
@@ -32,12 +35,15 @@ export default function LoginScreen() {
 
       if (error) {
         setErrorMessage(error.message);
+        isSubmittingRef.current = false;
+        setIsLoading(false);
       } else if (data.session) {
+        // Keep isLoading=true and isSubmittingRef=true during router replace
         router.replace('/(app)/machines');
       }
     } catch (err: unknown) {
       setErrorMessage('An unexpected error occurred during login.');
-    } finally {
+      isSubmittingRef.current = false;
       setIsLoading(false);
     }
   };
@@ -48,9 +54,8 @@ export default function LoginScreen() {
       style={[styles.flexContainer, { backgroundColor: theme.colors.canvas }]}
     >
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Soft Background Glow Circles */}
-        <View style={[styles.ambientGlowTop, { backgroundColor: theme.colors.link + '15' }]} />
-        <View style={[styles.ambientGlowBottom, { backgroundColor: theme.colors.violet + '15' }]} />
+        {/* Soft Background Reach Blue Ambient Glow */}
+        <View style={[styles.ambientGlowTop, { backgroundColor: '#00AEEF12' }]} />
 
         {/* Top Header Logo */}
         <View style={styles.topHeader}>
@@ -58,7 +63,12 @@ export default function LoginScreen() {
             <View style={[styles.logoEmblem, { backgroundColor: theme.colors.ink }]}>
               <Text style={[styles.logoLetter, { color: theme.colors.canvas }]}>R</Text>
             </View>
-            <Text style={[styles.brandTitle, { color: theme.colors.ink }]}>Reach International</Text>
+            <View>
+              <Text style={[styles.brandTitle, { color: theme.colors.ink }]}>Reach International</Text>
+              <Text style={{ fontSize: 9, fontWeight: '700', letterSpacing: 0.8, color: '#00AEEF', textTransform: 'uppercase' }}>
+                Fleet Operations Platform
+              </Text>
+            </View>
           </View>
           <TouchableOpacity
             onPress={() => setMode(isDark ? 'light' : 'dark')}
@@ -70,42 +80,9 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Hero Banner Section */}
-        <View style={styles.heroSection}>
-          <Text style={[styles.eyebrow, { color: theme.colors.link }]}>
-            ENTERPRISE FLEET OPERATIONS
-          </Text>
-          <Text style={[styles.heroHeadline, { color: theme.colors.ink }]}>
-            Industrial machine service & running hours tracking.
-          </Text>
-          <Text style={[styles.heroSubtext, { color: theme.colors.mute }]}>
-            Centralized fleet management, daily shift logs, and instant operational reporting.
-          </Text>
-
-          {/* Quick Metrics Bar */}
-          <View style={styles.metricsRow}>
-            <View style={[styles.metricCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <Cpu size={14} color={theme.colors.link} />
-              <Text style={[styles.metricValue, { color: theme.colors.ink }]}>Live</Text>
-              <Text style={[styles.metricLabel, { color: theme.colors.mute }]}>Fleet</Text>
-            </View>
-            <View style={[styles.metricCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <BellRing size={14} color={theme.colors.success} />
-              <Text style={[styles.metricValue, { color: theme.colors.ink }]}>IST</Text>
-              <Text style={[styles.metricLabel, { color: theme.colors.mute }]}>Accurate</Text>
-            </View>
-            <View style={[styles.metricCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <Activity size={14} color={theme.colors.violet} />
-              <Text style={[styles.metricValue, { color: theme.colors.ink }]}>24/7</Text>
-              <Text style={[styles.metricLabel, { color: theme.colors.mute }]}>Sync</Text>
-            </View>
-          </View>
-        </View>
-
         {/* Form Card */}
         <Card variant="elevated" style={styles.card}>
-          <Text style={[styles.formTitle, { color: theme.colors.ink }]}>Account Sign In</Text>
-          <Text style={[styles.formSubtitle, { color: theme.colors.mute }]}>Enter your credentials below</Text>
+          <Text style={[styles.formTitle, { color: theme.colors.ink }]}>Welcome back</Text>
 
           {errorMessage ? (
             <View style={[styles.errorContainer, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error }]}>
@@ -115,7 +92,7 @@ export default function LoginScreen() {
 
           <Input
             label="Email Address"
-            placeholder="engineer@reachinternation.com"
+            placeholder="vaibhav@company.com"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -125,7 +102,7 @@ export default function LoginScreen() {
 
           <Input
             label="Password"
-            placeholder="••••••••"
+            placeholder="••••••••••••"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -133,24 +110,24 @@ export default function LoginScreen() {
           />
 
           <Button
-            label="Sign In to Platform"
+            label="Sign in to Reach Fleet"
             onPress={handleLogin}
             isLoading={isLoading}
-            shape="pill"
+            shape="square"
             fullWidth
             style={styles.loginBtn}
           />
 
           <View style={styles.forgotRow}>
             <TouchableOpacity onPress={() => router.push('/(auth)/forgot-password')}>
-              <Text style={[styles.forgotLink, { color: theme.colors.mute }]}>Forgot Password?</Text>
+              <Text style={[styles.forgotLink, { color: '#00AEEF' }]}>Forgot Password?</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.signupPromptRow}>
-            <Text style={[styles.signupPromptText, { color: theme.colors.mute }]}>Don&apos;t have an account?</Text>
+            <Text style={[styles.signupPromptText, { color: theme.colors.mute }]}>Don&apos;t have access?</Text>
             <TouchableOpacity onPress={() => router.push('/(auth)/signup')}>
-              <Text style={[styles.signupPromptLink, { color: theme.colors.link }]}>Request Access</Text>
+              <Text style={[styles.signupPromptLink, { color: '#00AEEF' }]}>Request Access →</Text>
             </TouchableOpacity>
           </View>
         </Card>
@@ -220,48 +197,6 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
-  heroSection: {
-    marginBottom: spacingNumeric.lg,
-  },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    marginBottom: 4,
-  },
-  heroHeadline: {
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: -0.8,
-    lineHeight: 30,
-    marginBottom: 6,
-  },
-  heroSubtext: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: spacingNumeric.md,
-  },
-  metricsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  metricCard: {
-    flex: 1,
-    padding: 8,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  metricValue: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  metricLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-  },
   card: {
     width: '100%',
     padding: spacingNumeric.lg,
@@ -270,9 +205,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     letterSpacing: -0.3,
-  },
-  formSubtitle: {
-    fontSize: 12,
     marginBottom: spacingNumeric.md,
   },
   errorContainer: {

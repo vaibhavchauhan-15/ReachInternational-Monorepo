@@ -364,9 +364,9 @@ async function seed() {
     });
 
     const logs = [
-      { machine_id: machineMap['MCH-2026-001'], operator_id: primaryOperatorId, log_date: '2026-08-10', start_meter: 1400.0, end_meter: 1408.0, location: 'Noida Site' },
-      { machine_id: machineMap['MCH-2026-001'], operator_id: primaryOperatorId, log_date: '2026-08-11', start_meter: 1408.0, end_meter: 1415.5, location: 'Noida Site' },
-      { machine_id: machineMap['MCH-2026-001'], operator_id: primaryOperatorId, log_date: '2026-08-12', start_meter: 1415.5, end_meter: 1420.5, location: 'Noida Site' },
+      { machine_id: machineMap['MCH-2026-001'], operator_id: primaryOperatorId, log_date: '2026-08-10', start_meter: 1400.0, end_meter: 1408.0, start_time: '06:00:00', end_time: '14:00:00', location: 'Noida Site', idempotency_key: 'ihl_seed_001' },
+      { machine_id: machineMap['MCH-2026-001'], operator_id: primaryOperatorId, log_date: '2026-08-11', start_meter: 1408.0, end_meter: 1415.5, start_time: '06:00:00', end_time: '14:00:00', location: 'Noida Site', idempotency_key: 'ihl_seed_002' },
+      { machine_id: machineMap['MCH-2026-001'], operator_id: primaryOperatorId, log_date: '2026-08-12', start_meter: 1415.5, end_meter: 1420.5, start_time: '06:00:00', end_time: '14:00:00', location: 'Noida Site', idempotency_key: 'ihl_seed_003' },
     ];
     await admin.from('machine_hour_logs').insert(logs);
   }

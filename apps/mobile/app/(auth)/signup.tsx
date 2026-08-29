@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -58,12 +58,14 @@ export default function SignupScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
   const selectedRoleObj = SIGNUP_ROLES.find((r) => r.value === selectedRole) || SIGNUP_ROLES[0];
 
   const handleSignup = async () => {
+    if (isSubmittingRef.current || isLoading) return;
     setErrorMessage('');
     setSuccessMessage('');
 
@@ -102,6 +104,7 @@ export default function SignupScreen() {
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsLoading(true);
 
     try {
@@ -122,15 +125,18 @@ export default function SignupScreen() {
 
       if (error) {
         setErrorMessage(error.message);
+        isSubmittingRef.current = false;
+        setIsLoading(false);
       } else {
         setSuccessMessage('Account request submitted successfully! Please wait for administrator approval.');
+        // Keep isLoading=true and isSubmittingRef=true during redirect
         setTimeout(() => {
           router.replace('/(auth)/login');
-        }, 2200);
+        }, 2000);
       }
     } catch (err: any) {
       setErrorMessage(err?.message || 'An unexpected error occurred during signup.');
-    } finally {
+      isSubmittingRef.current = false;
       setIsLoading(false);
     }
   };
@@ -173,20 +179,15 @@ export default function SignupScreen() {
 
         {/* Hero Section */}
         <View style={styles.heroSection}>
-          <Text style={[styles.eyebrow, { color: theme.colors.link }]}>ORGANIZATION ACCESS REQUEST</Text>
           <Text style={[styles.heroHeadline, { color: theme.colors.ink }]}>
             Join your machine fleet team
-          </Text>
-          <Text style={[styles.heroSubtext, { color: theme.colors.mute }]}>
-            Create your account to access running hours, equipment tracking, and field operational tools.
           </Text>
         </View>
 
         {/* Form Card */}
         <Card variant="elevated" style={styles.card}>
-          <Text style={[styles.formTitle, { color: theme.colors.ink }]}>Create Your Account</Text>
-          <Text style={[styles.formSubtitle, { color: theme.colors.mute }]}>
-            Fill in your operational details below
+          <Text style={[styles.formTitle, { color: theme.colors.ink, marginBottom: spacingNumeric.md }]}>
+            Create Your Account
           </Text>
 
           {errorMessage ? (
@@ -315,7 +316,7 @@ export default function SignupScreen() {
             label="Request Platform Access"
             onPress={handleSignup}
             isLoading={isLoading}
-            shape="pill"
+            shape="square"
             fullWidth
             style={styles.signupBtn}
           />
@@ -441,24 +442,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   heroSection: {
-    marginBottom: spacingNumeric.lg,
-  },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    marginBottom: 4,
+    marginBottom: spacingNumeric.md,
   },
   heroHeadline: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '800',
     letterSpacing: -0.6,
-    lineHeight: 30,
-    marginBottom: 6,
-  },
-  heroSubtext: {
-    fontSize: 13,
-    lineHeight: 18,
+    lineHeight: 28,
   },
   card: {
     width: '100%',

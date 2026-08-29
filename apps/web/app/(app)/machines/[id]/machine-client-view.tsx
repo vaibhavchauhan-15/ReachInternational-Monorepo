@@ -51,7 +51,7 @@ import {
 } from "@/components/ui";
 import dynamic from "next/dynamic";
 import type { MachineWithEngineer, ServiceRecordWithDetails } from "@/lib/types/database";
-import { formatDate } from "@reachinternational/utils";
+import { formatDate, formatShiftTimingRange } from "@reachinternational/utils";
 
 const ServiceForm = dynamic(() => import("./service-form").then((mod) => mod.ServiceForm), { ssr: false });
 
@@ -849,7 +849,7 @@ export function MachineClientView({
                           <TableCell className="font-medium text-xs">{clientInfo.company_name || machine.customer_name}</TableCell>
                           <TableCell className="text-xs font-semibold">{log.operator?.full_name || "Operator"}</TableCell>
                           <TableCell className="font-mono text-xs">
-                            {log.start_time && log.end_time ? `${log.start_time} - ${log.end_time}` : `${log.running_hours || 0} hrs`}
+                            {log.start_time && log.end_time ? formatShiftTimingRange(log.start_time, log.end_time) : `${log.running_hours || 0} hrs`}
                           </TableCell>
                           <TableCell className="font-mono text-xs text-sky-600 dark:text-sky-400 font-bold">
                             {log.start_meter || 0} → {log.end_meter || 0} (+{log.running_hours || 0}h)

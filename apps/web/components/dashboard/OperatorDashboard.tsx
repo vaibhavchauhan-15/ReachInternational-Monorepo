@@ -46,7 +46,7 @@ import {
   updateOperatorHourLogAction,
 } from "@/app/actions/operators";
 import { useToast, CustomTimePicker, Modal } from "@/components/ui";
-import { formatDate } from "@reachinternational/utils";
+import { formatDate, formatTo12Hour, formatShiftTimingRange } from "@reachinternational/utils";
 import { PrintableOperatorLogsModal } from "./PrintableOperatorLogsModal";
 import { handleClipboardPaste } from "@/lib/security/clipboard";
 import { HmrSchema, RemarksSchema } from "@reachinternational/validation";
@@ -80,13 +80,13 @@ function parseTimeToMinutes(timeStr?: string): number | null {
   return hours * 60 + minutes;
 }
 
-// Compute operating duration & overtime (standard shift = 8 hours)
-function computeOperatingHours(startStr: string, endStr: string) {
+// Compute operating duration, normal working hours & overtime (standard shift = 8 hours + 1 hour break)
+function computeOperatingHours(startStr: string, endStr: string, manualOvertime?: number) {
   const startMins = parseTimeToMinutes(startStr);
   const endMins = parseTimeToMinutes(endStr);
 
   if (startMins === null || endMins === null) {
-    return { durationHours: 0, overtimeHours: 0, isValid: false, errorMessage: "Invalid start or end time format." };
+    return { durationHours: 0, overtimeHours: 0, normalWorkingHours: 0, breakHours: 1.0, isValid: false, errorMessage: "Invalid start or end time format." };
   }
 
   let diffMins = endMins - startMins;
@@ -96,12 +96,18 @@ function computeOperatingHours(startStr: string, endStr: string) {
   }
 
   if (diffMins === 0) {
-    return { durationHours: 0, overtimeHours: 0, isValid: false, errorMessage: "Start time and end time cannot be identical." };
+    return { durationHours: 0, overtimeHours: 0, normalWorkingHours: 0, breakHours: 1.0, isValid: false, errorMessage: "Start time and end time cannot be identical." };
   }
 
   const durationHours = Math.round((diffMins / 60) * 10) / 10;
-  const overtimeHours = Math.max(0, Math.round((durationHours - 8) * 10) / 10);
-  return { durationHours, overtimeHours, isValid: true, errorMessage: null };
+  const breakHours = 1.0;
+  // Overtime calculation: if manual overtime is provided, use it; otherwise auto-calc (duration - 9.0h)
+  const autoOvertime = Math.max(0, Math.round((durationHours - (8.0 + breakHours)) * 10) / 10);
+  const overtimeHours = manualOvertime !== undefined ? manualOvertime : autoOvertime;
+  // Always: total shift duration - overtime - 1h break = normal working time
+  const normalWorkingHours = Math.max(0, Math.round((durationHours - overtimeHours - breakHours) * 10) / 10);
+
+  return { durationHours, overtimeHours, normalWorkingHours, breakHours, isValid: true, errorMessage: null };
 }
 
 export interface OperatorHourLog {
@@ -115,15 +121,14 @@ export interface OperatorHourLog {
   start_time?: string;
   end_time?: string;
   overtime_hours?: number;
+  normal_working_hours?: number;
   is_breakdown?: boolean;
   running_hours?: number;
-  start_fuel_level?: number;
-  fuel_consumed?: number;
   shift?: string;
   machine_condition?: string;
   location?: string;
   remarks?: string;
-  status?: string;
+  idempotency_key?: string;
   created_at?: string;
   machine?: Machine;
   client?: CRMClient;
@@ -406,16 +411,25 @@ export function OperatorDashboard({
 
   const handleStartTimeChange = (val: string) => {
     setStartTime(val);
+    const stats = computeOperatingHours(val, endTime);
+    if (stats.isValid) {
+      setOvertimeHours(String(stats.overtimeHours));
+    }
   };
 
   const handleEndTimeChange = (val: string) => {
     setEndTime(val);
+    const stats = computeOperatingHours(startTime, val);
+    if (stats.isValid) {
+      setOvertimeHours(String(stats.overtimeHours));
+    }
   };
 
-  // Real-time operating duration & overtime calculation
+  // Real-time operating duration, normal working hours & overtime calculation
   const operatingStats = useMemo(() => {
-    return computeOperatingHours(startTime, endTime);
-  }, [startTime, endTime]);
+    const ot = parseFloat(overtimeHours);
+    return computeOperatingHours(startTime, endTime, isNaN(ot) ? undefined : ot);
+  }, [startTime, endTime, overtimeHours]);
 
 
   // Real-time meter running hours & meter validation calculation
@@ -653,6 +667,34 @@ export function OperatorDashboard({
     }
   };
 
+  const handleSaveDraft = () => {
+    const draft = {
+      selectedMachineId,
+      selectedClientId,
+      clientLocation,
+      startMeter,
+      endMeter,
+      startTime,
+      endTime,
+      overtimeHours,
+      isBreakdown,
+      breakdownHours,
+      breakdownMinutes,
+      breakdownReason,
+      actionTaken,
+      remarks,
+      updatedAt: new Date().toISOString(),
+    };
+    try {
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+      const now = new Date();
+      setLastSavedTime(now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+      toast("success", "Draft Saved", "Your machine log draft was saved locally.");
+    } catch (e) {
+      toast("error", "Save Failed", "Could not save draft locally.");
+    }
+  };
+
   // Completion status calculation
   const completionStatus = useMemo(() => {
     let completed = 0;
@@ -704,7 +746,7 @@ export function OperatorDashboard({
   };
 
   // Final Submit Action to Server / Database
-  const handleExecuteSubmit = async (statusOverride: "submitted" | "draft" = "submitted") => {
+  const handleExecuteSubmit = async () => {
     setShowConfirmModal(false);
     setSubmitting(true);
     setMessage(null);
@@ -738,7 +780,6 @@ export function OperatorDashboard({
       isBreakdown,
       machineCondition: isBreakdown ? "breakdown" : "good",
       remarks: finalRemarks,
-      status: statusOverride,
       idempotencyKey,
     });
 
@@ -764,18 +805,19 @@ export function OperatorDashboard({
     }
   };
 
-  // Real-time operating duration & overtime calculation for Edit Modal
+  // Real-time operating duration, normal working hours & overtime calculation for Edit Modal
   const editOperatingStats = useMemo(() => {
-    return computeOperatingHours(editStartTime, editEndTime);
-  }, [editStartTime, editEndTime]);
+    const ot = parseFloat(editOvertime);
+    return computeOperatingHours(editStartTime, editEndTime, isNaN(ot) ? undefined : ot);
+  }, [editStartTime, editEndTime, editOvertime]);
 
   // Open Edit Modal for a Log
   const handleOpenEditLog = (log: OperatorHourLog) => {
     setEditingLog(log);
     setEditStartMeter(String(log.start_meter ?? 0));
     setEditEndMeter(String(log.end_meter ?? log.start_meter ?? 0));
-    const sTime = log.start_time || "06:00 AM";
-    const eTime = log.end_time || "02:00 PM";
+    const sTime = formatTo12Hour(log.start_time) || "06:00 AM";
+    const eTime = formatTo12Hour(log.end_time) || "02:00 PM";
     setEditStartTime(sTime);
     setEditEndTime(eTime);
     setEditOvertime(String(log.overtime_hours ?? 0));
@@ -1316,6 +1358,28 @@ export function OperatorDashboard({
                 </div>
               </div>
 
+              {/* Live Shift Breakdown Indicator */}
+              {operatingStats.isValid && (
+                <div className="p-2.5 sm:p-3 rounded-xl bg-sky-500/5 border border-sky-500/20 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div>
+                    <span className="text-[10px] text-[var(--color-mute)] font-medium block">Total Shift</span>
+                    <span className="font-mono font-bold text-[var(--color-ink)]">{operatingStats.durationHours} hrs</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-[var(--color-mute)] font-medium block">Break Time</span>
+                    <span className="font-mono font-semibold text-[var(--color-mute)]">1.0 hr</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold block">Normal WT (excl. OT)</span>
+                    <span className="font-mono font-bold text-sky-600 dark:text-sky-400">{operatingStats.normalWorkingHours} hrs</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold block">Overtime</span>
+                    <span className="font-mono font-bold text-amber-600 dark:text-amber-400">{overtimeHours || "0"} hrs OT</span>
+                  </div>
+                </div>
+              )}
+
               {/* Meter Validation & Time Overlap Warning Strip */}
               {meterValidationWarning ? (
                 <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
@@ -1441,7 +1505,7 @@ export function OperatorDashboard({
                 <button
                   type="button"
                   disabled={submitting}
-                  onClick={() => handleExecuteSubmit("draft")}
+                  onClick={handleSaveDraft}
                   className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] text-xs font-bold transition-all cursor-pointer disabled:opacity-50 min-h-[44px] flex items-center justify-center"
                 >
                   Save Draft
@@ -1483,14 +1547,6 @@ export function OperatorDashboard({
               >
                 <Printer className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
                 <span className="hidden sm:inline">PDF / Print</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleTabSwitch("entry")}
-                className="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
-              >
-                <Plus className="h-3.5 w-3.5" /> New Log Entry
               </button>
             </div>
           </div>
@@ -1556,7 +1612,7 @@ export function OperatorDashboard({
                 <p className="text-[11px]">
                   {historySearch || historyDateFilter !== "all"
                     ? "Try adjusting your search query or date filter selection."
-                    : "Click 'New Log Entry' above to submit your daily machine log."}
+                    : "Switch to the 'Log Entry' tab above to submit your daily machine log."}
                 </p>
                 {recentLogs.length === 0 && (
                   <button
@@ -1575,13 +1631,21 @@ export function OperatorDashboard({
               <div className="block sm:hidden space-y-2.5">
                 {filteredLogs.map((log) => {
                   const isBkd = log.is_breakdown || log.machine_condition === "breakdown";
-                  const status = log.status || "submitted";
                   const isToday = isLogFromToday(log.log_date);
-                  const canEdit = isToday || status === "draft";
+                  const canEdit = isToday;
 
                   const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*(\d+h\s*\d+m)[^\]]*\]/);
                   const bkdDurationStr = bkdMatch ? bkdMatch[1] : null;
                   const displayRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/, "") || "—";
+                  const normalHrs = log.normal_working_hours !== undefined && log.normal_working_hours !== null
+                    ? Number(log.normal_working_hours)
+                    : (() => {
+                        const s = formatTo12Hour(log.start_time) || "06:00 AM";
+                        const e = formatTo12Hour(log.end_time) || "02:00 PM";
+                        const ot = log.overtime_hours || 0;
+                        const stats = computeOperatingHours(s, e, ot);
+                        return stats.normalWorkingHours;
+                      })();
 
                   return (
                     <div
@@ -1628,9 +1692,16 @@ export function OperatorDashboard({
                         </div>
 
                         <div className="flex items-center justify-between text-[11px]">
-                          <span className="text-[var(--color-mute)] font-medium">Operating Hours:</span>
+                          <span className="text-[var(--color-mute)] font-medium">Shift Timings:</span>
                           <span className="font-mono font-bold text-[var(--color-ink)]">
-                            {log.start_time || "06:00 AM"} — {log.end_time || "02:00 PM"}
+                            {formatShiftTimingRange(log.start_time, log.end_time)}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-[var(--color-mute)] font-medium">Working Time (excl. OT):</span>
+                          <span className="font-mono font-bold text-sky-600 dark:text-sky-400">
+                            {normalHrs} hrs (1h break)
                           </span>
                         </div>
 
@@ -1681,7 +1752,7 @@ export function OperatorDashboard({
                       <th className="p-3.5">Machine No</th>
                       <th className="p-3.5">Model</th>
                       <th className="p-3.5">Hour Meter (hrs)</th>
-                      <th className="p-3.5">Timings</th>
+                      <th className="p-3.5">Timings / Working Time</th>
                       <th className="p-3.5">Overtime</th>
                       <th className="p-3.5">Breakdown</th>
                       <th className="p-3.5">Remarks</th>
@@ -1691,13 +1762,21 @@ export function OperatorDashboard({
                   <tbody className="divide-y divide-[var(--color-hairline)]">
                     {filteredLogs.map((log) => {
                       const isBkd = log.is_breakdown || log.machine_condition === "breakdown";
-                      const status = log.status || "submitted";
                       const isToday = isLogFromToday(log.log_date);
-                      const canEdit = isToday || status === "draft";
+                      const canEdit = isToday;
 
                       const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*(\d+h\s*\d+m)[^\]]*\]/);
                       const bkdDurationStr = bkdMatch ? bkdMatch[1] : null;
                       const displayRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/, "") || "—";
+                      const normalHrs = log.normal_working_hours !== undefined && log.normal_working_hours !== null
+                        ? Number(log.normal_working_hours)
+                        : (() => {
+                            const s = formatTo12Hour(log.start_time) || "06:00 AM";
+                            const e = formatTo12Hour(log.end_time) || "02:00 PM";
+                            const ot = log.overtime_hours || 0;
+                            const stats = computeOperatingHours(s, e, ot);
+                            return stats.normalWorkingHours;
+                          })();
 
                       return (
                         <tr key={log.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors">
@@ -1716,8 +1795,14 @@ export function OperatorDashboard({
                           <td className="p-3.5 font-mono font-bold text-[var(--color-ink)] whitespace-nowrap text-[11px]">
                             {log.start_meter ?? 0} → {log.end_meter ?? 0} <span className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold">(+{log.running_hours ?? Math.max(0, (log.end_meter ?? 0) - (log.start_meter ?? 0))}h)</span>
                           </td>
-                          <td className="p-3.5 font-medium text-[var(--color-ink)] whitespace-nowrap font-mono text-[11px]">
-                            {log.start_time || "06:00 AM"} — {log.end_time || "02:00 PM"}
+                          <td className="p-3.5 whitespace-nowrap">
+                            <div className="font-medium text-[var(--color-ink)] font-mono text-[11px]">
+                              {formatShiftTimingRange(log.start_time, log.end_time)}
+                            </div>
+                            <div className="text-[10px] font-bold text-sky-600 dark:text-sky-400 font-mono flex items-center gap-1 mt-0.5">
+                              <span>{normalHrs} hrs working</span>
+                              <span className="text-[var(--color-mute)] font-normal text-[9.5px]">(excl. OT)</span>
+                            </div>
                           </td>
                           <td className="p-3.5 font-bold text-amber-600 dark:text-amber-400 whitespace-nowrap">
                             {log.overtime_hours ? `${log.overtime_hours} hrs` : "0 hrs"}
@@ -1782,7 +1867,7 @@ export function OperatorDashboard({
             </button>
             <button
               type="button"
-              onClick={() => handleExecuteSubmit("submitted")}
+              onClick={() => handleExecuteSubmit()}
               className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs shadow-2xs transition-all cursor-pointer flex items-center gap-1.5"
             >
               Confirm & Submit Log
@@ -1824,12 +1909,13 @@ export function OperatorDashboard({
                 <span className="font-mono font-bold text-[var(--color-ink)]">{startMeter} → {endMeter} (+{meterRunningHours}h)</span>
               </div>
               <div>
-                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Timings</span>
-                <span className="font-bold text-[var(--color-ink)]">{startTime} → {endTime} ({operatingStats.durationHours}h)</span>
+                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Timings / Working Time</span>
+                <span className="font-bold text-[var(--color-ink)] block">{startTime} → {endTime}</span>
+                <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 font-mono">{operatingStats.normalWorkingHours} hrs normal (1h break)</span>
               </div>
               <div>
                 <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Overtime</span>
-                <span className="font-bold text-amber-600 dark:text-amber-400">{overtimeHours} hrs</span>
+                <span className="font-bold text-amber-600 dark:text-amber-400">{overtimeHours || "0"} hrs OT</span>
               </div>
             </div>
 
@@ -1940,6 +2026,19 @@ export function OperatorDashboard({
                   className="w-full px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                 />
               </div>
+
+              {editOperatingStats.isValid && (
+                <div className="p-2.5 rounded-xl bg-sky-500/5 border border-sky-500/20 grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-[10px] text-[var(--color-mute)] font-medium block">Shift Duration</span>
+                    <span className="font-mono font-bold text-[var(--color-ink)]">{editOperatingStats.durationHours} hrs (1h break)</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold block">Normal WT (excl. OT)</span>
+                    <span className="font-mono font-bold text-sky-600 dark:text-sky-400">{editOperatingStats.normalWorkingHours} hrs</span>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block font-bold text-[var(--color-ink)] mb-1">Breakdown Status</label>

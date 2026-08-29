@@ -1,13 +1,13 @@
 import * as XLSX from "xlsx";
 import type { User, Machine } from "@/lib/types/database";
 import type { OperatorHourLog } from "@/components/dashboard/OperatorDashboard";
-import { formatDate } from "@reachinternational/utils";
+import { formatDate, formatTo12Hour } from "@reachinternational/utils";
 
 // Time string parser (e.g. "08:00 AM", "05:30 PM", "17:00") -> total minutes from midnight
 function parseTimeToMinutes(timeStr?: string): number | null {
   if (!timeStr) return null;
   const str = timeStr.trim().toUpperCase();
-  const match = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
+  const match = str.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/);
   if (!match) return null;
 
   let hours = parseInt(match[1], 10);
@@ -32,13 +32,11 @@ function computeDurationHours(startStr?: string, endStr?: string): number {
   return Math.round((diffMins / 60) * 10) / 10;
 }
 
-// Compact timing range formatter with zero spaces (e.g. "10:00PM-02:00AM")
+// Compact timing range formatter with zero spaces (e.g. "06:00AM-06:00PM")
 export function formatCompactTiming(startStr?: string | null, endStr?: string | null): string {
-  if (!startStr && !endStr) return "06:00AM-02:00PM";
-  if (!startStr) return endStr?.trim().toUpperCase().replace(/\s+/g, "") || "—";
-  if (!endStr) return startStr?.trim().toUpperCase().replace(/\s+/g, "") || "—";
-  const clean = (s: string) => s.trim().toUpperCase().replace(/\s+/g, "");
-  return `${clean(startStr)}-${clean(endStr)}`;
+  const formattedStart = formatTo12Hour(startStr) || "06:00 AM";
+  const formattedEnd = formatTo12Hour(endStr) || "02:00 PM";
+  return `${formattedStart.replace(/\s+/g, "")}-${formattedEnd.replace(/\s+/g, "")}`;
 }
 
 export const MONTH_NAMES = [
@@ -192,7 +190,8 @@ export function exportOperatorLogsToExcel(
     "Meter Run (hrs)",
     "Start Time",
     "End Time",
-    "Operating Hours",
+    "Shift Duration",
+    "Normal Working Time (excl. OT & 1h break)",
     "Overtime Hours",
     "Breakdown",
     "Breakdown Duration",
@@ -201,6 +200,7 @@ export function exportOperatorLogsToExcel(
   ];
 
   let totalOpHours = 0;
+  let totalNormalHours = 0;
   let totalOtHours = 0;
   let totalMeterRun = 0;
   let totalBreakdowns = 0;
@@ -217,7 +217,12 @@ export function exportOperatorLogsToExcel(
 
     const opHrs = computeDurationHours(log.start_time, log.end_time);
     const otHrs = log.overtime_hours || 0;
+    const normalHrs = (log as any).normal_working_hours !== undefined && (log as any).normal_working_hours !== null
+      ? Number((log as any).normal_working_hours)
+      : Math.max(0, Math.round((opHrs - otHrs - 1.0) * 10) / 10);
+
     totalOpHours += opHrs;
+    totalNormalHours += normalHrs;
     totalOtHours += otHrs;
 
     const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*([^\]]+)\]/i) || (log.remarks || "").match(/Breakdown\s*(?:Duration)?:?\s*(\d+h?\s*\d*m?)/i);
@@ -241,6 +246,7 @@ export function exportOperatorLogsToExcel(
       log.start_time || "06:00 AM",
       log.end_time || "02:00 PM",
       `${opHrs} hrs`,
+      `${normalHrs} hrs`,
       `${otHrs} hrs`,
       displayBkdText,
       isBkd ? (bkdDetails || "Breakdown") : "—",
@@ -261,8 +267,9 @@ export function exportOperatorLogsToExcel(
     `Meter Run: ${Math.round(totalMeterRun * 10) / 10} hrs`,
     "",
     "",
-    `Total Op Hrs: ${Math.round(totalOpHours * 10) / 10} hrs`,
-    `Total OT Hrs: ${Math.round(totalOtHours * 10) / 10} hrs`,
+    `Total Shift: ${Math.round(totalOpHours * 10) / 10} hrs`,
+    `Total Normal: ${Math.round(totalNormalHours * 10) / 10} hrs`,
+    `Total OT: ${Math.round(totalOtHours * 10) / 10} hrs`,
     `Breakdowns: ${totalBreakdowns}`,
     "",
     "",

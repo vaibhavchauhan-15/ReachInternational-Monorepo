@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Modal } from "@/components/ui";
 import type { User, MachineHourLog } from "@/lib/types/database";
-import { formatDate } from "@reachinternational/utils";
+import { formatDate, formatTo12Hour } from "@reachinternational/utils";
 import {
   MONTH_NAMES,
   getLogMonthNumber,
@@ -42,13 +42,11 @@ interface SupervisorReportContentProps {
   machines?: any[];
 }
 
-// Compact timing range formatter with zero spaces (e.g. "10:00PM-02:00AM")
+// Compact timing range formatter with zero spaces (e.g. "06:00AM-06:00PM")
 function formatCompactTiming(startStr?: string | null, endStr?: string | null): string {
-  if (!startStr && !endStr) return "06:00AM-02:00PM";
-  if (!startStr) return endStr?.trim().toUpperCase().replace(/\s+/g, "") || "—";
-  if (!endStr) return startStr?.trim().toUpperCase().replace(/\s+/g, "") || "—";
-  const clean = (s: string) => s.trim().toUpperCase().replace(/\s+/g, "");
-  return `${clean(startStr)}-${clean(endStr)}`;
+  const formattedStart = formatTo12Hour(startStr) || "06:00 AM";
+  const formattedEnd = formatTo12Hour(endStr) || "02:00 PM";
+  return `${formattedStart.replace(/\s+/g, "")}-${formattedEnd.replace(/\s+/g, "")}`;
 }
 
 function SupervisorLogsReportContent({
@@ -343,7 +341,10 @@ function SupervisorLogsReportContent({
                         <div className="text-[7.5px] text-neutral-600 font-normal">{locationStr}</div>
                       </td>
                       <td className="p-0.5 border border-neutral-300 font-mono text-[8px] text-neutral-800 text-center align-middle whitespace-nowrap">
-                        {formatCompactTiming(log.start_time, log.end_time)}
+                        <div>{formatCompactTiming(log.start_time, log.end_time)}</div>
+                        <div className="text-[7.5px] text-sky-700 font-bold">
+                          {(log as any).normal_working_hours ?? 8}h normal
+                        </div>
                       </td>
                       <td className="p-0.5 border border-neutral-300 text-center align-middle font-mono font-bold text-[8.5px] whitespace-nowrap">
                         {runningHrs}h

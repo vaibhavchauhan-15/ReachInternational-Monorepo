@@ -23,6 +23,7 @@ export interface MachineReportRow {
   endMeter: number;
   runningHours: number;
   overtimeHours: number;
+  normalWorkingHours: number;
   isBreakdown: boolean;
   status: string;
 }
@@ -62,12 +63,13 @@ export async function getOperationsReportData(
       log_date,
       start_meter,
       end_meter,
+      running_hours,
       overtime_hours,
+      normal_working_hours,
       is_breakdown,
-      status,
-      machine:machines(machine_id, machine_code, model),
-      client:clients(client_name),
-      operator:users!machine_hour_logs_operator_id_fkey(full_name)
+      machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number),
+      client:clients!machine_hour_logs_client_id_fkey(id, client_name),
+      operator:users!machine_hour_logs_operator_id_fkey(id, full_name)
     `)
     .gte("log_date", filters.startDate)
     .lte("log_date", filters.endDate)
@@ -84,9 +86,6 @@ export async function getOperationsReportData(
   if (filters.operatorId && filters.operatorId !== "all") {
     query = query.eq("operator_id", filters.operatorId);
   }
-  if (filters.status && filters.status !== "all") {
-    query = query.eq("status", filters.status);
-  }
 
   const { data, error } = await query;
 
@@ -101,16 +100,23 @@ export async function getOperationsReportData(
   const rows: MachineReportRow[] = data.map((item: any) => {
     const startM = Number(item.start_meter) || 0;
     const endM = Number(item.end_meter) || startM;
-    const running = Math.max(0, endM - startM);
+    const running = item.running_hours !== undefined && item.running_hours !== null
+      ? Number(item.running_hours)
+      : Math.max(0, endM - startM);
     const ot = Number(item.overtime_hours) || 0;
+    const normal = item.normal_working_hours !== undefined && item.normal_working_hours !== null
+      ? Number(item.normal_working_hours)
+      : Math.max(0, running - ot - 1.0);
 
     totalHours += running;
     totalOvertime += ot;
 
+    const mCode = item.machine?.machine_id || item.machine?.id || "—";
+
     return {
       id: item.id,
       logDate: item.log_date,
-      machineCode: item.machine?.machine_code || item.machine?.machine_id || "—",
+      machineCode: mCode,
       machineModel: item.machine?.model || "—",
       clientName: item.client?.client_name || "Unassigned Client",
       operatorName: item.operator?.full_name || "Unassigned Operator",
@@ -118,6 +124,7 @@ export async function getOperationsReportData(
       endMeter: endM,
       runningHours: running,
       overtimeHours: ot,
+      normalWorkingHours: normal,
       isBreakdown: item.is_breakdown || false,
       status: item.status || "submitted",
     };

@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { Modal } from "@/components/ui";
 import type { User, Machine } from "@/lib/types/database";
 import type { OperatorHourLog } from "./OperatorDashboard";
-import { formatDate } from "@reachinternational/utils";
+import { formatDate, formatTo12Hour } from "@reachinternational/utils";
 import {
   exportOperatorLogsToExcel,
   MONTH_NAMES,
@@ -24,16 +24,14 @@ interface PrintableOperatorLogsModalProps {
 
 // Compute operating duration fallback
 function computeDurationHours(startStr?: string, endStr?: string): number {
-  if (!startStr || !endStr) return 8;
-  const parseMins = (str: string) => {
-    const s = str.trim().toUpperCase();
-    const match = s.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
+  const parseMins = (t?: string) => {
+    if (!t) return null;
+    const match = t.trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
     if (!match) return null;
     let h = parseInt(match[1], 10);
     const m = parseInt(match[2], 10);
-    const p = match[3];
-    if (p === "PM" && h < 12) h += 12;
-    if (p === "AM" && h === 12) h = 0;
+    if (match[3] === "PM" && h < 12) h += 12;
+    if (match[3] === "AM" && h === 12) h = 0;
     return h * 60 + m;
   };
   const sMins = parseMins(startStr);
@@ -44,13 +42,11 @@ function computeDurationHours(startStr?: string, endStr?: string): number {
   return Math.round((diff / 60) * 10) / 10;
 }
 
-// Compact timing range formatter with zero spaces (e.g. "10:00PM-02:00AM")
+// Compact timing range formatter with zero spaces (e.g. "06:00AM-06:00PM")
 function formatCompactTiming(startStr?: string, endStr?: string): string {
-  if (!startStr || !endStr) return "06:00AM-02:00PM";
-  const clean = (s: string) => {
-    return s.trim().toUpperCase().replace(/\s+/g, "");
-  };
-  return `${clean(startStr)}-${clean(endStr)}`;
+  const formattedStart = formatTo12Hour(startStr) || "06:00 AM";
+  const formattedEnd = formatTo12Hour(endStr) || "02:00 PM";
+  return `${formattedStart.replace(/\s+/g, "")}-${formattedEnd.replace(/\s+/g, "")}`;
 }
 
 interface ReportContentProps {
@@ -195,7 +191,10 @@ function OperatorLogsReportContent({
                       {log.start_meter ?? 0} → {log.end_meter ?? 0}
                     </td>
                     <td className="p-0.5 border border-neutral-300 font-mono text-[8px] text-neutral-800 text-center align-middle whitespace-nowrap">
-                      {formatCompactTiming(log.start_time, log.end_time)}
+                      <div>{formatCompactTiming(log.start_time, log.end_time)}</div>
+                      <div className="text-[7.5px] text-sky-700 font-bold">
+                        {(log as any).normal_working_hours ?? 8}h normal
+                      </div>
                     </td>
                     <td className="p-0.5 border border-neutral-300 text-center align-middle font-mono font-bold text-[8.5px] whitespace-nowrap">
                       {opHrs}h

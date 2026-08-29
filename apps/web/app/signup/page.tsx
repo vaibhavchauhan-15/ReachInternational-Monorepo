@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -12,25 +12,26 @@ import {
   AnimatedPhone,
   AnimatedMapPin,
   AnimatedAlertCircle,
-  AnimatedCheckCircle,
-  AnimatedArrowRight,
+  AnimatedShieldCheck,
+  AnimatedEye,
+  AnimatedEyeOff,
 } from "@/components/ui/animated-icons";
-import { 
-  CheckCircle2, 
-  ShieldCheck, 
-  Building2, 
-  Wrench, 
-  Package, 
-  Activity, 
-  Users, 
-  CreditCard, 
-  TrendingUp, 
-  Truck, 
-  UserCheck, 
-  ShieldAlert 
+import {
+  Wrench,
+  ShieldCheck,
+  Building2,
+  Package,
+  Activity,
+  Users,
+  CreditCard,
+  TrendingUp,
+  Truck,
+  ShieldAlert,
+  Loader2,
 } from "lucide-react";
 import { signup, type AuthFormState } from "@/app/actions/auth";
-import { Button, Input, SearchableSelect, ReachInternationalLogo } from "@/components/ui";
+import { ReachInternationalLogo } from "@/components/ui";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import type { SelectOption } from "@/components/ui/SearchableSelect";
 
 const signupRoleOptions: SelectOption[] = [
@@ -38,85 +39,88 @@ const signupRoleOptions: SelectOption[] = [
     value: "service_engineer",
     label: "Service Engineer",
     description: "Field operations & breakdown resolution",
-    icon: <Wrench className="h-4 w-4 text-blue-500" />,
+    icon: <Wrench className="h-4 w-4 text-[#00AEEF]" />,
   },
   {
     value: "service_manager",
     label: "Service Manager",
     description: "Service planning, engineer dispatch & FSR approval",
-    icon: <ShieldCheck className="h-4 w-4 text-indigo-500" />,
+    icon: <ShieldCheck className="h-4 w-4 text-[#00AEEF]" />,
   },
   {
     value: "branch_manager",
     label: "Branch Manager",
     description: "Branch fleet, staff & store control",
-    icon: <Building2 className="h-4 w-4 text-indigo-500" />,
+    icon: <Building2 className="h-4 w-4 text-[#00AEEF]" />,
   },
   {
     value: "store_manager",
     label: "Store Manager",
     description: "Inventory stock ledger & transfers",
-    icon: <Package className="h-4 w-4 text-purple-500" />,
+    icon: <Package className="h-4 w-4 text-[#00AEEF]" />,
   },
   {
     value: "supervisor",
     label: "Supervisor",
     description: "Raise complaints & machine inspection",
-    icon: <ShieldCheck className="h-4 w-4 text-teal-500" />,
+    icon: <ShieldCheck className="h-4 w-4 text-[#00AEEF]" />,
   },
   {
     value: "operator",
     label: "Operator",
     description: "Machine duty & daily running hour logs",
-    icon: <Activity className="h-4 w-4 text-amber-500" />,
+    icon: <Activity className="h-4 w-4 text-[#00AEEF]" />,
   },
   {
     value: "mechanic",
     label: "Mechanic / Technician",
     description: "Repair work orders & parts request",
-    icon: <Wrench className="h-4 w-4 text-orange-500" />,
+    icon: <Wrench className="h-4 w-4 text-[#00AEEF]" />,
   },
   {
     value: "hr_manager",
     label: "HR Manager",
     description: "Staff onboarding & payroll management",
-    icon: <Users className="h-4 w-4 text-emerald-500" />,
+    icon: <Users className="h-4 w-4 text-[#00AEEF]" />,
   },
   {
     value: "finance_manager",
     label: "Accounts / Finance Manager",
     description: "Billing & financial reporting",
-    icon: <CreditCard className="h-4 w-4 text-cyan-500" />,
+    icon: <CreditCard className="h-4 w-4 text-[#00AEEF]" />,
   },
   {
     value: "sales_executive",
     label: "Sales Executive",
     description: "Machinery sales & client inquiries",
-    icon: <TrendingUp className="h-4 w-4 text-sky-500" />,
+    icon: <TrendingUp className="h-4 w-4 text-[#00AEEF]" />,
   },
   {
     value: "rental_manager",
     label: "Rental Manager",
     description: "Rental fleet contracts & dispatches",
-    icon: <Truck className="h-4 w-4 text-violet-500" />,
+    icon: <Truck className="h-4 w-4 text-[#00AEEF]" />,
   },
   {
     value: "admin",
     label: "Administrator",
     description: "Platform & user management",
-    icon: <ShieldAlert className="h-4 w-4 text-amber-500" />,
+    icon: <ShieldAlert className="h-4 w-4 text-[#00AEEF]" />,
   },
   {
     value: "super_admin",
     label: "Super Admin",
     description: "Platform owner & global multi-branch control",
-    icon: <ShieldAlert className="h-4 w-4 text-red-500" />,
+    icon: <ShieldAlert className="h-4 w-4 text-[#00AEEF]" />,
   },
 ];
 
 export default function SignupPage() {
   const [state, setState] = useState<AuthFormState>({});
   const [pending, setPending] = useState(false);
+  const isSubmittingRef = useRef(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formValues, setFormValues] = useState({
     full_name: "",
     email: "",
@@ -142,22 +146,27 @@ export default function SignupPage() {
     }
   };
 
-function isRedirectError(error: unknown): boolean {
-  if (typeof error !== "object" || error === null) return false;
-  const err = error as Record<string, unknown>;
-  if (typeof err.digest === "string" && err.digest.startsWith("NEXT_REDIRECT")) {
-    return true;
+  function isRedirectError(error: unknown): boolean {
+    if (typeof error !== "object" || error === null) return false;
+    const err = error as Record<string, unknown>;
+    if (typeof err.digest === "string" && err.digest.startsWith("NEXT_REDIRECT")) {
+      return true;
+    }
+    if (err.message === "NEXT_REDIRECT") {
+      return true;
+    }
+    return false;
   }
-  if (err.message === "NEXT_REDIRECT") {
-    return true;
-  }
-  return false;
-}
 
-  async function handleSubmit(formData: FormData) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (isSubmittingRef.current || pending) return;
+    isSubmittingRef.current = true;
     setPending(true);
     setState({});
+    setFieldErrors({});
 
+    const formData = new FormData(e.currentTarget);
     try {
       const result = await signup({}, formData);
       setState(result);
@@ -174,280 +183,507 @@ function isRedirectError(error: unknown): boolean {
           ...result.fieldValues,
         }));
       }
-      
-      if (!result.error) {
+
+      if (!result.error && result.message) {
+        // Keep pending=true and isSubmittingRef=true so button stays locked and displays spinner during redirect
         setTimeout(() => {
           router.push("/login?message=Signup successful! Please wait for admin approval.");
-        }, 2000);
+        }, 1500);
+        return;
       }
+
+      isSubmittingRef.current = false;
+      setPending(false);
     } catch (err: unknown) {
       if (isRedirectError(err)) {
         throw err;
       }
-      setState({ error: "An unexpected error occurred. Please try again." });
-    } finally {
+      isSubmittingRef.current = false;
       setPending(false);
+      setState({ error: "An unexpected error occurred. Please try again." });
     }
   }
 
   return (
-    <div className="flex min-h-screen lg:h-screen w-full flex-col lg:flex-row bg-background text-foreground relative overflow-hidden">
-      {/* Left: Hero panel with mesh gradient & ambient glow (Desktop only) */}
-      <div className="mesh-gradient relative hidden lg:flex flex-col justify-between p-6 sm:p-10 lg:w-[45%] xl:w-[42%] lg:p-12 border-b lg:border-b-0 lg:border-r border-border overflow-hidden">
-        {/* Soft background glow decoration */}
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-sky-500/10 dark:bg-sky-500/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-violet-500/10 dark:bg-violet-500/15 rounded-full blur-3xl pointer-events-none" />
+    <div className="h-screen h-[100dvh] max-h-screen w-full flex flex-col lg:flex-row bg-[#080909] text-[#F5F7F8] dark:bg-[#080909] dark:text-[#F5F7F8] [html:not(.dark)_&]:bg-[#F7F8FA] [html:not(.dark)_&]:text-[#111315] overflow-y-auto lg:overflow-hidden select-none">
+      {/* ============================================================
+          Left: Visual & Industrial Fleet Showcase Panel (Desktop only)
+          40% width, restrained dark charcoal/cool gray surface
+          ============================================================ */}
+      <div className="relative hidden lg:flex flex-col justify-between h-full lg:w-[40%] p-8 xl:p-10 2xl:p-12 border-r border-[#26292C] dark:border-[#26292C] [html:not(.dark)_&]:border-[#E1E5E9] bg-[#0E1011] dark:bg-[#0E1011] [html:not(.dark)_&]:bg-[#F4F6F8] overflow-hidden">
+        {/* Minimal atmospheric Reach Blue glow behind machine */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[440px] h-[440px] bg-[radial-gradient(circle_at_center,rgba(0,174,239,0.09)_0%,rgba(0,174,239,0.02)_50%,transparent_70%)] dark:bg-[radial-gradient(circle_at_center,rgba(0,174,239,0.12)_0%,rgba(0,174,239,0.03)_50%,transparent_70%)] rounded-full blur-3xl pointer-events-none" />
 
         {/* Top Header / Logo */}
-        <div className="flex items-center justify-between gap-4 z-10">
-          <Link href="/" className="flex items-center group focus:outline-none">
-            <ReachInternationalLogo variant="full" size={32} />
+        <div className="flex items-center justify-between z-10">
+          <Link
+            href="/"
+            className="inline-flex items-center group focus:outline-none focus-visible:ring-2 focus-visible:ring-[#00AEEF] rounded-lg transition-transform hover:scale-[1.01]"
+            aria-label="Reach International Home"
+          >
+            <ReachInternationalLogo variant="full" size={28} />
           </Link>
         </div>
 
         {/* Hero Central Content */}
-        <div className="my-6 lg:my-8 flex flex-col gap-4 max-w-lg z-10">
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-foreground leading-[1.12]">
-            Join your{" "}
-            <span className="bg-gradient-to-r from-sky-500 via-indigo-500 to-violet-500 bg-clip-text text-transparent">
-              organization
-            </span>
-          </h1>
+        <div className="my-auto flex flex-col gap-6 xl:gap-8 max-w-md xl:max-w-lg z-10 py-4">
+          <div className="flex flex-col gap-2">
+            <h1 className="text-3xl sm:text-4xl xl:text-5xl font-bold tracking-tight text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] leading-[1.1]">
+              Join your team.
+              <br />
+              <span className="text-[#00AEEF] dark:text-[#00AEEF] [html:not(.dark)_&]:text-[#008FD0]">
+                Access the fleet.
+              </span>
+            </h1>
+          </div>
 
-          <p className="text-sm sm:text-base text-muted-foreground leading-relaxed">
-            Create an account to access machine service tracking and automated dispatch alerts. Administrator authorization is required.
-          </p>
+          {/* Machine Showcase Stage with Ground Shadow Pedestal */}
+          <div className="relative pt-2 pb-1 flex items-center justify-center">
+            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-[90%] max-w-[360px] xl:max-w-[420px] h-6 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.18)_0%,rgba(0,0,0,0.04)_50%,transparent_70%)] dark:bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0.25)_50%,transparent_70%)] blur-[4px] pointer-events-none z-0" />
 
-          <div className="flex flex-col sm:flex-row flex-wrap gap-2.5 pt-1">
-            <div className="flex items-center gap-2.5 text-xs font-semibold text-foreground bg-card/70 backdrop-blur-md px-3.5 py-2 rounded-xl border border-border/80 shadow-2xs">
-              <CheckCircle2 className="h-4 w-4 text-sky-500" />
-              Track Fleet Services
-            </div>
-            <div className="flex items-center gap-2.5 text-xs font-semibold text-foreground bg-card/70 backdrop-blur-md px-3.5 py-2 rounded-xl border border-border/80 shadow-2xs">
-              <CheckCircle2 className="h-4 w-4 text-sky-500" />
-              Automated Email Dispatch
-            </div>
-            <div className="flex items-center gap-2.5 text-xs font-semibold text-foreground bg-card/70 backdrop-blur-md px-3.5 py-2 rounded-xl border border-border/80 shadow-2xs">
-              <CheckCircle2 className="h-4 w-4 text-sky-500" />
-              Manage Machines
+            <div className="relative z-10 w-full max-w-[340px] xl:max-w-[400px] 2xl:max-w-[440px] transition-transform duration-500 hover:scale-[1.02]">
+              <Image
+                src="/loginpageimage.png"
+                alt="Reach International Aerial Boom Lift Fleet Equipment"
+                width={800}
+                height={533}
+                priority
+                className="w-full h-auto max-h-[32vh] xl:max-h-[36vh] object-contain drop-shadow-sm dark:drop-shadow-[0_12px_24px_rgba(0,0,0,0.6)] select-none pointer-events-none"
+              />
             </div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="pt-4 border-t border-border/60 z-10">
-          <p className="text-xs text-muted-foreground">
-            By submitting this form, you agree to our terms of service and privacy policy.
-          </p>
-        </div>
+        {/* Minimal Bottom Spacer */}
+        <div className="h-4 z-10" />
       </div>
 
-      {/* Right: Signup form panel - Takes up half screen width */}
-      <div className="flex flex-1 items-center justify-center p-4 sm:p-6 lg:p-8 xl:p-12 bg-background relative overflow-y-auto lg:overflow-visible min-h-screen lg:min-h-0">
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-[500px] h-[500px] bg-sky-500/5 dark:bg-sky-500/10 rounded-full blur-3xl" />
-        </div>
+      {/* ============================================================
+          Right: Dedicated Signup Workspace (60% width on desktop)
+          Compact floating enterprise registration card with zero scroll
+          ============================================================ */}
+      <div className="relative flex-1 lg:w-[60%] h-full flex flex-col justify-center items-center p-3 sm:p-5 lg:p-6 xl:p-8 overflow-y-auto lg:overflow-hidden bg-[#080909] dark:bg-[#080909] [html:not(.dark)_&]:bg-[#F7F8FA]">
+        {/* Center: Floating Registration Card */}
+        <div className="w-full flex items-center justify-center my-auto py-1 z-10">
+          <motion.div
+            initial={{ opacity: 0, y: 8, scale: 0.99 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+            className="w-full max-w-xl lg:max-w-2xl bg-[#111314] dark:bg-[#111314] [html:not(.dark)_&]:bg-[#FFFFFF] rounded-[14px] border border-[#26292C] dark:border-[#26292C] [html:not(.dark)_&]:border-[#E1E5E9] p-5 sm:p-6 lg:p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)] [html:not(.dark)_&]:shadow-[0_20px_50px_rgba(0,0,0,0.06)] text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] relative overflow-hidden"
+          >
+            {/* Mobile Only: Top Header Logo & Portal Emblem */}
+            <div className="flex lg:hidden flex-col items-center justify-center mb-4 gap-1.5">
+              <Link href="/" className="flex items-center group focus:outline-none">
+                <ReachInternationalLogo variant="full" size={26} />
+              </Link>
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#00AEEF]/10 dark:bg-[#00AEEF]/15 border border-[#00AEEF]/20 text-[10px] font-mono font-medium text-[#00AEEF] dark:text-[#00AEEF] [html:not(.dark)_&]:text-[#008FD0]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#18B981] animate-pulse" />
+                Enterprise Fleet Platform
+              </div>
+            </div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 12, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-          className="w-full max-w-xl lg:max-w-2xl xl:max-w-3xl bg-card/80 backdrop-blur-xl rounded-2xl border border-border p-6 sm:p-8 lg:p-10 shadow-2xl text-card-foreground relative overflow-hidden"
-        >
-          {/* Mobile Logo Branding */}
-          <div className="flex lg:hidden justify-center mb-6">
-            <Link href="/" className="flex items-center group focus:outline-none">
-              <ReachInternationalLogo variant="full" size={32} />
-            </Link>
-          </div>
+            {/* Card Header — Clean title */}
+            <div className="mb-3.5">
+              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315]">
+                Create an account
+              </h2>
+            </div>
 
-          {/* Decorative top hairline glow */}
-          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-sky-500/50 to-transparent" />
+            {/* Global Error Banner */}
+            {state.error && Object.keys(fieldErrors).length === 0 && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                className="flex items-start gap-2 rounded-[6px] bg-rose-500/10 border border-rose-500/20 p-2.5 mb-3 text-xs font-semibold text-rose-600 dark:text-rose-400"
+              >
+                <AnimatedAlertCircle size={14} className="text-rose-500 shrink-0 mt-0.5" />
+                <span>{state.error}</span>
+              </motion.div>
+            )}
 
-          <div className="mb-6">
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Create your account</h2>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-              Fill in your details below to request access from your organization administrator.
-            </p>
-          </div>
+            {/* Global Success Banner */}
+            {state.message && !state.error && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                className="flex items-start gap-2 rounded-[6px] bg-emerald-500/10 border border-emerald-500/20 p-2.5 mb-3 text-xs font-semibold text-emerald-600 dark:text-emerald-400"
+              >
+                <AnimatedShieldCheck size={14} className="text-emerald-500 shrink-0 mt-0.5" />
+                <span>{state.message}</span>
+              </motion.div>
+            )}
 
-          {state.error && Object.keys(fieldErrors).length === 0 && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              className="flex items-start gap-3 rounded-xl bg-rose-500/10 border border-rose-500/20 p-3.5 mb-5 text-xs font-semibold text-rose-700 dark:text-rose-300"
-            >
-              <AnimatedAlertCircle size={16} className="text-rose-500 shrink-0 mt-0.5" />
-              <span>{state.error}</span>
-            </motion.div>
-          )}
+            {/* Registration Form */}
+            <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
+              {/* Row 1: Full Name | Email */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* Full Name */}
+                <div className="flex flex-col gap-1 w-full">
+                  <label
+                    htmlFor="signup-full-name"
+                    className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
+                  >
+                    Full Name *
+                  </label>
+                  <div className="relative w-full flex items-center">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
+                      <AnimatedUser size={15} />
+                    </div>
+                    <input
+                      id="signup-full-name"
+                      name="full_name"
+                      type="text"
+                      value={formValues.full_name}
+                      onChange={(e) => handleChange("full_name", e.target.value)}
+                      placeholder="Rahul Sharma"
+                      required
+                      autoComplete="name"
+                      className={`w-full h-10 pl-9 pr-3 text-xs sm:text-[13px] rounded-[6px] border bg-[#151718] dark:bg-[#151718] [html:not(.dark)_&]:bg-[#F1F3F5] text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 [html:not(.dark)_&]:placeholder-[#626970]/70 transition-colors focus:outline-none focus:border-[#00AEEF] dark:focus:border-[#00AEEF] [html:not(.dark)_&]:focus:border-[#008FD0] focus:ring-2 focus:ring-[#00AEEF]/15 ${
+                        fieldErrors.full_name
+                          ? "border-rose-500 dark:border-rose-400 bg-rose-500/5 dark:bg-rose-500/10 focus:border-rose-500"
+                          : "border-[#292C2F] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] hover:border-[#3A3E42] dark:hover:border-[#3A3E42] [html:not(.dark)_&]:hover:border-[#CBD5E1]"
+                      }`}
+                    />
+                  </div>
+                  {fieldErrors.full_name && (
+                    <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-0.5">
+                      {fieldErrors.full_name}
+                    </p>
+                  )}
+                </div>
 
-          {state.message && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              className="flex items-start gap-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3.5 mb-5 text-xs font-semibold text-emerald-700 dark:text-emerald-300"
-            >
-              <AnimatedCheckCircle size={16} className="text-emerald-500 shrink-0 mt-0.5" />
-              <span>{state.message}</span>
-            </motion.div>
-          )}
-
-          <form action={handleSubmit} className="flex flex-col gap-4">
-            {/* 2-Column Input Grid for Signup */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="Full Name"
-                name="full_name"
-                type="text"
-                value={formValues.full_name}
-                onChange={(e) => handleChange("full_name", e.target.value)}
-                error={fieldErrors.full_name}
-                placeholder="Rahul Sharma"
-                icon={<AnimatedUser size={16} />}
-                required
-                autoComplete="name"
-              />
-
-              <Input
-                label="Email address"
-                name="email"
-                type="email"
-                value={formValues.email}
-                onChange={(e) => handleChange("email", e.target.value)}
-                error={fieldErrors.email}
-                placeholder="rahul@customdomain.in"
-                icon={<AnimatedMail size={16} />}
-                required
-                autoComplete="email"
-              />
-
-              <Input
-                label="Mobile Number"
-                name="phone"
-                type="tel"
-                value={formValues.phone}
-                onChange={(e) => handleChange("phone", e.target.value)}
-                error={fieldErrors.phone}
-                placeholder="+91 98765 43210"
-                icon={<AnimatedPhone size={16} />}
-                required
-                autoComplete="tel"
-              />
-
-              <div>
-                {/* Hidden Input for Form Submission */}
-                <input type="hidden" name="role" value={formValues.role} />
-                {/* Role Selector */}
-                <SearchableSelect
-                  label="Account Role Requested *"
-                  options={signupRoleOptions}
-                  value={formValues.role}
-                  onChange={(val) => handleChange("role", val)}
-                  placeholder="Select account role..."
-                  clearable={false}
-                  error={fieldErrors.role}
-                />
+                {/* Email Address */}
+                <div className="flex flex-col gap-1 w-full">
+                  <label
+                    htmlFor="signup-email"
+                    className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
+                  >
+                    Email address *
+                  </label>
+                  <div className="relative w-full flex items-center">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
+                      <AnimatedMail size={15} />
+                    </div>
+                    <input
+                      id="signup-email"
+                      name="email"
+                      type="email"
+                      value={formValues.email}
+                      onChange={(e) => handleChange("email", e.target.value)}
+                      placeholder="rahul@domain.com"
+                      required
+                      autoComplete="email"
+                      className={`w-full h-10 pl-9 pr-3 text-xs sm:text-[13px] rounded-[6px] border bg-[#151718] dark:bg-[#151718] [html:not(.dark)_&]:bg-[#F1F3F5] text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 [html:not(.dark)_&]:placeholder-[#626970]/70 transition-colors focus:outline-none focus:border-[#00AEEF] dark:focus:border-[#00AEEF] [html:not(.dark)_&]:focus:border-[#008FD0] focus:ring-2 focus:ring-[#00AEEF]/15 ${
+                        fieldErrors.email
+                          ? "border-rose-500 dark:border-rose-400 bg-rose-500/5 dark:bg-rose-500/10 focus:border-rose-500"
+                          : "border-[#292C2F] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] hover:border-[#3A3E42] dark:hover:border-[#3A3E42] [html:not(.dark)_&]:hover:border-[#CBD5E1]"
+                      }`}
+                    />
+                  </div>
+                  {fieldErrors.email && (
+                    <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-0.5">
+                      {fieldErrors.email}
+                    </p>
+                  )}
+                </div>
               </div>
 
-              <Input
-                label="City *"
-                name="city"
-                type="text"
-                value={formValues.city}
-                onChange={(e) => handleChange("city", e.target.value)}
-                error={fieldErrors.city}
-                placeholder="e.g. Pune"
-                icon={<AnimatedMapPin size={16} />}
-                required
-                autoComplete="address-level2"
-              />
+              {/* Row 2: Mobile Number | Role */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* Mobile Number */}
+                <div className="flex flex-col gap-1 w-full">
+                  <label
+                    htmlFor="signup-phone"
+                    className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
+                  >
+                    Mobile Number *
+                  </label>
+                  <div className="relative w-full flex items-center">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
+                      <AnimatedPhone size={15} />
+                    </div>
+                    <input
+                      id="signup-phone"
+                      name="phone"
+                      type="tel"
+                      value={formValues.phone}
+                      onChange={(e) => handleChange("phone", e.target.value)}
+                      placeholder="+91 98765 43210"
+                      required
+                      autoComplete="tel"
+                      className={`w-full h-10 pl-9 pr-3 text-xs sm:text-[13px] rounded-[6px] border bg-[#151718] dark:bg-[#151718] [html:not(.dark)_&]:bg-[#F1F3F5] text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 [html:not(.dark)_&]:placeholder-[#626970]/70 transition-colors focus:outline-none focus:border-[#00AEEF] dark:focus:border-[#00AEEF] [html:not(.dark)_&]:focus:border-[#008FD0] focus:ring-2 focus:ring-[#00AEEF]/15 ${
+                        fieldErrors.phone
+                          ? "border-rose-500 dark:border-rose-400 bg-rose-500/5 dark:bg-rose-500/10 focus:border-rose-500"
+                          : "border-[#292C2F] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] hover:border-[#3A3E42] dark:hover:border-[#3A3E42] [html:not(.dark)_&]:hover:border-[#CBD5E1]"
+                      }`}
+                    />
+                  </div>
+                  {fieldErrors.phone && (
+                    <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-0.5">
+                      {fieldErrors.phone}
+                    </p>
+                  )}
+                </div>
 
-              <Input
-                label="District *"
-                name="district"
-                type="text"
-                value={formValues.district}
-                onChange={(e) => handleChange("district", e.target.value)}
-                error={fieldErrors.district}
-                placeholder="e.g. Pune"
-                icon={<AnimatedMapPin size={16} />}
-                required
-                autoComplete="address-level2"
-              />
+                {/* Account Role Requested */}
+                <div className="flex flex-col gap-1 w-full">
+                  <input type="hidden" name="role" value={formValues.role} />
+                  <SearchableSelect
+                    label="Account Role Requested *"
+                    options={signupRoleOptions}
+                    value={formValues.role}
+                    onChange={(val) => handleChange("role", val)}
+                    placeholder="Select account role..."
+                    clearable={false}
+                    error={fieldErrors.role}
+                    className="w-full text-xs"
+                  />
+                </div>
+              </div>
 
-              <Input
-                label="State *"
-                name="state"
-                type="text"
-                value={formValues.state}
-                onChange={(e) => handleChange("state", e.target.value)}
-                error={fieldErrors.state}
-                placeholder="e.g. Maharashtra"
-                icon={<AnimatedMapPin size={16} />}
-                required
-                autoComplete="address-level1"
-              />
+              {/* Row 3: City | District | State (3-Column compact layout) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {/* City */}
+                <div className="flex flex-col gap-1 w-full">
+                  <label
+                    htmlFor="signup-city"
+                    className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
+                  >
+                    City *
+                  </label>
+                  <div className="relative w-full flex items-center">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
+                      <AnimatedMapPin size={14} />
+                    </div>
+                    <input
+                      id="signup-city"
+                      name="city"
+                      type="text"
+                      value={formValues.city}
+                      onChange={(e) => handleChange("city", e.target.value)}
+                      placeholder="Pune"
+                      required
+                      autoComplete="address-level2"
+                      className={`w-full h-10 pl-8 pr-2.5 text-xs rounded-[6px] border bg-[#151718] dark:bg-[#151718] [html:not(.dark)_&]:bg-[#F1F3F5] text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 [html:not(.dark)_&]:placeholder-[#626970]/70 transition-colors focus:outline-none focus:border-[#00AEEF] dark:focus:border-[#00AEEF] [html:not(.dark)_&]:focus:border-[#008FD0] focus:ring-2 focus:ring-[#00AEEF]/15 ${
+                        fieldErrors.city
+                          ? "border-rose-500 dark:border-rose-400 bg-rose-500/5 dark:bg-rose-500/10 focus:border-rose-500"
+                          : "border-[#292C2F] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] hover:border-[#3A3E42] dark:hover:border-[#3A3E42] [html:not(.dark)_&]:hover:border-[#CBD5E1]"
+                      }`}
+                    />
+                  </div>
+                  {fieldErrors.city && (
+                    <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-0.5">
+                      {fieldErrors.city}
+                    </p>
+                  )}
+                </div>
 
-              <Input
-                label="Password *"
-                name="password"
-                type="password"
-                value={formValues.password}
-                onChange={(e) => handleChange("password", e.target.value)}
-                error={fieldErrors.password}
-                placeholder="••••••••••••"
-                icon={<AnimatedLock size={16} />}
-                required
-                autoComplete="new-password"
-              />
+                {/* District */}
+                <div className="flex flex-col gap-1 w-full">
+                  <label
+                    htmlFor="signup-district"
+                    className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
+                  >
+                    District *
+                  </label>
+                  <div className="relative w-full flex items-center">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
+                      <AnimatedMapPin size={14} />
+                    </div>
+                    <input
+                      id="signup-district"
+                      name="district"
+                      type="text"
+                      value={formValues.district}
+                      onChange={(e) => handleChange("district", e.target.value)}
+                      placeholder="Pune"
+                      required
+                      autoComplete="address-level2"
+                      className={`w-full h-10 pl-8 pr-2.5 text-xs rounded-[6px] border bg-[#151718] dark:bg-[#151718] [html:not(.dark)_&]:bg-[#F1F3F5] text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 [html:not(.dark)_&]:placeholder-[#626970]/70 transition-colors focus:outline-none focus:border-[#00AEEF] dark:focus:border-[#00AEEF] [html:not(.dark)_&]:focus:border-[#008FD0] focus:ring-2 focus:ring-[#00AEEF]/15 ${
+                        fieldErrors.district
+                          ? "border-rose-500 dark:border-rose-400 bg-rose-500/5 dark:bg-rose-500/10 focus:border-rose-500"
+                          : "border-[#292C2F] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] hover:border-[#3A3E42] dark:hover:border-[#3A3E42] [html:not(.dark)_&]:hover:border-[#CBD5E1]"
+                      }`}
+                    />
+                  </div>
+                  {fieldErrors.district && (
+                    <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-0.5">
+                      {fieldErrors.district}
+                    </p>
+                  )}
+                </div>
 
-              <Input
-                label="Confirm Password *"
-                name="confirm_password"
-                type="password"
-                value={formValues.confirm_password}
-                onChange={(e) => handleChange("confirm_password", e.target.value)}
-                error={fieldErrors.confirm_password}
-                placeholder="••••••••••••"
-                icon={<AnimatedLock size={16} />}
-                required
-                autoComplete="new-password"
-              />
-            </div>
+                {/* State */}
+                <div className="flex flex-col gap-1 w-full">
+                  <label
+                    htmlFor="signup-state"
+                    className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
+                  >
+                    State *
+                  </label>
+                  <div className="relative w-full flex items-center">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
+                      <AnimatedMapPin size={14} />
+                    </div>
+                    <input
+                      id="signup-state"
+                      name="state"
+                      type="text"
+                      value={formValues.state}
+                      onChange={(e) => handleChange("state", e.target.value)}
+                      placeholder="Maharashtra"
+                      required
+                      autoComplete="address-level1"
+                      className={`w-full h-10 pl-8 pr-2.5 text-xs rounded-[6px] border bg-[#151718] dark:bg-[#151718] [html:not(.dark)_&]:bg-[#F1F3F5] text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 [html:not(.dark)_&]:placeholder-[#626970]/70 transition-colors focus:outline-none focus:border-[#00AEEF] dark:focus:border-[#00AEEF] [html:not(.dark)_&]:focus:border-[#008FD0] focus:ring-2 focus:ring-[#00AEEF]/15 ${
+                        fieldErrors.state
+                          ? "border-rose-500 dark:border-rose-400 bg-rose-500/5 dark:bg-rose-500/10 focus:border-rose-500"
+                          : "border-[#292C2F] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] hover:border-[#3A3E42] dark:hover:border-[#3A3E42] [html:not(.dark)_&]:hover:border-[#CBD5E1]"
+                      }`}
+                    />
+                  </div>
+                  {fieldErrors.state && (
+                    <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-0.5">
+                      {fieldErrors.state}
+                    </p>
+                  )}
+                </div>
+              </div>
 
-            <div className="bg-sky-500/10 border border-sky-500/20 rounded-xl p-3 text-xs leading-relaxed text-sky-700 dark:text-sky-300">
-              <strong>Note:</strong> Account status will be &ldquo;pending&rdquo; until approved by an administrator.
-            </div>
+              {/* Row 4: Password | Confirm Password */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* Password */}
+                <div className="flex flex-col gap-1 w-full">
+                  <label
+                    htmlFor="signup-password"
+                    className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
+                  >
+                    Password *
+                  </label>
+                  <div className="relative w-full flex items-center">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
+                      <AnimatedLock size={15} />
+                    </div>
+                    <input
+                      id="signup-password"
+                      name="password"
+                      type={showPassword ? "text" : "password"}
+                      value={formValues.password}
+                      onChange={(e) => handleChange("password", e.target.value)}
+                      placeholder="••••••••••••"
+                      required
+                      autoComplete="new-password"
+                      className={`w-full h-10 pl-9 pr-9 text-xs sm:text-[13px] rounded-[6px] border bg-[#151718] dark:bg-[#151718] [html:not(.dark)_&]:bg-[#F1F3F5] text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 [html:not(.dark)_&]:placeholder-[#626970]/70 transition-colors focus:outline-none focus:border-[#00AEEF] dark:focus:border-[#00AEEF] [html:not(.dark)_&]:focus:border-[#008FD0] focus:ring-2 focus:ring-[#00AEEF]/15 ${
+                        fieldErrors.password
+                          ? "border-rose-500 dark:border-rose-400 bg-rose-500/5 dark:bg-rose-500/10 focus:border-rose-500"
+                          : "border-[#292C2F] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] hover:border-[#3A3E42] dark:hover:border-[#3A3E42] [html:not(.dark)_&]:hover:border-[#CBD5E1]"
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970] hover:text-[#F5F7F8] dark:hover:text-[#F5F7F8] [html:not(.dark)_&]:hover:text-[#111315] transition-colors p-1 rounded focus:outline-none"
+                      tabIndex={-1}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? <AnimatedEyeOff size={15} /> : <AnimatedEye size={15} />}
+                    </button>
+                  </div>
+                  {fieldErrors.password && (
+                    <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-0.5">
+                      {fieldErrors.password}
+                    </p>
+                  )}
+                </div>
 
-            <motion.div whileTap={{ scale: 0.98 }} className="pt-2">
-              <Button
-                type="submit"
-                loading={pending}
-                className="w-full h-11 text-xs font-semibold bg-primary text-primary-foreground hover:opacity-95 shadow-md flex items-center justify-center gap-2 rounded-xl transition-all"
+                {/* Confirm Password */}
+                <div className="flex flex-col gap-1 w-full">
+                  <label
+                    htmlFor="signup-confirm-password"
+                    className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
+                  >
+                    Confirm Password *
+                  </label>
+                  <div className="relative w-full flex items-center">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
+                      <AnimatedLock size={15} />
+                    </div>
+                    <input
+                      id="signup-confirm-password"
+                      name="confirm_password"
+                      type={showConfirmPassword ? "text" : "password"}
+                      value={formValues.confirm_password}
+                      onChange={(e) => handleChange("confirm_password", e.target.value)}
+                      placeholder="••••••••••••"
+                      required
+                      autoComplete="new-password"
+                      className={`w-full h-10 pl-9 pr-9 text-xs sm:text-[13px] rounded-[6px] border bg-[#151718] dark:bg-[#151718] [html:not(.dark)_&]:bg-[#F1F3F5] text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 [html:not(.dark)_&]:placeholder-[#626970]/70 transition-colors focus:outline-none focus:border-[#00AEEF] dark:focus:border-[#00AEEF] [html:not(.dark)_&]:focus:border-[#008FD0] focus:ring-2 focus:ring-[#00AEEF]/15 ${
+                        fieldErrors.confirm_password
+                          ? "border-rose-500 dark:border-rose-400 bg-rose-500/5 dark:bg-rose-500/10 focus:border-rose-500"
+                          : "border-[#292C2F] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] hover:border-[#3A3E42] dark:hover:border-[#3A3E42] [html:not(.dark)_&]:hover:border-[#CBD5E1]"
+                      }`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970] hover:text-[#F5F7F8] dark:hover:text-[#F5F7F8] [html:not(.dark)_&]:hover:text-[#111315] transition-colors p-1 rounded focus:outline-none"
+                      tabIndex={-1}
+                      aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+                    >
+                      {showConfirmPassword ? <AnimatedEyeOff size={15} /> : <AnimatedEye size={15} />}
+                    </button>
+                  </div>
+                  {fieldErrors.confirm_password && (
+                    <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-0.5">
+                      {fieldErrors.confirm_password}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Note banner */}
+              <div className="rounded-[6px] bg-[#00AEEF]/10 dark:bg-[#00AEEF]/10 border border-[#00AEEF]/20 py-1.5 px-3 text-[11px] leading-relaxed text-[#00AEEF] dark:text-[#00AEEF] [html:not(.dark)_&]:text-[#008FD0]">
+                <strong>Note:</strong> Account status will be &ldquo;pending&rdquo; until approved by an administrator.
+              </div>
+
+              {/* Submit CTA Button — DESIGN.md compliant primary app button */}
+              <div className="pt-1">
+                <button
+                  type="submit"
+                  disabled={pending}
+                  className="w-full h-11 rounded-[6px] font-medium text-sm transition-all duration-150 shadow-xs flex items-center justify-center gap-2 bg-[#171717] hover:bg-[#262626] text-[#ffffff] dark:bg-[#fafafa] dark:hover:bg-[#ebebeb] dark:text-[#0a0a0a] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.98] cursor-pointer"
+                >
+                  {pending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin shrink-0 text-current" />
+                      <span>Creating account...</span>
+                    </>
+                  ) : (
+                    <span>Request Platform Access</span>
+                  )}
+                </button>
+              </div>
+            </form>
+
+            {/* Footer */}
+            <div className="mt-3.5 pt-3 border-t border-[#26292C] dark:border-[#26292C] [html:not(.dark)_&]:border-[#E1E5E9] flex items-center justify-center gap-1.5 text-xs">
+              <span className="text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
+                Already have an account?
+              </span>
+              <Link
+                href="/login"
+                className="font-semibold text-[#00AEEF] dark:text-[#00AEEF] [html:not(.dark)_&]:text-[#008FD0] hover:underline transition-colors inline-flex items-center gap-0.5"
               >
-                {pending ? (
-                  "Creating account..."
-                ) : (
-                  <>
-                    Request Access
-                    <AnimatedArrowRight size={16} />
-                  </>
-                )}
-              </Button>
-            </motion.div>
-          </form>
+                <span>Sign in</span>
+                <span className="text-xs">→</span>
+              </Link>
+            </div>
+          </motion.div>
+        </div>
 
-          <div className="mt-6 pt-4 border-t border-border/80 flex items-center justify-center gap-2 text-xs text-muted-foreground">
-            <span>Already have an account?</span>
-            <Link
-              href="/login"
-              className="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:text-sky-500 hover:underline transition-colors"
-            >
-              Sign in
-            </Link>
-          </div>
-        </motion.div>
+        {/* Minimal Bottom Footer */}
+        <div className="w-full flex items-center justify-center text-[11px] font-mono text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970] shrink-0 pt-1 pb-1">
+          <span>&copy; {new Date().getFullYear()} REACH INTERNATIONAL. ALL RIGHTS RESERVED.</span>
+        </div>
       </div>
     </div>
   );
