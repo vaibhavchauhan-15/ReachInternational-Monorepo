@@ -17,7 +17,7 @@ interface SearchableSelectProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  label?: string;
+  label?: ReactNode;
   disabled?: boolean;
   clearable?: boolean;
   className?: string;

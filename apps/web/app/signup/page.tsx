@@ -18,16 +18,6 @@ import {
   AnimatedEyeOff,
 } from "@/components/ui/animated-icons";
 import {
-  Wrench,
-  ShieldCheck,
-  Building2,
-  Package,
-  Activity,
-  Users,
-  CreditCard,
-  TrendingUp,
-  Truck,
-  ShieldAlert,
   Loader2,
 } from "lucide-react";
 import { signup, type AuthFormState } from "@/app/actions/auth";
@@ -37,66 +27,16 @@ import type { SelectOption } from "@/components/ui/SearchableSelect";
 import { validateAadhaarNumber, validateLicenseNumber, formatAadhaar } from "@reachinternational/utils";
 
 const signupRoleOptions: SelectOption[] = [
-  {
-    value: "service_engineer",
-    label: "Service Engineer",
-    description: "Field service & machine repair operations",
-    icon: <Wrench className="h-4 w-4 text-blue-500" />,
-  },
-  {
-    value: "supervisor",
-    label: "Supervisor",
-    description: "Site operations & equipment inspection",
-    icon: <ShieldCheck className="h-4 w-4 text-teal-500" />,
-  },
-  {
-    value: "store_manager",
-    label: "Store Manager",
-    description: "Inventory stock ledger & transfers",
-    icon: <Package className="h-4 w-4 text-purple-500" />,
-  },
-  {
-    value: "operator",
-    label: "Operator",
-    description: "Daily machinery operation & hour logs",
-    icon: <Activity className="h-4 w-4 text-amber-500" />,
-  },
-  {
-    value: "mechanic",
-    label: "Mechanic / Technician",
-    description: "Preventative maintenance & repair logs",
-    icon: <Wrench className="h-4 w-4 text-orange-500" />,
-  },
-  {
-    value: "hr_manager",
-    label: "HR Manager",
-    description: "Staff onboarding & workforce admin",
-    icon: <Users className="h-4 w-4 text-emerald-500" />,
-  },
-  {
-    value: "finance_manager",
-    label: "Accounts / Finance Manager",
-    description: "Billing & financial reconciliations",
-    icon: <CreditCard className="h-4 w-4 text-cyan-500" />,
-  },
-  {
-    value: "sales_executive",
-    label: "Sales Executive",
-    description: "Machinery sales & client inquiries",
-    icon: <TrendingUp className="h-4 w-4 text-sky-500" />,
-  },
-  {
-    value: "rental_manager",
-    label: "Rental Manager",
-    description: "Rental fleet logistics & deployments",
-    icon: <Truck className="h-4 w-4 text-violet-500" />,
-  },
-  {
-    value: "client",
-    label: "Client / Customer",
-    description: "View rented fleet & work progress",
-    icon: <Building2 className="h-4 w-4 text-slate-400" />,
-  },
+  { value: "service_engineer", label: "Service Engineer" },
+  { value: "supervisor", label: "Supervisor" },
+  { value: "store_manager", label: "Store Manager" },
+  { value: "operator", label: "Operator" },
+  { value: "mechanic", label: "Mechanic / Technician" },
+  { value: "hr_manager", label: "HR Manager" },
+  { value: "finance_manager", label: "Accounts / Finance Manager" },
+  { value: "sales_executive", label: "Sales Executive" },
+  { value: "rental_manager", label: "Rental Manager" },
+  { value: "client", label: "Client / Customer" },
 ];
 
 export default function SignupPage() {
@@ -184,7 +124,9 @@ export default function SignupPage() {
 
     // Client-side pre-flight checks
     const errors: Record<string, string> = {};
-    if (formValues.aadhaar_number.trim()) {
+    if (!formValues.aadhaar_number.trim()) {
+      errors.aadhaar_number = "Aadhaar card number is required.";
+    } else {
       const aadhaarRes = validateAadhaarNumber(formValues.aadhaar_number);
       if (!aadhaarRes.isValid) {
         errors.aadhaar_number = aadhaarRes.error || "Invalid Aadhaar number.";
@@ -364,7 +306,7 @@ export default function SignupPage() {
                     htmlFor="signup-full-name"
                     className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
                   >
-                    Full Name *
+                    Full Name <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative w-full flex items-center">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
@@ -399,7 +341,7 @@ export default function SignupPage() {
                     htmlFor="signup-email"
                     className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
                   >
-                    Email address *
+                    Email address <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative w-full flex items-center">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
@@ -437,7 +379,7 @@ export default function SignupPage() {
                     htmlFor="signup-phone"
                     className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
                   >
-                    Mobile Number *
+                    Mobile Number <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative w-full flex items-center">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
@@ -466,15 +408,19 @@ export default function SignupPage() {
                   )}
                 </div>
 
-                {/* Account Role Requested */}
+                {/* Account Role */}
                 <div className="flex flex-col gap-1 w-full">
+                  <label
+                    className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
+                  >
+                    Role <span className="text-rose-500">*</span>
+                  </label>
                   <input type="hidden" name="role" value={formValues.role} />
                   <SearchableSelect
-                    label="Account Role Requested *"
                     options={signupRoleOptions}
                     value={formValues.role}
                     onChange={(val) => handleChange("role", val)}
-                    placeholder="Select account role..."
+                    placeholder="Select role..."
                     clearable={false}
                     error={fieldErrors.role}
                     className="w-full text-xs"
@@ -490,7 +436,7 @@ export default function SignupPage() {
                     htmlFor="signup-city"
                     className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
                   >
-                    City *
+                    City <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative w-full flex items-center">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
@@ -525,7 +471,7 @@ export default function SignupPage() {
                     htmlFor="signup-district"
                     className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
                   >
-                    District *
+                    District <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative w-full flex items-center">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
@@ -560,7 +506,7 @@ export default function SignupPage() {
                     htmlFor="signup-state"
                     className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
                   >
-                    State *
+                    State <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative w-full flex items-center">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
@@ -598,7 +544,7 @@ export default function SignupPage() {
                     htmlFor="signup-aadhaar"
                     className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
                   >
-                    Aadhaar Card Number
+                    Aadhaar Card Number <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative w-full flex items-center">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
@@ -613,6 +559,7 @@ export default function SignupPage() {
                       onBlur={() => handleBlur("aadhaar_number")}
                       placeholder="12-digit Aadhaar Number"
                       maxLength={14}
+                      required
                       className={`w-full h-10 pl-9 pr-3 text-xs sm:text-[13px] rounded-[6px] border bg-[#151718] dark:bg-[#151718] [html:not(.dark)_&]:bg-[#F1F3F5] text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 [html:not(.dark)_&]:placeholder-[#626970]/70 transition-colors focus:outline-none focus:border-[#00AEEF] dark:focus:border-[#00AEEF] [html:not(.dark)_&]:focus:border-[#008FD0] focus:ring-2 focus:ring-[#00AEEF]/15 ${
                         fieldErrors.aadhaar_number
                           ? "border-rose-500 dark:border-rose-400 bg-rose-500/5 dark:bg-rose-500/10 focus:border-rose-500"
@@ -633,7 +580,7 @@ export default function SignupPage() {
                     htmlFor="signup-license"
                     className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
                   >
-                    Driving Licence Number
+                    Driving Licence Number <span className="text-[11px] font-normal text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">(Optional)</span>
                   </label>
                   <div className="relative w-full flex items-center">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
@@ -671,7 +618,7 @@ export default function SignupPage() {
                     htmlFor="signup-password"
                     className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
                   >
-                    Password *
+                    Password <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative w-full flex items-center">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
@@ -715,7 +662,7 @@ export default function SignupPage() {
                     htmlFor="signup-confirm-password"
                     className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
                   >
-                    Confirm Password *
+                    Confirm Password <span className="text-rose-500">*</span>
                   </label>
                   <div className="relative w-full flex items-center">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
@@ -785,10 +732,9 @@ export default function SignupPage() {
               </span>
               <Link
                 href="/login"
-                className="font-semibold text-[#00AEEF] dark:text-[#00AEEF] [html:not(.dark)_&]:text-[#008FD0] hover:underline transition-colors inline-flex items-center gap-0.5"
+                className="font-semibold text-[#00AEEF] dark:text-[#00AEEF] [html:not(.dark)_&]:text-[#008FD0] hover:underline transition-colors"
               >
-                <span>Sign in</span>
-                <span className="text-xs">→</span>
+                Sign in
               </Link>
             </div>
           </motion.div>

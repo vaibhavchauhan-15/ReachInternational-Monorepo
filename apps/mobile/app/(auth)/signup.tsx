@@ -108,15 +108,16 @@ export default function SignupScreen() {
       return;
     }
 
-    let cleanAadhaar: string | null = null;
-    if (aadhaarNumber.trim()) {
-      const aadhaarRes = validateAadhaarNumber(aadhaarNumber);
-      if (!aadhaarRes.isValid) {
-        setErrorMessage(aadhaarRes.error || 'Please enter a valid 12-digit Aadhaar number.');
-        return;
-      }
-      cleanAadhaar = aadhaarRes.clean || null;
+    if (!aadhaarNumber.trim()) {
+      setErrorMessage('Aadhaar card number is required.');
+      return;
     }
+    const aadhaarRes = validateAadhaarNumber(aadhaarNumber);
+    if (!aadhaarRes.isValid) {
+      setErrorMessage(aadhaarRes.error || 'Please enter a valid 12-digit Aadhaar number.');
+      return;
+    }
+    const cleanAadhaar = aadhaarRes.clean || null;
 
     let formattedLic: string | null = null;
     if (licenseNumber.trim()) {
@@ -313,7 +314,7 @@ export default function SignupScreen() {
           />
 
           <Input
-            label="Aadhaar Card Number"
+            label="Aadhaar Card Number *"
             placeholder="12-digit Aadhaar Number"
             value={aadhaarNumber}
             onChangeText={setAadhaarNumber}
@@ -323,7 +324,7 @@ export default function SignupScreen() {
           />
 
           <Input
-            label="Driving Licence Number"
+            label="Driving Licence Number (Optional)"
             placeholder="e.g. MH12 20110012345"
             value={licenseNumber}
             onChangeText={setLicenseNumber}

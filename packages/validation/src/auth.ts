@@ -95,6 +95,57 @@ export const AadhaarFieldSchema = z
     }
   });
 
+export const AadhaarRequiredFieldSchema = z
+  .string()
+  .trim()
+  .min(1, "Aadhaar card number is required")
+  .max(20, "Aadhaar number cannot exceed 20 characters")
+  .superRefine((val, ctx) => {
+    const clean = val.trim().replace(/[\s\-]/g, "");
+    if (!clean) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Aadhaar card number is required.",
+      });
+      return;
+    }
+    if (!/^\d+$/.test(clean)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Aadhaar number must contain digits only.",
+      });
+      return;
+    }
+    if (clean.length !== 12) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Aadhaar number must be exactly 12 digits (entered ${clean.length} digits).`,
+      });
+      return;
+    }
+    if (clean.startsWith("0") || clean.startsWith("1")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Aadhaar number cannot start with 0 or 1.",
+      });
+      return;
+    }
+    if (/^(\d)\1{11}$/.test(clean)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Invalid Aadhaar number (cannot be a repeated single digit).",
+      });
+      return;
+    }
+    if (!validateVerhoeff(clean)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Invalid Aadhaar number (checksum validation failed).",
+      });
+      return;
+    }
+  });
+
 export const LicenseFieldSchema = z
   .string()
   .trim()
@@ -146,7 +197,7 @@ export const SignupSchema = z.object({
   city: z.string().trim().min(2, "City is required").max(100, "City name cannot exceed 100 characters"),
   district: z.string().trim().min(2, "District is required").max(100, "District name cannot exceed 100 characters"),
   state: z.string().trim().min(2, "State is required").max(100, "State name cannot exceed 100 characters"),
-  aadhaar_number: AadhaarFieldSchema,
+  aadhaar_number: AadhaarRequiredFieldSchema,
   license_number: LicenseFieldSchema,
 });
 

@@ -1,3 +1,12 @@
+- **Signup Page UI Feedback Refinements (`signup/page.tsx`, `SearchableSelect.tsx`, `auth.ts`, `packages/validation/src/auth.ts`, `apps/mobile/`) (2026-08-30)**:
+  - **Clean Role Name Selection (Feedback #1 & #2)**: Removed icons and descriptive text from `signupRoleOptions` in `/signup`, rendering only the role name in both dropdown options and the selected button trigger.
+  - **Removed Footer Arrow (Feedback #3)**: Removed trailing `"→"` arrow from `"Already have an account? Sign in"` navigation link.
+  - **Red Asterisks on Required Fields (Feedback #4)**: Styled all mandatory field asterisks in red (`<span className="text-rose-500">*</span>`) across `Full Name`, `Email address`, `Mobile Number`, `Role`, `City`, `District`, `State`, `Aadhaar Card Number`, `Password`, and `Confirm Password`.
+  - **Mandatory Aadhaar Card Number (Feedback #5)**: Enforced required Aadhaar card number input across client pre-flight checks, Server Action (`signup` in `auth.ts`), Zod schema (`AadhaarRequiredFieldSchema` in `SignupSchema`), and Mobile signup.
+  - **Optional Driving Licence Label (Feedback #6)**: Updated Driving Licence field label to explicitly include `(Optional)`.
+  - **Web & Mobile Parity Synchronization**: Synchronized mobile signup screen `apps/mobile/app/(auth)/signup.tsx` with matching validation rules and labels.
+  - **Verification**: `pnpm turbo run typecheck --force` passed with 0 errors across all 9 packages in 53.6s; `pnpm --filter @reachinternational/web build` compiled all 35 routes cleanly.
+
 - **Aadhaar Card Number & Driving Licence Number Complete Validation Pipeline & Database Integration (`025_add_aadhaar_and_license_to_users.sql`, `auth.ts`, `users.ts`, `UserCreateModal.tsx`, `UserEditModal.tsx`, `UserDetailSheet.tsx`, `apps/mobile/`) (2026-08-30)**:
   - **Full Aadhaar & Driving Licence Validation Pipeline**:
     - *Aadhaar Validation*: Implemented Indian UIDAI standard validation incorporating 12-digit requirement, first-digit check (cannot start with 0 or 1), repeating digit rejection, and the complete **Verhoeff Dihedral Group ($D_5$) mathematical checksum algorithm** in `@reachinternational/utils` and `packages/validation/src/auth.ts` (`AadhaarFieldSchema`).

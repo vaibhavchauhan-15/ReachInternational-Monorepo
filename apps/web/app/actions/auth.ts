@@ -232,6 +232,7 @@ export async function signup(
   if (!city) fieldErrors.city = "City is required.";
   if (!district) fieldErrors.district = "District is required.";
   if (!stateName) fieldErrors.state = "State is required.";
+  if (!aadhaarNumber) fieldErrors.aadhaar_number = "Aadhaar card number is required.";
   if (!password) fieldErrors.password = "Password is required.";
   if (!confirmPassword) fieldErrors.confirm_password = "Confirm password is required.";
 

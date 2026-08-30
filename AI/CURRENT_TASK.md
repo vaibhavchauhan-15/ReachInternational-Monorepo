@@ -1,6 +1,46 @@
 # Current Task Context
 
-## Completed Task (2026-08-30) — Aadhaar Card & Driving Licence Number Complete Validation Pipeline & Integration (`025_add_aadhaar_and_license_to_users.sql`, `auth.ts`, `users.ts`, `UserCreateModal.tsx`, `UserEditModal.tsx`, `UserDetailSheet.tsx`, `apps/mobile/`)
+## Completed Task (2026-08-30) — Signup Page UI Feedback Refinements (`signup/page.tsx`, `SearchableSelect.tsx`, `auth.ts`, `packages/validation/src/auth.ts`, `apps/mobile/`)
+
+**Goal**: 
+1. **Show Only Role Name (Feedback #1 & #2)**: Simplified `<SearchableSelect>` role selection in `/signup` by removing icons and descriptions (`(Field service & machine repair operations)`), rendering only the clean role name in both the dropdown items and the selected button trigger.
+2. **Remove Footer Arrow Icon (Feedback #3)**: Removed the trailing `"→"` arrow icon from the `"Already have an account? Sign in"` footer link on `/signup`.
+3. **Red Asterisks for Required Fields (Feedback #4)**: Updated all mandatory field labels on `/signup` (`Full Name`, `Email address`, `Mobile Number`, `Role`, `City`, `District`, `State`, `Aadhaar Card Number`, `Password`, `Confirm Password`) to render asterisks in crisp red (`<span className="text-rose-500">*</span>`).
+4. **Mandatory Aadhaar Card Number (Feedback #5)**: Made Aadhaar card number mandatory across client pre-flight checks (`handleSubmit`), Server Action validation (`apps/web/app/actions/auth.ts`), Zod validation schema (`SignupSchema` via `AadhaarRequiredFieldSchema` in `packages/validation/src/auth.ts`), and mobile signup (`apps/mobile/app/(auth)/signup.tsx`).
+5. **Optional Driving Licence Label (Feedback #6)**: Updated Driving Licence field label with explicit `(Optional)` tag across Web (`signup/page.tsx`) and Mobile (`apps/mobile/app/(auth)/signup.tsx`).
+6. **Web & Mobile Parity Synchronization**: Fully synchronized `apps/mobile/app/(auth)/signup.tsx` with required Aadhaar number, optional licence label, and matching validation logic.
+
+### Key Deliverables & Implementation Details
+
+1. **Web Signup Page (`apps/web/app/signup/page.tsx`)**:
+   - Stripped `icon` and `description` properties from `signupRoleOptions`, ensuring clean role names are displayed in the dropdown list and select button trigger.
+   - Removed unused Lucide icon imports (`Wrench`, `ShieldCheck`, `Building2`, `Package`, `Activity`, `Users`, `CreditCard`, `TrendingUp`, `Truck`, `ShieldAlert`).
+   - Added red asterisk badges `<span className="text-rose-500">*</span>` across all required fields.
+   - Added `(Optional)` badge to Driving Licence Number label.
+   - Made Aadhaar number `required` with client-side pre-submit verification.
+   - Removed `"→"` from `"Sign in"` navigation link.
+
+2. **Validation Schema (`packages/validation/src/auth.ts`)**:
+   - Created and exported `AadhaarRequiredFieldSchema` enforcing Indian UIDAI 12-digit format, first-digit check, repeated digit rejection, and mathematical $D_5$ Verhoeff checksum.
+   - Updated `SignupSchema` to require `aadhaar_number: AadhaarRequiredFieldSchema`.
+
+3. **Backend Server Action (`apps/web/app/actions/auth.ts`)**:
+   - Added `if (!aadhaarNumber) fieldErrors.aadhaar_number = "Aadhaar card number is required.";` to `signup()` action.
+
+4. **UI Component Flexibility (`apps/web/components/ui/SearchableSelect.tsx`)**:
+   - Updated `label?: ReactNode` in `SearchableSelectProps` to support rich JSX labels with styled badges.
+
+5. **Mobile Parity Synchronization (`apps/mobile/app/(auth)/signup.tsx`)**:
+   - Updated `handleSignup` to enforce required Aadhaar card number validation.
+   - Updated labels to `Aadhaar Card Number *` and `Driving Licence Number (Optional)`.
+
+6. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed with 0 errors across all 9 packages in 53.6s.
+   - `pnpm --filter @reachinternational/web build`: Compiled all 35 Next.js App Router routes cleanly with code 0.
+
+---
+
+## Previous Completed Task (2026-08-30) — Aadhaar Card & Driving Licence Number Complete Validation Pipeline & Integration (`025_add_aadhaar_and_license_to_users.sql`, `auth.ts`, `users.ts`, `UserCreateModal.tsx`, `UserEditModal.tsx`, `UserDetailSheet.tsx`, `apps/mobile/`)
 
 **Goal**: 
 1. **Mathematical & Standardized Validation**:

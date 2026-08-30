@@ -1,10 +1,19 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: **Production Ready — Aadhaar Card & Driving Licence Number Database Integration, Self-Registration & Admin Creation Complete**
+- **Phase**: **Production Ready — Signup Page UI Feedback Refinements, Mandatory Aadhaar & Cross-Platform Parity Complete**
 - **Release Candidate**: `v2026.08.30` (Branch: `performance-optimization`)
 - **Overall Health**: Production Ready (0 TypeScript Errors across 9 packages, 35/35 Routes Compiled, 0 P0/P1/P2 Issues)
 - **Last Memory Update**: 2026-08-30
+
+- [x] **Signup Page UI Feedback Refinements (`signup/page.tsx`, `SearchableSelect.tsx`, `auth.ts`, `packages/validation/src/auth.ts`, `apps/mobile/`) (2026-08-30)**:
+  - **Clean Role Name Selection (Feedback #1 & #2)**: Removed icons and descriptive text from `signupRoleOptions` in `/signup`, rendering only the role name in both dropdown options and the selected button trigger.
+  - **Removed Footer Arrow (Feedback #3)**: Removed trailing `"→"` arrow from `"Already have an account? Sign in"` navigation link.
+  - **Red Asterisks on Required Fields (Feedback #4)**: Styled all mandatory field asterisks in red (`<span className="text-rose-500">*</span>`) across `Full Name`, `Email address`, `Mobile Number`, `Role`, `City`, `District`, `State`, `Aadhaar Card Number`, `Password`, and `Confirm Password`.
+  - **Mandatory Aadhaar Card Number (Feedback #5)**: Enforced required Aadhaar card number input across client pre-flight checks, Server Action (`signup` in `auth.ts`), Zod schema (`AadhaarRequiredFieldSchema` in `SignupSchema`), and Mobile signup.
+  - **Optional Driving Licence Label (Feedback #6)**: Updated Driving Licence field label to explicitly include `(Optional)`.
+  - **Web & Mobile Parity Synchronization**: Synchronized mobile signup screen `apps/mobile/app/(auth)/signup.tsx` with matching validation rules and labels.
+  - **Verification**: `pnpm turbo run typecheck --force` passed with 0 errors across all 9 packages; `pnpm --filter @reachinternational/web build` compiled all 35 routes cleanly.
 
 - [x] **Aadhaar Card Number & Driving Licence Number Full Validation & Integration (`025_add_aadhaar_and_license_to_users.sql`, `auth.ts`, `users.ts`, `UserCreateModal.tsx`, `UserEditModal.tsx`, `UserDetailSheet.tsx`, `apps/mobile/`) (2026-08-30)**:
   - **Full Aadhaar & Driving Licence Validation Pipeline**:
