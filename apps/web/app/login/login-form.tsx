@@ -265,7 +265,7 @@ export function LoginFormClient() {
           <button
             type="submit"
             disabled={pending}
-            className="w-full h-11 rounded-[6px] font-medium text-sm transition-all duration-150 shadow-xs flex items-center justify-center gap-2 bg-[#171717] hover:bg-[#262626] text-[#ffffff] dark:bg-[#fafafa] dark:hover:bg-[#ebebeb] dark:text-[#0a0a0a] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.98] cursor-pointer"
+            className="w-full h-11 rounded-[6px] font-semibold text-sm transition-all duration-150 shadow-sm flex items-center justify-center gap-2 bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600 text-white disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none active:scale-[0.98] cursor-pointer"
           >
             {pending ? (
               <>

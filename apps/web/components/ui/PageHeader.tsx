@@ -51,8 +51,8 @@ export function PageHeader({
       )}
 
       {/* Main Title Row */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center justify-between gap-3 sm:gap-4 flex-wrap sm:flex-nowrap">
+        <div className="flex items-center gap-3 flex-wrap min-w-0">
           <h1 className="heading-lg text-[var(--color-ink)] tracking-tight">{title}</h1>
           {badge}
         </div>

@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { CRMClient, User } from "@/lib/types/database";
 import { ClientModal } from "./ClientModal";
 import { softDeleteClientAction } from "@/app/actions/clients";
+import { Button } from "@/components/ui";
 
 interface ClientsClientProps {
   user: User;
@@ -151,14 +152,14 @@ export function ClientsClient({ user, initialClients }: ClientsClientProps) {
         </div>
 
         {canManageClients && (
-          <button
-            type="button"
+          <Button
+            variant="primary"
+            icon={<AnimatedPlus className="h-4 w-4" />}
+            responsive
             onClick={handleOpenAddModal}
-            className="flex items-center justify-center gap-1.5 rounded-lg bg-[var(--color-primary,#0070f3)] px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-blue-600 focus:outline-hidden transition-all shrink-0"
           >
-            <AnimatedPlus className="h-4 w-4" />
             Add New Client
-          </button>
+          </Button>
         )}
       </div>
 

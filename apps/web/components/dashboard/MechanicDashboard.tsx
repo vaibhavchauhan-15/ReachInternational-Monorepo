@@ -12,6 +12,7 @@ import { Save } from "lucide-react";
 
 import type { User, ComplaintWithDetails } from "@/lib/types/database";
 import { updateComplaintStatusAction } from "@/app/actions/complaints";
+import { Button } from "@/components/ui";
 
 export interface MechanicDashboardProps {
   user: User;
@@ -226,14 +227,15 @@ export function MechanicDashboard({ user, assignedComplaints = [] }: MechanicDas
                   />
                 </div>
 
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  icon={<Save className="h-4 w-4" />}
+                  loading={submitting}
                   onClick={() => handleStatusUpdate("in_progress")}
-                  disabled={submitting}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[var(--color-ink)] text-[var(--color-canvas)] text-xs font-bold transition-all hover:opacity-90 cursor-pointer"
+                  className="w-full justify-center text-xs font-bold py-2.5 rounded-xl"
                 >
-                  <Save className="h-4 w-4" /> Save Repair Progress
-                </button>
+                  Save Repair Progress
+                </Button>
               </div>
             </div>
           ) : (

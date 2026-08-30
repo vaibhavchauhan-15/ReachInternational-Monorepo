@@ -56,7 +56,7 @@ export const colorsLight: ColorTokens = {
   hairlineSoft: '#f2f2f2',
 
   // Primary & Action
-  primary: '#171717',
+  primary: '#0284c7',
   onPrimary: '#ffffff',
   link: '#0070f3',
   linkDeep: '#0761d1',
@@ -104,8 +104,8 @@ export const colorsDark: ColorTokens = {
   hairlineSoft: '#1a1a1a',
 
   // Primary & Action
-  primary: '#fafafa',
-  onPrimary: '#0a0a0a',
+  primary: '#0ea5e9',
+  onPrimary: '#ffffff',
   link: '#3b82f6',
   linkDeep: '#2563eb',
   linkSoft: '#1e3a8a',

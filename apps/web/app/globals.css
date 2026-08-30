@@ -120,7 +120,7 @@
   --color-hairline-soft-surface: var(--color-hairline-soft); /* alias used across components */
 
   /* Brand & Accent */
-  --color-primary: #171717;       /* Primary CTA fill (ink) */
+  --color-primary: #0284c7;       /* Primary CTA fill (Reach Sky Blue) */
   --color-on-primary: #ffffff;    /* Text on primary (white) */
   --color-link: #0070f3;          /* Vercel Blue — links, accents, focus */
   --color-link-deep: #0761d1;     /* Darker press tone */
@@ -188,8 +188,8 @@
   --color-hairline: #262626;      /* Subtle borders that read at low light */
   --color-hairline-soft: #1a1a1a; /* Inset wells */
 
-  --color-primary: #fafafa;       /* Inverted — white primary */
-  --color-on-primary: #0a0a0a;    /* Black text on primary */
+  --color-primary: #0ea5e9;       /* Vibrant Sky Blue primary in dark mode */
+  --color-on-primary: #ffffff;    /* Text on primary (white) */
   --color-link: #3b82f6;          /* Brighter blue for legibility */
   --color-link-deep: #2563eb;
   --color-link-soft: #1e3a8a;
@@ -410,33 +410,37 @@ html {
   box-shadow: var(--shadow-floating);
 }
 
-/* Buttons — Marketing Pills */
+/* Buttons — Primary Sky Blue (Replaces black/ink buttons) */
 .btn-primary {
   background: var(--color-primary);
   color: var(--color-on-primary);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-button-lg-size);
-  font-weight: var(--text-button-lg-weight);
-  line-height: var(--text-button-lg-line);
-  padding: 0 14px;
-  height: 40px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-button-md-size);
+  font-weight: 600;
+  line-height: var(--text-button-md-line);
+  padding: 0 16px;
+  height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   border: none;
   cursor: pointer;
-  transition: opacity var(--motion-fast) var(--ease-smooth),
-              transform var(--motion-instant) var(--ease-smooth);
+  box-shadow: var(--shadow-whisper);
+  transition: all var(--motion-fast) var(--ease-smooth);
   will-change: transform, opacity;
 }
 
 .btn-primary:hover {
-  opacity: 0.9;
+  background: #0369a1; /* sky-700 */
+}
+
+.dark .btn-primary:hover {
+  background: #0284c7; /* sky-600 */
 }
 
 .btn-primary:active {
-  transform: scale(0.97);
+  transform: scale(0.98);
 }
 
 .btn-primary:disabled {
@@ -448,12 +452,12 @@ html {
   background: var(--color-canvas-elevated);
   color: var(--color-ink);
   border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-button-lg-size);
-  font-weight: var(--text-button-lg-weight);
-  line-height: var(--text-button-lg-line);
+  border-radius: var(--radius-md);
+  font-size: var(--text-button-md-size);
+  font-weight: 500;
+  line-height: var(--text-button-md-line);
   padding: 0 14px;
-  height: 40px;
+  height: 38px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -470,18 +474,18 @@ html {
 }
 
 .btn-secondary:active {
-  transform: scale(0.97);
+  transform: scale(0.98);
 }
 
-/* Buttons — App/Nav Chrome (6px square) */
+/* Buttons — App/Nav Chrome */
 .btn-primary-sm {
   background: var(--color-primary);
   color: var(--color-on-primary);
   border-radius: var(--radius-sm);
   font-size: var(--text-button-md-size);
-  font-weight: var(--text-button-md-weight);
+  font-weight: 600;
   line-height: var(--text-button-md-line);
-  padding: 0 8px;
+  padding: 0 12px;
   height: 32px;
   display: inline-flex;
   align-items: center;
@@ -489,17 +493,21 @@ html {
   gap: 6px;
   border: none;
   cursor: pointer;
-  transition: opacity var(--motion-fast) var(--ease-smooth),
-              transform var(--motion-instant) var(--ease-smooth);
+  box-shadow: var(--shadow-whisper);
+  transition: all var(--motion-fast) var(--ease-smooth);
   will-change: transform, opacity;
 }
 
 .btn-primary-sm:hover {
-  opacity: 0.9;
+  background: #0369a1; /* sky-700 */
+}
+
+.dark .btn-primary-sm:hover {
+  background: #0284c7; /* sky-600 */
 }
 
 .btn-primary-sm:active {
-  transform: scale(0.96);
+  transform: scale(0.98);
 }
 
 .btn-primary-sm:disabled {

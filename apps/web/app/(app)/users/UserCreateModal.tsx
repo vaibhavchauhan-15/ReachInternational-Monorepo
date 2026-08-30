@@ -380,11 +380,21 @@ export function UserCreateModal({
         </div>
 
         {/* Form Action Controls */}
-        <div className="flex items-center justify-end gap-3 pt-2">
-          <Button type="button" variant="secondary" onClick={onClose} className="px-6">
+        <div className="flex items-center justify-end gap-2.5 pt-2">
+          <Button
+            type="button"
+            variant="ghost-sm"
+            onClick={onClose}
+            className="h-9 px-4 text-xs font-medium rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] cursor-pointer active:scale-[0.98] transition-all"
+          >
             Cancel
           </Button>
-          <Button type="submit" loading={loading} className="px-6 shadow-md">
+          <Button
+            type="submit"
+            variant="primary-sm"
+            loading={loading}
+            className="h-9 px-4 text-xs font-semibold whitespace-nowrap"
+          >
             Create User Account
           </Button>
         </div>

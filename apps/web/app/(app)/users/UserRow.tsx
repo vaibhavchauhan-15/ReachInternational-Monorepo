@@ -2,27 +2,13 @@
 
 import { memo, useState, useCallback } from "react";
 import {
-  AnimatedShield,
-  AnimatedShieldCheck,
-  AnimatedShieldAlert,
-  AnimatedBuilding2,
-  AnimatedPackage,
-  AnimatedActivity,
-  AnimatedWrench,
-  AnimatedUsers,
-  AnimatedCreditCard,
-  AnimatedTrendingUp,
-  AnimatedTruck,
-  AnimatedMapPin,
   AnimatedKey,
   AnimatedUser,
   AnimatedTrash2,
   AnimatedMoreVertical,
   AnimatedPower,
-  AnimatedMail,
-  AnimatedPhone,
 } from "@/components/ui/animated-icons";
-import { Button, Badge, Select, TooltipWrapper } from "@/components/ui";
+import { Button, Select, TooltipWrapper } from "@/components/ui";
 import { formatDate } from "@reachinternational/utils";
 import type { User, UserRole } from "@/lib/types/database";
 
@@ -44,6 +30,9 @@ interface UserRowProps {
   currentUser: User;
   isSuperAdmin: boolean;
   loadingId: { type: string; id: string } | null;
+  selectable?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (userId: string) => void;
   onResetPassword: (userId: string) => void;
   onToggleStatus: (userId: string) => void;
   onEdit: (user: User) => void;
@@ -55,86 +44,101 @@ function getStatusBadge(status: string) {
   switch (status) {
     case "active":
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800/80 shadow-xs">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
           Active
         </span>
       );
     case "inactive":
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 shadow-xs">
-          <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-slate-500/10 text-slate-600 dark:text-slate-400 border border-slate-500/20">
           Inactive
         </span>
       );
     case "pending":
       return (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800/80 shadow-xs">
-          <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
           Pending
         </span>
       );
     default:
-      return <Badge>{status}</Badge>;
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-muted text-muted-foreground border border-border">
+          {status}
+        </span>
+      );
   }
 }
 
 function getRoleBadge(role: string) {
   switch (role) {
     case "super_admin":
-      return <Badge variant="error">Super Admin</Badge>;
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-rose-500/10 text-rose-700 dark:text-rose-400 border border-rose-500/20">
+          Super Admin
+        </span>
+      );
     case "admin":
-      return <Badge variant="warning">Admin</Badge>;
-    case "manager":
-      return <Badge variant="default">Manager</Badge>;
-    case "branch_manager":
-      return <Badge variant="default">Manager</Badge>;
-    case "service_manager":
-      return <Badge variant="default">Service Manager</Badge>;
-    case "service_engineer":
-    case "engineer":
-      return <Badge variant="default">Service Engineer</Badge>;
-    case "supervisor":
-      return <Badge variant="default">Supervisor</Badge>;
-    case "store_manager":
-      return <Badge variant="warning">Store Manager</Badge>;
-    case "operator":
-      return <Badge variant="warning">Operator</Badge>;
-    case "mechanic":
-      return <Badge variant="error">Mechanic</Badge>;
-    case "hr_manager":
-      return <Badge variant="success">HR Manager</Badge>;
-    default:
-      return <Badge>{role}</Badge>;
-  }
-}
-
-function getRoleIcon(role: string) {
-  switch (role) {
-    case "super_admin":
-      return <AnimatedShieldAlert size={16} className="text-rose-600 dark:text-rose-400" />;
-    case "admin":
-      return <AnimatedShieldCheck size={16} className="text-amber-600 dark:text-amber-400" />;
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+          Admin
+        </span>
+      );
     case "manager":
     case "branch_manager":
-      return <AnimatedBuilding2 size={16} className="text-indigo-600 dark:text-indigo-400" />;
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-500/20">
+          Manager
+        </span>
+      );
     case "service_manager":
-      return <AnimatedShieldCheck size={16} className="text-indigo-600 dark:text-indigo-400" />;
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/20">
+          Service Manager
+        </span>
+      );
     case "service_engineer":
     case "engineer":
-      return <AnimatedWrench size={16} className="text-sky-600 dark:text-sky-400" />;
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20">
+          Service Engineer
+        </span>
+      );
     case "supervisor":
-      return <AnimatedShieldCheck size={16} className="text-teal-600 dark:text-teal-400" />;
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-teal-500/10 text-teal-700 dark:text-teal-400 border border-teal-500/20">
+          Supervisor
+        </span>
+      );
     case "store_manager":
-      return <AnimatedPackage size={16} className="text-purple-600 dark:text-purple-400" />;
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20">
+          Store Manager
+        </span>
+      );
     case "operator":
-      return <AnimatedActivity size={16} className="text-amber-600 dark:text-amber-400" />;
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+          Operator
+        </span>
+      );
     case "mechanic":
-      return <AnimatedWrench size={16} className="text-orange-600 dark:text-orange-400" />;
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-orange-500/10 text-orange-700 dark:text-orange-400 border border-orange-500/20">
+          Mechanic
+        </span>
+      );
     case "hr_manager":
-      return <AnimatedUsers size={16} className="text-emerald-600 dark:text-emerald-400" />;
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+          HR Manager
+        </span>
+      );
     default:
-      return <AnimatedShield size={16} className="text-muted-foreground" />;
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-muted text-muted-foreground border border-border">
+          {role}
+        </span>
+      );
   }
 }
 
@@ -143,6 +147,9 @@ export const UserRow = memo(function UserRow({
   currentUser,
   isSuperAdmin,
   loadingId,
+  selectable = false,
+  isSelected = false,
+  onToggleSelect,
   onResetPassword,
   onToggleStatus,
   onEdit,
@@ -184,29 +191,46 @@ export const UserRow = memo(function UserRow({
     : allRoleOptions.filter((r) => r.value !== "super_admin");
 
   return (
-    <tr className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors border-b border-[var(--color-hairline)]">
+    <tr
+      className={`transition-colors border-b border-[var(--color-hairline)] last:border-0 ${
+        isSelected
+          ? "bg-[var(--color-link-soft)]/25 dark:bg-[var(--color-link)]/15"
+          : "hover:bg-[var(--color-hairline-soft-surface)]"
+      }`}
+    >
+      {/* 0. Selection Checkbox */}
+      {selectable && (
+        <td className="py-3 px-3 w-10 text-center" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggleSelect && onToggleSelect(user.id)}
+            aria-label={`Select ${user.full_name}`}
+            className="h-4 w-4 rounded-[4px] border-[var(--color-hairline)] text-[var(--color-ink)] focus:ring-[var(--color-link)] cursor-pointer transition-all accent-[var(--color-ink)]"
+          />
+        </td>
+      )}
+
       {/* 1. User Name */}
-      <td className="py-2.5 px-3">
-        <div className="text-sm font-bold text-[var(--color-ink)] truncate" title={user.full_name}>
+      <td className="py-3 px-4">
+        <div className="text-sm font-semibold text-[var(--color-ink)] truncate" title={user.full_name}>
           {user.full_name}
         </div>
       </td>
 
       {/* 2. Contact Phone & Email */}
-      <td className="py-2.5 px-3">
+      <td className="py-3 px-4">
         {canViewContactInfo(user) ? (
           <div className="flex flex-col gap-0.5 text-xs">
             {user.phone ? (
-              <span className="flex items-center gap-1.5 text-[var(--color-ink)] font-mono font-medium whitespace-nowrap">
-                <AnimatedPhone size={13} className="text-emerald-500 shrink-0" />
+              <span className="text-[var(--color-ink)] font-mono font-medium whitespace-nowrap">
                 {user.phone}
               </span>
             ) : (
               <span className="text-[var(--color-mute)] italic">No Phone</span>
             )}
-            <span className="flex items-center gap-1.5 text-[var(--color-mute)] font-mono truncate max-w-[200px]" title={user.email}>
-              <AnimatedMail size={13} className="text-blue-500 shrink-0" />
-              <span className="truncate">{user.email}</span>
+            <span className="text-[var(--color-mute)] truncate max-w-[220px]" title={user.email}>
+              {user.email}
             </span>
           </div>
         ) : (
@@ -215,43 +239,41 @@ export const UserRow = memo(function UserRow({
       </td>
 
       {/* 3. Role & Permissions */}
-      <td className="py-2.5 px-3">
-        <div className="flex items-center gap-1.5 whitespace-nowrap">
-          {getRoleIcon(user.role)}
-          {getRoleBadge(user.role)}
-        </div>
+      <td className="py-3 px-4 whitespace-nowrap">
+        {getRoleBadge(user.role)}
       </td>
 
       {/* 4. Employee City */}
-      <td className="py-2.5 px-3">
+      <td className="py-3 px-4">
         {user.city || user.location ? (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] truncate max-w-full">
-            <AnimatedMapPin size={12} className="text-emerald-500 shrink-0" />
-            <span className="truncate" title={(user.city || user.location) ?? undefined}>
-              {user.city || user.location}
-            </span>
+          <span className="text-xs font-medium text-[var(--color-ink)] truncate block max-w-[160px]" title={(user.city || user.location) ?? undefined}>
+            {user.city || user.location}
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] border border-[var(--color-hairline)] whitespace-nowrap">
-            <AnimatedMapPin size={12} className="text-slate-400 shrink-0" />
-            —
-          </span>
+          <span className="text-xs text-[var(--color-mute)] font-normal">—</span>
         )}
       </td>
 
       {/* 5. Status Badge */}
-      <td className="py-2.5 px-3 whitespace-nowrap">{getStatusBadge(user.status)}</td>
+      <td className="py-3 px-4 whitespace-nowrap">
+        {getStatusBadge(user.status)}
+      </td>
 
       {/* 6. Created Date */}
-      <td suppressHydrationWarning className="py-2.5 px-3 text-xs font-mono text-[var(--color-mute)] whitespace-nowrap">
+      <td suppressHydrationWarning className="py-3 px-4 text-xs font-mono text-[var(--color-mute)] whitespace-nowrap">
         {formatDate(user.created_at)}
       </td>
 
       {/* 7. Actions Menu */}
-      <td className="py-2.5 px-3">
+      <td className="py-3 px-4 text-right">
         <div className="flex items-center justify-end relative">
           <TooltipWrapper content="More actions" side="left">
-            <Button variant="ghost-sm" onClick={toggleDropdown} aria-label="More actions">
+            <Button
+              variant="ghost-sm"
+              onClick={toggleDropdown}
+              aria-label="More actions"
+              className="h-8 w-8 p-0 flex items-center justify-center rounded-sm hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] cursor-pointer active:scale-[0.98] transition-all"
+            >
               <AnimatedMoreVertical size={16} />
             </Button>
           </TooltipWrapper>
@@ -259,7 +281,7 @@ export const UserRow = memo(function UserRow({
           {dropdownOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={closeDropdown} />
-              <div className={`absolute right-0 ${openUpwards ? "bottom-full mb-1" : "top-full mt-1"} z-20 bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] rounded-lg shadow-xl py-1 min-w-[190px] text-[var(--color-ink)]`}>
+              <div className={`absolute right-0 ${openUpwards ? "bottom-full mb-1" : "top-full mt-1"} z-20 bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] rounded-md shadow-lg p-1 min-w-[200px] text-left text-[var(--color-ink)]`}>
                 {canManageUser(user) ? (
                   <>
                     <button
@@ -267,42 +289,42 @@ export const UserRow = memo(function UserRow({
                         onResetPassword(user.id);
                         closeDropdown();
                       }}
-                      className="flex items-center gap-2 w-full px-4 py-2 text-xs font-semibold hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
+                      className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium rounded-[calc(var(--radius-sm)-2px)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer text-left"
                       disabled={isLoading}
                     >
-                      <AnimatedKey size={16} className="text-amber-500" />
-                      Reset Password
+                      <AnimatedKey size={14} className="text-amber-500 shrink-0" />
+                      <span>Reset Password</span>
                     </button>
                     <button
                       onClick={() => {
                         onToggleStatus(user.id);
                         closeDropdown();
                       }}
-                      className={`flex items-center gap-2 w-full px-4 py-2 text-xs font-semibold hover:bg-[var(--color-hairline-soft-surface)] transition-colors ${
+                      className={`flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium rounded-[calc(var(--radius-sm)-2px)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer text-left ${
                         user.status === "active"
                           ? "text-rose-600 dark:text-rose-400"
                           : "text-emerald-600 dark:text-emerald-400"
                       }`}
                       disabled={isLoading || user.id === currentUser.id}
                     >
-                      <AnimatedPower size={16} />
-                      {user.status === "active" ? "Deactivate User" : "Activate User"}
+                      <AnimatedPower size={14} className="shrink-0" />
+                      <span>{user.status === "active" ? "Deactivate User" : "Activate User"}</span>
                     </button>
                     <button
                       onClick={() => {
                         onEdit(user);
                         closeDropdown();
                       }}
-                      className="flex items-center gap-2 w-full px-4 py-2 text-xs font-semibold hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
+                      className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium rounded-[calc(var(--radius-sm)-2px)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer text-left"
                       disabled={isLoading}
                     >
-                      <AnimatedUser size={16} className="text-[var(--color-link)]" />
-                      Edit User Account
+                      <AnimatedUser size={14} className="text-[var(--color-link)] shrink-0" />
+                      <span>Edit User Account</span>
                     </button>
                     
                     <div className="border-t border-[var(--color-hairline)] my-1" />
-                    <div className="px-4 py-2">
-                      <label className="text-[11px] font-bold text-[var(--color-mute)] block mb-1 uppercase tracking-wider">
+                    <div className="px-3 py-1.5">
+                      <label className="text-[10px] font-mono font-bold text-[var(--color-mute)] block mb-1 uppercase tracking-wider">
                         Change Access Role
                       </label>
                       <Select
@@ -313,7 +335,7 @@ export const UserRow = memo(function UserRow({
                           closeDropdown();
                         }}
                         disabled={isLoading || user.id === currentUser.id}
-                        className="text-xs font-semibold w-full"
+                        className="text-xs font-medium w-full h-8"
                       />
                     </div>
 
@@ -323,15 +345,15 @@ export const UserRow = memo(function UserRow({
                         onDelete(user.id);
                         closeDropdown();
                       }}
-                      className="flex items-center gap-2 w-full px-4 py-2 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                      className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium rounded-[calc(var(--radius-sm)-2px)] text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer text-left"
                       disabled={isLoading || user.id === currentUser.id}
                     >
-                      <AnimatedTrash2 size={16} />
-                      Delete User
+                      <AnimatedTrash2 size={14} className="text-rose-600 shrink-0" />
+                      <span>Delete User</span>
                     </button>
                   </>
                 ) : (
-                  <div className="px-4 py-2 text-xs text-[var(--color-mute)] text-center">
+                  <div className="px-3 py-2 text-xs text-[var(--color-mute)] text-center">
                     No actions available
                   </div>
                 )}

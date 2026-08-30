@@ -27,6 +27,8 @@ Manages user accounts, profile details, company branch assignments, and Role-Bas
 
 ## Key Functions & Workflows
 - `getPendingRoleBadge(role)`: Renders color-coded status badges with role icons for pending account access requests on the Admin management page.
+- `exportUsersToExcel(users)` & `exportUsersToCSV(users)`: Generates structured Excel (.xlsx) and CSV reports with metadata headers, masked Aadhaar formatting, and status breakdown summary statistics.
+- `bulkDeleteUsers(userIds)`: High-performance parallel user deletion server action with self-delete protection, super admin privileges guard, employee sync cleanup, audit logging, and cache invalidation.
 - `roleHasPermission(role, permission)`: Evaluates resource-action permissions with dot/colon normalization (`machine:read` ↔ `machine.view`, `hr:read_salary` ↔ `employee.salary.view`).
 - `currentUserHasPermission(permission)`: Checks active user permission.
 - `updateUserRole(userId, role)`: Changes user permission tier across all canonical system roles (Super Admin can assign any role including Super Admin; Admin cannot modify Super Admin roles).

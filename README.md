@@ -41,6 +41,7 @@
 - **System Accounts Directory**: Unified management of system users and staff accounts with active status tracking.
 - **Mandatory Profile & Identity Fields**: Strictly enforces Full Name, Email Address, 10-digit Mobile Phone Number, System Role, Complete Address (City, District, State), and Regulatory Identity Details (Aadhaar Card Number with mathematical Verhoeff checksum & masked `XXXX-XXXX-1294` PII formatting and Driving Licence Number) across user profiles and self-registration.
 - **Self-Service Registration & Admin Access Governance**: Users request platform access choosing their functional role (`manager`, `service_manager`, `service_engineer`, `supervisor`, `store_manager`, `operator`, `mechanic`, `hr_manager`). The chosen role is preserved in `public.users.role` in `pending` status, displayed in the Admin Pending User Approvals panel with distinct role badges, and maintained without modification upon administrator approval.
+- **Multi-Selection & Bulk Actions**: Select individual or all filtered user accounts with a master checkbox and floating bulk actions bar. Perform instant formatted Excel (`.xlsx`) or CSV (`.csv`) export downloads and high-concurrency Bulk Deletions with safety self-delete guards, super admin protection, optimistic UI removals, and audit logging.
 - **Account Actions**: Create new user accounts, edit employee profiles, activate/deactivate accounts, and delete user accounts with full structured audit logging.
 
 ### 3. ⏱️ Operations Hub (`/operations`)
@@ -57,6 +58,7 @@
   - **Section B (Time, Meter Readings & Normal Working Time)**: Interactive `CustomTimePicker` for Start/End times, quick shift action pills (`06:00 AM`, `08:00 AM`, `02:00 PM`, `08:00 PM`), automatic 1-hour break deduction, live shift duration breakdown, Overtime computation, Normal Working Time calculation ($\text{Duration} - \text{OT} - 1.0\text{h}$), starting/ending HMR, breakdown duration toggle, and remarks.
 - **Log History (`tab=history`)**:
   - Operators inspect past submitted daily machine logs with real-time shift timings alongside normal working time (excl. OT), overtime badges, and breakdown duration indicators.
+  - **7-Day Edit Locking Window**: Operators can edit and resubmit logs created within the past 7 days across desktop and mobile card views, after which logs are automatically locked to prevent retro-edits.
 
 ### 5. 🏢 Client Directory & Address Policy (`/clients`)
 - **Mandatory Client Address Policy**: Every client record strictly requires complete address parameters (Office/Site Street Address, City, and State) across PostgreSQL constraints, Zod schemas, web dialogs, and mobile apps.

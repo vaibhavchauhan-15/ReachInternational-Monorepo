@@ -311,10 +311,10 @@ export function UserDetailSheet({
                       onClose();
                     }}
                     disabled={isLoading}
-                    className="w-full flex items-center justify-between px-4 py-3 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-semibold text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-98 transition-all"
+                    className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer"
                   >
                     <span className="flex items-center gap-2">
-                      <AnimatedEdit size={16} className="text-[var(--color-link)]" /> Edit Account Info
+                      <AnimatedEdit size={15} className="text-[var(--color-link)]" /> Edit Account Info
                     </span>
                   </button>
 
@@ -324,10 +324,10 @@ export function UserDetailSheet({
                       onClose();
                     }}
                     disabled={isLoading}
-                    className="w-full flex items-center justify-between px-4 py-3 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-semibold text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-98 transition-all"
+                    className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer"
                   >
                     <span className="flex items-center gap-2">
-                      <AnimatedKey size={16} className="text-amber-500" /> Reset Security Password
+                      <AnimatedKey size={15} className="text-amber-500" /> Reset Security Password
                     </span>
                   </button>
 
@@ -338,16 +338,16 @@ export function UserDetailSheet({
                         onClose();
                       }}
                       disabled={isLoading}
-                      className="w-full flex items-center justify-between px-4 py-3 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-semibold text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-98 transition-all"
+                      className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer"
                     >
                       <span className="flex items-center gap-2">
                         {user.status === "active" ? (
                           <>
-                            <AnimatedUserX size={16} className="text-amber-600" /> Deactivate Account
+                            <AnimatedUserX size={15} className="text-amber-600" /> Deactivate Account
                           </>
                         ) : (
                           <>
-                            <AnimatedUserCheck size={16} className="text-emerald-600" /> Activate Account
+                            <AnimatedUserCheck size={15} className="text-emerald-600" /> Activate Account
                           </>
                         )}
                       </span>
@@ -361,10 +361,10 @@ export function UserDetailSheet({
                         onClose();
                       }}
                       disabled={isLoading}
-                      className="w-full flex items-center justify-between px-4 py-3 rounded-[var(--radius-md)] border border-red-200 dark:border-red-900/40 bg-red-50/30 text-xs font-semibold text-red-600 hover:bg-red-50 active:scale-98 transition-all"
+                      className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-sm border border-red-200 dark:border-red-900/40 bg-red-50/30 text-xs font-medium text-red-600 hover:bg-red-50 active:scale-[0.98] transition-all cursor-pointer"
                     >
                       <span className="flex items-center gap-2">
-                        <AnimatedTrash2 size={16} className="text-red-600" /> Delete User Account
+                        <AnimatedTrash2 size={15} className="text-red-600" /> Delete User Account
                       </span>
                     </button>
                   )}
@@ -375,7 +375,7 @@ export function UserDetailSheet({
 
           {/* Footer */}
           <div className="p-4 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)]">
-            <Button variant="secondary" onClick={onClose} className="w-full justify-center">
+            <Button variant="secondary" onClick={onClose} className="w-full h-9 rounded-sm text-xs font-medium justify-center cursor-pointer active:scale-[0.98] transition-all">
               Close Sheet
             </Button>
           </div>

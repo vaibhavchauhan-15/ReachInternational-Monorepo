@@ -96,16 +96,33 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
     }
   };
 
-  const handleResetPassword = async () => {
-    const generatedPwd = 'Reach@' + Math.floor(100000 + Math.random() * 900000);
-    setIsLoading(true);
-    try {
-      setResetPasswordResult(generatedPwd);
-    } catch (err: any) {
-      console.warn('Error resetting password:', err);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleResetPassword = () => {
+    Alert.alert(
+      'Reset User Password',
+      `Are you sure you want to reset the security password for ${user.full_name}? A new temporary password will be generated and displayed for you to copy.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset Password',
+          style: 'destructive',
+          onPress: async () => {
+            const rawFirst = (user.full_name || '').trim().split(/\s+/)[0] || 'User';
+            const cleaned = rawFirst.replace(/[^a-zA-Z0-9]/g, '');
+            const firstName = cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : 'User';
+            const randomNum = Math.floor(1000 + Math.random() * 9000);
+            const generatedPwd = `${firstName}@${randomNum}`;
+            setIsLoading(true);
+            try {
+              setResetPasswordResult(generatedPwd);
+            } catch (err: any) {
+              console.warn('Error resetting password:', err);
+            } finally {
+              setIsLoading(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleUpdateRole = async (newRole: string) => {

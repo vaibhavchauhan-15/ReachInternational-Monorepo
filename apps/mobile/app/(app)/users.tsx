@@ -7,6 +7,7 @@ import {
   RefreshControl,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Card, Badge, Input, Button, useTheme, MobileHeader } from '../../components/ui';
 import { UserDetailModal, type UserRecord } from '../../components/users/UserDetailModal';
@@ -25,6 +26,9 @@ import {
   MapPin,
   Check,
   X,
+  Trash2,
+  CheckSquare,
+  Square,
 } from 'lucide-react-native';
 
 function formatRoleName(role: string): string {
@@ -106,14 +110,19 @@ export default function UsersScreen() {
 
   const handleApprove = async (userId: string) => {
     setApprovingId(userId);
+    const prevUsers = [...users];
+    setUsers((prev) =>
+      prev.map((u) => (u.id === userId ? { ...u, status: 'active' as const } : u))
+    );
     try {
       const { error } = await supabase
         .from('users')
         .update({ status: 'active' })
         .eq('id', userId);
       if (error) throw error;
-      await fetchUsers();
+      fetchUsers();
     } catch (e) {
+      setUsers(prevUsers);
       console.warn('Error approving user:', e);
     } finally {
       setApprovingId(null);
@@ -122,14 +131,17 @@ export default function UsersScreen() {
 
   const handleReject = async (userId: string) => {
     setApprovingId(userId);
+    const prevUsers = [...users];
+    setUsers((prev) => prev.filter((u) => u.id !== userId));
     try {
       const { error } = await supabase
         .from('users')
         .update({ status: 'inactive' })
         .eq('id', userId);
       if (error) throw error;
-      await fetchUsers();
+      fetchUsers();
     } catch (e) {
+      setUsers(prevUsers);
       console.warn('Error rejecting user:', e);
     } finally {
       setApprovingId(null);
@@ -144,6 +156,63 @@ export default function UsersScreen() {
   const pendingUsers = users.filter((u) => u.status === 'pending');
   const activeCount = users.filter((u) => u.status === 'active').length;
   const engineerCount = users.filter((u) => u.role === 'service_engineer' || u.role === 'engineer').length;
+
+  // Multi-Selection State
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false);
+
+  const toggleSelectUser = (userId: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.length === filteredUsers.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredUsers.map((u) => u.id));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    Alert.alert(
+      'Delete Users',
+      `Are you sure you want to delete ${selectedIds.length} user account${selectedIds.length > 1 ? 's' : ''}? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: `Delete (${selectedIds.length})`,
+          style: 'destructive',
+          onPress: async () => {
+            setIsDeletingBulk(true);
+            const prevUsers = [...users];
+            const toDelete = [...selectedIds];
+            setUsers((prev) => prev.filter((u) => !toDelete.includes(u.id)));
+
+            try {
+              const { error } = await supabase
+                .from('users')
+                .delete()
+                .in('id', toDelete);
+
+              if (error) throw error;
+              setSelectedIds([]);
+              setIsSelectMode(false);
+              fetchUsers();
+            } catch (err: any) {
+              setUsers(prevUsers);
+              Alert.alert('Error', err?.message || 'Failed to delete selected users.');
+            } finally {
+              setIsDeletingBulk(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const filteredUsers = users.filter((u) => {
     const q = search.toLowerCase().trim();
@@ -175,14 +244,42 @@ export default function UsersScreen() {
         title="Employee & User Accounts"
         subtitle="Manage organization staff, role authorizations & account approvals"
         rightAction={
-          <TouchableOpacity
-            onPress={() => setCreateModalVisible(true)}
-            style={[styles.addBtn, { backgroundColor: theme.colors.ink }]}
-            activeOpacity={0.8}
-          >
-            <Plus size={14} color={theme.colors.canvas} />
-            <Text style={[styles.addBtnText, { color: theme.colors.canvas }]}>Invite</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <TouchableOpacity
+              onPress={() => {
+                if (isSelectMode) {
+                  setIsSelectMode(false);
+                  setSelectedIds([]);
+                } else {
+                  setIsSelectMode(true);
+                }
+              }}
+              style={[
+                styles.addBtn,
+                {
+                  backgroundColor: isSelectMode ? theme.colors.canvasElevated : theme.colors.hairlineSoft,
+                  borderWidth: 1,
+                  borderColor: theme.colors.hairline,
+                },
+              ]}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.addBtnText, { color: isSelectMode ? theme.colors.link : theme.colors.body }]}>
+                {isSelectMode ? 'Done' : 'Select'}
+              </Text>
+            </TouchableOpacity>
+
+            {!isSelectMode && (
+              <TouchableOpacity
+                onPress={() => setCreateModalVisible(true)}
+                style={[styles.addBtn, { backgroundColor: theme.colors.ink }]}
+                activeOpacity={0.8}
+              >
+                <Plus size={14} color={theme.colors.canvas} />
+                <Text style={[styles.addBtnText, { color: theme.colors.canvas }]}>Invite</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         }
       />
 
@@ -336,55 +433,131 @@ export default function UsersScreen() {
             </Text>
           </View>
         ) : (
-          filteredUsers.map((u) => (
-            <TouchableOpacity
-              key={u.id}
-              onPress={() => openUserDetail(u)}
-              activeOpacity={0.8}
-            >
-              <Card style={styles.userCard}>
-                <View style={styles.userHeader}>
-                  <View style={styles.userAvatarRow}>
-                    <View style={[styles.avatarCircle, { backgroundColor: theme.colors.ink }]}>
-                      <Text style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
-                        {u.full_name ? u.full_name[0].toUpperCase() : 'U'}
-                      </Text>
+          filteredUsers.map((u) => {
+            const isSelected = selectedIds.includes(u.id);
+            return (
+              <TouchableOpacity
+                key={u.id}
+                onPress={() => {
+                  if (isSelectMode) {
+                    toggleSelectUser(u.id);
+                  } else {
+                    openUserDetail(u);
+                  }
+                }}
+                onLongPress={() => {
+                  if (!isSelectMode) {
+                    setIsSelectMode(true);
+                    setSelectedIds([u.id]);
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Card
+                  style={[
+                    styles.userCard,
+                    isSelectMode && isSelected
+                      ? { borderColor: theme.colors.link, borderWidth: 1.5, backgroundColor: theme.colors.canvasElevated }
+                      : null,
+                  ]}
+                >
+                  <View style={styles.userHeader}>
+                    <View style={styles.userAvatarRow}>
+                      {isSelectMode ? (
+                        <View style={{ marginRight: 2 }}>
+                          {isSelected ? (
+                            <CheckSquare size={20} color={theme.colors.link} />
+                          ) : (
+                            <Square size={20} color={theme.colors.mute} />
+                          )}
+                        </View>
+                      ) : (
+                        <View style={[styles.avatarCircle, { backgroundColor: theme.colors.ink }]}>
+                          <Text style={[styles.avatarLetter, { color: theme.colors.canvas }]}>
+                            {u.full_name ? u.full_name[0].toUpperCase() : 'U'}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.userName, { color: theme.colors.ink }]}>{u.full_name}</Text>
+                        <Text style={[styles.userEmail, { color: theme.colors.mute }]}>{u.email}</Text>
+                      </View>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.userName, { color: theme.colors.ink }]}>{u.full_name}</Text>
-                      <Text style={[styles.userEmail, { color: theme.colors.mute }]}>{u.email}</Text>
-                    </View>
+
+                    <Badge status={u.status === 'active' ? 'active' : 'inactive'} customLabel={u.status.toUpperCase()} />
                   </View>
 
-                  <Badge status={u.status === 'active' ? 'active' : 'inactive'} customLabel={u.status.toUpperCase()} />
-                </View>
+                  {/* Sub details */}
+                  <View style={[styles.specsWell, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                    <View style={styles.subDetailRow}>
+                      <Badge status="available" customLabel={u.role.replace('_', ' ').toUpperCase()} />
+                      {u.phone && (
+                        <View style={styles.metaItem}>
+                          <Phone size={11} color={theme.colors.mute} />
+                          <Text style={[styles.metaText, { color: theme.colors.body }]}>{u.phone}</Text>
+                        </View>
+                      )}
+                    </View>
 
-                {/* Sub details */}
-                <View style={[styles.specsWell, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                  <View style={styles.subDetailRow}>
-                    <Badge status="available" customLabel={u.role.replace('_', ' ').toUpperCase()} />
-                    {u.phone && (
-                      <View style={styles.metaItem}>
-                        <Phone size={11} color={theme.colors.mute} />
-                        <Text style={[styles.metaText, { color: theme.colors.body }]}>{u.phone}</Text>
+                    {(u.city || u.state) && (
+                      <View style={[styles.metaItem, { marginTop: 4 }]}>
+                        <MapPin size={11} color={theme.colors.mute} />
+                        <Text style={[styles.metaText, { color: theme.colors.body }]}>
+                          {[u.city, u.district, u.state].filter(Boolean).join(', ')}
+                        </Text>
                       </View>
                     )}
                   </View>
-
-                  {(u.city || u.state) && (
-                    <View style={[styles.metaItem, { marginTop: 4 }]}>
-                      <MapPin size={11} color={theme.colors.mute} />
-                      <Text style={[styles.metaText, { color: theme.colors.body }]}>
-                        {[u.city, u.district, u.state].filter(Boolean).join(', ')}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-              </Card>
-            </TouchableOpacity>
-          ))
+                </Card>
+              </TouchableOpacity>
+            );
+          })
         )}
       </ScrollView>
+
+      {/* Floating Bulk Actions Bar for Mobile */}
+      {isSelectMode && selectedIds.length > 0 && (
+        <View
+          style={[
+            styles.mobileBulkBar,
+            {
+              backgroundColor: theme.colors.ink,
+              shadowColor: '#000',
+            },
+          ]}
+        >
+          <View style={styles.bulkCountRow}>
+            <View style={[styles.bulkBadge, { backgroundColor: theme.colors.link }]}>
+              <Text style={[styles.bulkBadgeText, { color: '#ffffff' }]}>{selectedIds.length}</Text>
+            </View>
+            <Text style={[styles.bulkSelectedText, { color: '#ffffff' }]}>selected</Text>
+          </View>
+
+          <View style={styles.bulkActionsRow}>
+            <TouchableOpacity
+              onPress={handleSelectAll}
+              style={[styles.bulkBtnSecondary, { borderColor: 'rgba(255,255,255,0.2)' }]}
+              activeOpacity={0.7}
+            >
+              <Text style={{ color: '#ffffff', fontSize: 12, fontWeight: '600' }}>
+                {selectedIds.length === filteredUsers.length ? 'Deselect' : 'All'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleBulkDelete}
+              disabled={isDeletingBulk}
+              style={[styles.bulkBtnDanger, { backgroundColor: theme.colors.error }]}
+              activeOpacity={0.8}
+            >
+              <Trash2 size={14} color="#ffffff" />
+              <Text style={{ color: '#ffffff', fontSize: 12, fontWeight: '700' }}>
+                Delete ({selectedIds.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* User Detail Action Bottom Sheet */}
       <UserDetailModal
@@ -570,4 +743,59 @@ const styles = StyleSheet.create({
   emptyContainer: { padding: 32, borderRadius: radiusNumeric.md, borderWidth: 1, alignItems: 'center', gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: '700' },
   emptySubtext: { fontSize: 12, textAlign: 'center' },
+  mobileBulkBar: {
+    position: 'absolute',
+    bottom: 24,
+    left: spacingNumeric.md,
+    right: spacingNumeric.md,
+    borderRadius: radiusNumeric.lg,
+    padding: spacingNumeric.sm,
+    paddingHorizontal: spacingNumeric.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    elevation: 8,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+  },
+  bulkCountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  bulkBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radiusNumeric.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bulkBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  bulkSelectedText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  bulkActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  bulkBtnSecondary: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+  },
+  bulkBtnDanger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radiusNumeric.sm,
+  },
 });

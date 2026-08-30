@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import { AlertCircle, RotateCcw, Home } from "lucide-react";
 import Link from "next/link";
+import { AlertCircle, RotateCcw, Home } from "lucide-react";
+import { Button } from "@/components/ui";
 
 export default function AppError({
   error,
@@ -42,13 +43,14 @@ export default function AppError({
         )}
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <button
+          <Button
+            variant="primary"
+            icon={<RotateCcw className="h-4 w-4" />}
             onClick={() => reset()}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[var(--color-ink)] text-[var(--color-canvas)] text-xs font-semibold hover:opacity-90 transition-opacity min-h-[44px]"
+            className="w-full sm:w-auto min-h-[44px] justify-center"
           >
-            <RotateCcw className="h-4 w-4" />
             Try again
-          </button>
+          </Button>
 
           <Link
             href="/dashboard"

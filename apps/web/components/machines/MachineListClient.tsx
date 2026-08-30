@@ -839,17 +839,18 @@ export function MachineListClient({
               />
 
               {canCreateMachine && (
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
+                  icon={<AnimatedPlus size={16} />}
+                  responsive
                   onClick={() => {
                     setEditingMachine(null);
                     setModalOpen(true);
                   }}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-600 text-white shadow-sm transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+                  className="whitespace-nowrap"
                 >
-                  <AnimatedPlus size={16} />
-                  <span>Add Machine</span>
-                </button>
+                  Add Machine
+                </Button>
               )}
             </div>
           </div>

@@ -26,6 +26,9 @@ interface MobileUserCardProps {
   user: User;
   currentUser: User;
   loadingId: { type: string; id: string } | null;
+  selectable?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (userId: string) => void;
   onOpenSheet: (user: User) => void;
   onResetPassword: (userId: string) => void;
   onToggleStatus: (userId: string) => void;
@@ -124,6 +127,9 @@ export const MobileUserCard = memo(function MobileUserCard({
   user,
   currentUser,
   loadingId,
+  selectable = false,
+  isSelected = false,
+  onToggleSelect,
   onOpenSheet,
   onResetPassword,
   onToggleStatus,
@@ -182,13 +188,28 @@ export const MobileUserCard = memo(function MobileUserCard({
       whileTap={{ scale: 0.99 }}
       transition={{ duration: 0.2, type: "spring", stiffness: 350, damping: 25 }}
       onClick={() => onOpenSheet(user)}
-      className={`p-4 rounded-xl border border-[var(--color-hairline)] bg-gradient-to-b from-[var(--color-canvas-elevated)] via-[var(--color-canvas-elevated)] to-[var(--color-canvas)] shadow-xs hover:border-[var(--color-ink)]/30 hover:shadow-lg dark:hover:shadow-black/50 transition-all flex flex-col gap-3 relative overflow-hidden group cursor-pointer ${borderAccentClass}`}
+      className={`p-4 rounded-xl border ${
+        isSelected
+          ? "border-[var(--color-ink)] dark:border-white ring-1 ring-[var(--color-ink)] dark:ring-white bg-[var(--color-link-soft)]/20"
+          : "border-[var(--color-hairline)] bg-gradient-to-b from-[var(--color-canvas-elevated)] via-[var(--color-canvas-elevated)] to-[var(--color-canvas)]"
+      } shadow-xs hover:border-[var(--color-ink)]/30 hover:shadow-lg dark:hover:shadow-black/50 transition-all flex flex-col gap-3 relative overflow-hidden group cursor-pointer ${borderAccentClass}`}
     >
       {/* Top Hairline Sheen Gradient on Hover */}
       <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-[var(--color-link)]/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-      {/* Top Header section: Name, Role badge, Status indicator */}
+      {/* Top Header section: Checkbox, Name, Role badge, Status indicator */}
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5 min-w-0">
+          {selectable && (
+            <div onClick={(e) => e.stopPropagation()} className="flex items-center">
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => onToggleSelect && onToggleSelect(user.id)}
+                aria-label={`Select ${user.full_name}`}
+                className="h-4 w-4 rounded-[4px] border-[var(--color-hairline)] text-[var(--color-ink)] focus:ring-[var(--color-link)] cursor-pointer transition-all accent-[var(--color-ink)]"
+              />
+            </div>
+          )}
           <div className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] shadow-xs">
             {getRoleIcon(user.role)}
           </div>
@@ -249,14 +270,14 @@ export const MobileUserCard = memo(function MobileUserCard({
 
       {/* Action Footer */}
       <div
-        className="flex items-center justify-between pt-1 border-t border-[var(--color-hairline)]/50 mt-1"
+        className="flex items-center justify-between pt-1.5 border-t border-[var(--color-hairline)]/50 mt-1"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-1.5 flex-1 min-w-0">
           {showContact && (
             <a
               href={`mailto:${user.email}`}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 px-2 py-1 rounded bg-blue-50 dark:bg-blue-950/40 hover:underline"
+              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-blue-600 dark:text-blue-400 px-2.5 py-1 rounded-sm bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 transition-colors"
             >
               <AnimatedMail size={12} />
               <span>Email</span>
@@ -265,7 +286,7 @@ export const MobileUserCard = memo(function MobileUserCard({
           {showContact && user.phone && (
             <a
               href={`tel:${user.phone}`}
-              className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded bg-emerald-50 dark:bg-emerald-950/40 hover:underline"
+              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400 px-2.5 py-1 rounded-sm bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 transition-colors"
             >
               <AnimatedPhone size={12} />
               <span>Call</span>
@@ -280,9 +301,9 @@ export const MobileUserCard = memo(function MobileUserCard({
               onClick={() => onResetPassword(user.id)}
               disabled={isLoading}
               title="Reset password"
-              className="p-1.5 text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+              className="h-7 w-7 p-0 rounded-sm text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center justify-center cursor-pointer active:scale-[0.98]"
             >
-              <AnimatedKey size={14} />
+              <AnimatedKey size={13} />
             </Button>
             {user.id !== currentUser.id && (
               <Button
@@ -290,12 +311,12 @@ export const MobileUserCard = memo(function MobileUserCard({
                 onClick={() => onToggleStatus(user.id)}
                 disabled={isLoading}
                 title={user.status === "active" ? "Deactivate user" : "Activate user"}
-                className="p-1.5"
+                className="h-7 w-7 p-0 rounded-sm inline-flex items-center justify-center cursor-pointer active:scale-[0.98]"
               >
                 {user.status === "active" ? (
-                  <AnimatedUserX size={14} className="text-amber-600 dark:text-amber-400" />
+                  <AnimatedUserX size={13} className="text-amber-600 dark:text-amber-400" />
                 ) : (
-                  <AnimatedUserCheck size={14} className="text-emerald-600 dark:text-emerald-400" />
+                  <AnimatedUserCheck size={13} className="text-emerald-600 dark:text-emerald-400" />
                 )}
               </Button>
             )}

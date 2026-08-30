@@ -11,9 +11,10 @@ import {
   AnimatedMail,
   AnimatedFileText,
 } from "@/components/ui/animated-icons";
-import { AlertCircle, Loader2, Save } from "lucide-react";
+import { AlertCircle, Save } from "lucide-react";
 import type { CRMClient } from "@/lib/types/database";
 import { createClientAction, updateClientAction, type ClientFormState } from "@/app/actions/clients";
+import { Button } from "@/components/ui";
 
 interface ClientModalProps {
   isOpen: boolean;
@@ -355,31 +356,22 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
 
           {/* Footer Actions */}
           <div className="flex items-center justify-end gap-2 border-t border-[var(--color-border,#ebebeb)] pt-4">
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={onClose}
               disabled={isSubmitting}
-              className="rounded-lg border border-[var(--color-border,#ebebeb)] bg-white px-4 py-2 text-xs font-medium text-neutral-700 hover:bg-neutral-50 focus:outline-hidden disabled:opacity-50"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              disabled={isSubmitting}
-              className="flex items-center gap-1.5 rounded-lg bg-[var(--color-primary,#0070f3)] px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-600 focus:outline-hidden disabled:opacity-50 transition-colors"
+              variant="primary"
+              loading={isSubmitting}
+              icon={<Save className="h-4 w-4" />}
             >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4" />
-                  {isEditing ? "Update Client" : "Save Client"}
-                </>
-              )}
-            </button>
+              {isEditing ? "Update Client" : "Save Client"}
+            </Button>
           </div>
         </form>
       </div>

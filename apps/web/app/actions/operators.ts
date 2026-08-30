@@ -121,6 +121,7 @@ function computeNormalWorkingHours(startStr?: string, endStr?: string, overtimeH
 export async function submitOperatorHourLogAction(payload: {
   machineId: string;
   clientId?: string;
+  logDate?: string;
   startMeter?: number;
   endMeter?: number;
   startTime?: string;
@@ -169,13 +170,39 @@ export async function submitOperatorHourLogAction(payload: {
 
   const supabase = createSupabaseAdminClient();
   const effectiveCondition = payload.isBreakdown ? "breakdown" : (payload.machineCondition || "good");
+  const now = new Date();
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const todayDate = new Date().toISOString().split("T")[0];
+  let effectiveLogDate = todayDate;
+
+  // Validate custom logDate within allowed 7-day range
+  if (payload.logDate && payload.logDate.trim()) {
+    const rawDate = payload.logDate.trim().split("T")[0];
+    const parts = rawDate.split("-").map(Number);
+    if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      const parsedMidnight = new Date(parts[0], parts[1] - 1, parts[2]).getTime();
+      const diffDays = Math.floor((todayMidnight - parsedMidnight) / (1000 * 60 * 60 * 24));
+
+      // Security check: non-admins cannot log dates in the future or older than 7 days
+      if (user.role !== "super_admin" && user.role !== "admin") {
+        if (diffDays < 0) {
+          await failIdempotencyKey(currentIdempotencyKey);
+          return { success: false, error: "Cannot submit machine log for future dates." };
+        }
+        if (diffDays > 7) {
+          await failIdempotencyKey(currentIdempotencyKey);
+          return { success: false, error: "Cannot submit log older than 7 days. Please contact an administrator." };
+        }
+      }
+      effectiveLogDate = rawDate;
+    }
+  }
 
   // Check shift time overlap prior to database insert
   const overlapCheck = await checkShiftOverlapServer(supabase, {
     machineId: payload.machineId,
     operatorId: user.id,
-    logDate: todayDate,
+    logDate: effectiveLogDate,
     startTime: payload.startTime,
     endTime: payload.endTime,
     shift: payload.shift,
@@ -195,7 +222,7 @@ export async function submitOperatorHourLogAction(payload: {
     p_machine_id: payload.machineId,
     p_operator_id: user.id,
     p_client_id: payload.clientId || null,
-    p_log_date: todayDate,
+    p_log_date: effectiveLogDate,
     p_start_meter: startMtr,
     p_end_meter: endMtr,
     p_start_time: payload.startTime || null,
@@ -233,7 +260,7 @@ export async function submitOperatorHourLogAction(payload: {
       machine_id: payload.machineId,
       operator_id: user.id,
       client_id: payload.clientId || null,
-      log_date: todayDate,
+      log_date: effectiveLogDate,
       start_meter: startMtr,
       end_meter: endMtr,
       start_time: payload.startTime || null,
@@ -293,6 +320,7 @@ export async function submitOperatorHourLogAction(payload: {
       overtimeHours: payload.overtimeHours,
       isBreakdown: payload.isBreakdown,
       condition: effectiveCondition,
+      logDate: effectiveLogDate,
       idempotencyKey: currentIdempotencyKey,
     },
   });
@@ -334,6 +362,22 @@ export async function updateOperatorHourLogAction(payload: {
   if (!existingLog) return { success: false, error: "Log entry not found." };
   if (existingLog.operator_id !== user.id && user.role !== "super_admin" && user.role !== "admin") {
     return { success: false, error: "You can only edit your own meter logs." };
+  }
+
+  // 7-day edit locking window enforcement for operators (admins and super_admins can edit anytime)
+  if (user.role !== "super_admin" && user.role !== "admin" && existingLog.log_date) {
+    const logDateStr = existingLog.log_date.split("T")[0];
+    const parts = logDateStr.split("-").map(Number);
+    const now = new Date();
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+    if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      const logDateMidnight = new Date(parts[0], parts[1] - 1, parts[2]).getTime();
+      const diffDays = Math.floor((todayMidnight - logDateMidnight) / (1000 * 60 * 60 * 24));
+      if (diffDays > 7) {
+        return { success: false, error: "This log entry is locked. Logs older than 7 days cannot be edited." };
+      }
+    }
   }
 
   const startMtr = payload.startMeter ?? existingLog.start_meter ?? 0;

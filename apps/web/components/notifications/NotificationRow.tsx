@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import { AnimatedMessageSquare, AnimatedMail, AnimatedPhone, AnimatedEye, AnimatedRotateCw } from "@/components/ui/animated-icons";
-import { TableRow, TableCell, Badge } from "@/components/ui";
+import { TableRow, TableCell, Badge, Button } from "@/components/ui";
 import type { NotificationWithDetails } from "@/lib/types/database";
 
 interface NotificationRowProps {
@@ -147,14 +147,16 @@ export const NotificationRow = memo(function NotificationRow({
           </button>
 
           {isAdmin && n.status === "failed" && (
-            <button
+            <Button
+              variant="primary-sm"
+              size="sm"
               title="Resend notification"
               onClick={() => onResend(n.id)}
-              disabled={resendingId === n.id}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-[var(--radius-sm)] body-sm text-white bg-[var(--color-ink)] hover:opacity-90 transition-colors disabled:opacity-50"
+              loading={resendingId === n.id}
+              icon={<AnimatedRotateCw size={14} className={resendingId === n.id ? "animate-spin" : ""} />}
             >
-              <AnimatedRotateCw size={14} className={resendingId === n.id ? "animate-spin" : ""} /> Resend
-            </button>
+              Resend
+            </Button>
           )}
         </div>
       </TableCell>

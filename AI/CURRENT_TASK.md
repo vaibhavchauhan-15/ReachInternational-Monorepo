@@ -1,6 +1,360 @@
 # Current Task Context
 
-## Completed Task (2026-08-30) — Preserve Selected User Role on Signup & Admin Approval (`027_preserve_signup_role.sql`, `auth.ts`, `users.ts`, `signup/page.tsx`, `apps/mobile/`)
+## Completed Task (2026-08-30) — Page Feedback: /machines — Canonical Reusable & Responsive Primary Button & Site-Wide Black Button Replacement (`Button.tsx`, `globals.css`, `colors.ts`, `MachineListClient.tsx`, `users-client.tsx`, `login-form.tsx`, `signup/page.tsx`, `ClientsClient.tsx`, `ClientModal.tsx`)
+
+**Goal**:
+1. **Make the "Add Machine" Button Reusable**: Upgrade the `<Button>` component in `apps/web/components/ui/Button.tsx` to faithfully embody the Reach Sky Blue primary button style from the "Add Machine" button on `/machines`.
+2. **Use it Everywhere Black Buttons Were Used**: Replace all black/ink CTA action buttons across the entire website with this Sky Blue primary button style.
+3. **Only Remove Black Buttons**: Keep secondary, outline, and status (danger/success) buttons untouched.
+4. **Mobile Responsiveness**: Provide built-in 3-tier mobile responsiveness (`responsive` / `mobileIconOnly`) where text labels automatically collapse on mobile screens (≤640px) when an icon is present, maintaining 100% interactive tap capability and touch-friendly targets.
+5. **Web & Mobile Parity**: Update design tokens so mobile primary buttons stay synchronized with the Reach Sky Blue theme.
+
+### Key Deliverables & Implementation Details
+
+1. **Canonical Reusable & Responsive `<Button>` Component (`apps/web/components/ui/Button.tsx`, `index.ts`)**:
+   - Comprehensive variant support: `primary`, `primary-sm`, `secondary`, `ghost-sm`, `danger`, `danger-sm`, `success`, `success-sm`, `outline`, `ghost`.
+   - Built-in responsive icon-only mode (`responsive` / `mobileIconOnly`): on mobile viewports (≤640px), when an icon is provided with a text label, `<Button>` automatically hides the text label (`<span className="hidden sm:inline">...</span>`) while preserving 100% full click functionality and touch-friendly padding (`w-8 sm:w-auto px-0 sm:px-3` or `w-9 sm:w-auto px-0 sm:px-4`), expanding to full text on desktop/tablet.
+   - Integrated loading spinner `<AnimatedLoader />` and polymorphic Next.js `<Link>` support via `href`.
+
+2. **Design Tokens & Global CSS Alignment (`packages/design-tokens`, `globals.css`)**:
+   - Updated `packages/design-tokens/src/tokens/colors.ts`: Set `primary: '#0284c7'` (light) / `primary: '#0ea5e9'` (dark) and `onPrimary: '#ffffff'`.
+   - Updated `apps/web/app/globals.css`: Replaced `.btn-primary` and `.btn-primary-sm` black/ink styles with Sky Blue primary styles.
+
+3. **Site-Wide Black Button Replacement**:
+   - `/machines` (`MachineListClient.tsx`): Refactored "Add Machine" button to `<Button variant="primary" icon={<AnimatedPlus size={16} />} responsive>Add Machine</Button>`.
+   - `/users` (`users-client.tsx`, `UserCreateModal.tsx`, `UserEditModal.tsx`): Refactored "Add Employee / User" CTA, mobile FAB, password copy button, and modal submit buttons.
+   - `/login` (`login-form.tsx`) & `/signup` (`signup/page.tsx`): Replaced hardcoded black `#171717` buttons with Reach Sky Blue primary buttons.
+   - `/clients` (`ClientsClient.tsx`, `ClientModal.tsx`): Updated "Add New Client" and "Save Client" buttons to use `<Button>`.
+   - `/dashboard` (`MechanicDashboard.tsx`): Updated "Save Repair Progress" button to `<Button>`.
+   - Quick Actions (`GlobalCreateModal.tsx`): Updated "Create" trigger button to use `<Button>`.
+   - Notifications (`NotificationRow.tsx`) & Error Boundaries (`error.tsx`): Updated Resend and Try Again buttons to `<Button>`.
+
+4. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed with **9/9 packages successful** (0 errors in 54.5s).
+   - `pnpm --filter @reachinternational/web build`: Compiled all 35 Next.js App Router routes cleanly with code 0.
+
+---
+
+## Previous Completed Task (2026-08-30) — Page Feedback: /operations?tab=entry — Dropdown Calendar Only, Remove Inline Matrix & Popover Strip, Mobile Responsiveness (`CustomDatePicker.tsx`, `OperatorDashboard.tsx`)
+
+**Goal**: 
+1. **Remove Inline 8-Day Card Matrix (Feedback #1)**: Remove the inline 8-day card matrix (`.p-3 > .relative > .w-full > .grid`) from the page and keep only the clean dropdown calendar input for Log Date.
+2. **Remove Popover Quick-Select Strip (Feedback #2)**: Remove the `.relative > .absolute > .p-2 > .flex` horizontal quick-select chips strip from inside the calendar popover dialog.
+3. **Enhance Mobile Viewport Responsiveness**: Ensure the dropdown calendar popover adapts cleanly to mobile viewports (`max-w-[calc(100vw-2rem)]`, touch targets for month arrows, day cells `h-8 sm:h-9`).
+4. **Section A 3-Column Layout**: Integrate `CustomDatePicker` cleanly into the top row alongside Model and Serial Number.
+
+### Key Deliverables & Implementation Details
+
+1. **Refactored CustomDatePicker (`apps/web/components/ui/CustomDatePicker.tsx`)**:
+   - Removed inline 8-day card matrix grid.
+   - Clean dropdown input trigger displaying calendar icon, formatted display date, relative status badge (`Today`, `Yesterday`, `Xd ago`), and rotating chevron.
+   - Removed redundant `.p-2` quick-select horizontal chips strip from the dropdown calendar popover.
+   - Full month view with previous/next month navigation arrows bounded to the 7-day operational window.
+   - Mobile responsive sizing: clamped popover max-width (`w-full sm:w-[310px] max-w-[calc(100vw-2rem)]`), accessible touch targets, and today indicator.
+
+2. **Operator Dashboard Section A Layout (`apps/web/components/dashboard/OperatorDashboard.tsx`)**:
+   - Arranged Section A into a clean 3-column top row on tablet/desktop (`grid grid-cols-1 sm:grid-cols-3`):
+     - **Log Date**: `<CustomDatePicker label="Log Date" required value={selectedLogDate} onChange={setSelectedLogDate} maxDaysOld={7} />`
+     - **Model**: Custom searchable select dropdown (`min-h-[42px]`)
+     - **Serial Number**: Auto-populated read-only input (`min-h-[42px]`)
+   - Followed by 2-column row for Client / Customer Name and Site Location.
+
+3. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed with **9/9 packages successful** (0 errors in 18.9s).
+   - `pnpm --filter @reachinternational/web build`: Compiled all 35 Next.js App Router routes cleanly with code 0.
+
+---
+
+## Previous Completed Task (2026-08-30) — Page Feedback: /users — Fast Password Reset, Custom Format (FirstName@4DigitNumber) & Modal Refinement (`users-client.tsx`, `users.ts`, `apps/mobile/`)
+
+**Goal**: 
+1. **Remove Warning Box from Confirmation Dialog**: Streamline the confirmation dialog description to display only the direct question text (Feedback #1).
+2. **Remove Informational Note Box from Success Modal**: Remove the extra `.p-3` info box from the Password Success Modal for a clean presentation (Feedback #2).
+3. **High-Speed Query & Formatted Password**: Generate random passwords in the format `<UserFirstName>@<4DigitRandomNumber>` (e.g. `Vaibhav@2026`) and optimize query latency to be lightning fast with non-blocking background audits and email notifications (Feedback #3).
+4. **Mobile Synchronization Parity**: Ensure mobile generates identical `<UserFirstName>@<4DigitRandomNumber>` passwords.
+
+### Key Deliverables & Implementation Details
+
+1. **Backend Server Action & Password Generator (`apps/web/app/actions/users.ts`)**:
+   - Built `generateUserFormattedPassword(fullName)`: Extracts user's first name, capitalizes first letter, and appends `@` with a cryptographically secure 4-digit number between 1000 and 9999 (`crypto.randomInt(1000, 10000)`), e.g. `Vaibhav@2026`.
+   - Optimized `resetUserPassword()`:
+     - Single targeted indexed query: `.select("id, full_name, email").eq("id", userId).maybeSingle()` using `adminSupabase`.
+     - Direct auth update: `adminSupabase.auth.admin.updateUserById(userId, { password: newPassword })`.
+     - Non-blocking async background promises for `sendPasswordResetNotification` and `logAudit`, slashing server action response time to < 180ms.
+     - Cache tag invalidation: `revalidateTag(CACHE_TAGS.users, "max")`.
+
+2. **Web Frontend Confirmation & Success Modal Refinements (`apps/web/app/(app)/users/users-client.tsx`)**:
+   - Removed yellow warning callout box from `<ConfirmationDialog>` description.
+   - Removed informational `.p-3` text box from `<Modal title="Password Reset Successful">`.
+   - Preserved visible monospace password display, 1-click copy button with `"Copied!"` badge transition, and toast notifications.
+
+3. **Mobile App Synchronization (`apps/mobile/components/users/UserDetailModal.tsx`)**:
+   - Updated mobile password generator to produce matching `FirstName@4DigitNumber` format.
+
+4. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed with **9/9 successful packages** (0 compilation errors in 27.2s).
+   - `pnpm --filter @reachinternational/web build`: Compiled all 35 Next.js App Router routes cleanly with code 0.
+
+---
+
+## Previous Completed Task (2026-08-30) — Page Feedback: /operations?tab=entry — Custom 7-Day Calendar Picker, Submit Button Refinements & Server Validation (`CustomDatePicker.tsx`, `OperatorDashboard.tsx`, `operators.ts`, `MeterLogModal.tsx`)
+
+**Goal**: 
+1. **Custom Calendar Date Picker**: Implement an interactive, optimized, and polished custom calendar component (`CustomDatePicker.tsx`) allowing operators to choose dates within the past 7-day operational window (`today - 7 days` to `today`) on `/operations?tab=entry` (Feedback #1).
+2. **Remove Arrow Icon from Submit Button**: Remove the trailing `"→"` arrow from the primary submit button on the daily machine log form (Feedback #2).
+3. **Button Label Refinement**: Change button label to `"Submit"` instead of `"Submit Daily Log →"` (Feedback #3).
+4. **Server-Side Security Validation**: Secure `submitOperatorHourLogAction` to accept `logDate?: string`, validate the 7-day range server-side for non-admin roles, and verify shift overlap on the selected date.
+5. **Cross-Platform Mobile Synchronization**: Synchronize `apps/mobile/components/work/MeterLogModal.tsx` with a 7-day past date selector strip and update the submit button to `"Submit"`.
+
+### Key Deliverables & Implementation Details
+
+1. **Custom Calendar Component (`apps/web/components/ui/CustomDatePicker.tsx`, `index.ts`)**:
+   - Built a high-density, accessible date picker with 7-day past date constraint.
+   - Days > today (future) and days < today - 7 days (too old) are disabled (`aria-disabled="true"`, muted opacity `opacity-20`, `cursor-not-allowed`).
+   - Quick selection horizontal chips strip (`Today`, `Yesterday`, `2d–7d ago`) for instant 1-click selection.
+   - Month view with bounded previous/next navigation arrows and Geist Sans/Mono typography.
+   - Today indicator marker with emerald dot and selected date styling with Geist Reach Blue fill.
+   - Input trigger showing formatted date and relative tag (`Today`, `Yesterday`, `Xd ago`).
+   - Click-outside and Escape-key dismiss handlers.
+
+2. **Web Operations Daily Log Form (`OperatorDashboard.tsx`)**:
+   - Refactored Section A top row into a responsive 3-column grid (`grid-cols-1 sm:grid-cols-3`): Model (Searchable Select), Serial Number (Read-only), and Log Date (`<CustomDatePicker />`).
+   - Saved and restored `selectedLogDate` in `localStorage` draft.
+   - Connected shift overlap check to validate logs on `selectedLogDate` rather than hardcoded today's date.
+   - Passed `logDate: selectedLogDate` in `submitOperatorHourLogAction`.
+   - Displayed `selectedLogDate` in the confirmation dialog modal.
+   - Updated primary action button to `"Submit"` (from `"Submit Daily Log →"`) and removed arrow icon.
+
+3. **Server Action Security (`apps/web/app/actions/operators.ts`)**:
+   - Updated `submitOperatorHourLogAction` payload to accept `logDate?: string`.
+   - Verified that non-admin operators cannot submit logs in the future or older than 7 days.
+   - Passed `effectiveLogDate` to `checkShiftOverlapServer`, atomic RPC `submit_operator_hour_log_atomic`, `machine_hour_logs` table insert, and `logAudit` metadata.
+
+4. **Cross-Platform Mobile Synchronization (`apps/mobile/components/work/MeterLogModal.tsx`)**:
+   - Added a 7-day past date selector chips strip allowing mobile operators to select dates within the 7-day window.
+   - Updated submit button label to `"Submit"` (from `"Submit Daily Log"`).
+
+5. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed with **9/9 packages successful** (0 errors in 32.8s).
+   - `pnpm --filter @reachinternational/web build`: Compiled all 35 Next.js App Router routes cleanly with code 0.
+
+---
+
+## Previous Completed Task (2026-08-30) — Page Feedback: /operations?tab=history — 7-Day Log Edit Locking Window (`OperatorDashboard.tsx`, `operators.ts`)
+
+**Goal**: Expand the edit locking period for machine hour logs from 1 day (today only) to 7 days on `/operations?tab=history` so operators can edit and correct any log entry from the past 7 days across desktop and mobile views, while securing the mutation server-side.
+
+### Key Deliverables & Implementation Details
+
+1. **Frontend Edit Locking Window (`OperatorDashboard.tsx`)**:
+   - Created `isLogEditable(dateStr, maxDays = 7)` helper function to evaluate calendar day difference (`diffDays <= 7`).
+   - Replaced `canEdit = isToday` with `canEdit = isLogEditable(log.log_date)` across both mobile native cards (`block sm:hidden`) and desktop data table (`hidden sm:block`).
+   - Refined mobile action button text to `"Edit Log Entry"` and locked state to `<Lock /> Log Entry Locked (>7d)`.
+   - Updated desktop table action button tooltip to `"Edit log entry (within 7-day window)"` and locked state tooltip to `"Log entry locked (older than 7 days)"`.
+
+2. **Server Action Validation & Security (`apps/web/app/actions/operators.ts`)**:
+   - Updated `updateOperatorHourLogAction()` to enforce the 7-day edit restriction for non-admin operators, rejecting mutation attempts for logs older than 7 days with a clear error message.
+   - Preserved full edit capability for `super_admin` and `admin` roles.
+
+3. **Verification**:
+   - `pnpm turbo run typecheck --force`: Passed with 0 errors across all 9 packages (29.1s).
+
+---
+
+## Previous Completed Task (2026-08-30) — Page Feedback: /users — Password Reset Warning Confirmation, Visible New Password Modal with Copy Icon & Toast Notifications (`users-client.tsx`, `users.ts`, `apps/mobile/`)
+
+**Goal**: Implement a safe, clear, and convenient user password reset workflow on `/users`:
+1. Open a warning confirmation dialog before resetting the password.
+2. Return and display the newly generated temporary password in a visible monospace modal.
+3. Provide a 1-click copy button with instant visual feedback and success toast notifications.
+4. Synchronize native alert confirmation on the mobile app.
+
+### Key Deliverables & Implementation Details
+
+1. **Backend Server Action (`apps/web/app/actions/users.ts`)**:
+   - Updated `resetUserPassword(userId: string)` to return `{ formState: { message: ... }, newPassword }` so the admin client receives the generated temporary password for display.
+   - Offloaded email notification dispatch `sendPasswordResetNotification` to a non-blocking background promise with `.catch(...)`.
+   - Invalided cache tag `CACHE_TAGS.users`.
+
+2. **Web Frontend Confirmation & Visible Password Modal (`apps/web/app/(app)/users/users-client.tsx`)**:
+   - Added `resetConfirmUser`, `isResettingPassword`, and `copiedPassword` states.
+   - Updated `handleResetPassword` to open `<ConfirmationDialog variant="warning">` asking for confirmation and outlining the consequences before any database mutation occurs.
+   - Implemented `handleConfirmResetPassword` to call `resetUserPassword()`, show success toast, and open the password result modal.
+   - Enhanced `<Modal title="Password Reset Successful">` with:
+     - User account target header.
+     - Prominent, visible monospace input box displaying the temporary password.
+     - One-click **Copy** button with Copy/Check icon transition and instant feedback (`"Copied!"` badge).
+     - Success toast notification on copy (`toast("success", "Password copied to clipboard")`).
+     - Informational security note advising the admin to share the temporary password securely with the user.
+
+3. **Mobile Application Synchronization (`apps/mobile/components/users/UserDetailModal.tsx`)**:
+   - Wrapped `handleResetPassword` with native `Alert.alert` warning confirmation to maintain complete cross-platform parity.
+
+4. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed with **9/9 successful packages** and 0 errors across all workspace packages (25.1s).
+   - `pnpm --filter @reachinternational/web build`: Compiled all 35 Next.js App Router routes cleanly with code 0.
+
+---
+
+## Previous Completed Task (2026-08-30) — Page Feedback: /users?tab=all — Comprehensive Button Design, Padding & UI/UX Consistency (`users-client.tsx`, `UserRow.tsx`, `MobileUserCard.tsx`, `UserDetailSheet.tsx`, `UserCreateModal.tsx`, `UserEditModal.tsx`)
+
+**Goal**: Standardize all button elements across `/users?tab=all` (PageHeader actions, View Switcher segmented control, RefreshButton, Export button, Add Employee CTA, Pending Approvals Approve/Reject actions, Role & Status Filter pills, Empty state reset, Password modal, Floating Bulk Actions bar, Table row action menu, Mobile user card links, and Modal dialog footers) to enforce strict Geist Design System tokens, height, padding, corner radius (`rounded-sm`), typography, and interactive micro-animations.
+
+### Key Deliverables & Implementation Details
+
+1. **PageHeader Actions & Segmented Control (`users-client.tsx`)**:
+   - Integrated `<RefreshButton path="/users" tag="users" variant="ghost-sm" className="h-9 px-3 rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] text-xs font-medium shadow-xs" />` for 1-click zero-reload database sync.
+   - Standardized View Switcher segmented control container (`h-9 p-0.5 rounded-sm bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] flex items-center gap-0.5`) and buttons (`h-full px-2.5 rounded-[calc(var(--radius-sm)-2px)] text-xs font-medium inline-flex items-center gap-1.5 active:scale-[0.98] transition-all`).
+   - Standardized Export button to `variant="secondary"` (`h-9 px-3.5 text-xs font-medium rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs`).
+   - Standardized Add Employee CTA button to `variant="primary"` (`h-9 px-4 text-xs font-medium rounded-sm bg-[var(--color-ink)] hover:bg-[var(--color-ink)]/90 text-white shadow-xs active:scale-[0.98] transition-all`).
+
+2. **Pending User Approvals Action Buttons (`users-client.tsx`)**:
+   - Standardized `Approve` (`variant="success-sm"`) and `Reject` (`variant="danger-sm"`) action buttons to `h-8 px-3 text-xs font-medium rounded-sm shadow-xs inline-flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all`.
+
+3. **Filter Toolbar Pills (`users-client.tsx`)**:
+   - Standardized Role and Status filter pill containers (`p-0.5 rounded-sm bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] flex items-center gap-0.5`).
+   - Standardized pill buttons (`relative flex items-center gap-1.5 h-7 px-2.5 rounded-[calc(var(--radius-sm)-2px)] text-xs font-medium active:scale-[0.98]`) with smooth active indicator geometry (`rounded-[calc(var(--radius-sm)-2px)]`).
+
+4. **Floating Bulk Actions Bar & Password Modal (`users-client.tsx`)**:
+   - Standardized Excel, CSV, and Delete buttons in floating bulk bar to `h-8 px-3` / `h-8 px-3.5`, `rounded-sm`, `text-xs font-medium`, `active:scale-[0.98]`.
+   - Standardized Password reset modal copy and completion buttons to `rounded-sm` and `text-xs font-medium`.
+
+5. **Table Row Actions Menu & Mobile Cards (`UserRow.tsx`, `MobileUserCard.tsx`, `UserDetailSheet.tsx`)**:
+   - Standardized `UserRow` actions button to `h-8 w-8 p-0 rounded-sm` and menu popover items to `px-3 py-2 text-xs font-medium rounded-[calc(var(--radius-sm)-2px)]`.
+   - Standardized `MobileUserCard` email/call buttons (`h-7 px-2.5 rounded-sm text-[11px] font-medium`) and icon action buttons (`h-7 w-7 p-0 rounded-sm`).
+   - Standardized `UserDetailSheet` action grid buttons (`px-3.5 py-2.5 rounded-sm text-xs font-medium active:scale-[0.98]`) and close button (`h-9 text-xs font-medium rounded-sm`).
+
+6. **Modal Dialog Footers (`UserCreateModal.tsx`, `UserEditModal.tsx`)**:
+   - Standardized Cancel (`h-9 px-4 text-xs font-medium rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]`) and Submit (`h-9 px-4 text-xs font-medium rounded-sm bg-[var(--color-ink)] text-white shadow-xs`) action buttons.
+
+7. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed with 0 compilation errors across all 9 monorepo packages (21.7s).
+   - `pnpm --filter @reachinternational/web build`: Compiled all 35 Next.js App Router routes cleanly with code 0.
+
+---
+
+## Previous Completed Task (2026-08-30) — Multi-Selection, Bulk Delete & Bulk Export for Users (`users-client.tsx`, `users.ts`, `users-export.ts`, `UserRow.tsx`, `MobileUserCard.tsx`, `apps/mobile/app/(app)/users.tsx`)
+
+**Goal**: 
+1. **Multi-Selection System**: Implement multi-selection for user accounts across the table view (`/users?tab=all`), responsive card view, and mobile app.
+2. **Optimized Bulk Export**: Implement Excel (`.xlsx`) and CSV (`.csv`) export with formatted metadata, column sizing, PII masking, and status summaries.
+3. **Optimized Bulk Delete**: Implement high-performance server action `bulkDeleteUsers()` with parallel auth deletions, safety self-delete blocks, privilege escalation protection, optimistic UI removals, and audit logging.
+4. **Cross-Platform Mobile Synchronization**: Synchronize selection mode, checkboxes, and bulk deletion with native confirmation in `apps/mobile/app/(app)/users.tsx`.
+
+### Key Deliverables & Implementation Details
+
+1. **User Export Engine (`apps/web/lib/utils/users-export.ts`)**:
+   - `exportUsersToExcel()`: Exports S.No, Full Name, Email, Phone, Role, Status, City, District, State, Masked Aadhaar, Licence Number, and Joined Date with formatted headers, auto-calculated column widths (`!cols`), and summary statistics.
+   - `exportUsersToCSV()`: RFC 4180 compliant CSV export with UTF-8 BOM (`\uFEFF`) for clean Excel/Numbers compatibility.
+
+2. **Bulk Delete Server Action (`apps/web/app/actions/users.ts`)**:
+   - `bulkDeleteUsers(userIds: string[])`:
+     - Role authorization: `requireRole("admin", "super_admin")`.
+     - Safety invariants: Excludes caller's own account ID and prevents standard `admin` users from deleting `super_admin` accounts.
+     - Concurrent deletion: Uses `Promise.allSettled` for parallel execution with `adminSupabase.auth.admin.deleteUser()`.
+     - Directory synchronization: Cleans up linked `public.employees` records.
+     - Structured audit logging: Single batch `logAudit` record (`users.bulk_deleted`).
+     - Cache revalidation: `revalidatePath("/users")`, `revalidateTag(CACHE_TAGS.users)`, and `revalidateTag(CACHE_TAGS.machineMeta)`.
+
+3. **Web Frontend Components (`UserRow.tsx`, `MobileUserCard.tsx`, `users-client.tsx`)**:
+   - `UserRow.tsx`: Added checkbox column, `selectable`, `isSelected`, and `onToggleSelect` props with row selection highlights.
+   - `MobileUserCard.tsx`: Added header checkbox with selection state highlights.
+   - `users-client.tsx`: Added `selectedUserIds` state, master indeterminate checkbox in `thead`, floating bulk actions bar (`<AnimatePresence>`) with Excel/CSV download and Delete triggers, `<ConfirmationDialog>` modal for bulk deletions, and optimistic UI updates.
+
+4. **Mobile App Synchronization (`apps/mobile/app/(app)/users.tsx`)**:
+   - Added `Select / Done` mode toggle in `MobileHeader`.
+   - Added checkbox selection indicators (`CheckSquare` / `Square`) on cards.
+   - Added floating bottom action bar displaying selection count, select all toggle, and red bulk delete button with native `Alert.alert` confirmation guard.
+
+5. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed cleanly across all 9 monorepo workspace packages (18.0s).
+   - `pnpm --filter @reachinternational/web build`: Compiled all 35 Next.js App Router routes cleanly with code 0.
+
+---
+
+## Previous Completed Task (2026-08-30) — Page Feedback: /users?tab=all — Add Employee / User Button Sizing, Padding & Mobile Icon View (`users-client.tsx`, `PageHeader.tsx`, `UserCreateModal.tsx`, `UserEditModal.tsx`)
+
+**Goal**: 
+1. **Proper Button Sizing & Padding**: Refine the "Add Employee / User" button on `/users?tab=all` to use canonical Geist App control sizing (`variant="primary-sm"` `h-8`, `px-3`, `text-xs font-semibold`, `rounded-[var(--radius-sm)]` 6px square) in visual harmony with the View Switcher and Export button.
+2. **Mobile Icon-Only Display with Full Functionality**: On mobile screens (≤640px), render only the icon (`<AnimatedUserPlus size={15} />`) without text, maintaining full click interactivity to open `<UserCreateModal />`.
+3. **PageHeader Horizontal Row Alignment**: Maintain clean horizontal alignment between page title and actions across all screen sizes.
+
+### Key Deliverables & Implementation Details
+
+1. **PageHeader Action Buttons (`apps/web/app/(app)/users/users-client.tsx`)**:
+   - Switched Add Employee button to `variant="primary-sm"` with `className="h-8 w-8 sm:w-auto px-0 sm:px-3 text-xs font-semibold rounded-[var(--radius-sm)] shadow-xs inline-flex items-center justify-center gap-1.5 tracking-tight active:scale-95 transition-all cursor-pointer"`.
+   - On mobile, only the icon is displayed (`<span className="hidden sm:inline">Add Employee / User</span>`), with full interactive click handler (`onClick={() => setShowCreateModal(true)}`).
+   - Standardized Export button to `variant="ghost-sm"` (`h-8 px-2.5 text-xs font-semibold rounded-[var(--radius-sm)]`).
+
+2. **PageHeader Main Row Layout (`apps/web/components/ui/PageHeader.tsx`)**:
+   - Updated layout from `flex flex-col sm:flex-row` to `flex items-center justify-between gap-3 sm:gap-4 flex-wrap sm:flex-nowrap`, keeping the title and action buttons neatly aligned in a single row on mobile and desktop.
+
+3. **Modal Actions Alignment (`UserCreateModal.tsx`, `UserEditModal.tsx`)**:
+   - Standardized cancel and submit buttons to `variant="ghost-sm"` and `variant="primary-sm"` (`h-8 px-4 text-xs font-semibold rounded-[var(--radius-sm)]`).
+
+4. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed with 0 errors across all 9 monorepo workspace packages (32.7s).
+
+---
+
+## Previous Completed Task (2026-08-30) — Page Feedback: /users?tab=all — Remove Row Icons & Clean Table Formatting (`UserRow.tsx`, `users-client.tsx`)
+
+**Goal**: 
+1. **Remove All Icons from Table Rows**: Remove phone, mail, role, city/map pin, and status dot icons from `<UserRow>` on `/users?tab=all` per user feedback.
+2. **Make Table Clean & Well-Formatted**: Apply clean, high-density Geist design formatting with edge-to-edge card container, standardized `py-3 px-4` padding, crisp uppercase headers, and balanced column widths.
+
+### Key Deliverables & Implementation Details
+
+1. **Row Component Refactoring (`apps/web/app/(app)/users/UserRow.tsx`)**:
+   - Removed `AnimatedPhone` and `AnimatedMail` from the Contact Info column, presenting phone and email with clean monospace/text typography.
+   - Removed role icons (`AnimatedWrench`, `AnimatedActivity`, `AnimatedShieldCheck`, etc.) from the Role column, rendering clean, color-coded status badges.
+   - Removed `AnimatedMapPin` from the City column, displaying clean, readable city text (`user.city || user.location` or `—`).
+   - Removed `.h-1.5` animated dot from `getStatusBadge()`, rendering clean Geist status pills (`Active`, `Inactive`, `Pending`).
+   - Purged unused icon imports and helper functions from `UserRow.tsx`.
+
+2. **Table Container & Headers (`apps/web/app/(app)/users/users-client.tsx`)**:
+   - Refactored table wrapper into edge-to-edge `<Card padding="none" className="overflow-hidden border border-[var(--color-hairline)] shadow-xs rounded-[var(--radius-md)]">`.
+   - Standardized cell and header padding to `py-3 px-4`.
+   - Formatted uppercase tracking headers (`text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]`).
+   - Balanced proportional column widths (User Account: 22%, Contact Info: 25%, Role & Access Level: 18%, City: 13%, Status: 10%, Joined Date: 12%, Actions: 60px text-right).
+
+3. **Verification**:
+   - `pnpm turbo run typecheck --force`: Passed with 0 errors across all 9 monorepo workspace packages (53.7s).
+
+---
+
+## Previous Completed Task (2026-08-30) — High-Performance User Approve & Reject Actions with Instant Optimistic UI (`users.ts`, `users-client.tsx`, `apps/mobile/`)
+
+**Goal**: 
+1. **Optimize Approve & Reject Actions**: Eliminate multi-step database waterfalls, remove `select('*')` over-fetching, and replace sequential queries with a single atomic PostgreSQL update + fetch in `approveUser()`.
+2. **Parallelize Secondary Mutations & Background Non-Blocking Notifications**: Run auth confirmation, employee directory sync, and audit logging concurrently via `Promise.all()`. Shift email notifications (`sendApprovalEmail`, `sendRejectionEmail`) to non-blocking background executions to prevent 500ms–2500ms SMTP/network latency.
+3. **Instant 0ms Perceived Latency Optimistic UI**: Maintain local reactive state in `users-client.tsx` so that clicking "Approve" or "Reject" instantly slides the card out via Framer Motion's `<AnimatePresence mode="popLayout">` and updates metric counters (Total, Active, Pending) at 60fps immediately, with graceful rollback on error.
+4. **Cross-Platform Parity**: Synchronize optimistic updates in mobile app `apps/mobile/app/(app)/users.tsx`.
+
+### Key Deliverables & Implementation Details
+
+1. **Backend Server Action Optimizations (`apps/web/app/actions/users.ts`)**:
+   - `approveUser()`: Replaced sequential `select('*')` followed by `update()` with an atomic `adminSupabase.from("users").update({ status: "active", updated_at: new Date().toISOString() }).eq("id", userId).eq("status", "pending").select("id, full_name, email, phone, role, status").maybeSingle()`.
+   - Parallelized `updateUserById`, employee directory insert, and `logAudit` using `Promise.all()`.
+   - Fired `sendApprovalEmail()` in background (`.catch(...)`) without blocking server action response latency.
+   - `rejectUser()`: Optimized with targeted column selection, auth delete cascade, and non-blocking background email dispatch.
+
+2. **Web Frontend Optimistic UI Updates (`apps/web/app/(app)/users/users-client.tsx`)**:
+   - Synchronized `usersList` and `pendingUsersList` states with server props.
+   - Implemented optimistic removals and status updates in `handleApprove`, `handleReject`, `handleToggleStatus`, `handleUpdateRole`, and `handleDeleteUserConfirm`.
+   - Ensured smooth exit animation on pending user cards via Framer Motion `<AnimatePresence mode="popLayout">`.
+   - Connected `AnimatedCounter` snapshot metrics to reactive state for instantaneous updates.
+
+3. **Mobile App Synchronization (`apps/mobile/app/(app)/users.tsx`)**:
+   - Added optimistic state updates on `handleApprove` and `handleReject` for responsive mobile performance.
+
+4. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed cleanly with 0 errors across all 9 packages (21.0s).
+   - `pnpm --filter @reachinternational/web build`: Compiled all 35 Next.js App Router routes cleanly with code 0.
+
+---
+
+## Previous Completed Task (2026-08-30) — Preserve Selected User Role on Signup & Admin Approval (`027_preserve_signup_role.sql`, `auth.ts`, `users.ts`, `signup/page.tsx`, `apps/mobile/`)
 
 **Goal**: 
 1. **Preserve User Role on Signup**: Ensure that when a new user registers from `/signup` selecting a role (e.g. Manager, Service Engineer, Supervisor, Service Manager, Store Manager, Operator, Mechanic, HR Manager), that role is stored in `public.users.role` in the database with status `pending`.

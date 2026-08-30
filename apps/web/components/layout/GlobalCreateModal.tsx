@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/animated-icons";
 import { motion, AnimatePresence } from "framer-motion";
 import type { UserRole } from "@/lib/types/database";
+import { Button } from "@/components/ui";
 
 interface GlobalCreateModalProps {
   userRole: UserRole;
@@ -123,14 +124,14 @@ export function GlobalCreateModal({ userRole }: GlobalCreateModalProps) {
 
   return (
     <>
-      <button
-        type="button"
+      <Button
+        variant="primary-sm"
+        icon={<AnimatedPlus size={16} className="shrink-0" />}
+        responsive
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold shadow-xs transition-all cursor-pointer"
       >
-        <AnimatedPlus size={16} className="shrink-0" />
-        <span className="hidden sm:inline">Create</span>
-      </button>
+        Create
+      </Button>
 
       <AnimatePresence>
         {open && (

@@ -45,7 +45,7 @@ import {
   submitOperatorHourLogAction,
   updateOperatorHourLogAction,
 } from "@/app/actions/operators";
-import { useToast, CustomTimePicker, Modal } from "@/components/ui";
+import { useToast, CustomTimePicker, CustomDatePicker, Modal } from "@/components/ui";
 import { formatDate, formatTo12Hour, formatShiftTimingRange } from "@reachinternational/utils";
 import { PrintableOperatorLogsModal } from "./PrintableOperatorLogsModal";
 import { handleClipboardPaste } from "@/lib/security/clipboard";
@@ -183,6 +183,27 @@ export function OperatorDashboard({
       d.getMonth() === today.getMonth() &&
       d.getDate() === today.getDate()
     );
+  };
+
+  // 7-day edit locking window helper (allows editing today + past 7 days)
+  const isLogEditable = (dateStr?: string, maxDays = 7) => {
+    if (!dateStr) return false;
+    const cleanDateStr = dateStr.split("T")[0];
+    const parts = cleanDateStr.split("-").map(Number);
+    const now = new Date();
+    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+    if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      const logDateMidnight = new Date(parts[0], parts[1] - 1, parts[2]).getTime();
+      const diffDays = Math.floor((todayMidnight - logDateMidnight) / (1000 * 60 * 60 * 24));
+      return diffDays <= maxDays;
+    }
+
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return false;
+    const logDateMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const diffDays = Math.floor((todayMidnight - logDateMidnight) / (1000 * 60 * 60 * 24));
+    return diffDays <= maxDays;
   };
 
   const filteredLogs = useMemo(() => {
@@ -413,6 +434,7 @@ export function OperatorDashboard({
   );
 
   // Daily Machine Log Form State
+  const [selectedLogDate, setSelectedLogDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [machineName, setMachineName] = useState<string>(selectedMachine?.machine_name || "");
   const [machineNo, setMachineNo] = useState<string>(selectedMachine?.machine_code || "");
   const [model, setModel] = useState<string>(selectedMachine?.model || "");
@@ -578,17 +600,18 @@ export function OperatorDashboard({
     return recentLogs.length > 0 ? recentLogs[0] : null;
   }, [recentLogs]);
 
-  // Today's logs submitted for selected machine
-  const todayLogsForMachine = useMemo(() => {
-    if (!selectedMachineId) return [];
-    return recentLogs.filter(
-      (l) => l.machine_id === selectedMachineId && isLogFromToday(l.log_date)
-    );
-  }, [selectedMachineId, recentLogs]);
+  // Logs submitted for selected machine on the chosen date
+  const logsForDateAndMachine = useMemo(() => {
+    if (!selectedMachineId || !selectedLogDate) return [];
+    return recentLogs.filter((l) => {
+      if (l.machine_id !== selectedMachineId || !l.log_date) return false;
+      return l.log_date.split("T")[0] === selectedLogDate.split("T")[0];
+    });
+  }, [selectedMachineId, selectedLogDate, recentLogs]);
 
   // Client-side real-time shift time overlap validation
   const shiftOverlapWarning = useMemo(() => {
-    if (!selectedMachineId || todayLogsForMachine.length === 0) return null;
+    if (!selectedMachineId || logsForDateAndMachine.length === 0) return null;
 
     const newS = parseTimeToMinutes(startTime);
     let newE = parseTimeToMinutes(endTime);
@@ -596,7 +619,7 @@ export function OperatorDashboard({
       newE += 1440;
     }
 
-    for (const log of todayLogsForMachine) {
+    for (const log of logsForDateAndMachine) {
       if (newS !== null && newE !== null) {
         const exS = parseTimeToMinutes(log.start_time);
         let exE = parseTimeToMinutes(log.end_time);
@@ -605,14 +628,14 @@ export function OperatorDashboard({
           if (exE <= exS) exE += 1440;
 
           if (Math.max(newS, exS) < Math.min(newE, exE)) {
-            return `Time overlap detected: The selected period (${startTime} – ${endTime}) overlaps with an existing log (${log.start_time || "08:00 AM"} – ${log.end_time || "05:00 PM"}) logged today. Operating time periods must not overlap.`;
+            return `Time overlap detected: The selected period (${startTime} – ${endTime}) overlaps with an existing log (${log.start_time || "08:00 AM"} – ${log.end_time || "05:00 PM"}) on ${formatDate(selectedLogDate)}. Operating time periods must not overlap.`;
           }
         }
       }
     }
 
     return null;
-  }, [selectedMachineId, todayLogsForMachine, startTime, endTime]);
+  }, [selectedMachineId, logsForDateAndMachine, startTime, endTime, selectedLogDate]);
 
   // Load draft from localStorage on mount
   useEffect(() => {
@@ -630,6 +653,7 @@ export function OperatorDashboard({
           }
         }
         if (parsed.selectedClientId) setSelectedClientId(parsed.selectedClientId);
+        if (parsed.selectedLogDate) setSelectedLogDate(parsed.selectedLogDate);
         if (parsed.clientLocation && parsed.clientLocation.trim() !== "") setClientLocation(parsed.clientLocation);
         if (parsed.startMeter !== undefined) setStartMeter(parsed.startMeter);
         if (parsed.endMeter !== undefined) setEndMeter(parsed.endMeter);
@@ -661,6 +685,7 @@ export function OperatorDashboard({
     const draft = {
       selectedMachineId,
       selectedClientId,
+      selectedLogDate,
       clientLocation,
       startMeter,
       endMeter,
@@ -685,6 +710,7 @@ export function OperatorDashboard({
   }, [
     selectedMachineId,
     selectedClientId,
+    selectedLogDate,
     clientLocation,
     startMeter,
     endMeter,
@@ -713,6 +739,7 @@ export function OperatorDashboard({
     const draft = {
       selectedMachineId,
       selectedClientId,
+      selectedLogDate,
       clientLocation,
       startMeter,
       endMeter,
@@ -813,6 +840,7 @@ export function OperatorDashboard({
     const res = await submitOperatorHourLogAction({
       machineId: selectedMachineId,
       clientId: selectedClientId || undefined,
+      logDate: selectedLogDate,
       location: clientLocation.trim() || undefined,
       startMeter: startMtrNum,
       endMeter: endMtrNum,
@@ -1020,7 +1048,19 @@ export function OperatorDashboard({
             {/* SECTION A: MACHINE & CLIENT DETAILS          */}
             {/* ============================================ */}
             <div className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/40 space-y-3 sm:space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+              {/* 1. ROW 1: LOG DATE, MODEL & SERIAL NUMBER */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4">
+                {/* Log Date Custom Dropdown Calendar */}
+                <div>
+                  <CustomDatePicker
+                    label="Log Date"
+                    required
+                    value={selectedLogDate}
+                    onChange={setSelectedLogDate}
+                    maxDaysOld={7}
+                  />
+                </div>
+
                 {/* Model - Primary Custom Searchable Dropdown */}
                 <div>
                   <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 flex items-center gap-1.5">
@@ -1130,7 +1170,7 @@ export function OperatorDashboard({
                       required
                       value={model || selectedMachine?.model || selectedMachine?.machine_name || "Assigned Machine"}
                       onChange={(e) => setModel(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)]"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)] min-h-[42px]"
                       placeholder="e.g. 50B-9"
                     />
                   )}
@@ -1146,7 +1186,7 @@ export function OperatorDashboard({
                     readOnly
                     value={selectedMachine?.serial_number || selectedMachine?.machine_code || "—"}
                     placeholder="Auto-populated"
-                    className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] cursor-not-allowed opacity-80"
+                    className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] cursor-not-allowed opacity-80 min-h-[42px]"
                   />
                 </div>
               </div>
@@ -1562,7 +1602,7 @@ export function OperatorDashboard({
                   disabled={submitting || !completionStatus.isReady}
                   className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition-all shadow-md cursor-pointer disabled:opacity-50 min-h-[44px]"
                 >
-                  {submitting ? "Submitting..." : "Submit Daily Log →"}
+                  {submitting ? "Submitting..." : "Submit"}
                 </button>
               </div>
             </div>
@@ -1678,7 +1718,7 @@ export function OperatorDashboard({
                 {filteredLogs.map((log) => {
                   const isBkd = log.is_breakdown || log.machine_condition === "breakdown";
                   const isToday = isLogFromToday(log.log_date);
-                  const canEdit = isToday;
+                  const canEdit = isLogEditable(log.log_date);
 
                   const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*(\d+h\s*\d+m)[^\]]*\]/);
                   const bkdDurationStr = bkdMatch ? bkdMatch[1] : null;
@@ -1775,11 +1815,11 @@ export function OperatorDashboard({
                             onClick={() => handleOpenEditLog(log)}
                             className="w-full py-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
                           >
-                            <Edit className="h-3.5 w-3.5" /> Edit Today Log Entry
+                            <Edit className="h-3.5 w-3.5" /> Edit Log Entry
                           </button>
                         ) : (
-                          <span className="text-[10px] text-[var(--color-mute)] font-bold flex items-center gap-1">
-                            <Lock className="h-3 w-3" /> Log Entry Locked
+                          <span className="text-[10px] text-[var(--color-mute)] font-bold flex items-center gap-1" title="Log entry locked (older than 7 days)">
+                            <Lock className="h-3 w-3" /> Log Entry Locked (&gt;7d)
                           </span>
                         )}
                       </div>
@@ -1809,7 +1849,7 @@ export function OperatorDashboard({
                     {filteredLogs.map((log) => {
                       const isBkd = log.is_breakdown || log.machine_condition === "breakdown";
                       const isToday = isLogFromToday(log.log_date);
-                      const canEdit = isToday;
+                      const canEdit = isLogEditable(log.log_date);
 
                       const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*(\d+h\s*\d+m)[^\]]*\]/);
                       const bkdDurationStr = bkdMatch ? bkdMatch[1] : null;
@@ -1873,12 +1913,12 @@ export function OperatorDashboard({
                                 type="button"
                                 onClick={() => handleOpenEditLog(log)}
                                 className="px-2.5 py-1 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ml-auto shadow-2xs"
-                                title={isToday ? "Edit today's saved log entry" : "Edit log entry"}
+                                title={isToday ? "Edit today's saved log entry" : "Edit log entry (within 7-day window)"}
                               >
                                 <Edit className="h-3 w-3" /> Edit
                               </button>
                             ) : (
-                              <span className="text-[10px] text-[var(--color-mute)] font-bold flex items-center justify-end gap-1" title="Log entry locked (previous day record)">
+                              <span className="text-[10px] text-[var(--color-mute)] font-bold flex items-center justify-end gap-1" title="Log entry locked (older than 7 days)">
                                 <Lock className="h-3 w-3" /> Locked
                               </span>
                             )}
@@ -1948,7 +1988,7 @@ export function OperatorDashboard({
             <div className="grid grid-cols-4 gap-3 border-b border-[var(--color-hairline)] pb-3">
               <div>
                 <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Log Date</span>
-                <span className="font-bold text-[var(--color-ink)]">{formatDate(new Date())}</span>
+                <span className="font-bold text-[var(--color-ink)]">{formatDate(selectedLogDate)}</span>
               </div>
               <div>
                 <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Hour Meter</span>

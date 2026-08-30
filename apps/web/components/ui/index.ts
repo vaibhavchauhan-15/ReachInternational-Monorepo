@@ -1,4 +1,4 @@
-export { Button } from "./Button";
+export { Button, type ButtonProps, type ButtonVariant, type ButtonSize } from "./Button";
 export { Input } from "./Input";
 export { Card, CardHeader } from "./Card";
 export { Badge } from "./Badge";
@@ -113,4 +113,5 @@ export {
 } from "./sidebar";
 export { Logo, ReachInternationalLogo, ScissorLiftLogoIcon, type LogoProps } from "./Logo";
 export { CustomTimePicker } from "./CustomTimePicker";
+export { CustomDatePicker, type CustomDatePickerProps } from "./CustomDatePicker";
 export { BRAND_ASSETS, BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";

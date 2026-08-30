@@ -38,6 +38,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
 }) => {
   const { theme } = useTheme();
 
+  const [logDate, setLogDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [startMeter, setStartMeter] = useState('0');
   const [endMeter, setEndMeter] = useState('0');
   const [startTime, setStartTime] = useState('08:00 AM');
@@ -47,6 +48,26 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   const [remarks, setRemarks] = useState('');
   const [isBreakdown, setIsBreakdown] = useState(false);
   const [breakdownDuration, setBreakdownDuration] = useState('1h 30m');
+
+  // 7-day past dates list (Today + past 7 days)
+  const pastDates = React.useMemo(() => {
+    const dates = [];
+    const now = new Date();
+    for (let i = 0; i <= 7; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const str = d.toISOString().split('T')[0];
+      const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
+      const dayNum = d.getDate();
+      const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
+      dates.push({
+        str,
+        label: i === 0 ? 'Today' : i === 1 ? 'Yesterday' : `${i}d ago`,
+        subLabel: `${weekday}, ${dayNum} ${monthShort}`,
+      });
+    }
+    return dates;
+  }, []);
 
   // Client Selection
   const [clients, setClients] = useState<Array<{ id: string; name: string; client_name?: string; address?: string; city?: string; state?: string }>>([]);
@@ -210,7 +231,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         remarks: remarksPayload || null,
         operator_id: userId || null,
         idempotency_key: idempotencyKey,
-        log_date: new Date().toISOString().split('T')[0],
+        log_date: logDate,
       };
 
       const { error: insertErr } = await supabase
@@ -285,6 +306,40 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
           ) : null}
 
           <ScrollView style={styles.formScroll} contentContainerStyle={{ gap: spacingNumeric.xs }} showsVerticalScrollIndicator={false}>
+            {/* Log Date Selector Strip (Today + Past 7 Days) */}
+            <View style={styles.inputGroup}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={[styles.fieldLabel, { color: theme.colors.ink, marginBottom: 0 }]}>Log Date *</Text>
+                <Text style={{ fontSize: 10, color: theme.colors.link, fontWeight: '600' }}>Allowed: 7 days window</Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 2 }}>
+                {pastDates.map((item) => {
+                  const isSelected = item.str === logDate;
+                  return (
+                    <TouchableOpacity
+                      key={item.str}
+                      onPress={() => setLogDate(item.str)}
+                      activeOpacity={0.8}
+                      style={[
+                        styles.dateChip,
+                        {
+                          backgroundColor: isSelected ? theme.colors.link : theme.colors.canvas,
+                          borderColor: isSelected ? theme.colors.link : theme.colors.hairline,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.dateChipLabel, { color: isSelected ? '#ffffff' : theme.colors.ink, fontWeight: isSelected ? '700' : '600' }]}>
+                        {item.label}
+                      </Text>
+                      <Text style={[styles.dateChipSub, { color: isSelected ? 'rgba(255,255,255,0.85)' : theme.colors.mute }]}>
+                        {item.subLabel}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
             {/* Client Selector Trigger */}
             <View style={styles.inputGroup}>
               <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Client / Customer Site</Text>
@@ -402,7 +457,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
           <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
             <Button label="Cancel" onPress={onClose} variant="outline" size="md" />
             <Button
-              label="Submit Daily Log"
+              label="Submit"
               onPress={handleSubmit}
               isLoading={isSubmitting}
               variant="primary"
@@ -514,6 +569,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     marginBottom: 6,
+  },
+  dateChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 64,
+  },
+  dateChipLabel: {
+    fontSize: 11,
+  },
+  dateChipSub: {
+    fontSize: 9,
+    marginTop: 1,
   },
   clientSelectTrigger: {
     flexDirection: 'row',

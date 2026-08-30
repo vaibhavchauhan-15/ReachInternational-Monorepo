@@ -18,8 +18,9 @@ import {
   AnimatedActivity,
   AnimatedPackage,
   AnimatedShield,
+  AnimatedTrash2,
 } from "@/components/ui/animated-icons";
-import { LayoutGrid, Table as TableIcon, Check, X, Plus, Copy } from "lucide-react";
+import { LayoutGrid, Table as TableIcon, Check, X, Plus, Copy, Download, FileSpreadsheet, Trash2 } from "lucide-react";
 import {
   Button,
   Card,
@@ -41,8 +42,10 @@ import {
   toggleUserStatus,
   updateUserRole,
   deleteUser,
+  bulkDeleteUsers,
   editUser,
 } from "@/app/actions/users";
+import { exportUsersToExcel, exportUsersToCSV } from "@/lib/utils/users-export";
 import { UserRow } from "./UserRow";
 import { MobileUserCard } from "./MobileUserCard";
 import { UserDetailSheet } from "./UserDetailSheet";
@@ -153,6 +156,18 @@ export function UsersPageClient({
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
+  // Optimistic local state synchronized with server props
+  const [usersList, setUsersList] = useState<User[]>(users);
+  const [pendingUsersList, setPendingUsersList] = useState<User[]>(pendingUsers);
+
+  useEffect(() => {
+    setUsersList(users);
+  }, [users]);
+
+  useEffect(() => {
+    setPendingUsersList(pendingUsers);
+  }, [pendingUsers]);
+
   const [loading, setLoading] = useState<{ type: "approve" | "reject" | "create" | "reset" | "toggle" | "role" | "delete" | "edit"; id: string } | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -164,11 +179,23 @@ export function UsersPageClient({
   const [showEditModal, setShowEditModal] = useState<User | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [selectedSheetUser, setSelectedSheetUser] = useState<User | null>(null);
+  const [resetConfirmUser, setResetConfirmUser] = useState<{
+    id: string;
+    name: string;
+    email: string;
+  } | null>(null);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [copiedPassword, setCopiedPassword] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState<{
     userId: string;
     userName: string;
     password: string;
   } | null>(null);
+
+  // Multi-Selection State
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   // Search and Filter State
   const [searchTerm, setSearchTerm] = useState("");
@@ -177,35 +204,75 @@ export function UsersPageClient({
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"auto" | "cards" | "table">("auto");
 
-  // Handlers for User Actions
+  // Handlers for User Actions with Instant Optimistic Updates
   const handleApprove = useCallback(
     async (userId: string) => {
+      // 1. Snapshot previous state for rollback
+      const prevPending = pendingUsersList;
+      const prevUsers = usersList;
+      const targetUser = pendingUsersList.find((u) => u.id === userId);
+
+      // 2. Optimistic UI update: immediately remove from pending list and activate in users directory
+      setPendingUsersList((prev) => prev.filter((u) => u.id !== userId));
+      setUsersList((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, status: "active" as const } : u))
+      );
       setLoading({ type: "approve", id: userId });
-      const result = await approveUser(userId);
-      setLoading(null);
-      if (result.error) {
-        toast("error", result.error);
-      } else {
-        toast("success", result.message || "User approved successfully");
-        router.refresh();
+
+      try {
+        const result = await approveUser(userId);
+        setLoading(null);
+        if (result.error) {
+          // Rollback on server error
+          setPendingUsersList(prevPending);
+          setUsersList(prevUsers);
+          toast("error", result.error);
+        } else {
+          toast("success", result.message || `User ${targetUser?.full_name || ""} approved successfully`);
+          router.refresh();
+        }
+      } catch (err: any) {
+        setLoading(null);
+        setPendingUsersList(prevPending);
+        setUsersList(prevUsers);
+        toast("error", err?.message || "Failed to approve user. Please try again.");
       }
     },
-    [router, toast]
+    [pendingUsersList, usersList, router, toast]
   );
 
   const handleReject = useCallback(
     async (userId: string) => {
+      // 1. Snapshot previous state for rollback
+      const prevPending = pendingUsersList;
+      const prevUsers = usersList;
+      const targetUser = pendingUsersList.find((u) => u.id === userId);
+
+      // 2. Optimistic UI update: immediately remove from pending and users lists
+      setPendingUsersList((prev) => prev.filter((u) => u.id !== userId));
+      setUsersList((prev) => prev.filter((u) => u.id !== userId));
       setLoading({ type: "reject", id: userId });
-      const result = await rejectUser(userId);
-      setLoading(null);
-      if (result.error) {
-        toast("error", result.error);
-      } else {
-        toast("success", result.message || "User rejected successfully");
-        router.refresh();
+
+      try {
+        const result = await rejectUser(userId);
+        setLoading(null);
+        if (result.error) {
+          // Rollback on server error
+          setPendingUsersList(prevPending);
+          setUsersList(prevUsers);
+          toast("error", result.error);
+        } else {
+          toast("success", result.message || `User ${targetUser?.full_name || ""} rejected.`);
+          router.refresh();
+        }
+      } catch (err: any) {
+        setLoading(null);
+        setPendingUsersList(prevPending);
+        setUsersList(prevUsers);
+        toast("error", err?.message || "Failed to reject user. Please try again.");
       }
     },
-    [router, toast]
+    [pendingUsersList, usersList, router, toast]
   );
 
   const handleCreateUser = useCallback(
@@ -225,64 +292,141 @@ export function UsersPageClient({
   );
 
   const handleResetPassword = useCallback(
-    async (userId: string) => {
-      setLoading({ type: "reset", id: userId });
-      const result = await resetUserPassword(userId);
+    (userId: string) => {
+      const targetUser =
+        usersList.find((u) => u.id === userId) ||
+        pendingUsersList.find((u) => u.id === userId);
+      if (!targetUser) {
+        toast("error", "User not found.");
+        return;
+      }
+      setResetConfirmUser({
+        id: targetUser.id,
+        name: targetUser.full_name || "User",
+        email: targetUser.email || "",
+      });
+    },
+    [usersList, pendingUsersList, toast]
+  );
+
+  const handleConfirmResetPassword = useCallback(async () => {
+    if (!resetConfirmUser) return;
+    const target = resetConfirmUser;
+    setIsResettingPassword(true);
+    setLoading({ type: "reset", id: target.id });
+
+    try {
+      const result = await resetUserPassword(target.id);
+      setIsResettingPassword(false);
       setLoading(null);
+
       if (result.formState.error) {
         toast("error", result.formState.error);
       } else if (result.newPassword) {
-        setShowPasswordModal({ userId, userName: "", password: result.newPassword });
-        toast("success", result.formState.message || "Password reset successfully");
+        setResetConfirmUser(null);
+        setCopiedPassword(false);
+        setShowPasswordModal({
+          userId: target.id,
+          userName: target.name,
+          password: result.newPassword,
+        });
+        toast("success", result.formState.message || `Password reset successfully for ${target.name}`);
         router.refresh();
       }
-    },
-    [router, toast]
-  );
+    } catch (err: any) {
+      setIsResettingPassword(false);
+      setLoading(null);
+      toast("error", err?.message || "Failed to reset password. Please try again.");
+    }
+  }, [resetConfirmUser, router, toast]);
 
   const handleToggleStatus = useCallback(
     async (userId: string) => {
+      const prevUsers = usersList;
+      setUsersList((prev) =>
+        prev.map((u) =>
+          u.id === userId
+            ? { ...u, status: u.status === "active" ? ("inactive" as const) : ("active" as const) }
+            : u
+        )
+      );
       setLoading({ type: "toggle", id: userId });
-      const result = await toggleUserStatus(userId);
-      setLoading(null);
-      if (result.error) {
-        toast("error", result.error);
-      } else {
-        toast("success", result.message || "User status updated");
-        router.refresh();
+
+      try {
+        const result = await toggleUserStatus(userId);
+        setLoading(null);
+        if (result.error) {
+          setUsersList(prevUsers);
+          toast("error", result.error);
+        } else {
+          toast("success", result.message || "User status updated");
+          router.refresh();
+        }
+      } catch (err: any) {
+        setLoading(null);
+        setUsersList(prevUsers);
+        toast("error", err?.message || "Failed to update user status.");
       }
     },
-    [router, toast]
+    [usersList, router, toast]
   );
 
   const handleUpdateRole = useCallback(
     async (userId: string, newRole: UserRole) => {
+      const prevUsers = usersList;
+      setUsersList((prev) =>
+        prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
+      );
       setLoading({ type: "role", id: userId });
-      const result = await updateUserRole(userId, newRole);
-      setLoading(null);
-      if (result.error) {
-        toast("error", result.error);
-      } else {
-        toast("success", result.message || "User role updated");
-        router.refresh();
+
+      try {
+        const result = await updateUserRole(userId, newRole);
+        setLoading(null);
+        if (result.error) {
+          setUsersList(prevUsers);
+          toast("error", result.error);
+        } else {
+          toast("success", result.message || "User role updated");
+          router.refresh();
+        }
+      } catch (err: any) {
+        setLoading(null);
+        setUsersList(prevUsers);
+        toast("error", err?.message || "Failed to update user role.");
       }
     },
-    [router, toast]
+    [usersList, router, toast]
   );
 
   const handleDeleteUserConfirm = useCallback(async () => {
     if (!deletingUserId) return;
-    setLoading({ type: "delete", id: deletingUserId });
-    const result = await deleteUser(deletingUserId);
-    setLoading(null);
+    const targetId = deletingUserId;
+    const prevUsers = usersList;
+    const prevPending = pendingUsersList;
+
+    setUsersList((prev) => prev.filter((u) => u.id !== targetId));
+    setPendingUsersList((prev) => prev.filter((u) => u.id !== targetId));
+    setLoading({ type: "delete", id: targetId });
     setDeletingUserId(null);
-    if (result.error) {
-      toast("error", result.error);
-    } else {
-      toast("success", result.message || "User deleted successfully");
-      router.refresh();
+
+    try {
+      const result = await deleteUser(targetId);
+      setLoading(null);
+      if (result.error) {
+        setUsersList(prevUsers);
+        setPendingUsersList(prevPending);
+        toast("error", result.error);
+      } else {
+        toast("success", result.message || "User deleted successfully");
+        router.refresh();
+      }
+    } catch (err: any) {
+      setLoading(null);
+      setUsersList(prevUsers);
+      setPendingUsersList(prevPending);
+      toast("error", err?.message || "Failed to delete user.");
     }
-  }, [deletingUserId, router, toast]);
+  }, [deletingUserId, usersList, pendingUsersList, router, toast]);
 
   const handleEditUser = useCallback(
     async (formData: FormData) => {
@@ -303,7 +447,7 @@ export function UsersPageClient({
 
   // Filter Users List
   const filteredUsers = useMemo(() => {
-    return users.filter((u) => {
+    return usersList.filter((u) => {
       // Search filter (name, email, phone, location, role)
       if (deferredSearch.trim()) {
         const query = deferredSearch.toLowerCase();
@@ -327,10 +471,10 @@ export function UsersPageClient({
 
       return true;
     });
-  }, [users, deferredSearch, roleFilter, statusFilter]);
+  }, [usersList, deferredSearch, roleFilter, statusFilter]);
 
-  const activeCount = users.filter((u) => u.status === "active").length;
-  const engineerCount = users.filter((u) => u.role === "engineer" || u.role === "service_engineer").length;
+  const activeCount = usersList.filter((u) => u.status === "active").length;
+  const engineerCount = usersList.filter((u) => u.role === "engineer" || u.role === "service_engineer").length;
 
   const activeFilterCount =
     (roleFilter !== "all" ? 1 : 0) +
@@ -343,6 +487,93 @@ export function UsersPageClient({
     setStatusFilter("all");
   };
 
+  // Multi-selection computed states
+  const allFilteredSelected = useMemo(() => {
+    return filteredUsers.length > 0 && filteredUsers.every((u) => selectedUserIds.includes(u.id));
+  }, [filteredUsers, selectedUserIds]);
+
+  const someFilteredSelected = useMemo(() => {
+    return filteredUsers.some((u) => selectedUserIds.includes(u.id)) && !allFilteredSelected;
+  }, [filteredUsers, selectedUserIds, allFilteredSelected]);
+
+  const handleToggleSelect = useCallback((userId: string) => {
+    setSelectedUserIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  }, []);
+
+  const handleSelectAllFiltered = useCallback(() => {
+    if (allFilteredSelected) {
+      const filteredIdSet = new Set(filteredUsers.map((u) => u.id));
+      setSelectedUserIds((prev) => prev.filter((id) => !filteredIdSet.has(id)));
+    } else {
+      const filteredIds = filteredUsers.map((u) => u.id);
+      setSelectedUserIds((prev) => Array.from(new Set([...prev, ...filteredIds])));
+    }
+  }, [allFilteredSelected, filteredUsers]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedUserIds([]);
+  }, []);
+
+  const handleExportSelectedExcel = useCallback(() => {
+    const targetUsers = selectedUserIds.length > 0
+      ? usersList.filter((u) => selectedUserIds.includes(u.id))
+      : filteredUsers;
+    if (targetUsers.length === 0) {
+      toast("warning", "No users available to export.");
+      return;
+    }
+    exportUsersToExcel(targetUsers, selectedUserIds.length > 0 ? "Selected-Users" : "Users-Directory");
+    toast("success", `Exported ${targetUsers.length} user${targetUsers.length > 1 ? "s" : ""} to Excel (.xlsx)`);
+  }, [selectedUserIds, usersList, filteredUsers, toast]);
+
+  const handleExportSelectedCSV = useCallback(() => {
+    const targetUsers = selectedUserIds.length > 0
+      ? usersList.filter((u) => selectedUserIds.includes(u.id))
+      : filteredUsers;
+    if (targetUsers.length === 0) {
+      toast("warning", "No users available to export.");
+      return;
+    }
+    exportUsersToCSV(targetUsers, selectedUserIds.length > 0 ? "Selected-Users" : "Users-Directory");
+    toast("success", `Exported ${targetUsers.length} user${targetUsers.length > 1 ? "s" : ""} to CSV (.csv)`);
+  }, [selectedUserIds, usersList, filteredUsers, toast]);
+
+  const handleBulkDeleteConfirm = useCallback(async () => {
+    if (selectedUserIds.length === 0) return;
+    const idsToDelete = [...selectedUserIds];
+    const prevUsers = usersList;
+    const prevPending = pendingUsersList;
+    const deleteIdSet = new Set(idsToDelete);
+
+    // Optimistic UI update: immediately remove from local users list
+    setUsersList((prev) => prev.filter((u) => !deleteIdSet.has(u.id)));
+    setPendingUsersList((prev) => prev.filter((u) => !deleteIdSet.has(u.id)));
+    setIsBulkDeleting(true);
+    setShowBulkDeleteModal(false);
+
+    try {
+      const result = await bulkDeleteUsers(idsToDelete);
+      setIsBulkDeleting(false);
+      if (result.error) {
+        // Rollback on server error
+        setUsersList(prevUsers);
+        setPendingUsersList(prevPending);
+        toast("error", result.error);
+      } else {
+        setSelectedUserIds([]);
+        toast("success", result.message || `Successfully deleted ${result.successCount || idsToDelete.length} users.`);
+        router.refresh();
+      }
+    } catch (err: any) {
+      setIsBulkDeleting(false);
+      setUsersList(prevUsers);
+      setPendingUsersList(prevPending);
+      toast("error", err?.message || "Failed to delete selected users.");
+    }
+  }, [selectedUserIds, usersList, pendingUsersList, router, toast]);
+
   return (
     <div className="flex flex-col gap-6 pb-28 md:pb-6">
       {/* Page Header */}
@@ -351,15 +582,22 @@ export function UsersPageClient({
         breadcrumbs={[{ label: "Users" }]}
         actions={
           <div className="flex items-center gap-2">
+            <RefreshButton
+              path="/users"
+              tag="users"
+              variant="ghost-sm"
+              className="h-9 px-3 rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] text-xs font-medium shadow-xs cursor-pointer active:scale-[0.98] transition-all"
+            />
+
             {/* View Switcher for Desktop / Mobile */}
-            <div className="hidden sm:flex items-center bg-[var(--color-hairline-soft-surface)] p-1 rounded-[var(--radius-sm)] border border-[var(--color-hairline)] text-xs">
+            <div className="hidden sm:flex items-center bg-[var(--color-hairline-soft-surface)] p-0.5 rounded-sm border border-[var(--color-hairline)] text-xs h-9">
               <button
                 type="button"
                 onClick={() => setViewMode("auto")}
-                className={`px-2.5 py-1 rounded-[calc(var(--radius-sm)-2px)] font-medium transition-all ${
+                className={`h-full px-2.5 rounded-[calc(var(--radius-sm)-2px)] text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] ${
                   viewMode === "auto"
-                    ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs"
-                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                    ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs border border-[var(--color-hairline)]"
+                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-transparent"
                 }`}
                 title="Auto responsive view"
               >
@@ -368,38 +606,49 @@ export function UsersPageClient({
               <button
                 type="button"
                 onClick={() => setViewMode("cards")}
-                className={`p-1 px-2.5 rounded-[calc(var(--radius-sm)-2px)] flex items-center gap-1 font-medium transition-all ${
+                className={`h-full px-2.5 rounded-[calc(var(--radius-sm)-2px)] text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] ${
                   viewMode === "cards"
-                    ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs"
-                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                    ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs border border-[var(--color-hairline)]"
+                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-transparent"
                 }`}
                 title="Cards view"
               >
-                <AnimatedSlidersHorizontal size={14} />
-                Cards
+                <AnimatedSlidersHorizontal size={13} />
+                <span>Cards</span>
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode("table")}
-                className={`p-1 px-2.5 rounded-[calc(var(--radius-sm)-2px)] flex items-center gap-1 font-medium transition-all ${
+                className={`h-full px-2.5 rounded-[calc(var(--radius-sm)-2px)] text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] ${
                   viewMode === "table"
-                    ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs"
-                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                    ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs border border-[var(--color-hairline)]"
+                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-transparent"
                 }`}
                 title="Table view"
               >
-                <AnimatedFileText size={14} />
-                Table
+                <AnimatedFileText size={13} />
+                <span>Table</span>
               </button>
             </div>
 
             <Button
-              variant="primary"
-              onClick={() => setShowCreateModal(true)}
-              className="h-9 px-4 text-xs font-bold rounded-lg shadow-sm hidden sm:inline-flex items-center gap-2 tracking-tight active:scale-95 transition-all cursor-pointer"
+              variant="secondary"
+              onClick={handleExportSelectedExcel}
+              className="h-9 px-3.5 text-xs font-medium rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs hidden sm:inline-flex items-center gap-1.5 cursor-pointer active:scale-[0.98] transition-all"
+              title="Export users directory to Excel (.xlsx)"
             >
-              <AnimatedUserPlus size={16} />
-              <span>Add Employee / User</span>
+              <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Export</span>
+            </Button>
+
+            <Button
+              variant="primary"
+              icon={<AnimatedUserPlus size={15} />}
+              responsive
+              onClick={() => setShowCreateModal(true)}
+              className="h-9 px-4 text-xs font-semibold whitespace-nowrap"
+            >
+              Add Employee / User
             </Button>
           </div>
         }
@@ -424,7 +673,7 @@ export function UsersPageClient({
             <AnimatedUsers size={16} className="text-[var(--color-ink)]" />
           </div>
           <div className="text-2xl font-extrabold text-[var(--color-ink)] mt-1">
-            <AnimatedCounter value={users.length} />
+            <AnimatedCounter value={usersList.length} />
           </div>
         </motion.div>
 
@@ -471,13 +720,13 @@ export function UsersPageClient({
         <motion.div
           whileTap={{ scale: 0.98 }}
           onClick={() => {
-            if (pendingUsers.length > 0) {
+            if (pendingUsersList.length > 0) {
               const el = document.getElementById("pending-approvals-section");
               if (el) el.scrollIntoView({ behavior: "smooth" });
             }
           }}
           className={`cursor-pointer p-4 rounded-[var(--radius-md)] border transition-all ${
-            pendingUsers.length > 0
+            pendingUsersList.length > 0
               ? "bg-amber-50/40 border-amber-500 shadow-xs dark:bg-amber-950/20"
               : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)]"
           }`}
@@ -489,13 +738,13 @@ export function UsersPageClient({
             <AnimatedShieldAlert size={16} className="text-amber-600 dark:text-amber-400" />
           </div>
           <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300 mt-1">
-            <AnimatedCounter value={pendingUsers.length} />
+            <AnimatedCounter value={pendingUsersList.length} />
           </div>
         </motion.div>
       </div>
 
       {/* Pending Approvals Mobile & Desktop Card Section */}
-      {pendingUsers.length > 0 && (
+      {pendingUsersList.length > 0 && (
         <Card
           id="pending-approvals-section"
           padding="lg"
@@ -505,12 +754,12 @@ export function UsersPageClient({
             <div className="flex items-center gap-2">
               <AnimatedShieldAlert size={20} className="text-amber-600 dark:text-amber-400" />
               <h2 className="heading-md text-[var(--color-ink)]">Pending User Approvals</h2>
-              <Badge variant="warning">{pendingUsers.length}</Badge>
+              <Badge variant="warning">{pendingUsersList.length}</Badge>
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <AnimatePresence mode="popLayout">
-              {pendingUsers.map((pUser) => (
+              {pendingUsersList.map((pUser) => (
                 <motion.div
                   key={pUser.id}
                   layout
@@ -548,19 +797,19 @@ export function UsersPageClient({
                       variant="success-sm"
                       onClick={() => handleApprove(pUser.id)}
                       loading={loading?.type === "approve" && loading.id === pUser.id}
-                      className="shadow-xs font-semibold px-3 py-1.5 flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
+                      className="h-8 px-3 text-xs font-medium rounded-sm shadow-xs inline-flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer"
                     >
                       <Check className="h-3.5 w-3.5" />
-                      Approve
+                      <span>Approve</span>
                     </Button>
                     <Button
                       variant="danger-sm"
                       onClick={() => handleReject(pUser.id)}
                       loading={loading?.type === "reject" && loading.id === pUser.id}
-                      className="shadow-xs font-semibold px-3 py-1.5 flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
+                      className="h-8 px-3 text-xs font-medium rounded-sm shadow-xs inline-flex items-center justify-center gap-1.5 active:scale-[0.98] transition-all cursor-pointer"
                     >
                       <X className="h-3.5 w-3.5" />
-                      Reject
+                      <span>Reject</span>
                     </Button>
                   </div>
                 </motion.div>
@@ -582,9 +831,9 @@ export function UsersPageClient({
         {/* Touch & Desktop Filter Pills Container for Role and Status */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 overflow-x-auto no-scrollbar py-1">
           {/* Role Filter Pills — Color coded per role */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] shrink-0 max-w-full overflow-x-auto">
+          <div className="flex items-center gap-1 p-0.5 rounded-sm bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] shrink-0 max-w-full overflow-x-auto">
             <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--color-mute)] px-1.5 shrink-0">
-              Role Filter
+              Role
             </span>
             {[
               { id: "all", label: "All Roles", activeColor: "text-[var(--color-ink)]", dotColor: "" },
@@ -605,21 +854,21 @@ export function UsersPageClient({
                   key={pill.id}
                   type="button"
                   onClick={() => setRoleFilter(pill.id)}
-                  className={`relative flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                  className={`relative flex items-center gap-1.5 h-7 px-2.5 rounded-[calc(var(--radius-sm)-2px)] text-xs font-medium transition-all whitespace-nowrap cursor-pointer select-none active:scale-[0.98] ${
                     isActive
-                      ? pill.activeColor + " shadow-xs"
+                      ? pill.activeColor + " shadow-xs font-semibold"
                       : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
                   }`}
                 >
                   {isActive && (
                     <motion.div
                       layoutId="activeUserRolePill"
-                      className="absolute inset-0 bg-[var(--color-canvas-elevated)] rounded-lg shadow-xs border border-[var(--color-hairline)]"
+                      className="absolute inset-0 bg-[var(--color-canvas-elevated)] rounded-[calc(var(--radius-sm)-2px)] shadow-xs border border-[var(--color-hairline)]"
                       transition={{ type: "spring", stiffness: 400, damping: 30 }}
                     />
                   )}
                   {pill.dotColor && (
-                    <span className={`relative z-10 h-2 w-2 rounded-full ${pill.dotColor}`} />
+                    <span className={`relative z-10 h-1.5 w-1.5 rounded-full ${pill.dotColor}`} />
                   )}
                   <span className="relative z-10">{pill.label}</span>
                 </button>
@@ -628,7 +877,7 @@ export function UsersPageClient({
           </div>
 
           {/* Status Filter Pills — Color coded per status */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] shrink-0 max-w-full overflow-x-auto">
+          <div className="flex items-center gap-1 p-0.5 rounded-sm bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] shrink-0 max-w-full overflow-x-auto">
             <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[var(--color-mute)] px-1.5 shrink-0">
               Status
             </span>
@@ -643,21 +892,21 @@ export function UsersPageClient({
                   key={pill.id}
                   type="button"
                   onClick={() => setStatusFilter(pill.id)}
-                  className={`relative flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
+                  className={`relative flex items-center gap-1.5 h-7 px-2.5 rounded-[calc(var(--radius-sm)-2px)] text-xs font-medium transition-all whitespace-nowrap cursor-pointer select-none active:scale-[0.98] ${
                     isActive
-                      ? pill.activeColor + " shadow-xs"
+                      ? pill.activeColor + " shadow-xs font-semibold"
                       : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
                   }`}
                 >
                   {isActive && (
                     <motion.div
                       layoutId="activeUserStatusPill"
-                      className="absolute inset-0 bg-[var(--color-canvas-elevated)] rounded-lg shadow-xs border border-[var(--color-hairline)]"
+                      className="absolute inset-0 bg-[var(--color-canvas-elevated)] rounded-[calc(var(--radius-sm)-2px)] shadow-xs border border-[var(--color-hairline)]"
                       transition={{ type: "spring", stiffness: 400, damping: 30 }}
                     />
                   )}
                   {pill.dotColor && (
-                    <span className={`relative z-10 h-2 w-2 rounded-full ${pill.dotColor}`} />
+                    <span className={`relative z-10 h-1.5 w-1.5 rounded-full ${pill.dotColor}`} />
                   )}
                   <span className="relative z-10">{pill.label}</span>
                 </button>
@@ -685,7 +934,11 @@ export function UsersPageClient({
               Try adjusting your search terms or clearing filters.
             </p>
             {activeFilterCount > 0 && (
-              <Button variant="secondary" onClick={resetFilters} className="mt-3 text-xs">
+              <Button
+                variant="ghost-sm"
+                onClick={resetFilters}
+                className="mt-3 h-8 px-3.5 text-xs font-medium rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs cursor-pointer active:scale-[0.98] transition-all"
+              >
                 Reset Filters
               </Button>
             )}
@@ -699,6 +952,9 @@ export function UsersPageClient({
                   user={u}
                   currentUser={currentUser}
                   loadingId={loading}
+                  selectable={true}
+                  isSelected={selectedUserIds.includes(u.id)}
+                  onToggleSelect={handleToggleSelect}
                   onOpenSheet={(targetUser) => setSelectedSheetUser(targetUser)}
                   onResetPassword={handleResetPassword}
                   onToggleStatus={handleToggleStatus}
@@ -719,30 +975,44 @@ export function UsersPageClient({
             : "hidden md:block"
         }
       >
-        <Card padding="lg" className="shadow-xs">
-          <div className="overflow-x-auto lg:overflow-x-visible rounded-[var(--radius-sm)] border border-[var(--color-hairline)]">
-            <table className="w-full text-left table-fixed sm:table-auto lg:table-fixed">
-              <thead className="bg-[var(--color-canvas)] border-b border-[var(--color-hairline)] text-xs font-semibold text-[var(--color-mute)]">
+        <Card padding="none" className="overflow-hidden border border-[var(--color-hairline)] shadow-xs rounded-[var(--radius-md)]">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-[var(--color-canvas)] border-b border-[var(--color-hairline)] text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
                 <tr>
-                  <th className="py-2.5 px-3 w-[22%] whitespace-nowrap">
+                  <th className="py-3 px-3 w-10 text-center">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected && filteredUsers.length > 0}
+                      ref={(el) => {
+                        if (el) {
+                          el.indeterminate = someFilteredSelected;
+                        }
+                      }}
+                      onChange={handleSelectAllFiltered}
+                      aria-label="Select all filtered users"
+                      className="h-4 w-4 rounded-[4px] border-[var(--color-hairline)] text-[var(--color-ink)] focus:ring-[var(--color-link)] cursor-pointer transition-all accent-[var(--color-ink)]"
+                    />
+                  </th>
+                  <th className="py-3 px-4 w-[21%] whitespace-nowrap">
                     User Account
                   </th>
-                  <th className="py-2.5 px-3 w-[26%] whitespace-nowrap">
+                  <th className="py-3 px-4 w-[24%] whitespace-nowrap">
                     Contact Info
                   </th>
-                  <th className="py-2.5 px-3 w-[18%] whitespace-nowrap">
+                  <th className="py-3 px-4 w-[18%] whitespace-nowrap">
                     Role & Access Level
                   </th>
-                  <th className="py-2.5 px-3 w-[16%] whitespace-nowrap">
+                  <th className="py-3 px-4 w-[13%] whitespace-nowrap">
                     City
                   </th>
-                  <th className="py-2.5 px-3 w-[10%] whitespace-nowrap">
+                  <th className="py-3 px-4 w-[10%] whitespace-nowrap">
                     Status
                   </th>
-                  <th className="py-2.5 px-3 w-[10%] whitespace-nowrap">
+                  <th className="py-3 px-4 w-[11%] whitespace-nowrap">
                     Joined Date
                   </th>
-                  <th className="py-2.5 px-3 w-[8%] whitespace-nowrap text-right">
+                  <th className="py-3 px-4 w-[55px] whitespace-nowrap text-right">
                     Actions
                   </th>
                 </tr>
@@ -755,6 +1025,9 @@ export function UsersPageClient({
                     currentUser={currentUser}
                     isSuperAdmin={isSuperAdmin}
                     loadingId={loading}
+                    selectable={true}
+                    isSelected={selectedUserIds.includes(userItem.id)}
+                    onToggleSelect={handleToggleSelect}
                     onResetPassword={handleResetPassword}
                     onToggleStatus={handleToggleStatus}
                     onEdit={setShowEditModal}
@@ -773,7 +1046,7 @@ export function UsersPageClient({
         whileTap={{ scale: 0.9 }}
         whileHover={{ scale: 1.05 }}
         onClick={() => setShowCreateModal(true)}
-        className="fixed bottom-20 right-4 z-30 md:hidden flex items-center gap-2 bg-[var(--color-ink)] text-[var(--color-canvas)] px-4 py-3 rounded-full shadow-[0_8px_24px_rgba(0,0,0,0.25)] border border-white/20 active:bg-neutral-800 focus:outline-none"
+        className="fixed bottom-20 right-4 z-30 md:hidden flex items-center gap-2 bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 text-white px-4 py-3 rounded-full shadow-[0_8px_24px_rgba(2,132,199,0.35)] border border-sky-400/30 active:scale-95 focus:outline-none"
         title="Invite New User"
       >
         <Plus className="h-5 w-5" />
@@ -819,37 +1092,104 @@ export function UsersPageClient({
         />
       )}
 
-      {/* Password Reset Success Modal */}
+      {/* Reset Password Warning Confirmation Dialog */}
+      {resetConfirmUser && (
+        <ConfirmationDialog
+          isOpen={!!resetConfirmUser}
+          onClose={() => {
+            if (!isResettingPassword) setResetConfirmUser(null);
+          }}
+          onConfirm={handleConfirmResetPassword}
+          title="Reset User Password"
+          description={
+            <p className="text-xs text-[var(--color-body)] leading-relaxed">
+              Are you sure you want to reset the security password for{" "}
+              <strong className="text-[var(--color-ink)] font-semibold">{resetConfirmUser.name}</strong>{" "}
+              {resetConfirmUser.email && (
+                <span className="text-[var(--color-mute)]">({resetConfirmUser.email})</span>
+              )}?
+            </p>
+          }
+          confirmLabel={isResettingPassword ? "Resetting..." : "Reset Password"}
+          cancelLabel="Cancel"
+          variant="warning"
+          loading={isResettingPassword}
+        />
+      )}
+
+      {/* Password Reset Success Modal with Visible Copy Functionality */}
       {showPasswordModal && (
         <Modal
           open={!!showPasswordModal}
-          onClose={() => setShowPasswordModal(null)}
+          onClose={() => {
+            setShowPasswordModal(null);
+            setCopiedPassword(false);
+          }}
           title="Password Reset Successful"
         >
           <div className="flex flex-col gap-4">
-            <p className="text-xs body-md text-[var(--color-body)] leading-relaxed">
-              The user&apos;s password has been reset. Below is the generated password credential:
-            </p>
-            <div className="bg-[var(--color-hairline-soft-surface)] p-3 rounded-[var(--radius-sm)] border border-[var(--color-hairline)]">
-              <label className="block text-[11px] font-semibold text-[var(--color-mute)] mb-1 uppercase tracking-wider">
-                Temporary Password
+            <div className="flex items-center gap-3 p-3 rounded-[var(--radius-sm)] bg-emerald-500/10 border border-emerald-500/20 text-emerald-800 dark:text-emerald-300 text-xs">
+              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <p className="font-semibold">New Password Generated</p>
+                <p className="text-[11px] text-[var(--color-mute)] mt-0.5">
+                  Password has been successfully updated for <strong className="text-[var(--color-ink)]">{showPasswordModal.userName}</strong>.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-[var(--color-hairline-soft-surface)] p-3.5 rounded-[var(--radius-sm)] border border-[var(--color-hairline)]">
+              <label className="block text-[11px] font-bold text-[var(--color-mute)] mb-1.5 uppercase tracking-wider">
+                Generated Temporary Password
               </label>
               <div className="flex items-center gap-2">
-                <code className="flex-1 text-xs font-mono bg-[var(--color-canvas-elevated)] p-2 rounded border border-[var(--color-hairline)] font-bold text-[var(--color-ink)]">
-                  {showPasswordModal.password}
-                </code>
+                <input
+                  type="text"
+                  readOnly
+                  value={showPasswordModal.password}
+                  aria-label="Generated Temporary Password"
+                  className="w-full text-xs font-mono font-bold bg-[var(--color-canvas-elevated)] px-3 py-2 rounded-sm border border-[var(--color-hairline)] text-[var(--color-ink)] select-all focus:outline-none focus:ring-1 focus:ring-[var(--color-link)]"
+                />
                 <Button
-                  variant="ghost-sm"
+                  variant="primary"
                   onClick={() => {
                     navigator.clipboard.writeText(showPasswordModal.password);
+                    setCopiedPassword(true);
                     toast("success", "Password copied to clipboard");
+                    setTimeout(() => setCopiedPassword(false), 2500);
                   }}
+                  className={`h-9 px-3.5 text-xs font-medium rounded-sm inline-flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-[0.98] transition-all shrink-0 ${
+                    copiedPassword
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                      : "bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 text-white"
+                  }`}
+                  title="Copy password to clipboard"
                 >
-                  <Copy className="h-4 w-4" />
+                  {copiedPassword ? (
+                    <>
+                      <Check className="h-3.5 w-3.5" />
+                      <span>Copied!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3.5 w-3.5" />
+                      <span>Copy</span>
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
-            <Button variant="primary" onClick={() => setShowPasswordModal(null)} className="w-full">
+
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setShowPasswordModal(null);
+                setCopiedPassword(false);
+              }}
+              className="w-full h-9 text-xs font-medium rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs cursor-pointer active:scale-[0.98] transition-all justify-center"
+            >
               Done
             </Button>
           </div>
@@ -864,6 +1204,89 @@ export function UsersPageClient({
           onClose={() => setShowEditModal(null)}
           loading={loading?.type === "edit"}
           onSubmit={handleEditUser}
+        />
+      )}
+
+      {/* Floating Bulk Actions Bar */}
+      <AnimatePresence>
+        {selectedUserIds.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 24, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 24, scale: 0.96 }}
+            transition={{ type: "spring", stiffness: 450, damping: 30 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[92%] sm:w-auto min-w-[320px] max-w-xl bg-[var(--color-ink)] text-white dark:bg-[#1a1a1a] dark:text-neutral-100 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.35)] border border-neutral-700/60 p-2.5 px-4 flex flex-wrap items-center justify-between gap-3 backdrop-blur-md"
+          >
+            <div className="flex items-center gap-2">
+              <span className="flex items-center justify-center h-6 min-w-6 px-2 rounded-full bg-white/20 text-xs font-bold text-white">
+                {selectedUserIds.length}
+              </span>
+              <span className="text-xs font-medium text-neutral-100 whitespace-nowrap">
+                {selectedUserIds.length === 1 ? "1 selected" : `${selectedUserIds.length} selected`}
+              </span>
+              <button
+                type="button"
+                onClick={handleClearSelection}
+                className="text-xs text-neutral-400 hover:text-white underline cursor-pointer ml-1"
+              >
+                Clear
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap ml-auto">
+              <button
+                type="button"
+                onClick={handleExportSelectedExcel}
+                className="h-8 px-3 rounded-sm text-xs font-medium bg-white/10 hover:bg-white/20 text-white border border-white/15 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
+                title="Export selected users to Excel (.xlsx)"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Excel</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportSelectedCSV}
+                className="h-8 px-3 rounded-sm text-xs font-medium bg-white/10 hover:bg-white/20 text-white border border-white/15 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
+                title="Export selected users to CSV (.csv)"
+              >
+                <Download className="h-3.5 w-3.5 text-sky-400" />
+                <span>CSV</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowBulkDeleteModal(true)}
+                disabled={isBulkDeleting}
+                className="h-8 px-3.5 rounded-sm text-xs font-medium bg-rose-600 hover:bg-rose-700 text-white shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50"
+              >
+                <AnimatedTrash2 size={14} />
+                <span>Delete ({selectedUserIds.length})</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      {showBulkDeleteModal && (
+        <ConfirmationDialog
+          isOpen={showBulkDeleteModal}
+          onClose={() => setShowBulkDeleteModal(false)}
+          onConfirm={handleBulkDeleteConfirm}
+          title={`Delete ${selectedUserIds.length} User Account${selectedUserIds.length > 1 ? "s" : ""}`}
+          description={
+            <span>
+              Are you sure you want to permanently delete{" "}
+              <strong className="text-[var(--color-ink)] font-bold">
+                {selectedUserIds.length} selected user{selectedUserIds.length > 1 ? "s" : ""}
+              </strong>
+              ? This action will permanently remove authentication credentials and directory records, and cannot be undone.
+            </span>
+          }
+          confirmLabel={`Delete ${selectedUserIds.length} User${selectedUserIds.length > 1 ? "s" : ""}`}
+          variant="danger"
+          loading={isBulkDeleting}
         />
       )}
     </div>
