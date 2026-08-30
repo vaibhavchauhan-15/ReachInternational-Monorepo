@@ -247,17 +247,11 @@ export function OperatorDashboard({
     [availableMachines, selectedMachineId, assignedMachine]
   );
 
-  // Client Selection State & Dropdown
-  const [selectedClientId, setSelectedClientId] = useState<string>("");
-  const [clientLocation, setClientLocation] = useState<string>("");
-  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState<boolean>(false);
-  const [clientSearchQuery, setClientSearchQuery] = useState<string>("");
-  const clientDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Helper to find associated client for a machine from recent logs, machine customer_name, or dbClients
+  // Helper to find associated client for a machine from recent logs or dbClients
   const findClientForMachine = useCallback(
     (mId: string, machineObj?: Machine | null) => {
-      if (!mId) return null;
+      if (!mId) return dbClients.length > 0 ? dbClients[0] : null;
+      // 1. Look in recent logs for this specific machine
       const logForMachine = recentLogs.find((l) => l.machine_id === mId && (l.client_id || (l as any).client));
       if (logForMachine) {
         if (logForMachine.client_id) {
@@ -268,20 +262,66 @@ export function OperatorDashboard({
           return (logForMachine as any).client as CRMClient;
         }
       }
-      const custName = machineObj?.customer_name?.trim().toLowerCase();
-      if (custName && dbClients.length > 0) {
-        const match = dbClients.find(
-          (c) =>
-            c.client_name.toLowerCase() === custName ||
-            c.company_name?.toLowerCase() === custName ||
-            c.code.toLowerCase() === custName
-        );
-        if (match) return match;
+      // 2. Look in any recent logs
+      const anyLogWithClient = recentLogs.find((l) => l.client_id || (l as any).client);
+      if (anyLogWithClient) {
+        if (anyLogWithClient.client_id) {
+          const found = dbClients.find((c) => c.id === anyLogWithClient.client_id);
+          if (found) return found;
+        }
+        if ((anyLogWithClient as any).client) {
+          return (anyLogWithClient as any).client as CRMClient;
+        }
       }
+      // 3. Fallback to first client in DB
       return dbClients.length > 0 ? dbClients[0] : null;
     },
     [recentLogs, dbClients]
   );
+
+  // Helper to find associated client location for a machine from recent logs or client record in DB
+  const findLocationForMachine = useCallback(
+    (mId: string, clientObj?: CRMClient | null) => {
+      // 1. Look in recent logs for this specific machine
+      if (mId) {
+        const logForMachine = recentLogs.find((l) => l.machine_id === mId && l.location && l.location.trim() !== "");
+        if (logForMachine?.location) return logForMachine.location;
+      }
+      // 2. Look in any recent logs with location
+      const anyLogWithLocation = recentLogs.find((l) => l.location && l.location.trim() !== "");
+      if (anyLogWithLocation?.location) return anyLogWithLocation.location;
+      // 3. Client address from DB
+      if (clientObj) {
+        const formatted = getClientFormattedLocation(clientObj);
+        if (formatted) return formatted;
+      }
+      // 4. Fallback to first client in DB
+      if (dbClients.length > 0) {
+        const formatted = getClientFormattedLocation(dbClients[0]);
+        if (formatted) return formatted;
+      }
+      return "";
+    },
+    [recentLogs, dbClients]
+  );
+
+  const initialMachineId = assignedMachine?.id || (availableMachines.length > 0 ? availableMachines[0].id : "");
+  const initialClient = useMemo(() => {
+    return findClientForMachine(initialMachineId, assignedMachine || (availableMachines.length > 0 ? availableMachines[0] : null));
+  }, [findClientForMachine, initialMachineId, assignedMachine, availableMachines]);
+
+  const initialLocation = useMemo(() => {
+    return findLocationForMachine(initialMachineId, initialClient);
+  }, [findLocationForMachine, initialMachineId, initialClient]);
+
+  // Client Selection State & Dropdown
+  const [selectedClientId, setSelectedClientId] = useState<string>(
+    initialClient?.id || (dbClients.length > 0 ? dbClients[0].id : "")
+  );
+  const [clientLocation, setClientLocation] = useState<string>(initialLocation);
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState<boolean>(false);
+  const [clientSearchQuery, setClientSearchQuery] = useState<string>("");
+  const clientDropdownRef = useRef<HTMLDivElement>(null);
 
   // Custom Searchable Dropdown State for Machine Selector
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -464,14 +504,15 @@ export function OperatorDashboard({
       setStartMeter(String(latestMtr));
       setEndMeter(String(latestMtr));
 
-      // Auto-detect and pre-fill client & location
+      // Auto-detect and pre-fill client & location from database
       const autoClient = findClientForMachine(mId, target);
       if (autoClient) {
         setSelectedClientId(autoClient.id);
-        const loc = getClientFormattedLocation(autoClient, target.customer_address || target.city || null);
+        const loc = findLocationForMachine(mId, autoClient);
         setClientLocation(loc);
       } else {
-        setClientLocation(target.customer_address || target.city || "");
+        const loc = findLocationForMachine(mId, null);
+        setClientLocation(loc);
       }
     }
   };
@@ -488,10 +529,10 @@ export function OperatorDashboard({
         const parsed = JSON.parse(saved);
         if (parsed.selectedMachineId === selectedMachineId && parsed.selectedClientId) {
           setSelectedClientId(parsed.selectedClientId);
-          if (parsed.clientLocation !== undefined) {
+          if (parsed.clientLocation && parsed.clientLocation.trim() !== "") {
             setClientLocation(parsed.clientLocation);
+            return;
           }
-          return;
         }
       }
     } catch (e) {
@@ -500,12 +541,13 @@ export function OperatorDashboard({
 
     if (autoClient) {
       setSelectedClientId(autoClient.id);
-      const loc = getClientFormattedLocation(autoClient, targetMachine?.customer_address || targetMachine?.city || null);
+      const loc = findLocationForMachine(selectedMachineId, autoClient);
       setClientLocation(loc);
-    } else if (targetMachine?.customer_name) {
-      setClientLocation(targetMachine.customer_address || targetMachine.city || "");
+    } else {
+      const loc = findLocationForMachine(selectedMachineId, null);
+      setClientLocation(loc);
     }
-  }, [selectedMachineId, availableMachines, assignedMachine, findClientForMachine]);
+  }, [selectedMachineId, availableMachines, assignedMachine, findClientForMachine, findLocationForMachine]);
 
   // Auto-fetch and update starting meter reading from database whenever selected machine or recent logs change
   useEffect(() => {
@@ -588,7 +630,7 @@ export function OperatorDashboard({
           }
         }
         if (parsed.selectedClientId) setSelectedClientId(parsed.selectedClientId);
-        if (parsed.clientLocation !== undefined) setClientLocation(parsed.clientLocation);
+        if (parsed.clientLocation && parsed.clientLocation.trim() !== "") setClientLocation(parsed.clientLocation);
         if (parsed.startMeter !== undefined) setStartMeter(parsed.startMeter);
         if (parsed.endMeter !== undefined) setEndMeter(parsed.endMeter);
         if (parsed.startTime) setStartTime(parsed.startTime);
@@ -981,7 +1023,7 @@ export function OperatorDashboard({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
                 {/* Model - Primary Custom Searchable Dropdown */}
                 <div>
-                  <label className="block text-xs font-bold text-[var(--color-ink)] mb-1 flex items-center gap-1.5">
+                  <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 flex items-center gap-1.5">
                     Model *
                   </label>
 
@@ -1096,7 +1138,7 @@ export function OperatorDashboard({
 
                 {/* Serial Number (Read-Only Auto-Populated) */}
                 <div>
-                  <label className="block text-xs font-bold text-[var(--color-ink)] mb-1">
+                  <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1">
                     Serial Number
                   </label>
                   <input
@@ -1113,7 +1155,7 @@ export function OperatorDashboard({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-4 pt-2.5 border-t border-[var(--color-hairline)]/60">
                 {/* Client / Customer Name - Searchable Dropdown */}
                 <div>
-                  <label className="block text-xs font-bold text-[var(--color-ink)] mb-1 flex items-center justify-between">
+                  <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 flex items-center justify-between">
                     <span>Client / Customer Name *</span>
                     {selectedClient?.code && (
                       <span className="text-[10px] text-sky-600 dark:text-sky-400 font-mono font-bold">
@@ -1232,15 +1274,20 @@ export function OperatorDashboard({
 
                 {/* Client Site Location (Auto-Filled, Editable) */}
                 <div>
-                  <label className="block text-xs font-bold text-[var(--color-ink)] mb-1">
-                    Client Site Location *
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)]">
+                      Client Site Location *
+                    </label>
+                    <span className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold tracking-tight">
+                      Auto-fetched
+                    </span>
+                  </div>
                   <input
                     type="text"
                     required
                     value={clientLocation}
                     onChange={(e) => setClientLocation(e.target.value)}
-                    placeholder="e.g. Sriperumbudur Industrial Park, Chennai"
+                    placeholder="e.g. Plot 51, Industrial Growth Centre, Bhiwadi"
                     className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                   />
                 </div>
@@ -1250,135 +1297,134 @@ export function OperatorDashboard({
             {/* ============================================ */}
             {/* SECTION B: OPERATING HOURS & HOUR METER       */}
             {/* ============================================ */}
-            <div className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/40 space-y-2.5 sm:space-y-4">
-              <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-4">
-                {/* Starting Hour Meter Reading */}
-                <div className="col-span-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-[var(--color-ink)]">
-                      Starting Meter (hrs) *
-                    </label>
-                    <span className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold tracking-tight">
-                      Auto-fetched
+            <div className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/40 space-y-3 sm:space-y-4">
+              {/* 1. Hour Meter Section */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">
+                    Hour Meter (HMR)
+                  </span>
+                  {meterRunningHours > 0 && (
+                    <span className="text-[10px] font-mono font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded">
+                      Running: {meterRunningHours.toFixed(1)} hrs
                     </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+                  {/* Starting Hour Meter Reading */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] truncate">
+                        Starting Meter (hrs) *
+                      </label>
+                      <span className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold tracking-tight shrink-0 ml-1">
+                        Auto-fetched
+                      </span>
+                    </div>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      inputMode="decimal"
+                      required
+                      value={startMeter}
+                      onChange={(e) => setStartMeter(e.target.value)}
+                      onPaste={(e) =>
+                        handleClipboardPaste({
+                          event: e,
+                          schema: HmrSchema as any,
+                          onSuccess: (val) => setStartMeter(String(val)),
+                          onError: (msg) => toast("error", "Validation Error", msg),
+                        })
+                      }
+                      placeholder="e.g. 1250.0"
+                      className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                    />
                   </div>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    inputMode="decimal"
-                    required
-                    value={startMeter}
-                    onChange={(e) => setStartMeter(e.target.value)}
-                    onPaste={(e) =>
-                      handleClipboardPaste({
-                        event: e,
-                        schema: HmrSchema as any,
-                        onSuccess: (val) => setStartMeter(String(val)),
-                        onError: (msg) => toast("error", "Validation Error", msg),
-                      })
-                    }
-                    placeholder="e.g. 1250.0"
-                    className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
-                  />
-                </div>
 
-                {/* Ending Hour Meter Reading */}
-                <div className="col-span-1">
-                  <label className="block text-xs font-bold text-[var(--color-ink)] mb-1">
-                    Ending Meter (hrs) *
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    inputMode="decimal"
-                    required
-                    value={endMeter}
-                    onChange={(e) => setEndMeter(e.target.value)}
-                    onPaste={(e) =>
-                      handleClipboardPaste({
-                        event: e,
-                        schema: HmrSchema as any,
-                        onSuccess: (val) => setEndMeter(String(val)),
-                        onError: (msg) => toast("error", "Validation Error", msg),
-                      })
-                    }
-                    placeholder="e.g. 1258.0"
-                    className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
-                  />
-                </div>
-
-                {/* Start Time */}
-                <div className="col-span-1">
-                  <CustomTimePicker
-                    label="Start Time *"
-                    required
-                    value={startTime}
-                    onChange={handleStartTimeChange}
-                    placeholder="e.g. 06:00 AM"
-                    iconColor="text-emerald-500"
-                  />
-                </div>
-
-                {/* End Time */}
-                <div className="col-span-1">
-                  <CustomTimePicker
-                    label="End Time *"
-                    required
-                    value={endTime}
-                    onChange={handleEndTimeChange}
-                    placeholder="e.g. 02:00 PM"
-                    iconColor="text-rose-500"
-                  />
-                </div>
-
-                {/* Overtime (Hours) - Manual fill */}
-                <div className="col-span-2 lg:col-span-1">
-                  <label className="block text-xs font-bold text-[var(--color-ink)] mb-1">
-                    Overtime (Hours)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    value={overtimeHours}
-                    onChange={(e) => setOvertimeHours(e.target.value)}
-                    onPaste={(e) =>
-                      handleClipboardPaste({
-                        event: e,
-                        schema: HmrSchema as any,
-                        onSuccess: (val) => setOvertimeHours(String(val)),
-                        onError: (msg) => toast("error", "Validation Error", msg),
-                      })
-                    }
-                    placeholder="e.g. 0.0"
-                    className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
-                  />
+                  {/* Ending Hour Meter Reading */}
+                  <div>
+                    <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 truncate">
+                      Ending Meter (hrs) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      inputMode="decimal"
+                      required
+                      value={endMeter}
+                      onChange={(e) => setEndMeter(e.target.value)}
+                      onPaste={(e) =>
+                        handleClipboardPaste({
+                          event: e,
+                          schema: HmrSchema as any,
+                          onSuccess: (val) => setEndMeter(String(val)),
+                          onError: (msg) => toast("error", "Validation Error", msg),
+                        })
+                      }
+                      placeholder="e.g. 1258.0"
+                      className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Live Shift Breakdown Indicator */}
-              {operatingStats.isValid && (
-                <div className="p-2.5 sm:p-3 rounded-xl bg-sky-500/5 border border-sky-500/20 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+              {/* 2. Shift Timings Section */}
+              <div className="pt-2.5 border-t border-[var(--color-hairline)]/60 space-y-2">
+                <span className="text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider block">
+                  Shift Timings & Overtime
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4">
+                  {/* Start Time */}
                   <div>
-                    <span className="text-[10px] text-[var(--color-mute)] font-medium block">Total Shift</span>
-                    <span className="font-mono font-bold text-[var(--color-ink)]">{operatingStats.durationHours} hrs</span>
+                    <CustomTimePicker
+                      label="Start Time *"
+                      required
+                      value={startTime}
+                      onChange={handleStartTimeChange}
+                      placeholder="e.g. 06:00 AM"
+                      iconColor="text-emerald-500"
+                    />
                   </div>
+
+                  {/* End Time */}
                   <div>
-                    <span className="text-[10px] text-[var(--color-mute)] font-medium block">Break Time</span>
-                    <span className="font-mono font-semibold text-[var(--color-mute)]">1.0 hr</span>
+                    <CustomTimePicker
+                      label="End Time *"
+                      required
+                      value={endTime}
+                      onChange={handleEndTimeChange}
+                      placeholder="e.g. 02:00 PM"
+                      iconColor="text-rose-500"
+                    />
                   </div>
+
+                  {/* Overtime (Hours) */}
                   <div>
-                    <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold block">Normal WT (excl. OT)</span>
-                    <span className="font-mono font-bold text-sky-600 dark:text-sky-400">{operatingStats.normalWorkingHours} hrs</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-bold block">Overtime</span>
-                    <span className="font-mono font-bold text-amber-600 dark:text-amber-400">{overtimeHours || "0"} hrs OT</span>
+                    <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 truncate">
+                      Overtime (Hours)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      value={overtimeHours}
+                      onChange={(e) => setOvertimeHours(e.target.value)}
+                      onPaste={(e) =>
+                        handleClipboardPaste({
+                          event: e,
+                          schema: HmrSchema as any,
+                          onSuccess: (val) => setOvertimeHours(String(val)),
+                          onError: (msg) => toast("error", "Validation Error", msg),
+                        })
+                      }
+                      placeholder="e.g. 0.0"
+                      className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                    />
                   </div>
                 </div>
-              )}
+              </div>
 
               {/* Meter Validation & Time Overlap Warning Strip */}
               {meterValidationWarning ? (
@@ -2026,19 +2072,6 @@ export function OperatorDashboard({
                   className="w-full px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
                 />
               </div>
-
-              {editOperatingStats.isValid && (
-                <div className="p-2.5 rounded-xl bg-sky-500/5 border border-sky-500/20 grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <span className="text-[10px] text-[var(--color-mute)] font-medium block">Shift Duration</span>
-                    <span className="font-mono font-bold text-[var(--color-ink)]">{editOperatingStats.durationHours} hrs (1h break)</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-sky-600 dark:text-sky-400 font-bold block">Normal WT (excl. OT)</span>
-                    <span className="font-mono font-bold text-sky-600 dark:text-sky-400">{editOperatingStats.normalWorkingHours} hrs</span>
-                  </div>
-                </div>
-              )}
 
               <div>
                 <label className="block font-bold text-[var(--color-ink)] mb-1">Breakdown Status</label>

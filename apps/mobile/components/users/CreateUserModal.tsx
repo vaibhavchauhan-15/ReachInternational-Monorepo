@@ -12,7 +12,8 @@ import {
 import { Button, Input, useTheme } from '../ui';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { X, UserPlus, User, Mail, Phone, Lock, MapPin, ChevronDown, Check } from 'lucide-react-native';
+import { validateAadhaarNumber, validateLicenseNumber, formatAadhaar } from '@reachinternational/utils';
+import { X, UserPlus, User, Mail, Phone, Lock, MapPin, ChevronDown, Check, ShieldCheck, CreditCard } from 'lucide-react-native';
 
 const USER_ROLES = [
   { value: 'service_engineer', label: 'Service Engineer' },
@@ -50,6 +51,8 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   const [city, setCity] = useState('');
   const [district, setDistrict] = useState('');
   const [stateVal, setStateVal] = useState('');
+  const [aadhaarNumber, setAadhaarNumber] = useState('');
+  const [licenseNumber, setLicenseNumber] = useState('');
   const [password, setPassword] = useState('Welcome@123');
 
   const [isLoading, setIsLoading] = useState(false);
@@ -75,6 +78,26 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
       return;
     }
 
+    let cleanAadhaar: string | null = null;
+    if (aadhaarNumber.trim()) {
+      const aadhaarRes = validateAadhaarNumber(aadhaarNumber);
+      if (!aadhaarRes.isValid) {
+        setError(aadhaarRes.error || 'Please enter a valid 12-digit Aadhaar number.');
+        return;
+      }
+      cleanAadhaar = aadhaarRes.clean || null;
+    }
+
+    let formattedLic: string | null = null;
+    if (licenseNumber.trim()) {
+      const licRes = validateLicenseNumber(licenseNumber);
+      if (!licRes.isValid) {
+        setError(licRes.error || 'Please enter a valid driving licence number.');
+        return;
+      }
+      formattedLic = licRes.formatted || licenseNumber.trim().toUpperCase();
+    }
+
     setIsLoading(true);
     try {
       // 1. Direct Supabase Admin/Auth creation or public.users insert
@@ -89,6 +112,8 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
             city: city.trim(),
             district: district.trim(),
             state: stateVal.trim(),
+            aadhaar_number: cleanAadhaar,
+            license_number: formattedLic,
           },
         },
       });
@@ -203,6 +228,26 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
               value={stateVal}
               onChangeText={setStateVal}
               leftIcon={<MapPin size={16} color={theme.colors.mute} />}
+            />
+
+            <Input
+              label="Aadhaar Card Number"
+              placeholder="12-digit Aadhaar Number"
+              value={aadhaarNumber}
+              onChangeText={setAadhaarNumber}
+              keyboardType="number-pad"
+              maxLength={14}
+              leftIcon={<ShieldCheck size={16} color={theme.colors.mute} />}
+            />
+
+            <Input
+              label="Driving Licence Number"
+              placeholder="e.g. MH12 20110012345"
+              value={licenseNumber}
+              onChangeText={setLicenseNumber}
+              autoCapitalize="characters"
+              maxLength={25}
+              leftIcon={<CreditCard size={16} color={theme.colors.mute} />}
             />
 
             <Input

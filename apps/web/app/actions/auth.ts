@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
+import { validateAadhaarNumber, validateLicenseNumber } from "@reachinternational/utils";
 
 export interface AuthFormState {
   error?: string;
@@ -185,6 +186,8 @@ export async function signup(
   const city = ((formData.get("city") as string) || "").trim();
   const district = ((formData.get("district") as string) || "").trim();
   const stateName = ((formData.get("state") as string) || "").trim();
+  const aadhaarNumber = ((formData.get("aadhaar_number") as string) || "").trim();
+  const licenseNumber = ((formData.get("license_number") as string) || "").trim();
   const password = (formData.get("password") as string) || "";
   const confirmPassword = (formData.get("confirm_password") as string) || "";
   const requestedRole = (formData.get("role") as string) || "operator";
@@ -215,6 +218,8 @@ export async function signup(
     city,
     district,
     state: stateName,
+    aadhaar_number: aadhaarNumber,
+    license_number: licenseNumber,
     password,
     confirm_password: confirmPassword,
   };
@@ -350,6 +355,72 @@ export async function signup(
     }
   }
 
+  // 3. Validation & Duplicate check for Aadhaar Number
+  let cleanAadhaar: string | null = null;
+  if (aadhaarNumber) {
+    const aadhaarResult = validateAadhaarNumber(aadhaarNumber);
+    if (!aadhaarResult.isValid) {
+      return {
+        error: aadhaarResult.error || "Please enter a valid 12-digit Aadhaar number.",
+        fieldErrors: {
+          aadhaar_number: aadhaarResult.error || "Please enter a valid 12-digit Aadhaar number.",
+        },
+        fieldValues,
+      };
+    }
+    cleanAadhaar = aadhaarResult.clean || null;
+
+    if (cleanAadhaar) {
+      const { data: existingAadhaar } = await adminSupabase
+        .from("users")
+        .select("id")
+        .eq("aadhaar_number", cleanAadhaar)
+        .maybeSingle();
+
+      if (existingAadhaar) {
+        return {
+          error: "A user account with this Aadhaar number already exists.",
+          fieldErrors: {
+            aadhaar_number: "A user account with this Aadhaar number already exists.",
+          },
+          fieldValues,
+        };
+      }
+    }
+  }
+
+  // 4. Validation & Duplicate check for Driving Licence Number
+  let formattedLicense: string | null = null;
+  if (licenseNumber) {
+    const licResult = validateLicenseNumber(licenseNumber);
+    if (!licResult.isValid) {
+      return {
+        error: licResult.error || "Please enter a valid driving licence number.",
+        fieldErrors: {
+          license_number: licResult.error || "Please enter a valid driving licence number.",
+        },
+        fieldValues,
+      };
+    }
+    formattedLicense = licResult.formatted || licenseNumber.trim().toUpperCase();
+
+    const { data: existingLic } = await adminSupabase
+      .from("users")
+      .select("id")
+      .ilike("license_number", licResult.clean || licenseNumber.trim())
+      .maybeSingle();
+
+    if (existingLic) {
+      return {
+        error: "A user account with this driving licence number already exists.",
+        fieldErrors: {
+          license_number: "A user account with this driving licence number already exists.",
+        },
+        fieldValues,
+      };
+    }
+  }
+
   const supabase = await createSupabaseServerClient();
 
   // Create the auth user. The handle_new_user() DB trigger automatically
@@ -368,6 +439,8 @@ export async function signup(
         district,
         state: stateName,
         location: `${city}, ${district}, ${stateName}`,
+        aadhaar_number: cleanAadhaar,
+        license_number: formattedLicense,
       },
       emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/login`,
     },
@@ -467,7 +540,9 @@ export async function signup(
       city, 
       district, 
       state: stateName, 
-      location: `${city}, ${district}, ${stateName}` 
+      location: `${city}, ${district}, ${stateName}`,
+      has_aadhaar: !!aadhaarNumber,
+      has_license: !!licenseNumber,
     },
   });
 

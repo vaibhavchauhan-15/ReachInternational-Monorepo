@@ -13,6 +13,7 @@ import {
   sendRejectionEmail,
   sendPasswordResetNotification,
 } from "@/lib/email";
+import { validateAadhaarNumber, validateLicenseNumber } from "@reachinternational/utils";
 import type { User, UserRole } from "@/lib/types/database";
 
 export interface UserFormState {
@@ -42,7 +43,7 @@ export async function getAllUsers(): Promise<User[]> {
   
   const { data, error } = await supabase
     .from("users")
-    .select("id, full_name, email, phone, role, status, city, district, state, created_at")
+    .select("id, full_name, email, phone, role, status, city, district, state, aadhaar_number, license_number, created_at")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -60,7 +61,7 @@ export async function getPendingUsers(): Promise<User[]> {
   
   const { data, error } = await supabase
     .from("users")
-    .select("id, full_name, email, phone, role, status, city, district, state, created_at")
+    .select("id, full_name, email, phone, role, status, city, district, state, aadhaar_number, license_number, created_at")
     .eq("status", "pending")
     .order("created_at", { ascending: true });
 
@@ -224,6 +225,8 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
     const city = (formData.get("city") as string)?.trim() || "";
     const district = (formData.get("district") as string)?.trim() || "";
     const state = (formData.get("state") as string)?.trim() || "";
+    const aadhaarNumber = (formData.get("aadhaar_number") as string)?.trim() || "";
+    const licenseNumber = (formData.get("license_number") as string)?.trim() || "";
 
     if (!fullName || !email || !password || !role || !phone) {
       return { error: "Full name, email, mobile number, password, and role fields are required." };
@@ -281,6 +284,48 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
       return { error: "A user account with this mobile number already exists." };
     }
 
+    // 3. Aadhaar validation & duplicate check
+    let cleanAadhaar: string | null = null;
+    if (aadhaarNumber) {
+      const aadhaarResult = validateAadhaarNumber(aadhaarNumber);
+      if (!aadhaarResult.isValid) {
+        return { error: aadhaarResult.error || "Please enter a valid 12-digit Aadhaar number." };
+      }
+      cleanAadhaar = aadhaarResult.clean || null;
+
+      if (cleanAadhaar) {
+        const { data: existingAadhaar } = await adminSupabase
+          .from("users")
+          .select("id")
+          .eq("aadhaar_number", cleanAadhaar)
+          .maybeSingle();
+
+        if (existingAadhaar) {
+          return { error: "A user account with this Aadhaar number already exists." };
+        }
+      }
+    }
+
+    // 4. Driving Licence validation & duplicate check
+    let formattedLicense: string | null = null;
+    if (licenseNumber) {
+      const licResult = validateLicenseNumber(licenseNumber);
+      if (!licResult.isValid) {
+        return { error: licResult.error || "Please enter a valid driving licence number." };
+      }
+      formattedLicense = licResult.formatted || licenseNumber.trim().toUpperCase();
+
+      const { data: existingLic } = await adminSupabase
+        .from("users")
+        .select("id")
+        .ilike("license_number", licResult.clean || licenseNumber.trim())
+        .maybeSingle();
+
+      if (existingLic) {
+        return { error: "A user account with this driving licence number already exists." };
+      }
+    }
+
     // Create user with admin client (default status: active, no admin approval required)
     const { data, error } = await adminSupabase.auth.admin.createUser({
       email,
@@ -294,6 +339,8 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
         district,
         state,
         location: `${city}, ${district}, ${state}`,
+        aadhaar_number: cleanAadhaar,
+        license_number: formattedLicense,
         status: "active",
       },
     });
@@ -311,7 +358,7 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
       return { error: "Failed to create user. Please try again." };
     }
 
-    // Update status to active and sync role, phone, city, district, state
+    // Update status to active and sync role, phone, city, district, state, aadhaar_number, license_number
     const { error: updateError } = await adminSupabase
       .from("users")
       .update({
@@ -321,6 +368,8 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
         city,
         district,
         state,
+        aadhaar_number: cleanAadhaar,
+        license_number: formattedLicense,
       })
       .eq("id", data.user.id);
 
@@ -678,6 +727,8 @@ export async function editUser(userId: string, formData: FormData): Promise<User
     const city = (formData.get("city") as string)?.trim() || "";
     const district = (formData.get("district") as string)?.trim() || "";
     const state = (formData.get("state") as string)?.trim() || "";
+    const aadhaarNumber = (formData.get("aadhaar_number") as string)?.trim() || "";
+    const licenseNumber = (formData.get("license_number") as string)?.trim() || "";
     
     if (!fullName) {
       return { error: "Full name is required." };
@@ -721,6 +772,49 @@ export async function editUser(userId: string, formData: FormData): Promise<User
     if (hasDuplicatePhone) {
       return { error: "Another user account with this mobile number already exists." };
     }
+
+    // Validate Aadhaar & Licence
+    let cleanAadhaar: string | null = null;
+    if (aadhaarNumber) {
+      const aadhaarResult = validateAadhaarNumber(aadhaarNumber);
+      if (!aadhaarResult.isValid) {
+        return { error: aadhaarResult.error || "Please enter a valid 12-digit Aadhaar number." };
+      }
+      cleanAadhaar = aadhaarResult.clean || null;
+
+      if (cleanAadhaar) {
+        const { data: existingAadhaar } = await adminSupabase
+          .from("users")
+          .select("id")
+          .neq("id", userId)
+          .eq("aadhaar_number", cleanAadhaar)
+          .maybeSingle();
+
+        if (existingAadhaar) {
+          return { error: "Another user account with this Aadhaar number already exists." };
+        }
+      }
+    }
+
+    let formattedLicense: string | null = null;
+    if (licenseNumber) {
+      const licResult = validateLicenseNumber(licenseNumber);
+      if (!licResult.isValid) {
+        return { error: licResult.error || "Please enter a valid driving licence number." };
+      }
+      formattedLicense = licResult.formatted || licenseNumber.trim().toUpperCase();
+
+      const { data: existingLic } = await adminSupabase
+        .from("users")
+        .select("id")
+        .neq("id", userId)
+        .ilike("license_number", licResult.clean || licenseNumber.trim())
+        .maybeSingle();
+
+      if (existingLic) {
+        return { error: "Another user account with this driving licence number already exists." };
+      }
+    }
     
     // Update auth user metadata
     const { error: authError } = await adminSupabase.auth.admin.updateUserById(userId, {
@@ -731,6 +825,8 @@ export async function editUser(userId: string, formData: FormData): Promise<User
         district,
         state,
         location: `${city}, ${district}, ${state}`,
+        aadhaar_number: cleanAadhaar,
+        license_number: formattedLicense,
         ...(role ? { role } : {}),
       }
     });
@@ -746,6 +842,8 @@ export async function editUser(userId: string, formData: FormData): Promise<User
       city,
       district,
       state,
+      aadhaar_number: cleanAadhaar,
+      license_number: formattedLicense,
     };
     if (role && (currentUser.role === "super_admin" || role !== "super_admin")) {
       updatePayload.role = role;

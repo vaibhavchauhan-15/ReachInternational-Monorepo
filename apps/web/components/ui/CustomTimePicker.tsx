@@ -15,6 +15,7 @@ export interface CustomTimePickerProps {
   value: string;
   onChange: (value: string) => void;
   label?: string;
+  labelClassName?: string;
   required?: boolean;
   placeholder?: string;
   iconColor?: string;
@@ -36,6 +37,7 @@ export function CustomTimePicker({
   value,
   onChange,
   label,
+  labelClassName,
   required = false,
   placeholder = "e.g. 08:00 AM",
   iconColor = "text-sky-500",
@@ -320,7 +322,7 @@ export function CustomTimePicker({
   return (
     <div className={`relative w-full ${className}`} ref={containerRef}>
       {label && (
-        <label className="block text-xs font-bold text-[var(--color-ink)] mb-1 flex items-center gap-1.5">
+        <label className={labelClassName || "block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 flex items-center gap-1.5"}>
           <button
             type="button"
             onClick={() => !disabled && setIsOpen((prev) => !prev)}

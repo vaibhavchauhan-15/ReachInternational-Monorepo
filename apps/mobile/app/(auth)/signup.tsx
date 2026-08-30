@@ -13,6 +13,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { Button, Input, Card, useTheme } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { validateAadhaarNumber, validateLicenseNumber, formatAadhaar } from '@reachinternational/utils';
 import {
   User,
   Mail,
@@ -20,6 +21,7 @@ import {
   Lock,
   MapPin,
   ShieldCheck,
+  CreditCard,
   CheckCircle2,
   ChevronDown,
   X,
@@ -54,6 +56,8 @@ export default function SignupScreen() {
   const [city, setCity] = useState('');
   const [district, setDistrict] = useState('');
   const [stateVal, setStateVal] = useState('');
+  const [aadhaarNumber, setAadhaarNumber] = useState('');
+  const [licenseNumber, setLicenseNumber] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -104,6 +108,26 @@ export default function SignupScreen() {
       return;
     }
 
+    let cleanAadhaar: string | null = null;
+    if (aadhaarNumber.trim()) {
+      const aadhaarRes = validateAadhaarNumber(aadhaarNumber);
+      if (!aadhaarRes.isValid) {
+        setErrorMessage(aadhaarRes.error || 'Please enter a valid 12-digit Aadhaar number.');
+        return;
+      }
+      cleanAadhaar = aadhaarRes.clean || null;
+    }
+
+    let formattedLic: string | null = null;
+    if (licenseNumber.trim()) {
+      const licRes = validateLicenseNumber(licenseNumber);
+      if (!licRes.isValid) {
+        setErrorMessage(licRes.error || 'Please enter a valid driving licence number.');
+        return;
+      }
+      formattedLic = licRes.formatted || licenseNumber.trim().toUpperCase();
+    }
+
     isSubmittingRef.current = true;
     setIsLoading(true);
 
@@ -119,6 +143,8 @@ export default function SignupScreen() {
             city: city.trim(),
             district: district.trim(),
             state: stateVal.trim(),
+            aadhaar_number: cleanAadhaar,
+            license_number: formattedLic,
           },
         },
       });
@@ -284,6 +310,26 @@ export default function SignupScreen() {
             value={stateVal}
             onChangeText={setStateVal}
             leftIcon={<MapPin size={16} color={theme.colors.mute} />}
+          />
+
+          <Input
+            label="Aadhaar Card Number"
+            placeholder="12-digit Aadhaar Number"
+            value={aadhaarNumber}
+            onChangeText={setAadhaarNumber}
+            keyboardType="number-pad"
+            maxLength={14}
+            leftIcon={<ShieldCheck size={16} color={theme.colors.mute} />}
+          />
+
+          <Input
+            label="Driving Licence Number"
+            placeholder="e.g. MH12 20110012345"
+            value={licenseNumber}
+            onChangeText={setLicenseNumber}
+            autoCapitalize="characters"
+            maxLength={25}
+            leftIcon={<CreditCard size={16} color={theme.colors.mute} />}
           />
 
           <Input

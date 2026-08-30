@@ -1,6 +1,90 @@
 # Current Task Context
 
-## Completed Task (2026-08-29) — Machine Hour Logs Simplification, 12-Hour AM/PM Standardization & Idempotency Fix (`024_remove_fuel_status_and_fix_idempotency.sql`, `OperatorDashboard.tsx`, `operations.tsx`, `packages/`)
+## Completed Task (2026-08-30) — Aadhaar Card & Driving Licence Number Complete Validation Pipeline & Integration (`025_add_aadhaar_and_license_to_users.sql`, `auth.ts`, `users.ts`, `UserCreateModal.tsx`, `UserEditModal.tsx`, `UserDetailSheet.tsx`, `apps/mobile/`)
+
+**Goal**: 
+1. **Mathematical & Standardized Validation**:
+   - **Aadhaar Number**: Implement Indian UIDAI 12-digit format checks, first-digit (cannot start with 0 or 1), repeating digit rejection, and the complete **Verhoeff Dihedral Group ($D_5$) mathematical checksum algorithm**.
+   - **Driving Licence Number**: Implement MoRTH/Sarathi format checks across all 36 Indian States and Union Territories (e.g. `MH12 20110012345`).
+2. **Layered Validation Architecture**: Enforce client-side real-time auto-formatting, on-blur validation, pre-submit blocks, server-side Zod validation schemas (`AadhaarFieldSchema`, `LicenseFieldSchema`), and database duplicate uniqueness checks across:
+   - Self-Service Signup (`/signup`)
+   - Admin Create User Modal (`/users` -> `UserCreateModal.tsx`)
+   - Admin Edit User Modal (`/users` -> `UserEditModal.tsx`)
+   - Mobile Signup & Admin Modals (`apps/mobile`)
+3. **Database Persistence & Security**: Add indexed columns `aadhaar_number` and `license_number` to `public.users` and update trigger `handle_new_user()`.
+4. **PII Masking**: Mask Aadhaar numbers (`XXXX-XXXX-1294`) across profile sheets and cards.
+
+### Key Deliverables & Implementation Details
+
+1. **Database Schema & Live Migration (`supabase/migrations/025_add_aadhaar_and_license_to_users.sql`)**:
+   - Added `aadhaar_number TEXT` and `license_number TEXT` columns to `public.users`.
+   - Created partial B-tree indexes `idx_users_aadhaar_number` and `idx_users_license_number` for quick identity lookups.
+   - Updated `public.handle_new_user()` security trigger function to extract `aadhaar_number` and `license_number` from `raw_user_meta_data` and write them to `public.users`.
+   - Applied migration cleanly to live Supabase project `dhbbgfzbyatzvqafnsqp`.
+
+2. **Monorepo Shared Packages (`packages/types`, `packages/validation`, `packages/utils`)**:
+   - Added `aadhaar_number?: string | null` and `license_number?: string | null` to `User` interface in `packages/types/src/database.ts`.
+   - Added optional/nullable string validations to `SignupSchema`, `CreateUserSchema`, and `UpdateUserSchema` in `packages/validation/src/auth.ts`.
+   - Created and exported `maskAadhaar(aadhaar)` and `formatLicenseNumber(lic)` in `packages/utils/src/string.ts` and `packages/utils/src/index.ts`.
+
+3. **Backend Server Actions & Data Access Layer (`apps/web/app/actions/`, `apps/web/lib/`)**:
+   - `apps/web/app/actions/auth.ts`: Extracted `aadhaar_number` and `license_number` from `formData`, validated, passed into `supabase.auth.signUp()` options data, and recorded flags in audit logs.
+   - `apps/web/app/actions/users.ts`: Updated `createUser()` and `editUser()` to extract and persist `aadhaar_number` and `license_number` to auth metadata and `public.users`.
+   - `apps/web/lib/queries/users.ts`: Added columns to `USER_SELECT_COLUMNS` and added Aadhaar/Licence search matching to `getUserList()`.
+   - `apps/web/lib/dal.ts`: Added columns to `getCachedUserRow()`.
+
+4. **Web Frontend Components (`apps/web/`)**:
+   - `apps/web/app/signup/page.tsx`: Added 2-column grid row with Aadhaar Card Number (`AnimatedShieldCheck` icon) and Driving Licence Number (`AnimatedCreditCard` icon).
+   - `apps/web/app/(app)/users/UserCreateModal.tsx`: Added Section 3 (Identity & Regulatory Documents) with Aadhaar and Licence number input fields.
+   - `apps/web/app/(app)/users/UserEditModal.tsx`: Added Section 3 with pre-populated Aadhaar and Licence inputs.
+   - `apps/web/app/(app)/users/UserDetailSheet.tsx`: Displayed masked Aadhaar number (`XXXX-XXXX-1294`) and formatted licence number in profile summary box.
+
+5. **Mobile Application Synchronization (`apps/mobile/`)**:
+   - `apps/mobile/app/(auth)/signup.tsx`: Added Aadhaar and Licence inputs and passed both to `supabase.auth.signUp()`.
+   - `apps/mobile/components/users/CreateUserModal.tsx`: Added Aadhaar and Licence inputs.
+   - `apps/mobile/components/users/UserDetailModal.tsx`: Updated `UserRecord` interface and added Aadhaar and Licence specification rows.
+
+6. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed cleanly across all 9 packages with 0 errors.
+   - `pnpm --filter @reachinternational/web build`: Compiled all 35 Next.js App Router routes and static pages cleanly with code 0.
+
+---
+
+## Previous Completed Task (2026-08-30) — Operations Daily Log Entry UI Refinements, Separated Meter/Time & Database Location Auto-Fetch (`OperatorDashboard.tsx`, `CustomTimePicker.tsx`, `MeterLogModal.tsx`)
+
+**Goal**: 
+1. **Remove Breakdown Indicator Box (Feedback #1)**: Remove the Live Shift Breakdown Indicator box from Section B in `<OperatorDashboard>` to declutter the form interface.
+2. **Separated Meter & Shift Timings + Compact Labels (Feedback #2)**: Separate Section B into two distinct sub-sections: (a) Hour Meter (HMR) 2-column grid and (b) Shift Timings & Overtime 3-column grid. Standardize all labels to compact typography (`text-[11px] sm:text-xs font-semibold`) ensuring zero line-wrapping or layout breakage across all screen sizes (viewport 1185×614, mobile ≤640px, tablet, and desktop).
+3. **Database Client Location Auto-Fetch (Feedback #3)**: Auto-populate client site location from the database (previous machine logs or client's registered address, city, and state in `public.clients`) synchronously on initial mount, machine change, and client dropdown selection.
+4. **Web-to-Mobile Synchronization**: Synchronize mobile `<MeterLogModal>` with auto-populating DB client location and streamlined layout.
+
+### Key Deliverables & Implementation Details
+
+1. **Web Component Layout & Label Refinement (`apps/web/components/dashboard/OperatorDashboard.tsx`, `CustomTimePicker.tsx`)**:
+   - Removed Live Shift Breakdown Indicator box from Section B and the edit modal.
+   - Decomposed Section B into two separate rows/subsections:
+     - `Hour Meter (HMR)`: 2-column grid (`grid-cols-1 sm:grid-cols-2`) for Starting Meter (hrs) and Ending Meter (hrs) with live running hours badge.
+     - `Shift Timings & Overtime`: 3-column grid (`grid-cols-1 sm:grid-cols-3`) for Start Time, End Time, and Overtime Hours.
+   - Standardized all input labels to `text-[11px] sm:text-xs font-semibold text-[var(--color-ink)]` across Section A, Section B, Section C, and Section D.
+   - Updated `CustomTimePicker.tsx` to support `labelClassName` with compact typography defaults.
+
+2. **Database Client Location Auto-Detection (`OperatorDashboard.tsx`)**:
+   - Implemented `findLocationForMachine` helper to resolve site location from previous machine logs in `machine_hour_logs` or client address, city, and state in `clients`.
+   - Synchronously initialized `selectedClientId` and `clientLocation` from database records on initial component render.
+   - Added automatic client and location synchronization upon machine selection (`handleSelectMachine`) and client selection (`handleSelectClient`).
+   - Added `"Auto-fetched"` status badge on the Client Site Location field.
+
+3. **Mobile App Synchronization (`apps/mobile/components/work/MeterLogModal.tsx`)**:
+   - Updated `fetchClients` to auto-populate initial client and location from DB if not already set.
+   - Removed redundant Shift Breakdown Box for complete Web-to-Mobile visual and behavioral parity.
+
+4. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed with 0 errors across all 9 packages (API client, config, design tokens, mobile, permissions, types, utils, validation, web).
+   - `pnpm --filter @reachinternational/web build`: Compiled all 35 Next.js App Router routes cleanly.
+
+---
+
+## Previous Completed Task (2026-08-29) — Machine Hour Logs Simplification, 12-Hour AM/PM Standardization & Idempotency Fix (`024_remove_fuel_status_and_fix_idempotency.sql`, `OperatorDashboard.tsx`, `operations.tsx`, `packages/`)
 
 **Goal**: 
 1. **Remove Fuel Tracking**: Eliminate `fuel_consumed` and `start_fuel_level` columns from `machine_hour_logs` table, RPC function, Server Actions, DAL queries, shared types, and web/mobile forms since fuel logs are not tracked.

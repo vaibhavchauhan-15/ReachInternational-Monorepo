@@ -1,10 +1,30 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: **Production Ready — Machine Hour Logs Simplification, 12-Hour AM/PM Standardization & Idempotency Fix Complete**
-- **Release Candidate**: `v2026.08.29` (Branch: `performance-optimization`)
-- **Overall Health**: Production Ready (0 TypeScript Errors, 35/35 Routes Compiled, 0 P0/P1/P2 Issues)
-- **Last Memory Update**: 2026-08-29
+- **Phase**: **Production Ready — Aadhaar Card & Driving Licence Number Database Integration, Self-Registration & Admin Creation Complete**
+- **Release Candidate**: `v2026.08.30` (Branch: `performance-optimization`)
+- **Overall Health**: Production Ready (0 TypeScript Errors across 9 packages, 35/35 Routes Compiled, 0 P0/P1/P2 Issues)
+- **Last Memory Update**: 2026-08-30
+
+- [x] **Aadhaar Card Number & Driving Licence Number Full Validation & Integration (`025_add_aadhaar_and_license_to_users.sql`, `auth.ts`, `users.ts`, `UserCreateModal.tsx`, `UserEditModal.tsx`, `UserDetailSheet.tsx`, `apps/mobile/`) (2026-08-30)**:
+  - **Full Aadhaar & Driving Licence Validation Pipeline**:
+    - *Aadhaar Validation*: Implemented Indian UIDAI standard validation incorporating 12-digit requirement, first-digit check (cannot start with 0 or 1), repeating digit rejection, and the complete **Verhoeff Dihedral Group ($D_5$) mathematical checksum algorithm** in `@reachinternational/utils` and `packages/validation/src/auth.ts` (`AadhaarFieldSchema`).
+    - *Driving Licence Validation*: Implemented MoRTH/Sarathi standard validation checking valid 2-letter state/UT codes across all 36 Indian states/territories, numeric RTO codes, valid format structures, and length boundaries (`LicenseFieldSchema`).
+    - *Client-Side Ergonomics & Error States*: Added real-time 4-digit auto-group formatting (`1234 5678 9012`), uppercase transforms, blur validation, inline field error rendering, and pre-submit client blocks in Web signup (`signup/page.tsx`), Admin Create User (`UserCreateModal.tsx`), and Admin Edit User (`UserEditModal.tsx`).
+    - *Server Action & Backend Hardening*: Enforced strict Zod schema validation and database-level duplicate Aadhaar/Licence checks in `signup()` (`auth.ts`), `createUser()`, and `editUser()` (`users.ts`).
+    - *Mobile Application Parity*: Integrated identical validation and duplicate prevention in `apps/mobile/app/(auth)/signup.tsx` and `apps/mobile/components/users/CreateUserModal.tsx`.
+  - **Database Schema Migration (`025_add_aadhaar_and_license_to_users.sql`)**: Added nullable `aadhaar_number TEXT` and `license_number TEXT` columns to `public.users` table with performance indexes `idx_users_aadhaar_number` and `idx_users_license_number`. Updated PostgreSQL `handle_new_user()` security trigger function to persist `aadhaar_number` and `license_number` directly from raw user metadata on signup. Applied migration live to Supabase.
+  - **Verification**: `pnpm turbo run typecheck --force` passed with 0 errors across all 9 monorepo packages; `pnpm --filter @reachinternational/web build` compiled all 35 routes cleanly.
+
+- [x] **Operations Daily Log Entry UI Refinements, Separated Meter/Time & Database Location Auto-Fetch (`OperatorDashboard.tsx`, `CustomTimePicker.tsx`, `MeterLogModal.tsx`) (2026-08-30)**:
+  - **Removed Redundant Breakdown Box (Feedback #1)**: Removed the Live Shift Breakdown Indicator box from Section B in `<OperatorDashboard>` and modal corrections to eliminate visual clutter and keep the form streamlined.
+  - **Separated Meter Readings & Shift Timings (Feedback #2)**: Split Section B into two distinct, dedicated subsections:
+    - *Hour Meter (HMR)*: Dedicated 2-column grid (`grid-cols-1 sm:grid-cols-2`) for Starting Meter (hrs) and Ending Meter (hrs) with live running hours badge.
+    - *Shift Timings & Overtime*: Dedicated 3-column grid (`grid-cols-1 sm:grid-cols-3`) for Start Time, End Time, and Overtime Hours.
+    - Standardized all input labels to compact `text-[11px] sm:text-xs font-semibold text-[var(--color-ink)]` ensuring crisp rendering and zero awkward text wrapping across all viewports (mobile, 1185×614, and desktop).
+  - **Database Client Location Auto-Fetch (Feedback #3)**: Implemented `findLocationForMachine` and synchronous state initialization to auto-fetch and pre-populate the exact client site location from previous machine logs or the client's registered address, city, and state in the database upon page load, machine change, and client dropdown selection.
+  - **Mobile Synchronization**: Synchronized mobile `<MeterLogModal>` by auto-populating client location from DB and removing the redundant shift breakdown box for full cross-platform parity.
+  - **Verification**: `pnpm turbo run typecheck --force` passed with 0 errors across all 9 packages; `pnpm --filter @reachinternational/web build` compiled all 35 routes cleanly.
 
 - [x] **Machine Hour Logs Simplification, 12-Hour AM/PM Standardization & Idempotency Fix (`024_remove_fuel_status_and_fix_idempotency.sql`, `OperatorDashboard.tsx`, `operations.tsx`, `packages/`) (2026-08-29)**:
   - **Removed Fuel Tracking**: Dropped `fuel_consumed` and `start_fuel_level` columns from `public.machine_hour_logs` table, atomic RPC `submit_operator_hour_log_atomic`, Server Actions (`submitOperatorHourLogAction`, `updateOperatorHourLogAction`), DAL queries, and shared types (`MachineHourLog`, `CreateHourLogSchema`).

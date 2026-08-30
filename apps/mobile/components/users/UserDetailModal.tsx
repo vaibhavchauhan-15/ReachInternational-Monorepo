@@ -18,6 +18,8 @@ import {
   Phone,
   MapPin,
   Shield,
+  ShieldCheck,
+  CreditCard,
   KeyRound,
   Trash2,
   UserCheck,
@@ -25,6 +27,7 @@ import {
   Copy,
   Check,
 } from 'lucide-react-native';
+import { maskAadhaar, formatLicenseNumber } from '@reachinternational/utils';
 
 export interface UserRecord {
   id: string;
@@ -36,6 +39,8 @@ export interface UserRecord {
   city?: string;
   district?: string;
   state?: string;
+  aadhaar_number?: string | null;
+  license_number?: string | null;
   created_at?: string;
 }
 
@@ -210,6 +215,22 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                 <Text style={[styles.infoLabel, { color: theme.colors.mute }]}>Location:</Text>
                 <Text style={[styles.infoValue, { color: theme.colors.ink }]}>
                   {[user.city, user.district, user.state].filter(Boolean).join(', ') || '—'}
+                </Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <ShieldCheck size={14} color={theme.colors.mute} />
+                <Text style={[styles.infoLabel, { color: theme.colors.mute }]}>Aadhaar:</Text>
+                <Text style={[styles.infoValue, { color: theme.colors.ink, fontFamily: 'monospace' }]}>
+                  {maskAadhaar(user.aadhaar_number)}
+                </Text>
+              </View>
+
+              <View style={styles.infoRow}>
+                <CreditCard size={14} color={theme.colors.mute} />
+                <Text style={[styles.infoLabel, { color: theme.colors.mute }]}>Licence:</Text>
+                <Text style={[styles.infoValue, { color: theme.colors.ink, fontFamily: 'monospace' }]}>
+                  {formatLicenseNumber(user.license_number)}
                 </Text>
               </View>
 

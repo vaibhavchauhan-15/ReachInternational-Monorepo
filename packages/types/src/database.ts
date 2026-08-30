@@ -92,6 +92,8 @@ export interface User {
   city?: string | null;
   district?: string | null;
   state?: string | null;
+  aadhaar_number?: string | null;
+  license_number?: string | null;
   email: string;
   created_at: string;
   updated_at: string;

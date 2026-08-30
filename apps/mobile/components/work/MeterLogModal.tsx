@@ -99,14 +99,20 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         .select('id, client_name, address, city, state')
         .order('client_name');
       if (data) {
-        setClients(data.map((c: any) => ({
+        const clientItems = data.map((c: any) => ({
           id: c.id,
           name: c.client_name || 'Client',
           client_name: c.client_name,
           address: c.address,
           city: c.city,
           state: c.state,
-        })));
+        }));
+        setClients(clientItems);
+        if (clientItems.length > 0 && !selectedClientId && !location) {
+          setSelectedClientId(clientItems[0].id);
+          const parts = [clientItems[0].address, clientItems[0].city, clientItems[0].state].filter(Boolean);
+          if (parts.length > 0) setLocation(parts.join(', '));
+        }
       }
     } catch (e) {
       console.warn('Error fetching clients:', e);
@@ -357,18 +363,6 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               onChangeText={setOvertimeHours}
               keyboardType="numeric"
             />
-
-            {/* Shift Breakdown Box */}
-            <View style={[styles.calcBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, padding: spacingNumeric.sm }]}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={{ fontSize: 11, color: theme.colors.mute }}>Shift Duration:</Text>
-                <Text style={{ fontSize: 11, fontFamily: 'GeistMono_700Bold', color: theme.colors.ink }}>{shiftStats.duration} hrs (1h break)</Text>
-              </View>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 11, color: theme.colors.link, fontWeight: '700' }}>Normal Working Time:</Text>
-                <Text style={{ fontSize: 11, fontFamily: 'GeistMono_700Bold', color: theme.colors.link }}>{shiftStats.normal} hrs (excl. OT)</Text>
-              </View>
-            </View>
 
             {/* Breakdown Toggle */}
             <View style={[styles.breakdownRow, { backgroundColor: theme.colors.canvas, borderColor: isBreakdown ? theme.colors.error : theme.colors.hairline }]}>

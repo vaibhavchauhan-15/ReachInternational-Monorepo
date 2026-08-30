@@ -117,3 +117,247 @@ export function summarizeTaskTitle(description: string): string {
   return summarized;
 }
 
+// ---------------------------------------------------------------------------
+// Indian Regulatory Identity Validation (Aadhaar & Driving Licence)
+// ---------------------------------------------------------------------------
+
+// Verhoeff Algorithm Tables (D5 Dihedral Group Checksum for Aadhaar Validation)
+const VERHOEFF_D: number[][] = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+  [2, 3, 4, 0, 1, 7, 8, 9, 5, 6],
+  [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+  [4, 0, 1, 2, 3, 9, 5, 6, 7, 8],
+  [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+  [6, 5, 9, 8, 7, 1, 0, 4, 3, 2],
+  [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+  [8, 7, 6, 5, 9, 3, 2, 1, 0, 4],
+  [9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+];
+
+const VERHOEFF_P: number[][] = [
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+  [1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+  [5, 8, 0, 3, 7, 9, 6, 1, 4, 2],
+  [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+  [9, 4, 5, 3, 1, 2, 6, 8, 7, 0],
+  [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+  [2, 7, 9, 3, 8, 0, 6, 4, 1, 5],
+  [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
+];
+
+/**
+ * Validates a number string using the Verhoeff checksum algorithm (used by UIDAI Aadhaar).
+ */
+export function validateVerhoeff(numStr: string): boolean {
+  if (!/^\d+$/.test(numStr)) return false;
+  let c = 0;
+  const digits = numStr.split("").map(Number).reverse();
+  for (let i = 0; i < digits.length; i++) {
+    c = VERHOEFF_D[c][VERHOEFF_P[i % 8][digits[i]]];
+  }
+  return c === 0;
+}
+
+export interface AadhaarValidationResult {
+  isValid: boolean;
+  error?: string;
+  clean?: string;
+  formatted?: string;
+}
+
+/**
+ * Validates an Indian Aadhaar Card number:
+ * 1. Must contain exactly 12 digits (ignoring spaces/hyphens).
+ * 2. Cannot start with 0 or 1 (UIDAI standard).
+ * 3. Cannot consist of all repeating identical digits (e.g. 222222222222).
+ * 4. Must satisfy the Verhoeff mathematical checksum algorithm.
+ */
+export function validateAadhaarNumber(aadhaar?: string | null): AadhaarValidationResult {
+  if (!aadhaar || !aadhaar.trim()) {
+    return { isValid: true, clean: "", formatted: "" };
+  }
+
+  const raw = aadhaar.trim();
+  const clean = raw.replace(/[\s\-]/g, "");
+
+  if (!/^\d+$/.test(clean)) {
+    return {
+      isValid: false,
+      error: "Aadhaar number must contain digits only.",
+      clean,
+    };
+  }
+
+  if (clean.length !== 12) {
+    return {
+      isValid: false,
+      error: `Aadhaar number must be exactly 12 digits (entered ${clean.length} digits).`,
+      clean,
+    };
+  }
+
+  if (clean.startsWith("0") || clean.startsWith("1")) {
+    return {
+      isValid: false,
+      error: "Aadhaar number cannot start with 0 or 1.",
+      clean,
+    };
+  }
+
+  // Reject dummy repeating digits like 222222222222, 333333333333, etc.
+  if (/^(\d)\1{11}$/.test(clean)) {
+    return {
+      isValid: false,
+      error: "Invalid Aadhaar number (cannot be a repeated single digit).",
+      clean,
+    };
+  }
+
+  if (!validateVerhoeff(clean)) {
+    return {
+      isValid: false,
+      error: "Invalid Aadhaar number (checksum validation failed).",
+      clean,
+    };
+  }
+
+  // Format as 1234 5678 9012
+  const formatted = `${clean.slice(0, 4)} ${clean.slice(4, 8)} ${clean.slice(8, 12)}`;
+
+  return {
+    isValid: true,
+    clean,
+    formatted,
+  };
+}
+
+/**
+ * Quick boolean helper to check if an Aadhaar number is valid.
+ */
+export function isValidAadhaar(aadhaar?: string | null): boolean {
+  return validateAadhaarNumber(aadhaar).isValid;
+}
+
+/**
+ * Formats a 12-digit Aadhaar number with standard 4-digit space groupings (e.g. 1234 5678 9012).
+ */
+export function formatAadhaar(aadhaar?: string | null): string {
+  if (!aadhaar) return "";
+  const clean = aadhaar.replace(/\D/g, "").slice(0, 12);
+  if (!clean) return "";
+  const parts = [];
+  for (let i = 0; i < clean.length; i += 4) {
+    parts.push(clean.slice(i, i + 4));
+  }
+  return parts.join(" ");
+}
+
+/**
+ * Masks an Aadhaar number to show only the last 4 digits (e.g. XXXX-XXXX-1234)
+ * complying with AI/RULES/DATA-PROTECTION-PRIVACY.md.
+ */
+export function maskAadhaar(aadhaar?: string | null): string {
+  if (!aadhaar || !aadhaar.trim()) return "—";
+  const clean = aadhaar.replace(/[^0-9]/g, "");
+  if (clean.length < 4) return aadhaar.trim();
+  return `XXXX-XXXX-${clean.slice(-4)}`;
+}
+
+// List of all 36 Indian State and Union Territory 2-letter RTO codes (MoRTH Sarathi)
+const INDIAN_STATE_CODES = new Set([
+  "AN", "AP", "AR", "AS", "BR", "CG", "CH", "DD", "DH", "DL",
+  "DN", "GA", "GJ", "HP", "HR", "JH", "JK", "KA", "KL", "LA",
+  "LD", "MH", "ML", "MN", "MP", "MZ", "NL", "OD", "OR", "PB",
+  "PY", "RJ", "SK", "TN", "TR", "TS", "UA", "UK", "UP", "WB",
+]);
+
+export interface LicenseValidationResult {
+  isValid: boolean;
+  error?: string;
+  clean?: string;
+  formatted?: string;
+}
+
+/**
+ * Validates an Indian Driving Licence (DL) number according to MoRTH / Sarathi standards:
+ * Standard Format: SS-RR-YYYYNNNNNNN or SS RRYYYYNNNNNNN or SSRRYYYYNNNNNNN
+ * 1. Must start with a valid 2-letter Indian State / UT code (e.g., MH, DL, KA, UP, HR).
+ * 2. Total clean alphanumeric length must be between 9 and 20 characters (standard modern is 15-16 chars).
+ * 3. Must contain valid RTO digits and unique alphanumeric identifier.
+ */
+export function validateLicenseNumber(license?: string | null): LicenseValidationResult {
+  if (!license || !license.trim()) {
+    return { isValid: true, clean: "", formatted: "" };
+  }
+
+  const raw = license.trim().toUpperCase();
+  const clean = raw.replace(/[\s\-\/\.]/g, "");
+
+  if (clean.length < 9 || clean.length > 20) {
+    return {
+      isValid: false,
+      error: `Driving licence number must be between 9 and 20 characters (e.g. MH12 20110012345).`,
+      clean,
+    };
+  }
+
+  const stateCode = clean.slice(0, 2);
+  if (!INDIAN_STATE_CODES.has(stateCode)) {
+    return {
+      isValid: false,
+      error: `Invalid state code "${stateCode}". Driving licence must start with a valid 2-letter state code (e.g. MH, DL, KA, UP, HR, GJ).`,
+      clean,
+    };
+  }
+
+  // Must contain alphanumeric characters only
+  if (!/^[A-Z0-9]+$/.test(clean)) {
+    return {
+      isValid: false,
+      error: "Driving licence number must contain only letters, numbers, and standard separators.",
+      clean,
+    };
+  }
+
+  // Check that after state code, there are digits
+  const rtoCode = clean.slice(2, 4);
+  if (!/^\d{2}$/.test(rtoCode) && !/^\d[A-Z0-9]$/.test(rtoCode)) {
+    return {
+      isValid: false,
+      error: "Invalid driving licence format. RTO code following state prefix must be numeric (e.g. MH12...).",
+      clean,
+    };
+  }
+
+  // Format neatly as SS-RR YYYYNNNNNNN or SS-RR-YYYY-NNNNNNN if standard 15-char Sarathi format
+  let formatted = raw;
+  if (/^[A-Z]{2}\d{13}$/.test(clean)) {
+    formatted = `${clean.slice(0, 2)}${clean.slice(2, 4)} ${clean.slice(4, 8)}${clean.slice(8)}`;
+  } else if (/^[A-Z]{2}\d{2}/.test(clean)) {
+    formatted = `${clean.slice(0, 2)}${clean.slice(2, 4)} ${clean.slice(4)}`;
+  }
+
+  return {
+    isValid: true,
+    clean,
+    formatted,
+  };
+}
+
+/**
+ * Quick boolean helper to check if a driving licence number is valid.
+ */
+export function isValidLicense(license?: string | null): boolean {
+  return validateLicenseNumber(license).isValid;
+}
+
+/**
+ * Formats a driving licence number neatly (e.g. MH12 20110012345).
+ */
+export function formatLicenseNumber(lic?: string | null): string {
+  if (!lic || !lic.trim()) return "—";
+  const result = validateLicenseNumber(lic);
+  return result.formatted || lic.trim().toUpperCase();
+}
+

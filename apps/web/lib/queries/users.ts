@@ -15,7 +15,7 @@ export interface UserListParams {
 }
 
 const USER_SELECT_COLUMNS =
-  "id, full_name, email, phone, role, status, city, district, state, created_at, updated_at";
+  "id, full_name, email, phone, role, status, city, district, state, aadhaar_number, license_number, created_at, updated_at";
 
 export async function getUserList(params: UserListParams = {}) {
   await requireRole("admin", "super_admin", "service_manager", "hr_manager");
@@ -41,7 +41,7 @@ export async function getUserList(params: UserListParams = {}) {
   if (search) {
     const s = search.replace(/[,()"\\]/g, "");
     query = query.or(
-      `full_name.ilike.%${s}%,email.ilike.%${s}%,phone.ilike.%${s}%,city.ilike.%${s}%`
+      `full_name.ilike.%${s}%,email.ilike.%${s}%,phone.ilike.%${s}%,city.ilike.%${s}%,aadhaar_number.ilike.%${s}%,license_number.ilike.%${s}%`
     );
   }
 

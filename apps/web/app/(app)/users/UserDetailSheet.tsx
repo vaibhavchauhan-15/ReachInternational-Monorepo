@@ -12,10 +12,12 @@ import {
   AnimatedUserCheck,
   AnimatedUserX,
   AnimatedCalendarClock,
+  AnimatedShieldCheck,
+  AnimatedCreditCard,
 } from "@/components/ui/animated-icons";
 import { Shield, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Button, Badge, Select, Dialog, DialogContent } from "@/components/ui";
-import { formatDate } from "@reachinternational/utils";
+import { formatDate, maskAadhaar, formatLicenseNumber } from "@reachinternational/utils";
 import type { User, UserRole } from "@/lib/types/database";
 
 const roleOptions = [
@@ -220,7 +222,7 @@ export function UserDetailSheet({
               </div>
             )}
 
-            {/* Profile Info Summary Box */}
+              {/* Profile Info Summary Box */}
             <div className="p-3.5 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2.5 text-xs text-[var(--color-body)]">
               <div className="flex items-center justify-between">
                 <span className="text-[var(--color-mute)] font-medium flex items-center gap-1">
@@ -244,6 +246,22 @@ export function UserDetailSheet({
                 </span>
                 <span className="font-semibold text-[var(--color-ink)]">
                   {user.state || "—"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1">
+                  <AnimatedShieldCheck size={14} className="text-[var(--color-link)]" /> Aadhaar Number
+                </span>
+                <span className="font-semibold font-mono text-[var(--color-ink)]">
+                  {maskAadhaar(user.aadhaar_number)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1">
+                  <AnimatedCreditCard size={14} className="text-[var(--color-link)]" /> Licence Number
+                </span>
+                <span className="font-semibold font-mono text-[var(--color-ink)]">
+                  {formatLicenseNumber(user.license_number)}
                 </span>
               </div>
               <div className="flex items-center justify-between">

@@ -39,7 +39,7 @@
 
 ### 2. 👥 User & Employee Management (`/users`)
 - **System Accounts Directory**: Unified management of system users and staff accounts with active status tracking.
-- **Mandatory Profile Fields**: Strictly enforces Full Name, Email Address, 10-digit Mobile Phone Number, System Role, and Complete Address (City, District, State) across all user profiles and self-registration.
+- **Mandatory Profile & Identity Fields**: Strictly enforces Full Name, Email Address, 10-digit Mobile Phone Number, System Role, Complete Address (City, District, State), and Regulatory Identity Details (Aadhaar Card Number with masked `XXXX-XXXX-1294` PII formatting and Driving Licence Number) across user profiles and self-registration.
 - **Role Assignment**: Assign system roles (`super_admin`, `admin`, `service_manager`, `supervisor`, `operator`, etc.).
 - **Account Actions**: Create new user accounts, edit employee profiles, and delete user accounts with full audit logging.
 
@@ -63,7 +63,7 @@
 - **Client Lifecycle Management**: Add new clients, update client parameters, inspect machine fleet counts, and manage contact persons.
 
 ### 6. 🔑 Login & Access Control (`/login`, `/signup`, `/forgot-password`)
-- Secure authentication flow backed by Supabase SSR Auth and Next.js 16 Edge proxy security middleware with mandatory City, District, State registration fields.
+- Secure authentication flow backed by Supabase SSR Auth and Next.js 16 Edge proxy security middleware with mandatory City, District, State, Aadhaar Card Number, and Driving Licence Number registration fields.
 
 ---
 
@@ -171,7 +171,7 @@ ReachInternational-Monorepo/
 
 The core database is built on 6 central tables in Supabase PostgreSQL:
 
-1. `public.users`: System user accounts (email, phone, role, city, district, state, status).
+1. `public.users`: System user accounts (email, phone, role, city, district, state, aadhaar_number, license_number, status).
 2. `public.machines`: Machine fleet master (machine_code, model, serial_number, manufacturer, year_of_manufacture, hour_meter, customer_name, status).
 3. `public.machine_hour_logs`: Daily running hour logs (machine_id, client_id, operator_id, supervisor_id, log_date, start_time, end_time, start_meter, end_meter, running_hours, normal_working_hours, overtime_hours, is_breakdown, location, remarks, idempotency_key).
 4. `public.clients`: Registered clients & customer sites (client_code, client_name, contact_person, phone, email, address, city, state).

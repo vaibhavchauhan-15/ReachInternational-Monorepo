@@ -13,6 +13,7 @@ import {
   AnimatedMapPin,
   AnimatedAlertCircle,
   AnimatedShieldCheck,
+  AnimatedCreditCard,
   AnimatedEye,
   AnimatedEyeOff,
 } from "@/components/ui/animated-icons";
@@ -33,85 +34,68 @@ import { signup, type AuthFormState } from "@/app/actions/auth";
 import { ReachInternationalLogo } from "@/components/ui";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import type { SelectOption } from "@/components/ui/SearchableSelect";
+import { validateAadhaarNumber, validateLicenseNumber, formatAadhaar } from "@reachinternational/utils";
 
 const signupRoleOptions: SelectOption[] = [
   {
     value: "service_engineer",
     label: "Service Engineer",
-    description: "Field operations & breakdown resolution",
-    icon: <Wrench className="h-4 w-4 text-[#00AEEF]" />,
+    description: "Field service & machine repair operations",
+    icon: <Wrench className="h-4 w-4 text-blue-500" />,
   },
   {
-    value: "service_manager",
-    label: "Service Manager",
-    description: "Service planning, engineer dispatch & FSR approval",
-    icon: <ShieldCheck className="h-4 w-4 text-[#00AEEF]" />,
-  },
-  {
-    value: "branch_manager",
-    label: "Branch Manager",
-    description: "Branch fleet, staff & store control",
-    icon: <Building2 className="h-4 w-4 text-[#00AEEF]" />,
+    value: "supervisor",
+    label: "Supervisor",
+    description: "Site operations & equipment inspection",
+    icon: <ShieldCheck className="h-4 w-4 text-teal-500" />,
   },
   {
     value: "store_manager",
     label: "Store Manager",
     description: "Inventory stock ledger & transfers",
-    icon: <Package className="h-4 w-4 text-[#00AEEF]" />,
-  },
-  {
-    value: "supervisor",
-    label: "Supervisor",
-    description: "Raise complaints & machine inspection",
-    icon: <ShieldCheck className="h-4 w-4 text-[#00AEEF]" />,
+    icon: <Package className="h-4 w-4 text-purple-500" />,
   },
   {
     value: "operator",
     label: "Operator",
-    description: "Machine duty & daily running hour logs",
-    icon: <Activity className="h-4 w-4 text-[#00AEEF]" />,
+    description: "Daily machinery operation & hour logs",
+    icon: <Activity className="h-4 w-4 text-amber-500" />,
   },
   {
     value: "mechanic",
     label: "Mechanic / Technician",
-    description: "Repair work orders & parts request",
-    icon: <Wrench className="h-4 w-4 text-[#00AEEF]" />,
+    description: "Preventative maintenance & repair logs",
+    icon: <Wrench className="h-4 w-4 text-orange-500" />,
   },
   {
     value: "hr_manager",
     label: "HR Manager",
-    description: "Staff onboarding & payroll management",
-    icon: <Users className="h-4 w-4 text-[#00AEEF]" />,
+    description: "Staff onboarding & workforce admin",
+    icon: <Users className="h-4 w-4 text-emerald-500" />,
   },
   {
     value: "finance_manager",
     label: "Accounts / Finance Manager",
-    description: "Billing & financial reporting",
-    icon: <CreditCard className="h-4 w-4 text-[#00AEEF]" />,
+    description: "Billing & financial reconciliations",
+    icon: <CreditCard className="h-4 w-4 text-cyan-500" />,
   },
   {
     value: "sales_executive",
     label: "Sales Executive",
     description: "Machinery sales & client inquiries",
-    icon: <TrendingUp className="h-4 w-4 text-[#00AEEF]" />,
+    icon: <TrendingUp className="h-4 w-4 text-sky-500" />,
   },
   {
     value: "rental_manager",
     label: "Rental Manager",
-    description: "Rental fleet contracts & dispatches",
-    icon: <Truck className="h-4 w-4 text-[#00AEEF]" />,
+    description: "Rental fleet logistics & deployments",
+    icon: <Truck className="h-4 w-4 text-violet-500" />,
   },
   {
-    value: "admin",
-    label: "Administrator",
-    description: "Platform & user management",
-    icon: <ShieldAlert className="h-4 w-4 text-[#00AEEF]" />,
-  },
-  {
-    value: "super_admin",
-    label: "Super Admin",
-    description: "Platform owner & global multi-branch control",
-    icon: <ShieldAlert className="h-4 w-4 text-[#00AEEF]" />,
+    value: "client",
+    label: "Client / Customer",
+    description: "View rented fleet & work progress",
+    icon: <Building2 className="h-4 w-4 text-slate-400" />,
   },
 ];
 
@@ -129,6 +113,8 @@ export default function SignupPage() {
     city: "",
     district: "",
     state: "",
+    aadhaar_number: "",
+    license_number: "",
     password: "",
     confirm_password: "",
   });
@@ -136,13 +122,47 @@ export default function SignupPage() {
   const router = useRouter();
 
   const handleChange = (field: string, value: string) => {
-    setFormValues((prev) => ({ ...prev, [field]: value }));
+    let formattedVal = value;
+    if (field === "aadhaar_number") {
+      formattedVal = formatAadhaar(value);
+    } else if (field === "license_number") {
+      formattedVal = value.toUpperCase();
+    }
+
+    setFormValues((prev) => ({ ...prev, [field]: formattedVal }));
+
+    // Instant validation for Aadhaar
+    if (field === "aadhaar_number") {
+      const clean = formattedVal.replace(/\D/g, "");
+      if (clean.length === 12) {
+        const res = validateAadhaarNumber(clean);
+        if (!res.isValid) {
+          setFieldErrors((prev) => ({ ...prev, aadhaar_number: res.error || "Invalid Aadhaar number" }));
+          return;
+        }
+      }
+    }
+
     if (fieldErrors[field]) {
       setFieldErrors((prev) => {
         const copy = { ...prev };
         delete copy[field];
         return copy;
       });
+    }
+  };
+
+  const handleBlur = (field: string) => {
+    if (field === "aadhaar_number" && formValues.aadhaar_number.trim()) {
+      const res = validateAadhaarNumber(formValues.aadhaar_number);
+      if (!res.isValid) {
+        setFieldErrors((prev) => ({ ...prev, aadhaar_number: res.error || "Invalid Aadhaar number" }));
+      }
+    } else if (field === "license_number" && formValues.license_number.trim()) {
+      const res = validateLicenseNumber(formValues.license_number);
+      if (!res.isValid) {
+        setFieldErrors((prev) => ({ ...prev, license_number: res.error || "Invalid driving licence format" }));
+      }
     }
   };
 
@@ -161,6 +181,27 @@ export default function SignupPage() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (isSubmittingRef.current || pending) return;
+
+    // Client-side pre-flight checks
+    const errors: Record<string, string> = {};
+    if (formValues.aadhaar_number.trim()) {
+      const aadhaarRes = validateAadhaarNumber(formValues.aadhaar_number);
+      if (!aadhaarRes.isValid) {
+        errors.aadhaar_number = aadhaarRes.error || "Invalid Aadhaar number.";
+      }
+    }
+    if (formValues.license_number.trim()) {
+      const licRes = validateLicenseNumber(formValues.license_number);
+      if (!licRes.isValid) {
+        errors.license_number = licRes.error || "Invalid driving licence format.";
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      return;
+    }
+
     isSubmittingRef.current = true;
     setPending(true);
     setState({});
@@ -549,7 +590,80 @@ export default function SignupPage() {
                 </div>
               </div>
 
-              {/* Row 4: Password | Confirm Password */}
+              {/* Row 4: Aadhaar Card Number | Driving Licence Number */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {/* Aadhaar Card Number */}
+                <div className="flex flex-col gap-1 w-full">
+                  <label
+                    htmlFor="signup-aadhaar"
+                    className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
+                  >
+                    Aadhaar Card Number
+                  </label>
+                  <div className="relative w-full flex items-center">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
+                      <AnimatedShieldCheck size={15} />
+                    </div>
+                    <input
+                      id="signup-aadhaar"
+                      name="aadhaar_number"
+                      type="text"
+                      value={formValues.aadhaar_number}
+                      onChange={(e) => handleChange("aadhaar_number", e.target.value)}
+                      onBlur={() => handleBlur("aadhaar_number")}
+                      placeholder="12-digit Aadhaar Number"
+                      maxLength={14}
+                      className={`w-full h-10 pl-9 pr-3 text-xs sm:text-[13px] rounded-[6px] border bg-[#151718] dark:bg-[#151718] [html:not(.dark)_&]:bg-[#F1F3F5] text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 [html:not(.dark)_&]:placeholder-[#626970]/70 transition-colors focus:outline-none focus:border-[#00AEEF] dark:focus:border-[#00AEEF] [html:not(.dark)_&]:focus:border-[#008FD0] focus:ring-2 focus:ring-[#00AEEF]/15 ${
+                        fieldErrors.aadhaar_number
+                          ? "border-rose-500 dark:border-rose-400 bg-rose-500/5 dark:bg-rose-500/10 focus:border-rose-500"
+                          : "border-[#292C2F] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] hover:border-[#3A3E42] dark:hover:border-[#3A3E42] [html:not(.dark)_&]:hover:border-[#CBD5E1]"
+                      }`}
+                    />
+                  </div>
+                  {fieldErrors.aadhaar_number && (
+                    <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-0.5">
+                      {fieldErrors.aadhaar_number}
+                    </p>
+                  )}
+                </div>
+
+                {/* Driving Licence Number */}
+                <div className="flex flex-col gap-1 w-full">
+                  <label
+                    htmlFor="signup-license"
+                    className="text-xs font-medium text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] select-none"
+                  >
+                    Driving Licence Number
+                  </label>
+                  <div className="relative w-full flex items-center">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center text-[#969CA3] dark:text-[#969CA3] [html:not(.dark)_&]:text-[#626970]">
+                      <AnimatedCreditCard size={15} />
+                    </div>
+                    <input
+                      id="signup-license"
+                      name="license_number"
+                      type="text"
+                      value={formValues.license_number}
+                      onChange={(e) => handleChange("license_number", e.target.value)}
+                      onBlur={() => handleBlur("license_number")}
+                      placeholder="e.g. MH12 20110012345"
+                      maxLength={25}
+                      className={`w-full h-10 pl-9 pr-3 text-xs sm:text-[13px] rounded-[6px] border bg-[#151718] dark:bg-[#151718] [html:not(.dark)_&]:bg-[#F1F3F5] text-[#F5F7F8] dark:text-[#F5F7F8] [html:not(.dark)_&]:text-[#111315] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 [html:not(.dark)_&]:placeholder-[#626970]/70 transition-colors focus:outline-none focus:border-[#00AEEF] dark:focus:border-[#00AEEF] [html:not(.dark)_&]:focus:border-[#008FD0] focus:ring-2 focus:ring-[#00AEEF]/15 ${
+                        fieldErrors.license_number
+                          ? "border-rose-500 dark:border-rose-400 bg-rose-500/5 dark:bg-rose-500/10 focus:border-rose-500"
+                          : "border-[#292C2F] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] hover:border-[#3A3E42] dark:hover:border-[#3A3E42] [html:not(.dark)_&]:hover:border-[#CBD5E1]"
+                      }`}
+                    />
+                  </div>
+                  {fieldErrors.license_number && (
+                    <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-0.5">
+                      {fieldErrors.license_number}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Row 5: Password | Confirm Password */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 {/* Password */}
                 <div className="flex flex-col gap-1 w-full">
