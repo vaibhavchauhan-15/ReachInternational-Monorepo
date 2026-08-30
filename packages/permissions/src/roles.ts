@@ -3,6 +3,7 @@ import type { UserRole } from "@reachinternational/types";
 export const CANONICAL_ROLES: UserRole[] = [
   "super_admin",
   "admin",
+  "manager",
   "service_manager",
   "engineer",
   "service_engineer",
@@ -11,9 +12,6 @@ export const CANONICAL_ROLES: UserRole[] = [
   "operator",
   "mechanic",
   "hr_manager",
-  "finance_manager",
-  "sales_executive",
-  "rental_manager",
 ];
 
 export interface RoleMetadata {
@@ -35,6 +33,12 @@ export const ROLE_METADATA: Record<UserRole, RoleMetadata> = {
     name: "System Admin",
     description: "Organization-wide administrative access.",
     category: "admin",
+  },
+  manager: {
+    code: "manager",
+    name: "Manager",
+    description: "Operations, fleet, client contracts, and business management.",
+    category: "management",
   },
   service_manager: {
     code: "service_manager",
@@ -83,23 +87,5 @@ export const ROLE_METADATA: Record<UserRole, RoleMetadata> = {
     name: "HR Manager",
     description: "Employee onboarding, salary management, and document tracking.",
     category: "hr",
-  },
-  finance_manager: {
-    code: "finance_manager",
-    name: "Finance Manager",
-    description: "Invoicing, payment processing, expense approvals, and 3-way match.",
-    category: "finance",
-  },
-  sales_executive: {
-    code: "sales_executive",
-    name: "Sales Executive",
-    description: "CRM leads, quotations, opportunities, and sales order processing.",
-    category: "sales",
-  },
-  rental_manager: {
-    code: "rental_manager",
-    name: "Rental Manager",
-    description: "Rental agreements, fleet dispatch, damage reports, and return inspection.",
-    category: "operations",
   },
 };

@@ -27,6 +27,35 @@ import {
   X,
 } from 'lucide-react-native';
 
+function formatRoleName(role: string): string {
+  switch (role) {
+    case 'super_admin':
+      return 'Super Admin';
+    case 'admin':
+      return 'Admin';
+    case 'manager':
+    case 'branch_manager':
+      return 'Manager';
+    case 'service_manager':
+      return 'Service Manager';
+    case 'service_engineer':
+    case 'engineer':
+      return 'Service Engineer';
+    case 'supervisor':
+      return 'Supervisor';
+    case 'store_manager':
+      return 'Store Manager';
+    case 'operator':
+      return 'Operator';
+    case 'mechanic':
+      return 'Mechanic';
+    case 'hr_manager':
+      return 'HR Manager';
+    default:
+      return role ? role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'User';
+  }
+}
+
 export default function UsersScreen() {
   const { theme } = useTheme();
   const { role } = useAuth();
@@ -259,9 +288,14 @@ export default function UsersScreen() {
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.pendingName, { color: theme.colors.ink }]}>{p.full_name}</Text>
                     <Text style={[styles.pendingEmail, { color: theme.colors.mute }]}>{p.email}</Text>
-                    <Text style={[styles.pendingRole, { color: theme.colors.link }]}>
-                      Requested: {p.role.replace('_', ' ').toUpperCase()}
-                    </Text>
+                    <View style={styles.pendingRoleRow}>
+                      <Text style={[styles.pendingRoleLabel, { color: theme.colors.mute }]}>Role:</Text>
+                      <View style={[styles.pendingRoleChip, { backgroundColor: theme.colors.hairlineSoft, borderColor: theme.colors.hairline }]}>
+                        <Text style={[styles.pendingRoleChipText, { color: theme.colors.link }]}>
+                          {formatRoleName(p.role)}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
                 </View>
 
@@ -466,10 +500,25 @@ const styles = StyleSheet.create({
   pendingEmail: {
     fontSize: 11,
   },
-  pendingRole: {
+  pendingRoleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  pendingRoleLabel: {
     fontSize: 11,
-    fontWeight: '600',
-    marginTop: 2,
+    fontWeight: '500',
+  },
+  pendingRoleChip: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+  },
+  pendingRoleChipText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   pendingActions: {
     flexDirection: 'row',

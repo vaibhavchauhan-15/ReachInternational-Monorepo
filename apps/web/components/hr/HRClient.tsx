@@ -1625,13 +1625,11 @@ export function HRClient({
                 onChange={(e) => setReqRole(e.target.value as UserRole)}
                 options={[
                   { value: "service_engineer", label: "Service Engineer" },
+                  { value: "manager", label: "Manager" },
                   { value: "mechanic", label: "Mechanic" },
                   { value: "operator", label: "Operator" },
                   { value: "supervisor", label: "Supervisor" },
                   { value: "store_manager", label: "Store Manager" },
-                  { value: "branch_manager", label: "Branch Manager" },
-                  { value: "sales_executive", label: "Sales Executive" },
-                  { value: "finance_manager", label: "Finance Manager" },
                   { value: "hr_manager", label: "HR Manager" },
                 ]}
               />

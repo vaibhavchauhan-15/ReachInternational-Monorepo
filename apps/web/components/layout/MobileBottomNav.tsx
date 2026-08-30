@@ -43,6 +43,7 @@ interface NavItemConfig {
 const roleLabels: Record<UserRole, string> = {
   super_admin: "Super Admin",
   admin: "Admin",
+  manager: "Manager",
   service_manager: "Service Manager",
   engineer: "Service Engineer",
   service_engineer: "Service Engineer",
@@ -51,9 +52,6 @@ const roleLabels: Record<UserRole, string> = {
   operator: "Operator",
   mechanic: "Mechanic",
   hr_manager: "HR Manager",
-  finance_manager: "Finance Manager",
-  sales_executive: "Sales Executive",
-  rental_manager: "Rental Manager",
 };
 
 export function MobileBottomNav({ user }: MobileBottomNavProps) {

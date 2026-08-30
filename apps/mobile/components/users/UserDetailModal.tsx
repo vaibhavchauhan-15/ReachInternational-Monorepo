@@ -53,16 +53,13 @@ export interface UserDetailModalProps {
 
 const ROLES_LIST = [
   'service_engineer',
+  'manager',
   'service_manager',
-  'branch_manager',
   'store_manager',
   'supervisor',
   'operator',
   'mechanic',
   'hr_manager',
-  'finance_manager',
-  'sales_executive',
-  'rental_manager',
   'admin',
 ];
 

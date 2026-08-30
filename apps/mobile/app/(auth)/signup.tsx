@@ -31,17 +31,13 @@ import {
 
 const SIGNUP_ROLES = [
   { value: 'service_engineer', label: 'Service Engineer', desc: 'Field operations & breakdown resolution' },
+  { value: 'manager', label: 'Manager', desc: 'Operations, fleet, client contracts & business management' },
   { value: 'service_manager', label: 'Service Manager', desc: 'Service planning, engineer dispatch & FSR approval' },
-  { value: 'branch_manager', label: 'Branch Manager', desc: 'Branch fleet, staff & store control' },
   { value: 'store_manager', label: 'Store Manager', desc: 'Inventory stock ledger & transfers' },
   { value: 'supervisor', label: 'Supervisor', desc: 'Raise complaints & machine inspection' },
   { value: 'operator', label: 'Operator', desc: 'Machine duty & daily running hour logs' },
   { value: 'mechanic', label: 'Mechanic / Technician', desc: 'Repair work orders & parts request' },
   { value: 'hr_manager', label: 'HR Manager', desc: 'Staff onboarding & payroll management' },
-  { value: 'finance_manager', label: 'Accounts / Finance Manager', desc: 'Billing & financial reporting' },
-  { value: 'sales_executive', label: 'Sales Executive', desc: 'Machinery sales & client inquiries' },
-  { value: 'rental_manager', label: 'Rental Manager', desc: 'Rental fleet contracts & dispatches' },
-  { value: 'admin', label: 'Administrator', desc: 'Platform & user management' },
 ];
 
 export default function SignupScreen() {

@@ -17,16 +17,13 @@ import { X, UserPlus, User, Mail, Phone, Lock, MapPin, ChevronDown, Check, Shiel
 
 const USER_ROLES = [
   { value: 'service_engineer', label: 'Service Engineer' },
+  { value: 'manager', label: 'Manager' },
   { value: 'service_manager', label: 'Service Manager' },
-  { value: 'branch_manager', label: 'Branch Manager' },
   { value: 'store_manager', label: 'Store Manager' },
   { value: 'supervisor', label: 'Supervisor' },
   { value: 'operator', label: 'Operator' },
   { value: 'mechanic', label: 'Mechanic' },
   { value: 'hr_manager', label: 'HR Manager' },
-  { value: 'finance_manager', label: 'Finance Manager' },
-  { value: 'sales_executive', label: 'Sales Executive' },
-  { value: 'rental_manager', label: 'Rental Manager' },
   { value: 'admin', label: 'Administrator' },
 ];
 

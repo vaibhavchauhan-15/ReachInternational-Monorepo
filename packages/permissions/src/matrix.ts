@@ -125,44 +125,23 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "settings.view", "settings.edit"
   ],
 
-  rental_manager: [
-    "machine.view", "machine.edit",
-    "rental.view", "rental.create", "rental.edit", "rental.approve", "rental.dispatch", "rental.return",
-    "rental.inspect", "rental.damage_report", "rental.extend", "rental.cancel", "rental.billing_request", "rental.customer_manage", "rental.accessory_manage",
-    "complaint.create", "complaint.view",
-    "service.view", "fsr.view",
-    "inventory.view", "inventory.request", "part_request.create", "part_request.view",
-    "challan.view", "challan.create", "challan.edit",
-    "employee.view",
-    "sales.view", "sales.create", "sales.edit",
-    "finance.view",
+  manager: [
+    "machine.view", "machine.create", "machine.edit", "machine.assign",
+    "complaint.view", "complaint.create", "complaint.assign", "complaint.update", "complaint.close",
+    "service.view", "service.plan", "service.create", "service.assign", "service.update", "service.close",
+    "fsr.view", "fsr.create", "fsr.update", "fsr.review", "fsr.approve",
+    "inventory.view", "inventory.create", "inventory.edit", "inventory.stock_in", "inventory.stock_out", "inventory.adjust", "inventory.transfer", "inventory.approve_transfer", "inventory.request", "part_request.create", "part_request.view", "part_request.approve", "part_request.reject",
+    "po.view", "po.create", "po.edit", "po.approve", "po.cancel",
+    "challan.view", "challan.create", "challan.edit", "challan.approve", "challan.cancel",
+    "supplier.view", "supplier.create", "supplier.edit",
+    "employee.view", "employee.create", "employee.edit", "employee.salary.view",
+    "rental.view", "rental.create", "rental.edit", "rental.approve", "rental.dispatch", "rental.return", "rental.inspect", "rental.damage_report", "rental.extend", "rental.cancel",
+    "sales.view", "sales.create", "sales.edit", "sales.quotation", "sales.lead_manage", "sales.customer_manage", "sales.opportunity_manage", "sales.order_manage",
+    "finance.view", "finance.invoice", "finance.invoice.create", "finance.invoice.edit", "finance.payment", "finance.expense.manage", "finance.report",
+    "operator.view", "operator.assign", "operator.log_approve",
     "notification.view", "notification.send",
-    "report.view", "report.export", "audit.view",
-    "settings.view", "settings.edit"
-  ],
-
-  sales_executive: [
-    "machine.view",
-    "sales.view", "sales.create", "sales.edit", "sales.quotation",
-    "sales.lead_manage", "sales.customer_manage", "sales.interaction_log",
-    "sales.opportunity_manage", "sales.quotation_manage", "sales.discount_approve",
-    "sales.order_manage", "sales.order_approve", "sales.machine_reserve",
-    "sales.delivery_coordinate", "sales.handover_coordinate", "sales.settings_manage",
-    "rental.view", "inventory.view", "finance.view", "complaint.create", "complaint.view",
-    "service.view", "fsr.view", "notification.view", "notification.send",
-    "report.view", "audit.view"
-  ],
-
-  finance_manager: [
-    "machine.view", "inventory.view", "employee.view", "employee.salary.view",
-    "finance.view", "finance.invoice", "finance.invoice.create", "finance.invoice.edit",
-    "finance.invoice.finalize", "finance.invoice.cancel", "finance.credit_note", "finance.debit_note",
-    "finance.payment", "finance.payment.record", "finance.receivable.manage", "finance.payable.manage",
-    "finance.3way_match", "finance.expense.manage", "finance.expense.approve", "finance.approval",
-    "finance.report", "finance.settings.manage", "rental.view", "sales.view", "po.view", "grn.view",
-    "supplier.view", "challan.view", "service.view", "complaint.view", "fsr.view",
-    "notification.view", "notification.send", "report.view", "report.export", "audit.view",
-    "settings.view", "settings.edit"
+    "user.view", "user.create", "user.edit",
+    "report.view", "report.export", "audit.view", "settings.view"
   ],
 };
 

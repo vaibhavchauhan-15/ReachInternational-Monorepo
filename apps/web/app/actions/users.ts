@@ -118,6 +118,25 @@ export async function approveUser(userId: string): Promise<UserFormState> {
       console.error("Error confirming user email:", confirmError);
     }
 
+    // Synchronize approved user into public.employees directory table if not exists
+    const empCode = `EMP-${crypto.randomInt(1000, 10000)}`;
+    const designationLabel = (targetUser.role || "operator").replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
+    try {
+      await adminSupabase
+        .from("employees")
+        .insert({
+          employee_code: empCode,
+          full_name: targetUser.full_name?.trim(),
+          user_id: targetUser.id,
+          phone: targetUser.phone || null,
+          email: targetUser.email?.trim(),
+          designation: designationLabel,
+          status: "active",
+        });
+    } catch (empErr: any) {
+      console.warn("Note: employees directory sync on approval skipped or existing:", empErr?.message || empErr);
+    }
+
     // Send approval email
     await sendApprovalEmail(targetUser.email, targetUser.full_name);
 
@@ -129,6 +148,7 @@ export async function approveUser(userId: string): Promise<UserFormState> {
       metadata: { 
         user_email: targetUser.email, 
         user_name: targetUser.full_name,
+        role: targetUser.role,
         approved_by: user.email,
         approved_by_name: user.full_name,
       },

@@ -20,7 +20,7 @@ function isValidUuid(id?: string | null): boolean {
   return UUID_REGEX.test(id.trim());
 }
 
-const AUTHORIZED_ROLES = ["super_admin", "admin", "service_manager", "rental_manager", "sales_executive"] as const;
+const AUTHORIZED_ROLES = ["super_admin", "admin", "manager", "service_manager"] as const;
 
 /**
  * Create a new Client in database (public.clients)

@@ -14,8 +14,11 @@ import {
   AnimatedKey,
   AnimatedUserCheck,
   AnimatedUserX,
+  AnimatedWrench,
+  AnimatedActivity,
+  AnimatedPackage,
+  AnimatedUsers,
 } from "@/components/ui/animated-icons";
-import { ShieldAlert, ShieldCheck, Shield } from "lucide-react";
 import { Badge, Button } from "@/components/ui";
 import type { User } from "@/lib/types/database";
 
@@ -34,8 +37,24 @@ function getRoleBadge(role: string) {
       return <Badge variant="error" dot>Super Admin</Badge>;
     case "admin":
       return <Badge variant="warning" dot>Admin</Badge>;
+    case "manager":
+    case "branch_manager":
+      return <Badge variant="default" dot>Manager</Badge>;
+    case "service_manager":
+      return <Badge variant="default" dot>Service Manager</Badge>;
+    case "service_engineer":
     case "engineer":
-      return <Badge variant="tomorrow" dot>Engineer</Badge>;
+      return <Badge variant="info" dot>Service Engineer</Badge>;
+    case "supervisor":
+      return <Badge variant="default" dot>Supervisor</Badge>;
+    case "store_manager":
+      return <Badge variant="warning" dot>Store Manager</Badge>;
+    case "operator":
+      return <Badge variant="warning" dot>Operator</Badge>;
+    case "mechanic":
+      return <Badge variant="error" dot>Mechanic</Badge>;
+    case "hr_manager":
+      return <Badge variant="success" dot>HR Manager</Badge>;
     default:
       return <Badge variant="neutral">{role}</Badge>;
   }
@@ -44,13 +63,29 @@ function getRoleBadge(role: string) {
 function getRoleIcon(role: string) {
   switch (role) {
     case "super_admin":
-      return <ShieldAlert className="h-4 w-4 text-red-500" />;
+      return <AnimatedShieldAlert size={14} className="text-red-500" />;
     case "admin":
-      return <ShieldCheck className="h-4 w-4 text-amber-500" />;
+      return <AnimatedShieldCheck size={14} className="text-amber-500" />;
+    case "manager":
+    case "branch_manager":
+      return <AnimatedBuilding2 size={14} className="text-indigo-500" />;
+    case "service_manager":
+      return <AnimatedShieldCheck size={14} className="text-sky-500" />;
+    case "service_engineer":
     case "engineer":
-      return <Shield className="h-4 w-4 text-blue-500" />;
+      return <AnimatedWrench size={14} className="text-blue-500" />;
+    case "supervisor":
+      return <AnimatedShieldCheck size={14} className="text-teal-500" />;
+    case "store_manager":
+      return <AnimatedPackage size={14} className="text-purple-500" />;
+    case "operator":
+      return <AnimatedActivity size={14} className="text-amber-500" />;
+    case "mechanic":
+      return <AnimatedWrench size={14} className="text-orange-500" />;
+    case "hr_manager":
+      return <AnimatedUsers size={14} className="text-emerald-500" />;
     default:
-      return <Shield className="h-4 w-4 text-muted-foreground" />;
+      return <AnimatedShield size={14} className="text-muted-foreground" />;
   }
 }
 
@@ -120,8 +155,22 @@ export const MobileUserCard = memo(function MobileUserCard({
       ? "border-l-4 border-l-red-500 dark:border-l-red-500"
       : user.role === "admin"
       ? "border-l-4 border-l-amber-500 dark:border-l-amber-400"
-      : user.role === "engineer"
+      : user.role === "manager"
+      ? "border-l-4 border-l-indigo-500 dark:border-l-indigo-400"
+      : user.role === "service_manager"
+      ? "border-l-4 border-l-sky-500 dark:border-l-sky-400"
+      : user.role === "engineer" || user.role === "service_engineer"
       ? "border-l-4 border-l-blue-500 dark:border-l-blue-400"
+      : user.role === "supervisor"
+      ? "border-l-4 border-l-teal-500 dark:border-l-teal-400"
+      : user.role === "store_manager"
+      ? "border-l-4 border-l-purple-500 dark:border-l-purple-400"
+      : user.role === "operator"
+      ? "border-l-4 border-l-amber-500 dark:border-l-amber-400"
+      : user.role === "mechanic"
+      ? "border-l-4 border-l-orange-500 dark:border-l-orange-400"
+      : user.role === "hr_manager"
+      ? "border-l-4 border-l-emerald-500 dark:border-l-emerald-400"
       : "border-l-4 border-l-slate-400 dark:border-l-slate-600";
 
   return (

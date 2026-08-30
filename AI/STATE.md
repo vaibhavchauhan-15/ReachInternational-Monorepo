@@ -1,10 +1,62 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: **Production Ready — Signup Page UI Feedback Refinements, Mandatory Aadhaar & Cross-Platform Parity Complete**
+- **Phase**: **Production Ready — User Management & Pending Access Approval Role Badges Complete**
 - **Release Candidate**: `v2026.08.30` (Branch: `performance-optimization`)
 - **Overall Health**: Production Ready (0 TypeScript Errors across 9 packages, 35/35 Routes Compiled, 0 P0/P1/P2 Issues)
 - **Last Memory Update**: 2026-08-30
+
+- [x] **Preserve Selected User Role on Signup & Admin Approval (`027_preserve_signup_role.sql`, `auth.ts`, `users.ts`, `signup/page.tsx`, `apps/mobile/`) (2026-08-30)**:
+  - **Database Migration (`027_preserve_signup_role.sql`)**:
+    - Updated PostgreSQL `handle_new_user()` trigger function on `auth.users` to extract and assign the user's selected role directly from `raw_user_meta_data->>'role'` instead of hardcoding `'operator'`.
+    - Enforced canonical self-registration roles (`manager`, `service_manager`, `service_engineer`, `engineer`, `supervisor`, `store_manager`, `operator`, `mechanic`, `hr_manager`), preventing privilege escalation to `admin` / `super_admin` during self-signup.
+    - Preserved `role` on conflict updates for pending user profiles.
+    - Backfilled existing pending database records from auth metadata to align requested roles in `public.users`. Applied migration live to Supabase.
+  - **Backend Server Actions (`auth.ts`, `users.ts`)**:
+    - Updated `allowedSignupRoles` in `apps/web/app/actions/auth.ts` to include all canonical staff roles and removed non-canonical `"client"`.
+    - Updated `approveUser` in `apps/web/app/actions/users.ts` to maintain the selected role upon activating account, synchronize active user into `public.employees` directory with corresponding designation, and include `role` in audit logs.
+  - **Web & Mobile Frontend UI**:
+    - Removed non-canonical `"client"` from `signupRoleOptions` on `/signup` (`apps/web/app/signup/page.tsx`).
+    - Verified cross-platform parity with mobile signup screen `apps/mobile/app/(auth)/signup.tsx`.
+  - **Verification**: `pnpm turbo run typecheck --force` passed with 0 errors across all 9 monorepo workspace packages (33.6s); `pnpm --filter @reachinternational/web build` compiled all 35 routes cleanly.
+
+- [x] **Pending Access Request Role Display in Admin User Approvals (`users-client.tsx`, `MobileUserCard.tsx`, `apps/mobile/app/(app)/users.tsx`) (2026-08-30)**:
+  - **Admin User Management Pending Approvals (`users-client.tsx`)**:
+    - Implemented `getPendingRoleBadge(role)` displaying color-coded status badges with role icons (`AnimatedBuilding2`, `AnimatedWrench`, `AnimatedActivity`, `AnimatedPackage`, `AnimatedShieldCheck`, `AnimatedShieldAlert`, `AnimatedUsers`, `AnimatedShield`) for all requesting users in `#pending-approvals-section`.
+    - Enhanced responsive layout `flex flex-col sm:flex-row sm:items-center justify-between gap-3` ensuring clear readability and zero layout overlap across mobile (≤640px), tablet, and desktop viewports.
+    - Updated Role Filter pills to include all consolidated canonical roles (`manager`, `store_manager`, `hr_manager`).
+  - **Mobile User Card Component Enhancement (`MobileUserCard.tsx`)**:
+    - Updated `getRoleBadge`, `getRoleIcon`, and `borderAccentClass` supporting all canonical roles.
+  - **Mobile App Synchronization (`apps/mobile/app/(app)/users.tsx`)**:
+    - Added `formatRoleName` helper and formatted requested role badge chips on mobile pending user cards.
+  - **Verification**: `pnpm turbo run typecheck --force` passed with 0 errors across all 9 monorepo packages; `pnpm --filter @reachinternational/web build` compiled all 35 routes cleanly.
+
+- [x] **Role Consolidation: Add `manager` Role & Remove `rental_manager`, `sales_executive`, `finance_manager` (`026_update_roles_add_manager.sql`, `packages/types`, `packages/permissions`, `apps/web/`, `apps/mobile/`) (2026-08-30)**:
+  - **Database Migration (`026_update_roles_add_manager.sql`)**:
+    - Migrated existing users with deprecated roles (`rental_manager`, `sales_executive`, `finance_manager`, `branch_manager`, `sales_manager`) to `'manager'`.
+    - Updated `users_role_check` constraint on `public.users` table to enforce canonical roles: `'super_admin', 'admin', 'manager', 'service_manager', 'service_engineer', 'engineer', 'supervisor', 'store_manager', 'operator', 'mechanic', 'hr_manager'`.
+    - Updated RLS policies on `machines` (`machines_insert_authorized`, `machines_update_authorized`) and `clients` (`clients_select_policy`, `clients_insert_policy`, `clients_update_policy`, `clients_delete_policy`) to grant authorized access to `'manager'` while removing deprecated roles. Applied migration live to Supabase.
+  - **Shared Core Packages**:
+    - `packages/types/src/database.ts`: Updated `UserRole` union to include `"manager"` and remove `"rental_manager"`, `"sales_executive"`, `"finance_manager"`.
+    - `packages/permissions/src/roles.ts`: Updated `CANONICAL_ROLES` and `ROLE_METADATA` with consolidated `manager` role metadata.
+    - `packages/permissions/src/matrix.ts`: Updated `ROLE_PERMISSIONS` with comprehensive `manager` capabilities covering operations, fleet, clients, services, inventory, and reports.
+    - `packages/permissions/src/scopes.ts`: Updated `ROLE_DEFAULT_SCOPES` mapping `manager: "ORGANIZATION"`.
+  - **Web Application Backend & Actions**:
+    - `apps/web/app/actions/auth.ts`: Updated `allowedSignupRoles` to include `"manager"`.
+    - `apps/web/app/actions/machines.ts`: Updated `requireRole` in `createMachine` and `updateMachine` to include `"manager"`.
+    - `apps/web/app/actions/clients.ts`: Updated `AUTHORIZED_ROLES` to include `"manager"`.
+    - `apps/web/app/actions/rentals.ts`: Updated all `requireRole` calls across 8 operational rental actions to include `"manager"`.
+  - **Web Frontend Components**:
+    - `apps/web/app/signup/page.tsx`: Updated `signupRoleOptions` with clean `"Manager"` option.
+    - `apps/web/app/(app)/users/UserCreateModal.tsx` & `UserEditModal.tsx`: Updated `allRoleSelectOptions` with `Manager`.
+    - `apps/web/app/(app)/users/UserRow.tsx` & `UserDetailSheet.tsx`: Updated role badges, icons, and select options.
+    - `apps/web/app/(app)/clients/page.tsx`, `ClientsClient.tsx`, `MachineListClient.tsx`, `HRClient.tsx`, `TaskDetailDrawer.tsx`, `TasksClient.tsx`, `AppSidebar.tsx`, `MobileBottomNav.tsx`, `PublicNavbar.tsx`, `GlobalCreateModal.tsx`: Updated role permissions, dropdowns, and navigation filtering.
+  - **Mobile Application Parity**:
+    - `apps/mobile/app/(auth)/signup.tsx`: Updated `SIGNUP_ROLES` with `manager`.
+    - `apps/mobile/components/users/CreateUserModal.tsx`: Updated `USER_ROLES` with `manager`.
+    - `apps/mobile/components/users/UserDetailModal.tsx`: Updated `ROLES_LIST` with `manager`.
+    - `apps/mobile/lib/nav/navItems.ts`: Updated `mobileNavItems` to authorize `manager`.
+  - **Verification**: `pnpm turbo run typecheck --force` passed with 0 errors across all 9 monorepo packages; `pnpm --filter @reachinternational/web build` compiled all 35 routes cleanly.
 
 - [x] **Signup Page UI Feedback Refinements (`signup/page.tsx`, `SearchableSelect.tsx`, `auth.ts`, `packages/validation/src/auth.ts`, `apps/mobile/`) (2026-08-30)**:
   - **Clean Role Name Selection (Feedback #1 & #2)**: Removed icons and descriptive text from `signupRoleOptions` in `/signup`, rendering only the role name in both dropdown options and the selected button trigger.

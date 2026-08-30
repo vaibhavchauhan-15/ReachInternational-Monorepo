@@ -38,7 +38,7 @@ export function ClientsClient({ user, initialClients }: ClientsClientProps) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const canManageClients = ["super_admin", "admin", "branch_manager", "service_manager", "rental_manager", "sales_executive"].includes(user.role);
+  const canManageClients = ["super_admin", "admin", "manager", "service_manager"].includes(user.role);
 
   // Filtered clients list
   const filteredClients = useMemo(() => {

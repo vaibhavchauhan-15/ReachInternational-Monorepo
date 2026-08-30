@@ -28,15 +28,13 @@ import { validateAadhaarNumber, validateLicenseNumber, formatAadhaar } from "@re
 
 const signupRoleOptions: SelectOption[] = [
   { value: "service_engineer", label: "Service Engineer" },
+  { value: "manager", label: "Manager" },
+  { value: "service_manager", label: "Service Manager" },
   { value: "supervisor", label: "Supervisor" },
   { value: "store_manager", label: "Store Manager" },
   { value: "operator", label: "Operator" },
   { value: "mechanic", label: "Mechanic / Technician" },
   { value: "hr_manager", label: "HR Manager" },
-  { value: "finance_manager", label: "Accounts / Finance Manager" },
-  { value: "sales_executive", label: "Sales Executive" },
-  { value: "rental_manager", label: "Rental Manager" },
-  { value: "client", label: "Client / Customer" },
 ];
 
 export default function SignupPage() {

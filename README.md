@@ -39,9 +39,9 @@
 
 ### 2. 👥 User & Employee Management (`/users`)
 - **System Accounts Directory**: Unified management of system users and staff accounts with active status tracking.
-- **Mandatory Profile & Identity Fields**: Strictly enforces Full Name, Email Address, 10-digit Mobile Phone Number, System Role, Complete Address (City, District, State), and Regulatory Identity Details (Aadhaar Card Number with masked `XXXX-XXXX-1294` PII formatting and Driving Licence Number) across user profiles and self-registration.
-- **Role Assignment**: Assign system roles (`super_admin`, `admin`, `service_manager`, `supervisor`, `operator`, etc.).
-- **Account Actions**: Create new user accounts, edit employee profiles, and delete user accounts with full audit logging.
+- **Mandatory Profile & Identity Fields**: Strictly enforces Full Name, Email Address, 10-digit Mobile Phone Number, System Role, Complete Address (City, District, State), and Regulatory Identity Details (Aadhaar Card Number with mathematical Verhoeff checksum & masked `XXXX-XXXX-1294` PII formatting and Driving Licence Number) across user profiles and self-registration.
+- **Self-Service Registration & Admin Access Governance**: Users request platform access choosing their functional role (`manager`, `service_manager`, `service_engineer`, `supervisor`, `store_manager`, `operator`, `mechanic`, `hr_manager`). The chosen role is preserved in `public.users.role` in `pending` status, displayed in the Admin Pending User Approvals panel with distinct role badges, and maintained without modification upon administrator approval.
+- **Account Actions**: Create new user accounts, edit employee profiles, activate/deactivate accounts, and delete user accounts with full structured audit logging.
 
 ### 3. ⏱️ Operations Hub (`/operations`)
 - **Running Hours Logs (`tab=logs`)**:
@@ -161,6 +161,7 @@ ReachInternational-Monorepo/
 |------|-------------------|---------------|
 | `super_admin` | Global System | Full control over machines, operations, user accounts, and system configuration. |
 | `admin` | Global Operations | Add/edit/delete machines, manage users, review all running hour logs, reassign operators. |
+| `manager` | Operations & Business | Fleet management, client contracts, running hour logs review, user assignments, and reporting. |
 | `service_manager` | Fleet Operations | Oversee machine directory, review running hour logs, export PDF/Excel reports. |
 | `supervisor` | Site Operations | Monitor daily running hour logs, track operator machine assignments, record logs. |
 | `operator` | Field Operations | Submit daily machine running hour logs (`/operations?tab=entry`) and view log history (`/operations?tab=history`). |

@@ -475,8 +475,8 @@ export function MachineListClient({
   const [healthStatusFilter, setHealthStatusFilter] = useState<string>("all");
 
   const isAdmin = userRole === "super_admin" || userRole === "admin";
-  const canEdit = isAdmin || userRole === "service_manager" || userRole === "rental_manager" || userRole === "supervisor";
-  const canCreateMachine = isAdmin || userRole === "service_manager";
+  const canEdit = isAdmin || userRole === "manager" || userRole === "service_manager" || userRole === "supervisor";
+  const canCreateMachine = isAdmin || userRole === "manager" || userRole === "service_manager";
 
   const activeFilterCount = useMemo(() => {
     let count = 0;

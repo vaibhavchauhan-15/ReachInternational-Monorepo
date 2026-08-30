@@ -39,6 +39,12 @@ const allRoleSelectOptions: SelectOption[] = [
     icon: <ShieldCheck className="h-4 w-4 text-amber-500" />,
   },
   {
+    value: "manager",
+    label: "Manager",
+    description: "Operations, fleet, client contracts & business management",
+    icon: <ShieldCheck className="h-4 w-4 text-violet-500" />,
+  },
+  {
     value: "service_manager",
     label: "Service Manager",
     description: "Service planning, engineer dispatch & FSR approval",
@@ -79,24 +85,6 @@ const allRoleSelectOptions: SelectOption[] = [
     label: "HR Manager",
     description: "Staff onboarding, leave & payroll",
     icon: <Users className="h-4 w-4 text-emerald-500" />,
-  },
-  {
-    value: "finance_manager",
-    label: "Accounts / Finance Manager",
-    description: "Billing & financial reports",
-    icon: <CreditCard className="h-4 w-4 text-cyan-500" />,
-  },
-  {
-    value: "sales_executive",
-    label: "Sales Executive",
-    description: "Machinery sales & client inquiries",
-    icon: <TrendingUp className="h-4 w-4 text-sky-500" />,
-  },
-  {
-    value: "rental_manager",
-    label: "Rental Manager",
-    description: "Rental fleet contracts & dispatches",
-    icon: <Truck className="h-4 w-4 text-violet-500" />,
   },
 ];
 

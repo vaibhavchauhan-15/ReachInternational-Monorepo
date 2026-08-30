@@ -1,6 +1,7 @@
 export type UserRole = 
   | "super_admin"
   | "admin"
+  | "manager"
   | "service_manager"
   | "engineer"
   | "service_engineer"
@@ -8,10 +9,7 @@ export type UserRole =
   | "store_manager"
   | "operator"
   | "mechanic"
-  | "hr_manager"
-  | "finance_manager"
-  | "sales_executive"
-  | "rental_manager";
+  | "hr_manager";
 
 export type PermissionScope = 
   | "ORGANIZATION"

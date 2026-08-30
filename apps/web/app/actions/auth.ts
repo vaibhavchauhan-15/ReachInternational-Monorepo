@@ -196,16 +196,14 @@ export async function signup(
   // Admin and super_admin roles must be explicitly assigned by existing admins post-approval.
   const allowedSignupRoles = [
     "service_engineer",
+    "manager",
+    "service_manager",
     "engineer",
     "supervisor",
     "store_manager",
     "operator",
     "mechanic",
     "hr_manager",
-    "finance_manager",
-    "sales_executive",
-    "rental_manager",
-    "client",
   ];
 
   const role = allowedSignupRoles.includes(requestedRole) ? requestedRole : "operator";

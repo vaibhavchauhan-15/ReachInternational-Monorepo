@@ -27,8 +27,8 @@ export const mobileNavItems: MobileNavItem[] = [
     label: 'Machines',
     icon: Wrench,
     roles: [
-      'super_admin', 'admin', 'service_manager', 'service_engineer', 'engineer',
-      'supervisor', 'mechanic', 'store_manager', 'sales_executive', 'rental_manager', 'finance_manager'
+      'super_admin', 'admin', 'manager', 'service_manager', 'service_engineer', 'engineer',
+      'supervisor', 'mechanic', 'store_manager'
     ],
     subItems: [
       { label: 'Directory', tab: 'inventory', icon: Wrench },
@@ -38,7 +38,7 @@ export const mobileNavItems: MobileNavItem[] = [
     href: '/(app)/operations',
     label: 'Operations',
     icon: Gauge,
-    roles: ['super_admin', 'admin', 'service_manager', 'supervisor', 'operator'],
+    roles: ['super_admin', 'admin', 'manager', 'service_manager', 'supervisor', 'operator'],
     subItems: [
       { label: 'Running Hours', tab: 'logs', icon: Gauge },
       { label: 'Assignments', tab: 'assignments', icon: Star },
@@ -48,7 +48,7 @@ export const mobileNavItems: MobileNavItem[] = [
     href: '/(app)/users',
     label: 'Employees & Users',
     icon: Users,
-    roles: ['super_admin', 'admin', 'service_manager', 'hr_manager'],
+    roles: ['super_admin', 'admin', 'manager', 'service_manager', 'hr_manager'],
     subItems: [
       { label: 'All Accounts', tab: 'all', icon: Users },
     ],

@@ -13,6 +13,11 @@ import {
   AnimatedX,
   AnimatedSlidersHorizontal,
   AnimatedFileText,
+  AnimatedBuilding2,
+  AnimatedWrench,
+  AnimatedActivity,
+  AnimatedPackage,
+  AnimatedShield,
 } from "@/components/ui/animated-icons";
 import { LayoutGrid, Table as TableIcon, Check, X, Plus, Copy } from "lucide-react";
 import {
@@ -46,6 +51,90 @@ import type { User, UserRole } from "@/lib/types/database";
 
 const UserCreateModal = dynamic(() => import("./UserCreateModal").then(mod => mod.UserCreateModal), { ssr: false });
 const UserEditModal = dynamic(() => import("./UserEditModal").then(mod => mod.UserEditModal), { ssr: false });
+
+function getPendingRoleBadge(role: string) {
+  switch (role) {
+    case "super_admin":
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/80 shadow-xs whitespace-nowrap">
+          <AnimatedShieldAlert size={12} className="text-rose-600 dark:text-rose-400 shrink-0" />
+          Super Admin
+        </span>
+      );
+    case "admin":
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 shadow-xs whitespace-nowrap">
+          <AnimatedShieldCheck size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
+          Admin
+        </span>
+      );
+    case "manager":
+    case "branch_manager":
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 shadow-xs whitespace-nowrap">
+          <AnimatedBuilding2 size={12} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
+          Manager
+        </span>
+      );
+    case "service_manager":
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/80 shadow-xs whitespace-nowrap">
+          <AnimatedShieldCheck size={12} className="text-sky-600 dark:text-sky-400 shrink-0" />
+          Service Manager
+        </span>
+      );
+    case "service_engineer":
+    case "engineer":
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/80 shadow-xs whitespace-nowrap">
+          <AnimatedWrench size={12} className="text-blue-600 dark:text-blue-400 shrink-0" />
+          Service Engineer
+        </span>
+      );
+    case "supervisor":
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/80 shadow-xs whitespace-nowrap">
+          <AnimatedShieldCheck size={12} className="text-teal-600 dark:text-teal-400 shrink-0" />
+          Supervisor
+        </span>
+      );
+    case "store_manager":
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/80 shadow-xs whitespace-nowrap">
+          <AnimatedPackage size={12} className="text-purple-600 dark:text-purple-400 shrink-0" />
+          Store Manager
+        </span>
+      );
+    case "operator":
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 shadow-xs whitespace-nowrap">
+          <AnimatedActivity size={12} className="text-amber-600 dark:text-amber-400 shrink-0" />
+          Operator
+        </span>
+      );
+    case "mechanic":
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-orange-50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800/80 shadow-xs whitespace-nowrap">
+          <AnimatedWrench size={12} className="text-orange-600 dark:text-orange-400 shrink-0" />
+          Mechanic
+        </span>
+      );
+    case "hr_manager":
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 shadow-xs whitespace-nowrap">
+          <AnimatedUsers size={12} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+          HR Manager
+        </span>
+      );
+    default:
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] shadow-xs whitespace-nowrap">
+          <AnimatedShield size={12} className="text-[var(--color-mute)] shrink-0" />
+          {role ? role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "User"}
+        </span>
+      );
+  }
+}
 
 interface UsersPageClientProps {
   users: User[];
@@ -428,7 +517,7 @@ export function UsersPageClient({
                   initial={{ opacity: 0, scale: 0.96 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
-                  className="flex items-center justify-between p-4 rounded-xl border border-[var(--color-hairline)] bg-gradient-to-b from-[var(--color-canvas-elevated)] via-[var(--color-canvas-elevated)] to-[var(--color-canvas)] shadow-xs hover:border-amber-500/40 hover:shadow-md transition-all relative overflow-hidden group border-l-4 border-l-amber-500 dark:border-l-amber-400"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-[var(--color-hairline)] bg-gradient-to-b from-[var(--color-canvas-elevated)] via-[var(--color-canvas-elevated)] to-[var(--color-canvas)] shadow-xs hover:border-amber-500/40 hover:shadow-md transition-all relative overflow-hidden group border-l-4 border-l-amber-500 dark:border-l-amber-400"
                 >
                   {/* Top Hairline Sheen Gradient on Hover */}
                   <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-amber-500/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
@@ -437,19 +526,29 @@ export function UsersPageClient({
                     <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] font-bold text-sm border border-[var(--color-hairline)] shadow-xs">
                       {pUser.full_name.charAt(0).toUpperCase()}
                     </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-bold text-[var(--color-ink)] truncate">
-                        {pUser.full_name}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-[var(--color-ink)] truncate" title={pUser.full_name}>
+                          {pUser.full_name}
+                        </span>
+                        {getPendingRoleBadge(pUser.role)}
                       </div>
-                      <div className="text-xs text-[var(--color-mute)] truncate">{pUser.email}</div>
+                      <div className="text-xs text-[var(--color-mute)] truncate mt-0.5" title={pUser.email}>
+                        {pUser.email}
+                      </div>
+                      {pUser.phone && (
+                        <div className="text-[11px] text-[var(--color-mute)] font-mono truncate">
+                          {pUser.phone}
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 flex-shrink-0 self-end sm:self-center">
                     <Button
                       variant="success-sm"
                       onClick={() => handleApprove(pUser.id)}
                       loading={loading?.type === "approve" && loading.id === pUser.id}
-                      className="shadow-xs font-semibold px-3 py-1.5 flex items-center gap-1 active:scale-95 transition-all"
+                      className="shadow-xs font-semibold px-3 py-1.5 flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
                     >
                       <Check className="h-3.5 w-3.5" />
                       Approve
@@ -458,7 +557,7 @@ export function UsersPageClient({
                       variant="danger-sm"
                       onClick={() => handleReject(pUser.id)}
                       loading={loading?.type === "reject" && loading.id === pUser.id}
-                      className="shadow-xs font-semibold px-3 py-1.5 flex items-center gap-1 active:scale-95 transition-all"
+                      className="shadow-xs font-semibold px-3 py-1.5 flex items-center gap-1 active:scale-95 transition-all cursor-pointer"
                     >
                       <X className="h-3.5 w-3.5" />
                       Reject
@@ -491,10 +590,12 @@ export function UsersPageClient({
               { id: "all", label: "All Roles", activeColor: "text-[var(--color-ink)]", dotColor: "" },
               { id: "service_engineer", label: "Engineers", activeColor: "text-blue-700 dark:text-blue-400 font-semibold", dotColor: "bg-blue-500" },
               { id: "service_manager", label: "Service Managers", activeColor: "text-sky-700 dark:text-sky-400 font-semibold", dotColor: "bg-sky-500" },
-              { id: "branch_manager", label: "Branch Managers", activeColor: "text-indigo-700 dark:text-indigo-400 font-semibold", dotColor: "bg-indigo-500" },
+              { id: "manager", label: "Managers", activeColor: "text-indigo-700 dark:text-indigo-400 font-semibold", dotColor: "bg-indigo-500" },
               { id: "supervisor", label: "Supervisors", activeColor: "text-teal-700 dark:text-teal-400 font-semibold", dotColor: "bg-teal-500" },
               { id: "operator", label: "Operators", activeColor: "text-amber-700 dark:text-amber-400 font-semibold", dotColor: "bg-amber-500" },
               { id: "mechanic", label: "Mechanics", activeColor: "text-orange-700 dark:text-orange-400 font-semibold", dotColor: "bg-orange-500" },
+              { id: "store_manager", label: "Store Managers", activeColor: "text-purple-700 dark:text-purple-400 font-semibold", dotColor: "bg-purple-500" },
+              { id: "hr_manager", label: "HR Managers", activeColor: "text-emerald-700 dark:text-emerald-400 font-semibold", dotColor: "bg-emerald-500" },
               { id: "admin", label: "Admins", activeColor: "text-amber-700 dark:text-amber-400 font-semibold", dotColor: "bg-amber-500" },
               { id: "super_admin", label: "Super Admins", activeColor: "text-red-700 dark:text-red-400 font-semibold", dotColor: "bg-red-500" },
             ].map((pill) => {

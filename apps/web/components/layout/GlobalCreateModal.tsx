@@ -37,7 +37,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     icon: AnimatedUsers,
     color: "text-blue-500 bg-blue-500/10 border-blue-500/20",
     href: "/crm?action=create_client",
-    roles: ["super_admin", "admin", "sales_executive"],
+    roles: ["super_admin", "admin", "manager"],
   },
   {
     id: "machine",
@@ -46,7 +46,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     icon: AnimatedWrench,
     color: "text-sky-500 bg-sky-500/10 border-sky-500/20",
     href: "/machines?action=create",
-    roles: ["super_admin", "admin", "rental_manager"],
+    roles: ["super_admin", "admin", "manager"],
   },
   {
     id: "complaint",
@@ -55,7 +55,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     icon: AnimatedAlertTriangle,
     color: "text-red-500 bg-red-500/10 border-red-500/20",
     href: "/service?tab=complaints&action=create_complaint",
-    roles: ["super_admin", "admin", "service_engineer", "supervisor", "mechanic"],
+    roles: ["super_admin", "admin", "manager", "service_engineer", "supervisor", "mechanic"],
   },
   {
     id: "service",
@@ -64,7 +64,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     icon: AnimatedClipboardList,
     color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20",
     href: "/service?action=create_service",
-    roles: ["super_admin", "admin", "service_engineer"],
+    roles: ["super_admin", "admin", "manager", "service_engineer"],
   },
   {
     id: "po",
@@ -73,7 +73,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     icon: AnimatedFileText,
     color: "text-amber-500 bg-amber-500/10 border-amber-500/20",
     href: "/purchase-orders?action=create_po",
-    roles: ["super_admin", "admin", "store_manager", "finance_manager"],
+    roles: ["super_admin", "admin", "manager", "store_manager"],
   },
   {
     id: "challan",
@@ -82,7 +82,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     icon: AnimatedPackage,
     color: "text-purple-500 bg-purple-500/10 border-purple-500/20",
     href: "/challans?action=create_challan",
-    roles: ["super_admin", "admin", "store_manager"],
+    roles: ["super_admin", "admin", "manager", "store_manager"],
   },
   {
     id: "inventory",

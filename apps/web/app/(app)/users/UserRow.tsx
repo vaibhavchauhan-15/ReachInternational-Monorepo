@@ -29,6 +29,7 @@ import type { User, UserRole } from "@/lib/types/database";
 const allRoleOptions = [
   { value: "super_admin", label: "Super Admin" },
   { value: "admin", label: "Admin" },
+  { value: "manager", label: "Manager" },
   { value: "service_manager", label: "Service Manager" },
   { value: "service_engineer", label: "Service Engineer" },
   { value: "supervisor", label: "Supervisor" },
@@ -36,9 +37,6 @@ const allRoleOptions = [
   { value: "operator", label: "Operator" },
   { value: "mechanic", label: "Mechanic / Tech" },
   { value: "hr_manager", label: "HR Manager" },
-  { value: "finance_manager", label: "Finance Manager" },
-  { value: "sales_executive", label: "Sales Executive" },
-  { value: "rental_manager", label: "Rental Manager" },
 ];
 
 interface UserRowProps {
@@ -87,8 +85,10 @@ function getRoleBadge(role: string) {
       return <Badge variant="error">Super Admin</Badge>;
     case "admin":
       return <Badge variant="warning">Admin</Badge>;
+    case "manager":
+      return <Badge variant="default">Manager</Badge>;
     case "branch_manager":
-      return <Badge variant="default">Branch Manager</Badge>;
+      return <Badge variant="default">Manager</Badge>;
     case "service_manager":
       return <Badge variant="default">Service Manager</Badge>;
     case "service_engineer":
@@ -104,12 +104,6 @@ function getRoleBadge(role: string) {
       return <Badge variant="error">Mechanic</Badge>;
     case "hr_manager":
       return <Badge variant="success">HR Manager</Badge>;
-    case "finance_manager":
-      return <Badge variant="default">Finance Manager</Badge>;
-    case "sales_executive":
-      return <Badge variant="default">Sales Executive</Badge>;
-    case "rental_manager":
-      return <Badge variant="warning">Rental Manager</Badge>;
     default:
       return <Badge>{role}</Badge>;
   }
@@ -121,6 +115,7 @@ function getRoleIcon(role: string) {
       return <AnimatedShieldAlert size={16} className="text-rose-600 dark:text-rose-400" />;
     case "admin":
       return <AnimatedShieldCheck size={16} className="text-amber-600 dark:text-amber-400" />;
+    case "manager":
     case "branch_manager":
       return <AnimatedBuilding2 size={16} className="text-indigo-600 dark:text-indigo-400" />;
     case "service_manager":
@@ -138,12 +133,6 @@ function getRoleIcon(role: string) {
       return <AnimatedWrench size={16} className="text-orange-600 dark:text-orange-400" />;
     case "hr_manager":
       return <AnimatedUsers size={16} className="text-emerald-600 dark:text-emerald-400" />;
-    case "finance_manager":
-      return <AnimatedCreditCard size={16} className="text-cyan-600 dark:text-cyan-400" />;
-    case "sales_executive":
-      return <AnimatedTrendingUp size={16} className="text-sky-600 dark:text-sky-400" />;
-    case "rental_manager":
-      return <AnimatedTruck size={16} className="text-violet-600 dark:text-violet-400" />;
     default:
       return <AnimatedShield size={16} className="text-muted-foreground" />;
   }

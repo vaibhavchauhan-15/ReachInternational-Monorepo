@@ -71,9 +71,8 @@ export function TaskDetailDrawer({
 
   const badgeConfig = getStatusBadgeConfig(task.status);
   const isManager = [
-    "super_admin", "admin", "service_manager", "branch_manager",
-    "supervisor", "hr_manager", "rental_manager", "sales_manager",
-    "finance_manager", "store_manager"
+    "super_admin", "admin", "manager", "service_manager",
+    "supervisor", "hr_manager", "store_manager"
   ].includes(currentUser.role);
 
   const isAssignee = (task.assignees || []).some((a) => a.user_id === currentUser.id);

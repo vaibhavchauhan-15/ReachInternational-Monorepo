@@ -239,7 +239,7 @@ export const getManagersList = cache(async (): Promise<Pick<User, "id" | "full_n
   const { data, error } = await supabase
     .from("users")
     .select("id, full_name, email, role")
-    .in("role", ["super_admin", "admin", "branch_manager", "service_manager", "store_manager", "hr_manager", "finance_manager"])
+    .in("role", ["super_admin", "admin", "manager", "service_manager", "store_manager", "hr_manager"])
     .order("full_name", { ascending: true });
 
   if (error) {

@@ -6,15 +6,13 @@ import type { UserRole, PermissionScope } from "@reachinternational/types";
 export const ROLE_DEFAULT_SCOPES: Record<UserRole, PermissionScope> = {
   super_admin: "ORGANIZATION",
   admin: "ORGANIZATION",
+  manager: "ORGANIZATION",
   hr_manager: "ORGANIZATION",
-  finance_manager: "ORGANIZATION",
   service_manager: "ORGANIZATION",
   store_manager: "ORGANIZATION",
   service_engineer: "ASSIGNED",
   engineer: "ASSIGNED",
   supervisor: "ORGANIZATION",
-  sales_executive: "ORGANIZATION",
-  rental_manager: "ORGANIZATION",
   mechanic: "ASSIGNED",
   operator: "ASSIGNED",
 };

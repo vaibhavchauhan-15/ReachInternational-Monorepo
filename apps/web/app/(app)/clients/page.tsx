@@ -10,7 +10,7 @@ export default async function ClientsPage() {
     redirect("/login");
   }
 
-  await requireRole("super_admin", "admin", "service_manager", "rental_manager", "sales_executive");
+  await requireRole("super_admin", "admin", "manager", "service_manager");
 
   const clients = await getClients(undefined, true);
 

@@ -23,7 +23,7 @@ function isValidUuid(id?: string | null): boolean {
 
 export async function createMachine(state: MachineFormState, formData: FormData): Promise<MachineFormState> {
   try {
-    await requireRole("admin", "super_admin", "service_manager", "rental_manager", "store_manager");
+    await requireRole("admin", "super_admin", "manager", "service_manager", "store_manager");
 
     const supabase = await createSupabaseServerClient();
     const {
@@ -148,7 +148,7 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
     return { error: "Invalid machine ID format." };
   }
   try {
-    await requireRole("admin", "super_admin", "service_manager", "rental_manager", "store_manager", "supervisor");
+    await requireRole("admin", "super_admin", "manager", "service_manager", "store_manager", "supervisor");
     const supabase = await createSupabaseServerClient();
     const {
       data: { user },

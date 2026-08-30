@@ -26,9 +26,8 @@ export const getTasks = cache(async (
 
   // Role scoping: Employees only see tasks created by them or assigned to them
   const isManager = [
-    "super_admin", "admin", "service_manager",
-    "supervisor", "hr_manager", "rental_manager", "sales_manager",
-    "finance_manager", "store_manager"
+    "super_admin", "admin", "manager", "service_manager",
+    "supervisor", "hr_manager", "store_manager"
   ].includes(userRole);
 
   if (!isManager) {

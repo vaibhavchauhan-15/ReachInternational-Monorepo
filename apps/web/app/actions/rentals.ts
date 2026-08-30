@@ -16,7 +16,7 @@ export interface RentalActionResult {
 // 1. CUSTOMER MANAGEMENT
 // ----------------------------------------------------
 export async function createRentalCustomerAction(formData: FormData): Promise<RentalActionResult> {
-  const user = await requireRole("rental_manager", "admin", "super_admin");
+  const user = await requireRole("manager", "admin", "super_admin");
   const supabase = await createSupabaseServerClient();
 
   const company_name = (formData.get("company_name") as string)?.trim();
@@ -69,7 +69,7 @@ export async function createRentalCustomerAction(formData: FormData): Promise<Re
 }
 
 export async function updateRentalCustomerAction(id: string, formData: FormData): Promise<RentalActionResult> {
-  const user = await requireRole("rental_manager", "admin", "super_admin");
+  const user = await requireRole("manager", "admin", "super_admin");
   const supabase = await createSupabaseServerClient();
 
   const company_name = (formData.get("company_name") as string)?.trim();
@@ -108,7 +108,7 @@ export async function updateRentalCustomerAction(id: string, formData: FormData)
 }
 
 export async function deactivateRentalCustomerAction(id: string): Promise<RentalActionResult> {
-  const user = await requireRole("rental_manager", "admin", "super_admin");
+  const user = await requireRole("manager", "admin", "super_admin");
   const supabase = await createSupabaseServerClient();
 
   // Check if historical rentals exist
@@ -150,7 +150,7 @@ export async function deactivateRentalCustomerAction(id: string): Promise<Rental
 // 2. RENTAL REQUESTS
 // ----------------------------------------------------
 export async function createRentalRequestAction(formData: FormData): Promise<RentalActionResult> {
-  const user = await requireRole("rental_manager", "sales_executive", "admin", "super_admin");
+  const user = await requireRole("manager", "admin", "super_admin");
   const supabase = await createSupabaseServerClient();
 
   const customer_id = (formData.get("customer_id") as string) || null;
@@ -212,7 +212,7 @@ export async function createRentalRequestAction(formData: FormData): Promise<Ren
 }
 
 export async function approveRentalRequestAction(requestId: string): Promise<RentalActionResult> {
-  const user = await requireRole("rental_manager", "admin", "super_admin");
+  const user = await requireRole("manager", "admin", "super_admin");
   const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase
@@ -232,7 +232,7 @@ export async function approveRentalRequestAction(requestId: string): Promise<Ren
 }
 
 export async function rejectRentalRequestAction(requestId: string, reason: string): Promise<RentalActionResult> {
-  const user = await requireRole("rental_manager", "admin", "super_admin");
+  const user = await requireRole("manager", "admin", "super_admin");
   const supabase = await createSupabaseServerClient();
 
   const { error } = await supabase
@@ -256,7 +256,7 @@ export async function rejectRentalRequestAction(requestId: string, reason: strin
 // 3. RENTAL AGREEMENTS / CONTRACTS & PRICING
 // ----------------------------------------------------
 export async function createRentalAgreementAction(formData: FormData): Promise<RentalActionResult> {
-  const user = await requireRole("rental_manager", "admin", "super_admin");
+  const user = await requireRole("manager", "admin", "super_admin");
   const supabase = await createSupabaseServerClient();
 
   const customer_id = formData.get("customer_id") as string;
@@ -360,7 +360,7 @@ export async function createRentalAgreementAction(formData: FormData): Promise<R
 }
 
 export async function approveRentalAgreementAction(agreementId: string): Promise<RentalActionResult> {
-  const user = await requireRole("admin", "super_admin", "sales_executive");
+  const user = await requireRole("admin", "super_admin", "manager");
   const supabase = await createSupabaseServerClient();
 
   const { data: agreement } = await supabase
@@ -400,7 +400,7 @@ export async function approveRentalAgreementAction(agreementId: string): Promise
 // 4. DISPATCH & DELIVERY CHALLANS
 // ----------------------------------------------------
 export async function dispatchRentalMachineAction(formData: FormData): Promise<RentalActionResult> {
-  const user = await requireRole("rental_manager", "admin", "super_admin");
+  const user = await requireRole("manager", "admin", "super_admin");
   const supabase = await createSupabaseServerClient();
 
   const rental_agreement_id = formData.get("rental_agreement_id") as string;
@@ -490,7 +490,7 @@ export async function dispatchRentalMachineAction(formData: FormData): Promise<R
 // 5. RETURNS & INSPECTIONS & DAMAGE REPORTS
 // ----------------------------------------------------
 export async function recordMachineReturnAction(formData: FormData): Promise<RentalActionResult> {
-  const user = await requireRole("rental_manager", "admin", "super_admin");
+  const user = await requireRole("manager", "admin", "super_admin");
   const supabase = await createSupabaseServerClient();
 
   const rental_agreement_id = formData.get("rental_agreement_id") as string;
@@ -610,7 +610,7 @@ export async function recordMachineReturnAction(formData: FormData): Promise<Ren
 // 6. RENTAL EXTENSIONS
 // ----------------------------------------------------
 export async function extendRentalContractAction(formData: FormData): Promise<RentalActionResult> {
-  const user = await requireRole("rental_manager", "admin", "super_admin");
+  const user = await requireRole("manager", "admin", "super_admin");
   const supabase = await createSupabaseServerClient();
 
   const rental_agreement_id = formData.get("rental_agreement_id") as string;
@@ -703,7 +703,7 @@ export async function extendRentalContractAction(formData: FormData): Promise<Re
 // 7. OPERATIONAL BILLING REQUEST TO FINANCE
 // ----------------------------------------------------
 export async function createRentalBillingRequestAction(formData: FormData): Promise<RentalActionResult> {
-  const user = await requireRole("rental_manager", "admin", "super_admin");
+  const user = await requireRole("manager", "admin", "super_admin");
   const supabase = await createSupabaseServerClient();
 
   const rental_agreement_id = formData.get("rental_agreement_id") as string;
@@ -768,7 +768,7 @@ export async function createRentalBillingRequestAction(formData: FormData): Prom
 // 8. SERVICE BREAKDOWN COORDINATION
 // ----------------------------------------------------
 export async function requestRentalServiceAction(formData: FormData): Promise<RentalActionResult> {
-  const user = await requireRole("rental_manager", "admin", "super_admin");
+  const user = await requireRole("manager", "admin", "super_admin");
   const supabase = await createSupabaseServerClient();
 
   const machine_id = formData.get("machine_id") as string;

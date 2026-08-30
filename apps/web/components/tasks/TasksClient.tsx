@@ -76,9 +76,8 @@ export function TasksClient({ user, initialTasks, stats, users }: TasksClientPro
   const [isVerifyOpen, setIsVerifyOpen] = useState(false);
 
   const isManager = [
-    "super_admin", "admin", "service_manager", "branch_manager",
-    "supervisor", "hr_manager", "rental_manager", "sales_manager",
-    "finance_manager", "store_manager"
+    "super_admin", "admin", "manager", "service_manager",
+    "supervisor", "hr_manager", "store_manager"
   ].includes(user.role);
 
   // Filter Tasks
