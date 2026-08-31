@@ -7,6 +7,7 @@ import {
   AnimatedTrash2,
   AnimatedMoreVertical,
   AnimatedPower,
+  AnimatedEye,
 } from "@/components/ui/animated-icons";
 import { Button, Select, TooltipWrapper } from "@/components/ui";
 import { formatDate } from "@reachinternational/utils";
@@ -33,6 +34,7 @@ interface UserRowProps {
   selectable?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (userId: string) => void;
+  onViewDetails?: (user: User) => void;
   onResetPassword: (userId: string) => void;
   onToggleStatus: (userId: string) => void;
   onEdit: (user: User) => void;
@@ -150,6 +152,7 @@ export const UserRow = memo(function UserRow({
   selectable = false,
   isSelected = false,
   onToggleSelect,
+  onViewDetails,
   onResetPassword,
   onToggleStatus,
   onEdit,
@@ -213,9 +216,20 @@ export const UserRow = memo(function UserRow({
 
       {/* 1. User Name */}
       <td className="py-3 px-4">
-        <div className="text-sm font-semibold text-[var(--color-ink)] truncate" title={user.full_name}>
-          {user.full_name}
-        </div>
+        {onViewDetails ? (
+          <button
+            type="button"
+            onClick={() => onViewDetails(user)}
+            className="text-sm font-semibold text-[var(--color-ink)] hover:text-[var(--color-link)] hover:underline truncate text-left cursor-pointer transition-colors block max-w-full"
+            title={`View details for ${user.full_name}`}
+          >
+            {user.full_name}
+          </button>
+        ) : (
+          <div className="text-sm font-semibold text-[var(--color-ink)] truncate" title={user.full_name}>
+            {user.full_name}
+          </div>
+        )}
       </td>
 
       {/* 2. Contact Phone & Email */}
@@ -266,7 +280,20 @@ export const UserRow = memo(function UserRow({
 
       {/* 7. Actions Menu */}
       <td className="py-3 px-4 text-right">
-        <div className="flex items-center justify-end relative">
+        <div className="flex items-center justify-end gap-1 relative">
+          {onViewDetails && (
+            <TooltipWrapper content="View user details" side="top">
+              <Button
+                variant="ghost-sm"
+                onClick={() => onViewDetails(user)}
+                aria-label="View user details"
+                className="h-8 w-8 p-0 flex items-center justify-center rounded-sm hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] hover:text-[var(--color-ink)] cursor-pointer active:scale-[0.98] transition-all"
+              >
+                <AnimatedEye size={16} />
+              </Button>
+            </TooltipWrapper>
+          )}
+
           <TooltipWrapper content="More actions" side="left">
             <Button
               variant="ghost-sm"
@@ -282,8 +309,22 @@ export const UserRow = memo(function UserRow({
             <>
               <div className="fixed inset-0 z-10" onClick={closeDropdown} />
               <div className={`absolute right-0 ${openUpwards ? "bottom-full mb-1" : "top-full mt-1"} z-20 bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] rounded-md shadow-lg p-1 min-w-[200px] text-left text-[var(--color-ink)]`}>
+                {onViewDetails && (
+                  <button
+                    onClick={() => {
+                      onViewDetails(user);
+                      closeDropdown();
+                    }}
+                    className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium rounded-[calc(var(--radius-sm)-2px)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] transition-colors cursor-pointer text-left"
+                  >
+                    <AnimatedEye size={14} className="text-[var(--color-link)] shrink-0" />
+                    <span>View User Details</span>
+                  </button>
+                )}
+
                 {canManageUser(user) ? (
                   <>
+                    {onViewDetails && <div className="border-t border-[var(--color-hairline)] my-1" />}
                     <button
                       onClick={() => {
                         onResetPassword(user.id);
@@ -353,9 +394,11 @@ export const UserRow = memo(function UserRow({
                     </button>
                   </>
                 ) : (
-                  <div className="px-3 py-2 text-xs text-[var(--color-mute)] text-center">
-                    No actions available
-                  </div>
+                  !onViewDetails && (
+                    <div className="px-3 py-2 text-xs text-[var(--color-mute)] text-center">
+                      No actions available
+                    </div>
+                  )
                 )}
               </div>
             </>

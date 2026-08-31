@@ -90,7 +90,18 @@ export function CommandPalette({
         icon: AnimatedClipboardList,
         href: "/operations?tab=logs",
         keywords: ["running hours", "meter log", "log history", "operations", "assignments"],
-        roles: ["super_admin", "admin", "supervisor", "service_manager"],
+        roles: ["super_admin", "admin", "manager", "supervisor", "service_manager"],
+      },
+      {
+        id: "nav-clients",
+        title: "Go to Client Directory",
+        subtitle: "Browse and manage registered client and customer accounts",
+        category: "Navigation",
+        icon: AnimatedBuilding2,
+        href: "/clients",
+        shortcut: "⌘C",
+        keywords: ["clients", "customers", "accounts", "directory", "companies"],
+        roles: ["super_admin", "admin", "manager", "service_manager"],
       },
       {
         id: "nav-users",
@@ -101,7 +112,7 @@ export function CommandPalette({
         href: "/users",
         shortcut: "⌘U",
         keywords: ["employees", "staff", "team", "admins", "operators", "supervisors", "accounts", "roles", "users"],
-        roles: ["super_admin", "admin", "service_manager"],
+        roles: ["super_admin", "admin", "manager", "service_manager"],
       },
       {
         id: "action-add-machine",
@@ -111,7 +122,17 @@ export function CommandPalette({
         icon: AnimatedPlus,
         href: "/machines?action=create",
         keywords: ["add equipment", "new device", "register", "add asset"],
-        roles: ["super_admin", "admin"],
+        roles: ["super_admin", "admin", "manager"],
+      },
+      {
+        id: "action-add-client",
+        title: "Add New Client",
+        subtitle: "Register a new client account into directory",
+        category: "Quick Actions",
+        icon: AnimatedPlus,
+        href: "/clients",
+        keywords: ["add client", "new customer", "register client", "add account"],
+        roles: ["super_admin", "admin", "manager", "service_manager"],
       },
       {
         id: "action-add-user",
@@ -121,7 +142,7 @@ export function CommandPalette({
         icon: AnimatedPlus,
         href: "/users?action=create",
         keywords: ["add user", "invite", "create account", "new staff"],
-        roles: ["super_admin", "admin"],
+        roles: ["super_admin", "admin", "manager"],
       },
     ];
 

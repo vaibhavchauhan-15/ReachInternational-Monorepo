@@ -27,6 +27,7 @@ export function ClientDetailClient({ user, clientId }: ClientDetailClientProps) 
   // Mock client data
   const client: CRMClient = {
     id: clientId,
+    company_name: "ABC Infrastructure Pvt Ltd",
     client_name: "ABC Infrastructure Pvt Ltd",
     code: "CLI-ABC-01",
     contact_person: "Rajesh Sharma (Procurement Head)",

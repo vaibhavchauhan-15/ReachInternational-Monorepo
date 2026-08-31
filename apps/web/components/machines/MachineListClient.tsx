@@ -12,19 +12,23 @@ import {
   AnimatedClipboardList,
   AnimatedWrench,
   AnimatedAlertTriangle,
+  AnimatedSlidersHorizontal,
+  AnimatedFileText,
 } from "@/components/ui/animated-icons";
-import { MoreVertical, Download } from "lucide-react";
+import { MoreVertical, Download, FileSpreadsheet, Check, X, ChevronDown } from "lucide-react";
 import {
   Button,
   Pagination,
   useToast,
-  SearchableSelect,
   EnterpriseTable,
   ConfirmationDialog,
   Badge,
   FilterToolbar,
   TooltipWrapper,
+  PageHeader,
+  ExportButton,
 } from "@/components/ui";
+import { AnimatedCounter } from "@/components/ui/Motion";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { deleteMachine } from "@/app/actions/machines";
@@ -74,6 +78,137 @@ interface MachineListClientProps {
   currentEngineerId?: string;
   currentBucket?: string;
   initialTab?: string;
+}
+
+// Reusable responsive filter selector dropdown with mobile edge clamping
+function CustomFilterSelector({
+  label,
+  value,
+  onChange,
+  options,
+  ariaLabel,
+  align = "left",
+  className = "",
+}: {
+  label: string;
+  value: string;
+  onChange: (val: string) => void;
+  options: { id: string; label: string; activeColor?: string; dotColor?: string }[];
+  ariaLabel?: string;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const selectedOption = options.find((opt) => opt.id === value) || options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener("touchstart", handleOutsideClick);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("touchstart", handleOutsideClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div
+      ref={containerRef}
+      className={`relative w-full ${open ? "z-40" : "z-10"} ${className}`}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+        aria-label={ariaLabel || label}
+        className="w-full h-9 sm:h-9 px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-xs text-[var(--color-ink)] flex items-center justify-between gap-2 transition-all cursor-pointer select-none active:scale-[0.98] shadow-2xs"
+      >
+        <div className="flex items-center gap-2 truncate min-w-0">
+          <span className="text-[var(--color-mute)] font-medium shrink-0">{label}:</span>
+          {selectedOption?.dotColor && (
+            <span className={`h-2 w-2 rounded-full shrink-0 ${selectedOption.dotColor}`} />
+          )}
+          <span
+            className={`truncate font-semibold ${
+              selectedOption?.id !== "all"
+                ? selectedOption?.activeColor || "text-[var(--color-ink)]"
+                : "text-[var(--color-ink)]"
+            }`}
+          >
+            {selectedOption?.label}
+          </span>
+        </div>
+        <ChevronDown
+          className={`h-3.5 w-3.5 text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
+            open ? "rotate-180 text-[var(--color-ink)]" : ""
+          }`}
+        />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: 4, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 2, scale: 0.98 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+            role="listbox"
+            aria-label={ariaLabel}
+            className={`absolute top-full mt-1.5 z-50 min-w-full max-h-60 overflow-y-auto rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1 shadow-xl pointer-events-auto ${
+              align === "right"
+                ? "right-0 left-auto sm:left-0 sm:right-auto sm:min-w-[200px]"
+                : "left-0 right-auto sm:left-0 sm:min-w-[220px]"
+            }`}
+          >
+            {options.map((opt) => {
+              const isSelected = opt.id === value;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => {
+                    onChange(opt.id);
+                    setOpen(false);
+                  }}
+                  className={`w-full min-h-[36px] flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-left transition-all cursor-pointer active:scale-[0.98] ${
+                    isSelected
+                      ? "bg-[var(--color-ink)] text-[var(--color-canvas)] font-semibold shadow-xs"
+                      : "text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:bg-[var(--color-hairline-soft-surface)]"
+                  }`}
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    {opt.dotColor && (
+                      <span
+                        className={`h-2 w-2 rounded-full shrink-0 ${
+                          isSelected ? "bg-white" : opt.dotColor
+                        }`}
+                      />
+                    )}
+                    <span className="truncate">{opt.label}</span>
+                  </div>
+                  {isSelected && <Check className="h-3.5 w-3.5 shrink-0" />}
+                </button>
+              );
+            })}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 // Contextual Row Actions Menu (⋮)
@@ -220,7 +355,7 @@ function RowActionsMenu({
                       setOpen(false);
                       onEdit(machine);
                     }}
-                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
                   >
                     <AnimatedEdit size={14} className="text-amber-500" />
                     <span>Edit Machine</span>
@@ -233,7 +368,7 @@ function RowActionsMenu({
                     setOpen(false);
                     onNavigate("services");
                   }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
                 >
                   <AnimatedClipboardList size={14} className="text-emerald-500" />
                   <span>Update Service</span>
@@ -248,7 +383,7 @@ function RowActionsMenu({
                         setOpen(false);
                         onDelete(machine);
                       }}
-                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
                     >
                       <AnimatedTrash size={14} className="text-rose-500" />
                       <span>Delete Machine</span>
@@ -370,10 +505,11 @@ function HeaderMoreMenu({
         type="button"
         onClick={toggleOpen}
         aria-expanded={open}
-        className="flex items-center gap-1 px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs font-semibold text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors shadow-2xs cursor-pointer"
+        className="h-9 w-9 sm:w-auto p-0 sm:px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs font-semibold text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-all shadow-xs flex items-center justify-center gap-1 cursor-pointer active:scale-95 shrink-0"
         title="More options"
       >
-        <span>⋮ More</span>
+        <span className="font-bold text-sm leading-none">⋮</span>
+        <span className="hidden sm:inline">More</span>
       </button>
 
       {mounted &&
@@ -402,7 +538,7 @@ function HeaderMoreMenu({
                       setOpen(false);
                       onOpenImport();
                     }}
-                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
+                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
                   >
                     <AnimatedClipboardList size={16} className="text-sky-500" />
                     <span>Bulk Excel Import</span>
@@ -415,7 +551,7 @@ function HeaderMoreMenu({
                     setOpen(false);
                     onExportCSV();
                   }}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
+                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
                 >
                   <Download size={16} className="text-emerald-500" />
                   <span>Export CSV</span>
@@ -427,7 +563,7 @@ function HeaderMoreMenu({
                     setOpen(false);
                     onRefresh();
                   }}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
+                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
                 >
                   <AnimatedRefresh size={16} className="text-amber-500" />
                   <span>Refresh Data</span>
@@ -440,6 +576,29 @@ function HeaderMoreMenu({
     </div>
   );
 }
+
+const RENTAL_STATUS_OPTIONS = [
+  { id: "all", label: "All Rental Status", activeColor: "text-[var(--color-ink)]", dotColor: "" },
+  { id: "available", label: "Available", activeColor: "text-emerald-700 dark:text-emerald-400 font-semibold", dotColor: "bg-emerald-500" },
+  { id: "rented", label: "Rented", activeColor: "text-sky-700 dark:text-sky-400 font-semibold", dotColor: "bg-sky-500" },
+];
+
+const HEALTH_STATUS_OPTIONS = [
+  { id: "all", label: "All Health Status", activeColor: "text-[var(--color-ink)]", dotColor: "" },
+  { id: "active", label: "Active", activeColor: "text-emerald-700 dark:text-emerald-400 font-semibold", dotColor: "bg-emerald-500" },
+  { id: "under_maintenance", label: "Under Maintenance", activeColor: "text-amber-700 dark:text-amber-400 font-semibold", dotColor: "bg-amber-500" },
+  { id: "breakdown", label: "Breakdown", activeColor: "text-rose-700 dark:text-rose-400 font-semibold", dotColor: "bg-rose-500" },
+];
+
+const SORT_OPTIONS = [
+  { id: "machine_id_asc", label: "Machine ID (A → Z)" },
+  { id: "machine_id_desc", label: "Machine ID (Z → A)" },
+  { id: "model_asc", label: "Model (A → Z)" },
+  { id: "newest_yum", label: "Newest Mfg Year" },
+  { id: "oldest_yum", label: "Oldest Mfg Year" },
+  { id: "highest_hmr", label: "Highest HMR" },
+  { id: "lowest_hmr", label: "Lowest HMR" },
+];
 
 export function MachineListClient({
   machines,
@@ -470,21 +629,42 @@ export function MachineListClient({
   const [editingMachine, setEditingMachine] = useState<Machine | null>(null);
   const [deletingMachine, setDeletingMachine] = useState<Machine | null>(null);
   const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
-  const [viewMode, setViewMode] = useState<"cards" | "table">("table");
+  const [viewMode, setViewMode] = useState<"auto" | "cards" | "table">("auto");
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [healthStatusFilter, setHealthStatusFilter] = useState<string>("all");
+  const [supervisorFilter, setSupervisorFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("machine_id_asc");
 
   const isAdmin = userRole === "super_admin" || userRole === "admin";
   const canEdit = isAdmin || userRole === "manager" || userRole === "service_manager" || userRole === "supervisor";
   const canCreateMachine = isAdmin || userRole === "manager" || userRole === "service_manager";
 
+  const supervisorOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    supervisors.forEach((s) => {
+      if (s.id && s.full_name) map.set(s.id, s.full_name);
+    });
+    machines.forEach((m) => {
+      if (m.current_supervisor?.full_name && m.current_supervisor_id) {
+        map.set(m.current_supervisor_id, m.current_supervisor.full_name);
+      }
+    });
+    const list = Array.from(map.entries()).map(([id, name]) => ({
+      id,
+      label: name,
+    }));
+    return [{ id: "all", label: "All Supervisors" }, ...list];
+  }, [supervisors, machines]);
+
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (currentStatus !== "all") count++;
     if (healthStatusFilter !== "all") count++;
+    if (supervisorFilter !== "all") count++;
     if (search.trim() !== "") count++;
+    if (sortBy !== "machine_id_asc") count++;
     return count;
-  }, [currentStatus, healthStatusFilter, search]);
+  }, [currentStatus, healthStatusFilter, supervisorFilter, search, sortBy]);
 
   const updateFilters = useCallback(
     (updates: Record<string, string | number | undefined>) => {
@@ -511,6 +691,8 @@ export function MachineListClient({
   const handleResetAllFilters = () => {
     setSearch("");
     setHealthStatusFilter("all");
+    setSupervisorFilter("all");
+    setSortBy("machine_id_asc");
     startTransition(() => {
       router.push(pathname);
     });
@@ -547,7 +729,7 @@ export function MachineListClient({
         "Year of Mfg (YUM)",
         "Manufacturer",
         "Hour Meter Reading (HMR)",
-        "Service Count",
+        "Assigned Client",
         "Current Supervisor",
         "Current Operator",
         "Health Status",
@@ -557,6 +739,7 @@ export function MachineListClient({
       const rows = targetMachines.map((m) => {
         const supervisorName = m.current_supervisor?.full_name || "Unassigned";
         const operatorName = m.current_operator?.full_name || "Unassigned";
+        const clientName = m.customer_name || "Unassigned";
         return [
           `"${(m.machine_id || "").replace(/"/g, '""')}"`,
           `"${(m.model || "").replace(/"/g, '""')}"`,
@@ -564,7 +747,7 @@ export function MachineListClient({
           `"${(m.year_of_mfg || "").replace(/"/g, '""')}"`,
           `"${(m.manufacturer || "").replace(/"/g, '""')}"`,
           `"${m.hour_meter || 0}"`,
-          `"${m.service_count || 0}"`,
+          `"${clientName.replace(/"/g, '""')}"`,
           `"${supervisorName.replace(/"/g, '""')}"`,
           `"${operatorName.replace(/"/g, '""')}"`,
           `"${(m.health_status || "").replace(/"/g, '""')}"`,
@@ -593,8 +776,9 @@ export function MachineListClient({
     let maintenanceCount = 0;
 
     machines.forEach((m) => {
-      if (m.status === "available") availableCount++;
       if (m.status === "rented") rentedCount++;
+      else availableCount++;
+
       if (m.health_status === "breakdown") breakdownCount++;
       if (m.health_status === "under_maintenance") maintenanceCount++;
     });
@@ -602,24 +786,54 @@ export function MachineListClient({
     return { availableCount, rentedCount, breakdownCount, maintenanceCount };
   }, [machines]);
 
-  const statusOptions = useMemo(
-    () => [
-      { value: "all", label: "All Rental Status" },
-      { value: "available", label: "Available" },
-      { value: "rented", label: "Rented" },
-    ],
-    []
-  );
+  // Client-side instant filter and sort pipeline
+  const filteredAndSortedMachines = useMemo(() => {
+    let list = [...machines];
+    const q = deferredSearch.toLowerCase().trim();
+    if (q) {
+      list = list.filter((m) => {
+        return (
+          m.machine_id?.toLowerCase().includes(q) ||
+          m.model?.toLowerCase().includes(q) ||
+          m.serial_number?.toLowerCase().includes(q) ||
+          m.manufacturer?.toLowerCase().includes(q) ||
+          m.year_of_mfg?.toLowerCase().includes(q) ||
+          m.current_supervisor?.full_name?.toLowerCase().includes(q) ||
+          m.current_operator?.full_name?.toLowerCase().includes(q)
+        );
+      });
+    }
 
-  const healthStatusOptions = useMemo(
-    () => [
-      { value: "all", label: "All Health Status" },
-      { value: "active", label: "Active" },
-      { value: "under_maintenance", label: "Under Maintenance" },
-      { value: "breakdown", label: "Breakdown" },
-    ],
-    []
-  );
+    if (currentStatus !== "all") {
+      list = list.filter((m) => m.status === currentStatus);
+    }
+
+    if (healthStatusFilter !== "all") {
+      list = list.filter((m) => m.health_status === healthStatusFilter);
+    }
+
+    if (supervisorFilter !== "all") {
+      list = list.filter(
+        (m) =>
+          m.current_supervisor_id === supervisorFilter ||
+          m.current_supervisor?.full_name === supervisorFilter
+      );
+    }
+
+    // Sort
+    list.sort((a, b) => {
+      if (sortBy === "machine_id_asc") return (a.machine_id || "").localeCompare(b.machine_id || "");
+      if (sortBy === "machine_id_desc") return (b.machine_id || "").localeCompare(a.machine_id || "");
+      if (sortBy === "model_asc") return (a.model || "").localeCompare(b.model || "");
+      if (sortBy === "newest_yum") return (b.year_of_mfg || "").localeCompare(a.year_of_mfg || "");
+      if (sortBy === "oldest_yum") return (a.year_of_mfg || "").localeCompare(b.year_of_mfg || "");
+      if (sortBy === "highest_hmr") return (Number(b.hour_meter) || 0) - (Number(a.hour_meter) || 0);
+      if (sortBy === "lowest_hmr") return (Number(a.hour_meter) || 0) - (Number(b.hour_meter) || 0);
+      return 0;
+    });
+
+    return list;
+  }, [machines, deferredSearch, currentStatus, healthStatusFilter, supervisorFilter, sortBy]);
 
   const handlePageChange = useCallback(
     (newPage: number) => updateFilters({ page: newPage }),
@@ -692,14 +906,17 @@ export function MachineListClient({
         ),
       },
       {
-        id: "services_count",
-        header: "SERVICES",
-        accessorKey: "service_count" as const,
+        id: "client",
+        header: "CLIENT",
+        accessorKey: "customer_name" as const,
         sortable: true,
-        width: "8%",
+        width: "12%",
         cell: (row: Machine) => (
-          <span className="font-mono text-xs font-bold text-[var(--color-ink)] whitespace-nowrap">
-            {row.service_count || 0}
+          <span
+            className="text-xs font-semibold text-[var(--color-ink)] truncate block max-w-[120px]"
+            title={row.customer_name || "Unassigned"}
+          >
+            {row.customer_name || "—"}
           </span>
         ),
       },
@@ -781,30 +998,7 @@ export function MachineListClient({
   );
 
   return (
-    <div className="flex flex-col gap-5 pb-20 md:pb-6">
-      {/* Top Page Navigation Tabs — Mobile/Tablet Only (lg:hidden, as Desktop Sidebar already has sub-items) */}
-      {/* Soft-removed unused sub-menu tabs per user request (Service Logs, Breakdown Complaints) */}
-      {/*
-      <div className="flex lg:hidden items-center justify-between border-b border-[var(--color-hairline)] pb-3 overflow-x-auto w-full max-w-full gap-2 no-scrollbar">
-        <div className="flex items-center gap-1 bg-[var(--color-hairline-soft-surface)] p-1 rounded-xl border border-[var(--color-hairline)] shrink-0 w-full sm:w-auto overflow-x-auto no-scrollbar">
-          <button
-            type="button"
-            onClick={() => updateFilters({ tab: "inventory", page: 1 })}
-            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap min-h-[40px] ${
-              activeTab === "inventory"
-                ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-xs"
-                : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-            }`}
-          >
-            <AnimatedWrench size={15} className={activeTab === "inventory" ? "text-sky-500" : ""} />
-            <span>Machine Directory</span>
-            <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-full font-mono bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold">
-              {total}
-            </span>
-          </button>
-        </div>
-      </div>
-      */}
+    <div className="flex flex-col gap-5 pb-24 md:pb-6">
       {/* TAB 2: Service Logs View */}
       {activeTab === "services" && serviceData && (
         <ServicesClient data={serviceData} />
@@ -825,91 +1019,117 @@ export function MachineListClient({
       {/* TAB 1: Equipment Inventory View */}
       {activeTab === "inventory" && (
         <>
-          <div className="flex flex-row items-center justify-between gap-4">
-            <h1 className="text-2xl font-extrabold tracking-tight text-[var(--color-ink)]">
-              Machine Directory
-            </h1>
+          {/* Canonical Page Header */}
+          <PageHeader
+            title="Machine Directory"
+            breadcrumbs={[{ label: "Machines" }]}
+            actions={
+              <div className="flex items-center gap-2">
+                <ExportButton
+                  format="xlsx"
+                  iconOnly
+                  onClick={() => handleExportCSV(selectedIds)}
+                  tooltip="Export machine directory to Excel (.xlsx)"
+                />
 
-            <div className="flex items-center gap-2">
-              <HeaderMoreMenu
-                isAdmin={isAdmin}
-                onOpenImport={() => setImportModalOpen(true)}
-                onExportCSV={() => handleExportCSV(selectedIds)}
-                onRefresh={() => router.refresh()}
-              />
+                <HeaderMoreMenu
+                  isAdmin={isAdmin}
+                  onOpenImport={() => setImportModalOpen(true)}
+                  onExportCSV={() => handleExportCSV(selectedIds)}
+                  onRefresh={() => router.refresh()}
+                />
 
-              {canCreateMachine && (
-                <Button
-                  variant="primary"
-                  icon={<AnimatedPlus size={16} />}
-                  responsive
-                  onClick={() => {
-                    setEditingMachine(null);
-                    setModalOpen(true);
-                  }}
-                  className="whitespace-nowrap"
-                >
-                  Add Machine
-                </Button>
-              )}
-            </div>
-          </div>
+                {canCreateMachine && (
+                  <Button
+                    variant="primary"
+                    icon={<AnimatedPlus size={15} />}
+                    responsive
+                    onClick={() => {
+                      setEditingMachine(null);
+                      setModalOpen(true);
+                    }}
+                    className="h-9 px-3.5 sm:px-4 text-xs font-semibold whitespace-nowrap"
+                  >
+                    Add Machine
+                  </Button>
+                )}
+              </div>
+            }
+          />
 
           {/* Interactive KPI Cards Row */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3.5">
             {/* Total Card */}
-            <div
+            <motion.div
+              whileTap={{ scale: 0.98 }}
               onClick={() => updateFilters({ status: "all", page: 1 })}
-              className={`cursor-pointer p-3.5 rounded-xl border transition-all ${
+              className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
                 currentStatus === "all"
-                  ? "bg-[var(--color-ink)] text-[var(--color-canvas)] border-[var(--color-ink)] shadow-md"
-                  : "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] border-[var(--color-hairline)] hover:border-[var(--color-ink)]"
+                  ? "bg-[var(--color-canvas-elevated)] border-[var(--color-ink)] shadow-xs ring-1 ring-[var(--color-ink)]/10"
+                  : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-[var(--color-ink)]/30"
               }`}
             >
-              <div className="text-[11px] font-semibold text-[var(--color-mute)] uppercase tracking-wider">
+              <div className="text-[10px] sm:text-[11px] font-semibold text-[var(--color-mute)] uppercase tracking-wider">
                 Total Machines
               </div>
-              <div className="text-2xl font-black mt-1">{total}</div>
-            </div>
+              <div className="text-xl sm:text-2xl font-extrabold text-[var(--color-ink)] mt-1">
+                <AnimatedCounter value={total} />
+              </div>
+            </motion.div>
 
             {/* Available Card */}
-            <div
+            <motion.div
+              whileTap={{ scale: 0.98 }}
               onClick={() => updateFilters({ status: "available", page: 1 })}
-              className={`cursor-pointer p-3.5 rounded-xl border transition-all ${
+              className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
                 currentStatus === "available"
-                  ? "bg-emerald-600 text-white border-emerald-700 shadow-md font-bold"
-                  : "bg-emerald-500/10 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200/80 dark:border-emerald-900/60 hover:bg-emerald-500/20"
+                  ? "bg-emerald-50/40 border-emerald-500 shadow-xs ring-1 ring-emerald-500/20 dark:bg-emerald-950/20"
+                  : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-emerald-500/40"
               }`}
             >
-              <div className="text-[11px] font-semibold uppercase tracking-wider">Available Fleet</div>
-              <div className="text-2xl font-black mt-1">{statsSummary.availableCount}</div>
-            </div>
+              <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+                Available Fleet
+              </div>
+              <div className="text-xl sm:text-2xl font-extrabold text-emerald-700 dark:text-emerald-300 mt-1">
+                <AnimatedCounter value={statsSummary.availableCount} />
+              </div>
+            </motion.div>
 
             {/* Rented Card */}
-            <div
+            <motion.div
+              whileTap={{ scale: 0.98 }}
               onClick={() => updateFilters({ status: "rented", page: 1 })}
-              className={`cursor-pointer p-3.5 rounded-xl border transition-all ${
+              className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
                 currentStatus === "rented"
-                  ? "bg-sky-600 text-white border-sky-700 shadow-md font-bold"
-                  : "bg-sky-500/10 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-200/80 dark:border-sky-900/60 hover:bg-sky-500/20"
+                  ? "bg-sky-50/40 border-sky-500 shadow-xs ring-1 ring-sky-500/20 dark:bg-sky-950/20"
+                  : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-sky-500/40"
               }`}
             >
-              <div className="text-[11px] font-semibold uppercase tracking-wider">On Rent</div>
-              <div className="text-2xl font-black mt-1">{statsSummary.rentedCount}</div>
-            </div>
+              <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-400">
+                On Rent
+              </div>
+              <div className="text-xl sm:text-2xl font-extrabold text-sky-700 dark:text-sky-300 mt-1">
+                <AnimatedCounter value={statsSummary.rentedCount} />
+              </div>
+            </motion.div>
 
             {/* Breakdown Card */}
-            <div
+            <motion.div
+              whileTap={{ scale: 0.98 }}
               onClick={() => setHealthStatusFilter(healthStatusFilter === "breakdown" ? "all" : "breakdown")}
-              className={`cursor-pointer p-3.5 rounded-xl border transition-all ${
+              className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
                 healthStatusFilter === "breakdown"
-                  ? "bg-rose-600 text-white border-rose-700 shadow-md font-bold"
-                  : "bg-rose-500/10 dark:bg-rose-950/50 text-rose-700 dark:text-rose-300 border-rose-300/80 dark:border-rose-900/80 hover:bg-rose-500/20"
+                  ? "bg-rose-50/40 border-rose-500 shadow-xs ring-1 ring-rose-500/20 dark:bg-rose-950/20"
+                  : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-rose-500/40"
               }`}
             >
-              <div className="text-[11px] font-bold uppercase tracking-wider">Breakdown Events</div>
-              <div className="text-2xl font-black mt-1">{statsSummary.breakdownCount}</div>
-            </div>
+              <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                Breakdown Events
+              </div>
+              <div className="text-xl sm:text-2xl font-extrabold text-rose-700 dark:text-rose-300 mt-1">
+                <AnimatedCounter value={statsSummary.breakdownCount} />
+              </div>
+            </motion.div>
           </div>
 
           {/* Search Bar & Filter Toolbar */}
@@ -922,42 +1142,53 @@ export function MachineListClient({
             onSubmitSearch={handleSearchSubmit}
             actions={
               <div className="flex items-center gap-2">
-                <div className="flex items-center gap-1 bg-[var(--color-hairline-soft-surface)] p-1 rounded-lg border border-[var(--color-hairline)] text-xs shrink-0">
-                  <TooltipWrapper content="Switch to table view">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("table")}
-                      aria-label="Switch to table view"
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded font-semibold transition-all cursor-pointer ${
-                        viewMode === "table"
-                          ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-2xs"
-                          : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-                      }`}
-                    >
-                      <span className="hidden sm:inline">Table</span>
-                    </button>
-                  </TooltipWrapper>
-                  <TooltipWrapper content="Switch to cards grid view">
-                    <button
-                      type="button"
-                      onClick={() => setViewMode("cards")}
-                      aria-label="Switch to cards grid view"
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded font-semibold transition-all cursor-pointer ${
-                        viewMode === "cards"
-                          ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-2xs"
-                          : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-                      }`}
-                    >
-                      <span className="hidden sm:inline">Cards</span>
-                    </button>
-                  </TooltipWrapper>
+                {/* View Switcher is strictly hidden on mobile viewports (≤640px) per feedback #1 */}
+                <div className="hidden sm:flex items-center bg-[var(--color-hairline-soft-surface)] p-0.5 rounded-lg border border-[var(--color-hairline)] text-xs h-9 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("auto")}
+                    className={`h-full px-2.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] ${
+                      viewMode === "auto"
+                        ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs border border-[var(--color-hairline)]"
+                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-transparent"
+                    }`}
+                    title="Auto responsive view"
+                  >
+                    Auto View
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("cards")}
+                    className={`h-full px-2.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] ${
+                      viewMode === "cards"
+                        ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs border border-[var(--color-hairline)]"
+                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-transparent"
+                    }`}
+                    title="Cards view"
+                  >
+                    <AnimatedSlidersHorizontal size={13} />
+                    <span>Cards</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("table")}
+                    className={`h-full px-2.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] ${
+                      viewMode === "table"
+                        ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs border border-[var(--color-hairline)]"
+                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)] border border-transparent"
+                    }`}
+                    title="Table view"
+                  >
+                    <AnimatedFileText size={13} />
+                    <span>Table</span>
+                  </button>
                 </div>
 
                 {isAdmin && selectedIds.length > 0 && (
                   <Button
                     variant="secondary"
                     onClick={() => handleExportCSV(selectedIds)}
-                    className="text-xs justify-center shrink-0"
+                    className="text-xs justify-center shrink-0 h-9"
                   >
                     <Download size={14} className="mr-1" /> CSV ({selectedIds.length})
                   </Button>
@@ -965,28 +1196,147 @@ export function MachineListClient({
               </div>
             }
           >
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 pt-1">
-              <SearchableSelect
-                options={statusOptions}
-                value={currentStatus}
-                onChange={(val) => updateFilters({ status: val, page: 1 })}
-                placeholder="Filter Rental Status"
-              />
+            <div className="flex flex-col gap-3 w-full">
+              {/* Responsive Custom Dropdown Filter Selectors for Status, Health, Supervisor & Sort */}
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-2.5 w-full">
+                {/* 1. Rental Status Selector */}
+                <div className="w-full sm:w-48 min-w-0">
+                  <CustomFilterSelector
+                    label="Rental"
+                    value={currentStatus}
+                    onChange={(val) => updateFilters({ status: val, page: 1 })}
+                    options={RENTAL_STATUS_OPTIONS}
+                    ariaLabel="Filter by rental status"
+                    align="left"
+                  />
+                </div>
 
-              <SearchableSelect
-                options={healthStatusOptions}
-                value={healthStatusFilter}
-                onChange={(val) => setHealthStatusFilter(val)}
-                placeholder="Filter Health Status"
-              />
+                {/* 2. Health Status Selector */}
+                <div className="w-full sm:w-52 min-w-0">
+                  <CustomFilterSelector
+                    label="Health"
+                    value={healthStatusFilter}
+                    onChange={(val) => setHealthStatusFilter(val)}
+                    options={HEALTH_STATUS_OPTIONS}
+                    ariaLabel="Filter by health status"
+                    align="right"
+                  />
+                </div>
+
+                {/* 3. Supervisor Selector */}
+                <div className="w-full sm:w-56 min-w-0">
+                  <CustomFilterSelector
+                    label="Supervisor"
+                    value={supervisorFilter}
+                    onChange={(val) => setSupervisorFilter(val)}
+                    options={supervisorOptions}
+                    ariaLabel="Filter by supervisor"
+                    align="left"
+                  />
+                </div>
+
+                {/* 4. Sort By Selector */}
+                <div className="w-full sm:w-52 min-w-0">
+                  <CustomFilterSelector
+                    label="Sort"
+                    value={sortBy}
+                    onChange={(val) => setSortBy(val)}
+                    options={SORT_OPTIONS}
+                    ariaLabel="Sort machines"
+                    align="right"
+                  />
+                </div>
+              </div>
+
+              {/* Active Filter Badge Chips */}
+              {activeFilterCount > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-[var(--color-hairline)] text-xs">
+                  <span className="text-[11px] font-semibold text-[var(--color-mute)] mr-1">
+                    Active Filters:
+                  </span>
+                  {search.trim() !== "" && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] font-medium">
+                      <span>Search: &quot;{search}&quot;</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearch("");
+                          updateFilters({ search: undefined, page: 1 });
+                        }}
+                        className="hover:text-rose-600 transition-colors cursor-pointer"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  )}
+                  {currentStatus !== "all" && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/20 font-medium">
+                      <span>Rental: {currentStatus === "available" ? "Available" : "Rented"}</span>
+                      <button
+                        type="button"
+                        onClick={() => updateFilters({ status: "all", page: 1 })}
+                        className="hover:text-rose-600 transition-colors cursor-pointer"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  )}
+                  {healthStatusFilter !== "all" && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-medium">
+                      <span>Health: {healthStatusFilter.replace(/_/g, " ")}</span>
+                      <button
+                        type="button"
+                        onClick={() => setHealthStatusFilter("all")}
+                        className="hover:text-rose-600 transition-colors cursor-pointer"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  )}
+                  {supervisorFilter !== "all" && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 font-medium">
+                      <span>
+                        Supervisor:{" "}
+                        {supervisorOptions.find((s) => s.id === supervisorFilter)?.label || supervisorFilter}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSupervisorFilter("all")}
+                        className="hover:text-rose-600 transition-colors cursor-pointer"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  )}
+                  {sortBy !== "machine_id_asc" && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] font-medium">
+                      <span>Sort: {SORT_OPTIONS.find((s) => s.id === sortBy)?.label || sortBy}</span>
+                      <button
+                        type="button"
+                        onClick={() => setSortBy("machine_id_asc")}
+                        className="hover:text-rose-600 transition-colors cursor-pointer"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleResetAllFilters}
+                    className="text-[11px] font-bold text-[var(--color-link)] hover:underline ml-1 cursor-pointer"
+                  >
+                    Clear All
+                  </button>
+                </div>
+              )}
             </div>
           </FilterToolbar>
 
           {/* Main Table / Grid Display */}
           {viewMode === "cards" ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
               <AnimatePresence mode="popLayout">
-                {machines.map((m) => (
+                {filteredAndSortedMachines.map((m) => (
                   <MobileMachineCard
                     key={m.id}
                     machine={m}
@@ -1000,13 +1350,13 @@ export function MachineListClient({
                 ))}
               </AnimatePresence>
             </div>
-          ) : (
+          ) : viewMode === "table" ? (
             <>
-              {/* Desktop Table View (hidden sm:hidden md:block) */}
+              {/* Desktop Table View (hidden sm:block) */}
               <div className="hidden sm:block">
                 <EnterpriseTable
                   columns={tableColumns}
-                  data={machines}
+                  data={filteredAndSortedMachines}
                   loading={isPending}
                   selectable={true}
                   selectedIds={selectedIds}
@@ -1024,10 +1374,51 @@ export function MachineListClient({
                 />
               </div>
 
-              {/* Mobile Card Grid View (block sm:hidden) */}
+              {/* Mobile Card Grid View for viewMode=table */}
               <div className="block sm:hidden space-y-3">
                 <AnimatePresence mode="popLayout">
-                  {machines.map((m) => (
+                  {filteredAndSortedMachines.map((m) => (
+                    <MobileMachineCard
+                      key={m.id}
+                      machine={m}
+                      isAdmin={isAdmin}
+                      onEdit={(mach: Machine) => {
+                        setEditingMachine(mach);
+                        setModalOpen(true);
+                      }}
+                      onDelete={(mach: Machine) => setDeletingMachine(mach)}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
+            </>
+          ) : (
+            /* Auto Responsive View: Desktop Table, Mobile Touch Cards */
+            <>
+              <div className="hidden sm:block">
+                <EnterpriseTable
+                  columns={tableColumns}
+                  data={filteredAndSortedMachines}
+                  loading={isPending}
+                  selectable={true}
+                  selectedIds={selectedIds}
+                  onSelectionChange={setSelectedIds}
+                  bulkActions={[
+                    {
+                      label: "Export Selected CSV",
+                      icon: Download,
+                      onClick: handleExportCSV,
+                    },
+                  ]}
+                  emptyMessage="No machines match your criteria"
+                  emptyDescription="Try adjusting filters or search terms."
+                  onRowClick={(row) => router.push(`/machines/${row.id}`)}
+                />
+              </div>
+
+              <div className="block sm:hidden space-y-3">
+                <AnimatePresence mode="popLayout">
+                  {filteredAndSortedMachines.map((m) => (
                     <MobileMachineCard
                       key={m.id}
                       machine={m}
@@ -1046,7 +1437,7 @@ export function MachineListClient({
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="px-2 pt-2">
+            <div className="px-1 sm:px-2 pt-2">
               <Pagination
                 page={page}
                 pageSize={pageSize}
@@ -1106,3 +1497,4 @@ export function MachineListClient({
     </div>
   );
 }
+

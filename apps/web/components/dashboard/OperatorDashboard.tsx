@@ -45,13 +45,24 @@ import {
   submitOperatorHourLogAction,
   updateOperatorHourLogAction,
 } from "@/app/actions/operators";
-import { useToast, CustomTimePicker, CustomDatePicker, Modal } from "@/components/ui";
-import { formatDate, formatTo12Hour, formatShiftTimingRange } from "@reachinternational/utils";
+import { useToast, CustomTimePicker, CustomDatePicker, Modal, MachineSelect, ClientSelect } from "@/components/ui";
+import {
+  formatDate,
+  formatTo12Hour,
+  formatShiftTimingRange,
+  computeShiftTiming,
+  parseDateTimeToDate,
+  formatResolvedRange,
+  addDaysToDateStr,
+  findLatestMachineLogTimeline,
+  checkIntervalOverlap,
+} from "@reachinternational/utils";
 import { PrintableOperatorLogsModal } from "./PrintableOperatorLogsModal";
 import { handleClipboardPaste } from "@/lib/security/clipboard";
 import { HmrSchema, RemarksSchema } from "@reachinternational/validation";
 
 const DRAFT_STORAGE_KEY = "reach_operator_daily_log_draft";
+
 
 // Helper to format client location string
 function getClientFormattedLocation(client?: CRMClient | null, fallbackLocation?: string | null): string {
@@ -62,53 +73,6 @@ function getClientFormattedLocation(client?: CRMClient | null, fallbackLocation?
   return fallbackLocation || "";
 }
 
-// Time string parser (e.g. "08:00 AM", "05:30 PM", "17:00") -> total minutes from midnight
-function parseTimeToMinutes(timeStr?: string): number | null {
-  if (!timeStr) return null;
-  const str = timeStr.trim().toUpperCase();
-  const match = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
-  if (!match) return null;
-
-  let hours = parseInt(match[1], 10);
-  const minutes = parseInt(match[2], 10);
-  const period = match[3];
-
-  if (period) {
-    if (period === "PM" && hours < 12) hours += 12;
-    if (period === "AM" && hours === 12) hours = 0;
-  }
-  return hours * 60 + minutes;
-}
-
-// Compute operating duration, normal working hours & overtime (standard shift = 8 hours + 1 hour break)
-function computeOperatingHours(startStr: string, endStr: string, manualOvertime?: number) {
-  const startMins = parseTimeToMinutes(startStr);
-  const endMins = parseTimeToMinutes(endStr);
-
-  if (startMins === null || endMins === null) {
-    return { durationHours: 0, overtimeHours: 0, normalWorkingHours: 0, breakHours: 1.0, isValid: false, errorMessage: "Invalid start or end time format." };
-  }
-
-  let diffMins = endMins - startMins;
-  if (diffMins < 0) {
-    // Overnight shift calculation (e.g. 10:00 PM to 12:00 AM, 10:00 PM to 06:00 AM)
-    diffMins += 24 * 60;
-  }
-
-  if (diffMins === 0) {
-    return { durationHours: 0, overtimeHours: 0, normalWorkingHours: 0, breakHours: 1.0, isValid: false, errorMessage: "Start time and end time cannot be identical." };
-  }
-
-  const durationHours = Math.round((diffMins / 60) * 10) / 10;
-  const breakHours = 1.0;
-  // Overtime calculation: if manual overtime is provided, use it; otherwise auto-calc (duration - 9.0h)
-  const autoOvertime = Math.max(0, Math.round((durationHours - (8.0 + breakHours)) * 10) / 10);
-  const overtimeHours = manualOvertime !== undefined ? manualOvertime : autoOvertime;
-  // Always: total shift duration - overtime - 1h break = normal working time
-  const normalWorkingHours = Math.max(0, Math.round((durationHours - overtimeHours - breakHours) * 10) / 10);
-
-  return { durationHours, overtimeHours, normalWorkingHours, breakHours, isValid: true, errorMessage: null };
-}
 
 export interface OperatorHourLog {
   id: string;
@@ -116,6 +80,9 @@ export interface OperatorHourLog {
   operator_id: string;
   client_id?: string | null;
   log_date: string;
+  end_date?: string | null;
+  start_datetime?: string | null;
+  end_datetime?: string | null;
   start_meter?: number;
   end_meter?: number;
   start_time?: string;
@@ -340,76 +307,20 @@ export function OperatorDashboard({
     initialClient?.id || (dbClients.length > 0 ? dbClients[0].id : "")
   );
   const [clientLocation, setClientLocation] = useState<string>(initialLocation);
-  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState<boolean>(false);
-  const [clientSearchQuery, setClientSearchQuery] = useState<string>("");
-  const clientDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Custom Searchable Dropdown State for Machine Selector
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Close custom dropdowns on click outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setIsDropdownOpen(false);
-        setSearchQuery("");
-      }
-      if (clientDropdownRef.current && !clientDropdownRef.current.contains(e.target as Node)) {
-        setIsClientDropdownOpen(false);
-        setClientSearchQuery("");
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   // Selected Client derived object
   const selectedClient = useMemo(
     () => dbClients.find((c) => c.id === selectedClientId) || null,
     [dbClients, selectedClientId]
   );
 
-  // Search filter for clients
-  const filteredClients = useMemo(() => {
-    if (!clientSearchQuery.trim()) return dbClients;
-    const q = clientSearchQuery.toLowerCase().trim();
-    return dbClients.filter((c) => {
-      const nameMatch = c.client_name?.toLowerCase().includes(q);
-      const companyMatch = c.company_name?.toLowerCase().includes(q);
-      const codeMatch = c.code?.toLowerCase().includes(q);
-      const cityMatch = c.city?.toLowerCase().includes(q);
-      const stateMatch = c.state?.toLowerCase().includes(q);
-      const addressMatch = c.address?.toLowerCase().includes(q);
-      return nameMatch || companyMatch || codeMatch || cityMatch || stateMatch || addressMatch;
-    });
-  }, [dbClients, clientSearchQuery]);
-
   const handleSelectClient = (clientId: string) => {
     setSelectedClientId(clientId);
-    setIsClientDropdownOpen(false);
-    setClientSearchQuery("");
     const targetClient = dbClients.find((c) => c.id === clientId);
     if (targetClient) {
       const loc = getClientFormattedLocation(targetClient);
       setClientLocation(loc);
     }
   };
-
-  // Search filter matching machine name, serial no, model, machine code, engine serial
-  const filteredMachines = useMemo(() => {
-    if (!searchQuery.trim()) return availableMachines;
-    const q = searchQuery.toLowerCase().trim();
-    return availableMachines.filter((m) => {
-      const nameMatch = m.machine_name?.toLowerCase().includes(q);
-      const codeMatch = m.machine_code?.toLowerCase().includes(q);
-      const modelMatch = m.model?.toLowerCase().includes(q);
-      const serialMatch = m.serial_number?.toLowerCase().includes(q);
-      const engineMatch = m.engine_serial_no?.toLowerCase().includes(q);
-      return nameMatch || codeMatch || modelMatch || serialMatch || engineMatch;
-    });
-  }, [availableMachines, searchQuery]);
 
   // Helper to fetch the latest ending meter reading recorded for a machine from DB / logs
   const getLatestMeterForMachine = useCallback(
@@ -462,6 +373,7 @@ export function OperatorDashboard({
   const [editingLog, setEditingLog] = useState<OperatorHourLog | null>(null);
   const [editStartMeter, setEditStartMeter] = useState<string>("0");
   const [editEndMeter, setEditEndMeter] = useState<string>("0");
+  const [editLogDate, setEditLogDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [editStartTime, setEditStartTime] = useState<string>("");
   const [editEndTime, setEditEndTime] = useState<string>("");
   const [editOvertime, setEditOvertime] = useState<string>("0");
@@ -471,28 +383,40 @@ export function OperatorDashboard({
   const [editRemarks, setEditRemarks] = useState<string>("");
   const [updatingLog, setUpdatingLog] = useState(false);
 
+  // Real-time operating duration, normal working hours & overtime calculation
+  const operatingStats = useMemo(() => {
+    const ot = parseFloat(overtimeHours);
+    return computeShiftTiming({
+      logDate: selectedLogDate,
+      startTime,
+      endTime,
+      manualOvertime: isNaN(ot) ? undefined : ot,
+    });
+  }, [selectedLogDate, startTime, endTime, overtimeHours]);
+
   const handleStartTimeChange = (val: string) => {
     setStartTime(val);
-    const stats = computeOperatingHours(val, endTime);
-    if (stats.isValid) {
+    const stats = computeShiftTiming({
+      logDate: selectedLogDate,
+      startTime: val,
+      endTime,
+    });
+    if (stats.isValid && !isManualOvertime) {
       setOvertimeHours(String(stats.overtimeHours));
     }
   };
 
   const handleEndTimeChange = (val: string) => {
     setEndTime(val);
-    const stats = computeOperatingHours(startTime, val);
-    if (stats.isValid) {
+    const stats = computeShiftTiming({
+      logDate: selectedLogDate,
+      startTime,
+      endTime: val,
+    });
+    if (stats.isValid && !isManualOvertime) {
       setOvertimeHours(String(stats.overtimeHours));
     }
   };
-
-  // Real-time operating duration, normal working hours & overtime calculation
-  const operatingStats = useMemo(() => {
-    const ot = parseFloat(overtimeHours);
-    return computeOperatingHours(startTime, endTime, isNaN(ot) ? undefined : ot);
-  }, [startTime, endTime, overtimeHours]);
-
 
   // Real-time meter running hours & meter validation calculation
   const meterRunningHours = useMemo(() => {
@@ -513,11 +437,9 @@ export function OperatorDashboard({
   }, [startMeter, endMeter]);
 
   // Update machine details & auto-fetch latest starting meter reading & client when selection changes
-  const handleSelectMachine = (mId: string) => {
+  const handleSelectMachine = (mId: string, machineObj?: any) => {
     setSelectedMachineId(mId);
-    setIsDropdownOpen(false);
-    setSearchQuery("");
-    const target = availableMachines.find((m) => m.id === mId);
+    const target = machineObj || availableMachines.find((m) => m.id === mId);
     if (target) {
       setMachineName(target.machine_name || "");
       setMachineNo(target.machine_code || "");
@@ -595,47 +517,74 @@ export function OperatorDashboard({
     setEndMeter(String(latestMeter));
   }, [selectedMachineId, getLatestMeterForMachine]);
 
-  // Last submitted log reference
-  const lastSubmittedLog = useMemo(() => {
-    return recentLogs.length > 0 ? recentLogs[0] : null;
-  }, [recentLogs]);
+  // Machine Timeline: Finds the latest log recorded on this machine and its end time
+  const machineTimeline = useMemo(() => {
+    if (!selectedMachineId) return null;
+    return findLatestMachineLogTimeline(recentLogs, selectedMachineId);
+  }, [recentLogs, selectedMachineId]);
 
-  // Logs submitted for selected machine on the chosen date
-  const logsForDateAndMachine = useMemo(() => {
-    if (!selectedMachineId || !selectedLogDate) return [];
-    return recentLogs.filter((l) => {
-      if (l.machine_id !== selectedMachineId || !l.log_date) return false;
-      return l.log_date.split("T")[0] === selectedLogDate.split("T")[0];
-    });
-  }, [selectedMachineId, selectedLogDate, recentLogs]);
-
-  // Client-side real-time shift time overlap validation
-  const shiftOverlapWarning = useMemo(() => {
-    if (!selectedMachineId || logsForDateAndMachine.length === 0) return null;
-
-    const newS = parseTimeToMinutes(startTime);
-    let newE = parseTimeToMinutes(endTime);
-    if (newS !== null && newE !== null && newE <= newS) {
-      newE += 1440;
+  // Real-time sequencing check: New log must start at or after previous log's end time
+  const sequencingValidation = useMemo(() => {
+    if (!machineTimeline || !machineTimeline.endDateTime || !operatingStats.isValid || !operatingStats.startDateTime) {
+      return null;
     }
 
-    for (const log of logsForDateAndMachine) {
-      if (newS !== null && newE !== null) {
-        const exS = parseTimeToMinutes(log.start_time);
-        let exE = parseTimeToMinutes(log.end_time);
+    const prevEndMs = machineTimeline.endDateTime.getTime();
+    const currentStartMs = operatingStats.startDateTime.getTime();
 
-        if (exS !== null && exE !== null) {
-          if (exE <= exS) exE += 1440;
+    if (currentStartMs < prevEndMs) {
+      return {
+        isInvalid: true,
+        message: `Start time (${operatingStats.resolvedStartDate}, ${formatTo12Hour(startTime)}) cannot precede previous log's end time (${machineTimeline.formattedEndDate}, ${machineTimeline.formattedEndTime}). Handover is allowed from ${machineTimeline.formattedEndTime} onwards.`,
+        recommendedStartTime: machineTimeline.formattedEndTime,
+        recommendedStartDate: machineTimeline.latestLog?.end_date || machineTimeline.latestLog?.log_date || selectedLogDate,
+      };
+    }
 
-          if (Math.max(newS, exS) < Math.min(newE, exE)) {
-            return `Time overlap detected: The selected period (${startTime} – ${endTime}) overlaps with an existing log (${log.start_time || "08:00 AM"} – ${log.end_time || "05:00 PM"}) on ${formatDate(selectedLogDate)}. Operating time periods must not overlap.`;
-          }
+    return null;
+  }, [machineTimeline, operatingStats.isValid, operatingStats.startDateTime, operatingStats.resolvedStartDate, startTime, selectedLogDate]);
+
+  // Client-side real-time shift time interval overlap validation
+  const shiftOverlapWarning = useMemo(() => {
+    if (!selectedMachineId || recentLogs.length === 0 || !operatingStats.isValid || !operatingStats.startDateTime || !operatingStats.endDateTime) {
+      return null;
+    }
+
+    const currentStart = operatingStats.startDateTime;
+    const currentEnd = operatingStats.endDateTime;
+
+    const machineLogs = recentLogs.filter((l) => l.machine_id === selectedMachineId);
+
+    for (const log of machineLogs) {
+      let exStart: Date | null = null;
+      let exEnd: Date | null = null;
+      let exRangeFormatted = "";
+
+      if (log.start_datetime && log.end_datetime) {
+        exStart = new Date(log.start_datetime);
+        exEnd = new Date(log.end_datetime);
+        exRangeFormatted = `${formatDate(log.log_date)} ${formatTo12Hour(log.start_time)} → ${formatDate(log.end_date || log.log_date)} ${formatTo12Hour(log.end_time)}`;
+      } else if (log.log_date && log.start_time && log.end_time) {
+        const exTiming = computeShiftTiming({
+          startDate: log.log_date,
+          startTime: log.start_time,
+          endDate: log.end_date,
+          endTime: log.end_time,
+        });
+        exStart = exTiming.startDateTime;
+        exEnd = exTiming.endDateTime;
+        exRangeFormatted = exTiming.resolvedRangeFormatted;
+      }
+
+      if (exStart && exEnd && !isNaN(exStart.getTime()) && !isNaN(exEnd.getTime())) {
+        if (checkIntervalOverlap(currentStart, currentEnd, exStart, exEnd)) {
+          return `Time overlap detected: The requested period (${operatingStats.resolvedRangeFormatted}) overlaps with an existing log (${exRangeFormatted}) on this machine. Operating time periods must not overlap.`;
         }
       }
     }
 
     return null;
-  }, [selectedMachineId, logsForDateAndMachine, startTime, endTime, selectedLogDate]);
+  }, [selectedMachineId, recentLogs, operatingStats.isValid, operatingStats.startDateTime, operatingStats.endDateTime, operatingStats.resolvedRangeFormatted]);
 
   // Load draft from localStorage on mount
   useEffect(() => {
@@ -653,7 +602,9 @@ export function OperatorDashboard({
           }
         }
         if (parsed.selectedClientId) setSelectedClientId(parsed.selectedClientId);
-        if (parsed.selectedLogDate) setSelectedLogDate(parsed.selectedLogDate);
+        if (parsed.selectedLogDate) {
+          setSelectedLogDate(parsed.selectedLogDate);
+        }
         if (parsed.clientLocation && parsed.clientLocation.trim() !== "") setClientLocation(parsed.clientLocation);
         if (parsed.startMeter !== undefined) setStartMeter(parsed.startMeter);
         if (parsed.endMeter !== undefined) setEndMeter(parsed.endMeter);
@@ -768,7 +719,7 @@ export function OperatorDashboard({
   const completionStatus = useMemo(() => {
     let completed = 0;
     if (selectedMachineId) completed++;
-    if (operatingStats.isValid && !shiftOverlapWarning && !meterValidationWarning) completed++;
+    if (operatingStats.isValid && !shiftOverlapWarning && !sequencingValidation?.isInvalid && !meterValidationWarning) completed++;
     if (!isBreakdown) {
       completed++;
     } else {
@@ -778,9 +729,24 @@ export function OperatorDashboard({
     }
     completed++; // Status ready
 
-    const isReady = completed >= 4 && operatingStats.isValid && !shiftOverlapWarning && !meterValidationWarning && !!selectedMachineId;
+    const isReady =
+      completed >= 4 &&
+      operatingStats.isValid &&
+      !shiftOverlapWarning &&
+      !sequencingValidation?.isInvalid &&
+      !meterValidationWarning &&
+      !!selectedMachineId;
     return { completed, total: 4, isReady };
-  }, [selectedMachineId, operatingStats.isValid, shiftOverlapWarning, meterValidationWarning, isBreakdown, breakdownHours, breakdownMinutes]);
+  }, [
+    selectedMachineId,
+    operatingStats.isValid,
+    shiftOverlapWarning,
+    sequencingValidation,
+    meterValidationWarning,
+    isBreakdown,
+    breakdownHours,
+    breakdownMinutes,
+  ]);
 
   // Trigger submission check (opens confirmation modal if valid)
   const handleOpenSubmitModal = (e: React.FormEvent) => {
@@ -798,6 +764,11 @@ export function OperatorDashboard({
 
     if (!operatingStats.isValid) {
       toast("error", "Invalid Operating Hours", operatingStats.errorMessage || "Please verify start and end times.");
+      return;
+    }
+
+    if (sequencingValidation?.isInvalid) {
+      toast("error", "Shift Sequencing Error", sequencingValidation.message);
       return;
     }
 
@@ -840,7 +811,9 @@ export function OperatorDashboard({
     const res = await submitOperatorHourLogAction({
       machineId: selectedMachineId,
       clientId: selectedClientId || undefined,
-      logDate: selectedLogDate,
+      startDate: operatingStats.resolvedStartDate,
+      logDate: operatingStats.resolvedStartDate,
+      endDate: operatingStats.resolvedEndDate,
       location: clientLocation.trim() || undefined,
       startMeter: startMtrNum,
       endMeter: endMtrNum,
@@ -878,16 +851,61 @@ export function OperatorDashboard({
   // Real-time operating duration, normal working hours & overtime calculation for Edit Modal
   const editOperatingStats = useMemo(() => {
     const ot = parseFloat(editOvertime);
-    return computeOperatingHours(editStartTime, editEndTime, isNaN(ot) ? undefined : ot);
-  }, [editStartTime, editEndTime, editOvertime]);
+    return computeShiftTiming({
+      logDate: editLogDate,
+      startTime: editStartTime,
+      endTime: editEndTime,
+      manualOvertime: isNaN(ot) ? undefined : ot,
+    });
+  }, [editLogDate, editStartTime, editEndTime, editOvertime]);
+
+  // Edit Modal Overlap Check against other logs for this machine
+  const editShiftOverlapWarning = useMemo(() => {
+    if (!editingLog || !editOperatingStats.isValid || !editOperatingStats.startDateTime || !editOperatingStats.endDateTime) {
+      return null;
+    }
+    const currentStart = editOperatingStats.startDateTime;
+    const currentEnd = editOperatingStats.endDateTime;
+    const machineLogs = recentLogs.filter((l) => l.machine_id === editingLog.machine_id && l.id !== editingLog.id);
+
+    for (const log of machineLogs) {
+      let exStart: Date | null = null;
+      let exEnd: Date | null = null;
+      let exRangeFormatted = "";
+      if (log.start_datetime && log.end_datetime) {
+        exStart = new Date(log.start_datetime);
+        exEnd = new Date(log.end_datetime);
+        exRangeFormatted = `${formatDate(log.log_date)} ${formatTo12Hour(log.start_time)} → ${formatDate(log.end_date || log.log_date)} ${formatTo12Hour(log.end_time)}`;
+      } else if (log.log_date && log.start_time && log.end_time) {
+        const exTiming = computeShiftTiming({
+          startDate: log.log_date,
+          startTime: log.start_time,
+          endDate: log.end_date,
+          endTime: log.end_time,
+        });
+        exStart = exTiming.startDateTime;
+        exEnd = exTiming.endDateTime;
+        exRangeFormatted = exTiming.resolvedRangeFormatted;
+      }
+
+      if (exStart && exEnd && !isNaN(exStart.getTime()) && !isNaN(exEnd.getTime())) {
+        if (checkIntervalOverlap(currentStart, currentEnd, exStart, exEnd)) {
+          return `Time overlap detected: The modified shift (${editOperatingStats.resolvedRangeFormatted}) overlaps with an existing log (${exRangeFormatted}) on this machine.`;
+        }
+      }
+    }
+    return null;
+  }, [editingLog, editOperatingStats.isValid, editOperatingStats.startDateTime, editOperatingStats.endDateTime, editOperatingStats.resolvedRangeFormatted, recentLogs]);
 
   // Open Edit Modal for a Log
   const handleOpenEditLog = (log: OperatorHourLog) => {
     setEditingLog(log);
     setEditStartMeter(String(log.start_meter ?? 0));
     setEditEndMeter(String(log.end_meter ?? log.start_meter ?? 0));
+    const rawLogDate = log.log_date ? log.log_date.split("T")[0] : selectedLogDate;
     const sTime = formatTo12Hour(log.start_time) || "06:00 AM";
     const eTime = formatTo12Hour(log.end_time) || "02:00 PM";
+    setEditLogDate(rawLogDate);
     setEditStartTime(sTime);
     setEditEndTime(eTime);
     setEditOvertime(String(log.overtime_hours ?? 0));
@@ -912,6 +930,16 @@ export function OperatorDashboard({
   const handleResubmitLogCorrection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingLog) return;
+
+    if (!editOperatingStats.isValid) {
+      toast("error", "Invalid Shift Timings", editOperatingStats.errorMessage || "Please verify start and end date and time.");
+      return;
+    }
+
+    if (editShiftOverlapWarning) {
+      toast("error", "Shift Overlap Error", editShiftOverlapWarning);
+      return;
+    }
 
     setUpdatingLog(true);
 
@@ -938,6 +966,8 @@ export function OperatorDashboard({
       logId: editingLog.id,
       clientId: selectedClientId || undefined,
       location: clientLocation.trim() || undefined,
+      startDate: editOperatingStats.resolvedStartDate,
+      endDate: editOperatingStats.resolvedEndDate,
       startMeter: startMtrNum,
       endMeter: endMtrNum,
       startTime: editStartTime,
@@ -1048,287 +1078,29 @@ export function OperatorDashboard({
             {/* SECTION A: MACHINE & CLIENT DETAILS          */}
             {/* ============================================ */}
             <div className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/40 space-y-3 sm:space-y-4">
-              {/* 1. ROW 1: LOG DATE, MODEL & SERIAL NUMBER */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4">
-                {/* Log Date Custom Dropdown Calendar */}
+              {/* SELECT MACHINE & CLIENT NAME */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+                {/* Select Machine - Primary Custom Searchable Dropdown */}
                 <div>
-                  <CustomDatePicker
-                    label="Log Date"
+                  <MachineSelect
+                    label="Select Machine"
                     required
-                    value={selectedLogDate}
-                    onChange={setSelectedLogDate}
-                    maxDaysOld={7}
+                    machines={availableMachines}
+                    value={selectedMachineId}
+                    onChange={handleSelectMachine}
+                    placeholder="Search or select machine..."
                   />
                 </div>
 
-                {/* Model - Primary Custom Searchable Dropdown */}
+                {/* Client Name - Searchable Dropdown */}
                 <div>
-                  <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 flex items-center gap-1.5">
-                    Model *
-                  </label>
-
-                  {availableMachines.length > 0 ? (
-                    <div className="relative w-full" ref={dropdownRef}>
-                      <button
-                        type="button"
-                        onClick={() => setIsDropdownOpen((prev) => !prev)}
-                        className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)] flex items-center justify-between hover:border-sky-500/50 transition-all cursor-pointer shadow-2xs min-h-[42px]"
-                      >
-                        <span className="truncate flex items-center gap-2">
-                          {selectedMachine ? (
-                            <>
-                              <span className="truncate font-bold">
-                                {selectedMachine.model || selectedMachine.machine_name}
-                              </span>
-                              <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 font-mono text-[10px] shrink-0">
-                                {selectedMachine.machine_code}
-                              </span>
-                            </>
-                          ) : (
-                            <span className="text-[var(--color-mute)] font-normal">Search or select model...</span>
-                          )}
-                        </span>
-                        <AnimatedChevronDown
-                          size={16}
-                          className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
-                            isDropdownOpen ? "rotate-180 text-sky-500" : ""
-                          }`}
-                        />
-                      </button>
-
-                      {/* Searchable Dropdown Popover */}
-                      {isDropdownOpen && (
-                        <div className="absolute z-50 top-full left-0 right-0 mt-1.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden max-h-72 flex flex-col backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-150">
-                          <div className="p-2 border-b border-[var(--color-hairline)] flex items-center gap-2 bg-[var(--color-canvas)]">
-                            <Search className="h-3.5 w-3.5 text-[var(--color-mute)] shrink-0 ml-1" />
-                            <input
-                              type="text"
-                              value={searchQuery}
-                              onChange={(e) => setSearchQuery(e.target.value)}
-                              placeholder="Search by Model, Code, S/N..."
-                              className="w-full bg-transparent text-xs text-[var(--color-ink)] focus:outline-none placeholder:text-[var(--color-mute)] py-1"
-                              autoFocus
-                            />
-                            {searchQuery && (
-                              <button
-                                type="button"
-                                onClick={() => setSearchQuery("")}
-                                className="text-[var(--color-mute)] hover:text-[var(--color-ink)] p-1"
-                              >
-                                <AnimatedX size={12} />
-                              </button>
-                            )}
-                          </div>
-
-                          <div className="overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
-                            {filteredMachines.length === 0 ? (
-                              <div className="py-4 text-center text-xs text-[var(--color-mute)]">
-                                No matching machines found
-                              </div>
-                            ) : (
-                              filteredMachines.map((m) => {
-                                const isSelected = m.id === selectedMachineId;
-                                const modelTitle = m.model || m.machine_name;
-                                return (
-                                  <button
-                                    key={m.id}
-                                    type="button"
-                                    onClick={() => handleSelectMachine(m.id)}
-                                    className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
-                                      isSelected
-                                        ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold"
-                                        : "hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
-                                    }`}
-                                  >
-                                    <div className="min-w-0 pr-2">
-                                      <div className="font-bold flex items-center gap-2 truncate">
-                                        <span className="truncate">{modelTitle}</span>
-                                        <span className="font-mono text-[10px] text-sky-600 dark:text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded shrink-0">
-                                          {m.machine_code}
-                                        </span>
-                                      </div>
-                                      {m.serial_number && (
-                                        <div className="text-[10px] text-[var(--color-mute)] font-mono truncate mt-0.5">
-                                          S/N: {m.serial_number}
-                                        </div>
-                                      )}
-                                    </div>
-                                    {isSelected && (
-                                      <AnimatedCheck size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
-                                    )}
-                                  </button>
-                                );
-                              })
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <input
-                      type="text"
-                      required
-                      value={model || selectedMachine?.model || selectedMachine?.machine_name || "Assigned Machine"}
-                      onChange={(e) => setModel(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)] min-h-[42px]"
-                      placeholder="e.g. 50B-9"
-                    />
-                  )}
-                </div>
-
-                {/* Serial Number (Read-Only Auto-Populated) */}
-                <div>
-                  <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1">
-                    Serial Number
-                  </label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={selectedMachine?.serial_number || selectedMachine?.machine_code || "—"}
-                    placeholder="Auto-populated"
-                    className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] cursor-not-allowed opacity-80 min-h-[42px]"
-                  />
-                </div>
-              </div>
-
-              {/* Client & Site Location Strip */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 sm:gap-4 pt-2.5 border-t border-[var(--color-hairline)]/60">
-                {/* Client / Customer Name - Searchable Dropdown */}
-                <div>
-                  <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 flex items-center justify-between">
-                    <span>Client / Customer Name *</span>
-                    {selectedClient?.code && (
-                      <span className="text-[10px] text-sky-600 dark:text-sky-400 font-mono font-bold">
-                        {selectedClient.code}
-                      </span>
-                    )}
-                  </label>
-
-                  {dbClients.length > 0 ? (
-                    <div className="relative w-full" ref={clientDropdownRef}>
-                      <button
-                        type="button"
-                        onClick={() => setIsClientDropdownOpen((prev) => !prev)}
-                        className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)] flex items-center justify-between hover:border-sky-500/50 transition-all cursor-pointer shadow-2xs min-h-[42px]"
-                      >
-                        <span className="truncate flex items-center gap-2">
-                          {selectedClient ? (
-                            <>
-                              <span className="truncate font-extrabold">{selectedClient.client_name}</span>
-                              <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 font-mono text-[10px] shrink-0">
-                                {selectedClient.code}
-                              </span>
-                            </>
-                          ) : (
-                            <span className="text-[var(--color-mute)] font-normal">Search or select client...</span>
-                          )}
-                        </span>
-                        <AnimatedChevronDown
-                          size={16}
-                          className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
-                            isClientDropdownOpen ? "rotate-180 text-sky-500" : ""
-                          }`}
-                        />
-                      </button>
-
-                      {/* Searchable Client Dropdown Popover */}
-                      {isClientDropdownOpen && (
-                        <div className="absolute z-50 top-full left-0 right-0 mt-1.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden max-h-72 flex flex-col backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-150">
-                          <div className="p-2 border-b border-[var(--color-hairline)] flex items-center gap-2 bg-[var(--color-canvas)]">
-                            <Search className="h-3.5 w-3.5 text-[var(--color-mute)] shrink-0 ml-1" />
-                            <input
-                              type="text"
-                              value={clientSearchQuery}
-                              onChange={(e) => setClientSearchQuery(e.target.value)}
-                              placeholder="Search by Client Name, Code, City, Location..."
-                              className="w-full bg-transparent text-xs text-[var(--color-ink)] focus:outline-none placeholder:text-[var(--color-mute)] py-1"
-                              autoFocus
-                            />
-                            {clientSearchQuery && (
-                              <button
-                                type="button"
-                                onClick={() => setClientSearchQuery("")}
-                                className="text-[var(--color-mute)] hover:text-[var(--color-ink)] p-1"
-                              >
-                                <AnimatedX size={12} />
-                              </button>
-                            )}
-                          </div>
-
-                          <div className="overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
-                            {filteredClients.length === 0 ? (
-                              <div className="py-4 text-center text-xs text-[var(--color-mute)]">
-                                No matching clients found
-                              </div>
-                            ) : (
-                              filteredClients.map((c) => {
-                                const isSelected = c.id === selectedClientId;
-                                const cLoc = getClientFormattedLocation(c);
-                                return (
-                                  <button
-                                    key={c.id}
-                                    type="button"
-                                    onClick={() => handleSelectClient(c.id)}
-                                    className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
-                                      isSelected
-                                        ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold"
-                                        : "hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
-                                    }`}
-                                  >
-                                    <div className="min-w-0 pr-2">
-                                      <div className="font-bold flex items-center gap-2 truncate">
-                                        <span className="truncate">{c.client_name}</span>
-                                        <span className="font-mono text-[10px] text-sky-600 dark:text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded shrink-0">
-                                          {c.code}
-                                        </span>
-                                      </div>
-                                      {cLoc && (
-                                        <div className="text-[10px] text-[var(--color-mute)] font-normal truncate mt-0.5">
-                                          📍 {cLoc}
-                                        </div>
-                                      )}
-                                    </div>
-                                    {isSelected && (
-                                      <AnimatedCheck size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
-                                    )}
-                                  </button>
-                                );
-                              })
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <input
-                      type="text"
-                      value={selectedClient?.client_name || selectedMachine?.customer_name || ""}
-                      onChange={(e) => {
-                        // fallback input
-                      }}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)]"
-                      placeholder="Client Name..."
-                    />
-                  )}
-                </div>
-
-                {/* Client Site Location (Auto-Filled, Editable) */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)]">
-                      Client Site Location *
-                    </label>
-                    <span className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold tracking-tight">
-                      Auto-fetched
-                    </span>
-                  </div>
-                  <input
-                    type="text"
+                  <ClientSelect
+                    label="Client Name"
                     required
-                    value={clientLocation}
-                    onChange={(e) => setClientLocation(e.target.value)}
-                    placeholder="e.g. Plot 51, Industrial Growth Centre, Bhiwadi"
-                    className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                    clients={dbClients}
+                    value={selectedClientId}
+                    onChange={handleSelectClient}
+                    placeholder="Search or select client..."
                   />
                 </div>
               </div>
@@ -1353,14 +1125,9 @@ export function OperatorDashboard({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
                   {/* Starting Hour Meter Reading */}
                   <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] truncate">
-                        Starting Meter (hrs) *
-                      </label>
-                      <span className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold tracking-tight shrink-0 ml-1">
-                        Auto-fetched
-                      </span>
-                    </div>
+                    <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 truncate">
+                      Starting Meter (hrs) <span className="text-rose-500 font-bold ml-0.5">*</span>
+                    </label>
                     <input
                       type="number"
                       step="0.1"
@@ -1385,7 +1152,7 @@ export function OperatorDashboard({
                   {/* Ending Hour Meter Reading */}
                   <div>
                     <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 truncate">
-                      Ending Meter (hrs) *
+                      Ending Meter (hrs) <span className="text-rose-500 font-bold ml-0.5">*</span>
                     </label>
                     <input
                       type="number"
@@ -1410,79 +1177,149 @@ export function OperatorDashboard({
                 </div>
               </div>
 
-              {/* 2. Shift Timings Section */}
-              <div className="pt-2.5 border-t border-[var(--color-hairline)]/60 space-y-2">
-                <span className="text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider block">
-                  Shift Timings & Overtime
-                </span>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4">
+              {/* 2. Shift Timing Section */}
+              <div className="pt-3 border-t border-[var(--color-hairline)]/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider block">
+                    Shift Timing
+                  </span>
+                  {operatingStats.isValid ? (
+                    operatingStats.isOvernight && (
+                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 inline-flex items-center gap-1.5 shadow-2xs font-mono">
+                        🌙 Overnight · {operatingStats.durationFormatted}
+                      </span>
+                    )
+                  ) : (
+                    <span className="text-[11px] text-rose-500 font-semibold">
+                      {operatingStats.errorMessage || "Enter shift times"}
+                    </span>
+                  )}
+                </div>
+
+                {/* Machine Timeline Context Banner */}
+                {machineTimeline?.latestLog && (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 px-3 py-2 rounded-xl bg-sky-500/10 border border-sky-500/20 text-[11px] sm:text-xs text-sky-700 dark:text-sky-300">
+                    <div className="flex items-center gap-2">
+                      <Clock size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                      <span>
+                        <strong className="font-bold">Timeline Status:</strong> Last log ended on{" "}
+                        <span className="font-mono font-semibold">{machineTimeline.formattedEndDate} at {machineTimeline.formattedEndTime}</span>.
+                      </span>
+                    </div>
+                    <span className="text-[10px] sm:text-[11px] font-semibold text-sky-600 dark:text-sky-400 bg-sky-500/15 px-2 py-0.5 rounded-md self-start sm:self-auto">
+                      Exact handover allowed from {machineTimeline.formattedEndTime}
+                    </span>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-3.5 items-start">
+                  {/* Log Date */}
+                  <div className="lg:col-span-3">
+                    <CustomDatePicker
+                      label={
+                        <span>
+                          Log Date <span className="text-rose-500 font-bold ml-0.5">*</span>
+                        </span>
+                      }
+                      required
+                      value={selectedLogDate}
+                      onChange={(val) => setSelectedLogDate(val)}
+                      maxDaysOld={7}
+                    />
+                  </div>
+
                   {/* Start Time */}
-                  <div>
+                  <div className="lg:col-span-3">
                     <CustomTimePicker
-                      label="Start Time *"
+                      label="Start Time"
                       required
                       value={startTime}
                       onChange={handleStartTimeChange}
-                      placeholder="e.g. 06:00 AM"
                       iconColor="text-emerald-500"
                     />
                   </div>
 
                   {/* End Time */}
-                  <div>
+                  <div className="lg:col-span-3">
                     <CustomTimePicker
-                      label="End Time *"
+                      label="End Time"
                       required
                       value={endTime}
                       onChange={handleEndTimeChange}
-                      placeholder="e.g. 02:00 PM"
                       iconColor="text-rose-500"
                     />
                   </div>
 
                   {/* Overtime (Hours) */}
-                  <div>
+                  <div className="lg:col-span-3">
                     <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 truncate">
-                      Overtime (Hours)
+                      Overtime (hrs)
                     </label>
                     <input
                       type="number"
                       step="0.1"
                       min="0"
                       value={overtimeHours}
-                      onChange={(e) => setOvertimeHours(e.target.value)}
+                      onChange={(e) => {
+                        setOvertimeHours(e.target.value);
+                        setIsManualOvertime(true);
+                      }}
                       onPaste={(e) =>
                         handleClipboardPaste({
                           event: e,
                           schema: HmrSchema as any,
-                          onSuccess: (val) => setOvertimeHours(String(val)),
+                          onSuccess: (val) => {
+                            setOvertimeHours(String(val));
+                            setIsManualOvertime(true);
+                          },
                           onError: (msg) => toast("error", "Validation Error", msg),
                         })
                       }
                       placeholder="e.g. 0.0"
-                      className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                      className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 min-h-[42px]"
                     />
                   </div>
                 </div>
-              </div>
 
-              {/* Meter Validation & Time Overlap Warning Strip */}
-              {meterValidationWarning ? (
-                <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
-                  <AnimatedAlertTriangle size={16} className="shrink-0 text-rose-500" />
-                  <span>❌ {meterValidationWarning}</span>
-                </div>
-              ) : shiftOverlapWarning ? (
-                <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
-                  <AnimatedAlertTriangle size={16} className="shrink-0 text-rose-500" />
-                  <span>{shiftOverlapWarning}</span>
-                </div>
-              ) : !operatingStats.isValid ? (
-                <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
-                  <AnimatedAlertTriangle size={16} className="shrink-0" />
-                  <span>❌ {operatingStats.errorMessage}</span>
-                </div>
-              ) : null}
+                {/* Validation & Warning Strip */}
+                {meterValidationWarning ? (
+                  <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
+                    <AnimatedAlertTriangle size={16} className="shrink-0 text-rose-500" />
+                    <span>❌ {meterValidationWarning}</span>
+                  </div>
+                ) : sequencingValidation?.isInvalid ? (
+                  <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <AnimatedAlertTriangle size={16} className="shrink-0 text-rose-500" />
+                      <span>❌ {sequencingValidation.message}</span>
+                    </div>
+                    {sequencingValidation.recommendedStartTime && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStartTime(sequencingValidation.recommendedStartTime!);
+                          if (sequencingValidation.recommendedStartDate) {
+                            setSelectedLogDate(sequencingValidation.recommendedStartDate);
+                          }
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold transition-all shadow-2xs cursor-pointer self-start sm:self-auto whitespace-nowrap"
+                      >
+                        Align Start to {sequencingValidation.recommendedStartTime} (Handover)
+                      </button>
+                    )}
+                  </div>
+                ) : shiftOverlapWarning ? (
+                  <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
+                    <AnimatedAlertTriangle size={16} className="shrink-0 text-rose-500" />
+                    <span>{shiftOverlapWarning}</span>
+                  </div>
+                ) : !operatingStats.isValid ? (
+                  <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
+                    <AnimatedAlertTriangle size={16} className="shrink-0 text-rose-500" />
+                    <span>❌ {operatingStats.errorMessage}</span>
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             {/* ============================================ */}
@@ -1523,7 +1360,7 @@ export function OperatorDashboard({
                   <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
                     <div>
                       <label className="block text-[11px] font-bold text-[var(--color-ink)] mb-1">
-                        Breakdown Duration (Hours) *
+                        Breakdown Duration (Hours) <span className="text-rose-500 font-bold ml-0.5">*</span>
                       </label>
                       <input
                         type="number"
@@ -1538,7 +1375,7 @@ export function OperatorDashboard({
                     </div>
                     <div>
                       <label className="block text-[11px] font-bold text-[var(--color-ink)] mb-1">
-                        Breakdown Duration (Minutes) *
+                        Breakdown Duration (Minutes) <span className="text-rose-500 font-bold ml-0.5">*</span>
                       </label>
                       <input
                         type="number"
@@ -1729,7 +1566,8 @@ export function OperatorDashboard({
                         const s = formatTo12Hour(log.start_time) || "06:00 AM";
                         const e = formatTo12Hour(log.end_time) || "02:00 PM";
                         const ot = log.overtime_hours || 0;
-                        const stats = computeOperatingHours(s, e, ot);
+                        const d = log.log_date ? log.log_date.split("T")[0] : "2026-01-01";
+                        const stats = computeShiftTiming({ logDate: d, startTime: s, endTime: e, manualOvertime: ot });
                         return stats.normalWorkingHours;
                       })();
 
@@ -1753,8 +1591,8 @@ export function OperatorDashboard({
                             🔴 {bkdDurationStr || "Breakdown"}
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
-                            🟢 Normal
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] border border-[var(--color-hairline)] inline-flex items-center gap-1 font-mono">
+                            0
                           </span>
                         )}
                       </div>
@@ -1860,7 +1698,8 @@ export function OperatorDashboard({
                             const s = formatTo12Hour(log.start_time) || "06:00 AM";
                             const e = formatTo12Hour(log.end_time) || "02:00 PM";
                             const ot = log.overtime_hours || 0;
-                            const stats = computeOperatingHours(s, e, ot);
+                            const d = log.log_date ? log.log_date.split("T")[0] : "2026-01-01";
+                            const stats = computeShiftTiming({ logDate: d, startTime: s, endTime: e, manualOvertime: ot });
                             return stats.normalWorkingHours;
                           })();
 
@@ -1899,8 +1738,8 @@ export function OperatorDashboard({
                                 🔴 {bkdDurationStr || "Breakdown"}
                               </span>
                             ) : (
-                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
-                                🟢 Normal
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[var(--color-canvas)] text-[var(--color-ink)] border border-[var(--color-hairline)] inline-flex items-center gap-1 font-mono">
+                                0
                               </span>
                             )}
                           </td>
@@ -1995,9 +1834,13 @@ export function OperatorDashboard({
                 <span className="font-mono font-bold text-[var(--color-ink)]">{startMeter} → {endMeter} (+{meterRunningHours}h)</span>
               </div>
               <div>
-                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Timings / Working Time</span>
-                <span className="font-bold text-[var(--color-ink)] block">{startTime} → {endTime}</span>
-                <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 font-mono">{operatingStats.normalWorkingHours} hrs normal (1h break)</span>
+                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Shift Timing</span>
+                <span className="font-bold text-[var(--color-ink)] block text-[11px] font-mono">
+                  {operatingStats.resolvedRangeFormatted || `${startTime} → ${endTime}`}
+                </span>
+                <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 font-mono">
+                  {operatingStats.isOvernight ? "🌙 Overnight · " : "☀️ Day · "}{operatingStats.durationFormatted} ({operatingStats.normalWorkingHours.toFixed(1)}h work)
+                </span>
               </div>
               <div>
                 <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Overtime</span>
@@ -2013,7 +1856,7 @@ export function OperatorDashboard({
                 </div>
               ) : (
                 <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold">
-                  🟢 Normal (Machine operated normally today)
+                  🟢 Normal (0 breakdown hours)
                 </div>
               )}
             </div>
@@ -2056,7 +1899,9 @@ export function OperatorDashboard({
             <form onSubmit={handleResubmitLogCorrection} className="space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-[var(--color-ink)] mb-1">Start Meter (hrs) *</label>
+                  <label className="block font-bold text-[var(--color-ink)] mb-1">
+                    Start Meter (hrs) <span className="text-rose-500 font-bold ml-0.5">*</span>
+                  </label>
                   <input
                     type="number"
                     step="0.1"
@@ -2068,7 +1913,9 @@ export function OperatorDashboard({
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-[var(--color-ink)] mb-1">End Meter (hrs) *</label>
+                  <label className="block font-bold text-[var(--color-ink)] mb-1">
+                    End Meter (hrs) <span className="text-rose-500 font-bold ml-0.5">*</span>
+                  </label>
                   <input
                     type="number"
                     step="0.1"
@@ -2081,23 +1928,60 @@ export function OperatorDashboard({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <CustomTimePicker
-                  label="Start Time"
+              {/* Edit Shift Timing */}
+              <div className="space-y-3 p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/40">
+                <CustomDatePicker
+                  label={
+                    <span>
+                      Log Date <span className="text-rose-500 font-bold ml-0.5">*</span>
+                    </span>
+                  }
                   required
-                  value={editStartTime}
-                  onChange={setEditStartTime}
-                  placeholder="e.g. 08:00 AM"
-                  iconColor="text-emerald-500"
+                  value={editLogDate}
+                  onChange={(val) => setEditLogDate(val)}
+                  maxDaysOld={7}
                 />
-                <CustomTimePicker
-                  label="End Time"
-                  required
-                  value={editEndTime}
-                  onChange={setEditEndTime}
-                  placeholder="e.g. 05:00 PM"
-                  iconColor="text-rose-500"
-                />
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <CustomTimePicker
+                      label="Start Time"
+                      required
+                      value={editStartTime}
+                      onChange={(val) => setEditStartTime(val)}
+                      iconColor="text-emerald-500"
+                    />
+                  </div>
+
+                  <div>
+                    <CustomTimePicker
+                      label="End Time"
+                      required
+                      value={editEndTime}
+                      onChange={(val) => setEditEndTime(val)}
+                      iconColor="text-rose-500"
+                    />
+                  </div>
+                </div>
+
+                {editShiftOverlapWarning ? (
+                  <div className="text-[11px] text-rose-600 dark:text-rose-400 font-bold p-2 rounded-lg bg-rose-500/10 border border-rose-500/20">
+                    ❌ {editShiftOverlapWarning}
+                  </div>
+                ) : editOperatingStats.isValid ? (
+                  editOperatingStats.isOvernight ? (
+                    <div className="text-[11px] text-[var(--color-mute)] flex flex-col sm:flex-row sm:items-center justify-between font-mono bg-[var(--color-canvas-elevated)] p-2 rounded-lg border border-[var(--color-hairline)] gap-1">
+                      <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                        🌙 Overnight · {editOperatingStats.durationFormatted}
+                      </span>
+                      <span className="text-sky-600 dark:text-sky-400 font-bold">{editOperatingStats.normalWorkingHours.toFixed(1)}h working</span>
+                    </div>
+                  ) : null
+                ) : (
+                  <div className="text-[11px] text-rose-600 dark:text-rose-400 font-bold p-2 rounded-lg bg-rose-500/10 border border-rose-500/20">
+                    ❌ {editOperatingStats.errorMessage}
+                  </div>
+                )}
               </div>
 
               <div>

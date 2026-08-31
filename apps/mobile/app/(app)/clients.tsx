@@ -1,23 +1,30 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, Modal, TextInput, Switch } from 'react-native';
 import { Card, Badge, Input, Button, useTheme, MobileHeader } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert } from 'lucide-react-native';
+import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText } from 'lucide-react-native';
 
 export type StatusFilter = 'all' | 'active' | 'inactive';
 
 interface ClientItem {
   id: string;
   code: string;
-  client_name: string;
-  company_name?: string;
+  company_name: string;
   contact_person?: string;
   phone?: string;
-  email?: string;
   gstin?: string;
+  pan_number?: string;
   address: string;
   city: string;
+  district?: string;
   state: string;
+  pincode?: string;
+  is_billing_address_different?: boolean;
+  billing_address?: string;
+  billing_city?: string;
+  billing_district?: string;
+  billing_state?: string;
+  billing_pincode?: string;
   status: 'active' | 'inactive';
   deleted_at?: string | null;
 }
@@ -26,42 +33,39 @@ const INITIAL_CLIENTS: ClientItem[] = [
   {
     id: 'cli-001',
     code: 'CLI-0001',
-    client_name: 'Pushpa Infracon Pvt Ltd',
-    company_name: 'Pushpa Group',
+    company_name: 'Pushpa Infracon Pvt Ltd',
     contact_person: 'Rajesh Sharma',
     phone: '+91 98765 43210',
-    email: 'info@pushpainfra.com',
     gstin: '07AAAAA0000A1Z5',
+    pan_number: 'ABCDE1234F',
     address: 'Plot 12, Industrial Area Phase 2',
     city: 'Delhi',
+    district: 'New Delhi',
     state: 'Delhi',
     status: 'active',
   },
   {
     id: 'cli-002',
     code: 'CLI-0002',
-    client_name: 'ABC Infrastructure Ltd',
-    company_name: 'ABC Corp',
+    company_name: 'ABC Infrastructure Ltd',
     contact_person: 'Suresh Kumar',
     phone: '+91 98123 45678',
-    email: 'contact@abcinfra.com',
-    gstin: '07BBBBB1111B1Z2',
+    gstin: '06BBBBB0000B1Z6',
     address: 'Sector 34, Cyber City Phase 1',
     city: 'Gurgaon',
+    district: 'Gurugram',
     state: 'Haryana',
     status: 'active',
   },
   {
     id: 'cli-003',
     code: 'CLI-0003',
-    client_name: 'Global Logistics Hub',
-    company_name: 'Global Corp',
+    company_name: 'Global Logistics Hub',
     contact_person: 'Anil Patel',
     phone: '+91 99887 76655',
-    email: 'ops@globallogistics.in',
-    gstin: '07CCCCC2222C1Z9',
     address: 'Plot 9, Logistics Park, Ecotech 3',
     city: 'Noida',
+    district: 'Gautam Buddha Nagar',
     state: 'Uttar Pradesh',
     status: 'inactive',
   },
@@ -80,15 +84,24 @@ export default function ClientsScreen() {
   const [editingClient, setEditingClient] = useState<ClientItem | null>(null);
 
   // Form State
-  const [clientName, setClientName] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [contactPerson, setContactPerson] = useState('');
   const [phone, setPhone] = useState('');
-  const [email, setEmail] = useState('');
   const [gstin, setGstin] = useState('');
+  const [panNumber, setPanNumber] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
+  const [district, setDistrict] = useState('');
   const [stateName, setStateName] = useState('');
+  const [pincode, setPincode] = useState('');
+
+  // Conditional Billing Address
+  const [isBillingAddressDifferent, setIsBillingAddressDifferent] = useState(false);
+  const [billingAddress, setBillingAddress] = useState('');
+  const [billingCity, setBillingCity] = useState('');
+  const [billingDistrict, setBillingDistrict] = useState('');
+  const [billingState, setBillingState] = useState('');
+  const [billingPincode, setBillingPincode] = useState('');
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -101,13 +114,18 @@ export default function ClientsScreen() {
     const q = search.toLowerCase().trim();
     const matchesSearch =
       !q ||
-      c.client_name.toLowerCase().includes(q) ||
+      c.company_name.toLowerCase().includes(q) ||
       c.code.toLowerCase().includes(q) ||
       (c.contact_person && c.contact_person.toLowerCase().includes(q)) ||
       (c.phone && c.phone.includes(q)) ||
+      (c.gstin && c.gstin.toLowerCase().includes(q)) ||
+      (c.pan_number && c.pan_number.toLowerCase().includes(q)) ||
       (c.address && c.address.toLowerCase().includes(q)) ||
       (c.city && c.city.toLowerCase().includes(q)) ||
-      (c.state && c.state.toLowerCase().includes(q));
+      (c.district && c.district.toLowerCase().includes(q)) ||
+      (c.state && c.state.toLowerCase().includes(q)) ||
+      (c.billing_address && c.billing_address.toLowerCase().includes(q)) ||
+      (c.billing_city && c.billing_city.toLowerCase().includes(q));
 
     const matchesStatus = activeFilter === 'all' || c.status === activeFilter;
     return matchesSearch && matchesStatus;
@@ -115,35 +133,49 @@ export default function ClientsScreen() {
 
   const handleOpenAdd = () => {
     setEditingClient(null);
-    setClientName('');
     setCompanyName('');
     setContactPerson('');
     setPhone('');
-    setEmail('');
     setGstin('');
+    setPanNumber('');
     setAddress('');
     setCity('');
+    setDistrict('');
     setStateName('');
+    setPincode('');
+    setIsBillingAddressDifferent(false);
+    setBillingAddress('');
+    setBillingCity('');
+    setBillingDistrict('');
+    setBillingState('');
+    setBillingPincode('');
     setModalVisible(true);
   };
 
   const handleOpenEdit = (client: ClientItem) => {
     setEditingClient(client);
-    setClientName(client.client_name);
-    setCompanyName(client.company_name || '');
+    setCompanyName(client.company_name);
     setContactPerson(client.contact_person || '');
     setPhone(client.phone || '');
-    setEmail(client.email || '');
     setGstin(client.gstin || '');
+    setPanNumber(client.pan_number || '');
     setAddress(client.address || '');
     setCity(client.city || '');
+    setDistrict(client.district || '');
     setStateName(client.state || '');
+    setPincode(client.pincode || '');
+    setIsBillingAddressDifferent(Boolean(client.is_billing_address_different));
+    setBillingAddress(client.billing_address || '');
+    setBillingCity(client.billing_city || '');
+    setBillingDistrict(client.billing_district || '');
+    setBillingState(client.billing_state || '');
+    setBillingPincode(client.billing_pincode || '');
     setModalVisible(true);
   };
 
   const handleSave = () => {
-    if (!clientName.trim()) {
-      Alert.alert('Validation Error', 'Please enter a valid client name.');
+    if (!companyName.trim()) {
+      Alert.alert('Validation Error', 'Please enter a valid company name.');
       return;
     }
 
@@ -158,15 +190,22 @@ export default function ClientsScreen() {
           c.id === editingClient.id
             ? {
                 ...c,
-                client_name: clientName.trim(),
                 company_name: companyName.trim(),
                 contact_person: contactPerson.trim(),
                 phone: phone.trim(),
-                email: email.trim(),
-                gstin: gstin.trim(),
+                gstin: gstin.trim().toUpperCase(),
+                pan_number: panNumber.trim().toUpperCase(),
                 address: address.trim(),
                 city: city.trim(),
+                district: district.trim(),
                 state: stateName.trim(),
+                pincode: pincode.trim(),
+                is_billing_address_different: isBillingAddressDifferent,
+                billing_address: isBillingAddressDifferent ? billingAddress.trim() : undefined,
+                billing_city: isBillingAddressDifferent ? billingCity.trim() : undefined,
+                billing_district: isBillingAddressDifferent ? billingDistrict.trim() : undefined,
+                billing_state: isBillingAddressDifferent ? billingState.trim() : undefined,
+                billing_pincode: isBillingAddressDifferent ? billingPincode.trim() : undefined,
               }
             : c
         )
@@ -177,15 +216,22 @@ export default function ClientsScreen() {
       const newClient: ClientItem = {
         id: `cli-${Date.now()}`,
         code,
-        client_name: clientName.trim(),
         company_name: companyName.trim(),
         contact_person: contactPerson.trim(),
         phone: phone.trim(),
-        email: email.trim(),
-        gstin: gstin.trim(),
+        gstin: gstin.trim().toUpperCase(),
+        pan_number: panNumber.trim().toUpperCase(),
         address: address.trim(),
         city: city.trim(),
+        district: district.trim(),
         state: stateName.trim(),
+        pincode: pincode.trim(),
+        is_billing_address_different: isBillingAddressDifferent,
+        billing_address: isBillingAddressDifferent ? billingAddress.trim() : undefined,
+        billing_city: isBillingAddressDifferent ? billingCity.trim() : undefined,
+        billing_district: isBillingAddressDifferent ? billingDistrict.trim() : undefined,
+        billing_state: isBillingAddressDifferent ? billingState.trim() : undefined,
+        billing_pincode: isBillingAddressDifferent ? billingPincode.trim() : undefined,
         status: 'active',
       };
       setClients([newClient, ...clients]);
@@ -196,7 +242,7 @@ export default function ClientsScreen() {
   const handleSoftDelete = (client: ClientItem) => {
     Alert.alert(
       'Soft Delete Client?',
-      `Are you sure you want to soft delete "${client.client_name}"? Historical logs will remain 100% intact.`,
+      `Are you sure you want to soft delete "${client.company_name}"? Historical logs will remain 100% intact.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -240,7 +286,7 @@ export default function ClientsScreen() {
             <Input
               value={search}
               onChangeText={setSearch}
-              placeholder="Search clients..."
+              placeholder="Search clients, GST, PAN, city..."
               leftIcon={<Search size={16} color={theme.colors.mute} />}
             />
           </View>
@@ -289,11 +335,22 @@ export default function ClientsScreen() {
             filteredClients.map((item) => (
               <Card key={item.id} style={styles.clientCard}>
                 <View style={styles.cardHeader}>
-                  <View>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
                     <Text style={[styles.codeText, { color: theme.colors.primary }]}>{item.code}</Text>
-                    <Text style={[styles.clientName, { color: theme.colors.ink }]}>{item.client_name}</Text>
-                    {item.company_name && (
-                      <Text style={[styles.subText, { color: theme.colors.mute }]}>{item.company_name}</Text>
+                    <Text style={[styles.clientName, { color: theme.colors.ink }]}>{item.company_name}</Text>
+                    {(item.gstin || item.pan_number) && (
+                      <View style={styles.tagRow}>
+                        {item.gstin ? (
+                          <View style={[styles.taxBadge, { backgroundColor: '#f3e8ff', borderColor: '#d8b4fe' }]}>
+                            <Text style={[styles.taxBadgeText, { color: '#7e22ce' }]}>GST: {item.gstin}</Text>
+                          </View>
+                        ) : null}
+                        {item.pan_number ? (
+                          <View style={[styles.taxBadge, { backgroundColor: '#e0f2fe', borderColor: '#bae6fd' }]}>
+                            <Text style={[styles.taxBadgeText, { color: '#0369a1' }]}>PAN: {item.pan_number}</Text>
+                          </View>
+                        ) : null}
+                      </View>
                     )}
                   </View>
                   <Badge
@@ -314,8 +371,13 @@ export default function ClientsScreen() {
                     </Text>
                   )}
                   <Text style={[styles.detailRow, { color: theme.colors.ink }]}>
-                    Location: <Text style={{ fontWeight: '600' }}>{[item.city, item.state].filter(Boolean).join(', ') || '—'}</Text>
+                    Location: <Text style={{ fontWeight: '600' }}>{[item.city, item.district, item.state].filter(Boolean).join(', ') || '—'}</Text>
                   </Text>
+                  {item.is_billing_address_different && (
+                    <Text style={[styles.detailRow, { color: '#d97706', fontWeight: '600' }]}>
+                      Billing: {[item.billing_city, item.billing_state].filter(Boolean).join(', ') || 'Separate Address'}
+                    </Text>
+                  )}
                 </View>
 
                 {/* Touch Actions */}
@@ -355,72 +417,211 @@ export default function ClientsScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 380 }}>
-              <View style={styles.formGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Client Name *</Text>
-                <TextInput
-                  value={clientName}
-                  onChangeText={setClientName}
-                  placeholder="e.g. Pushpa Infracon"
-                  placeholderTextColor={theme.colors.mute}
-                  style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
-                />
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+              <View style={styles.formSection}>
+                <Text style={[styles.sectionTitle, { color: theme.colors.mute }]}>Company & Tax Details</Text>
+                
+                <View style={styles.formGroup}>
+                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Company Name *</Text>
+                  <TextInput
+                    value={companyName}
+                    onChangeText={setCompanyName}
+                    placeholder="e.g. Pushpa Infracon Pvt Ltd"
+                    placeholderTextColor={theme.colors.mute}
+                    style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Contact Person</Text>
+                  <TextInput
+                    value={contactPerson}
+                    onChangeText={setContactPerson}
+                    placeholder="e.g. Rajesh Sharma"
+                    placeholderTextColor={theme.colors.mute}
+                    style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                  />
+                </View>
+
+                <View style={styles.formGroup}>
+                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Phone Number</Text>
+                  <TextInput
+                    value={phone}
+                    onChangeText={setPhone}
+                    placeholder="e.g. +91 98765 43210"
+                    placeholderTextColor={theme.colors.mute}
+                    keyboardType="phone-pad"
+                    style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                  />
+                </View>
+
+                <View style={styles.rowInputs}>
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>GSTIN Number</Text>
+                    <TextInput
+                      value={gstin}
+                      onChangeText={(t) => setGstin(t.toUpperCase())}
+                      placeholder="07AAAAA0000A1Z5"
+                      placeholderTextColor={theme.colors.mute}
+                      autoCapitalize="characters"
+                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                    />
+                  </View>
+
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>PAN Number</Text>
+                    <TextInput
+                      value={panNumber}
+                      onChangeText={(t) => setPanNumber(t.toUpperCase())}
+                      placeholder="ABCDE1234F"
+                      placeholderTextColor={theme.colors.mute}
+                      autoCapitalize="characters"
+                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                    />
+                  </View>
+                </View>
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Contact Person</Text>
-                <TextInput
-                  value={contactPerson}
-                  onChangeText={setContactPerson}
-                  placeholder="e.g. Rajesh Sharma"
-                  placeholderTextColor={theme.colors.mute}
-                  style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
-                />
+              <View style={styles.formSection}>
+                <Text style={[styles.sectionTitle, { color: theme.colors.mute }]}>Site Address</Text>
+
+                <View style={styles.formGroup}>
+                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Site Address *</Text>
+                  <TextInput
+                    value={address}
+                    onChangeText={setAddress}
+                    placeholder="e.g. Plot 42, Sector 18, Industrial Area"
+                    placeholderTextColor={theme.colors.mute}
+                    style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                  />
+                </View>
+
+                <View style={styles.rowInputs}>
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>City *</Text>
+                    <TextInput
+                      value={city}
+                      onChangeText={setCity}
+                      placeholder="e.g. Pune"
+                      placeholderTextColor={theme.colors.mute}
+                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                    />
+                  </View>
+
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>District</Text>
+                    <TextInput
+                      value={district}
+                      onChangeText={setDistrict}
+                      placeholder="e.g. Pune"
+                      placeholderTextColor={theme.colors.mute}
+                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.rowInputs}>
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>State *</Text>
+                    <TextInput
+                      value={stateName}
+                      onChangeText={setStateName}
+                      placeholder="e.g. Maharashtra"
+                      placeholderTextColor={theme.colors.mute}
+                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                    />
+                  </View>
+
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Pincode</Text>
+                    <TextInput
+                      value={pincode}
+                      onChangeText={setPincode}
+                      placeholder="411001"
+                      placeholderTextColor={theme.colors.mute}
+                      keyboardType="numeric"
+                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                    />
+                  </View>
+                </View>
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Phone Number</Text>
-                <TextInput
-                  value={phone}
-                  onChangeText={setPhone}
-                  placeholder="e.g. +91 98765 43210"
-                  placeholderTextColor={theme.colors.mute}
-                  keyboardType="phone-pad"
-                  style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
-                />
-              </View>
+              <View style={styles.formSection}>
+                <View style={styles.toggleRow}>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.mute, marginBottom: 0 }]}>Billing Address</Text>
+                  <View style={styles.switchWrapper}>
+                    <Text style={[styles.switchLabel, { color: theme.colors.ink }]}>Different Address</Text>
+                    <Switch
+                      value={isBillingAddressDifferent}
+                      onValueChange={setIsBillingAddressDifferent}
+                      trackColor={{ false: theme.colors.hairline, true: theme.colors.primary }}
+                    />
+                  </View>
+                </View>
 
-              <View style={styles.formGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Office / Plant Address *</Text>
-                <TextInput
-                  value={address}
-                  onChangeText={setAddress}
-                  placeholder="e.g. Plot 42, Sector 18, Industrial Area"
-                  placeholderTextColor={theme.colors.mute}
-                  style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
-                />
-              </View>
+                {isBillingAddressDifferent && (
+                  <View style={{ marginTop: 8 }}>
+                    <View style={styles.formGroup}>
+                      <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Billing Address</Text>
+                      <TextInput
+                        value={billingAddress}
+                        onChangeText={setBillingAddress}
+                        placeholder="e.g. Corporate HQ, Tower B, Cyber City"
+                        placeholderTextColor={theme.colors.mute}
+                        style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                      />
+                    </View>
 
-              <View style={styles.formGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>City *</Text>
-                <TextInput
-                  value={city}
-                  onChangeText={setCity}
-                  placeholder="e.g. Pune"
-                  placeholderTextColor={theme.colors.mute}
-                  style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
-                />
-              </View>
+                    <View style={styles.rowInputs}>
+                      <View style={[styles.formGroup, { flex: 1 }]}>
+                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>City</Text>
+                        <TextInput
+                          value={billingCity}
+                          onChangeText={setBillingCity}
+                          placeholder="e.g. Gurugram"
+                          placeholderTextColor={theme.colors.mute}
+                          style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                        />
+                      </View>
 
-              <View style={styles.formGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>State *</Text>
-                <TextInput
-                  value={stateName}
-                  onChangeText={setStateName}
-                  placeholder="e.g. Maharashtra"
-                  placeholderTextColor={theme.colors.mute}
-                  style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
-                />
+                      <View style={[styles.formGroup, { flex: 1 }]}>
+                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>District</Text>
+                        <TextInput
+                          value={billingDistrict}
+                          onChangeText={setBillingDistrict}
+                          placeholder="e.g. Gurugram"
+                          placeholderTextColor={theme.colors.mute}
+                          style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                        />
+                      </View>
+                    </View>
+
+                    <View style={styles.rowInputs}>
+                      <View style={[styles.formGroup, { flex: 1 }]}>
+                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>State</Text>
+                        <TextInput
+                          value={billingState}
+                          onChangeText={setBillingState}
+                          placeholder="e.g. Haryana"
+                          placeholderTextColor={theme.colors.mute}
+                          style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                        />
+                      </View>
+
+                      <View style={[styles.formGroup, { flex: 1 }]}>
+                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Pincode</Text>
+                        <TextInput
+                          value={billingPincode}
+                          onChangeText={setBillingPincode}
+                          placeholder="122002"
+                          placeholderTextColor={theme.colors.mute}
+                          keyboardType="numeric"
+                          style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                        />
+                      </View>
+                    </View>
+                  </View>
+                )}
               </View>
             </ScrollView>
 
@@ -455,6 +656,9 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   codeText: { fontSize: 11, fontWeight: '800', fontFamily: 'monospace' },
   clientName: { fontSize: 14, fontWeight: '800' },
+  tagRow: { flexDirection: 'row', gap: 6, marginTop: 4, flexWrap: 'wrap' },
+  taxBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1 },
+  taxBadgeText: { fontSize: 9, fontWeight: '700', fontFamily: 'monospace' },
   subText: { fontSize: 10 },
   cardDetails: { borderTopWidth: 1, paddingTop: 8, gap: 4 },
   detailRow: { fontSize: 11 },
@@ -462,11 +666,17 @@ const styles = StyleSheet.create({
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, minHeight: 44 },
   actionBtnText: { fontSize: 11, fontWeight: '700' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: spacingNumeric.md },
-  modalContent: { borderRadius: radiusNumeric.lg, padding: spacingNumeric.md, gap: spacingNumeric.sm },
+  modalContent: { borderRadius: radiusNumeric.lg, padding: spacingNumeric.md, gap: spacingNumeric.sm, maxHeight: '90%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   modalTitle: { fontSize: 15, fontWeight: '800' },
-  formGroup: { marginBottom: 10 },
+  formSection: { marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, padding: 10 },
+  sectionTitle: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  formGroup: { marginBottom: 8 },
+  rowInputs: { flexDirection: 'row', gap: 8 },
   fieldLabel: { fontSize: 11, fontWeight: '600', marginBottom: 4 },
   modalInput: { borderWidth: 1, borderRadius: radiusNumeric.sm, paddingHorizontal: 10, paddingVertical: 8, fontSize: 12 },
+  toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  switchWrapper: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  switchLabel: { fontSize: 11, fontWeight: '600' },
   modalFooter: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 8 },
 });

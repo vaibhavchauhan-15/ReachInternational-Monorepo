@@ -6,7 +6,7 @@ import { TAGS, CACHE_TIERS } from "@/lib/cache";
 import type { CRMClient } from "@/lib/types/database";
 
 const CLIENT_SELECT_COLUMNS =
-  "id, code, client_name, company_name, contact_person, email, phone, gstin, address, city, state, pincode, notes, status, deleted_at, created_at, updated_at";
+  "id, code, company_name, contact_person, phone, gstin, pan_number, address, city, district, state, pincode, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode, status, deleted_at, created_at, updated_at";
 
 const getCachedClients = unstable_cache(
   async (includeDeleted: boolean = false): Promise<CRMClient[]> => {
@@ -14,7 +14,7 @@ const getCachedClients = unstable_cache(
     let query = supabase
       .from("clients")
       .select(CLIENT_SELECT_COLUMNS)
-      .order("client_name", { ascending: true });
+      .order("company_name", { ascending: true });
 
     if (!includeDeleted) {
       query = query.is("deleted_at", null);
@@ -29,12 +29,13 @@ const getCachedClients = unstable_cache(
 
     return ((data as CRMClient[]) ?? []).map((client) => ({
       ...client,
+      client_name: client.company_name,
       machine_count: client.machine_count ?? 0,
       open_complaints: client.open_complaints ?? 0,
       status: client.status ?? "active",
     }));
   },
-  ["clients-directory-list-v2"],
+  ["clients-directory-list-v4"],
   {
     revalidate: CACHE_TIERS.CLASS_B_DIRECTORY,
     tags: [TAGS.clients],
@@ -55,19 +56,20 @@ export const getClientOptions = unstable_cache(
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase
       .from("clients")
-      .select("id, code, client_name")
+      .select("id, code, company_name")
       .is("deleted_at", null)
-      .order("client_name", { ascending: true });
+      .order("company_name", { ascending: true });
 
     if (error || !data) return [];
 
     return data.map((c: any) => ({
       id: c.id,
-      label: c.client_name || c.code || "Unknown Client",
+      label: c.company_name || c.code || "Unknown Client",
       code: c.code || undefined,
     }));
   },
-  ["client-options-v2"],
+  ["client-options-v3"],
   { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.clients] }
 );
+
 

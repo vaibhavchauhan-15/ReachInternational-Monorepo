@@ -19,6 +19,7 @@ export interface MachineDetailModalProps {
     health_status: string;
     hour_meter: number;
     service_count: number;
+    customer_name?: string;
     supervisor_name?: string;
     operator_name?: string;
   };
@@ -37,6 +38,7 @@ export const MachineDetailModal: React.FC<MachineDetailModalProps> = ({
     health_status: 'active',
     hour_meter: 1420,
     service_count: 3,
+    customer_name: 'Saint Gobain',
     supervisor_name: 'Rajesh Kumar',
     operator_name: 'Vikram Singh',
   },
@@ -108,8 +110,8 @@ export const MachineDetailModal: React.FC<MachineDetailModalProps> = ({
                   <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.hour_meter} hrs</Text>
                 </View>
                 <View style={styles.gridItem}>
-                  <Text style={[styles.lbl, { color: theme.colors.mute }]}>Services Logged</Text>
-                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.service_count}</Text>
+                  <Text style={[styles.lbl, { color: theme.colors.mute }]}>Assigned Client</Text>
+                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.customer_name || 'Unassigned'}</Text>
                 </View>
               </View>
             </View>

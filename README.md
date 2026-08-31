@@ -54,18 +54,30 @@
 
 ### 4. 📝 Operator Daily Machine Logs & Log History (`/operations` for operators)
 - **Daily Machine Log Entry (`tab=entry`)**:
+  - **Machine Timeline Sequencing & Zero-Overlap Guarantee**: Strictly prevents duplicate and overlapping shifts for each machine. New logs must start at or after the previous log's end time. Supports exact handovers (`06:00 AM – 06:00 PM → 06:00 PM – 10:00 PM`) and overnight shifts (`31-Aug 10:00 PM → 01-Sep 06:00 AM`) across calendar days.
+  - **Timeline Context Banner & 1-Click Handover Alignment**: Real-time banner displays previous log end time and handover eligibility with a 1-click button to align start time to exact handover.
+  - **PostgreSQL GiST Exclusion & Concurrency Protection**: Atomic `[start_datetime, end_datetime)` GiST exclusion constraint and transaction-level advisory locks prevent race conditions during concurrent submissions.
   - **Section A (Machine & Client Info)**: Auto-populates Machine Model, Serial Number, Client Name, and Client Site Location.
   - **Section B (Time, Meter Readings & Normal Working Time)**: Interactive `CustomTimePicker` for Start/End times, quick shift action pills (`06:00 AM`, `08:00 AM`, `02:00 PM`, `08:00 PM`), automatic 1-hour break deduction, live shift duration breakdown, Overtime computation, Normal Working Time calculation ($\text{Duration} - \text{OT} - 1.0\text{h}$), starting/ending HMR, breakdown duration toggle, and remarks.
 - **Log History (`tab=history`)**:
   - Operators inspect past submitted daily machine logs with real-time shift timings alongside normal working time (excl. OT), overtime badges, and breakdown duration indicators.
   - **7-Day Edit Locking Window**: Operators can edit and resubmit logs created within the past 7 days across desktop and mobile card views, after which logs are automatically locked to prevent retro-edits.
 
-### 5. 🏢 Client Directory & Address Policy (`/clients`)
-- **Mandatory Client Address Policy**: Every client record strictly requires complete address parameters (Office/Site Street Address, City, and State) across PostgreSQL constraints, Zod schemas, web dialogs, and mobile apps.
-- **Client Lifecycle Management**: Add new clients, update client parameters, inspect machine fleet counts, and manage contact persons.
+### 5. 🏢 Client Directory & Tax/Billing Management (`/clients`)
+- **Streamlined Client Profile**: Uses Company Name as the single primary client identifier along with Contact Person, Phone Number, GSTIN Number, and PAN Card Number.
+- **Site Location & District**: Stores primary Office / Site Street Address, City, District, State, and Pincode across database constraints, validation schemas, and UI modals.
+- **Conditional Billing Address**: Supports dedicated separate billing addresses (Billing Address, City, District, State, Pincode) toggleable when billing differs from operational site locations.
+- **Client Lifecycle Management**: Register new clients, update client parameters, inspect machine fleet counts, soft delete clients with historical log preservation, and manage contact persons.
 
-### 6. 🔑 Login & Access Control (`/login`, `/signup`, `/forgot-password`)
-- Secure authentication flow backed by Supabase SSR Auth and Next.js 16 Edge proxy security middleware with mandatory City, District, State, Aadhaar Card Number, and Driving Licence Number registration fields.
+### 7. 🎨 Centralized UI Design System (`apps/web/components/ui/`)
+- **Single Canonical UI Architecture**: One centralized reusable UI system across buttons, form controls, date & time pickers, search & filtering controls, enterprise tables, export controls, modals, and layouts.
+- **Buttons**: Canonical `<Button>` supporting variants (`primary`, `secondary`, `outline`, `ghost`, `danger`, `destructive`, `success`, `link`, `primary-sm`, `ghost-sm`, `danger-sm`, `success-sm`), sizes (`sm`, `md`, `lg`, `icon`), `fullWidth`, `responsive` / `mobileIconOnly` (auto icon collapse on ≤640px), and `<IconButton>`.
+- **Form Controls**: `<Input>`, `<PasswordInput>`, `<NumberInput>`, `<Textarea>`, `<Select>`, `<MultiSelect>`, `<Checkbox>`, `<Radio>`, `<Switch>`, and `<FormField>` layout wrappers.
+- **Date & Time**: `<DatePicker>`, `<DateRangePicker>` (with presets: Today, Yesterday, Last 7d, Last 30d, This Month, Custom), `<TimePicker>` (IST GMT+5:30 radial clock dial & digital), and `<DateTimePicker>`.
+- **Search & Filtering**: `<SearchBox>`, `<FilterToolbar>`, `<FilterDropdown>`, `<SortControl>`, and `<FilterChips>` with 1-click reset.
+- **Tables & Data Display**: `<DataTable>`, `<EnterpriseTable>`, `<Pagination>` with page size controls (`10`, `25`, `50`, `100`), `<EmptyState>`, and `<SkeletonTable>`.
+- **Export Controls**: `<ExportButton>` and `<ExportDropdown>` supporting Excel (`.xlsx`), CSV (`.csv`), PDF (`.pdf`), and Print actions with tooltips and mobile responsiveness.
+- **Feedback & Navigation**: `<Alert>`, `<Drawer>`, `<Modal>`, `<ConfirmationDialog>`, `<Tabs>`, `<Breadcrumb>`, `<PageContainer>`, and `<Section>`.
 
 ---
 
@@ -172,14 +184,20 @@ ReachInternational-Monorepo/
 
 ## 🗄 Database Schema
 
-The core database is built on 6 central tables in Supabase PostgreSQL:
+The core database is built on 7 central tables in Supabase PostgreSQL:
 
 1. `public.users`: System user accounts (email, phone, role, city, district, state, aadhaar_number, license_number, status).
 2. `public.machines`: Machine fleet master (machine_code, model, serial_number, manufacturer, year_of_manufacture, hour_meter, customer_name, status).
 3. `public.machine_hour_logs`: Daily running hour logs (machine_id, client_id, operator_id, supervisor_id, log_date, start_time, end_time, start_meter, end_meter, running_hours, normal_working_hours, overtime_hours, is_breakdown, location, remarks, idempotency_key).
 4. `public.clients`: Registered clients & customer sites (client_code, client_name, contact_person, phone, email, address, city, state).
-5. `public.idempotency_keys`: Replay attack protection & state mutation deduplication key ledger (idempotency_key, user_id, action_name, request_hash, status, response_payload, created_at, expires_at).
-6. `public.audit_logs`: Immutable, append-only security & compliance audit trail (id, user_id, action, entity_type, entity_id, metadata, ip_address, created_at).
+5. `public.states`: Official Indian State and Union Territory directory with official smallint LGD codes (36 entities).
+6. `public.districts`: Official Indian Administrative Districts directory (784 districts mapped to `states(id)` with smallint LGD codes).
+7. `public.cities`: Statutory Cities, Municipal Corporations, City Municipal Councils, and Major Urban Centers (466 entities mapped to `districts(id)` with Census location codes).
+8. `public.towns`: Statutory Municipal Councils, Nagar Palika Parishads, Nagar Panchayats, Town Panchayats, Census Towns, and Sub-District/Tehsil/Taluka hubs (15,081 entities mapped to `districts(id)`).
+9. `public.villages`: Complete Census Revenue Village directory (640,787 villages mapped to `districts(id)` with 6-digit Census village codes).
+10. `public.master_location`: Unified high-speed location lookup and autocomplete master (15,331 records) indexed with composite B-Tree and `pg_trgm` GIN indexes (`search_text`).
+11. `public.idempotency_keys`: Replay attack protection & state mutation deduplication key ledger (idempotency_key, user_id, action_name, request_hash, status, response_payload, created_at, expires_at).
+12. `public.audit_logs`: Immutable, append-only security & compliance audit trail (id, user_id, action, entity_type, entity_id, metadata, ip_address, created_at).
 
 ---
 

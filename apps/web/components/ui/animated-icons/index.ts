@@ -11,11 +11,15 @@ export const AnimatedChevronUp = createAnimatedIcon(L.ChevronUp, "arrow-up");
 export const AnimatedChevronsUpDown = createAnimatedIcon(L.ChevronsUpDown, "bounce");
 export const AnimatedArrowRight = createAnimatedIcon(L.ArrowRight, "arrow-right");
 export const AnimatedArrowLeft = createAnimatedIcon(L.ArrowLeft, "arrow-left");
+export const AnimatedArrowUp = createAnimatedIcon(L.ArrowUp, "arrow-up");
+export const AnimatedArrowDown = createAnimatedIcon(L.ArrowDown, "arrow-down");
+export const AnimatedArrowUpDown = createAnimatedIcon(L.ArrowUpDown, "bounce");
 export const AnimatedArrowUpRight = createAnimatedIcon(L.ArrowUpRight, "arrow-right");
 export const AnimatedArrowDownLeft = createAnimatedIcon(L.ArrowDownLeft, "arrow-left");
 
 // Actions & Tools Icons
 export const AnimatedPlus = createAnimatedIcon(L.Plus, "bounce");
+export const AnimatedMinus = createAnimatedIcon(L.Minus, "bounce");
 export const AnimatedCopy = createAnimatedIcon(L.Copy, "bounce");
 export const AnimatedTrash = createAnimatedIcon(L.Trash2, "tilt");
 export const AnimatedEdit = createAnimatedIcon(L.Edit, "draw");

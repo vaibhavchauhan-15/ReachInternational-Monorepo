@@ -11,3 +11,4 @@ export * from "./branches";
 export * from "./categories";
 export * from "./dashboard";
 export * from "./reports";
+export * from "./locations";

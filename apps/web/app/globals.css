@@ -414,7 +414,7 @@ html {
 .btn-primary {
   background: var(--color-primary);
   color: var(--color-on-primary);
-  border-radius: var(--radius-md);
+  border-radius: 8px;
   font-size: var(--text-button-md-size);
   font-weight: 600;
   line-height: var(--text-button-md-line);
@@ -452,7 +452,7 @@ html {
   background: var(--color-canvas-elevated);
   color: var(--color-ink);
   border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-md);
+  border-radius: 8px;
   font-size: var(--text-button-md-size);
   font-weight: 500;
   line-height: var(--text-button-md-line);
@@ -471,6 +471,11 @@ html {
 
 .btn-secondary:hover {
   background: var(--color-hairline-soft);
+  border-color: #cbd5e1;
+}
+
+:is(.dark) .btn-secondary:hover {
+  border-color: #3a3e42;
 }
 
 .btn-secondary:active {
@@ -481,7 +486,7 @@ html {
 .btn-primary-sm {
   background: var(--color-primary);
   color: var(--color-on-primary);
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
   font-size: var(--text-button-md-size);
   font-weight: 600;
   line-height: var(--text-button-md-line);
@@ -519,7 +524,7 @@ html {
   background: var(--color-canvas-elevated);
   color: var(--color-ink);
   border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
   font-size: var(--text-button-md-size);
   font-weight: var(--text-button-md-weight);
   line-height: var(--text-button-md-line);
@@ -580,7 +585,7 @@ html {
 .btn-success-sm {
   background: var(--color-success);
   color: white;
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
   font-size: var(--text-button-md-size);
   font-weight: var(--text-button-md-weight);
   line-height: var(--text-button-md-line);
@@ -647,7 +652,7 @@ html {
 .btn-danger-sm {
   background: var(--color-error);
   color: white;
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
   font-size: var(--text-button-md-size);
   font-weight: var(--text-button-md-weight);
   line-height: var(--text-button-md-line);
@@ -679,26 +684,45 @@ html {
 
 /* Inputs */
 .input-base {
-  background: var(--color-canvas-elevated);
+  background: var(--color-canvas);
   color: var(--color-ink);
   border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-body-md-size);
-  line-height: var(--text-body-md-line);
-  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  height: 42px;
+  min-height: 42px;
+  padding: 0 14px;
   width: 100%;
   transition: border-color var(--motion-fast) var(--ease-smooth),
-              box-shadow var(--motion-fast) var(--ease-smooth);
+              box-shadow var(--motion-fast) var(--ease-smooth),
+              background-color var(--motion-fast) var(--ease-smooth);
+}
+
+@media (min-width: 640px) {
+  .input-base {
+    height: 44px;
+    min-height: 44px;
+  }
+}
+
+.input-base:hover {
+  border-color: #cbd5e1;
+}
+
+:is(.dark) .input-base:hover {
+  border-color: #3a3e42;
 }
 
 .input-base:focus {
   outline: none;
-  border-color: var(--color-link);
-  box-shadow: 0 0 0 3px var(--color-link-soft);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
 }
 
 .input-base::placeholder {
-  color: var(--color-faint);
+  color: var(--color-mute);
+  opacity: 0.7;
 }
 
 /* Badges */

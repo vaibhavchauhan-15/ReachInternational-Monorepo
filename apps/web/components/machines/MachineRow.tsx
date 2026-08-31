@@ -64,8 +64,10 @@ export const MachineRow = memo(function MachineRow({
 
       <TableCell>
         <div className="flex flex-col">
-          <span className="font-bold text-xs text-[var(--color-ink)]">{machine.service_count ?? 0}</span>
-          <span className="text-[11px] text-[var(--color-mute)]">Services Logged</span>
+          <span className="font-semibold text-xs text-[var(--color-ink)] truncate max-w-[130px]" title={machine.customer_name || "Unassigned"}>
+            {machine.customer_name || "—"}
+          </span>
+          <span className="text-[11px] text-[var(--color-mute)]">Assigned Client</span>
         </div>
       </TableCell>
 

@@ -14,7 +14,7 @@ import {
   AnimatedSearch,
   AnimatedUserCheck,
 } from "@/components/ui/animated-icons";
-import { Badge, Button, Select, useToast, TooltipWrapper } from "@/components/ui";
+import { Badge, Button, Select, useToast, TooltipWrapper, MachineSelect, ClientSelect, UserSelect, SearchableSelect } from "@/components/ui";
 import type { Machine, User, MachineAssignment, MachineHourLog, MachineWithEngineer, CRMClient } from "@/lib/types/database";
 import { OperatorDashboard, type OperatorHourLog } from "@/components/dashboard/OperatorDashboard";
 import {
@@ -219,7 +219,7 @@ export function OperationsClient({
       : uniqueClients[0] || "";
 
   const activeDbClient = dbClients.find(
-    (c) => c.client_name.toLowerCase() === activeClientName.toLowerCase()
+    (c) => (c.company_name || c.client_name || "").toLowerCase() === activeClientName.toLowerCase()
   );
 
   // Derived machine IDs associated with active selected client from logs
@@ -606,26 +606,29 @@ export function OperationsClient({
             {logsViewMode === "client" ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1 border-t border-[var(--color-hairline)]">
                 <div>
-                  <Select
+                  <ClientSelect
                     label="Select Client"
                     value={activeClientName}
-                    onChange={(e) => {
-                      setLogsSelectedClientName(e.target.value);
+                    onChange={(val, clientObj) => {
+                      const cName = clientObj?.client_name || clientObj?.name || val;
+                      setLogsSelectedClientName(cName);
                       setLogsSelectedSite("all");
                       setLogsSelectedClientMachineId("all");
                     }}
-                    options={uniqueClients.map((c) => ({
-                      value: c,
-                      label: c,
-                    }))}
+                    clients={
+                      dbClients && dbClients.length > 0
+                        ? dbClients
+                        : uniqueClients.map((c) => ({ id: c, client_name: c, name: c }))
+                    }
+                    placeholder="Select Client..."
                   />
                 </div>
 
                 <div>
-                  <Select
+                  <SearchableSelect
                     label="Select Location"
                     value={effectiveSelectedSite}
-                    onChange={(e) => setLogsSelectedSite(e.target.value)}
+                    onChange={(val) => setLogsSelectedSite(val)}
                     options={
                       clientSites.length === 1
                         ? clientSites.map((s) => ({ value: s, label: s }))
@@ -638,32 +641,21 @@ export function OperationsClient({
                 </div>
 
                 <div>
-                  <Select
+                  <MachineSelect
                     label="Select Machine"
                     value={effectiveSelectedClientMachineId}
-                    onChange={(e) => setLogsSelectedClientMachineId(e.target.value)}
-                    options={
-                      clientMachines.length === 1
-                        ? clientMachines.map((m) => ({
-                            value: m.id,
-                            label: formatMachineSelectLabel(m),
-                          }))
-                        : [
-                            { value: "all", label: "All Client Rented Machines" },
-                            ...clientMachines.map((m) => ({
-                              value: m.id,
-                              label: formatMachineSelectLabel(m),
-                            })),
-                          ]
-                    }
+                    onChange={(mId) => setLogsSelectedClientMachineId(mId)}
+                    machines={clientMachines}
+                    allowAll={clientMachines.length > 1}
+                    allLabel="All Client Rented Machines"
                   />
                 </div>
 
                 <div>
-                  <Select
+                  <SearchableSelect
                     label="Select Month"
                     value={logsSelectedMonth}
-                    onChange={(e) => setLogsSelectedMonth(e.target.value)}
+                    onChange={(val) => setLogsSelectedMonth(val)}
                     options={MONTH_NAMES.map((m) => ({
                       value: m.value,
                       label: m.label,
@@ -675,35 +667,29 @@ export function OperationsClient({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-[var(--color-hairline)]">
                 <div>
                   {logsViewMode === "machine" && (
-                    <Select
+                    <MachineSelect
                       label="Select Machine"
                       value={activeMachineId}
-                      onChange={(e) => setLogsSelectedMachineId(e.target.value)}
-                      options={orderedMachines.map((m) => ({
-                        value: m.id,
-                        label: formatMachineSelectLabel(m),
-                      }))}
+                      onChange={(mId) => setLogsSelectedMachineId(mId)}
+                      machines={orderedMachines}
                     />
                   )}
 
                   {logsViewMode === "operator" && (
-                    <Select
+                    <UserSelect
                       label="Select Operator"
                       value={activeOperatorId}
-                      onChange={(e) => setLogsSelectedOperatorId(e.target.value)}
-                      options={orderedOperators.map((op) => ({
-                        value: op.id,
-                        label: op.full_name,
-                      }))}
+                      onChange={(opId) => setLogsSelectedOperatorId(opId)}
+                      users={orderedOperators}
                     />
                   )}
                 </div>
 
                 <div>
-                  <Select
+                  <SearchableSelect
                     label="Select Month"
                     value={logsSelectedMonth}
-                    onChange={(e) => setLogsSelectedMonth(e.target.value)}
+                    onChange={(val) => setLogsSelectedMonth(val)}
                     options={MONTH_NAMES.map((m) => ({
                       value: m.value,
                       label: m.label,
@@ -1088,7 +1074,7 @@ export function OperationsClient({
                                     <AnimatedAlertTriangle size={13} className="shrink-0 text-rose-600 dark:text-rose-400" /> {displayBkdText}
                                   </span>
                                 ) : (
-                                  <span className="font-semibold text-emerald-600 dark:text-emerald-400 text-xs">Normal</span>
+                                  <span className="font-bold text-[var(--color-ink)] font-mono text-xs">0</span>
                                 )}
                               </td>
                               <td className="px-4 py-3">
@@ -1126,7 +1112,7 @@ export function OperationsClient({
                                     <AnimatedAlertTriangle size={13} className="shrink-0 text-rose-600 dark:text-rose-400" /> {displayBkdText}
                                   </span>
                                 ) : (
-                                  <span className="font-semibold text-emerald-600 dark:text-emerald-400 text-xs">Normal</span>
+                                  <span className="font-bold text-[var(--color-ink)] font-mono text-xs">0</span>
                                 )}
                               </td>
                               <td className="px-4 py-3">
@@ -1173,7 +1159,7 @@ export function OperationsClient({
                                     <AnimatedAlertTriangle size={13} className="shrink-0 text-rose-600 dark:text-rose-400" /> {displayBkdText}
                                   </span>
                                 ) : (
-                                  <span className="font-semibold text-emerald-600 dark:text-emerald-400 text-xs">Normal</span>
+                                  <span className="font-bold text-[var(--color-ink)] font-mono text-xs">0</span>
                                 )}
                               </td>
                               <td className="px-4 py-3">
@@ -1232,7 +1218,7 @@ export function OperationsClient({
                       {log.is_breakdown ? (
                         <Badge variant="error" className="font-extrabold">{displayBkdText}</Badge>
                       ) : (
-                        <Badge variant="success" className="font-bold">Normal</Badge>
+                        <Badge variant="neutral" className="font-bold font-mono">0</Badge>
                       )}
                     </div>
 
@@ -1288,8 +1274,8 @@ export function OperationsClient({
                               <AnimatedAlertTriangle size={12} className="text-rose-600 dark:text-rose-400" /> {displayBkdText}
                             </span>
                           ) : (
-                            <span className="font-semibold text-emerald-600 dark:text-emerald-400 text-[11px]">
-                              Normal
+                            <span className="font-bold text-[var(--color-ink)] font-mono text-[11px]">
+                              0
                             </span>
                           )}
                         </div>
@@ -1342,8 +1328,8 @@ export function OperationsClient({
                                     <AnimatedAlertTriangle size={12} className="text-rose-600 dark:text-rose-400" /> {displayBkdText}
                                   </span>
                                 ) : (
-                                  <span className="font-semibold text-emerald-600 dark:text-emerald-400 text-[11px]">
-                                    Normal
+                                  <span className="font-bold text-[var(--color-ink)] font-mono text-[11px]">
+                                    0
                                   </span>
                                 )}
                               </div>
@@ -1624,35 +1610,21 @@ export function OperationsClient({
 
             <div className="space-y-3">
               {/* Select Machine */}
-              <Select
-                label="Select Target Machine *"
+              <MachineSelect
+                label="Select Target Machine"
+                required
                 value={selectedMachineId}
-                onChange={(e) => setSelectedMachineId(e.target.value)}
-                options={machines.map((m) => {
-                  const currentOpId = m.current_operator_id;
-                  const currentOp = operators.find((op) => op.id === currentOpId);
-                  return {
-                    value: m.id,
-                    label: `${formatMachineSelectLabel(m)}${currentOp ? ` — Current: ${currentOp.full_name}` : ""}`,
-                  };
-                })}
+                onChange={(mId) => setSelectedMachineId(mId)}
+                machines={machines}
               />
 
               {/* Select Operator */}
-              <Select
-                label="Select Machine Operator *"
+              <UserSelect
+                label="Select Machine Operator"
+                required
                 value={selectedOperatorId}
-                onChange={(e) => setSelectedOperatorId(e.target.value)}
-                options={operators.map((op) => {
-                  const activeAss = assignments.find((a) => a.operator_id === op.id && a.status === "active");
-                  const assignedMach = activeAss
-                    ? machines.find((m) => m.id === activeAss.machine_id)
-                    : machines.find((m) => m.current_operator_id === op.id);
-                  return {
-                    value: op.id,
-                    label: `${op.full_name}${assignedMach ? ` (Operating: ${formatMachineSelectLabel(assignedMach)})` : " (Unassigned / Available)"}`,
-                  };
-                })}
+                onChange={(opId) => setSelectedOperatorId(opId)}
+                users={operators}
               />
 
               {/* Reassignment Notice Banner */}
@@ -1801,20 +1773,19 @@ export function OperationsClient({
             </h3>
 
             <div className="space-y-3">
-              <Select
-                label="Select Machine *"
+              <MachineSelect
+                label="Select Machine"
+                required
                 value={moveMachineId}
-                onChange={(e) => setMoveMachineId(e.target.value)}
-                options={machines.map((m) => ({
-                  value: m.id,
-                  label: formatMachineSelectLabel(m),
-                }))}
+                onChange={(mId) => setMoveMachineId(mId)}
+                machines={machines}
               />
 
-              <Select
-                label="Movement Type *"
+              <SearchableSelect
+                label="Movement Type"
+                required
                 value={moveType}
-                onChange={(e) => setMoveType(e.target.value as any)}
+                onChange={(val) => setMoveType(val as any)}
                 options={[
                   { value: "loading_dispatch", label: "Loading & Yard Dispatch" },
                   { value: "unloading_arrival", label: "Unloading & Arrival at Client Site" },
@@ -1857,14 +1828,12 @@ export function OperationsClient({
                 />
               </div>
 
-              <Select
+              <UserSelect
                 label="Assigned Operator on Site"
                 value={moveOperatorId}
-                onChange={(e) => setMoveOperatorId(e.target.value)}
-                options={operators.map((op) => ({
-                  value: op.id,
-                  label: `${op.full_name} (${op.phone || "Operator"})`,
-                }))}
+                onChange={(opId) => setMoveOperatorId(opId)}
+                users={operators}
+                clearable
               />
             </div>
 
@@ -1897,14 +1866,12 @@ export function OperationsClient({
             </h3>
 
             <div className="space-y-3">
-              <Select
-                label="Select Operator *"
+              <UserSelect
+                label="Select Operator"
+                required
                 value={payoutOperatorId}
-                onChange={(e) => setPayoutOperatorId(e.target.value)}
-                options={operators.map((op) => ({
-                  value: op.id,
-                  label: `${op.full_name} (${op.phone || "Operator"})`,
-                }))}
+                onChange={(opId) => setPayoutOperatorId(opId)}
+                users={operators}
               />
 
               <div className="grid grid-cols-2 gap-2">

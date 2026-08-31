@@ -105,7 +105,7 @@ export default function OperationsScreen() {
           client_id,
           machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number),
           operator:users!machine_hour_logs_operator_id_fkey(id, full_name),
-          client:clients!machine_hour_logs_client_id_fkey(id, client_name)
+          client:clients!machine_hour_logs_client_id_fkey(id, company_name)
         `)
         .order('log_date', { ascending: false })
         .limit(100);
@@ -121,7 +121,7 @@ export default function OperationsScreen() {
         const formatted = logsData.map((l: any) => ({
           ...l,
           machine_code: l.machine?.machine_id || l.machine_id || 'Machine',
-          client: l.client ? { name: l.client.client_name } : null,
+          client: l.client ? { name: l.client.company_name || l.client.client_name } : null,
         }));
         setLogs(formatted as any);
       }
@@ -439,9 +439,9 @@ export default function OperationsScreen() {
                             </Text>
                           </View>
                         ) : (
-                          <View style={[styles.breakdownBadge, { backgroundColor: theme.colors.success + '1a', borderColor: theme.colors.success }]}>
-                            <Text style={[styles.breakdownBadgeText, { color: theme.colors.success }]}>
-                              Normal
+                          <View style={[styles.breakdownBadge, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+                            <Text style={[styles.breakdownBadgeText, { color: theme.colors.ink, fontWeight: '700' }]}>
+                              0
                             </Text>
                           </View>
                         )}

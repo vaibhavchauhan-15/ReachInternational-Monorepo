@@ -12,6 +12,15 @@ import {
   completeIdempotencyKey,
   failIdempotencyKey,
 } from "@/lib/security/idempotency";
+import {
+  computeShiftTiming,
+  checkIntervalOverlap,
+  formatResolvedRange,
+  formatDate,
+  formatTo12Hour,
+  parseDateTimeToDate,
+  addDaysToDateStr,
+} from "@reachinternational/utils";
 
 function parseTimeToMinutes(timeStr?: string): number | null {
   if (!timeStr) return null;
@@ -50,47 +59,79 @@ async function checkShiftOverlapServer(
   supabase: any,
   params: {
     machineId: string;
-    operatorId: string;
-    logDate: string;
+    operatorId?: string;
+    startDate?: string;
+    logDate?: string;
     startTime?: string;
+    endDate?: string;
     endTime?: string;
     shift?: string;
     excludeLogId?: string;
   }
 ): Promise<{ hasOverlap: boolean; errorMessage?: string }> {
+  if (!params.machineId) return { hasOverlap: false };
+
+  const timing = computeShiftTiming({
+    startDate: params.startDate || params.logDate,
+    startTime: params.startTime,
+    endDate: params.endDate,
+    endTime: params.endTime,
+  });
+
+  if (!timing.isValid || !timing.startDateTime || !timing.endDateTime) {
+    return { hasOverlap: true, errorMessage: timing.errorMessage || "Invalid shift date and time values." };
+  }
+
+  // Query all logs on this machine to prevent any timeline collisions
   const { data: existingLogs } = await supabase
     .from("machine_hour_logs")
-    .select("id, shift, start_time, end_time, log_date")
-    .eq("log_date", params.logDate)
-    .or(`machine_id.eq.${params.machineId},operator_id.eq.${params.operatorId}`);
+    .select("id, shift, start_time, end_time, log_date, end_date, start_datetime, end_datetime")
+    .eq("machine_id", params.machineId)
+    .order("start_datetime", { ascending: true });
 
   if (!existingLogs || existingLogs.length === 0) {
     return { hasOverlap: false };
   }
 
-  const newS = parseTimeToMinutes(params.startTime);
-  let newE = parseTimeToMinutes(params.endTime);
-
-  if (newS !== null && newE !== null && newE <= newS) {
-    newE += 1440;
-  }
+  const targetStart = timing.startDateTime;
+  const targetEnd = timing.endDateTime;
 
   for (const log of existingLogs) {
     if (params.excludeLogId && log.id === params.excludeLogId) continue;
 
-    if (newS !== null && newE !== null) {
-      const exS = parseTimeToMinutes(log.start_time);
-      let exE = parseTimeToMinutes(log.end_time);
+    let exStart: Date | null = null;
+    let exEnd: Date | null = null;
+    let exRangeFormatted = "";
 
-      if (exS !== null && exE !== null) {
-        if (exE <= exS) exE += 1440;
+    if (log.start_datetime && log.end_datetime) {
+      exStart = new Date(log.start_datetime);
+      exEnd = new Date(log.end_datetime);
+      const exTiming = computeShiftTiming({
+        startDate: log.log_date,
+        startTime: log.start_time,
+        endDate: log.end_date,
+        endTime: log.end_time,
+      });
+      exRangeFormatted = exTiming.resolvedRangeFormatted || `${formatDate(log.log_date)} ${formatTo12Hour(log.start_time)} → ${formatDate(log.end_date || log.log_date)} ${formatTo12Hour(log.end_time)}`;
+    } else if (log.log_date && log.start_time && log.end_time) {
+      const exTiming = computeShiftTiming({
+        startDate: log.log_date,
+        startTime: log.start_time,
+        endDate: log.end_date,
+        endTime: log.end_time,
+      });
+      exStart = exTiming.startDateTime;
+      exEnd = exTiming.endDateTime;
+      exRangeFormatted = exTiming.resolvedRangeFormatted;
+    }
 
-        if (Math.max(newS, exS) < Math.min(newE, exE)) {
-          return {
-            hasOverlap: true,
-            errorMessage: `Time overlap detected: Selected period (${params.startTime} - ${params.endTime}) overlaps with existing entry (${log.start_time} - ${log.end_time}) on ${params.logDate}. Operating time periods must not overlap.`,
-          };
-        }
+    if (exStart && exEnd && !isNaN(exStart.getTime()) && !isNaN(exEnd.getTime())) {
+      // Check half-open interval overlap [targetStart, targetEnd) && [exStart, exEnd)
+      if (checkIntervalOverlap(targetStart, targetEnd, exStart, exEnd)) {
+        return {
+          hasOverlap: true,
+          errorMessage: `Shift time overlap detected: The requested shift (${timing.resolvedRangeFormatted}) overlaps with an existing log (${exRangeFormatted}) on this machine. A new log must start at or after the previous log's end time.`,
+        };
       }
     }
   }
@@ -100,28 +141,16 @@ async function checkShiftOverlapServer(
 
 function computeNormalWorkingHours(startStr?: string, endStr?: string, overtimeHours: number = 0): number {
   if (!startStr || !endStr) return 0;
-  const parseMins = (t: string) => {
-    const match = t.trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
-    if (!match) return null;
-    let h = parseInt(match[1], 10);
-    const m = parseInt(match[2], 10);
-    if (match[3] === "PM" && h < 12) h += 12;
-    if (match[3] === "AM" && h === 12) h = 0;
-    return h * 60 + m;
-  };
-  const s = parseMins(startStr);
-  const e = parseMins(endStr);
-  if (s === null || e === null) return 0;
-  let diff = e - s;
-  if (diff < 0) diff += 24 * 60;
-  const duration = Math.round((diff / 60) * 10) / 10;
-  return Math.max(0, Math.round((duration - overtimeHours - 1.0) * 10) / 10);
+  const timing = computeShiftTiming({ startTime: startStr, endTime: endStr, manualOvertime: overtimeHours });
+  return timing.normalWorkingHours;
 }
 
 export async function submitOperatorHourLogAction(payload: {
   machineId: string;
   clientId?: string;
+  startDate?: string;
   logDate?: string;
+  endDate?: string;
   startMeter?: number;
   endMeter?: number;
   startTime?: string;
@@ -170,16 +199,16 @@ export async function submitOperatorHourLogAction(payload: {
 
   const supabase = createSupabaseAdminClient();
   const effectiveCondition = payload.isBreakdown ? "breakdown" : (payload.machineCondition || "good");
-  const now = new Date();
-  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const todayDate = new Date().toISOString().split("T")[0];
-  let effectiveLogDate = todayDate;
+  const effectiveStartDate = payload.startDate || payload.logDate || todayDate;
 
   // Validate custom logDate within allowed 7-day range
-  if (payload.logDate && payload.logDate.trim()) {
-    const rawDate = payload.logDate.trim().split("T")[0];
+  if (effectiveStartDate) {
+    const rawDate = effectiveStartDate.trim().split("T")[0];
     const parts = rawDate.split("-").map(Number);
     if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      const now = new Date();
+      const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
       const parsedMidnight = new Date(parts[0], parts[1] - 1, parts[2]).getTime();
       const diffDays = Math.floor((todayMidnight - parsedMidnight) / (1000 * 60 * 60 * 24));
 
@@ -194,16 +223,30 @@ export async function submitOperatorHourLogAction(payload: {
           return { success: false, error: "Cannot submit log older than 7 days. Please contact an administrator." };
         }
       }
-      effectiveLogDate = rawDate;
     }
+  }
+
+  // Compute shift timing details
+  const timing = computeShiftTiming({
+    startDate: effectiveStartDate,
+    startTime: payload.startTime,
+    endDate: payload.endDate,
+    endTime: payload.endTime,
+    manualOvertime: payload.overtimeHours,
+  });
+
+  if (!timing.isValid || !timing.startDateTime || !timing.endDateTime) {
+    await failIdempotencyKey(currentIdempotencyKey);
+    return { success: false, error: timing.errorMessage || "Invalid shift timing values." };
   }
 
   // Check shift time overlap prior to database insert
   const overlapCheck = await checkShiftOverlapServer(supabase, {
     machineId: payload.machineId,
     operatorId: user.id,
-    logDate: effectiveLogDate,
+    startDate: timing.resolvedStartDate,
     startTime: payload.startTime,
+    endDate: timing.resolvedEndDate,
     endTime: payload.endTime,
     shift: payload.shift,
   });
@@ -213,28 +256,27 @@ export async function submitOperatorHourLogAction(payload: {
     return { success: false, error: overlapCheck.errorMessage || "Shift time overlap detected." };
   }
 
-  // Use manually entered overtime_hours from payload (or default to 0)
-  const manualOvertime = payload.overtimeHours ?? 0;
-  const normalWorkingHours = computeNormalWorkingHours(payload.startTime, payload.endTime, manualOvertime);
-
   // Try atomic PostgreSQL RPC execution first (1 round-trip for log insert + machine update + audit)
   const { data: rpcResult, error: rpcError } = await supabase.rpc("submit_operator_hour_log_atomic", {
     p_machine_id: payload.machineId,
     p_operator_id: user.id,
     p_client_id: payload.clientId || null,
-    p_log_date: effectiveLogDate,
+    p_log_date: timing.resolvedStartDate,
+    p_end_date: timing.resolvedEndDate,
+    p_start_datetime: timing.startDateTime.toISOString(),
+    p_end_datetime: timing.endDateTime.toISOString(),
     p_start_meter: startMtr,
     p_end_meter: endMtr,
     p_start_time: payload.startTime || null,
     p_end_time: payload.endTime || null,
-    p_overtime_hours: manualOvertime,
+    p_overtime_hours: timing.overtimeHours,
+    p_normal_working_hours: timing.normalWorkingHours,
     p_is_breakdown: payload.isBreakdown ?? (effectiveCondition === "breakdown"),
     p_shift: payload.shift || null,
     p_machine_condition: effectiveCondition,
     p_location: payload.location || null,
     p_remarks: payload.remarks || null,
     p_idempotency_key: currentIdempotencyKey,
-    p_normal_working_hours: normalWorkingHours,
   });
 
   if (!rpcError && rpcResult && (rpcResult as { success?: boolean }).success) {
@@ -260,13 +302,16 @@ export async function submitOperatorHourLogAction(payload: {
       machine_id: payload.machineId,
       operator_id: user.id,
       client_id: payload.clientId || null,
-      log_date: effectiveLogDate,
+      log_date: timing.resolvedStartDate,
+      end_date: timing.resolvedEndDate,
+      start_datetime: timing.startDateTime.toISOString(),
+      end_datetime: timing.endDateTime.toISOString(),
       start_meter: startMtr,
       end_meter: endMtr,
       start_time: payload.startTime || null,
       end_time: payload.endTime || null,
-      overtime_hours: manualOvertime,
-      normal_working_hours: normalWorkingHours,
+      overtime_hours: timing.overtimeHours,
+      normal_working_hours: timing.normalWorkingHours,
       is_breakdown: payload.isBreakdown ?? (effectiveCondition === "breakdown"),
       shift: payload.shift || null,
       machine_condition: effectiveCondition,
@@ -280,10 +325,7 @@ export async function submitOperatorHourLogAction(payload: {
   if (logError) {
     console.error("Error creating machine hour log:", logError);
     await failIdempotencyKey(currentIdempotencyKey);
-    const errMessage = logError.message.includes("Shift time overlap") || logError.message.includes("Shift overlap")
-      ? logError.message
-      : logError.message;
-    return { success: false, error: errMessage };
+    return { success: false, error: logError.message };
   }
 
   // 2. Update current hour meter & status on machine
@@ -317,10 +359,14 @@ export async function submitOperatorHourLogAction(payload: {
       runningHours: endMtr - startMtr,
       startTime: payload.startTime,
       endTime: payload.endTime,
-      overtimeHours: payload.overtimeHours,
+      startDate: timing.resolvedStartDate,
+      endDate: timing.resolvedEndDate,
+      startDatetime: timing.startDateTime.toISOString(),
+      endDatetime: timing.endDateTime.toISOString(),
+      overtimeHours: timing.overtimeHours,
+      normalWorkingHours: timing.normalWorkingHours,
       isBreakdown: payload.isBreakdown,
       condition: effectiveCondition,
-      logDate: effectiveLogDate,
       idempotencyKey: currentIdempotencyKey,
     },
   });
@@ -336,6 +382,8 @@ export async function submitOperatorHourLogAction(payload: {
 export async function updateOperatorHourLogAction(payload: {
   logId: string;
   clientId?: string;
+  startDate?: string;
+  endDate?: string;
   startMeter?: number;
   endMeter?: number;
   startTime?: string;
@@ -390,13 +438,28 @@ export async function updateOperatorHourLogAction(payload: {
   const effectiveCondition = payload.isBreakdown ? "breakdown" : (payload.machineCondition || existingLog.machine_condition || "good");
   const targetStartTime = payload.startTime ?? existingLog.start_time ?? undefined;
   const targetEndTime = payload.endTime ?? existingLog.end_time ?? undefined;
+  const targetStartDate = payload.startDate || existingLog.log_date;
+  const targetEndDate = payload.endDate || existingLog.end_date;
+
+  const timing = computeShiftTiming({
+    startDate: targetStartDate,
+    startTime: targetStartTime,
+    endDate: targetEndDate,
+    endTime: targetEndTime,
+    manualOvertime: payload.overtimeHours,
+  });
+
+  if (!timing.isValid || !timing.startDateTime || !timing.endDateTime) {
+    return { success: false, error: timing.errorMessage || "Invalid shift timing values." };
+  }
 
   // Check shift time overlap prior to database update
   const overlapCheck = await checkShiftOverlapServer(supabase, {
     machineId: existingLog.machine_id,
     operatorId: existingLog.operator_id,
-    logDate: existingLog.log_date,
+    startDate: timing.resolvedStartDate,
     startTime: targetStartTime,
+    endDate: timing.resolvedEndDate,
     endTime: targetEndTime,
     shift: payload.shift,
     excludeLogId: payload.logId,
@@ -406,19 +469,20 @@ export async function updateOperatorHourLogAction(payload: {
     return { success: false, error: overlapCheck.errorMessage || "Shift time overlap detected." };
   }
 
-  const manualOvertime = payload.overtimeHours ?? 0;
-  const normalWorkingHours = computeNormalWorkingHours(targetStartTime, targetEndTime, manualOvertime);
-
   const { data, error } = await supabase
     .from("machine_hour_logs")
     .update({
       client_id: payload.clientId ?? existingLog.client_id ?? null,
+      log_date: timing.resolvedStartDate,
+      end_date: timing.resolvedEndDate,
+      start_datetime: timing.startDateTime.toISOString(),
+      end_datetime: timing.endDateTime.toISOString(),
       start_meter: startMtr,
       end_meter: endMtr,
       start_time: targetStartTime || null,
       end_time: targetEndTime || null,
-      overtime_hours: manualOvertime,
-      normal_working_hours: normalWorkingHours,
+      overtime_hours: timing.overtimeHours,
+      normal_working_hours: timing.normalWorkingHours,
       is_breakdown: payload.isBreakdown ?? (effectiveCondition === "breakdown"),
       shift: payload.shift || existingLog.shift || null,
       machine_condition: effectiveCondition,
@@ -446,8 +510,12 @@ export async function updateOperatorHourLogAction(payload: {
       endMeter: endMtr,
       startTime: payload.startTime,
       endTime: payload.endTime,
-      overtimeHours: manualOvertime,
-      normalWorkingHours,
+      startDate: timing.resolvedStartDate,
+      endDate: timing.resolvedEndDate,
+      startDatetime: timing.startDateTime.toISOString(),
+      endDatetime: timing.endDateTime.toISOString(),
+      overtimeHours: timing.overtimeHours,
+      normalWorkingHours: timing.normalWorkingHours,
     },
   });
 

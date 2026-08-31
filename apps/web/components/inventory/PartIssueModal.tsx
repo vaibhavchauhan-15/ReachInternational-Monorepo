@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Modal, Button, Input, Textarea, Select, useToast } from "@/components/ui";
+import { Modal, Button, Input, Textarea, Select, useToast, MachineSelect, SearchableSelect } from "@/components/ui";
 import { createPartIssueAction } from "@/app/actions/inventory";
 import type { InventoryProduct, InventoryStock, Machine } from "@/lib/types/database";
 import type { Branch } from "@/lib/queries/branches";
@@ -30,58 +30,55 @@ export function PartIssueModal({
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
 
-  const [branchId, setBranchId] = useState<string>(branches[0]?.id || "");
-  const [machineId, setMachineId] = useState<string>(machines[0]?.id || "");
-  const [issuedToName, setIssuedToName] = useState<string>("Sushil Mishra / Site Tech");
-  const [issueDate, setIssueDate] = useState<string>(new Date().toISOString().split("T")[0]);
-  const [isReturnable, setIsReturnable] = useState<boolean>(false);
-  const [expectedReturnDate, setExpectedReturnDate] = useState<string>(
-    new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
-  );
-  const [generateDeliveryChallan, setGenerateDeliveryChallan] = useState<boolean>(true);
-  const [destinationAddress, setDestinationAddress] = useState<string>(
-    "JK PAPER SURAT SITE 80D-7ACE-727"
-  );
-  const [remarks, setRemarks] = useState<string>("Issued for machine maintenance job");
+  const [branchId, setBranchId] = useState(branches[0]?.id || "");
+  const [machineId, setMachineId] = useState("");
+  const [issuedToName, setIssuedToName] = useState("");
+  const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0]);
+  const [isReturnable, setIsReturnable] = useState(false);
+  const [expectedReturnDate, setExpectedReturnDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [generateDeliveryChallan, setGenerateDeliveryChallan] = useState(true);
 
-  // Items State
-  const [items, setItems] = useState<
-    Array<{ productId: string; quantityIssued: number; machineCode: string; isReturnable: boolean }>
-  >([
-    {
-      productId: products[0]?.id || "",
-      quantityIssued: 1,
-      machineCode: machines[0]?.machine_code || "M-101",
-      isReturnable: false,
-    },
+  // Dynamic parts table rows
+  const [items, setItems] = useState<Array<{ productId: string; quantity: number; notes: string; isReturnable: boolean }>>([
+    { productId: products[0]?.id || "", quantity: 1, notes: "", isReturnable: false },
   ]);
 
-  const handleAddItemRow = () => {
-    const unselected = products.find((p) => !items.some((i) => i.productId === p.id)) || products[0];
-    if (!unselected) return;
+  const handleAddItem = () => {
     setItems((prev) => [
       ...prev,
-      {
-        productId: unselected.id,
-        quantityIssued: 1,
-        machineCode: machines[0]?.machine_code || "M-101",
-        isReturnable: isReturnable,
-      },
+      { productId: products[0]?.id || "", quantity: 1, notes: "", isReturnable: isReturnable },
     ]);
   };
 
-  const handleRemoveItemRow = (index: number) => {
+  const handleRemoveItem = (index: number) => {
     setItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleItemChange = (index: number, field: string, value: any) => {
+    setItems((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!issuedToName.trim()) {
-      toast("error", "Receiver Name (Issue To) is required");
+
+    if (!branchId) {
+      toast("error", "Branch is required");
       return;
     }
-    if (items.length === 0) {
-      toast("error", "Add at least one part item to issue");
+
+    if (!issuedToName.trim()) {
+      toast("error", "Issued to personnel name is required");
+      return;
+    }
+
+    const validItems = items.filter((item) => item.productId && item.quantity > 0);
+    if (validItems.length === 0) {
+      toast("error", "Please add at least one spare part with quantity > 0");
       return;
     }
 
@@ -89,14 +86,17 @@ export function PartIssueModal({
       const res = await createPartIssueAction({
         branchId,
         machineId: machineId || undefined,
-        issuedToName,
+        issuedToName: issuedToName.trim(),
         issueDate,
         isReturnable,
-        expectedReturnDate: isReturnable ? expectedReturnDate : undefined,
+        expectedReturnDate: isReturnable && expectedReturnDate ? expectedReturnDate : undefined,
+        remarks: notes.trim() || undefined,
         generateDeliveryChallan,
-        destinationAddress,
-        remarks,
-        items,
+        items: validItems.map((item) => ({
+          productId: item.productId,
+          quantityIssued: Number(item.quantity),
+          isReturnable: item.isReturnable,
+        })),
       });
 
       if (res.success) {
@@ -114,27 +114,23 @@ export function PartIssueModal({
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Recipient & Machine Selection */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
-          <Select
+          <SearchableSelect
             label="Branch Scope"
             value={branchId}
-            onChange={(e) => setBranchId(e.target.value)}
+            onChange={(val) => setBranchId(val)}
             options={branches.map((b) => ({
               value: b.id,
               label: `${b.name} (${b.code})`,
             }))}
           />
 
-          <Select
+          <MachineSelect
             label="Target Machine (Optional)"
             value={machineId}
-            onChange={(e) => setMachineId(e.target.value)}
-            options={[
-              { value: "", label: "General Store / Employee Issue" },
-              ...(machines || []).map((m) => ({
-                value: m.id,
-                label: `${m.machine_code} — ${m.machine_name}`,
-              })),
-            ]}
+            onChange={(mId) => setMachineId(mId)}
+            machines={machines}
+            placeholder="General Store / Employee Issue"
+            clearable
           />
 
           <div>
@@ -159,13 +155,13 @@ export function PartIssueModal({
             />
           </div>
 
-          <Select
+          <SearchableSelect
             label="Returnable Type"
             value={isReturnable ? "YES" : "NO"}
-            onChange={(e) => {
-              const val = e.target.value === "YES";
-              setIsReturnable(val);
-              setItems((prev) => prev.map((item) => ({ ...item, isReturnable: val })));
+            onChange={(val) => {
+              const boolVal = val === "YES";
+              setIsReturnable(boolVal);
+              setItems((prev) => prev.map((item) => ({ ...item, isReturnable: boolVal })));
             }}
             options={[
               { value: "NO", label: "NON-RETURNABLE (Consumable/Permanent)" },
@@ -206,7 +202,7 @@ export function PartIssueModal({
             <label className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-mute)]">
               Select Parts To Issue
             </label>
-            <Button type="button" variant="secondary" onClick={handleAddItemRow}>
+            <Button type="button" variant="secondary" onClick={handleAddItem}>
               <AnimatedPlus size={14} className="mr-1" /> Add Part
             </Button>
           </div>
@@ -218,7 +214,6 @@ export function PartIssueModal({
                   <th className="p-2">Part Item</th>
                   <th className="p-2 w-24 text-center">Available</th>
                   <th className="p-2 w-24 text-center">Issue Qty</th>
-                  <th className="p-2 w-28 text-center">Machine Code</th>
                   <th className="p-2 w-24 text-center">Returnable</th>
                   <th className="p-2 w-8"></th>
                 </tr>
@@ -233,11 +228,10 @@ export function PartIssueModal({
 
                   return (
                     <tr key={idx}>
-                      <td className="p-2">
-                        <Select
+                      <td className="p-2 min-w-[200px]">
+                        <SearchableSelect
                           value={item.productId}
-                          onChange={(e) => {
-                            const val = e.target.value;
+                          onChange={(val) => {
                             setItems((prev) =>
                               prev.map((r, i) => (i === idx ? { ...r, productId: val } : r))
                             );
@@ -245,11 +239,13 @@ export function PartIssueModal({
                           options={products.map((p) => ({
                             value: p.id,
                             label: `${p.name} (${p.part_number})`,
+                            description: p.category || undefined,
                           }))}
+                          compact
                         />
                       </td>
                       <td className="p-2 text-center font-mono font-bold">
-                        <span className={availQty < item.quantityIssued ? "text-rose-600 font-black" : "text-emerald-600"}>
+                        <span className={availQty < item.quantity ? "text-rose-600 font-black" : "text-emerald-600"}>
                           {availQty} Pcs
                         </span>
                       </td>
@@ -258,24 +254,12 @@ export function PartIssueModal({
                           type="number"
                           min={1}
                           max={availQty}
-                          value={item.quantityIssued}
+                          value={item.quantity}
                           onChange={(e) => {
                             const val = parseInt(e.target.value, 10) || 1;
-                            setItems((prev) => prev.map((r, i) => (i === idx ? { ...r, quantityIssued: val } : r)));
+                            setItems((prev) => prev.map((r, i) => (i === idx ? { ...r, quantity: val } : r)));
                           }}
-                          className="w-full p-1 text-center font-mono font-bold border rounded bg-[var(--color-canvas)] text-sky-600"
-                        />
-                      </td>
-                      <td className="p-2">
-                        <input
-                          type="text"
-                          value={item.machineCode}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setItems((prev) => prev.map((r, i) => (i === idx ? { ...r, machineCode: val } : r)));
-                          }}
-                          className="w-full p-1 text-center font-mono border rounded bg-[var(--color-canvas)]"
-                          placeholder="M-101"
+                          className="w-full p-1.5 text-center font-mono font-bold border border-[var(--color-hairline)] rounded-lg bg-[var(--color-canvas)] text-sky-600"
                         />
                       </td>
                       <td className="p-2 text-center">
@@ -293,8 +277,8 @@ export function PartIssueModal({
                         {items.length > 1 && (
                           <button
                             type="button"
-                            onClick={() => handleRemoveItemRow(idx)}
-                            className="text-rose-600 hover:text-rose-800"
+                            onClick={() => handleRemoveItem(idx)}
+                            className="text-rose-600 hover:text-rose-800 p-1 font-bold text-base cursor-pointer"
                           >
                             ×
                           </button>

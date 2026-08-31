@@ -16,6 +16,12 @@ import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens
 import { X, Check, ChevronDown, Clock, AlertTriangle } from 'lucide-react-native';
 import { validateMobileClipboardInput } from '../../lib/security/clipboard';
 import { HmrSchema } from '@reachinternational/validation';
+import {
+  computeShiftTiming,
+  findLatestMachineLogTimeline,
+  formatTo12Hour,
+  formatDate,
+} from '@reachinternational/utils';
 
 export interface MeterLogModalProps {
   visible: boolean;
@@ -26,6 +32,7 @@ export interface MeterLogModalProps {
   serialNumber?: string;
   onSubmit?: (log?: any) => void;
 }
+
 
 export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   visible,
@@ -41,8 +48,8 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   const [logDate, setLogDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [startMeter, setStartMeter] = useState('0');
   const [endMeter, setEndMeter] = useState('0');
-  const [startTime, setStartTime] = useState('08:00 AM');
-  const [endTime, setEndTime] = useState('05:00 PM');
+  const [startTime, setStartTime] = useState('06:00 AM');
+  const [endTime, setEndTime] = useState('02:00 PM');
   const [overtimeHours, setOvertimeHours] = useState('0');
   const [location, setLocation] = useState('');
   const [remarks, setRemarks] = useState('');
@@ -74,33 +81,45 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [clientModalVisible, setClientModalVisible] = useState(false);
 
+  const [latestTimeline, setLatestTimeline] = useState<{
+    latestLog: any | null;
+    endDateTime: Date | null;
+    formattedEndTime: string;
+    formattedEndDate: string;
+  } | null>(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Shift normal working time and overtime calculation
+  // Shift duration, normal working time and overtime calculation via canonical helper
   const shiftStats = React.useMemo(() => {
-    const parseMins = (t: string) => {
-      const match = t.trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
-      if (!match) return null;
-      let h = parseInt(match[1], 10);
-      const m = parseInt(match[2], 10);
-      if (match[3] === 'PM' && h < 12) h += 12;
-      if (match[3] === 'AM' && h === 12) h = 0;
-      return h * 60 + m;
-    };
-    const s = parseMins(startTime);
-    const e = parseMins(endTime);
-    if (s === null || e === null) {
-      return { duration: 9, normal: 8, ot: parseFloat(overtimeHours) || 0 };
+    const ot = parseFloat(overtimeHours);
+    return computeShiftTiming({
+      logDate,
+      startTime,
+      endTime,
+      manualOvertime: isNaN(ot) ? undefined : ot,
+    });
+  }, [logDate, startTime, endTime, overtimeHours]);
+
+  // Real-time sequencing check against machine timeline
+  const sequencingError = React.useMemo(() => {
+    if (!latestTimeline || !latestTimeline.endDateTime || !shiftStats.isValid || !shiftStats.startDateTime) {
+      return null;
     }
-    let diff = e - s;
-    if (diff <= 0) diff += 24 * 60;
-    const dur = Math.round((diff / 60) * 10) / 10;
-    const ot = parseFloat(overtimeHours) || (dur > 9 ? Math.round((dur - 9) * 10) / 10 : 0);
-    const normal = Math.max(0, Math.round((dur - ot - 1.0) * 10) / 10);
-    return { duration: dur, normal, ot };
-  }, [startTime, endTime, overtimeHours]);
+    const prevEndMs = latestTimeline.endDateTime.getTime();
+    const currentStartMs = shiftStats.startDateTime.getTime();
+    if (currentStartMs < prevEndMs) {
+      return {
+        isInvalid: true,
+        message: `Start time (${formatTo12Hour(startTime)}) cannot precede previous log's end time (${latestTimeline.formattedEndDate} at ${latestTimeline.formattedEndTime}). Handover is allowed from ${latestTimeline.formattedEndTime} onwards.`,
+        recommendedTime: latestTimeline.formattedEndTime,
+        recommendedDate: latestTimeline.latestLog?.end_date || latestTimeline.latestLog?.log_date || logDate,
+      };
+    }
+    return null;
+  }, [latestTimeline, shiftStats.isValid, shiftStats.startDateTime, startTime, logDate]);
 
   useEffect(() => {
     if (visible) {
@@ -117,13 +136,13 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     try {
       const { data } = await supabase
         .from('clients')
-        .select('id, client_name, address, city, state')
-        .order('client_name');
+        .select('id, company_name, address, city, state')
+        .order('company_name');
       if (data) {
         const clientItems = data.map((c: any) => ({
           id: c.id,
-          name: c.client_name || 'Client',
-          client_name: c.client_name,
+          name: c.company_name || c.client_name || 'Client',
+          client_name: c.company_name || c.client_name,
           address: c.address,
           city: c.city,
           state: c.state,
@@ -144,19 +163,20 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     try {
       const { data } = await supabase
         .from('machine_hour_logs')
-        .select('end_meter, location, client_id')
+        .select('id, machine_id, log_date, end_date, start_time, end_time, start_datetime, end_datetime, end_meter, location, client_id')
         .eq('machine_id', machineId)
         .order('log_date', { ascending: false })
-        .limit(1)
-        .single();
+        .limit(5);
 
-      if (data) {
-        if (data.end_meter) {
-          setStartMeter(String(data.end_meter));
-          setEndMeter(String(data.end_meter + 8));
+      if (data && data.length > 0) {
+        const timeline = findLatestMachineLogTimeline(data, machineId);
+        setLatestTimeline(timeline);
+        if (timeline.latestLog?.end_meter) {
+          setStartMeter(String(timeline.latestLog.end_meter));
+          setEndMeter(String(timeline.latestLog.end_meter + 8));
         }
-        if (data.location) setLocation(data.location);
-        if (data.client_id) setSelectedClientId(data.client_id);
+        if (timeline.latestLog?.location) setLocation(timeline.latestLog.location);
+        if (timeline.latestLog?.client_id) setSelectedClientId(timeline.latestLog.client_id);
       }
     } catch (e) {
       // Ignore if no prior log
@@ -202,6 +222,16 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       return;
     }
 
+    if (!shiftStats.isValid) {
+      setError(shiftStats.errorMessage || 'End Date + Time must always be later than Start Date + Time.');
+      return;
+    }
+
+    if (sequencingError?.isInvalid) {
+      setError(sequencingError.message);
+      return;
+    }
+
     setError('');
     setIsSubmitting(true);
 
@@ -225,13 +255,16 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         running_hours: runningHours,
         start_time: startTime.trim(),
         end_time: endTime.trim(),
-        overtime_hours: shiftStats.ot,
-        normal_working_hours: shiftStats.normal,
+        overtime_hours: shiftStats.overtimeHours,
+        normal_working_hours: shiftStats.normalWorkingHours,
         is_breakdown: isBreakdown,
         remarks: remarksPayload || null,
         operator_id: userId || null,
         idempotency_key: idempotencyKey,
-        log_date: logDate,
+        log_date: shiftStats.resolvedStartDate,
+        end_date: shiftStats.resolvedEndDate,
+        start_datetime: shiftStats.startDateTime?.toISOString(),
+        end_datetime: shiftStats.endDateTime?.toISOString(),
       };
 
       const { error: insertErr } = await supabase
@@ -391,24 +424,103 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               <Text style={[styles.calcValue, { color: theme.colors.link }]}>{runningHours.toFixed(1)} hrs</Text>
             </View>
 
-            {/* Shift Times */}
-            <View style={styles.rowInputs}>
-              <View style={{ flex: 1 }}>
-                <Input
-                  label="Shift Start Time"
-                  placeholder="08:00 AM"
-                  value={startTime}
-                  onChangeText={setStartTime}
-                />
+            {/* Shift Timing Section */}
+            <View style={{ gap: 8, marginTop: 4 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={[styles.fieldLabel, { color: theme.colors.ink, marginBottom: 0 }]}>Shift Timing</Text>
+                {shiftStats.isValid && shiftStats.isOvernight ? (
+                  <View style={{
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    borderRadius: 12,
+                    backgroundColor: 'rgba(99, 102, 241, 0.12)',
+                  }}>
+                    <Text style={{
+                      fontSize: 10,
+                      fontWeight: '700',
+                      color: '#6366f1',
+                    }}>
+                      🌙 Overnight · {shiftStats.durationFormatted}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
-              <View style={{ flex: 1 }}>
-                <Input
-                  label="Shift End Time"
-                  placeholder="05:00 PM"
-                  value={endTime}
-                  onChangeText={setEndTime}
-                />
+
+              {/* Machine Timeline Context Strip */}
+              {latestTimeline?.latestLog && (
+                <View style={{
+                  padding: 10,
+                  borderRadius: 10,
+                  backgroundColor: 'rgba(14, 165, 233, 0.08)',
+                  borderColor: 'rgba(14, 165, 233, 0.25)',
+                  borderWidth: 1,
+                  gap: 4,
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Clock size={13} color="#0284c7" />
+                    <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '500', flex: 1 }}>
+                      <Text style={{ fontWeight: '700' }}>Timeline Status:</Text> Last log ended on {latestTimeline.formattedEndDate} at {latestTimeline.formattedEndTime}.
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 10, color: '#0284c7', fontWeight: '600' }}>
+                    Exact handover allowed from {latestTimeline.formattedEndTime}
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.rowInputs}>
+                <View style={{ flex: 1 }}>
+                  <Input
+                    label="Start Time *"
+                    placeholder="06:00 AM"
+                    value={startTime}
+                    onChangeText={setStartTime}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Input
+                    label="End Time *"
+                    placeholder="02:00 PM"
+                    value={endTime}
+                    onChangeText={setEndTime}
+                  />
+                </View>
               </View>
+
+              {/* Sequencing Error Alert */}
+              {sequencingError?.isInvalid && (
+                <View style={[styles.alertBox, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error, marginVertical: 2, padding: 10, gap: 8 }]}>
+                  <Text style={{ color: theme.colors.error, fontSize: 11, fontWeight: '600' }}>
+                    ❌ {sequencingError.message}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (sequencingError.recommendedTime) setStartTime(sequencingError.recommendedTime);
+                      if (sequencingError.recommendedDate) setLogDate(sequencingError.recommendedDate);
+                    }}
+                    style={{
+                      minHeight: 44,
+                      backgroundColor: theme.colors.error,
+                      borderRadius: 8,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      paddingHorizontal: 12,
+                    }}
+                  >
+                    <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>
+                      Align Start to {sequencingError.recommendedTime} (Handover)
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {!shiftStats.isValid && !sequencingError?.isInvalid && (
+                <View style={[styles.alertBox, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error, marginVertical: 2 }]}>
+                  <Text style={{ color: theme.colors.error, fontSize: 11, textAlign: 'center', fontWeight: '600' }}>
+                    ❌ {shiftStats.errorMessage || 'Invalid shift timings.'}
+                  </Text>
+                </View>
+              )}
             </View>
 
             <Input

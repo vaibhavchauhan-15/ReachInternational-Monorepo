@@ -30,6 +30,7 @@ export interface MachineRecord {
   health_status: string;
   hour_meter: number;
   service_count: number;
+  customer_name?: string;
   supervisor_id?: string;
   operator_id?: string;
   current_supervisor?: { full_name: string } | null;
@@ -83,6 +84,7 @@ export default function MachinesScreen() {
           health_status,
           hour_meter,
           service_count,
+          customer_name,
           supervisor_id,
           operator_id,
           current_supervisor:users!machines_supervisor_id_fkey(full_name),
@@ -120,6 +122,7 @@ export default function MachinesScreen() {
   const openDetail = (m: MachineRecord) => {
     setSelectedMachine({
       ...m,
+      customer_name: m.customer_name,
       supervisor_name: m.current_supervisor?.full_name,
       operator_name: m.current_operator?.full_name,
     });
@@ -310,8 +313,10 @@ export default function MachinesScreen() {
                       <Text style={[styles.specsValue, { color: theme.colors.ink }]}>{m.hour_meter ?? 0} hrs</Text>
                     </View>
                     <View style={styles.specsItem}>
-                      <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Service Count:</Text>
-                      <Text style={[styles.specsValue, { color: theme.colors.ink }]}>{m.service_count ?? 0} Services</Text>
+                      <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Assigned Client:</Text>
+                      <Text style={[styles.specsValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                        {m.customer_name || '—'}
+                      </Text>
                     </View>
                   </View>
 

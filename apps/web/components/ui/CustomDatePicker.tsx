@@ -19,6 +19,7 @@ export interface CustomDatePickerProps {
   value: string; // Format: "YYYY-MM-DD"
   onChange: (dateStr: string) => void;
   maxDaysOld?: number; // Number of days in past allowed (default: 7)
+  allowFutureDays?: number; // Number of days in future allowed (default: 0, set to 1 for shift end dates)
   mode?: "input" | "inline"; // Preserved for backwards compatibility
   label?: React.ReactNode;
   labelClassName?: string;
@@ -70,6 +71,7 @@ export function CustomDatePicker({
   value,
   onChange,
   maxDaysOld = 7,
+  allowFutureDays = 0,
   label,
   labelClassName = "block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)]",
   required = false,
@@ -96,6 +98,13 @@ export function CustomDatePicker({
     d.setDate(d.getDate() - maxDaysOld);
     return d;
   }, [today, maxDaysOld]);
+
+  // Maximum allowed future date at midnight (today + allowFutureDays)
+  const maxFutureDate = useMemo(() => {
+    const d = new Date(today);
+    d.setDate(d.getDate() + allowFutureDays);
+    return d;
+  }, [today, allowFutureDays]);
 
   // Month currently in view on calendar
   const [viewDate, setViewDate] = useState<Date>(() => {
@@ -148,6 +157,12 @@ export function CustomDatePicker({
     const diffTime = today.getTime() - target.getTime();
     const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
+    if (diffDays === -1) {
+      return {
+        label: "Tomorrow",
+        colorClass: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20",
+      };
+    }
     if (diffDays === 0) {
       return {
         label: "Today",
@@ -186,8 +201,8 @@ export function CustomDatePicker({
 
   const canGoNextMonth = useMemo(() => {
     const nextMonthStart = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1);
-    return nextMonthStart <= today;
-  }, [viewDate, today]);
+    return nextMonthStart <= maxFutureDate;
+  }, [viewDate, maxFutureDate]);
 
   const handlePrevMonth = () => {
     if (!canGoPrevMonth) return;
@@ -225,7 +240,7 @@ export function CustomDatePicker({
       const d = new Date(year, month - 1, dayNum);
       const dStr = formatToYMD(d);
       const diffDays = Math.round((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-      const isSelectable = diffDays >= 0 && diffDays <= maxDaysOld;
+      const isSelectable = diffDays >= -allowFutureDays && diffDays <= maxDaysOld;
 
       days.push({
         date: d,
@@ -244,7 +259,7 @@ export function CustomDatePicker({
       const d = new Date(year, month, i);
       const dStr = formatToYMD(d);
       const diffDays = Math.round((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-      const isSelectable = diffDays >= 0 && diffDays <= maxDaysOld;
+      const isSelectable = diffDays >= -allowFutureDays && diffDays <= maxDaysOld;
 
       days.push({
         date: d,
@@ -265,7 +280,7 @@ export function CustomDatePicker({
       const d = new Date(year, month + 1, i);
       const dStr = formatToYMD(d);
       const diffDays = Math.round((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-      const isSelectable = diffDays >= 0 && diffDays <= maxDaysOld;
+      const isSelectable = diffDays >= -allowFutureDays && diffDays <= maxDaysOld;
 
       days.push({
         date: d,
@@ -280,7 +295,7 @@ export function CustomDatePicker({
     }
 
     return days;
-  }, [viewDate, value, today, todayStr, maxDaysOld]);
+  }, [viewDate, value, today, todayStr, maxDaysOld, allowFutureDays]);
 
   const handleSelectDate = (dateStr: string) => {
     onChange(dateStr);

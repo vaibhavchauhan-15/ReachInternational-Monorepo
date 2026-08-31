@@ -38,19 +38,26 @@ export async function createClientAction(state: ClientFormState, formData: FormD
       return { error: "Authentication required. Please log in to perform this action." };
     }
 
+    const isBillingDiff = formData.get("isBillingAddressDifferent") === "true" || formData.get("isBillingAddressDifferent") === "on";
+
     const payload = {
-      clientName: (formData.get("clientName") as string)?.trim(),
-      companyName: (formData.get("companyName") as string)?.trim() || "",
+      companyName: (formData.get("companyName") as string)?.trim() || (formData.get("clientName") as string)?.trim() || "",
       contactPerson: (formData.get("contactPerson") as string)?.trim() || "",
       phone: (formData.get("phone") as string)?.trim() || "",
-      email: (formData.get("email") as string)?.trim() || "",
-      gstin: (formData.get("gstin") as string)?.trim() || "",
+      gstin: ((formData.get("gstin") as string)?.trim() || "").toUpperCase(),
+      panNumber: ((formData.get("panNumber") as string)?.trim() || "").toUpperCase(),
       address: (formData.get("address") as string)?.trim() || "",
       city: (formData.get("city") as string)?.trim() || "",
+      district: (formData.get("district") as string)?.trim() || "",
       state: (formData.get("state") as string)?.trim() || "",
       pincode: (formData.get("pincode") as string)?.trim() || "",
+      isBillingAddressDifferent: isBillingDiff,
+      billingAddress: isBillingDiff ? (formData.get("billingAddress") as string)?.trim() || "" : "",
+      billingCity: isBillingDiff ? (formData.get("billingCity") as string)?.trim() || "" : "",
+      billingDistrict: isBillingDiff ? (formData.get("billingDistrict") as string)?.trim() || "" : "",
+      billingState: isBillingDiff ? (formData.get("billingState") as string)?.trim() || "" : "",
+      billingPincode: isBillingDiff ? (formData.get("billingPincode") as string)?.trim() || "" : "",
       branchId: (formData.get("branchId") as string)?.trim() || null,
-      notes: (formData.get("notes") as string)?.trim() || "",
       status: ((formData.get("status") as string) || "active") as "active" | "inactive",
     };
 
@@ -70,24 +77,29 @@ export async function createClientAction(state: ClientFormState, formData: FormD
     const data = parsed.data;
 
     const insertPayload = {
-      client_name: data.clientName,
-      company_name: data.companyName || null,
+      company_name: data.companyName,
       contact_person: data.contactPerson || null,
       phone: data.phone || null,
-      email: data.email || null,
       gstin: data.gstin || null,
+      pan_number: data.panNumber || null,
       address: data.address.trim(),
       city: data.city.trim(),
+      district: data.district || null,
       state: data.state.trim(),
       pincode: data.pincode || null,
-      notes: data.notes || null,
+      is_billing_address_different: data.isBillingAddressDifferent,
+      billing_address: data.isBillingAddressDifferent ? data.billingAddress || null : null,
+      billing_city: data.isBillingAddressDifferent ? data.billingCity || null : null,
+      billing_district: data.isBillingAddressDifferent ? data.billingDistrict || null : null,
+      billing_state: data.isBillingAddressDifferent ? data.billingState || null : null,
+      billing_pincode: data.isBillingAddressDifferent ? data.billingPincode || null : null,
       status: data.status,
     };
 
     const { data: createdClient, error: dbError } = await supabase
       .from("clients")
       .insert([insertPayload])
-      .select("id, code, client_name")
+      .select("id, code, company_name")
       .single();
 
     if (dbError) {
@@ -100,7 +112,7 @@ export async function createClientAction(state: ClientFormState, formData: FormD
       action: "CLIENT_CREATE",
       entity_type: "clients",
       entity_id: createdClient.id,
-      metadata: { client_code: createdClient.code, client_name: createdClient.client_name },
+      metadata: { client_code: createdClient.code, company_name: createdClient.company_name, gstin: data.gstin },
     });
 
     revalidateTag(TAGS.clients, "max");
@@ -132,20 +144,27 @@ export async function updateClientAction(state: ClientFormState, formData: FormD
       return { error: "Valid Client ID is required for update." };
     }
 
+    const isBillingDiff = formData.get("isBillingAddressDifferent") === "true" || formData.get("isBillingAddressDifferent") === "on";
+
     const payload = {
       id,
-      clientName: (formData.get("clientName") as string)?.trim(),
-      companyName: (formData.get("companyName") as string)?.trim() || "",
+      companyName: (formData.get("companyName") as string)?.trim() || (formData.get("clientName") as string)?.trim() || "",
       contactPerson: (formData.get("contactPerson") as string)?.trim() || "",
       phone: (formData.get("phone") as string)?.trim() || "",
-      email: (formData.get("email") as string)?.trim() || "",
-      gstin: (formData.get("gstin") as string)?.trim() || "",
+      gstin: ((formData.get("gstin") as string)?.trim() || "").toUpperCase(),
+      panNumber: ((formData.get("panNumber") as string)?.trim() || "").toUpperCase(),
       address: (formData.get("address") as string)?.trim() || "",
       city: (formData.get("city") as string)?.trim() || "",
+      district: (formData.get("district") as string)?.trim() || "",
       state: (formData.get("state") as string)?.trim() || "",
       pincode: (formData.get("pincode") as string)?.trim() || "",
+      isBillingAddressDifferent: isBillingDiff,
+      billingAddress: isBillingDiff ? (formData.get("billingAddress") as string)?.trim() || "" : "",
+      billingCity: isBillingDiff ? (formData.get("billingCity") as string)?.trim() || "" : "",
+      billingDistrict: isBillingDiff ? (formData.get("billingDistrict") as string)?.trim() || "" : "",
+      billingState: isBillingDiff ? (formData.get("billingState") as string)?.trim() || "" : "",
+      billingPincode: isBillingDiff ? (formData.get("billingPincode") as string)?.trim() || "" : "",
       branchId: (formData.get("branchId") as string)?.trim() || null,
-      notes: (formData.get("notes") as string)?.trim() || "",
       status: ((formData.get("status") as string) || "active") as "active" | "inactive",
     };
 
@@ -165,17 +184,22 @@ export async function updateClientAction(state: ClientFormState, formData: FormD
     const data = parsed.data;
 
     const updatePayload = {
-      client_name: data.clientName,
-      company_name: data.companyName || null,
+      company_name: data.companyName,
       contact_person: data.contactPerson || null,
       phone: data.phone || null,
-      email: data.email || null,
       gstin: data.gstin || null,
+      pan_number: data.panNumber || null,
       address: data.address.trim(),
       city: data.city.trim(),
+      district: data.district || null,
       state: data.state.trim(),
       pincode: data.pincode || null,
-      notes: data.notes || null,
+      is_billing_address_different: data.isBillingAddressDifferent,
+      billing_address: data.isBillingAddressDifferent ? data.billingAddress || null : null,
+      billing_city: data.isBillingAddressDifferent ? data.billingCity || null : null,
+      billing_district: data.isBillingAddressDifferent ? data.billingDistrict || null : null,
+      billing_state: data.isBillingAddressDifferent ? data.billingState || null : null,
+      billing_pincode: data.isBillingAddressDifferent ? data.billingPincode || null : null,
       status: data.status,
       updated_at: new Date().toISOString(),
     };
@@ -195,7 +219,7 @@ export async function updateClientAction(state: ClientFormState, formData: FormD
       action: "CLIENT_UPDATE",
       entity_type: "clients",
       entity_id: id,
-      metadata: { client_name: data.clientName },
+      metadata: { company_name: data.companyName, gstin: data.gstin },
     });
 
     revalidateTag(TAGS.clients, "max");

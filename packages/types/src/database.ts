@@ -285,6 +285,9 @@ export interface MachineHourLog {
   supervisor_id?: string | null;
   client_id?: string | null;
   log_date: string;
+  end_date?: string | null;
+  start_datetime?: string | null;
+  end_datetime?: string | null;
   start_meter: number;
   end_meter: number;
   running_hours: number;
@@ -729,25 +732,36 @@ export interface StoreManagerDashboardMetrics {
 
 export interface CRMClient {
   id: string;
-  client_name: string;
   code: string;
-  company_name?: string | null;
+  company_name: string;
   contact_person: string | null;
-  email: string | null;
   phone: string | null;
   gstin?: string | null;
+  pan_number?: string | null;
   address: string;
   city: string;
+  district?: string | null;
   state: string;
   pincode?: string | null;
+  is_billing_address_different?: boolean;
+  billing_address?: string | null;
+  billing_city?: string | null;
+  billing_district?: string | null;
+  billing_state?: string | null;
+  billing_pincode?: string | null;
   branch_id?: string | null;
-  notes?: string | null;
-  machine_count: number;
-  open_complaints: number;
+  machine_count?: number;
+  open_complaints?: number;
   status: "active" | "inactive";
   deleted_at?: string | null;
   created_at: string;
   updated_at?: string;
+  /** @deprecated Backward compatibility alias mapped from company_name */
+  client_name?: string;
+  /** @deprecated Backward compatibility optional alias */
+  email?: string | null;
+  /** @deprecated Backward compatibility optional alias */
+  notes?: string | null;
 }
 
 export interface Vendor {
@@ -1343,5 +1357,101 @@ export interface TaskFilterParams {
   dueDate?: string;
   sortBy?: "due_date" | "priority" | "created_at" | "status" | "title";
   sortOrder?: "asc" | "desc";
+}
+
+export interface MasterState {
+  id: string;
+  name: string;
+  type: "state" | "union_territory";
+  state_code: string | null;
+  lgd_code: string | null;
+  census_code: string | null;
+  status: "active" | "inactive";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MasterDistrict {
+  id: string;
+  state_name: string;
+  district_name: string;
+  district_lgd_code: string | null;
+  short_name: string | null;
+  census_code: string | null;
+  status: "active" | "inactive";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MasterCity {
+  id: string;
+  state_name: string;
+  district_name: string;
+  city_name: string;
+  town_type: string;
+  town_code: string | null;
+  status: "active" | "inactive";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MasterLocation {
+  id: string;
+  state: string;
+  union_territory: string | null;
+  location_type: "state" | "union_territory";
+  district: string;
+  city_town: string;
+  town_type: string;
+  town_code?: string | null;
+  district_code?: string | null;
+  state_code?: string | null;
+  search_text?: string;
+  status: "active" | "inactive";
+  created_at: string;
+  updated_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Relational Indian Locations Hierarchy (states, districts, cities, towns, villages)
+// Official Government Integer / Smallint IDs
+// ---------------------------------------------------------------------------
+export interface State {
+  id: number; // SMALLINT
+  name: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface District {
+  id: number; // SMALLINT
+  state_id: number; // SMALLINT REFERENCES states(id)
+  name: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface City {
+  id: number; // INTEGER PRIMARY KEY (Census Location Code)
+  district_id: number; // SMALLINT REFERENCES districts(id)
+  name: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Town {
+  id: number; // INTEGER PRIMARY KEY (Census Town / Tehsil Code)
+  district_id: number; // SMALLINT REFERENCES districts(id)
+  name: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface Village {
+  id: number; // INTEGER PRIMARY KEY (Census Village Code)
+  district_id: number; // SMALLINT REFERENCES districts(id)
+  name: string;
+  created_at?: string;
+  updated_at?: string;
 }
 

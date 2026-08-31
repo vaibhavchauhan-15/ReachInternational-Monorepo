@@ -68,7 +68,7 @@ export async function getOperationsReportData(
       normal_working_hours,
       is_breakdown,
       machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number),
-      client:clients!machine_hour_logs_client_id_fkey(id, client_name),
+      client:clients!machine_hour_logs_client_id_fkey(id, company_name),
       operator:users!machine_hour_logs_operator_id_fkey(id, full_name)
     `)
     .gte("log_date", filters.startDate)
@@ -118,7 +118,7 @@ export async function getOperationsReportData(
       logDate: item.log_date,
       machineCode: mCode,
       machineModel: item.machine?.model || "—",
-      clientName: item.client?.client_name || "Unassigned Client",
+      clientName: item.client?.company_name || item.client?.client_name || "Unassigned Client",
       operatorName: item.operator?.full_name || "Unassigned Operator",
       startMeter: startM,
       endMeter: endM,

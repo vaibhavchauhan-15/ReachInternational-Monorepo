@@ -3,6 +3,9 @@ import { z } from "zod";
 export const CreateHourLogSchema = z.object({
   machine_id: z.string().min(1, "Machine reference is required").max(100, "Machine reference cannot exceed 100 characters"),
   log_date: z.string().min(1, "Log date is required").max(50, "Log date string cannot exceed 50 characters"),
+  end_date: z.string().max(50, "End date string cannot exceed 50 characters").optional().nullable(),
+  start_datetime: z.string().max(100, "Start datetime cannot exceed 100 characters").optional().nullable(),
+  end_datetime: z.string().max(100, "End datetime cannot exceed 100 characters").optional().nullable(),
   start_meter: z.number().min(0, "Start meter reading must be non-negative"),
   end_meter: z.number().min(0, "End meter reading must be non-negative"),
   location: z.string().max(255, "Location cannot exceed 255 characters").optional().nullable(),

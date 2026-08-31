@@ -5,12 +5,12 @@ import { checkRateLimitAsync, getClientIp, RATE_LIMIT_PROFILES } from "@/lib/sec
 const activeProtectedRoutes = [
   "/machines",
   "/operations",
+  "/clients",
   "/users",
 ];
 
 const deprecatedRoutes = [
   "/dashboard",
-  "/clients",
   "/crm",
   "/inventory",
   "/finance",

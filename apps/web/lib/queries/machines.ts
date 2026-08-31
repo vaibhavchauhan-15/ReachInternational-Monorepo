@@ -510,7 +510,7 @@ export async function getMachineActiveRental(machineId: string) {
   const supabase = createSupabaseAdminClient();
   const { data } = await supabase
     .from("rental_contracts")
-    .select("id, contract_number, client_id, start_date, end_date, monthly_rate, status, client:clients(id, client_name)")
+    .select("id, contract_number, client_id, start_date, end_date, monthly_rate, status, client:clients(id, company_name)")
     .eq("machine_id", machineId)
     .eq("status", "active")
     .maybeSingle();

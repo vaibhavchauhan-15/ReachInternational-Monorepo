@@ -321,7 +321,7 @@ function SupervisorLogsReportContent({
                 if (bkdDurationOnly) {
                   bkdDurationOnly = bkdDurationOnly.replace(/^Breakdown\s*\((.*)\)$/i, "$1").replace(/^Machine Breakdown\s*\((.*)\)$/i, "$1").replace(/^Breakdown\s*/i, "").replace(/\s*duration$/i, "").trim();
                 }
-                const displayBkdText = isBkd ? (bkdDurationOnly && bkdDurationOnly.toLowerCase() !== "breakdown" ? bkdDurationOnly : "Breakdown") : "Normal";
+                const displayBkdText = isBkd ? (bkdDurationOnly && bkdDurationOnly.toLowerCase() !== "breakdown" ? bkdDurationOnly : "Breakdown") : "0";
 
                 if (isOperatorView) {
                   return (
@@ -358,8 +358,8 @@ function SupervisorLogsReportContent({
                             {displayBkdText}
                           </span>
                         ) : (
-                          <span className="font-bold text-emerald-700 block text-[8px] text-center whitespace-nowrap">
-                            Normal
+                          <span className="font-bold text-neutral-800 block text-[8px] text-center font-mono whitespace-nowrap">
+                            0
                           </span>
                         )}
                       </td>
@@ -414,8 +414,8 @@ function SupervisorLogsReportContent({
                               {displayBkdText}
                             </span>
                           ) : (
-                            <span className="font-semibold text-emerald-700 block text-[8px] text-center whitespace-nowrap">
-                              Normal
+                            <span className="font-bold text-neutral-800 block text-[8px] text-center font-mono whitespace-nowrap">
+                              0
                             </span>
                           )}
                         </td>
@@ -437,8 +437,8 @@ function SupervisorLogsReportContent({
                               {displayBkdText}
                             </span>
                           ) : (
-                            <span className="font-bold text-emerald-700 block text-[8px] text-center whitespace-nowrap">
-                              Normal
+                            <span className="font-bold text-neutral-800 block text-[8px] text-center font-mono whitespace-nowrap">
+                              0
                             </span>
                           )}
                         </td>

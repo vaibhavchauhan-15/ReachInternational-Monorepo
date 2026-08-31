@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   AnimatedX,
   AnimatedBuilding2,
@@ -14,10 +15,14 @@ import {
   AnimatedCalendarClock,
   AnimatedShieldCheck,
   AnimatedCreditCard,
+  AnimatedCopy,
+  AnimatedCheck,
+  AnimatedEye,
+  AnimatedEyeOff,
 } from "@/components/ui/animated-icons";
-import { Shield, ShieldAlert, ShieldCheck } from "lucide-react";
-import { Button, Badge, Select, Dialog, DialogContent } from "@/components/ui";
-import { formatDate, maskAadhaar, formatLicenseNumber } from "@reachinternational/utils";
+import { Shield, ShieldAlert, ShieldCheck, Copy, Check } from "lucide-react";
+import { Button, Badge, Select, Dialog, DialogContent, TooltipWrapper, useToast } from "@/components/ui";
+import { formatDate, formatDateTime, formatTimeAgo, maskAadhaar, formatLicenseNumber } from "@reachinternational/utils";
 import type { User, UserRole } from "@/lib/types/database";
 
 const roleOptions = [
@@ -120,6 +125,17 @@ export function UserDetailSheet({
   onUpdateRole,
   onDelete,
 }: UserDetailSheetProps) {
+  const { toast } = useToast();
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [showFullAadhaar, setShowFullAadhaar] = useState(false);
+
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(label);
+    toast("success", `${label} copied to clipboard`);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
   const isLoading = user ? loadingId?.id === user.id : false;
 
   const canViewContactInfo = () => {
@@ -150,12 +166,12 @@ export function UserDetailSheet({
         <DialogContent
           from="bottom"
           showCloseButton={false}
-          className="max-w-lg bg-[var(--color-canvas-elevated)] rounded-t-[var(--radius-lg)] sm:rounded-[var(--radius-lg)] border border-[var(--color-hairline)] shadow-2xl overflow-hidden max-h-[85vh] p-0"
+          className="max-w-lg bg-[var(--color-canvas-elevated)] rounded-t-[var(--radius-lg)] sm:rounded-[var(--radius-lg)] border border-[var(--color-hairline)] shadow-2xl overflow-hidden max-h-[90vh] p-0"
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-[var(--color-hairline)]">
+          <div className="flex items-center justify-between p-4 border-b border-[var(--color-hairline)] bg-[var(--color-canvas)]">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] shadow-xs">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] border border-[var(--color-hairline)] shadow-xs">
                 {getRoleIcon(user.role)}
               </div>
               <div>
@@ -181,99 +197,226 @@ export function UserDetailSheet({
 
             <button
               onClick={onClose}
-              className="p-2 rounded-full hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors"
+              className="p-2 rounded-full hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
             >
               <AnimatedX size={18} />
             </button>
           </div>
 
           {/* Scrollable Sheet Content */}
-          <div className="p-4 space-y-4 overflow-y-auto max-h-[60vh]">
+          <div className="p-4 space-y-4 overflow-y-auto max-h-[68vh]">
             {/* Quick Contact Buttons */}
             {showContact && (
               <div className="grid grid-cols-2 gap-3">
                 <a
                   href={`mailto:${user.email}`}
-                  className="flex items-center justify-center gap-2 py-3 px-4 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-98 transition-all"
+                  className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-98 transition-all"
                 >
-                  <AnimatedMail size={16} className="text-[var(--color-link)]" />
+                  <AnimatedMail size={15} className="text-[var(--color-link)]" />
                   Email User
                 </a>
                 {user.phone ? (
                   <a
                     href={`tel:${user.phone}`}
-                    className="flex items-center justify-center gap-2 py-3 px-4 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-98 transition-all"
+                    className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-98 transition-all"
                   >
-                    <AnimatedPhone size={16} className="text-[var(--color-success)]" />
+                    <AnimatedPhone size={15} className="text-emerald-600 dark:text-emerald-400" />
                     Call Phone
                   </a>
                 ) : (
-                  <div className="flex items-center justify-center gap-2 py-3 px-4 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-medium text-[var(--color-mute)] opacity-60">
-                    <AnimatedPhone size={16} /> No Phone
+                  <div className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-medium text-[var(--color-mute)] opacity-60">
+                    <AnimatedPhone size={15} /> No Phone
                   </div>
                 )}
               </div>
             )}
 
-              {/* Profile Info Summary Box */}
-            <div className="p-3.5 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2.5 text-xs text-[var(--color-body)]">
+            {/* Profile Info Summary Box */}
+            <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3 text-xs">
+              <div className="flex items-center justify-between pb-2 border-b border-[var(--color-hairline)]">
+                <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[var(--color-mute)]">
+                  Account Details
+                </span>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(user.id, "User ID")}
+                  className="inline-flex items-center gap-1 font-mono text-[10px] text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
+                  title="Copy User ID"
+                >
+                  <span>ID: {user.id.slice(0, 8)}...</span>
+                  {copiedField === "User ID" ? (
+                    <Check className="h-3 w-3 text-emerald-500" />
+                  ) : (
+                    <Copy className="h-3 w-3 opacity-60" />
+                  )}
+                </button>
+              </div>
+
+              {/* Email Address */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1.5">
+                  <AnimatedMail size={14} className="text-[var(--color-ink)] opacity-60" /> Email
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-[var(--color-ink)] truncate max-w-[220px]">
+                    {user.email}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(user.email, "Email")}
+                    className="p-1 hover:bg-[var(--color-hairline-soft-surface)] rounded text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
+                    title="Copy Email"
+                  >
+                    {copiedField === "Email" ? (
+                      <Check className="h-3 w-3 text-emerald-500" />
+                    ) : (
+                      <Copy className="h-3 w-3" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Phone Number */}
+              {user.phone && (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[var(--color-mute)] font-medium flex items-center gap-1.5">
+                    <AnimatedPhone size={14} className="text-[var(--color-ink)] opacity-60" /> Phone
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold font-mono text-[var(--color-ink)]">
+                      {user.phone}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(user.phone!, "Phone")}
+                      className="p-1 hover:bg-[var(--color-hairline-soft-surface)] rounded text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
+                      title="Copy Phone"
+                    >
+                      {copiedField === "Phone" ? (
+                        <Check className="h-3 w-3 text-emerald-500" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Location Hierarchy: City, District, State */}
               <div className="flex items-center justify-between">
-                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1">
-                  <AnimatedMapPin size={14} className="text-emerald-500" /> City
+                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1.5">
+                  <AnimatedMapPin size={14} className="text-emerald-500" /> City / District
                 </span>
                 <span className="font-semibold text-[var(--color-ink)]">
-                  {user.city || "—"}
+                  {user.city && user.district ? `${user.city}, ${user.district}` : user.city || user.district || "—"}
                 </span>
               </div>
+
               <div className="flex items-center justify-between">
-                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1">
-                  <AnimatedMapPin size={14} className="text-emerald-500" /> District
-                </span>
-                <span className="font-semibold text-[var(--color-ink)]">
-                  {user.district || "—"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1">
+                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1.5">
                   <AnimatedMapPin size={14} className="text-emerald-500" /> State
                 </span>
                 <span className="font-semibold text-[var(--color-ink)]">
                   {user.state || "—"}
                 </span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1">
-                  <AnimatedShieldCheck size={14} className="text-[var(--color-link)]" /> Aadhaar Number
-                </span>
-                <span className="font-semibold font-mono text-[var(--color-ink)]">
-                  {maskAadhaar(user.aadhaar_number)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1">
-                  <AnimatedCreditCard size={14} className="text-[var(--color-link)]" /> Licence Number
-                </span>
-                <span className="font-semibold font-mono text-[var(--color-ink)]">
-                  {formatLicenseNumber(user.license_number)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[var(--color-mute)] font-medium">Email Address</span>
-                <span className="font-semibold text-[var(--color-ink)]">{user.email}</span>
-              </div>
-              {user.phone && (
+
+              {user.location && (
                 <div className="flex items-center justify-between">
-                  <span className="text-[var(--color-mute)] font-medium">Phone Number</span>
-                  <span className="font-semibold text-[var(--color-ink)]">{user.phone}</span>
+                  <span className="text-[var(--color-mute)] font-medium flex items-center gap-1.5">
+                    <AnimatedBuilding2 size={14} className="text-indigo-500" /> Site / Deployment
+                  </span>
+                  <span className="font-semibold text-[var(--color-ink)]">
+                    {user.location}
+                  </span>
                 </div>
               )}
+
+              {/* Aadhaar Number */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1.5">
+                  <AnimatedShieldCheck size={14} className="text-[var(--color-link)]" /> Aadhaar Number
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold font-mono text-[var(--color-ink)]">
+                    {user.aadhaar_number
+                      ? showFullAadhaar
+                        ? user.aadhaar_number
+                        : maskAadhaar(user.aadhaar_number)
+                      : "—"}
+                  </span>
+                  {user.aadhaar_number && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setShowFullAadhaar((prev) => !prev)}
+                        className="p-1 hover:bg-[var(--color-hairline-soft-surface)] rounded text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
+                        title={showFullAadhaar ? "Mask Aadhaar" : "Reveal Aadhaar"}
+                      >
+                        {showFullAadhaar ? (
+                          <AnimatedEyeOff size={13} />
+                        ) : (
+                          <AnimatedEye size={13} />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(user.aadhaar_number!, "Aadhaar")}
+                        className="p-1 hover:bg-[var(--color-hairline-soft-surface)] rounded text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
+                        title="Copy Aadhaar"
+                      >
+                        {copiedField === "Aadhaar" ? (
+                          <Check className="h-3 w-3 text-emerald-500" />
+                        ) : (
+                          <Copy className="h-3 w-3" />
+                        )}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Licence Number */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1.5">
+                  <AnimatedCreditCard size={14} className="text-[var(--color-link)]" /> Licence Number
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold font-mono text-[var(--color-ink)]">
+                    {user.license_number ? formatLicenseNumber(user.license_number) : "—"}
+                  </span>
+                  {user.license_number && (
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(user.license_number!, "Licence")}
+                      className="p-1 hover:bg-[var(--color-hairline-soft-surface)] rounded text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
+                      title="Copy Licence"
+                    >
+                      {copiedField === "Licence" ? (
+                        <Check className="h-3 w-3 text-emerald-500" />
+                      ) : (
+                        <Copy className="h-3 w-3" />
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Registered Date & Relative Time */}
               <div className="flex items-center justify-between">
-                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1">
+                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1.5">
                   <AnimatedCalendarClock size={14} className="text-[var(--color-mute)]" /> Registered Date
                 </span>
-                <span className="font-semibold text-[var(--color-ink)]">
-                  {formatDate(user.created_at)}
-                </span>
+                <div className="text-right">
+                  <span className="font-semibold text-[var(--color-ink)] block">
+                    {formatDate(user.created_at)}
+                  </span>
+                  {user.created_at && (
+                    <span className="text-[10px] text-[var(--color-mute)] font-mono">
+                      ({formatTimeAgo(user.created_at)})
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 

@@ -51,13 +51,13 @@ export function PageHeader({
       )}
 
       {/* Main Title Row */}
-      <div className="flex items-center justify-between gap-3 sm:gap-4 flex-wrap sm:flex-nowrap">
-        <div className="flex items-center gap-3 flex-wrap min-w-0">
-          <h1 className="heading-lg text-[var(--color-ink)] tracking-tight">{title}</h1>
+      <div className="flex items-center justify-between gap-2 sm:gap-4 w-full">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <h1 className="text-xl sm:text-2xl md:text-[32px] md:leading-[40px] font-bold text-[var(--color-ink)] tracking-tight truncate leading-tight">{title}</h1>
           {badge}
         </div>
 
-        {actions && <div className="flex items-center gap-2 flex-shrink-0">{actions}</div>}
+        {actions && <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">{actions}</div>}
       </div>
 
       {description && <p className="body-md text-[var(--color-body)] max-w-3xl">{description}</p>}

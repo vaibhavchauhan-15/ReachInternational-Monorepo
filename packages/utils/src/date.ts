@@ -96,6 +96,38 @@ export function formatTimeAgo(dateInput: string | Date | null | undefined): stri
 }
 
 /**
+ * Formats a date into an ultra-compact relative time representation.
+ * Examples: "1min", "10min", "1h", "20h", "1d", "7d", "1m", "10m", "1y".
+ */
+export function formatTinyRelativeTime(dateInput: string | Date | null | undefined): string {
+  if (!dateInput) return '—';
+  let date: Date;
+  if (typeof dateInput === 'string') {
+    const cleanStr = dateInput.trim();
+    if (!cleanStr) return '—';
+    date = new Date(cleanStr);
+  } else {
+    date = dateInput;
+  }
+  if (isNaN(date.getTime())) return '—';
+
+  const diffMs = Math.max(0, Date.now() - date.getTime());
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+  const diffMonth = Math.floor(diffDay / 30);
+  const diffYear = Math.floor(diffDay / 365);
+
+  if (diffMin < 1) return '1min';
+  if (diffMin < 60) return `${diffMin}min`;
+  if (diffHour < 24) return `${diffHour}h`;
+  if (diffDay < 30) return `${diffDay}d`;
+  if (diffMonth < 12) return `${diffMonth}m`;
+  return `${diffYear}y`;
+}
+
+/**
  * Formats any raw time input (e.g. "06:00:00", "18:00:00", "18:30", "6:00", "06:00 AM")
  * into user-friendly 12-hour format with AM/PM (e.g. "06:00 AM", "06:00 PM").
  */
@@ -144,4 +176,395 @@ export function formatCompactTiming(startStr?: string | null, endStr?: string | 
   const formattedEnd = formatTo12Hour(endStr) || '02:00 PM';
   return `${formattedStart.replace(/\s+/g, '')}-${formattedEnd.replace(/\s+/g, '')}`;
 }
+
+export interface ShiftTimingComputation {
+  startDateTime: Date | null;
+  endDateTime: Date | null;
+  resolvedStartDate: string;
+  resolvedEndDate: string;
+  resolvedRangeFormatted: string; // e.g. "31 Aug 08:00 PM → 01 Sep 06:00 AM"
+  durationHours: number;
+  durationMinutes: number;
+  durationFormatted: string; // e.g. "10h 00m"
+  isOvernight: boolean;
+  overtimeHours: number;
+  normalWorkingHours: number;
+  breakHours: number;
+  isValid: boolean;
+  errorMessage: string | null;
+}
+
+/**
+ * Adds days to a YYYY-MM-DD date string.
+ */
+export function addDaysToDateStr(dateStr: string, days: number): string {
+  const parts = dateStr.split('T')[0].split('-').map(Number);
+  if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) return dateStr;
+  const d = new Date(parts[0], parts[1] - 1, parts[2]);
+  d.setDate(d.getDate() + days);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/**
+ * Parses time string (e.g. "08:00 AM", "05:30 PM", "17:00") into minutes from midnight (0..1439).
+ */
+export function parseTimeToMinutes(timeStr?: string | null): number | null {
+  if (!timeStr) return null;
+  const str = timeStr.trim().toUpperCase();
+  const match = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (!match) return null;
+
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const period = match[3];
+
+  if (period) {
+    if (period === 'PM' && hours < 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+  }
+  return hours * 60 + minutes;
+}
+
+/**
+ * Parses date string (YYYY-MM-DD) and 12/24-hour time string (e.g. "08:00 PM") into a local Date object.
+ */
+export function parseDateTimeToDate(dateStr?: string | null, timeStr?: string | null): Date | null {
+  if (!dateStr || !timeStr) return null;
+  const dParts = dateStr.split('T')[0].split('-').map(Number);
+  if (dParts.length < 3 || isNaN(dParts[0]) || isNaN(dParts[1]) || isNaN(dParts[2])) return null;
+
+  const tTrimmed = timeStr.trim().toUpperCase();
+  const match = tTrimmed.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
+  if (!match) return null;
+
+  let hours = parseInt(match[1], 10);
+  const minutes = parseInt(match[2], 10);
+  const period = match[3];
+
+  if (period) {
+    if (period === 'PM' && hours < 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+  }
+
+  return new Date(dParts[0], dParts[1] - 1, dParts[2], hours, minutes, 0, 0);
+}
+
+/**
+ * Formats a resolved shift datetime range for secondary display.
+ * e.g. "31 Aug 08:00 PM → 01 Sep 06:00 AM" or "31 Aug 06:00 AM → 31 Aug 02:00 PM"
+ */
+export function formatResolvedRange(
+  startDateStr: string,
+  startTimeStr: string,
+  endDateStr: string,
+  endTimeStr: string
+): string {
+  const formatShortDate = (dStr: string) => {
+    const parts = dStr.split('T')[0].split('-').map(Number);
+    if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      const d = new Date(parts[0], parts[1] - 1, parts[2]);
+      const day = d.getDate();
+      const month = d.toLocaleDateString('en-US', { month: 'short' });
+      return `${day} ${month}`;
+    }
+    return formatDate(dStr);
+  };
+
+  const sDate = formatShortDate(startDateStr);
+  const eDate = formatShortDate(endDateStr);
+  const sTime = formatTo12Hour(startTimeStr) || '06:00 AM';
+  const eTime = formatTo12Hour(endTimeStr) || '02:00 PM';
+
+  return `${sDate} ${sTime} → ${eDate} ${eTime}`;
+}
+
+/**
+ * Computes shift duration, overnight flag, overtime hours, normal working hours,
+ * automatically derives End Date for overnight shifts (when End Time < Start Time),
+ * and validates that Start Time and End Time are not identical.
+ */
+export function computeShiftTiming(params: {
+  startDate?: string | null;
+  logDate?: string | null;
+  startTime?: string | null;
+  endDate?: string | null;
+  endTime?: string | null;
+  manualOvertime?: number;
+}): ShiftTimingComputation {
+  const { startDate, logDate, startTime, endDate, endTime, manualOvertime } = params;
+  const effectiveStartDate = startDate || logDate || new Date().toISOString().split('T')[0];
+
+  if (!startTime || !endTime) {
+    return {
+      startDateTime: null,
+      endDateTime: null,
+      resolvedStartDate: effectiveStartDate,
+      resolvedEndDate: effectiveStartDate,
+      resolvedRangeFormatted: '',
+      durationHours: 0,
+      durationMinutes: 0,
+      durationFormatted: '0h 00m',
+      isOvernight: false,
+      overtimeHours: 0,
+      normalWorkingHours: 0,
+      breakHours: 1.0,
+      isValid: false,
+      errorMessage: 'Start time and end time are required.',
+    };
+  }
+
+  const sMins = parseTimeToMinutes(startTime);
+  const eMins = parseTimeToMinutes(endTime);
+
+  if (sMins === null || eMins === null) {
+    return {
+      startDateTime: null,
+      endDateTime: null,
+      resolvedStartDate: effectiveStartDate,
+      resolvedEndDate: effectiveStartDate,
+      resolvedRangeFormatted: '',
+      durationHours: 0,
+      durationMinutes: 0,
+      durationFormatted: '0h 00m',
+      isOvernight: false,
+      overtimeHours: 0,
+      normalWorkingHours: 0,
+      breakHours: 1.0,
+      isValid: false,
+      errorMessage: 'Invalid time format.',
+    };
+  }
+
+  // Edge case: Same Start Time and End Time (e.g. 08:00 AM -> 08:00 AM)
+  if (sMins === eMins && (!endDate || endDate === effectiveStartDate)) {
+    const startDateTime = parseDateTimeToDate(effectiveStartDate, startTime);
+    return {
+      startDateTime,
+      endDateTime: startDateTime,
+      resolvedStartDate: effectiveStartDate,
+      resolvedEndDate: effectiveStartDate,
+      resolvedRangeFormatted: formatResolvedRange(effectiveStartDate, startTime, effectiveStartDate, endTime),
+      durationHours: 0,
+      durationMinutes: 0,
+      durationFormatted: '0h 00m',
+      isOvernight: false,
+      overtimeHours: 0,
+      normalWorkingHours: 0,
+      breakHours: 1.0,
+      isValid: false,
+      errorMessage: 'Start time and end time cannot be identical.',
+    };
+  }
+
+  // Automatically derive End Date if not explicitly passed or if matching start date
+  let effectiveEndDate = endDate || effectiveStartDate;
+  let isOvernight = false;
+
+  if (!endDate || endDate === effectiveStartDate) {
+    if (eMins < sMins) {
+      // Overnight shift: moves to next calendar day
+      effectiveEndDate = addDaysToDateStr(effectiveStartDate, 1);
+      isOvernight = true;
+    } else {
+      // Same-day shift
+      effectiveEndDate = effectiveStartDate;
+      isOvernight = false;
+    }
+  } else {
+    // Explicit endDate passed
+    isOvernight = effectiveEndDate !== effectiveStartDate;
+  }
+
+  const startDateTime = parseDateTimeToDate(effectiveStartDate, startTime);
+  const endDateTime = parseDateTimeToDate(effectiveEndDate, endTime);
+
+  if (!startDateTime || !endDateTime) {
+    return {
+      startDateTime,
+      endDateTime,
+      resolvedStartDate: effectiveStartDate,
+      resolvedEndDate: effectiveEndDate,
+      resolvedRangeFormatted: '',
+      durationHours: 0,
+      durationMinutes: 0,
+      durationFormatted: '0h 00m',
+      isOvernight,
+      overtimeHours: 0,
+      normalWorkingHours: 0,
+      breakHours: 1.0,
+      isValid: false,
+      errorMessage: 'Invalid date or time format.',
+    };
+  }
+
+  const diffMs = endDateTime.getTime() - startDateTime.getTime();
+  if (diffMs <= 0) {
+    return {
+      startDateTime,
+      endDateTime,
+      resolvedStartDate: effectiveStartDate,
+      resolvedEndDate: effectiveEndDate,
+      resolvedRangeFormatted: formatResolvedRange(effectiveStartDate, startTime, effectiveEndDate, endTime),
+      durationHours: 0,
+      durationMinutes: 0,
+      durationFormatted: '0h 00m',
+      isOvernight,
+      overtimeHours: 0,
+      normalWorkingHours: 0,
+      breakHours: 1.0,
+      isValid: false,
+      errorMessage: 'End Date + Time must be later than Start Date + Time.',
+    };
+  }
+
+  const diffMinutes = Math.round(diffMs / (1000 * 60));
+  const hours = Math.floor(diffMinutes / 60);
+  const mins = diffMinutes % 60;
+  const durationFormatted = `${hours}h ${String(mins).padStart(2, '0')}m`;
+  const durationHours = Math.round((diffMinutes / 60) * 10) / 10;
+
+  const breakHours = 1.0;
+  const autoOvertime = Math.max(0, Math.round((durationHours - (8.0 + breakHours)) * 10) / 10);
+  const overtimeHours = manualOvertime !== undefined && !isNaN(manualOvertime) ? manualOvertime : autoOvertime;
+  const normalWorkingHours = Math.max(0, Math.round((durationHours - overtimeHours - breakHours) * 10) / 10);
+
+  if (diffMinutes > 24 * 60) {
+    return {
+      startDateTime,
+      endDateTime,
+      resolvedStartDate: effectiveStartDate,
+      resolvedEndDate: effectiveEndDate,
+      resolvedRangeFormatted: formatResolvedRange(effectiveStartDate, startTime, effectiveEndDate, endTime),
+      durationHours,
+      durationMinutes: diffMinutes,
+      durationFormatted,
+      isOvernight,
+      overtimeHours,
+      normalWorkingHours,
+      breakHours,
+      isValid: false,
+      errorMessage: 'Shift duration cannot exceed 24 hours.',
+    };
+  }
+
+  return {
+    startDateTime,
+    endDateTime,
+    resolvedStartDate: effectiveStartDate,
+    resolvedEndDate: effectiveEndDate,
+    resolvedRangeFormatted: formatResolvedRange(effectiveStartDate, startTime, effectiveEndDate, endTime),
+    durationHours,
+    durationMinutes: diffMinutes,
+    durationFormatted,
+    isOvernight,
+    overtimeHours,
+    normalWorkingHours,
+    breakHours,
+    isValid: true,
+    errorMessage: null,
+  };
+}
+
+/**
+ * Checks whether two half-open datetime intervals [start1, end1) and [start2, end2) overlap.
+ * Exact handover where end1 === start2 returns false (no overlap, valid handover).
+ */
+export function checkIntervalOverlap(
+  start1: Date | null,
+  end1: Date | null,
+  start2: Date | null,
+  end2: Date | null
+): boolean {
+  if (!start1 || !end1 || !start2 || !end2) return false;
+  return Math.max(start1.getTime(), start2.getTime()) < Math.min(end1.getTime(), end2.getTime());
+}
+
+/**
+ * Finds the latest machine hour log recorded for a machine by its end datetime.
+ */
+export function findLatestMachineLogTimeline(
+  logs: any[],
+  machineId: string,
+  excludeLogId?: string
+): {
+  latestLog: any | null;
+  endDateTime: Date | null;
+  formattedEndTime: string;
+  formattedEndDate: string;
+  formattedRange: string;
+} {
+  if (!logs || logs.length === 0 || !machineId) {
+    return {
+      latestLog: null,
+      endDateTime: null,
+      formattedEndTime: '',
+      formattedEndDate: '',
+      formattedRange: '',
+    };
+  }
+
+  const machineLogs = logs.filter(
+    (l) => l.machine_id === machineId && (!excludeLogId || l.id !== excludeLogId)
+  );
+
+  if (machineLogs.length === 0) {
+    return {
+      latestLog: null,
+      endDateTime: null,
+      formattedEndTime: '',
+      formattedEndDate: '',
+      formattedRange: '',
+    };
+  }
+
+  let latestLog: any = null;
+  let latestEndMs = -1;
+  let latestEndDateObj: Date | null = null;
+
+  for (const log of machineLogs) {
+    let endDateObj: Date | null = null;
+    if (log.end_datetime) {
+      endDateObj = new Date(log.end_datetime);
+    } else if (log.log_date && log.end_time) {
+      const isOvernight = log.start_time && log.end_time && parseTimeToMinutes(log.end_time)! <= parseTimeToMinutes(log.start_time)!;
+      const targetDate = log.end_date || (isOvernight ? addDaysToDateStr(log.log_date, 1) : log.log_date);
+      endDateObj = parseDateTimeToDate(targetDate, log.end_time);
+    }
+
+    if (endDateObj && !isNaN(endDateObj.getTime())) {
+      if (endDateObj.getTime() > latestEndMs) {
+        latestEndMs = endDateObj.getTime();
+        latestLog = log;
+        latestEndDateObj = endDateObj;
+      }
+    }
+  }
+
+  if (!latestLog || !latestEndDateObj) {
+    return {
+      latestLog: machineLogs[0],
+      endDateTime: null,
+      formattedEndTime: '',
+      formattedEndDate: '',
+      formattedRange: '',
+    };
+  }
+
+  const formattedEndTime = formatTo12Hour(latestLog.end_time) || latestEndDateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const formattedEndDate = formatDate(latestLog.end_date || latestLog.log_date || latestEndDateObj);
+  const startT = formatTo12Hour(latestLog.start_time) || '06:00 AM';
+  const formattedRange = `${startT} — ${formattedEndTime}`;
+
+  return {
+    latestLog,
+    endDateTime: latestEndDateObj,
+    formattedEndTime,
+    formattedEndDate,
+    formattedRange,
+  };
+}
+
 

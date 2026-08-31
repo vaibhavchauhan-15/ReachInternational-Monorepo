@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo, ReactNode } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { AnimatedSearch, AnimatedChevronDown, AnimatedCheck, AnimatedX } from "./animated-icons";
+import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
+import {
+  AnimatedChevronDown,
+  AnimatedCheck,
+  AnimatedX,
+} from "./animated-icons";
+import { Search } from "lucide-react";
 
 export interface SelectOption {
   value: string;
@@ -10,52 +14,66 @@ export interface SelectOption {
   group?: string;
   icon?: ReactNode;
   description?: string;
+  badge?: string;
+  badgeClassName?: string;
 }
 
-interface SearchableSelectProps {
+export interface SearchableSelectProps {
   options: SelectOption[];
   value: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, option?: SelectOption | null) => void;
   placeholder?: string;
   label?: ReactNode;
   disabled?: boolean;
+  required?: boolean;
   clearable?: boolean;
+  allowAll?: boolean;
+  allLabel?: string;
+  compact?: boolean;
   className?: string;
+  triggerClassName?: string;
   icon?: ReactNode;
   error?: string;
 }
 
 export function SearchableSelect({
-  options,
-  value,
+  options = [],
+  value = "",
   onChange,
   placeholder = "Select option...",
   label,
   disabled = false,
-  clearable = true,
+  required = false,
+  clearable = false,
+  allowAll = false,
+  allLabel = "All",
+  compact = false,
   className = "",
+  triggerClassName = "",
   icon,
   error,
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [highlightedIndex, setHighlightedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const selectedOption = useMemo(
-    () => options.find((opt) => opt.value === value),
-    [options, value]
-  );
+  const isAllSelected = allowAll && (value === "all" || value === "");
+
+  const selectedOption = useMemo(() => {
+    if (isAllSelected) return null;
+    return options.find((opt) => opt.value === value) || null;
+  }, [options, value, isAllSelected]);
 
   const filteredOptions = useMemo(() => {
     if (!search.trim()) return options;
-    const query = search.toLowerCase();
+    const query = search.toLowerCase().trim();
     return options.filter(
       (opt) =>
         opt.label.toLowerCase().includes(query) ||
         (opt.description && opt.description.toLowerCase().includes(query)) ||
-        (opt.group && opt.group.toLowerCase().includes(query))
+        (opt.group && opt.group.toLowerCase().includes(query)) ||
+        (opt.badge && opt.badge.toLowerCase().includes(query))
     );
   }, [options, search]);
 
@@ -63,6 +81,7 @@ export function SearchableSelect({
     const handleClickOutside = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setIsOpen(false);
+        setSearch("");
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -74,184 +93,229 @@ export function SearchableSelect({
     const nextState = !isOpen;
     setIsOpen(nextState);
     if (nextState) {
-      setHighlightedIndex(0);
       setTimeout(() => searchInputRef.current?.focus(), 50);
     } else {
       setSearch("");
     }
   };
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearch(e.target.value);
-    setHighlightedIndex(0);
+  const handleSelect = (val: string) => {
+    if (val === "all") {
+      onChange("all", null);
+    } else {
+      const opt = options.find((o) => o.value === val) || null;
+      onChange(val, opt);
+    }
+    setIsOpen(false);
+    setSearch("");
+  };
+
+  const handleClear = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onChange(allowAll ? "all" : "", null);
+    setSearch("");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (disabled) return;
-
-    if (!isOpen && (e.key === "Enter" || e.key === "ArrowDown" || e.key === " ")) {
-      e.preventDefault();
-      setIsOpen(true);
-      setHighlightedIndex(0);
-      return;
-    }
-
-    if (!isOpen) return;
-
     if (e.key === "Escape") {
-      e.preventDefault();
       setIsOpen(false);
       setSearch("");
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setHighlightedIndex((prev) => (prev + 1) % Math.max(1, filteredOptions.length));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setHighlightedIndex((prev) =>
-        prev - 1 < 0 ? Math.max(0, filteredOptions.length - 1) : prev - 1
-      );
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      if (filteredOptions[highlightedIndex]) {
-        onChange(filteredOptions[highlightedIndex].value);
-        setIsOpen(false);
-        setSearch("");
-      }
     }
   };
 
   return (
-    <div className={`relative flex flex-col gap-1 ${className}`} ref={containerRef} onKeyDown={handleKeyDown}>
+    <div
+      className={`relative flex flex-col gap-1 w-full ${className}`}
+      ref={containerRef}
+      onKeyDown={handleKeyDown}
+    >
       {label && (
-        <label className="label-sm text-[var(--color-ink)] flex items-center justify-between">
-          {label}
+        <label className="block text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] mb-1 flex items-center justify-between select-none">
+          <span>
+            {label} {required && <span className="text-rose-500 font-semibold">*</span>}
+          </span>
         </label>
       )}
 
+      {/* Trigger Button */}
       <button
         type="button"
         disabled={disabled}
         onClick={handleOpenToggle}
-        className={`flex items-center justify-between h-9 w-full px-3 rounded-[var(--radius-sm)] border text-left body-md transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-2 ${error
-            ? "!border-rose-500 dark:!border-rose-400 !bg-rose-500/5 dark:!bg-rose-500/10 focus:!ring-rose-500/20"
+        className={`w-full px-3 sm:px-3.5 rounded-lg border text-xs sm:text-[13px] font-medium text-[var(--color-ink)] flex items-center justify-between transition-all shadow-2xs ${
+          compact ? "h-[38px] min-h-[38px] py-1.5" : "h-[42px] sm:h-[44px] min-h-[42px] sm:min-h-[44px]"
+        } ${
+          error
+            ? "border-rose-500 dark:border-rose-400 bg-rose-500/5 dark:bg-rose-500/10 focus:border-rose-500"
             : isOpen
-              ? "border-primary bg-card ring-1 ring-primary text-foreground"
-              : "border-border bg-card text-foreground hover:border-muted-foreground/50"
-          } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
+            ? "border-sky-500 dark:border-sky-400 bg-[var(--color-canvas)] ring-2 ring-sky-500/15"
+            : "border-[var(--color-hairline)] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] bg-[var(--color-canvas)] hover:border-[#3A3E42] dark:hover:border-[#3A3E42] [html:not(.dark)_&]:hover:border-[#CBD5E1]"
+        } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"} ${triggerClassName}`}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
-        <span className="flex items-center gap-2 truncate">
-          {selectedOption ? (
-            <span className="flex items-center gap-2 text-foreground font-medium truncate">
-              {selectedOption.icon || icon}
-              {selectedOption.label}
+        <span className="truncate flex items-center gap-2 pr-1">
+          {isAllSelected ? (
+            <span className="font-bold text-[var(--color-ink)] flex items-center gap-2">
+              <span>{allLabel}</span>
+              <span className="px-1.5 py-0.5 rounded bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] font-mono text-[10px]">
+                {options.length} Total
+              </span>
             </span>
+          ) : selectedOption ? (
+            <>
+              {selectedOption.icon || icon}
+              <span className="truncate font-bold">
+                {selectedOption.label}
+              </span>
+              {selectedOption.badge && (
+                <span
+                  className={`px-1.5 py-0.5 rounded text-[10px] font-mono shrink-0 ${
+                    selectedOption.badgeClassName ||
+                    "bg-sky-500/10 text-sky-600 dark:text-sky-400"
+                  }`}
+                >
+                  {selectedOption.badge}
+                </span>
+              )}
+              {!compact && selectedOption.description && (
+                <span className="text-[10px] text-[var(--color-mute)] truncate hidden md:inline">
+                  ({selectedOption.description})
+                </span>
+              )}
+            </>
           ) : (
             <>
               {icon}
-              <span className="text-muted-foreground">{placeholder}</span>
+              <span className="text-[var(--color-mute)] font-normal">{placeholder}</span>
             </>
           )}
         </span>
 
-        <span className="flex items-center gap-1">
-          {clearable && selectedOption && selectedOption.value !== "all" && (
+        <span className="flex items-center gap-1.5 shrink-0">
+          {clearable && selectedOption && (
             <span
               role="button"
               tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation();
-                onChange("all");
-              }}
-              className="p-0.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground"
+              onClick={handleClear}
+              className="p-1 rounded-full hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] hover:text-[var(--color-ink)] cursor-pointer"
             >
-              <AnimatedX size={14} />
+              <AnimatedX size={12} />
             </span>
           )}
           <AnimatedChevronDown
-            size={14}
-            className={`text-muted-foreground transition-transform duration-150 ${isOpen ? "rotate-180" : ""}`}
+            size={16}
+            className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
+              isOpen ? "rotate-180 text-sky-500" : ""
+            }`}
           />
         </span>
       </button>
-      {error && <p className="text-xs font-semibold text-rose-600 dark:text-rose-400 mt-1 flex items-center gap-1 form-error-enter">{error}</p>}
 
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 4, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 4, scale: 0.98 }}
-            transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute z-50 top-full left-0 right-0 mt-1 card-elevated border border-border bg-card text-card-foreground shadow-lg overflow-hidden max-h-64 flex flex-col"
-          >
-            {/* Search Input */}
-            <div className="p-2 border-b border-border flex items-center gap-2 bg-muted/30">
-              <AnimatedSearch size={14} className="text-muted-foreground shrink-0" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={search}
-                onChange={handleSearchChange}
-                placeholder="Search..."
-                className="w-full bg-transparent text-xs body-md text-foreground focus:outline-none placeholder:text-muted-foreground"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  className="text-muted-foreground hover:text-foreground text-xs"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
+      {error && (
+        <p className="text-xs font-semibold text-rose-600 dark:text-rose-400 mt-1 flex items-center gap-1">
+          {error}
+        </p>
+      )}
 
-            {/* Options List */}
-            <div className="overflow-y-auto p-1 max-h-48 space-y-0.5">
-              {filteredOptions.length === 0 ? (
-                <div className="py-4 text-center text-xs text-muted-foreground">
-                  No matching options
+      {/* Popover Menu */}
+      {isOpen && (
+        <div className="absolute z-50 top-full left-0 right-0 mt-1.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden max-h-72 flex flex-col backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-150">
+          {/* Search Header */}
+          <div className="p-2 border-b border-[var(--color-hairline)] flex items-center gap-2 bg-[var(--color-canvas)]">
+            <Search className="h-3.5 w-3.5 text-[var(--color-mute)] shrink-0 ml-1" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search..."
+              className="w-full bg-transparent text-xs text-[var(--color-ink)] focus:outline-none placeholder:text-[var(--color-mute)] py-1"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => setSearch("")}
+                className="text-[var(--color-mute)] hover:text-[var(--color-ink)] p-1 cursor-pointer"
+              >
+                <AnimatedX size={12} />
+              </button>
+            )}
+          </div>
+
+          {/* Options List */}
+          <div className="overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
+            {allowAll && !search.trim() && (
+              <button
+                type="button"
+                onClick={() => handleSelect("all")}
+                className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
+                  isAllSelected
+                    ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold"
+                    : "hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="font-bold">{allLabel}</span>
+                  <span className="text-[10px] text-[var(--color-mute)] font-mono">
+                    ({options.length} options)
+                  </span>
                 </div>
-              ) : (
-                filteredOptions.map((option, idx) => {
-                  const isSelected = option.value === value;
-                  const isHighlighted = idx === highlightedIndex;
+                {isAllSelected && (
+                  <AnimatedCheck size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                )}
+              </button>
+            )}
 
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => {
-                        onChange(option.value);
-                        setIsOpen(false);
-                        setSearch("");
-                      }}
-                      onMouseEnter={() => setHighlightedIndex(idx)}
-                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-[var(--radius-sm)] text-xs text-left transition-colors ${isHighlighted
-                          ? "bg-muted text-foreground"
-                          : "text-foreground hover:bg-muted/60"
-                        } ${isSelected ? "font-semibold text-primary" : ""}`}
-                    >
-                      <span className="flex items-center gap-2 truncate">
-                        {option.icon}
-                        <span className="truncate">{option.label}</span>
-                        {option.description && (
-                          <span className="text-[10px] text-muted-foreground truncate">
-                            ({option.description})
+            {filteredOptions.length === 0 ? (
+              <div className="py-4 text-center text-xs text-[var(--color-mute)]">
+                No matching options found
+              </div>
+            ) : (
+              filteredOptions.map((opt) => {
+                const isSelected = opt.value === value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => handleSelect(opt.value)}
+                    className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
+                      isSelected
+                        ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold"
+                        : "hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
+                    }`}
+                  >
+                    <div className="min-w-0 pr-2 flex-1">
+                      <div className="font-bold flex items-center gap-2 truncate">
+                        {opt.icon}
+                        <span className="truncate">{opt.label}</span>
+                        {opt.badge && (
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-mono shrink-0 ${
+                              opt.badgeClassName || "bg-sky-500/10 text-sky-600 dark:text-sky-400"
+                            }`}
+                          >
+                            {opt.badge}
                           </span>
                         )}
-                      </span>
-                      {isSelected && <AnimatedCheck size={14} className="text-primary shrink-0" />}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                      </div>
+                      {opt.description && (
+                        <div className="text-[10px] text-[var(--color-mute)] truncate mt-0.5">
+                          {opt.description}
+                        </div>
+                      )}
+                    </div>
+                    {isSelected && (
+                      <AnimatedCheck size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                    )}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

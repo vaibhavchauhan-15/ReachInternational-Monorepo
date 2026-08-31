@@ -16,6 +16,9 @@ const HOUR_LOG_PROJECTION = `
   supervisor_id,
   client_id,
   log_date,
+  end_date,
+  start_datetime,
+  end_datetime,
   start_meter,
   end_meter,
   running_hours,
@@ -31,7 +34,7 @@ const HOUR_LOG_PROJECTION = `
   idempotency_key,
   created_at,
   machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number, hour_meter, status, manufacturer),
-  client:clients!machine_hour_logs_client_id_fkey(id, code, client_name, address, city, state, phone, email),
+  client:clients!machine_hour_logs_client_id_fkey(id, code, company_name, address, city, state, phone),
   operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone, email),
   supervisor:users!machine_hour_logs_supervisor_id_fkey(id, full_name, phone, email)
 `;
@@ -69,6 +72,14 @@ function formatHourLogsData(rawLogs: any[]): any[] {
       }
     }
 
+    const c = log.client;
+    const formattedClient = c
+      ? {
+          ...c,
+          client_name: c.company_name || c.client_name || "",
+        }
+      : null;
+
     return {
       ...log,
       start_meter: startMtr,
@@ -76,6 +87,7 @@ function formatHourLogsData(rawLogs: any[]): any[] {
       running_hours: running,
       overtime_hours: ot,
       normal_working_hours: normalWorking ?? 8,
+      client: formattedClient,
       machine: m
         ? {
             ...m,

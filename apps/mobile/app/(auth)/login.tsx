@@ -110,7 +110,7 @@ export default function LoginScreen() {
           />
 
           <Button
-            label="Sign in to Reach Fleet"
+            label="Sign in"
             onPress={handleLogin}
             isLoading={isLoading}
             shape="square"
@@ -127,7 +127,7 @@ export default function LoginScreen() {
           <View style={styles.signupPromptRow}>
             <Text style={[styles.signupPromptText, { color: theme.colors.mute }]}>Don&apos;t have access?</Text>
             <TouchableOpacity onPress={() => router.push('/(auth)/signup')}>
-              <Text style={[styles.signupPromptLink, { color: '#00AEEF' }]}>Request Access →</Text>
+              <Text style={[styles.signupPromptLink, { color: '#00AEEF' }]}>Request Access</Text>
             </TouchableOpacity>
           </View>
         </Card>

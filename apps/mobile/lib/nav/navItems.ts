@@ -2,6 +2,7 @@ import {
   Wrench,
   Gauge,
   Star,
+  Building2,
   Users,
   Clock,
   LucideIcon,
@@ -42,6 +43,15 @@ export const mobileNavItems: MobileNavItem[] = [
     subItems: [
       { label: 'Running Hours', tab: 'logs', icon: Gauge },
       { label: 'Assignments', tab: 'assignments', icon: Star },
+    ],
+  },
+  {
+    href: '/(app)/clients',
+    label: 'Clients',
+    icon: Building2,
+    roles: ['super_admin', 'admin', 'manager', 'service_manager'],
+    subItems: [
+      { label: 'Client Directory', tab: 'all', icon: Building2 },
     ],
   },
   {

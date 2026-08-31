@@ -1076,4 +1076,188 @@ export async function bulkDeleteUsers(userIds: string[]): Promise<BulkDeleteResu
     return { error: "Unauthorized or an error occurred while deleting users." };
   }
 }
+
+export interface BulkActionResult {
+  successCount?: number;
+  failedCount?: number;
+  message?: string;
+  error?: string;
+}
+
+/**
+ * Approve multiple pending users in parallel (optimized batch operation).
+ */
+export async function bulkApproveUsers(userIds: string[]): Promise<BulkActionResult> {
+  if (!Array.isArray(userIds) || userIds.length === 0) {
+    return { error: "No users provided for approval." };
+  }
+
+  try {
+    const currentUser = await requireRole("admin", "super_admin");
+    const adminSupabase = createSupabaseAdminClient();
+
+    const validIds = userIds.filter((id) => isValidUuid(id));
+    if (validIds.length === 0) {
+      return { error: "Invalid user IDs provided." };
+    }
+
+    // 1. Single atomic SQL update targeting all valid IDs with pending status
+    const { data: updatedUsers, error: updateError } = await adminSupabase
+      .from("users")
+      .update({ status: "active", updated_at: new Date().toISOString() })
+      .in("id", validIds)
+      .eq("status", "pending")
+      .select("id, full_name, email, phone, role, status");
+
+    if (updateError) {
+      console.error("Error bulk approving users:", updateError);
+      return { error: "Failed to approve users. Please try again." };
+    }
+
+    if (!updatedUsers || updatedUsers.length === 0) {
+      return { error: "No pending users were found to approve." };
+    }
+
+    // 2. Parallel secondary execution: Auth email confirmations, Employees sync, and Audit Log
+    const employeeInserts = updatedUsers.map((u) => ({
+      employee_code: `EMP-${crypto.randomInt(1000, 10000)}`,
+      full_name: u.full_name?.trim(),
+      user_id: u.id,
+      phone: u.phone || null,
+      email: u.email?.trim(),
+      designation: (u.role || "operator").replace(/_/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
+      status: "active",
+    }));
+
+    await Promise.allSettled([
+      // Confirm auth emails in parallel
+      ...updatedUsers.map((u) => adminSupabase.auth.admin.updateUserById(u.id, { email_confirm: true })),
+
+      // Batch insert employee profiles
+      (async () => {
+        try {
+          await adminSupabase.from("employees").insert(employeeInserts);
+        } catch (err: any) {
+          console.warn("Employees bulk insert note:", err?.message || err);
+        }
+      })(),
+
+      // Structured batch audit log
+      logAudit({
+        action: "users.bulk_approved",
+        entity_type: "user",
+        entity_id: currentUser.id,
+        user_id: currentUser.id,
+        metadata: {
+          approved_count: updatedUsers.length,
+          user_ids: updatedUsers.map((u) => u.id),
+          user_emails: updatedUsers.map((u) => u.email),
+          approved_by_id: currentUser.id,
+          approved_by_name: currentUser.full_name,
+          approved_by_email: currentUser.email,
+        },
+      }),
+    ]);
+
+    // 3. Background non-blocking email notifications
+    updatedUsers.forEach((u) => {
+      if (u.email) {
+        sendApprovalEmail(u.email, u.full_name).catch((emailErr) =>
+          console.error("Failed to send bulk approval email:", emailErr)
+        );
+      }
+    });
+
+    // 4. Cache revalidation
+    revalidatePath("/users");
+    revalidateTag(CACHE_TAGS.users, "max");
+    revalidateTag(CACHE_TAGS.dashboard, "max");
+    revalidateTag(CACHE_TAGS.machineMeta, "max");
+
+    return {
+      successCount: updatedUsers.length,
+      message: `Successfully approved all ${updatedUsers.length} user request${updatedUsers.length > 1 ? "s" : ""}.`,
+    };
+  } catch (error) {
+    console.error("Error in bulkApproveUsers:", error);
+    return { error: "Unauthorized or an error occurred while approving users." };
+  }
+}
+
+/**
+ * Reject multiple pending users in parallel (optimized batch operation).
+ */
+export async function bulkRejectUsers(userIds: string[]): Promise<BulkActionResult> {
+  if (!Array.isArray(userIds) || userIds.length === 0) {
+    return { error: "No users provided for rejection." };
+  }
+
+  try {
+    const currentUser = await requireRole("admin", "super_admin");
+    const adminSupabase = createSupabaseAdminClient();
+
+    const validIds = userIds.filter((id) => isValidUuid(id));
+    if (validIds.length === 0) {
+      return { error: "Invalid user IDs provided." };
+    }
+
+    // 1. Fetch pending users to reject
+    const { data: targetUsers, error: fetchError } = await adminSupabase
+      .from("users")
+      .select("id, full_name, email, role")
+      .in("id", validIds)
+      .eq("status", "pending");
+
+    if (fetchError || !targetUsers || targetUsers.length === 0) {
+      return { error: "No pending users found to reject." };
+    }
+
+    // 2. Parallel delete from auth.users (cascades to public.users)
+    const deleteResults = await Promise.allSettled(
+      targetUsers.map((u) => adminSupabase.auth.admin.deleteUser(u.id))
+    );
+
+    let successCount = 0;
+    targetUsers.forEach((u, idx) => {
+      const res = deleteResults[idx];
+      if (res.status === "fulfilled" && !res.value.error) {
+        successCount++;
+        if (u.email) {
+          sendRejectionEmail(u.email, u.full_name).catch((emailErr) =>
+            console.error("Failed to send bulk rejection email:", emailErr)
+          );
+        }
+      }
+    });
+
+    // 3. Batch audit log
+    await logAudit({
+      action: "users.bulk_rejected",
+      entity_type: "user",
+      entity_id: currentUser.id,
+      user_id: currentUser.id,
+      metadata: {
+        rejected_count: successCount,
+        user_ids: targetUsers.map((u) => u.id),
+        user_emails: targetUsers.map((u) => u.email),
+        rejected_by_id: currentUser.id,
+        rejected_by_name: currentUser.full_name,
+        rejected_by_email: currentUser.email,
+      },
+    }).catch((err) => console.error("Error logging bulk reject audit:", err));
+
+    revalidatePath("/users");
+    revalidateTag(CACHE_TAGS.users, "max");
+    revalidateTag(CACHE_TAGS.dashboard, "max");
+    revalidateTag(CACHE_TAGS.machineMeta, "max");
+
+    return {
+      successCount,
+      message: `Successfully rejected ${successCount} user request${successCount > 1 ? "s" : ""}.`,
+    };
+  } catch (error) {
+    console.error("Error in bulkRejectUsers:", error);
+    return { error: "Unauthorized or an error occurred while rejecting users." };
+  }
+}
 

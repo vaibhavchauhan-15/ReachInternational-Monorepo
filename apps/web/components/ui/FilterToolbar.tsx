@@ -46,15 +46,21 @@ export function FilterToolbar({
   onSubmitSearch,
 }: FilterToolbarProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const [isAnimating, setIsAnimating] = useState(false);
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (onSubmitSearch) onSubmitSearch(e);
   };
 
+  const toggleOpen = () => {
+    setIsAnimating(true);
+    setIsOpen((prev) => !prev);
+  };
+
   return (
     <div
-      className={`p-3 sm:p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs space-y-3 ${className}`}
+      className={`p-3 sm:p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs ${className}`}
     >
       {/* Top Toolbar Row: Search Input + Filter Toggle Button + Actions */}
       <form onSubmit={handleFormSubmit} className="flex items-center gap-2 sm:gap-2.5">
@@ -87,18 +93,18 @@ export function FilterToolbar({
         {children && (
           <button
             type="button"
-            onClick={() => setIsOpen(!isOpen)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold active:scale-95 transition-all shrink-0 ${
+            onClick={toggleOpen}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold active:scale-95 transition-all duration-200 shrink-0 select-none cursor-pointer ${
               isOpen || activeFilterCount > 0
                 ? "bg-[var(--color-ink)] text-[var(--color-canvas)] border-[var(--color-ink)] shadow-xs"
-                : "bg-[var(--color-canvas)] text-[var(--color-ink)] border-[var(--color-hairline)] hover:border-[var(--color-ink)]/40"
+                : "bg-[var(--color-canvas)] text-[var(--color-ink)] border-[var(--color-hairline)] hover:border-[var(--color-ink)]/40 hover:bg-[var(--color-hairline-soft-surface)]"
             }`}
           >
             <AnimatedSlidersHorizontal size={14} />
             <span>Filter</span>
             {activeFilterCount > 0 && (
               <span
-                className={`flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full text-[10px] font-bold ${
+                className={`flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full text-[10px] font-bold transition-colors ${
                   isOpen || activeFilterCount > 0
                     ? "bg-[var(--color-canvas)] text-[var(--color-ink)]"
                     : "bg-[var(--color-ink)] text-[var(--color-canvas)]"
@@ -109,12 +115,12 @@ export function FilterToolbar({
             )}
             <AnimatedChevronDown
               size={12}
-              className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+              className={`transition-transform duration-300 ease-out ${isOpen ? "rotate-180" : ""}`}
             />
           </button>
         )}
 
-        {/* Custom Actions (e.g. Export / Custom Buttons) */}
+        {/* Custom Actions (e.g. Export / Custom Buttons / View Switcher) */}
         {actions}
 
         {/* Quick Reset Filters Button */}
@@ -122,7 +128,7 @@ export function FilterToolbar({
           <button
             type="button"
             onClick={onResetFilters}
-            className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-xs font-medium text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-all shrink-0"
+            className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-xs font-medium text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-all shrink-0 cursor-pointer active:scale-95"
             title="Reset all filters"
           >
             <AnimatedRotateCcw size={14} />
@@ -131,17 +137,44 @@ export function FilterToolbar({
         )}
       </form>
 
-      {/* Expandable / Collapsible Filter Panel */}
+      {/* Expandable / Collapsible Filter Panel with Buttery Smooth Transition */}
       <AnimatePresence initial={false}>
         {isOpen && children && (
           <motion.div
-            initial={{ opacity: 0, height: 0, overflow: "hidden" }}
-            animate={{ opacity: 1, height: "auto", overflow: "visible" }}
-            exit={{ opacity: 0, height: 0, overflow: "hidden" }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="pt-2 border-t border-[var(--color-hairline)]"
+            key="filter-panel"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{
+              opacity: 1,
+              height: "auto",
+              transition: {
+                height: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
+                opacity: { duration: 0.22, ease: "easeOut", delay: 0.04 },
+              },
+            }}
+            exit={{
+              opacity: 0,
+              height: 0,
+              transition: {
+                height: { duration: 0.22, ease: [0.16, 1, 0.3, 1] },
+                opacity: { duration: 0.16, ease: "easeIn" },
+              },
+            }}
+            onAnimationStart={() => setIsAnimating(true)}
+            onAnimationComplete={() => setIsAnimating(false)}
+            style={{ willChange: isAnimating ? "height, opacity" : "auto" }}
+            className={isAnimating ? "overflow-hidden" : "overflow-visible"}
           >
-            {children}
+            <div className="pt-3 mt-3 border-t border-[var(--color-hairline)] overflow-visible">
+              <motion.div
+                initial={{ y: -6, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: -4, opacity: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="overflow-visible"
+              >
+                {children}
+              </motion.div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

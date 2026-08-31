@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Modal, Input, Select, Textarea, Button, useToast, SearchableSelect } from "@/components/ui";
+import { Modal, Input, Select, Textarea, Button, useToast, SearchableSelect, MachineSelect, UserSelect } from "@/components/ui";
 import { createComplaint, updateComplaint } from "@/app/actions/complaints";
 import type { ComplaintWithDetails, MachineWithEngineer, User } from "@/lib/types/database";
 import {
@@ -43,21 +43,6 @@ export function MachineComplaintModal({
   const [selectedEngineerId, setSelectedEngineerId] = useState<string>(
     complaint?.engineer_id || selectedMachine?.engineer_id || ""
   );
-
-  const machineOptions = machines.map((m) => ({
-    value: m.id,
-    label: `${m.machine_code} - ${m.machine_name}`,
-    description: `Model: ${m.model || "N/A"} | Sr: ${m.serial_number || "N/A"} | ${m.city}`,
-  }));
-
-  const engineerOptions = [
-    { value: "", label: "-- Select Service Engineer --" },
-    ...engineers.map((e) => ({
-      value: e.id,
-      label: e.full_name,
-      description: e.phone ? `+91 ${e.phone.replace(/^\+91/, "")}` : e.email || undefined,
-    })),
-  ];
 
   const statusOptions = [
     { value: "open", label: "Open (Malfunction Raised)" },
@@ -134,9 +119,9 @@ export function MachineComplaintModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Machine No */}
             <div className="flex flex-col gap-1.5 w-full">
-              <SearchableSelect
-                label="Select Machine No"
-                options={machineOptions}
+              <MachineSelect
+                label="Select Machine"
+                machines={machines}
                 value={selectedMachineId}
                 onChange={handleMachineChange}
                 placeholder="-- Select Machine --"
@@ -184,9 +169,9 @@ export function MachineComplaintModal({
 
             {/* Service Engineer */}
             <div className="flex flex-col gap-1.5 w-full">
-              <SearchableSelect
+              <UserSelect
                 label="Service Engineer"
-                options={engineerOptions}
+                users={engineers}
                 value={selectedEngineerId}
                 onChange={setSelectedEngineerId}
                 placeholder="-- Select Service Engineer --"

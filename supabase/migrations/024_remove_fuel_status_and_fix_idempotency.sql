@@ -154,7 +154,7 @@ BEGIN
     action,
     entity_type,
     entity_id,
-    details,
+    metadata,
     created_at
   )
   VALUES (

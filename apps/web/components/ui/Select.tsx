@@ -181,9 +181,9 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     };
 
     return (
-      <div className={`flex flex-col gap-1.5 w-full relative ${className}`} ref={containerRef} onKeyDown={handleKeyDown}>
+      <div className={`flex flex-col gap-1 w-full relative ${className}`} ref={containerRef} onKeyDown={handleKeyDown}>
         {label && (
-          <label htmlFor={selectId} className="label-sm font-medium text-[var(--color-ink)] select-none flex items-center justify-between">
+          <label htmlFor={selectId} className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none flex items-center justify-between">
             <span>{label}</span>
             {required && <span className="text-[10px] text-rose-500 font-bold">* Required</span>}
           </label>
@@ -224,13 +224,13 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             onClick={() => {
               if (!disabled) setIsOpen((prev) => !prev);
             }}
-            className={`input-base flex items-center justify-between w-full text-left font-medium cursor-pointer appearance-none transition-all duration-150 ${
+            className={`w-full h-[42px] sm:h-[44px] min-h-[42px] sm:min-h-[44px] px-3.5 rounded-lg border text-xs sm:text-[13px] font-medium text-[var(--color-ink)] flex items-center justify-between transition-all shadow-2xs ${
               error
-                ? "!border-rose-500 focus:!ring-rose-500/20"
+                ? "border-rose-500 dark:border-rose-400 bg-rose-500/5 dark:bg-rose-500/10 focus:border-rose-500"
                 : isOpen
-                ? "!border-[var(--color-link)] ring-2 ring-[var(--color-link)]/20"
-                : "hover:border-[var(--color-ink)]/30"
-            } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
+                ? "border-sky-500 dark:border-sky-400 bg-[var(--color-canvas)] ring-2 ring-sky-500/15"
+                : "border-[var(--color-hairline)] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] bg-[var(--color-canvas)] hover:border-[#3A3E42] dark:hover:border-[#3A3E42] [html:not(.dark)_&]:hover:border-[#CBD5E1]"
+            } ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}`}
             aria-haspopup="listbox"
             aria-expanded={isOpen}
           >
@@ -250,7 +250,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             <AnimatedChevronDown
               size={16}
               className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
-                isOpen ? "rotate-180 text-[var(--color-link)]" : ""
+                isOpen ? "rotate-180 text-sky-500" : ""
               }`}
             />
           </button>

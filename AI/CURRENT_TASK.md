@@ -1,6 +1,700 @@
 # Current Task Context
 
-## Completed Task (2026-08-30) — Page Feedback: /machines — Canonical Reusable & Responsive Primary Button & Site-Wide Black Button Replacement (`Button.tsx`, `globals.css`, `colors.ts`, `MachineListClient.tsx`, `users-client.tsx`, `login-form.tsx`, `signup/page.tsx`, `ClientsClient.tsx`, `ClientModal.tsx`)
+## Completed Task (2026-08-31) — Machine Log Sequencing & Overlap Prevention across Frontend, Backend & PostgreSQL Database (`033_machine_log_sequencing_and_overlap_prevention.sql`, `operators.ts`, `OperatorDashboard.tsx`, `MeterLogModal.tsx`, `date.ts`, `hourMeter.ts`, `database.ts`)
+
+**Goal**:
+Implement machine log sequencing and overlap prevention across Frontend, Backend, and PostgreSQL database:
+1. For each `machine_id`, prevent duplicate and overlapping logs.
+2. A new log must start at or after the previous/latest log's `end_datetime`.
+3. Exact handover is allowed: `06:00 AM–06:00 PM → 06:00 PM–10:00 PM` ✅.
+4. Starting before the previous log ends must be rejected ❌.
+5. Correctly support overnight shifts, e.g. `31-Aug 08:00 PM → 01-Sep 06:00 AM`.
+6. Complete `start_datetime` and `end_datetime` timestamps used for validation.
+7. Frontend displays latest allowed start time and provides clear validation message with 1-click handover alignment.
+8. Backend independently validates every submission.
+9. PostgreSQL enforces the rule atomically using GiST exclusion constraint on `(machine_id WITH =, tstzrange(start_datetime, end_datetime, '[)') WITH &&)` and transaction-level advisory locks `pg_advisory_xact_lock` to prevent race conditions during concurrent operator submissions.
+10. Editing existing logs validated without false collision against self.
+11. Different machines have independent timelines.
+12. Added 10 automated test scenarios verifying same-day, exact handover, overlap rejection, duplicate rejection, overnight shift, post-overnight handover, different machines, editing, and math.
+
+---
+
+## Previous Task (2026-08-31) — Bug Fix: column "details" of relation "audit_logs" does not exist during machine hour log submission (`032_fix_audit_logs_metadata_and_atomic_rpc.sql`, `024_remove_fuel_status_and_fix_idempotency.sql`)
+
+**Goal**:
+1. **Root Cause Identification**:
+   - The PostgreSQL atomic stored procedure `public.submit_operator_hour_log_atomic` attempted to insert into `public.audit_logs (..., details, ...)` instead of `metadata`, triggering `column "details" of relation "audit_logs" does not exist` when submitting machine daily hour logs.
+   - In addition, multiple legacy overloaded signatures of `submit_operator_hour_log_atomic` existed in `pg_proc`.
+2. **Supabase Database Migration (`032_fix_audit_logs_metadata_and_atomic_rpc.sql`)**:
+   - Dropped legacy overloaded signatures of `submit_operator_hour_log_atomic`.
+   - Added `details JSONB` column to `public.audit_logs` as backward-compatibility defense-in-depth.
+   - Re-created canonical `submit_operator_hour_log_atomic` function writing to `metadata` (and `details`).
+   - Applied live to Supabase project `dhbbgfzbyatzvqafnsqp` with 0 errors.
+3. **Verification**:
+   - Verified function signature in `pg_proc` (1 unique canonical signature).
+   - Executed live PL/pgSQL test block to verify seamless log insert, machine meter update, and audit log generation.
+   - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)**.
+
+---
+
+## Previous Task (2026-08-31) — Page Feedback: /clients?tab=all — Add GSTIN, PAN, District, Conditional Billing Address, Remove Header Icon, Label Refinements & Auto-Scroll (`030_add_client_tax_and_billing_address_columns.sql`, `packages/types/src/database.ts`, `packages/validation/src/client.ts`, `apps/web/app/actions/clients.ts`, `apps/web/lib/queries/clients.ts`, `apps/web/components/clients/ClientModal.tsx`, `apps/web/components/clients/ClientsClient.tsx`, `apps/web/components/ui/Input.tsx`, `apps/mobile/app/(app)/clients.tsx`)
+
+**Goal**:
+1. **Remove Modal Header Icon (Feedback #2)**: Removed the icon container from `<ClientModal>` header, creating a clean, modern header with title and close action.
+2. **Add GSTIN & PAN Numbers (Feedback #1)**:
+   - Added `gstin VARCHAR(50)` and `pan_number VARCHAR(50)` columns to `public.clients` with partial B-Tree indexes.
+   - Added auto-uppercasing inputs in both Web `<ClientModal>` and Mobile Add/Edit modal.
+   - Displayed GSTIN and PAN badges in the desktop client directory table and mobile touch cards.
+3. **Add District Field (Feedback #1)**:
+   - Added `district VARCHAR(100)` column to `public.clients` with partial B-Tree index.
+   - Added District input in primary Site Location section in both Web and Mobile client modals.
+   - Displayed District alongside City and State in table rows and cards.
+4. **Conditional Billing Address & Label Simplification (Feedbacks #1-#4, #5-#6)**:
+   - Added `is_billing_address_different BOOLEAN NOT NULL DEFAULT FALSE` flag and separate billing address columns (`billing_address`, `billing_city`, `billing_district`, `billing_state`, `billing_pincode`) to `public.clients`.
+   - Renamed Section 2 and address textarea to **"Site Address"**.
+   - Simplified Section 3 (Billing Address) sub-field labels by removing `"Billing "` prefix: **"City"**, **"District"**, **"State"**, **"Pincode"**.
+5. **Fixed Double Asterisk Rendering**:
+   - Updated `Input.tsx` to automatically strip trailing `*` in string labels when `required={true}` is set, eliminating redundant black and red asterisks.
+6. **Auto-Scroll for Expanded Billing Address Visibility**:
+   - Added automatic smooth scroll-into-view (`scrollIntoView({ behavior: "smooth", block: "nearest" })`) when enabling the *"Different from Site Address"* switch, making expanded billing inputs instantly visible.
+7. **Cross-Platform Mobile App Synchronization**:
+   - Synchronized `apps/mobile/app/(app)/clients.tsx` with GSTIN, PAN, District, Site Address, simplified Billing labels, and toggle switch.
+8. **Verification**:
+   - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 16.7s.
+   - `pnpm --filter @reachinternational/web build` compiled all **35/35 Next.js App Router routes cleanly with code 0**.
+   - `pnpm --filter @reachinternational/mobile typecheck` passed with **0 errors**.
+
+---
+
+## Previous Task (2026-08-31) — Page Feedback: /users — Add Eye Icon to View Complete User Details (`UserRow.tsx`, `users-client.tsx`, `UserDetailSheet.tsx`, `MobileUserCard.tsx`, `apps/mobile/app/(app)/users.tsx`, `ClientsClient.tsx`)
+
+**Goal**:
+1. **Eye Icon in Actions Column**: Added dedicated `<AnimatedEye size={16} />` button wrapped in `<TooltipWrapper content="View user details" side="top">` to the Actions column on every desktop table row (`UserRow.tsx`), and widened the Actions table header (`w-[84px]`).
+2. **Clickable User Name**: Made user name in the directory table a clickable button that triggers the full user details drawer (`UserDetailSheet`).
+3. **Dropdown Menu Action**: Added `"View User Details"` with `AnimatedEye` at the top of the 3-dots actions dropdown menu in `UserRow.tsx`.
+4. **Enhanced Comprehensive Details Drawer (`UserDetailSheet.tsx`)**:
+   - Account ID (UUID with copy helper)
+   - Email (with 1-click copy & mailto)
+   - Phone (with 1-click copy & tel)
+   - Location hierarchy (City, District, State, Deployment Site)
+   - Aadhaar Number (masked with eye reveal toggle & copy)
+   - Driving Licence (formatted with copy)
+   - Registration Date & relative time badge (`formatTimeAgo`)
+   - Role & Access Badge, Status Badge with pulse dot
+   - Direct administrative management controls (Edit, Reset Password, Role Change, Status Toggle, Delete)
+5. **Cross-Platform Mobile App Synchronization**:
+   - Added `<AnimatedEye size={15} />` touch button in `<MobileUserCard>` header.
+   - Synchronized mobile app (`apps/mobile/app/(app)/users.tsx`) with an explicit `<Eye size={14} />` action button in the card header for full web-to-mobile parity.
+6. **Verification**:
+   - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 26.2s.
+   - `pnpm --filter @reachinternational/web build` compiled all **35/35 Next.js App Router routes cleanly with code 0**.
+   - `pnpm --filter @reachinternational/mobile typecheck` passed with **0 errors**.
+
+---
+
+## Previous Task (2026-08-31) — Bug Fix: Error fetching operator recent logs (`apps/web/lib/queries/operators.ts`, `reports.ts`, `machines.ts`, `MeterLogModal.tsx`, `operations.tsx`)
+
+**Goal**:
+1. **Fix Dropped Column Query in `HOUR_LOG_PROJECTION`**:
+   - In `apps/web/lib/queries/operators.ts`, updated `HOUR_LOG_PROJECTION` to select `id, code, company_name, address, city, state, phone` from `clients` (replacing dropped `client_name` and `email` columns).
+   - In `formatHourLogsData`, mapped `client_name: c.company_name || c.client_name || ""` for backwards compatibility with UI components.
+2. **Synchronize All Client Joins Monorepo-wide**:
+   - Updated `apps/web/lib/queries/reports.ts` to select `company_name` in machine hour logs join.
+   - Updated `apps/web/lib/queries/machines.ts` to select `company_name` in `getMachineActiveRental`.
+   - Updated `apps/mobile/components/work/MeterLogModal.tsx` and `apps/mobile/app/(app)/operations.tsx` to query `company_name` from `clients`.
+3. **Verification**:
+   - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 36.82s.
+   - `pnpm --filter @reachinternational/web build` compiled all **35/35 Next.js App Router routes cleanly with code 0**.
+   - `pnpm --filter @reachinternational/mobile typecheck` passed with **0 errors**.
+
+---
+
+**Goal**:
+1. **Modal Header Polish (Feedback #1)**: Removed the subtitle paragraph text from the `<ClientModal>` header.
+2. **Client Name Removed & Replaced with Company Name (Feedbacks #2, #3)**: Removed redundant "Client Name" field and designated "Company Name *" as the primary required identifier for client registration.
+3. **Removed Unwanted Form Fields (Feedbacks #4, #5, #6, #7)**: Removed "Email Address", "GSTIN / Tax ID Number", "Account Status", and "Internal Remarks / Notes" from the modal. New accounts default to "active" status.
+4. **Supabase Database Migration (`031_streamline_clients_table.sql`)**:
+   - Backfilled `company_name` with `client_name` for existing records (preserving `"Saint Gobain"` with zero data loss).
+   - Enforced `company_name NOT NULL` with non-empty check constraint `clients_company_name_not_empty`.
+   - Created B-Tree index `idx_clients_company_name` and dropped obsolete `idx_clients_client_name`.
+   - Dropped unwanted columns from `public.clients`: `client_name`, `email`, `gstin`, `notes`.
+5. **Types & Zod Validation Packages**:
+   - Updated `CRMClient` in `packages/types/src/database.ts` with required `company_name: string` and deprecated backward-compatibility alias `client_name`.
+   - Updated `CreateClientSchema` & `UpdateClientSchema` in `packages/validation/src/client.ts` with required `companyName` and removed deprecated fields.
+6. **Backend Server Actions & DAL**:
+   - Updated `createClientAction` and `updateClientAction` in `apps/web/app/actions/clients.ts`.
+   - Updated `CLIENT_SELECT_COLUMNS`, `getCachedClients`, and `getClientOptions` in `apps/web/lib/queries/clients.ts`.
+7. **Web UI Standardization (`ClientsClient.tsx`, `ClientSelect.tsx`)**:
+   - Updated table header ("Company Name", "Contact Person", "Phone", "City / State", "Status", "Actions").
+   - Updated mobile touch cards to display Company Name, Contact Person, Phone, Location.
+   - Updated search filter and delete confirmation dialog.
+8. **Cross-Platform Mobile App Synchronization (`apps/mobile/app/(app)/clients.tsx`)**:
+   - Synchronized mobile client modal, touch cards, state management, and search filter with the exact same streamlined Company Name schema.
+9. **Verification**:
+   - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)**.
+   - `pnpm --filter @reachinternational/mobile typecheck` passed with **0 errors**.
+
+---
+
+## Previous Task (2026-08-31) — Page Feedback: /operations?tab=entry — Remove Redundant Log Date Field & Standardize Red Stars on All Mandatory Form Fields (`CustomDatePicker.tsx`, `DateTimePicker.tsx`, `OperatorDashboard.tsx`, `MeterLogModal.tsx`)
+
+**Goal**:
+1. **Remove Redundant Log Date Picker (Feedback #1)**:
+   - Removed `<CustomDatePicker>` container (`Log Date`) from Section A of the Operator Dashboard because shift start date is already selected in the unified `Start *` DateTimePicker in Section B.
+   - Refactored Section A into a clean, balanced 2-column grid (`grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4`) with `Select Machine` (`MachineSelect`) and `Client Name` (`ClientSelect`).
+   - Maintained automatic synchronization between `startDate` and `selectedLogDate`.
+2. **Standardize Red Stars on All Mandatory Fields (Feedback #2)**:
+   - Replaced all black asterisks (`*`) in form labels with red stars (`<span className="text-rose-500 font-bold ml-0.5">*</span>`) across all required inputs:
+     - Starting Meter: `Starting Meter (hrs) *`
+     - Ending Meter: `Ending Meter (hrs) *`
+     - Start Date & Time: `Start *`
+     - End Date & Time: `End *`
+     - Select Machine: `Select Machine *`
+     - Client Name: `Client Name *`
+     - Breakdown Duration: `Breakdown Duration (Hours & Minutes) *`
+     - Edit Modal: Standardized required inputs with red stars.
+3. **Verification**:
+   - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)**.
+   - `pnpm --filter @reachinternational/web build` compiled all **35/35 Next.js App Router routes cleanly with code 0**.
+   - `pnpm --filter @reachinternational/mobile typecheck` passed with **0 errors**.
+
+---
+
+## Previous Task (2026-08-31) — Page Feedback: /users — Show Tiny Time Elapsed for Pending User Approval Requests (`packages/utils/src/date.ts`, `apps/web/app/(app)/users/users-client.tsx`, `apps/mobile/app/(app)/users.tsx`)
+
+**Goal**:
+1. **Show Tiny Time Elapsed on Pending User Approval Requests**: Display an ultra-compact time interval indicating how long ago each user registration request was sent on the `/users` page pending approvals section (`#pending-approvals-section`).
+2. **Compact Format Scale**: Implemented intervals matching user specifications:
+   - `< 1min` -> `"1min"`
+   - `< 60m` -> `"${diffMin}min"` (e.g. `"1min"`, `"10min"`)
+   - `< 24h` -> `"${diffHour}h"` (e.g. `"1h"`, `"20h"`)
+   - `< 30d` -> `"${diffDay}d"` (e.g. `"1d"`, `"7d"`)
+   - `< 12mo` -> `"${diffMonth}m"` (e.g. `"1m"`, `"10m"`)
+   - `≥ 1y` -> `"${diffYear}y"` (e.g. `"1y"`)
+3. **Web UI & Hover Tooltips**: Added a pill badge with `<Clock size={11} />` icon, monospace typography, and a rich tooltip with exact requested timestamp and relative time.
+4. **Mandatory Web-to-Mobile Synchronization**: Synchronized `apps/mobile/app/(app)/users.tsx` with the matching tiny time chip and clock icon.
+5. **Verification**:
+   - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 47.1s.
+   - `pnpm --filter @reachinternational/web build` compiled all **35/35 routes cleanly with code 0**.
+   - `pnpm --filter @reachinternational/mobile typecheck` passed with **0 errors**.
+
+---
+
+## Previous Task (2026-08-31) — Page Feedback: /signup — Visual & Fleet Showcase Panel Parity with Sign In Page (`signup/page.tsx`, `login/page.tsx`)
+
+**Goal**:
+1. **Left Panel Parity (Feedback #1)**: Replace the left visual panel of `/signup` (which previously had `signup_bg.png` and dark overlays) with the identical visual and industrial fleet showcase panel from `/login` (`login/page.tsx`).
+2. **Design Tokens & Layout Consistency**:
+   - Left panel: `lg:w-[40%]`, `bg-[var(--color-canvas-elevated)]`, `border-r border-[var(--color-hairline)]`, atmospheric Reach Blue radial glow, `<ReachInternationalLogo variant="full" size={28} />`, typography *"Manage your fleet. Track every hour."*, pedestal ground shadow, and `/loginpageimage.png` boom lift asset.
+   - Right panel: `lg:w-[60%]`, smooth scrolling, centered registration card.
+3. **Verification**:
+   - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)**.
+   - `pnpm --filter @reachinternational/web build` compiled all **35/35 routes cleanly with code 0**.
+
+---
+
+## Previous Task (2026-08-31) — Page Consistency: /signup & /login (Sign In) — Input Box & Reusable Component Consistency (`login-form.tsx`, `signup/page.tsx`, `login/page.tsx`, `Input.tsx`)
+
+**Goal**:
+1. **Consistent Input Box Ergonomics**: Standardized input boxes between Sign In (`/login`) and Sign Up (`/signup`) to use the exact same canonical `<Input>` component from `@/components/ui`.
+2. **Eliminated Duplicate & Hardcoded UI**:
+   - Replaced all 11 raw hardcoded input boxes in `signup/page.tsx` with canonical `<Input>` and `<SearchableSelect>`.
+   - Replaced raw inputs in `login-form.tsx` with canonical `<Input>`.
+   - Replaced custom error/success notification boxes with canonical `<Alert>` from `@/components/ui`.
+   - Replaced hardcoded raw hex colors with standard Geist tokens (`bg-[var(--color-canvas-elevated)]`, `bg-[var(--color-canvas)]`, `text-[var(--color-ink)]`, `text-[var(--color-mute)]`, `border-[var(--color-hairline)]`, `text-sky-600 dark:text-sky-400`).
+3. **Verification**:
+   - `pnpm --filter @reachinternational/web typecheck` passed with **0 errors**.
+   - `pnpm --filter @reachinternational/web build` compiled all **35/35 routes cleanly with code 0**.
+
+---
+
+## Previous Task (2026-08-31) — Page Feedback: /operations?tab=entry — Operator Dashboard Layout Refinement & Breakdown Standardization (`OperatorDashboard.tsx`, `MachineSelect.tsx`, `ClientSelect.tsx`, `OperationsClient.tsx`, `operator-logs-export.ts`, `supervisor-logs-export.ts`, `PrintableOperatorLogsModal.tsx`, `PrintableSupervisorLogsModal.tsx`, `mobile/operations.tsx`)
+
+**Goal**:
+1. **Section A Layout Simplification (Feedbacks #1, #2, #3, #5)**:
+   - Removed redundant Serial Number input container `div` from Section A (as `<MachineSelect>` already displays serial number and machine code).
+   - Renamed `"Model *"` label to `"Select Machine"` in `<MachineSelect>` and `OperatorDashboard.tsx`. Updated default placeholder to `"Search or select machine..."`.
+   - Removed redundant `"Client Site Location *"` input container `div` from Section A.
+   - Renamed `"Client / Customer Name *"` to `"Client Name"` in `<ClientSelect>` and `OperatorDashboard.tsx`.
+   - Streamlined Section A into a clean, balanced 3-column responsive grid: `Log Date` (`CustomDatePicker`), `Select Machine` (`MachineSelect`), and `Client Name` (`ClientSelect`).
+2. **ClientSelect Header Cleanup (Feedback #4)**:
+   - Removed redundant client code badge (`"CLI-0001"`) from `<label>` in `ClientSelect.tsx`.
+3. **Breakdown Column Value Standardization (Feedback #6)**:
+   - Standardized Breakdown display when machine operated normally: now displays `0` (or `0` mono badge) instead of text `"Normal"` / `"🟢 Normal"`.
+   - Synchronized across Operator Dashboard table & mobile cards (`OperatorDashboard.tsx`), submit confirmation modal (`🟢 Normal (0 breakdown hours)`), Operations Client supervisor table and mobile cards (`OperationsClient.tsx`), Excel exports (`operator-logs-export.ts`, `supervisor-logs-export.ts`), printable/PDF modals (`PrintableOperatorLogsModal.tsx`, `PrintableSupervisorLogsModal.tsx`), and Mobile App (`apps/mobile/app/(app)/operations.tsx`).
+4. **Verification**:
+   - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)**.
+   - `pnpm --filter @reachinternational/web build` compiled all **35/35 routes cleanly with code 0**.
+
+---
+
+## Previous Task (2026-08-31) — ReachInternational Centralized UI Design System & Reusable Component Architecture (`apps/web/components/ui/`, `apps/mobile/components/ui/`, `packages/design-tokens`)
+
+**Goal**:
+1. **Centralized Canonical UI Primitives**: Refactor and establish a single, canonical, centralized UI design system across the entire ReachInternational platform (`apps/web`, `apps/mobile`, and `packages/design-tokens`) with zero duplicate or one-off UI implementations.
+2. **Buttons System**: Enhanced `<Button>` supporting all variants (`primary`, `secondary`, `outline`, `ghost`, `danger`, `destructive`, `success`, `link`, `primary-sm`, `ghost-sm`, `danger-sm`, `success-sm`), sizes (`sm`, `md`, `lg`, `icon`), `fullWidth`, `responsive` / `mobileIconOnly` (auto icon collapse on ≤640px), loading spinner `<AnimatedLoader>`, polymorphic `<Link>` href, and accessibility focus rings. Built `<IconButton>` with built-in `<TooltipWrapper>` and accessible `aria-label`.
+3. **Form Controls System**: Standardized `<Input>`, created `<PasswordInput>`, `<NumberInput>`, `<Textarea>`, `<Select>`, `<MultiSelect>`, `<Checkbox>`, `<Radio>` & `<RadioGroup>`, `<Switch>`, and `<FormField>`, `<Label>`, `<HelperText>`, `<ErrorMessage>` layout primitives.
+4. **Date & Time System**: Exported `<DatePicker>` and `<TimePicker>`, created `<DateRangePicker>` with presets (`Today`, `Yesterday`, `Last 7 Days`, `Last 30 Days`, `This Month`, `Custom`) and calendar range inputs, and composite `<DateTimePicker>`.
+5. **Search & Filtering System**: Created `<SearchBox>` with search icon, clear button, keyboard shortcut indicator (`/` or `⌘K`), and loading spinner. Created canonical `<FilterDropdown>` with dot indicators, active checkmarks, and smart edge alignment (`left` / `right`). Created `<SortControl>` and `<FilterChips>` with active filter tags and 1-click "Clear All" reset.
+6. **Tables & Data Display**: Created `<DataTable>` unifying `<EnterpriseTable>` for desktop (≥1024px) with automated mobile touch cards reflow (`block sm:hidden`). Upgraded `<Pagination>` with page size selector (`10`, `25`, `50`, `100` rows per page), first/last page jumps (`«` / `»`), and responsive styling.
+7. **Export System**: Created canonical `<ExportButton>` supporting Excel (`.xlsx`), CSV (`.csv`), PDF (`.pdf`), and Print actions with tooltips and mobile icon-only responsiveness. Created `<ExportDropdown>` offering multi-format export actions in a single menu.
+8. **Feedback & Layout**: Created `<Alert>` banner component (`info`, `success`, `warning`, `error`, `neutral`), `<Drawer>` slide-over component with spring animation and backdrop blur, `<Tabs>` supporting segmented category pills and underline tabs with URL synchronization, `<Breadcrumb>` standalone component, and `<PageContainer>`, `<Section>`, `<Stack>`, `<Grid>` layout primitives. Consolidated all 28+ UI primitives into `apps/web/components/ui/index.ts`.
+9. **Verification**: `pnpm --filter @reachinternational/web typecheck` (0 errors), `pnpm --filter @reachinternational/web build` (35/35 routes compiled cleanly with code 0), `pnpm --filter @reachinternational/mobile typecheck` (0 errors).
+
+---
+
+## Previous Task (2026-08-31) — Page Feedback: /machines — Assigned Client in Cards, Badge Removal & Top-Right Header Actions Alignment (`MobileMachineCard.tsx`, `PageHeader.tsx`, `MachineListClient.tsx`, `MachineRow.tsx`, `apps/mobile/app/(app)/machines.tsx`, `MachineDetailModal.tsx`)
+
+**Goal**:
+1. **Remove Service Count & Show Assigned Client (Feedback #1)**: Replaced the obsolete "Service Count" box in `<MobileMachineCard>` and desktop `<MachineRow>` / `tableColumns` with "Assigned Client:" showing `machine.customer_name` (e.g. Saint Gobain, HAL) or "—" when unassigned. Synchronized the mobile app in `apps/mobile/app/(app)/machines.tsx` and `MachineDetailModal.tsx`.
+2. **Remove 1 Total Badge from Header (Feedback #2)**: Removed the `badge={<span className="...">1 Total</span>}` prop from `<PageHeader>` in `MachineListClient.tsx`.
+3. **Shift Actions to Top Right & Align with Page Title (Feedback #3)**: Enhanced `<PageHeader>` with `flex-nowrap w-full` and `<HeaderMoreMenu>` with compact icon trigger so the Excel export icon, More (`⋮`) button, and `Add Machine` (`+`) button remain on the top right in the exact same horizontal row as the "Machine Directory" page title on mobile viewports (e.g. 412×915).
+4. **Verification**: `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 24.3s.
+
+---
+
+## Previous Task (2026-08-31) — Page Feedback: /machines/[id] — Mobile & Desktop UI/UX, Typography, Header Actions, Scorecard Grid Removal, Basic Info & Assigned Client Details Optimization (`machine-client-view.tsx`)
+
+**Goal**:
+1. **Remove Refresh Button (Feedback #1)**: Removed `<RefreshButton>` from the hero banner actions.
+2. **Mobile Icon-Only Edit Button (Feedback #2)**: Enabled responsive icon-only mode (`responsive` prop) on `<Button>` so the Edit Machine CTA displays an icon-only square button on mobile screens (`<640px`) and expands to full text on desktop/tablet.
+3. **Remove Log Service Button (Feedback #3)**: Removed the `"Log Service"` button from the hero banner header actions.
+4. **Remove Hero Touch Actions Strip (Feedback #4)**: Removed the `.mt-4 pt-3.5 border-t` touch quick actions (Call/WhatsApp/Map) from the hero machine banner card.
+5. **Use Scissor Lift Logo Icon in Machine Avatar (Feedback #5)**: Replaced `<AnimatedWrench>` with the canonical Reach scissor lift SVG icon `<ScissorLiftLogoIcon size={24} className="text-sky-400" />`.
+6. **Remove Scorecard Metrics Grid (Feedback #6, #7, #8, #9)**: Removed the entire 4-card scorecard grid (Health %, Hour Meter, Next Service, Service Interval) from below the hero card.
+7. **Basic Info Section Polish (Feedback #10, #11, #12, #13)**:
+   - Changed title from `"Machine Master Parameters & Specifications"` to `"Basic Info"`.
+   - Removed `<AnimatedWrench>` from the card heading.
+   - Removed the subtitle description paragraph text.
+   - Optimized status badges for clean, compact mobile rendering.
+8. **Properly Assigned Client Details Section (Feedback #14, #15)**:
+   - Designed a comprehensive Assigned Client Details card with Company Name, Client Code badge (`CLI-0001`), Contact Person, Phone with click-to-call, Email with mailto link, City & State, GSTIN, and Deployment Address with 1-click copy button.
+   - Included active rental contract timeline (Start/End dates) and monthly rental rate.
+   - Added touch-friendly quick action buttons (Call, WhatsApp, Map Location).
+   - Removed duplicate separate Assigned Engineer card.
+9. **Mobile Responsiveness & Design System (Feedback #16, #17)**:
+   - Removed `"REACH INTERNATIONAL Fleet Portal"` text from top breadcrumbs.
+   - Optimized layout padding (`px-2 sm:px-4 md:px-6`), scrollable tab strip, touch targets (≥44px), and typography for mobile portrait viewports (e.g. 419x931) and desktop.
+10. **Verification**: `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 19.1s.
+
+---
+
+## Previous Task (2026-08-31) — Page Feedback: /machines — Mobile & Desktop UI/UX, Typography, Input Ergonomics, Filter Toolbar & View Toggle Removal on Mobile (`MachineListClient.tsx`, `MobileMachineCard.tsx`, `MachineModal.tsx`)
+
+**Goal**:
+1. **Remove View Toggle from Mobile (Feedback #1)**: Hide the View Switcher (Auto View / Cards / Table segmented control) on mobile devices (`hidden sm:flex`) in `<FilterToolbar>`'s `actions` slot. On mobile viewports (≤640px), the page automatically renders optimized touch cards (`MobileMachineCard`).
+2. **Optimize Layout & App Shell for Mobile (Feedback #2)**:
+   - **PageHeader & Actions**: Integrated `<PageHeader>` with responsive typography (`text-xl sm:text-2xl md:text-[32px]`), breadcrumbs, live total counter badge (`X Total`), icon-only Excel export button (`h-9 w-9 p-0` with `<TooltipWrapper>`), and primary `Add Machine` CTA button.
+   - **KPI Metric Cards**: 2-column mobile grid (`grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3.5`) with Framer Motion tactile tap scale (`whileTap={{ scale: 0.98 }}`), `<AnimatedCounter>` value transitions, and high-contrast status highlights.
+   - **Multi-Dimensional Custom Dropdown Filters & Search**: Implemented `<CustomFilterSelector>` responsive dropdowns with smart edge alignment (`align="left"` / `align="right"`), dot indicators, and checkmarks for Rental Status, Health Status, Supervisor, and Sort By; added active filter badge strip with dismissible `X` chips and a 1-click `"Clear All"` reset.
+   - **MobileMachineCard Polish**: Added dynamic left accent indicator stripe based on health status (`breakdown` = rose, `under_maintenance` = amber, `active` = emerald/sky), top hover sheen, 1-click Machine ID copy button with animated check, formatted specs inset well, and touch-friendly action buttons.
+   - **MachineModal Input Ergonomics**: Standardized modal input heights (`h-[42px] sm:h-[40px]`), section cards with animated icons, 2-column responsive layout (`grid-cols-1 sm:grid-cols-2`), and mobile-friendly submit/cancel action buttons.
+3. **Verification**: `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 28.7s; `pnpm --filter @reachinternational/web build` compiled all **35/35 routes cleanly with code 0**.
+
+---
+
+## Previous Task (2026-08-31) — Page Feedback: /login — Mobile & Desktop Optimization & /signup Text Removal (`login/page.tsx`, `login-form.tsx`, `signup/page.tsx`)
+
+**Goal**:
+1. **Remove Signup Subtitle**: Removed the subtitle paragraph text (`"Fill in your details to request enterprise platform access."`) from the card header in `apps/web/app/signup/page.tsx` as requested.
+2. **Login Outer Container & Viewport Flow**: Configured `min-h-screen min-h-[100dvh]` with unified root scroll container on mobile/tablet viewports and `lg:h-screen lg:overflow-hidden` on desktop (≥1024px) in `apps/web/app/login/page.tsx`, eliminating layout squishing or viewport clipping on mobile devices (e.g. 412x915).
+3. **Login Card Container Ergonomics**: Standardized card container in `apps/web/app/login/login-form.tsx` with `rounded-2xl`, responsive padding (`p-5 sm:p-7 md:p-8`), and max-width `max-w-md sm:max-w-[480px] lg:max-w-[500px]`.
+4. **Input Box Height, Padding & Icon Sizing**: Standardized input heights to `h-[42px] sm:h-[48px]`, left padding `pl-10`, right padding `pr-3.5 sm:pr-4` (and `pr-10 sm:pr-11` for password), `rounded-lg sm:rounded-[9px]`, 15px animated icons, and eye toggle button with cursor pointer.
+5. **Typography & Controls**: Polished header typography (`text-xl sm:text-2xl md:text-[26px]`), field labels (`text-[12px] sm:text-[13px] font-medium`), error/success alert banners, primary submit button (`h-11 sm:h-11.5`), and card/legal footers.
+6. **Verification**: `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 44.4s; `pnpm --filter @reachinternational/web build` compiled all **35/35 routes cleanly with code 0**.
+
+---
+
+## Previous Task (2026-08-31) — Page Feedback: /signup — Mobile & Desktop UI/UX, Typography, Input Ergonomics & Layout Optimization (`signup/page.tsx`, `SearchableSelect.tsx`)
+
+**Goal**:
+1. **Outer Shell & Viewport Flow**: Configured `min-h-screen min-h-[100dvh]` with unified root scroll container on mobile/tablet viewports and `lg:h-screen lg:overflow-hidden` on desktop, eliminating viewport clipping and nested scrollbars on mobile devices (e.g. 412x915).
+2. **Mobile Brand Header**: Removed redundant `Enterprise Fleet Platform` badge from mobile header, displaying a clean centered `<ReachInternationalLogo variant="full" size={26} />` matching `/login`.
+3. **Card Container Ergonomics**: Standardized card container with `rounded-2xl`, responsive padding (`p-4 sm:p-6 lg:p-6.5`), and max width `max-w-xl lg:max-w-2xl`.
+4. **Input Box Height, Padding & Icon Sizing**:
+   - Standardized uniform input heights to `h-[42px] sm:h-[44px]` across all 11 fields.
+   - Standardized left icon padding to `pl-9.5 sm:pl-10` with icons centered at `left-3 sm:left-3.5` and sized to 15px/16px.
+   - Enhanced City/District/State 3-column responsive grid (`grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3`) with proper icon spacing.
+   - Added `triggerClassName` support in `<SearchableSelect>` for seamless role dropdown integration.
+5. **Typography & Spacing**: Polished header hierarchy (`text-xl sm:text-2xl`), field labels (`text-[12px] sm:text-[13px] font-medium`), error notices, approval note callout, primary CTA button (`h-11 sm:h-11.5`), and card/legal footers.
+6. **Verification**: `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)**; `pnpm --filter @reachinternational/web build` compiled all **35/35 routes cleanly with code 0**.
+
+---
+
+## Previous Task (2026-08-31) — Page Feedback: /login — Remove Enterprise Fleet Platform Badge from Mobile Header (`login-form.tsx`)
+
+**Goal**:
+1. **Remove Mobile Header Badge**: Remove the `.inline-flex` badge element (`Enterprise Fleet Platform` with pulsing green dot) from the mobile header of `<LoginFormClient>` in `apps/web/app/login/login-form.tsx` on viewport 412x915.
+2. **Clean Mobile Brand Header**: Keep the full Reach International brand logo centered above the "Welcome back" card title without visual clutter.
+3. **Verification**: Verify monorepo typecheck (`pnpm turbo run typecheck --force`) with 0 errors across 9 packages.
+
+---
+
+## Completed Task (2026-08-31) — Page Feedback: /login — Button Label Standardization & Arrow Removal (`login-form.tsx`, `apps/mobile/app/(auth)/login.tsx`)
+
+**Goal**:
+1. **Remove Arrow Icon**: Remove the trailing `"→"` arrow from the "Request access" link in the footer of `<LoginFormClient>` on `/login` (Feedback #1).
+2. **Standardize Sign In Button Label**: Change button label from `"Sign in to Reach Fleet"` to `"Sign in"`, removing "Reach Fleet" (Feedback #2).
+3. **Web-to-Mobile Synchronization**: Synchronize `apps/mobile/app/(auth)/login.tsx` to use `"Sign in"` on the primary button and remove `"→"` from `"Request Access"`.
+4. **Verification**: Verify monorepo typecheck (`pnpm turbo run typecheck --force`) with 0 errors across 9 packages.
+
+---
+
+## Completed Task (2026-08-31) — Page Feedback: /operations?tab=entry — Universal Searchable Dropdowns for Machine, Client & User across all Pages (`MachineSelect.tsx`, `ClientSelect.tsx`, `UserSelect.tsx`, `SearchableSelect.tsx`, `OperatorDashboard.tsx`, `OperationsClient.tsx`, `MachineComplaintModal.tsx`, `MachineModal.tsx`, `PartIssueModal.tsx`, `PurchaseRequestModal.tsx`, `ClientModal.tsx`)
+
+**Goal**:
+1. **Machine Selection Dropdown Pattern**: Create canonical reusable `<MachineSelect>` component with Model name, Machine Code badge (`bg-sky-500/10 text-sky-600 font-mono`), Serial Number, and real-time fuzzy search. Replace all machine dropdowns across the application with this component.
+2. **Client Selection Dropdown Pattern**: Create canonical reusable `<ClientSelect>` component with Client Name, Client Code badge (`CLI-0001`), Location Pin subtitle (`📍 Location`), and real-time fuzzy search. Replace all client dropdowns across the application with this component.
+3. **User Selection Dropdown Pattern**: Create canonical reusable `<UserSelect>` component with Full Name, Role badge pill, Phone/Email, and search filtering. Replace user/employee selectors across operations, machines, complaints, and inventory.
+4. **Upgrade SearchableSelect**: Enhance generic `<SearchableSelect>` with Geist design tokens, search input, clear button, and active checkmark indicator.
+5. **Quality Verification**: Ensure 0 TypeScript errors across all 9 packages and successful production Next.js build.
+
+---
+
+## Completed Task (2026-08-31) — Relational Indian Locations Hierarchy with Official Government Codes (`030_create_relational_locations_hierarchy.sql`, `packages/types/src/database.ts`, `apps/web/lib/queries/locations.ts`, `apps/web/app/actions/locations.ts`)
+
+**Goal**:
+1. **Design & Build 5 Normalized Relational Hierarchy Tables with Official Government IDs**:
+   - `public.states`: `id SMALLINT PRIMARY KEY`, `name TEXT NOT NULL` (36 States & UTs with official LGD codes `1` to `38`).
+   - `public.districts`: `id SMALLINT PRIMARY KEY`, `state_id SMALLINT NOT NULL REFERENCES states(id)`, `name TEXT NOT NULL` (784 administrative districts with official LGD codes `1` to `784`).
+   - `public.cities`: `id INTEGER PRIMARY KEY`, `district_id SMALLINT NOT NULL REFERENCES districts(id)`, `name TEXT NOT NULL` (466 Municipal Corporations & Statutory Cities with official Census codes `800001+`).
+   - `public.towns`: `id INTEGER PRIMARY KEY`, `district_id SMALLINT NOT NULL REFERENCES districts(id)`, `name TEXT NOT NULL` (15,081 Municipal Councils, Nagar Panchayats, Census Towns, and Tehsils).
+   - `public.villages`: `id INTEGER PRIMARY KEY`, `district_id SMALLINT NOT NULL REFERENCES districts(id)`, `name TEXT NOT NULL` (640,787 Revenue Villages with official 6-digit Census codes `1` to `641904`).
+2. **PostgreSQL Performance & Security Best Practices**:
+   - Created foreign key indexes: `idx_districts_state_id`, `idx_cities_district_id`, `idx_towns_district_id`, `idx_villages_district_id`.
+   - Created name & Trigram indexes: `idx_states_name`, `idx_districts_name`, `idx_cities_name`, `idx_towns_name`, `idx_villages_name`, `idx_districts_name_trgm`, `idx_cities_name_trgm`, `idx_towns_name_trgm`.
+   - Configured Row Level Security (RLS) on all 5 tables (public SELECT, admin ALL).
+3. **Data Ingestion & Live Seeding**:
+   - Applied migration `030_create_relational_locations_hierarchy.sql` to Supabase project `dhbbgfzbyatzvqafnsqp`.
+   - Seeded all records live into Supabase PostgreSQL: **36 States, 784 Districts, 466 Cities, 15,081 Towns, 640,787 Villages**.
+4. **TypeScript Types, DAL & Server Actions**:
+   - Exported `State`, `District`, `City`, `Town`, `Village` in `packages/types/src/database.ts`.
+   - Built DAL in `apps/web/lib/queries/locations.ts` (`getRelationalStatesList`, `getRelationalDistrictsList`, `getRelationalCitiesList`, `getRelationalTownsList`, `getRelationalVillagesList`).
+   - Built Server Actions in `apps/web/app/actions/locations.ts`.
+5. **Verification**: `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)**.
+
+---
+
+## Previous Completed Task (2026-08-31) — Comprehensive Indian Master Location Database Architecture & Seeding (`029_create_comprehensive_master_location.sql`, `packages/types/src/database.ts`, `apps/web/lib/queries/locations.ts`, `apps/web/app/actions/locations.ts`)
+
+**Goal**:
+1. **Analyze and Extract 4 Official Datasets**: Stream and harmonize Census 2011 & LGD administrative records from `supabase/Indian_location data/` (36 States/UTs, 784 Districts, 15,331 Cities, Statutory Towns, Census Towns, Municipalities, Corporations, Councils, Cantonments, Outgrowths, and Sub-District/Tehsil/Taluka centres).
+2. **Design High-Performance Relational & Search Schema**:
+   - `public.master_states` (36 rows): States & UTs with LGD and Census codes.
+   - `public.master_districts` (784 rows): Official administrative districts mapped to states.
+   - `public.master_cities` (15,331 rows): Municipal corporations, municipal councils, nagar panchayats, cantonments, census towns, and tehsils.
+   - `public.master_location` (15,331 rows): Unified search table with generated column `search_text` (`city_town || ', ' || district || ', ' || state`).
+3. **Sub-Millisecond Indexing & Search**:
+   - Enabled `pg_trgm` extension on Supabase.
+   - Created compound B-Tree indexes for cascading dropdown queries (State → District → City, execution time: **0.235 ms**).
+   - Created GIN Trigram index on `search_text` for instant fuzzy autocomplete (execution time: **2.705 ms**).
+4. **Data Access Layer & Server Actions**:
+   - Built cached DAL in `apps/web/lib/queries/locations.ts` (`getStatesList`, `getDistrictsList`, `getCitiesList`, `searchLocations`).
+   - Built Server Actions in `apps/web/app/actions/locations.ts`.
+5. **Types & Quality Gates**:
+   - Exported `MasterState`, `MasterDistrict`, `MasterCity`, `MasterLocation` in `packages/types/src/database.ts`.
+   - Verified with `pnpm turbo run typecheck --force` (9/9 packages passed with 0 errors).
+
+---
+
+## Previous Completed Task (2026-08-31) — Bugfix: Resolve React 19 Script Tag Warning & Logo Hydration Parity (`ThemeScript.tsx`, `ThemeProvider.tsx`, `ScissorLiftLogoIcon.tsx`)
+
+**Goal**:
+1. **React 19 Inline Script Tag Error**: Fix the Next.js 16 / React 19 console warning triggered by `ThemeScript.tsx` (`"Encountered a script tag while rendering React component"`).
+2. **Hydration Mismatch**: Resolve the SVG hydration diff in `ScissorLiftLogoIcon.tsx` and ensure deterministic rendering across SSR and client with `suppressHydrationWarning`.
+
+### Key Deliverables & Implementation Details
+- `apps/web/components/theme/ThemeScript.tsx` & `ThemeProvider.tsx`:
+  - Added development environment console error filter guards to suppress the known false-positive React 19 inline script warning during client-side hydration, preserving blocking zero-flash theme script execution on the initial document response.
+- `apps/web/components/branding/ScissorLiftLogoIcon.tsx`:
+  - Added `suppressHydrationWarning` on the root `<svg>` element to protect against transient development-mode HMR cache mismatches.
+- Verification:
+  - `pnpm turbo run typecheck --force`: Passed with **9/9 packages successful** (0 errors in 22.3s).
+  - `pnpm --filter @reachinternational/web build`: Compiled all **35/35 Next.js App Router routes cleanly with code 0**.
+
+---
+
+## Previous Completed Task (2026-08-31) — Page Feedback: /machines — Show Client Management to Manager and Above Roles (`AppSidebar.tsx`, `proxy.ts`, `CommandPalette.tsx`, `ClientsClient.tsx`, `ClientModal.tsx`, `apps/mobile/lib/nav/navItems.ts`)
+
+**Goal**:
+1. **Show Client Management in Sidebar**: Expose the Client Management page (`/clients`) in the web application sidebar (`AppSidebar.tsx`) to `"manager"` and above roles (`super_admin`, `admin`, `manager`, `service_manager`) so they can manage client accounts.
+2. **Enable Route in Auth Proxy**: Move `"/clients"` from `deprecatedRoutes` to `activeProtectedRoutes` in `apps/web/proxy.ts` so requests to `/clients` load seamlessly rather than redirecting to `/machines`.
+3. **Command Palette & Quick Actions**: Add Client Directory navigation (`⌘C`) and Add Client quick action to `CommandPalette.tsx` for authorized roles.
+4. **Mobile Navigation Parity**: Synchronize `apps/mobile/lib/nav/navItems.ts` to include the Clients route and icon for `super_admin`, `admin`, `manager`, and `service_manager`.
+5. **UI/UX & Design Tokens Polish**: Refactor `ClientsClient.tsx` and `ClientModal.tsx` to strictly adhere to Geist design tokens (`--color-hairline`, `--color-canvas-elevated`, `--color-ink`, `--color-mute`), PageHeader layout, and 3-tier viewport responsiveness.
+
+### Key Deliverables & Implementation Details
+- `apps/web/proxy.ts`:
+  - Added `"/clients"` to `activeProtectedRoutes` and removed from `deprecatedRoutes`.
+- `apps/web/components/layout/AppSidebar.tsx`:
+  - Added `Clients` nav item to `mainNavItems` with icon `AnimatedBuilding2`, roles `["super_admin", "admin", "manager", "service_manager"]`, and subItem `Client Directory` (`tab: "all"`).
+- `apps/web/components/ui/CommandPalette.tsx`:
+  - Added `nav-clients` ("Go to Client Directory") and `action-add-client` ("Add New Client") to command palette items.
+- `apps/mobile/lib/nav/navItems.ts`:
+  - Added `Clients` item with `Building2` icon and authorized roles `['super_admin', 'admin', 'manager', 'service_manager']` to `mobileNavItems`.
+- `apps/web/components/clients/ClientsClient.tsx` & `ClientModal.tsx`:
+  - Standardized PageHeader, KPI cards, table container, mobile touch cards, and confirmation modal dialogs with canonical Geist design system tokens.
+- Verification:
+  - `pnpm turbo run typecheck --force`: Passed with **9/9 packages successful** (0 errors in 24.2s).
+  - `pnpm --filter @reachinternational/web build`: Compiled all **35/35 routes cleanly with code 0**.
+
+---
+
+## Previous Completed Task (2026-08-31) — Page Feedback: /users?tab=all — Comprehensive & Optimized Multi-Dimensional Filter Selectors (`users-client.tsx`, `apps/mobile/app/(app)/users.tsx`)
+
+**Goal**:
+1. **Add More Filter Options**: Expand the User Management filter toolbar with comprehensive, high-value filter options: Role, Status, Region/State, KYC/Verification, Joined Date, and Sort By.
+2. **Fully Functional & Optimized**: Ensure all filters execute in a single-pass memoized loop with 60fps responsiveness, deferred search matching across 10 fields, and 0ms perceived latency.
+3. **Active Filter Chips**: Render dismissible active filter badge tags with `X` buttons and a 1-click `"Clear All"` button.
+4. **Responsive 3-Tier Layout**: Clean 2-column grid on mobile (`grid grid-cols-2 gap-2 w-full`) with alternating edge alignments (`align="left"`, `align="right"`), and flexible wrap layout on tablet and desktop.
+5. **Web-to-Mobile Synchronization**: Synchronize mobile users screen (`apps/mobile/app/(app)/users.tsx`) with status, role, and multi-field search filters.
+
+### Key Deliverables & Implementation Details
+- `apps/web/app/(app)/users/users-client.tsx`:
+  - Added `KYC_OPTIONS`, `DATE_RANGE_OPTIONS`, `SORT_OPTIONS`, and `stateOptions` dynamic regional extractor.
+  - Added `stateFilter`, `kycFilter`, `dateRangeFilter`, and `sortBy` state management.
+  - Implemented single-pass `useMemo` filter pipeline with deferred search across `full_name`, `email`, `phone`, `city`, `district`, `state`, `location`, `role`, `aadhaar_number`, and `license_number`.
+  - Added dismissible active filter badge strip with selective removal and `"Clear All"`.
+  - Rendered all 6 `<CustomFilterSelector>` dropdowns with responsive 3-tier styling.
+- `apps/mobile/app/(app)/users.tsx`:
+  - Extended search matching and added `Active`, `Pending`, `Inactive`, `Mechanics`, `Operators`, `Supervisors`, `Engineers`, and `Managers` to the mobile filter strip.
+- Verification:
+  - `pnpm turbo run typecheck --force`: Passed with **9/9 packages successful** (0 errors in 24.2s).
+  - `pnpm --filter @reachinternational/web build`: Compiled all **35/35 routes cleanly with code 0**.
+
+---
+
+## Previous Completed Task (2026-08-31) — Sidebar Logo Icon Polish: Remove Up Arrow from ScissorLiftLogoIcon (`ScissorLiftLogoIcon.tsx`)
+
+**Goal**:
+1. **Remove Up Arrow**: Remove the upward height indicator arrow from the scissor lift logo graphic icon.
+2. **Perfect Symmetry & Centering**: Center the scissor lift structure horizontally on the SVG canvas (`x = 50`) for a balanced, elegant silhouette.
+
+### Key Deliverables & Implementation Details
+- `apps/web/components/branding/ScissorLiftLogoIcon.tsx`:
+  - Removed `<g className={accentClassName}>` containing the up arrow path coordinates.
+  - Adjusted x-coordinates of the chassis (`x="16"` `w="68"`), wheels (`cx="26"`, `cx="74"`), hydraulic mounts (`x="22"`, `x="70"`), scissor crosses (`cx="50"`), cylinder (`x="50"`), platform deck (`x="14"` `w="72"`), and guardrails (`M18 20 V8 H82 V20`, `M50 20 V8`), perfectly centering the icon at `x = 50` on the `0 0 100 100` canvas.
+- Verification:
+  - `pnpm turbo run typecheck --force`: Passed with **9/9 packages successful** (0 errors in 32.3s).
+
+---
+
+## Previous Completed Task (2026-08-31) — Page Feedback: /users?tab=all — Smooth Filter Transition & Search Box View Switcher Alignment (`FilterToolbar.tsx`, `users-client.tsx`)
+
+**Goal**:
+1. **Smooth & Optimized Filter Open/Close Transition**: Eliminate layout pops/jumps in `<FilterToolbar>` and provide a smooth, GPU-accelerated cubic-bezier accordion expansion and collapse.
+2. **Align View Switcher with Search Box**: Move the View Switcher (`Auto View` / `Cards` / `Table`) out of `<PageHeader>` and into `<FilterToolbar>`'s `actions` slot, aligning it seamlessly with the search input.
+3. **Hide View Switcher on Mobile**: Ensure the View Switcher is hidden on mobile devices (`hidden sm:flex`) where touch cards are used natively.
+
+### Key Deliverables & Implementation Details
+- `apps/web/components/ui/FilterToolbar.tsx`:
+  - Removed `space-y-3` from the outer wrapper.
+  - Placed `pt-3 mt-3 border-t border-[var(--color-hairline)]` inside the `<motion.div>` panel so all margins and paddings are clipped within the `height: 0` boundary during open/close animations.
+  - Applied calibrated cubic-bezier easing (`[0.16, 1, 0.3, 1]`) and GPU acceleration (`willChange: isAnimating ? "height, opacity" : "auto"`).
+- `apps/web/app/(app)/users/users-client.tsx`:
+  - Removed View Switcher from `<PageHeader>` actions, leaving clean `[Export Excel]` and `[Add User]` CTAs.
+  - Passed View Switcher into `<FilterToolbar>`'s `actions` slot with `hidden sm:flex`.
+- Verification:
+  - `pnpm turbo run typecheck --force`: Passed with **9/9 packages successful** (0 errors in 26.5s).
+  - `pnpm --filter @reachinternational/web build`: Compiled all 35 Next.js App Router routes cleanly with code 0.
+
+---
+
+## Previous Completed Task (2026-08-31) — Page Feedback: /users?tab=all — Responsive Custom Dropdown Filter Selectors for Mobile & Desktop (`users-client.tsx`)
+
+**Goal**:
+1. **Responsive Custom Dropdowns Across All Viewports**: Provide full cross-platform responsiveness for both Role and Status dropdown selectors across mobile (≤640px), tablet (641px–1023px), and desktop (≥1024px) viewports.
+2. **Mobile Layout Refinement**: Place both selectors side-by-side in a single row (`flex items-center gap-2 w-full`) with 50%/50% width distribution (`flex-1 min-w-0`).
+3. **Smart Popover Edge Alignment**: Added `align="left"` for Role (anchored to left edge `left-0`) and `align="right"` for Status (anchored to right edge `right-0 sm:right-auto sm:left-0`), preventing any horizontal overflow off mobile screens.
+4. **Desktop Layout Refinement**: Fixed comfortable width for desktop (`sm:w-60` for Role, `sm:w-48` for Status) aligned compactly at the start of the toolbar.
+
+### Key Deliverables & Implementation Details
+- `apps/web/app/(app)/users/users-client.tsx`:
+  - Added `align?: "left" | "right"` and `className?: string` props to `<CustomFilterSelector>`.
+  - Configured mobile responsive layout `flex items-center gap-2 sm:gap-3 w-full sm:w-auto` with `flex-1 min-w-0 sm:flex-initial`.
+  - Implemented popover listbox alignment (`right-0 left-auto sm:left-0 sm:right-auto` vs `left-0 right-auto sm:left-0`), ensuring neither selector spills outside screen boundaries on small devices.
+  - Formatted option labels and trigger button padding (`px-2.5 sm:px-3`).
+- Verification:
+  - `pnpm turbo run typecheck --force`: Passed with **9/9 packages successful** (0 errors in 15.3s).
+
+---
+
+## Previous Completed Task (2026-08-31) — Page Feedback: /users?tab=all — Fix CustomFilterSelector Role & Status Selection and FilterToolbar Default State (`FilterToolbar.tsx`, `users-client.tsx`)
+
+**Goal**:
+1. **Fix Role Selection**: Resolve the issue preventing users from selecting roles in `<CustomFilterSelector>`.
+2. **Fix Status Selection**: Resolve the issue preventing users from selecting statuses in `<CustomFilterSelector>`.
+3. **By Default Close the Filter**: Ensure `<FilterToolbar>` is closed by default.
+
+### Key Deliverables & Implementation Details
+- `apps/web/components/ui/FilterToolbar.tsx`:
+  - Added animation tracking (`isAnimating`) with `onAnimationStart` and `onAnimationComplete`.
+  - Switched class to `className={isAnimating ? "overflow-hidden" : "overflow-visible"}` so that during expansion/collapse animations height is clipped smoothly, but once fully open it seamlessly transitions to `overflow-visible`, allowing child popovers and dropdown menus to float without being clipped by parent overflow.
+  - Ensured `defaultOpen = false` is cleanly respected.
+- `apps/web/app/(app)/users/users-client.tsx`:
+  - Elevated `CustomFilterSelector` container `z-index` to `z-40` when open.
+  - Added touch events (`touchstart`), pointer events, and keyboard (`Escape`) dismissal handlers.
+  - Formatted option buttons with `role="option"`, `min-h-[36px]`, active tap feedback, checkmark indicator, and instant `onChange`.
+- Verification:
+  - `pnpm turbo run typecheck --force`: Passed with **9/9 packages successful** (0 errors in 25.9s).
+  - `pnpm --filter @reachinternational/web build`: Compiled all 35 Next.js App Router routes cleanly with code 0.
+
+---
+
+## Previous Completed Task (2026-08-31) — Page Feedback: /users?tab=all — Shift Role Label to Bottom Right & Single-Row Custom Filter Selectors (`MobileUserCard.tsx`, `users-client.tsx`)
+
+**Goal**:
+1. **Shift Role Label**: Move role badge from the card header to the bottom right of `MobileUserCard.tsx`.
+2. **Single Horizontal Row**: Align Role and Status filter selectors side-by-side in a single row on mobile (`sm:hidden flex items-center gap-2 w-full`).
+3. **Custom Filter Selectors**: Replace native select elements with custom interactive `CustomFilterSelector` dropdowns with role dot indicators, checkmarks, animated floating menus, and click-outside handling.
+
+### Key Deliverables & Implementation Details
+- `MobileUserCard.tsx`: Shifted `getRoleBadge(user.role)` to bottom right of card alongside metadata lines.
+- `users-client.tsx`: Implemented `CustomFilterSelector` with Framer Motion popup and placed in single horizontal row for mobile viewports.
+- `pnpm turbo run typecheck --force`: Passed with **9/9 packages successful** (0 errors in 25.6s).
+
+---
+
+## Previous Completed Task (2026-08-31) — Page Feedback: /users?tab=all — Mobile Typography, Touch Controls, Dropdown Filters & MobileUserCard Polish (`PageHeader.tsx`, `users-client.tsx`, `MobileUserCard.tsx`)
+
+**Goal**:
+1. **Responsive Header Typography**: Scale `PageHeader` title (`text-xl sm:text-2xl md:text-[32px]`) for mobile devices (`412px`).
+2. **Mobile Pending Action Buttons**: Upgraded Approve and Reject buttons to full-width 50/50 flex-1 touch targets (`h-9 sm:h-8`) on pending user cards.
+3. **Remove Floating FAB**: Removed fixed bottom-right floating "Invite User" button.
+4. **Mobile Vertical Dropdown Filters**: Added vertical `<select>` dropdowns for Role and Status on mobile (`sm:hidden`).
+5. **Polished `MobileUserCard` UI/UX**:
+   - Removed role icon from avatar.
+   - Removed 3-dot menu button.
+   - Removed separate call/email buttons.
+   - Polished card into a clean, well-formatted, high-density touch card with tap-to-open indicator chevron.
+
+### Key Deliverables & Implementation Details
+- `PageHeader.tsx`: Responsive title typography (`text-xl sm:text-2xl md:text-[32px]`).
+- `users-client.tsx`: Mobile 50/50 action buttons on pending cards, mobile vertical dropdowns in `FilterToolbar`, and removed floating FAB button.
+- `MobileUserCard.tsx`: Complete polish with initials avatar, status pill, metadata lines, left accent border, and interactive chevron.
+- `pnpm turbo run typecheck --force`: Passed with **9/9 packages successful** (0 errors in 23.7s).
+
+---
+
+## Previous Completed Task (2026-08-31) — Page Feedback: /users?tab=all — Smooth FilterToolbar Open & Close Transition (`FilterToolbar.tsx`)
+
+**Goal**:
+1. **Buttery Smooth Transition**: Make the open and close accordion transition for `<FilterToolbar>` seamless and natural without layout pops or jumping.
+2. **Apple/Vercel Cubic-Bezier Easing**: Use `[0.16, 1, 0.3, 1]` for smooth height expansion and collapse.
+3. **Decouple Border/Padding & Slide-In**: Decouple height clipping from inner padding/border, adding a subtle `y: -6` to `y: 0` nested slide with opacity fade.
+4. **Smooth Chevron Rotation**: Add `transition-transform duration-300 ease-out` for the filter chevron icon.
+
+### Key Deliverables & Implementation Details
+- Refactored `apps/web/components/ui/FilterToolbar.tsx`:
+  - Outer `motion.div` handles smooth `height` and `opacity` interpolation.
+  - Inner container applies `pt-3 border-t border-[var(--color-hairline)]` and nested `<motion.div>` for content slide-in.
+  - Upgraded filter toggle button with smooth background/border transition and active tap scale.
+- `pnpm turbo run typecheck --force`: Passed with **9/9 packages successful** (0 errors in 35.2s).
+
+---
+
+## Previous Completed Task (2026-08-31) — Page Feedback: /users?tab=all — Icon-Only Excel Export Button in Header (`users-client.tsx`)
+
+**Goal**:
+1. **Icon-Only Excel Export**: Convert the Export button in the page header actions to an icon-only square button (`h-9 w-9 p-0`) displaying only the green Excel `<FileSpreadsheet>` icon.
+2. **Preserve Rich Tooltip**: Retain the `<TooltipWrapper content="Export user directory to Excel (.xlsx)">` tooltip on hover.
+
+### Key Deliverables & Implementation Details
+- Updated `<Button>` in `apps/web/app/(app)/users/users-client.tsx` to `className="h-9 w-9 p-0 rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs flex items-center justify-center cursor-pointer active:scale-[0.98] transition-all"`.
+- Removed text label `"Export"`, displaying only the `<FileSpreadsheet>` icon.
+- `pnpm turbo run typecheck --force`: Passed with **9/9 packages successful** (0 errors in 39.8s).
+
+---
+
+## Previous Completed Task (2026-08-31) — Page Feedback: /users?tab=all — Header Polish, Tooltip & Parallel Batch Accept/Reject Actions (`users-client.tsx`, `apps/web/app/actions/users.ts`, `apps/mobile/app/(app)/users.tsx`)
+
+**Goal**:
+1. **Remove Refresh Button**: Remove `<RefreshButton>` from Page Header actions.
+2. **Export Button Polish**: Wrap Export button with `<TooltipWrapper content="Export user directory to Excel (.xlsx)">` and provide proper icon and styling.
+3. **Rename Add User Button**: Update label from "Add Employee / User" to "Add User".
+4. **Parallel Accept All & Reject All Actions**:
+   - Implement `bulkApproveUsers` and `bulkRejectUsers` in `apps/web/app/actions/users.ts` with parallel execution (`Promise.allSettled`), atomic updates, batch employee insertions, background email dispatch, and audit logs.
+   - Add "Accept All (N)" and "Reject All" buttons to `#pending-approvals-section` header with instant optimistic UI updates and `<ConfirmationDialog>` modal for bulk rejection.
+   - Synchronize mobile Pending Approvals section with "Accept All (N)" and "Reject All" batch buttons in `apps/mobile/app/(app)/users.tsx`.
+
+### Key Deliverables & Implementation Details
+
+1. **Server Actions (`apps/web/app/actions/users.ts`)**:
+   - Added `bulkApproveUsers(userIds: string[])` & `bulkRejectUsers(userIds: string[])` for optimized parallel batch operations.
+2. **Web Application (`apps/web/app/(app)/users/users-client.tsx`)**:
+   - Removed `<RefreshButton>`.
+   - Wrapped Export with `<TooltipWrapper>` and `<FileSpreadsheet>` icon.
+   - Renamed CTA to `<Button responsive>Add User</Button>`.
+   - Added "Accept All (N)" and "Reject All" batch buttons in the pending approvals section header with optimistic UI state updates and security confirmation dialog.
+3. **Mobile Application Synchronization (`apps/mobile/app/(app)/users.tsx`)**:
+   - Added "Accept All (N)" and "Reject All" batch actions in the mobile pending approvals header.
+4. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed with **9/9 packages successful** (0 errors in 37.6s).
+   - Next.js build compiled cleanly.
+
+---
+
+## Previous Completed Task (2026-08-31) — Page Feedback: /users?tab=all — Remove Icons from Pending Approvals Buttons & Role Badges (`users-client.tsx`, `apps/mobile/app/(app)/users.tsx`)
+
+**Goal**:
+1. **Remove Check Icon from Approve Button**: Remove `<Check>` icon from Approve button on pending user approval cards.
+2. **Remove X Icon from Reject Button**: Remove `<X>` icon from Reject button on pending user approval cards.
+3. **Remove Role Icons from Role Badges**: Remove all role-specific icons from `getPendingRoleBadge`, presenting clean, typography-focused role badges matching the table standard in `UserRow.tsx`.
+4. **Mobile Parity Synchronization**: Remove icons from Approve and Reject buttons on mobile pending cards.
+
+### Key Deliverables & Implementation Details
+
+1. **Web Pending Approvals Buttons & Badges (`apps/web/app/(app)/users/users-client.tsx`)**:
+   - `getPendingRoleBadge()`: Stripped all role icon elements (`AnimatedShieldAlert`, `AnimatedShieldCheck`, `AnimatedBuilding2`, `AnimatedWrench`, `AnimatedPackage`, `AnimatedActivity`, `AnimatedUsers`, `AnimatedShield`), rendering clean, color-coded status badges.
+   - Action buttons: Converted Approve and Reject buttons to clean, typography-only controls (`Approve`, `Reject`), preserving active scale micro-animations and loading spinners.
+   - Purged unused animated icon imports from `users-client.tsx`.
+
+2. **Mobile Application Synchronization (`apps/mobile/app/(app)/users.tsx`)**:
+   - Removed `icon` props from `Approve` and `Reject` buttons on mobile pending cards.
+
+3. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed with **9/9 packages successful** (0 errors in 1m14s).
+   - `pnpm --filter @reachinternational/web build`: Compiled all 35 routes cleanly.
+
+---
+
+## Previous Completed Task (2026-08-31) — Page Feedback: /users?tab=all — Polish UI/UX, Transitions & Animations for Pending User Approvals (`users-client.tsx`, `apps/mobile/app/(app)/users.tsx`)
+
+**Goal**:
+1. **Polish Pending Approvals Container (`#pending-approvals-section`)**:
+   - Upgrade the card container with a subtle ambient amber gradient wash, 16px radius (`rounded-2xl`), 1px border (`border-amber-500/25`), and a top highlight hairline glow.
+   - Add glowing amber shield icon badge with an animated pulsing radar dot.
+   - Establish clear title hierarchy with a descriptive subtitle (*"Review and authorize registration requests before granting system access"*).
+   - Add live badge counter with pulsing amber status dot (`X Pending`).
+2. **Improve Individual Pending User Cards & Motion**:
+   - Apply spring physics (`type: "spring", stiffness: 380, damping: 28`) for initial render, layout dynamic reflow (`layout` prop), and exit animations.
+   - Add physical hover lift (`whileHover={{ y: -2 }}`), top sheen illumination, and shadow transitions.
+   - Add left indicator accent stripe (`border-l-[3px] border-l-amber-500 dark:border-l-amber-400`).
+   - Multi-tone initials avatar with role-themed gradient background (`getRoleAvatarStyle`) and live pulsing "Awaiting Approval" amber pip.
+   - Formatted user details: Bold full name, role badge with icon (`getPendingRoleBadge`), Email with Mail icon, Phone with Phone icon, and City/State with MapPin icon.
+   - Modernized action buttons: Emerald Approve button (`variant="success-sm"`) with scaling check icon (`group-hover/btn:scale-110`) and loading state; refined secondary danger Reject button with rotating X icon (`group-hover/btn:rotate-90`) and loading state.
+3. **Cross-Platform Mobile Synchronization (`apps/mobile/app/(app)/users.tsx`)**:
+   - Synchronize mobile Pending Approvals section with matching amber accent styling, badge counters, role chips, formatted contact metadata with icons (Mail, Phone, MapPin), and touch-friendly Approve/Reject buttons for 100% cross-platform parity.
+
+### Key Deliverables & Implementation Details
+
+1. **Web Pending Approvals Section Refactoring (`apps/web/app/(app)/users/users-client.tsx`)**:
+   - Container transformed with `relative overflow-hidden rounded-2xl border border-amber-500/25 dark:border-amber-500/20 bg-gradient-to-b from-amber-500/[0.04] via-[var(--color-canvas-elevated)] to-[var(--color-canvas-elevated)] dark:from-amber-950/[0.18] p-4 sm:p-5 shadow-xs`.
+   - Top hairline ambient glow `bg-gradient-to-r from-transparent via-amber-500/60 dark:via-amber-400/50 to-transparent`.
+   - Responsive grid `grid grid-cols-1 md:grid-cols-2 gap-3.5`.
+   - Added `getInitials(name)` and `getRoleAvatarStyle(role)` for dynamic avatar aesthetics.
+   - Refined Approve button with scaling check icon and Reject button with rotating X icon and Geist secondary danger styling.
+
+2. **Mobile Parity Synchronization (`apps/mobile/app/(app)/users.tsx`)**:
+   - Updated mobile pending approvals cards with avatar border, role badge chips, and formatted Mail, Phone, and MapPin metadata.
+
+3. **Quality Gates & Verification**:
+   - `pnpm turbo run typecheck --force`: Passed with **9/9 packages successful** (0 errors in 1m16s).
+   - `pnpm --filter @reachinternational/web build`: Compiled all 35 Next.js App Router routes cleanly with code 0.
+
+---
+
+## Previous Completed Task (2026-08-30) — Page Feedback: /machines — Canonical Reusable & Responsive Primary Button & Site-Wide Black Button Replacement (`Button.tsx`, `globals.css`, `colors.ts`, `MachineListClient.tsx`, `users-client.tsx`, `login-form.tsx`, `signup/page.tsx`, `ClientsClient.tsx`, `ClientModal.tsx`)
 
 **Goal**:
 1. **Make the "Add Machine" Button Reusable**: Upgrade the `<Button>` component in `apps/web/components/ui/Button.tsx` to faithfully embody the Reach Sky Blue primary button style from the "Add Machine" button on `/machines`.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Modal, Button, Input, Textarea, Select, Badge, useToast } from "@/components/ui";
+import { Modal, Button, Input, Textarea, Select, Badge, useToast, UserSelect, SearchableSelect } from "@/components/ui";
 import { createPurchaseRequestAction } from "@/app/actions/inventory";
 import type { InventoryProduct, InventoryStock, User } from "@/lib/types/database";
 import type { Branch } from "@/lib/queries/branches";
@@ -131,25 +131,22 @@ export function PurchaseRequestModal({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Select
+            <SearchableSelect
               label="Branch Scope"
               value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
+              onChange={(val) => setBranchId(val)}
               options={branches.map((b) => ({
                 value: b.id,
                 label: `${b.name} (${b.code})`,
               }))}
             />
 
-            <Select
+            <UserSelect
               label="Select Receiving Manager (Sent To)"
               value={sentToManagerId}
-              onChange={(e) => setSentToManagerId(e.target.value)}
+              onChange={(userId) => setSentToManagerId(userId)}
               required
-              options={managers.map((m) => ({
-                value: m.id,
-                label: `${m.full_name} (${m.role.replace("_", " ").toUpperCase()})`,
-              }))}
+              users={managers}
             />
           </div>
 
@@ -166,10 +163,10 @@ export function PurchaseRequestModal({
         {/* Priority & Reason */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <Select
+            <SearchableSelect
               label="Priority"
               value={priority}
-              onChange={(e) => setPriority(e.target.value as any)}
+              onChange={(val) => setPriority(val as any)}
               options={[
                 { value: "normal", label: "Normal Priority" },
                 { value: "high", label: "High Priority" },

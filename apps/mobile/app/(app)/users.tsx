@@ -15,6 +15,7 @@ import { CreateUserModal } from '../../components/users/CreateUserModal';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { formatTinyRelativeTime } from '@reachinternational/utils';
 import {
   Users,
   UserCheck,
@@ -29,6 +30,9 @@ import {
   Trash2,
   CheckSquare,
   Square,
+  Mail,
+  Clock,
+  Eye,
 } from 'lucide-react-native';
 
 function formatRoleName(role: string): string {
@@ -148,6 +152,53 @@ export default function UsersScreen() {
     }
   };
 
+  const [isBulkApprovingMobile, setIsBulkApprovingMobile] = useState(false);
+  const [isBulkRejectingMobile, setIsBulkRejectingMobile] = useState(false);
+
+  const handleApproveAll = async () => {
+    if (pendingUsers.length === 0) return;
+    const pendingIds = pendingUsers.map((u) => u.id);
+    const prevUsers = [...users];
+    setUsers((prev) =>
+      prev.map((u) => (pendingIds.includes(u.id) ? { ...u, status: 'active' } : u))
+    );
+    setIsBulkApprovingMobile(true);
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ status: 'active' })
+        .in('id', pendingIds);
+      if (error) throw error;
+      fetchUsers();
+    } catch (e) {
+      setUsers(prevUsers);
+      console.warn('Error bulk approving users:', e);
+    } finally {
+      setIsBulkApprovingMobile(false);
+    }
+  };
+
+  const handleRejectAll = async () => {
+    if (pendingUsers.length === 0) return;
+    const pendingIds = pendingUsers.map((u) => u.id);
+    const prevUsers = [...users];
+    setUsers((prev) => prev.filter((u) => !pendingIds.includes(u.id)));
+    setIsBulkRejectingMobile(true);
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ status: 'inactive' })
+        .in('id', pendingIds);
+      if (error) throw error;
+      fetchUsers();
+    } catch (e) {
+      setUsers(prevUsers);
+      console.warn('Error bulk rejecting users:', e);
+    } finally {
+      setIsBulkRejectingMobile(false);
+    }
+  };
+
   const openUserDetail = (u: UserRecord) => {
     setSelectedUser(u);
     setDetailModalVisible(true);
@@ -216,20 +267,28 @@ export default function UsersScreen() {
 
   const filteredUsers = users.filter((u) => {
     const q = search.toLowerCase().trim();
+    const qNoSpaces = q.replace(/\s+/g, '');
     const matchesSearch =
       !q ||
-      u.full_name.toLowerCase().includes(q) ||
-      u.email.toLowerCase().includes(q) ||
+      u.full_name?.toLowerCase().includes(q) ||
+      u.email?.toLowerCase().includes(q) ||
       (u.phone && u.phone.toLowerCase().includes(q)) ||
       (u.city && u.city.toLowerCase().includes(q)) ||
-      u.role.toLowerCase().includes(q);
+      (u.state && u.state.toLowerCase().includes(q)) ||
+      (u.district && u.district.toLowerCase().includes(q)) ||
+      (u.aadhaar_number && u.aadhaar_number.replace(/\s+/g, '').includes(qNoSpaces)) ||
+      u.role?.toLowerCase().includes(q);
 
     const matchesRole =
       roleFilter === 'all' ||
       (roleFilter === 'engineers' && (u.role === 'service_engineer' || u.role === 'engineer')) ||
       (roleFilter === 'managers' && (u.role.includes('manager') || u.role === 'admin' || u.role === 'super_admin')) ||
       (roleFilter === 'operators' && u.role === 'operator') ||
-      (roleFilter === 'supervisors' && u.role === 'supervisor');
+      (roleFilter === 'supervisors' && u.role === 'supervisor') ||
+      (roleFilter === 'mechanics' && u.role === 'mechanic') ||
+      (roleFilter === 'active' && u.status === 'active') ||
+      (roleFilter === 'pending' && u.status === 'pending') ||
+      (roleFilter === 'inactive' && u.status === 'inactive');
 
     const matchesStatus = statusFilter === 'all' || u.status === statusFilter;
 
@@ -293,12 +352,15 @@ export default function UsersScreen() {
           containerStyle={styles.searchInput}
         />
 
-        {/* Role Filters */}
+        {/* Role & Status Filter Strip */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
           {[
-            { key: 'all', label: `All Roles (${users.length})` },
+            { key: 'all', label: `All Users (${users.length})` },
+            { key: 'active', label: `Active (${activeCount})` },
+            { key: 'pending', label: `Pending (${pendingUsers.length})` },
             { key: 'engineers', label: `Engineers (${engineerCount})` },
             { key: 'operators', label: 'Operators' },
+            { key: 'mechanics', label: 'Mechanics' },
             { key: 'supervisors', label: 'Supervisors' },
             { key: 'managers', label: 'Managers & Admins' },
           ].map((f) => {
@@ -368,31 +430,75 @@ export default function UsersScreen() {
         {/* Pending Approvals Section */}
         {pendingUsers.length > 0 && (
           <View style={styles.pendingSection}>
-            <View style={styles.pendingHeaderRow}>
-              <ShieldAlert size={16} color={theme.colors.warning} />
-              <Text style={[styles.pendingTitle, { color: theme.colors.ink }]}>Pending User Approvals</Text>
-              <Badge status="pending" customLabel={String(pendingUsers.length)} />
+            <View style={[styles.pendingHeaderRow, { justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <ShieldAlert size={16} color={theme.colors.warning} />
+                <Text style={[styles.pendingTitle, { color: theme.colors.ink }]}>Pending User Approvals</Text>
+                <Badge status="pending" customLabel={`${pendingUsers.length} Pending`} />
+              </View>
+              {pendingUsers.length > 0 && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Button
+                    label={`Accept All (${pendingUsers.length})`}
+                    onPress={handleApproveAll}
+                    isLoading={isBulkApprovingMobile}
+                    variant="primary"
+                    size="sm"
+                  />
+                  <Button
+                    label="Reject All"
+                    onPress={handleRejectAll}
+                    isLoading={isBulkRejectingMobile}
+                    variant="ghost"
+                    size="sm"
+                  />
+                </View>
+              )}
             </View>
 
             {pendingUsers.map((p) => (
               <Card key={p.id} style={styles.pendingCard}>
                 <View style={styles.pendingCardLeft}>
-                  <View style={[styles.avatarCircle, { backgroundColor: theme.colors.hairlineSoft }]}>
+                  <View style={[styles.avatarCircle, { backgroundColor: theme.colors.hairlineSoft, borderColor: theme.colors.hairline, borderWidth: 1 }]}>
                     <Text style={[styles.avatarLetter, { color: theme.colors.ink }]}>
                       {p.full_name ? p.full_name[0].toUpperCase() : 'U'}
                     </Text>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.pendingName, { color: theme.colors.ink }]}>{p.full_name}</Text>
-                    <Text style={[styles.pendingEmail, { color: theme.colors.mute }]}>{p.email}</Text>
-                    <View style={styles.pendingRoleRow}>
-                      <Text style={[styles.pendingRoleLabel, { color: theme.colors.mute }]}>Role:</Text>
-                      <View style={[styles.pendingRoleChip, { backgroundColor: theme.colors.hairlineSoft, borderColor: theme.colors.hairline }]}>
-                        <Text style={[styles.pendingRoleChipText, { color: theme.colors.link }]}>
-                          {formatRoleName(p.role)}
-                        </Text>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
+                      <Text style={[styles.pendingName, { color: theme.colors.ink }]}>{p.full_name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <View style={[styles.pendingRoleChip, { backgroundColor: theme.colors.hairlineSoft, borderColor: theme.colors.hairline }]}>
+                          <Text style={[styles.pendingRoleChipText, { color: theme.colors.link }]}>
+                            {formatRoleName(p.role)}
+                          </Text>
+                        </View>
+                        {p.created_at ? (
+                          <View style={[styles.pendingTimeChip, { backgroundColor: theme.colors.hairlineSoft, borderColor: theme.colors.hairline }]}>
+                            <Clock size={9} color={theme.colors.warning} />
+                            <Text style={[styles.pendingTimeChipText, { color: theme.colors.warning }]}>
+                              {formatTinyRelativeTime(p.created_at)}
+                            </Text>
+                          </View>
+                        ) : null}
                       </View>
                     </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Mail size={11} color={theme.colors.mute} />
+                      <Text style={[styles.pendingEmail, { color: theme.colors.mute }]}>{p.email}</Text>
+                    </View>
+                    {p.phone ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Phone size={11} color={theme.colors.mute} />
+                        <Text style={[styles.pendingEmail, { color: theme.colors.mute }]}>{p.phone}</Text>
+                      </View>
+                    ) : null}
+                    {p.city ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <MapPin size={11} color={theme.colors.mute} />
+                        <Text style={[styles.pendingEmail, { color: theme.colors.mute }]}>{p.city}</Text>
+                      </View>
+                    ) : null}
                   </View>
                 </View>
 
@@ -403,14 +509,12 @@ export default function UsersScreen() {
                     isLoading={approvingId === p.id}
                     variant="primary"
                     size="sm"
-                    icon={<Check size={12} color={theme.colors.onPrimary} />}
                   />
                   <Button
                     label="Reject"
                     onPress={() => handleReject(p.id)}
                     variant="ghost"
                     size="sm"
-                    icon={<X size={12} color={theme.colors.error} />}
                   />
                 </View>
               </Card>
@@ -484,7 +588,21 @@ export default function UsersScreen() {
                       </View>
                     </View>
 
-                    <Badge status={u.status === 'active' ? 'active' : 'inactive'} customLabel={u.status.toUpperCase()} />
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Badge status={u.status === 'active' ? 'active' : 'inactive'} customLabel={u.status.toUpperCase()} />
+                      <TouchableOpacity
+                        onPress={() => openUserDetail(u)}
+                        style={{
+                          padding: 4,
+                          borderRadius: 6,
+                          backgroundColor: theme.colors.hairlineSoft,
+                        }}
+                        activeOpacity={0.7}
+                        accessibilityLabel={`View details for ${u.full_name}`}
+                      >
+                        <Eye size={14} color={theme.colors.mute} />
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   {/* Sub details */}
@@ -691,6 +809,19 @@ const styles = StyleSheet.create({
   },
   pendingRoleChipText: {
     fontSize: 11,
+    fontWeight: '700',
+  },
+  pendingTimeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+  },
+  pendingTimeChipText: {
+    fontSize: 10,
     fontWeight: '700',
   },
   pendingActions: {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Modal, Input, Select, Button, useToast, SearchableSelect } from "@/components/ui";
+import { Modal, Input, Select, Button, useToast, SearchableSelect, UserSelect } from "@/components/ui";
 import { createMachine, updateMachine } from "@/app/actions/machines";
 import type { Machine, User } from "@/lib/types/database";
 import { AnimatedWrench, AnimatedCpu, AnimatedShieldCheck } from "@/components/ui/animated-icons";
@@ -87,15 +87,6 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
     }
   }
 
-  const supervisorOptions = [
-    { value: "", label: "-- Unassigned Supervisor --", description: "No supervisor assigned" },
-    ...allSupervisors.map((s) => ({
-      value: s.id,
-      label: s.full_name,
-      description: s.phone ? `+91 ${s.phone.replace(/^\+91/, "")}` : s.email || undefined,
-    })),
-  ];
-
   // Ensure assigned current operator is included in options if present
   const allOperators: Array<{ id: string; full_name: string; phone?: string | null; email?: string | null }> = [...operators];
   if (machine?.current_operator && machine.current_operator_id) {
@@ -103,15 +94,6 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
       allOperators.push(machine.current_operator);
     }
   }
-
-  const operatorOptions = [
-    { value: "", label: "-- Unassigned Operator --", description: "No operator assigned" },
-    ...allOperators.map((o) => ({
-      value: o.id,
-      label: o.full_name,
-      description: o.phone ? `+91 ${o.phone.replace(/^\+91/, "")}` : o.email || undefined,
-    })),
-  ];
 
   const healthStatusOptions = [
     { value: "active", label: "Active" },
@@ -225,23 +207,25 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
             />
 
             <div>
-              <SearchableSelect
+              <UserSelect
                 label="Current Supervisor"
-                options={supervisorOptions}
+                users={allSupervisors}
                 value={supervisorId}
                 onChange={setSupervisorId}
                 placeholder="Select Supervisor"
+                clearable
               />
               <input type="hidden" name="current_supervisor_id" value={supervisorId} />
             </div>
 
             <div>
-              <SearchableSelect
+              <UserSelect
                 label="Current Operator"
-                options={operatorOptions}
+                users={allOperators}
                 value={operatorId}
                 onChange={setOperatorId}
                 placeholder="Select Operator"
+                clearable
               />
               <input type="hidden" name="current_operator_id" value={operatorId} />
             </div>
@@ -277,11 +261,22 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
         </div>
 
         {/* Actions */}
-        <div className="flex justify-end gap-3 pt-2">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={isPending}>
+        <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5 sm:gap-3 pt-2">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={onClose}
+            disabled={isPending}
+            className="h-10 sm:h-9 text-xs sm:text-sm font-semibold justify-center"
+          >
             Cancel
           </Button>
-          <Button type="submit" variant="primary" loading={isPending}>
+          <Button
+            type="submit"
+            variant="primary"
+            loading={isPending}
+            className="h-10 sm:h-9 text-xs sm:text-sm font-semibold justify-center"
+          >
             {isEdit ? "Update Machine" : "Register Machine"}
           </Button>
         </div>
