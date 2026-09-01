@@ -21,6 +21,7 @@ import {
 import { AlertCircle } from "lucide-react";
 import { updateMachine, deleteMachine, checkMachineSerialNumberAvailable } from "@/app/actions/machines";
 import type { Machine, User, UserRole } from "@/lib/types/database";
+import { isManagerOrAbove } from "@reachinternational/permissions";
 
 export interface MachineEditClientProps {
   machine: Machine;
@@ -46,6 +47,14 @@ export function MachineEditClient({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string>("");
+
+  const canEditSupervisor = isManagerOrAbove(userRole);
+
+  // Standardized Title: Machine Model - Serial no (with graceful fallbacks)
+  const machineTitle =
+    [machine.model, machine.serial_number].filter(Boolean).join(" - ") ||
+    machine.machine_id ||
+    "Machine Details";
 
   const [supervisorId, setSupervisorId] = useState<string>(() => machine.current_supervisor_id || "");
   const [operatorId, setOperatorId] = useState<string>(() => machine.current_operator_id || "");
@@ -178,34 +187,42 @@ export function MachineEditClient({
   };
 
   return (
-    <div className="w-full max-w-5xl mx-auto space-y-5 px-3 sm:px-6 py-4 sm:py-6">
+    <div className="w-full max-w-5xl mx-auto space-y-4 sm:space-y-5 px-3 sm:px-6 py-3 sm:py-6 pb-24 sm:pb-8">
       {/* Top Breadcrumb & Back Action */}
-      <div className="flex items-center justify-between gap-3">
-        <Breadcrumb
-          items={[
-            { label: "Machines", href: "/machines" },
-            { label: machine.machine_id, href: `/machines/${machine.id}` },
-            { label: "Edit Machine" },
-          ]}
-        />
+      <div className="flex items-center justify-between gap-2 sm:gap-3">
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <Breadcrumb
+            items={[
+              { label: "Machines", href: "/machines" },
+              { label: machine.machine_id, href: `/machines/${machine.id}` },
+              { label: "Edit Machine" },
+            ]}
+          />
+        </div>
         <Button
           variant="secondary"
           size="sm"
+          responsive
+          mobileIconOnly
           icon={<AnimatedArrowLeft size={14} />}
           href={`/machines/${machine.id}`}
+          title="Back to Machine Details"
         >
           Back to Details
         </Button>
       </div>
 
       {/* Hero Header Card */}
-      <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-6 shadow-xs relative overflow-hidden">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-[var(--color-ink)]">
-                Edit Machine: <span className="font-mono text-sky-600 dark:text-sky-400">{machine.machine_id}</span>
+      <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-5 md:p-6 shadow-xs relative overflow-hidden">
+        <div className="flex items-center justify-between gap-3 relative z-10">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-base sm:text-xl md:text-2xl font-bold tracking-tight text-[var(--color-ink)] truncate">
+                {machineTitle}
               </h1>
+              <span className="px-2 py-0.5 text-xs font-mono font-medium rounded-md bg-[var(--color-hairline-soft-surface)] text-[var(--color-body)] border border-[var(--color-hairline)]">
+                {machine.machine_id}
+              </span>
             </div>
           </div>
 
@@ -214,9 +231,12 @@ export function MachineEditClient({
               <Button
                 variant="destructive"
                 size="sm"
+                responsive
+                mobileIconOnly
                 icon={<AnimatedTrash size={14} />}
                 onClick={() => setDeleteConfirmOpen(true)}
                 disabled={isSaving || isDeleting}
+                title="Delete Machine"
               >
                 Delete Machine
               </Button>
@@ -226,23 +246,23 @@ export function MachineEditClient({
       </div>
 
       {/* Main Edit Form */}
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-5">
         {formError && (
-          <div className="p-4 text-xs sm:text-sm rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 flex items-start gap-3 shadow-xs">
+          <div className="p-3 sm:p-4 text-xs sm:text-sm rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 flex items-start gap-2.5 sm:gap-3 shadow-xs">
             <AlertCircle size={18} className="shrink-0 mt-0.5" />
             <div className="flex-1 leading-relaxed font-medium">{formError}</div>
           </div>
         )}
 
         {/* SECTION 1: Machine Identification & Specifications */}
-        <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-6 shadow-xs space-y-4">
-          <div className="pb-3 border-b border-[var(--color-hairline)]">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
+        <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-5 md:p-6 shadow-xs space-y-3.5 sm:space-y-4">
+          <div className="pb-2.5 sm:pb-3 border-b border-[var(--color-hairline)] flex items-center justify-between">
+            <h3 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
               1. Machine Identification & Specifications
             </h3>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <Input
               label="Machine Code / ID"
               name="machine_id"
@@ -297,25 +317,27 @@ export function MachineEditClient({
         </div>
 
         {/* SECTION 2: Metering & Fleet Assignment */}
-        <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-6 shadow-xs space-y-4">
-          <div className="pb-3 border-b border-[var(--color-hairline)]">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
+        <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-5 md:p-6 shadow-xs space-y-3.5 sm:space-y-4">
+          <div className="pb-2.5 sm:pb-3 border-b border-[var(--color-hairline)] flex items-center justify-between">
+            <h3 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
               2. Meter Readings & Personnel Assignment
             </h3>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Hour Meter Reading (HMR)"
-              name="hour_meter"
-              type="number"
-              step="0.1"
-              min="0"
-              placeholder="e.g. 1250.5"
-              defaultValue={machine.hour_meter ?? 0}
-              error={fieldErrors.hour_meter}
-              disabled={isSaving || isDeleting}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <div className="sm:col-span-2">
+              <Input
+                label="Hour Meter Reading (HMR)"
+                name="hour_meter"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="e.g. 1250.5"
+                defaultValue={machine.hour_meter ?? 0}
+                error={fieldErrors.hour_meter}
+                disabled={isSaving || isDeleting}
+              />
+            </div>
 
             <div>
               <UserSelect
@@ -324,7 +346,8 @@ export function MachineEditClient({
                 value={supervisorId}
                 onChange={setSupervisorId}
                 placeholder="Select Supervisor"
-                clearable
+                clearable={canEditSupervisor}
+                disabled={!canEditSupervisor || isSaving || isDeleting}
               />
               <input type="hidden" name="current_supervisor_id" value={supervisorId} />
             </div>
@@ -344,14 +367,14 @@ export function MachineEditClient({
         </div>
 
         {/* SECTION 3: Status & Health Tracking */}
-        <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-6 shadow-xs space-y-4">
-          <div className="pb-3 border-b border-[var(--color-hairline)]">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
+        <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-5 md:p-6 shadow-xs space-y-3.5 sm:space-y-4">
+          <div className="pb-2.5 sm:pb-3 border-b border-[var(--color-hairline)] flex items-center justify-between">
+            <h3 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
               3. Status & Health Tracking
             </h3>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <Select
               label="Health Status"
               name="health_status"
@@ -398,27 +421,25 @@ export function MachineEditClient({
         </div>
 
         {/* Bottom Pinned Action Bar */}
-        <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-5 shadow-xs flex flex-col-reverse sm:flex-row items-center justify-between gap-3 sticky bottom-4 z-20 backdrop-blur-md">
+        <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]/95 dark:bg-neutral-900/95 p-3 sm:p-4 md:p-5 shadow-lg flex items-center justify-between gap-2.5 sm:gap-3 sticky bottom-3 sm:bottom-4 z-20 backdrop-blur-md">
           <Button
             variant="secondary"
             href={`/machines/${machine.id}`}
             disabled={isSaving || isDeleting}
-            className="w-full sm:w-auto"
+            className="w-1/2 sm:w-auto min-h-[42px] sm:min-h-[38px] justify-center"
           >
             Cancel
           </Button>
 
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <Button
-              type="submit"
-              variant="primary"
-              loading={isSaving}
-              disabled={isDeleting}
-              className="w-full sm:w-auto px-6 font-semibold"
-            >
-              Save Machine Details
-            </Button>
-          </div>
+          <Button
+            type="submit"
+            variant="primary"
+            loading={isSaving}
+            disabled={isDeleting}
+            className="w-1/2 sm:w-auto min-h-[42px] sm:min-h-[38px] px-4 sm:px-6 font-semibold justify-center"
+          >
+            Save Machine Details
+          </Button>
         </div>
       </form>
 

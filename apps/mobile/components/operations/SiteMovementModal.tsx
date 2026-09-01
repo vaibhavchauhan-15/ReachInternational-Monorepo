@@ -38,7 +38,7 @@ export const SiteMovementModal: React.FC<SiteMovementModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!fromLocation || !toLocation) {
       setError('Please provide origin and destination site locations.');
       return;
@@ -47,18 +47,21 @@ export const SiteMovementModal: React.FC<SiteMovementModalProps> = ({
     setError('');
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      onSubmit({
+    try {
+      await Promise.resolve(onSubmit({
         machineCode,
         fromLocation,
         toLocation,
         transporterName,
         driverPhone,
         notes,
-      });
-      setIsSubmitting(false);
+      }));
       onClose();
-    }, 600);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to submit site movement.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

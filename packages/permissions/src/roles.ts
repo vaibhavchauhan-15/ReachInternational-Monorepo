@@ -89,3 +89,17 @@ export const ROLE_METADATA: Record<UserRole, RoleMetadata> = {
     category: "hr",
   },
 };
+
+/**
+ * Checks whether a given role is Manager tier or above (super_admin, admin, manager, service_manager).
+ */
+export function isManagerOrAbove(role?: string | null): boolean {
+  if (!role) return false;
+  return (
+    role === "super_admin" ||
+    role === "admin" ||
+    role === "manager" ||
+    role === "service_manager"
+  );
+}
+

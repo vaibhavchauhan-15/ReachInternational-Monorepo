@@ -15,7 +15,7 @@ export interface BulkImportResult {
 }
 
 export async function importMachinesFromExcel(formData: FormData): Promise<BulkImportResult> {
-  await requireRole("admin", "super_admin");
+  await requireRole("admin", "super_admin", "manager", "service_manager");
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },

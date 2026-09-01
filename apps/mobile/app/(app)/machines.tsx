@@ -70,7 +70,9 @@ export default function MachinesScreen() {
     normalizedRole === 'super_admin' ||
     normalizedRole === 'manager' ||
     normalizedRole === 'service_manager';
-  const canEdit = isManagerOrAdmin || normalizedRole === 'supervisor';
+  const isSupervisor = normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor';
+  const canEdit = isManagerOrAdmin;
+  const canEditStatus = isManagerOrAdmin || isSupervisor;
   const canDelete = isManagerOrAdmin;
 
   const handleDeleteMachine = (m: MachineRecord) => {
@@ -389,6 +391,15 @@ export default function MachinesScreen() {
                         icon={<Edit2 size={12} color={theme.colors.body} />}
                       />
                     )}
+                    {isSupervisor && !canEdit && (
+                      <Button
+                        label="Update"
+                        onPress={() => openEdit(m)}
+                        size="sm"
+                        variant="ghost"
+                        icon={<Edit2 size={12} color={theme.colors.link} />}
+                      />
+                    )}
                     {canDelete && (
                       <Button
                         label="Delete"
@@ -444,6 +455,7 @@ export default function MachinesScreen() {
         onClose={() => setAddModalVisible(false)}
         onSuccess={fetchMachines}
         machineToEdit={machineToEdit}
+        userRole={role}
       />
 
       {/* Meter Log Modal */}

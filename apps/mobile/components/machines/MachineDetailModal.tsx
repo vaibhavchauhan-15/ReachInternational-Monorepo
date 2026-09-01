@@ -2,7 +2,7 @@ import React from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Badge, Button, useTheme } from '../ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { X, Truck, Wrench, UserCheck } from 'lucide-react-native';
+import { X, Truck } from 'lucide-react-native';
 
 export interface MachineDetailModalProps {
   visible: boolean;
@@ -111,7 +111,6 @@ export const MachineDetailModal: React.FC<MachineDetailModalProps> = ({
             {/* Specifications Card */}
             <View style={[styles.sectionCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
               <View style={styles.sectionTitleRow}>
-                <Wrench size={16} color={theme.colors.link} />
                 <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>Master Specifications</Text>
               </View>
 
@@ -147,13 +146,12 @@ export const MachineDetailModal: React.FC<MachineDetailModalProps> = ({
             {clientCompanyName ? (
               <View style={[styles.sectionCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                 <View style={styles.sectionTitleRow}>
-                  <Truck size={16} color={theme.colors.link} />
-                  <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>Assigned Client (CRM)</Text>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>Assigned Client Details</Text>
                 </View>
 
                 <View style={styles.grid}>
                   <View style={[styles.gridItem, { width: '100%' }]}>
-                    <Text style={[styles.lbl, { color: theme.colors.mute }]}>Company Name</Text>
+                    <Text style={[styles.lbl, { color: theme.colors.mute }]}>Client Name</Text>
                     <Text style={[styles.val, { color: theme.colors.ink }]}>
                       {clientCompanyName} {client?.code ? `(${client.code})` : ''}
                     </Text>
@@ -184,7 +182,7 @@ export const MachineDetailModal: React.FC<MachineDetailModalProps> = ({
                   ) : null}
                   {client?.address && (
                     <View style={[styles.gridItem, { width: '100%' }]}>
-                      <Text style={[styles.lbl, { color: theme.colors.mute }]}>Site Address</Text>
+                      <Text style={[styles.lbl, { color: theme.colors.mute }]}>Site Location</Text>
                       <Text style={[styles.val, { color: theme.colors.ink }]}>
                         {client.address} {client.pincode ? `- ${client.pincode}` : ''}
                       </Text>
@@ -197,7 +195,6 @@ export const MachineDetailModal: React.FC<MachineDetailModalProps> = ({
             {/* Personnel Assignment Card */}
             <View style={[styles.sectionCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
               <View style={styles.sectionTitleRow}>
-                <UserCheck size={16} color={theme.colors.link} />
                 <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>Assigned Personnel</Text>
               </View>
 

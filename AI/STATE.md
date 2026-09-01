@@ -1,10 +1,156 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: **Production Ready — Bug Fix: /operations?tab=logs Operator Assignment Error & Atomic Database Query Optimization Completed**
+- **Phase**: **Production Ready — Machine Modal Header Cleanup & "Locked" Badge Removal Completed**
 - **Release Candidate**: `v2026.09.01` (Branch: `main`)
 - **Overall Health**: Production Ready (0 TypeScript Errors across 9 packages, 35/35 Routes Compiled, 0 Runtime Errors, 0 Warnings, 0 P0/P1/P2 Issues)
 - **Last Memory Update**: 2026-09-01
+- [x] **Page Feedback: /machines?tab=inventory — Machine Modal Header Cleanup & "Locked" Badge Removal (`MachineModal.tsx`, `AddMachineModal.tsx`) (2026-09-01)**:
+  - **1. Removed Locked Badge**: Removed `"Locked (Manager Only)"` badge from Section 1 in `MachineModal.tsx` and cleaned `(Locked)` tags in mobile `AddMachineModal.tsx`.
+  - **2. Standardized Section Header**: Renamed Section 1 heading from `"Machine Identification & Specifications"` to `"MACHINE INFO"`.
+  - **3. Verification**: Verified with 0 TS errors across all 9 packages.
+- [x] **Page Feedback: /machines?tab=inventory — Supervisor Machine Operational Status & Assignment Management Across Monorepo Stack (`041_allow_supervisor_machine_operational_updates.sql`, `matrix.ts`, `actions/machines.ts`, `MachineListClient.tsx`, `MachineModal.tsx`, `MobileMachineCard.tsx`, `apps/mobile/machines.tsx`, `AddMachineModal.tsx`) (2026-09-01)**:
+  - **1. Fixed More Actions Menu for Supervisors**: Rendered "Update Status & Assignments" and "View Details" in `RowActionsMenu` on `/machines`.
+  - **2. Scope of Supervisor Updates**: Supervisors can assign/change/unassign Operator and Client, enter Hour Meter Reading, update Health Status, and update Rental Status. Master specs (`model`, `serial_number`, `year_of_mfg`, `manufacturer`, `machine_id`) and Supervisor assignment remain strictly locked to Manager tier or above.
+  - **3. Database Layer Hardening**: Migration `041_allow_supervisor_machine_operational_updates.sql` applied with updated RLS policy and trigger `trg_enforce_supervisor_machine_update_restrictions` blocking unauthorized spec alterations.
+  - **4. Backend Server Actions**: Updated `updateMachine` and added `updateMachineOperationalStatus` with Zod validation and structured audit logs.
+  - **5. UI & Modal Adaptation**: `MachineModal` locks master specs with badge `"Locked (Manager Only)"` and enables operator/client/health/status fields.
+  - **6. Mobile App Synchronization**: `apps/mobile/app/(app)/machines.tsx` and `AddMachineModal.tsx` updated with supervisor mode and operator selection pills.
+  - **7. Monorepo Quality Gate**: Verified with 0 TS errors across 9 packages and 35/35 clean Next.js route builds.
+- [x] **Page Feedback: /machines/[id] — Hours Meter Logs Streamlining, Overtime Removal & Collapsible Single-Row Filtering (`machine-client-view.tsx`) (2026-09-01)**:
+  - **1. Card Header Streamlining (Feedbacks #1, #4, #5, #6, #7)**:
+    - Renamed section title from `"Hour Meter Running History"` to `"Hours Meter Logs"`.
+    - Removed subtitle paragraph (`"Shift operations logbook and daily meter tracking."`).
+    - Removed redundant `<RefreshCw>` reload button (pull-to-refresh handles data updates).
+    - Removed redundant count badge (`"27 Logs"`) from card header since count is already rendered in the `SegmentedToggle` tab badge.
+    - Aligned `"+{logStats.totalHours} hrs Run"` badge in the top-right corner, directly aligned with the `"Hours Meter Logs"` title.
+    - Synchronized `SegmentedToggle` desktop tab label to `"Hours Meter Logs"`.
+  - **2. Complete Overtime Removal (Feedbacks #2, #3, #8)**:
+    - Removed `"+79 hrs OT"` overtime badge from the card header.
+    - Removed `"OT Only"` button, `logOvertimeOnly` state variable, and filter predicate.
+    - Removed overtime sort options (`"overtime-desc"`) and `"overtime"` from `logSortBy` state.
+    - Removed `"OT: +3h"` overtime badge from mobile touch cards (`block md:hidden`).
+    - Removed the `"Overtime"` column (`<TableHead>` and `<TableCell>`) from the desktop data table (`hidden md:block`).
+  - **3. Collapsible Single-Row Filter & Sorting Toolbar (Feedback #9)**:
+    - Built compact search bar with Filter toggle button (`<SlidersHorizontal size={14} />`) with active filter count badge.
+    - Expandable single row containing Date filter select, Operator filter select, Sort criteria select, and Reset button.
+  - **4. Verification & Quality Gate**:
+    - `pnpm turbo run typecheck` passed with **9/9 packages successful (0 errors)** in 13.0s.
+    - `pnpm --filter @reachinternational/web build` compiled all **35/35 Next.js App Router routes cleanly with code 0**.
+- [x] **Page Feedback: /machines/[id]/edit — Manager-or-Above Machine & Supervisor Management Across Full Stack, Title Standardization & Subtitle Removal (`040_restrict_machine_management_to_managers_and_admins.sql`, `roles.ts`, `matrix.ts`, `actions/machines.ts`, `actions/machine-import.ts`, `machine-edit-client.tsx`, `machines/[id]/edit/page.tsx`, `machines/[id]/page.tsx`, `MachineListClient.tsx`, `MachineModal.tsx`, `apps/mobile/machines.tsx`, `MachineDetailModal.tsx`) (2026-09-01)**:
+  - **1. Manager-or-Above Supervisor Changing & Unassigning (Feedback #1)**:
+    - Gated supervisor assignment, changing, and unassigning across frontend, backend, and PostgreSQL database strictly to **Manager or above** (`super_admin`, `admin`, `manager`, `service_manager`).
+    - Created PostgreSQL trigger `trg_enforce_supervisor_change_role` on `public.machines` before update of `current_supervisor_id` to block unauthorized role modifications at the database layer.
+    - Added `isManagerOrAbove(userRole)` gating in `machine-edit-client.tsx` and `MachineModal.tsx` to disable/hide supervisor clear and edit actions for non-managers.
+  - **2. Manager-or-Above Machine Details Editing (Feedbacks #2 & #3)**:
+    - Gated all machine specification edits across Section 1 (Identification & Specifications), Section 2 (Metering & Fleet Assignment), and Section 3 (Status & Health Tracking) strictly to Manager tier or above.
+    - Updated `public.machines` RLS policy `machines_update_authorized` to strictly require Manager or above (or operator updating their active machine's hour meter reading).
+  - **3. Manager-or-Above Machine Management Pages, Creation & Deletion (Feedback #4)**:
+    - Restricted access to `/machines/[id]/edit` strictly to Manager or above in `page.tsx` (redirects non-managers immediately to `/machines/[id]`).
+    - Gated "Edit Machine" and "Delete Machine" buttons across web (`machine-client-view.tsx`, `MachineListClient.tsx`) and mobile (`machines.tsx`, `MachineDetailModal.tsx`) to Manager or above.
+    - Removed `"machine.edit"` from `supervisor` in `@reachinternational/permissions` matrix.
+    - Enforced `requireRole("admin", "super_admin", "manager", "service_manager")` across `createMachine`, `updateMachine`, `deleteMachine`, `reassignMachineSupervisor`, and `importMachinesFromExcel`.
+  - **4. Machine Model-Serial No Title Standardization (Feedback #5)**:
+    - Standardized `<h1>` on `/machines/[id]/edit` to display `[Model] - [Serial No]` (e.g. `50B-9 - TY50B-99214`) alongside the unique `machine_id` badge (`RI-MC-0001`).
+  - **5. Removed Header Subtitle Paragraph (Feedback #6)**:
+    - Removed redundant subtitle paragraph `<p>HYUNDAI • Serial: ...</p>` from the hero header card on `/machines/[id]/edit`.
+  - **6. Cross-Platform Mobile App Synchronization**:
+    - Updated `apps/mobile/app/(app)/machines.tsx` so `canEdit = isManagerOrAdmin` (`['super_admin', 'admin', 'manager', 'service_manager'].includes(userRole)`), removing supervisor edit access.
+  - **7. Monorepo Quality Gate & Verification**:
+    - Live Supabase PostgreSQL database `dhbbgfzbyatzvqafnsqp` verified with migration `040_restrict_machine_management_to_managers_and_admins.sql`.
+    - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 50.6s.
+    - `pnpm --filter @reachinternational/web build` compiled all **35/35 Next.js App Router routes cleanly with code 0**.
+- [x] **Page Feedback: /machines/[id] — Full Filtering, Sorting, Quick Stats, Pagination & Mobile Toggle Optimization (`machine-client-view.tsx`, `SegmentedToggle.tsx`, `Table.tsx`) (2026-09-01)**:
+  - **1. Mobile SegmentedToggle Typography & Padding Optimization**:
+    - Replaced long overflow label strings on mobile with responsive labels (`Basic Info` on mobile vs `Basic Info & Client` on desktop, `Running Logs` on mobile vs `Hour Meter Running History` on desktop).
+    - Refined inner span padding (`px-1 sm:px-2`) and badge margins in `SegmentedToggle.tsx` to ensure zero squishing, zero text clipping, and perfect centering.
+  - **2. Full-Featured Search & Multi-Criteria Filtering for Hour Meter Logs**:
+    - Instant search input matching operator name, date, start/end meter readings, and remarks with instant clear `X` action.
+    - Date range preset filter (`All Dates`, `Last 7 Days`, `Last 30 Days`, `This Month`).
+    - Dynamic operator dropdown filter populated from unique operators in the machine's log history.
+    - Overtime toggle filter button (`OT Only`).
+    - Multi-criteria sort dropdown (`Date: Newest First`, `Date: Oldest First`, `Hours: High to Low`, `Hours: Low to High`, `Start Meter: High to Low`, `Overtime: High to Low`).
+    - Single-click "Reset" button when any active filter is applied.
+  - **3. Interactive Sortable Desktop Table & Mobile Touch Cards with Pagination**:
+    - Interactive sortable table column headers with `<ChevronUp>` / `<ChevronDown>` / `<ArrowUpDown>` indicators in `hidden md:block` table view.
+    - Mobile touch cards (`block md:hidden`) with high contrast, shift timing, meter reading progress pill, overtime badge, and remarks.
+    - Built-in pagination with `<Pagination>` component (10, 25, 50 per page).
+    - KPI stats banner with dynamic filtered shift count, total running hours, and total overtime hours.
+    - Empty state for 0 filter matches with "Clear All Filters" CTA.
+  - **4. Verification**: `pnpm turbo run typecheck` passed with **9/9 packages successful (0 errors)** in 36.2s.
+- [x] **Page Feedback: /machines/[id] — Mobile SegmentedToggle Optimization, Header Health Status Badge & Icon-Only Copy Buttons (`SegmentedToggle.tsx`, `machine-client-view.tsx`) (2026-09-01)**:
+  - **1. Mobile SegmentedToggle Optimization (Feedback #1)**:
+    - Optimized `<SegmentedToggle>` size styling (`sizeStyles.md` & `sm`) with responsive padding (`py-1.5 px-2 sm:py-2.5 sm:px-4`), typography (`text-xs sm:text-sm font-semibold sm:font-bold tracking-tight sm:tracking-normal`), icon sizing (`14 sm:15`), and minimum touch heights (`min-h-[38px] sm:min-h-[42px]`) to ensure clean rendering on mobile devices (360px–412px viewports).
+  - **2. Header Health Status Badge (Feedback #2)**:
+    - Added the health status badge (`Active` / `Breakdown` / `Under Maintenance` with `dot` indicator) right in front of the rental status badge (`On Rent` / `Available`) in the machine hero title area.
+  - **3. Icon-Only Copy Buttons (Feedback #3)**:
+    - Replaced the `"Copy Address"` and `"Copy Billing Address"` text buttons with clean, accessible icon-only copy buttons (`<Copy />` / `<Check />`) on the top-right of the Site Location, Billing Address, GSTIN, and PAN cards.
+  - **4. Verification**: `pnpm turbo run typecheck` passed with **9/9 packages successful (0 errors)** in 1m0.6s.
+- [x] **Page Feedback: /machines/[id] — Streamlined Hour Meter Running History UI & Table Columns (`machine-client-view.tsx`) (2026-09-01)**:
+  - **1. Removed Redundant Header Metadata Row (Feedback #1)**:
+    - Removed duplicate metadata flex container (`ID: ... • Model: ... • Sr: ... • Mfg: ...`) from below the title in the hero banner since all parameters are already rendered in the Basic Info card.
+    - Moved the copy button directly into the Machine ID tile inside the Basic Info card.
+  - **2. Label Standardization: "CLIENT NAME" (Feedback #2)**:
+    - Changed label from `"Client / Company Name"` to `"CLIENT NAME"` in the Assigned Client Details card.
+  - **3. Label Standardization: "SITE LOCATION" (Feedback #3)**:
+    - Changed label from `"Site Location / Deployment Address"` to `"SITE LOCATION"` in the Assigned Client Details card.
+  - **4. Icon Removal from SegmentedToggle Tab 1 (Feedback #4)**:
+    - Removed `<AnimatedBuilding2>` icon from the "Basic Info & Client" toggle tab.
+  - **5. Icon Removal from SegmentedToggle Tab 2 (Feedback #5)**:
+    - Removed `<AnimatedClock>` icon from the "Hour Meter Running History" toggle tab.
+  - **6. Icon Removal from Assigned Client Details Card Header (Feedback #6)**:
+    - Removed `<AnimatedBuilding2>` icon from the "Assigned Client Details" card header.
+  - **7. Clean, Well-Formatted Design & Layout for Assigned Client Card (Feedback #7)**:
+    - Structured the CRM Client card with Geist design tokens, high contrast, clean borders (`border-[var(--color-hairline)]`), consistent rounded tiles, and prominent contact action buttons (Call, WhatsApp, Maps Location).
+  - **8. Enhanced 3-Tier Mobile Viewport Responsiveness (Feedback #8)**:
+    - Implemented dual presentation for Hour Meter Running History:
+      - **Mobile/Tablet (<768px `block md:hidden`)**: Structured high-density touch card feed with prominent meter reading progression (`Start → End (+X hrs)`), shift timing, overtime badges, and remarks.
+      - **Desktop (≥768px `hidden md:block`)**: High-density data table with smooth horizontal scroll container.
+    - Updated `MachineDetailSkeleton` in `Skeleton.tsx` to match the exact same responsive layout.
+  - **9. Cross-Platform Mobile App Synchronization**:
+    - Synchronized `apps/mobile/components/machines/MachineDetailModal.tsx` to standardize labels (`Client Name`, `Site Location`) and remove decorative section header icons.
+  - **10. Verification**:
+    - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 1m1.6s.
+    - `pnpm --filter @reachinternational/web build` compiled all **35/35 Next.js App Router routes cleanly with code 0**.
+- [x] **Global Action Button Optimization & Duplicate Submission Prevention (`Button.tsx` (web & mobile), `MobileBottomNav.tsx`, `UserProfileDropdown.tsx`, `PublicNavbar.tsx`, `OperationsClient.tsx`, `OperatorDashboard.tsx`, `ComplaintStatusModal.tsx`, `RentalReturnModal.tsx`, `SiteMovementModal.tsx`, `CreateTaskModal.tsx`) (2026-09-01)**:
+  - **1. Web Button Primitive (`apps/web/components/ui/Button.tsx`)**:
+    - Integrated React 19 `useFormStatus()` from `react-dom` for automatic form submission `pending` status detection.
+    - Added synchronous execution ref lock (`isExecutingRef`) and internal loading state tracking for async `onClick` handlers.
+    - Immediately renders `<AnimatedLoader isSpinning size={16} />` and disables button on the first click, preventing duplicate network calls.
+    - Injects ARIA accessibility attributes: `aria-busy={effectiveLoading}` and `aria-disabled={disabled || effectiveLoading}`.
+  - **2. Mobile Bottom Navigation & Sign Out Buttons (`MobileBottomNav.tsx`, `UserProfileDropdown.tsx`, `PublicNavbar.tsx`)**:
+    - Standardized "Sign out of account" in the mobile bottom navigation profile sheet to use `<Button type="submit" variant="danger">`.
+    - Standardized sidebar desktop `UserProfileDropdown.tsx` and public navbar `PublicNavbar.tsx` sign out buttons to use `<Button>`.
+    - Automatically displays `<AnimatedLoader isSpinning size={16} />` and disables the button immediately on tap/click during logout.
+  - **3. Mobile Button Primitive (`apps/mobile/components/ui/Button.tsx`)**:
+    - Integrated async `onPress` promise tracking and synchronous touch locking (`isExecutingRef`).
+    - Immediately switches to `ActivityIndicator` and disables the touchable to prevent touchscreen double-taps.
+    - Injects accessibility state: `accessibilityState={{ disabled: disabled || effectiveLoading, busy: effectiveLoading }}`.
+  - **4. Application-Wide Modal & Form Hardening**:
+    - Standardized modal action buttons in `OperationsClient.tsx` (Operator Assignment, Operator Hiring, Site Movement, Salary Payout) with `<Button>` primitives and `loading={submitting}`.
+    - Standardized `OperatorDashboard.tsx` daily log entry submission, confirmation modal, and correction modal with `<Button>` primitives and complete `try...catch...finally` state resilience.
+    - Hardened mobile modals (`ComplaintStatusModal.tsx`, `RentalReturnModal.tsx`, `SiteMovementModal.tsx`, `CreateTaskModal.tsx`) with `try...finally` loading state management.
+  - **5. Verification**:
+    - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)**.
+    - `pnpm --filter @reachinternational/web build` compiled all **35/35 Next.js App Router routes cleanly with code 0**.
+- [x] **Page Feedback: /machines/[id]/edit — 3-Tier Viewport Responsiveness Optimization (`machine-edit-client.tsx`, `page.tsx`, `loading.tsx`) (2026-09-01)**:
+  - **1. Responsive Navigation & "Back to Details" Action (Feedback #1 & #2)**:
+    - Added `responsive` and `mobileIconOnly` to the top "Back to Details" `<Button>`, displaying a compact 34px icon-only touch button (`<AnimatedArrowLeft size={14} />`) on mobile (≤640px) and a full labeled button on desktop.
+    - Wrapped `<Breadcrumb>` in a flexible truncation container (`min-w-0 flex-1 overflow-hidden`) with `gap-2 sm:gap-3` to prevent horizontal overflow or multi-line wrapping on small screens.
+  - **2. Hero Header Card Mobile Optimization**:
+    - Added `responsive` and `mobileIconOnly` to the "Delete Machine" button in the hero header, maintaining an aligned single-row header layout on mobile viewports.
+    - Standardized typography with `text-base sm:text-xl md:text-2xl` and fluid subtitle metadata.
+  - **3. Form Structure & Input Grid Responsiveness**:
+    - Enhanced section cards with responsive padding (`p-3.5 sm:p-5 md:p-6`) and spacing (`space-y-3.5 sm:space-y-4`).
+    - Standardized input grids across Sections 1, 2, and 3 (`grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4`) with full-width spanning for HMR and Manufacturer.
+    - Preserved dynamic `<ClientSelect>` dropdown when Rental Status is "Rented".
+  - **4. Single-Row Sticky Bottom Action Bar**:
+    - Redesigned the sticky bottom action bar (`bg-[var(--color-canvas-elevated)]/95 dark:bg-neutral-900/95 p-3 sm:p-4 md:p-5 shadow-lg flex items-center justify-between gap-2.5 sm:gap-3 sticky bottom-3 sm:bottom-4 z-20 backdrop-blur-md`) with equal-width buttons (`w-1/2 sm:w-auto min-h-[42px] sm:min-h-[38px]`) on mobile, keeping it compact and thumb-accessible while minimizing vertical screen occlusion.
+  - **5. Skeleton Loader Synchronization**:
+    - Updated `EditMachineSkeleton` in `page.tsx` and `loading.tsx` to match the exact same responsive layout and heights.
+  - **6. Verification**:
+    - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 30.8s.
+    - `pnpm --filter @reachinternational/web build` compiled all **35/35 Next.js App Router routes cleanly with code 0**.
 - [x] **Bug Fix: /operations?tab=logs — Fixed Operator Assignment Error & Atomic Database Query Optimization (`039_assign_machine_operator_atomic.sql`, `actions/operators.ts`, `queries/operators.ts`, `OperationsClient.tsx`) (2026-09-01)**:
   - **1. Root Cause Resolution**: Resolved `Could not find the table 'public.machine_assignments' in the schema cache` error by removing obsolete queries/inserts to dropped `machine_assignments` table in favor of direct tracking in `public.machines.current_operator_id`.
   - **2. Atomic Database Stored Procedure (`039_assign_machine_operator_atomic.sql`)**: Created canonical atomic stored procedure `public.assign_machine_operator_atomic` validating machine and operator, unassigning operator from previous machines, updating target machine `current_operator_id`, and writing structured audit logs to `public.audit_logs` in one atomic transaction. Applied live to Supabase PostgreSQL database `dhbbgfzbyatzvqafnsqp`.

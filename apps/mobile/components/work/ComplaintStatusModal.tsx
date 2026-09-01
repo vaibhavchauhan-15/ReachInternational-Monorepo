@@ -33,10 +33,16 @@ export const ComplaintStatusModal: React.FC<ComplaintStatusModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const [selectedStatus, setSelectedStatus] = useState(currentStatus);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = () => {
-    onUpdateStatus(selectedStatus);
-    onClose();
+  const handleSave = async () => {
+    try {
+      setIsSaving(true);
+      await Promise.resolve(onUpdateStatus(selectedStatus));
+      onClose();
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -75,8 +81,8 @@ export const ComplaintStatusModal: React.FC<ComplaintStatusModalProps> = ({
           </View>
 
           <View style={styles.footer}>
-            <Button label="Cancel" onPress={onClose} variant="ghost" size="md" />
-            <Button label="Save Status" onPress={handleSave} variant="primary" size="md" />
+            <Button label="Cancel" onPress={onClose} disabled={isSaving} variant="ghost" size="md" />
+            <Button label="Save Status" onPress={handleSave} isLoading={isSaving} variant="primary" size="md" />
           </View>
         </View>
       </View>

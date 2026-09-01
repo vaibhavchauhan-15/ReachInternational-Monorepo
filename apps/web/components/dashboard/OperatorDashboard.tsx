@@ -45,7 +45,7 @@ import {
   submitOperatorHourLogAction,
   updateOperatorHourLogAction,
 } from "@/app/actions/operators";
-import { useToast, CustomTimePicker, CustomDatePicker, Modal, MachineSelect, ClientSelect, SegmentedToggle } from "@/components/ui";
+import { useToast, CustomTimePicker, CustomDatePicker, Modal, MachineSelect, ClientSelect, SegmentedToggle, Button } from "@/components/ui";
 import {
   formatDate,
   formatTo12Hour,
@@ -791,60 +791,66 @@ export function OperatorDashboard({
     setSubmitting(true);
     setMessage(null);
 
-    const overtimeNum = parseFloat(overtimeHours) || 0;
-    const startMtrNum = parseFloat(startMeter) || 0;
-    const endMtrNum = parseFloat(endMeter) || startMtrNum;
+    try {
+      const overtimeNum = parseFloat(overtimeHours) || 0;
+      const startMtrNum = parseFloat(startMeter) || 0;
+      const endMtrNum = parseFloat(endMeter) || startMtrNum;
 
-    // Build breakdown details string
-    let finalRemarks = remarks.trim();
-    if (isBreakdown) {
-      const bkdH = parseInt(breakdownHours) || 0;
-      const bkdM = parseInt(breakdownMinutes) || 0;
-      const bkdDetails = `[Breakdown Duration: ${bkdH}h ${bkdM}m]`;
-      if (!finalRemarks.includes("[Breakdown Duration:")) {
-        finalRemarks = finalRemarks ? `${bkdDetails} ${finalRemarks}` : bkdDetails;
+      // Build breakdown details string
+      let finalRemarks = remarks.trim();
+      if (isBreakdown) {
+        const bkdH = parseInt(breakdownHours) || 0;
+        const bkdM = parseInt(breakdownMinutes) || 0;
+        const bkdDetails = `[Breakdown Duration: ${bkdH}h ${bkdM}m]`;
+        if (!finalRemarks.includes("[Breakdown Duration:")) {
+          finalRemarks = finalRemarks ? `${bkdDetails} ${finalRemarks}` : bkdDetails;
+        }
       }
-    }
 
-    const idempotencyKey = typeof window !== "undefined" && window.crypto?.randomUUID ? window.crypto.randomUUID() : undefined;
+      const idempotencyKey = typeof window !== "undefined" && window.crypto?.randomUUID ? window.crypto.randomUUID() : undefined;
 
-    const res = await submitOperatorHourLogAction({
-      machineId: selectedMachineId,
-      clientId: selectedClientId || undefined,
-      startDate: operatingStats.resolvedStartDate,
-      logDate: operatingStats.resolvedStartDate,
-      endDate: operatingStats.resolvedEndDate,
-      location: clientLocation.trim() || undefined,
-      startMeter: startMtrNum,
-      endMeter: endMtrNum,
-      startTime,
-      endTime,
-      overtimeHours: overtimeNum,
-      isBreakdown,
-      machineCondition: isBreakdown ? "breakdown" : "good",
-      remarks: finalRemarks,
-      idempotencyKey,
-    });
+      const res = await submitOperatorHourLogAction({
+        machineId: selectedMachineId,
+        clientId: selectedClientId || undefined,
+        startDate: operatingStats.resolvedStartDate,
+        logDate: operatingStats.resolvedStartDate,
+        endDate: operatingStats.resolvedEndDate,
+        location: clientLocation.trim() || undefined,
+        startMeter: startMtrNum,
+        endMeter: endMtrNum,
+        startTime,
+        endTime,
+        overtimeHours: overtimeNum,
+        isBreakdown,
+        machineCondition: isBreakdown ? "breakdown" : "good",
+        remarks: finalRemarks,
+        idempotencyKey,
+      });
 
-    setSubmitting(false);
-
-    if (res.success) {
-      toast("success", "Daily Machine Log Submitted", "Your daily log entry has been recorded directly in the database.");
-      setMessage({ type: "success", text: "Daily machine log submitted and stored directly in database successfully." });
-      setRemarks("");
-      setIsBreakdown(false);
-      setBreakdownHours("0");
-      setBreakdownMinutes("0");
-      setBreakdownReason("");
-      setActionTaken("");
-      setOvertimeHours("0");
-      setIsManualOvertime(false);
-      setStartMeter(String(endMtrNum));
-      setEndMeter(String(endMtrNum));
-      clearDraft();
-    } else {
-      setMessage({ type: "error", text: res.error || "Failed to submit daily machine log." });
-      toast("error", "Submission Failed", res.error || "Could not submit daily machine log.");
+      if (res.success) {
+        toast("success", "Daily Machine Log Submitted", "Your daily log entry has been recorded directly in the database.");
+        setMessage({ type: "success", text: "Daily machine log submitted and stored directly in database successfully." });
+        setRemarks("");
+        setIsBreakdown(false);
+        setBreakdownHours("0");
+        setBreakdownMinutes("0");
+        setBreakdownReason("");
+        setActionTaken("");
+        setOvertimeHours("0");
+        setIsManualOvertime(false);
+        setStartMeter(String(endMtrNum));
+        setEndMeter(String(endMtrNum));
+        clearDraft();
+      } else {
+        setMessage({ type: "error", text: res.error || "Failed to submit daily machine log." });
+        toast("error", "Submission Failed", res.error || "Could not submit daily machine log.");
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to submit daily machine log.";
+      setMessage({ type: "error", text: msg });
+      toast("error", "Submission Failed", msg);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -1417,22 +1423,27 @@ export function OperatorDashboard({
               </div>
 
               <div className="flex items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="lg"
                   disabled={submitting}
                   onClick={handleSaveDraft}
-                  className="flex-1 sm:flex-none px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] text-xs font-bold transition-all cursor-pointer disabled:opacity-50 min-h-[44px] flex items-center justify-center"
+                  className="flex-1 sm:flex-none h-11 sm:h-12 px-4 sm:px-5 font-bold"
                 >
                   Save Draft
-                </button>
+                </Button>
 
-                <button
+                <Button
                   type="submit"
-                  disabled={submitting || !completionStatus.isReady}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 sm:gap-2 px-5 sm:px-6 py-2.5 sm:py-3 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition-all shadow-md cursor-pointer disabled:opacity-50 min-h-[44px]"
+                  variant="primary"
+                  size="lg"
+                  loading={submitting}
+                  disabled={!completionStatus.isReady}
+                  className="flex-1 sm:flex-none h-11 sm:h-12 px-5 sm:px-6 font-bold"
                 >
-                  {submitting ? "Submitting..." : "Submit"}
-                </button>
+                  Submit
+                </Button>
               </div>
             </div>
           </form>
@@ -1775,20 +1786,24 @@ export function OperatorDashboard({
         size="md"
         footer={
           <div className="flex items-center justify-end gap-2.5 w-full pt-2">
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={() => setShowConfirmModal(false)}
-              className="px-4 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] font-semibold text-xs hover:bg-[var(--color-hairline-soft-surface)] transition-all cursor-pointer"
+              disabled={submitting}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="primary"
+              size="sm"
+              loading={submitting}
               onClick={() => handleExecuteSubmit()}
-              className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs shadow-2xs transition-all cursor-pointer flex items-center gap-1.5"
             >
               Confirm & Submit Log
-            </button>
+            </Button>
           </div>
         }
       >
@@ -2059,20 +2074,25 @@ export function OperatorDashboard({
               </div>
 
               <div className="flex items-center gap-2 pt-2">
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="md"
                   onClick={() => setEditingLog(null)}
-                  className="flex-1 py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] font-bold cursor-pointer"
+                  disabled={updatingLog}
+                  className="flex-1"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  disabled={updatingLog}
-                  className="flex-1 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold transition-all cursor-pointer disabled:opacity-50"
+                  variant="primary"
+                  size="md"
+                  loading={updatingLog}
+                  className="flex-1"
                 >
-                  {updatingLog ? "Updating..." : "Resubmit Entry"}
-                </button>
+                  Resubmit Entry
+                </Button>
               </div>
             </form>
           </div>

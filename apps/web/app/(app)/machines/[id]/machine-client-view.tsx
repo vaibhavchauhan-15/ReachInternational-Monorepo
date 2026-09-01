@@ -1,13 +1,11 @@
 "use client";
 
-import { useState, useTransition, useCallback } from "react";
+import { useState, useTransition, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   AnimatedChevronLeft,
   AnimatedEdit,
-  AnimatedClock,
-  AnimatedBuilding2,
   AnimatedCheck,
   AnimatedCopy,
   AnimatedMessageSquare,
@@ -25,6 +23,14 @@ import {
   ExternalLink,
   RefreshCw,
   AlertCircle,
+  Clock,
+  Search,
+  X,
+  ChevronUp,
+  ChevronDown,
+  ArrowUpDown,
+  SlidersHorizontal,
+  Calendar,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -41,6 +47,7 @@ import {
   TableRow,
   TableHead,
   TableCell,
+  Pagination,
   ConfirmationDialog,
   SegmentedToggle,
 } from "@/components/ui";
@@ -69,7 +76,7 @@ export function MachineClientView({
   const { toast } = useToast();
   const [isDeleting, startDeleteTransition] = useTransition();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [copiedBillingAddress, setCopiedBillingAddress] = useState(false);
   const [copiedGstin, setCopiedGstin] = useState(false);
@@ -81,6 +88,16 @@ export function MachineClientView({
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [logsError, setLogsError] = useState<string | null>(null);
   const [hasLoadedLogs, setHasLoadedLogs] = useState(false);
+
+  // Hour meter logs filtering, searching, sorting & pagination state
+  const [logSearchQuery, setLogSearchQuery] = useState("");
+  const [logDateFilter, setLogDateFilter] = useState<"all" | "7d" | "30d" | "month">("all");
+  const [logOperatorFilter, setLogOperatorFilter] = useState<string>("all");
+  const [logSortBy, setLogSortBy] = useState<"date" | "running_hours" | "start_meter" | "end_meter">("date");
+  const [logSortOrder, setLogSortOrder] = useState<"asc" | "desc">("desc");
+  const [showFilterSort, setShowFilterSort] = useState(false);
+  const [logPage, setLogPage] = useState(1);
+  const [logPageSize, setLogPageSize] = useState(10);
 
   const allowEdit = canEdit ?? isAdmin;
   const allowDelete = canDelete ?? isAdmin;
@@ -135,11 +152,150 @@ export function MachineClientView({
     });
   };
 
-  const handleCopyCode = () => {
+  const handleCopyMachineId = () => {
     navigator.clipboard.writeText(machine.machine_id || machine.machine_code || "");
-    setCopiedCode(true);
+    setCopiedId(true);
     toast("success", "Copied!", `Machine ID ${machine.machine_id} copied to clipboard.`);
-    setTimeout(() => setCopiedCode(false), 2000);
+    setTimeout(() => setCopiedId(false), 2000);
+  };
+
+  // Derived unique operators list for filter dropdown
+  const availableOperators = useMemo(() => {
+    if (!hourMeterLogs) return [];
+    const opsMap = new Map<string, string>();
+    hourMeterLogs.forEach((log: any) => {
+      const id = log.operator_id || log.operator?.id;
+      const name = log.operator?.full_name || log.operator_name;
+      if (id && name) opsMap.set(id, name);
+      else if (name) opsMap.set(name, name);
+    });
+    return Array.from(opsMap.entries()).map(([id, name]) => ({ id, name }));
+  }, [hourMeterLogs]);
+
+  // High-performance filter & sort pipeline
+  const filteredAndSortedLogs = useMemo(() => {
+    if (!hourMeterLogs || hourMeterLogs.length === 0) return [];
+    let list = [...hourMeterLogs];
+
+    // 1. Text Search (operator, remarks, date, meter)
+    if (logSearchQuery.trim()) {
+      const q = logSearchQuery.toLowerCase().trim();
+      list = list.filter((log: any) => {
+        const opName = (log.operator?.full_name || log.operator_name || "").toLowerCase();
+        const remarks = (log.remarks || "").toLowerCase();
+        const dateStr = log.log_date ? formatDate(log.log_date).toLowerCase() : "";
+        const startM = String(log.start_meter ?? "");
+        const endM = String(log.end_meter ?? "");
+        return (
+          opName.includes(q) ||
+          remarks.includes(q) ||
+          dateStr.includes(q) ||
+          startM.includes(q) ||
+          endM.includes(q)
+        );
+      });
+    }
+
+    // 2. Date Preset Filter
+    if (logDateFilter !== "all") {
+      const now = new Date();
+      list = list.filter((log: any) => {
+        if (!log.log_date) return false;
+        const logD = new Date(log.log_date);
+        if (isNaN(logD.getTime())) return true;
+        if (logDateFilter === "7d") {
+          const past7 = new Date(now);
+          past7.setDate(past7.getDate() - 7);
+          return logD >= past7;
+        }
+        if (logDateFilter === "30d") {
+          const past30 = new Date(now);
+          past30.setDate(past30.getDate() - 30);
+          return logD >= past30;
+        }
+        if (logDateFilter === "month") {
+          return logD.getMonth() === now.getMonth() && logD.getFullYear() === now.getFullYear();
+        }
+        return true;
+      });
+    }
+
+    // 3. Operator Filter
+    if (logOperatorFilter !== "all") {
+      list = list.filter((log: any) => {
+        const opId = log.operator_id || log.operator?.id;
+        const opName = log.operator?.full_name || log.operator_name;
+        return opId === logOperatorFilter || opName === logOperatorFilter;
+      });
+    }
+
+    // 4. Sorting
+    list.sort((a: any, b: any) => {
+      let comparison = 0;
+      if (logSortBy === "date") {
+        const dateA = new Date(a.log_date || 0).getTime();
+        const dateB = new Date(b.log_date || 0).getTime();
+        comparison = dateA - dateB;
+      } else if (logSortBy === "running_hours") {
+        comparison = (Number(a.running_hours) || 0) - (Number(b.running_hours) || 0);
+      } else if (logSortBy === "start_meter") {
+        comparison = (Number(a.start_meter) || 0) - (Number(b.start_meter) || 0);
+      } else if (logSortBy === "end_meter") {
+        comparison = (Number(a.end_meter) || 0) - (Number(b.end_meter) || 0);
+      }
+      return logSortOrder === "asc" ? comparison : -comparison;
+    });
+
+    return list;
+  }, [hourMeterLogs, logSearchQuery, logDateFilter, logOperatorFilter, logSortBy, logSortOrder]);
+
+  // Active filter count for badge indicator
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (logDateFilter !== "all") count++;
+    if (logOperatorFilter !== "all") count++;
+    if (logSortBy !== "date" || logSortOrder !== "desc") count++;
+    return count;
+  }, [logDateFilter, logOperatorFilter, logSortBy, logSortOrder]);
+
+  // Overall and filtered KPI stats
+  const logStats = useMemo(() => {
+    const totalHours = filteredAndSortedLogs.reduce((acc, log: any) => acc + (Number(log.running_hours) || 0), 0);
+    return {
+      count: filteredAndSortedLogs.length,
+      totalHours: Number(totalHours.toFixed(1)),
+    };
+  }, [filteredAndSortedLogs]);
+
+  // Paginated records
+  const paginatedLogs = useMemo(() => {
+    const start = (logPage - 1) * logPageSize;
+    return filteredAndSortedLogs.slice(start, start + logPageSize);
+  }, [filteredAndSortedLogs, logPage, logPageSize]);
+
+  const isAnyFilterActive =
+    Boolean(logSearchQuery.trim()) ||
+    logDateFilter !== "all" ||
+    logOperatorFilter !== "all" ||
+    logSortBy !== "date" ||
+    logSortOrder !== "desc";
+
+  const handleResetFilters = () => {
+    setLogSearchQuery("");
+    setLogDateFilter("all");
+    setLogOperatorFilter("all");
+    setLogSortBy("date");
+    setLogSortOrder("desc");
+    setLogPage(1);
+  };
+
+  const handleSort = (column: "date" | "running_hours" | "start_meter" | "end_meter") => {
+    if (logSortBy === column) {
+      setLogSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setLogSortBy(column);
+      setLogSortOrder("desc");
+    }
   };
 
   // Linked Client Data from public.clients table (Supabase) via machine.client or activeRental.client
@@ -238,7 +394,7 @@ export function MachineClientView({
           <div className="absolute top-0 right-0 -mr-16 -mt-16 h-48 w-48 rounded-full bg-[var(--color-link)]/10 blur-3xl pointer-events-none" />
 
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 relative z-10">
-            <div className="flex items-start gap-3 sm:gap-4">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
               <motion.div
                 whileHover={{ scale: 1.05, rotate: 2 }}
                 whileTap={{ scale: 0.95 }}
@@ -254,6 +410,27 @@ export function MachineClientView({
                     {machineTitle}
                   </h1>
 
+                  {/* Health Status Badge */}
+                  <Badge
+                    variant={
+                      machine.health_status === "breakdown"
+                        ? "overdue"
+                        : machine.health_status === "under_maintenance"
+                        ? "warning"
+                        : "success"
+                    }
+                    dot
+                  >
+                    <span className="capitalize font-semibold text-[11px] sm:text-xs">
+                      {machine.health_status === "breakdown"
+                        ? "Breakdown"
+                        : machine.health_status === "under_maintenance"
+                        ? "Under Maintenance"
+                        : "Active"}
+                    </span>
+                  </Badge>
+
+                  {/* Rental Fleet Status Badge */}
                   <Badge
                     variant={
                       machine.status === "on_rent" || machine.status === "rented"
@@ -270,53 +447,11 @@ export function MachineClientView({
                         ? "On Rent"
                         : machine.status === "under_maintenance"
                         ? "Under Maintenance"
+                        : machine.status === "available"
+                        ? "Available"
                         : machine.status}
                     </span>
                   </Badge>
-                </div>
-
-                {/* Machine ID, Model, Serial No & Manufacturer metadata */}
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--color-mute)]">
-                  <div className="inline-flex items-center gap-1">
-                    <span className="font-mono text-[11px] sm:text-xs text-[var(--color-mute)] font-semibold">ID:</span>
-                    <motion.button
-                      whileTap={{ scale: 0.92 }}
-                      onClick={handleCopyCode}
-                      title="Copy Unique Machine ID"
-                      className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-md text-[11px] sm:text-xs font-mono bg-[var(--color-hairline-soft-surface)] hover:bg-[var(--color-hairline)] text-[var(--color-ink)] transition-all active:scale-95 border border-[var(--color-hairline)] cursor-pointer"
-                    >
-                      <span>{machine.machine_id}</span>
-                      {copiedCode ? (
-                        <AnimatedCheck size={11} className="text-emerald-600" />
-                      ) : (
-                        <AnimatedCopy size={11} className="text-[var(--color-mute)]" />
-                      )}
-                    </motion.button>
-                  </div>
-                  {machine.model && (
-                    <>
-                      <span className="text-[var(--color-hairline)]">•</span>
-                      <span className="font-mono text-[11px] sm:text-xs text-[var(--color-mute)]">
-                        Model: <span className="font-semibold text-[var(--color-ink)]">{machine.model}</span>
-                      </span>
-                    </>
-                  )}
-                  {machine.serial_number && (
-                    <>
-                      <span className="text-[var(--color-hairline)]">•</span>
-                      <span className="font-mono text-[11px] sm:text-xs text-[var(--color-mute)]">
-                        Sr: <span className="font-semibold text-[var(--color-ink)]">{machine.serial_number}</span>
-                      </span>
-                    </>
-                  )}
-                  {machine.manufacturer && (
-                    <>
-                      <span className="text-[var(--color-hairline)]">•</span>
-                      <span className="text-[11px] sm:text-xs text-[var(--color-mute)]">
-                        Mfg: <span className="font-medium text-[var(--color-ink)]">{machine.manufacturer}</span>
-                      </span>
-                    </>
-                  )}
                 </div>
               </div>
             </div>
@@ -353,7 +488,7 @@ export function MachineClientView({
         </div>
       </FadeIn>
 
-      {/* Segmented Toggle Navigation Bar */}
+      {/* Segmented Toggle Navigation Bar (Optimized for Mobile & Desktop) */}
       <SegmentedToggle<"overview" | "running_hours">
         value={activeTab}
         onChange={handleTabChange}
@@ -361,16 +496,24 @@ export function MachineClientView({
         items={[
           {
             id: "overview",
-            label: "Basic Info & Client",
-            icon: <AnimatedBuilding2 size={15} className="shrink-0" />,
+            label: (
+              <span>
+                <span className="sm:hidden">Basic Info</span>
+                <span className="hidden sm:inline">Basic Info & Client</span>
+              </span>
+            ),
           },
           {
             id: "running_hours",
-            label: "Hour Meter Running History",
-            icon: <AnimatedClock size={15} className="shrink-0" />,
+            label: (
+              <span>
+                <span className="sm:hidden">Running Logs</span>
+                <span className="hidden sm:inline">Hours Meter Logs</span>
+              </span>
+            ),
             badge: isLoadingLogs ? (
               <span className="inline-flex items-center ml-0.5 shrink-0">
-                <AnimatedLoader isSpinning size={13} className="text-sky-500" />
+                <AnimatedLoader isSpinning size={12} className="text-sky-500" />
               </span>
             ) : null,
             count: hasLoadedLogs && hourMeterLogs !== null ? hourMeterLogs.length : undefined,
@@ -405,7 +548,21 @@ export function MachineClientView({
 
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5 mt-3.5 text-xs sm:text-sm">
                 <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Machine ID</span>
+                  <div className="flex items-center justify-between gap-1 mb-0.5">
+                    <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Machine ID</span>
+                    <button
+                      type="button"
+                      onClick={handleCopyMachineId}
+                      title="Copy Unique Machine ID"
+                      className="text-[10px] text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-0.5 cursor-pointer"
+                    >
+                      {copiedId ? (
+                        <AnimatedCheck size={10} className="text-emerald-600" />
+                      ) : (
+                        <AnimatedCopy size={10} className="text-[var(--color-mute)]" />
+                      )}
+                    </button>
+                  </div>
                   <span className="font-bold text-[var(--color-ink)] font-mono text-xs sm:text-sm">{machine.machine_id}</span>
                 </div>
 
@@ -461,10 +618,9 @@ export function MachineClientView({
             </Card>
 
             {/* Linked Client Details Section from public.clients table (Supabase) */}
-            <Card padding="md" className="card-hover-system sm:p-6 border-sky-500/20 bg-gradient-to-b from-sky-500/[0.03] to-transparent">
+            <Card padding="md" className="card-hover-system sm:p-6 border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
               <div className="flex items-center justify-between gap-2 pb-3 border-b border-[var(--color-hairline)]">
                 <div className="flex items-center gap-2">
-                  <AnimatedBuilding2 size={18} className="text-sky-600 dark:text-sky-400" />
                   <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">
                     Assigned Client Details
                   </h3>
@@ -493,12 +649,12 @@ export function MachineClientView({
               </div>
 
               {hasLinkedClient ? (
-                <div className="flex flex-col gap-4 mt-4 text-xs sm:text-sm">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                    {/* Company / Client Name */}
-                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
+                <div className="flex flex-col gap-3.5 sm:gap-4 mt-3.5 sm:mt-4 text-xs sm:text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3.5">
+                    {/* CLIENT NAME (Feedback #2) */}
+                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                       <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">
-                        Client / Company Name
+                        CLIENT NAME
                       </span>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="font-bold text-[var(--color-ink)] text-sm sm:text-base">
@@ -511,14 +667,14 @@ export function MachineClientView({
                         )}
                       </div>
                       {activeRental?.contract_number && (
-                        <span className="inline-block mt-1.5 font-mono text-[11px] text-sky-600 font-bold bg-sky-500/10 px-2 py-0.5 rounded self-start border border-sky-500/20">
+                        <span className="inline-block mt-1.5 font-mono text-[11px] text-sky-600 dark:text-sky-400 font-bold bg-sky-500/10 px-2 py-0.5 rounded self-start border border-sky-500/20">
                           Contract: {activeRental.contract_number}
                         </span>
                       )}
                     </div>
 
                     {/* Contact Person */}
-                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
+                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                       <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">
                         Contact Person
                       </span>
@@ -527,8 +683,8 @@ export function MachineClientView({
                       </p>
                     </div>
 
-                    {/* Contact Phone */}
-                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
+                    {/* Contact Mobile */}
+                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                       <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">
                         Contact Mobile
                       </span>
@@ -546,7 +702,7 @@ export function MachineClientView({
 
                     {/* Contact Email */}
                     {clientEmail && (
-                      <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
+                      <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                         <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">
                           Contact Email
                         </span>
@@ -559,8 +715,8 @@ export function MachineClientView({
                       </div>
                     )}
 
-                    {/* City, District & State */}
-                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
+                    {/* City & State */}
+                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                       <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">
                         City & State
                       </span>
@@ -571,7 +727,7 @@ export function MachineClientView({
 
                     {/* GSTIN */}
                     {clientGstin && (
-                      <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
+                      <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">
                             GSTIN
@@ -579,10 +735,11 @@ export function MachineClientView({
                           <button
                             type="button"
                             onClick={handleCopyGstin}
-                            className="text-[11px] text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-1 cursor-pointer"
+                            title={copiedGstin ? "Copied!" : "Copy GSTIN"}
+                            aria-label="Copy GSTIN"
+                            className="p-1 -mr-1 -mt-0.5 rounded-md text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] inline-flex items-center justify-center cursor-pointer transition-colors"
                           >
-                            {copiedGstin ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                            <span>{copiedGstin ? "Copied" : "Copy"}</span>
+                            {copiedGstin ? <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
                           </button>
                         </div>
                         <p className="font-mono font-semibold text-[var(--color-ink)] text-xs sm:text-sm">
@@ -593,7 +750,7 @@ export function MachineClientView({
 
                     {/* PAN Number */}
                     {clientPan && (
-                      <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
+                      <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">
                             PAN Number
@@ -601,10 +758,11 @@ export function MachineClientView({
                           <button
                             type="button"
                             onClick={handleCopyPan}
-                            className="text-[11px] text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-1 cursor-pointer"
+                            title={copiedPan ? "Copied!" : "Copy PAN Number"}
+                            aria-label="Copy PAN Number"
+                            className="p-1 -mr-1 -mt-0.5 rounded-md text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] inline-flex items-center justify-center cursor-pointer transition-colors"
                           >
-                            {copiedPan ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                            <span>{copiedPan ? "Copied" : "Copy"}</span>
+                            {copiedPan ? <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
                           </button>
                         </div>
                         <p className="font-mono font-semibold text-[var(--color-ink)] text-xs sm:text-sm">
@@ -614,19 +772,20 @@ export function MachineClientView({
                     )}
                   </div>
 
-                  {/* Primary Site Location / Deployment Address */}
-                  <div className="flex flex-col p-3.5 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
+                  {/* SITE LOCATION */}
+                  <div className="flex flex-col p-3 sm:p-3.5 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                     <div className="flex items-center justify-between mb-1.5">
                       <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">
-                        Site Location / Deployment Address
+                        SITE LOCATION
                       </span>
                       <button
                         type="button"
                         onClick={handleCopySiteAddress}
-                        className="text-xs text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-1 cursor-pointer transition-colors"
+                        title={copiedAddress ? "Copied!" : "Copy Site Address"}
+                        aria-label="Copy Site Address"
+                        className="p-1 -mr-1 -mt-0.5 rounded-md text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] inline-flex items-center justify-center cursor-pointer transition-colors"
                       >
-                        {copiedAddress ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                        <span>{copiedAddress ? "Copied" : "Copy Address"}</span>
+                        {copiedAddress ? <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
                       </button>
                     </div>
                     <p className="text-xs sm:text-sm text-[var(--color-ink)] leading-relaxed font-medium">
@@ -638,7 +797,7 @@ export function MachineClientView({
 
                   {/* Billing Address (if separate) */}
                   {isBillingAddressDifferent && (billingAddress || billingCity) && (
-                    <div className="flex flex-col p-3.5 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
+                    <div className="flex flex-col p-3 sm:p-3.5 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                       <div className="flex items-center justify-between mb-1.5">
                         <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">
                           Billing Address
@@ -646,10 +805,11 @@ export function MachineClientView({
                         <button
                           type="button"
                           onClick={handleCopyBillingAddress}
-                          className="text-xs text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-1 cursor-pointer transition-colors"
+                          title={copiedBillingAddress ? "Copied!" : "Copy Billing Address"}
+                          aria-label="Copy Billing Address"
+                          className="p-1 -mr-1 -mt-0.5 rounded-md text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] inline-flex items-center justify-center cursor-pointer transition-colors"
                         >
-                          {copiedBillingAddress ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
-                          <span>{copiedBillingAddress ? "Copied" : "Copy Billing Address"}</span>
+                          {copiedBillingAddress ? <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
                         </button>
                       </div>
                       <p className="text-xs sm:text-sm text-[var(--color-ink)] leading-relaxed font-medium">
@@ -660,7 +820,7 @@ export function MachineClientView({
 
                   {/* Rental Contract Timeline & Rate if available */}
                   {activeRental && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                       <div>
                         <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block mb-0.5">Rental Start</span>
                         <span className="font-semibold text-xs sm:text-sm text-[var(--color-ink)]">{formatDate(activeRental.start_date)}</span>
@@ -669,7 +829,7 @@ export function MachineClientView({
                         <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block mb-0.5">Rental End</span>
                         <span className="font-semibold text-xs sm:text-sm text-[var(--color-ink)]">{formatDate(activeRental.end_date)}</span>
                       </div>
-                      <div>
+                      <div className="col-span-2 sm:col-span-1">
                         <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block mb-0.5">Rental Rate</span>
                         <span className="font-bold text-xs sm:text-sm text-emerald-600 dark:text-emerald-400">
                           ₹{(activeRental.monthly_rate || activeRental.rental_rate || 0).toLocaleString("en-IN")} / {activeRental.rate_unit || "month"}
@@ -736,7 +896,7 @@ export function MachineClientView({
           </motion.div>
         )}
 
-        {/* TAB 2: HOUR METER RUNNING HISTORY (Lazy Loaded on Demand) */}
+        {/* TAB 2: HOURS METER LOGS (Lazy Loaded on Demand & 3-Tier Responsive) */}
         {activeTab === "running_hours" && (
           <motion.div
             key="running_hours"
@@ -745,30 +905,19 @@ export function MachineClientView({
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.18 }}
           >
-            <Card padding="lg">
-              <CardHeader
-                title="Hour Meter Running Machine History"
-                eyebrow="Operator Daily Logbook with Shift Timings & Running Hours"
-                action={
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      icon={<RefreshCw size={13} className={isLoadingLogs ? "animate-spin" : ""} />}
-                      onClick={loadHourMeterLogs}
-                      disabled={isLoadingLogs}
-                      title="Refresh Running Logs"
-                    >
-                      Refresh
-                    </Button>
-                    <Link href="/operations?tab=entry">
-                      <Button variant="secondary" className="text-xs font-bold py-1.5 px-3">
-                        + Add Meter Log Entry
-                      </Button>
-                    </Link>
-                  </div>
-                }
-              />
+            <Card padding="md" className="sm:p-6">
+              {/* Header: Title on Left, Total Hours Run Badge at Top-Right Corner */}
+              <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-[var(--color-hairline)]">
+                <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">
+                  Hours Meter Logs
+                </h3>
+
+                {hasLoadedLogs && hourMeterLogs && hourMeterLogs.length > 0 && (
+                  <Badge variant="info" className="font-mono text-xs">
+                    <span className="font-bold">+{logStats.totalHours}</span> hrs Run
+                  </Badge>
+                )}
+              </div>
 
               {/* Loading Skeleton */}
               {isLoadingLogs && (
@@ -803,13 +952,12 @@ export function MachineClientView({
                     <span>{logsError}</span>
                   </div>
                   <Button size="sm" variant="secondary" onClick={loadHourMeterLogs}>
-                    <RefreshCw size={13} className="mr-1.5" />
                     Retry
                   </Button>
                 </div>
               )}
 
-              {/* Empty State */}
+              {/* Initial Empty State (No logs ever recorded) */}
               {!isLoadingLogs && !logsError && hasLoadedLogs && (!hourMeterLogs || hourMeterLogs.length === 0) && (
                 <div className="py-10 text-center">
                   <EmptyState
@@ -826,51 +974,321 @@ export function MachineClientView({
                 </div>
               )}
 
-              {/* Data Table */}
+              {/* Filter & Sort Controls + Data Presentation */}
               {!isLoadingLogs && !logsError && hourMeterLogs && hourMeterLogs.length > 0 && (
-                <div className="mt-4 w-full overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Log Date</TableHead>
-                        <TableHead>Client Company</TableHead>
-                        <TableHead>Operator</TableHead>
-                        <TableHead>Operating Hours</TableHead>
-                        <TableHead>Meter Reading (Start → End)</TableHead>
-                        <TableHead>Overtime</TableHead>
-                        <TableHead>Remarks</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {hourMeterLogs.map((log: any) => (
-                        <TableRow key={log.id}>
-                          <TableCell className="font-mono text-xs font-bold whitespace-nowrap">
-                            {formatDate(log.log_date)}
-                          </TableCell>
-                          <TableCell className="font-medium text-xs">
-                            {log.client?.company_name || clientCompanyName || "—"}
-                          </TableCell>
-                          <TableCell className="text-xs font-semibold whitespace-nowrap">
-                            {log.operator?.full_name || "Operator"}
-                          </TableCell>
-                          <TableCell className="font-mono text-xs whitespace-nowrap">
-                            {log.start_time && log.end_time
-                              ? formatShiftTimingRange(log.start_time, log.end_time)
-                              : `${log.running_hours || 0} hrs`}
-                          </TableCell>
-                          <TableCell className="font-mono text-xs text-sky-600 dark:text-sky-400 font-bold whitespace-nowrap">
-                            {log.start_meter || 0} → {log.end_meter || 0} (+{log.running_hours || 0}h)
-                          </TableCell>
-                          <TableCell className="font-mono text-xs text-amber-600 dark:text-amber-400 font-semibold whitespace-nowrap">
-                            {log.overtime_hours ? `+${log.overtime_hours} hrs` : "—"}
-                          </TableCell>
-                          <TableCell className="text-xs text-[var(--color-mute)] max-w-xs truncate">
-                            {log.remarks || "—"}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                <div className="mt-4 space-y-4">
+                  {/* Collapsible Search & Filter Toolbar */}
+                  <div className="flex flex-col gap-2 p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/50 border border-[var(--color-hairline)]">
+                    {/* Main Row: Search Input + Filter Toggle Icon */}
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1 min-w-0">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-mute)] pointer-events-none" />
+                        <input
+                          type="text"
+                          placeholder="Search logs by operator, date, meter, remarks..."
+                          value={logSearchQuery}
+                          onChange={(e) => {
+                            setLogSearchQuery(e.target.value);
+                            setLogPage(1);
+                          }}
+                          className="w-full h-9 pl-9 pr-8 text-xs rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] placeholder:text-[var(--color-mute)] focus:outline-none focus:border-sky-500 transition-colors"
+                        />
+                        {logSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setLogSearchQuery("");
+                              setLogPage(1);
+                            }}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-mute)] hover:text-[var(--color-ink)] p-0.5 rounded cursor-pointer"
+                          >
+                            <X size={13} />
+                          </button>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowFilterSort((prev) => !prev)}
+                        title={showFilterSort ? "Hide filter and sorting options" : "Show filter and sorting options"}
+                        aria-label="Toggle filter and sorting options"
+                        className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-semibold shrink-0 border transition-all cursor-pointer flex items-center gap-1.5 ${
+                          showFilterSort || activeFilterCount > 0
+                            ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30"
+                            : "bg-[var(--color-canvas-elevated)] text-[var(--color-mute)] hover:text-[var(--color-ink)] border-[var(--color-hairline)]"
+                        }`}
+                      >
+                        <SlidersHorizontal size={14} className={showFilterSort || activeFilterCount > 0 ? "text-sky-500" : ""} />
+                        <span className="hidden sm:inline">Filter & Sort</span>
+                        {activeFilterCount > 0 && (
+                          <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full text-[10px] font-bold bg-sky-500 text-white leading-none">
+                            {activeFilterCount}
+                          </span>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Expandable Filter & Sort Row (Single Row) */}
+                    <AnimatePresence>
+                      {showFilterSort && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.18 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap pt-1">
+                            {/* Date Preset Filter */}
+                            <select
+                              value={logDateFilter}
+                              onChange={(e) => {
+                                setLogDateFilter(e.target.value as any);
+                                setLogPage(1);
+                              }}
+                              className="h-9 px-2.5 text-xs rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] focus:outline-none focus:border-sky-500 cursor-pointer shrink-0 font-medium flex-1 sm:flex-initial"
+                            >
+                              <option value="all">All Dates</option>
+                              <option value="7d">Last 7 Days</option>
+                              <option value="30d">Last 30 Days</option>
+                              <option value="month">This Month</option>
+                            </select>
+
+                            {/* Operator Filter (if multiple) */}
+                            {availableOperators.length > 1 && (
+                              <select
+                                value={logOperatorFilter}
+                                onChange={(e) => {
+                                  setLogOperatorFilter(e.target.value);
+                                  setLogPage(1);
+                                }}
+                                className="h-9 px-2.5 text-xs rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] focus:outline-none focus:border-sky-500 cursor-pointer shrink-0 font-medium max-w-[150px] truncate flex-1 sm:flex-initial"
+                              >
+                                <option value="all">All Operators</option>
+                                {availableOperators.map((op) => (
+                                  <option key={op.id} value={op.id}>
+                                    {op.name}
+                                  </option>
+                                ))}
+                              </select>
+                            )}
+
+                            {/* Multi-Criteria Sort Selector */}
+                            <select
+                              value={`${logSortBy}-${logSortOrder}`}
+                              onChange={(e) => {
+                                const [by, order] = e.target.value.split("-") as [any, any];
+                                setLogSortBy(by);
+                                setLogSortOrder(order);
+                                setLogPage(1);
+                              }}
+                              className="h-9 px-2.5 text-xs rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] focus:outline-none focus:border-sky-500 cursor-pointer shrink-0 font-medium flex-1 sm:flex-initial"
+                            >
+                              <option value="date-desc">Date: Newest First</option>
+                              <option value="date-asc">Date: Oldest First</option>
+                              <option value="running_hours-desc">Hours: High to Low</option>
+                              <option value="running_hours-asc">Hours: Low to High</option>
+                              <option value="start_meter-desc">Start Meter: High to Low</option>
+                              <option value="start_meter-asc">Start Meter: Low to High</option>
+                            </select>
+
+                            {/* Clear/Reset Action Button */}
+                            {isAnyFilterActive && (
+                              <button
+                                type="button"
+                                onClick={handleResetFilters}
+                                className="h-9 px-2.5 rounded-lg text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 border border-rose-500/20 shrink-0 transition-colors cursor-pointer flex items-center gap-1"
+                              >
+                                <X size={12} />
+                                <span>Reset</span>
+                              </button>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  {/* Filtered Empty State (No logs matched current filters) */}
+                  {filteredAndSortedLogs.length === 0 && (
+                    <div className="py-10 text-center border border-dashed border-[var(--color-hairline)] rounded-xl bg-[var(--color-hairline-soft-surface)]/20 p-6">
+                      <Search className="h-8 w-8 text-[var(--color-mute)] mx-auto mb-2 opacity-50" />
+                      <p className="font-bold text-xs sm:text-sm text-[var(--color-ink)]">No logs match your filter criteria</p>
+                      <p className="text-xs text-[var(--color-mute)] mt-1 max-w-sm mx-auto">
+                        Try adjusting your search terms, date range, or clear all filters.
+                      </p>
+                      <div className="mt-4">
+                        <Button variant="secondary" size="sm" onClick={handleResetFilters}>
+                          Clear All Filters
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Desktop High-Density Table View with Interactive Sortable Columns (hidden on mobile, visible md+) */}
+                  {filteredAndSortedLogs.length > 0 && (
+                    <>
+                      <div className="hidden md:block w-full overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead
+                                className="cursor-pointer select-none hover:text-[var(--color-ink)] transition-colors"
+                                onClick={() => handleSort("date")}
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span>Log Date</span>
+                                  {logSortBy === "date" ? (
+                                    logSortOrder === "asc" ? (
+                                      <ChevronUp size={13} className="text-sky-500" />
+                                    ) : (
+                                      <ChevronDown size={13} className="text-sky-500" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown size={11} className="opacity-30" />
+                                  )}
+                                </div>
+                              </TableHead>
+
+                              <TableHead>Operator</TableHead>
+
+                              <TableHead
+                                className="cursor-pointer select-none hover:text-[var(--color-ink)] transition-colors"
+                                onClick={() => handleSort("running_hours")}
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span>Operating Hours</span>
+                                  {logSortBy === "running_hours" ? (
+                                    logSortOrder === "asc" ? (
+                                      <ChevronUp size={13} className="text-sky-500" />
+                                    ) : (
+                                      <ChevronDown size={13} className="text-sky-500" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown size={11} className="opacity-30" />
+                                  )}
+                                </div>
+                              </TableHead>
+
+                              <TableHead
+                                className="cursor-pointer select-none hover:text-[var(--color-ink)] transition-colors"
+                                onClick={() => handleSort("start_meter")}
+                              >
+                                <div className="flex items-center gap-1">
+                                  <span>Meter Reading (Start → End)</span>
+                                  {logSortBy === "start_meter" || logSortBy === "end_meter" ? (
+                                    logSortOrder === "asc" ? (
+                                      <ChevronUp size={13} className="text-sky-500" />
+                                    ) : (
+                                      <ChevronDown size={13} className="text-sky-500" />
+                                    )
+                                  ) : (
+                                    <ArrowUpDown size={11} className="opacity-30" />
+                                  )}
+                                </div>
+                              </TableHead>
+
+                              <TableHead>Remarks</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {paginatedLogs.map((log: any) => (
+                              <TableRow key={log.id}>
+                                <TableCell className="font-mono text-xs font-bold whitespace-nowrap">
+                                  {formatDate(log.log_date)}
+                                </TableCell>
+                                <TableCell className="text-xs font-semibold whitespace-nowrap">
+                                  {log.operator?.full_name || log.operator_name || "Operator"}
+                                </TableCell>
+                                <TableCell className="font-mono text-xs whitespace-nowrap">
+                                  {log.start_time && log.end_time
+                                    ? formatShiftTimingRange(log.start_time, log.end_time)
+                                    : `${log.running_hours || 0} hrs`}
+                                </TableCell>
+                                <TableCell className="font-mono text-xs text-sky-600 dark:text-sky-400 font-bold whitespace-nowrap">
+                                  {log.start_meter || 0} → {log.end_meter || 0} (+{log.running_hours || 0}h)
+                                </TableCell>
+                                <TableCell className="text-xs text-[var(--color-mute)] max-w-xs truncate">
+                                  {log.remarks || "—"}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      {/* Mobile & Tablet Card View (visible on mobile < md, hidden on md+) */}
+                      <div className="block md:hidden flex flex-col gap-2.5">
+                        {paginatedLogs.map((log: any) => (
+                          <div
+                            key={log.id}
+                            className="p-3 sm:p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/50 flex flex-col gap-2 shadow-2xs"
+                          >
+                            {/* Top Row: Date & Operator */}
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-mono text-xs font-bold text-[var(--color-ink)]">
+                                {formatDate(log.log_date)}
+                              </span>
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] text-[var(--color-ink)] truncate max-w-[140px]">
+                                {log.operator?.full_name || log.operator_name || "Operator"}
+                              </span>
+                            </div>
+
+                            {/* Meter Reading Highlight */}
+                            <div className="flex items-center justify-between p-2 rounded-lg bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)]">
+                              <div className="flex flex-col">
+                                <span className="text-[10px] uppercase font-bold text-[var(--color-mute)] tracking-wider">Meter Reading</span>
+                                <span className="font-mono text-xs font-bold text-[var(--color-ink)]">
+                                  {log.start_meter || 0} → {log.end_meter || 0}
+                                </span>
+                              </div>
+                              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                                +{log.running_hours || 0} hrs
+                              </span>
+                            </div>
+
+                            {/* Shift Timing */}
+                            <div className="flex items-center justify-between text-xs text-[var(--color-mute)]">
+                              <div className="flex items-center gap-1 font-mono">
+                                <Clock size={12} className="shrink-0 text-[var(--color-mute)]" />
+                                <span>
+                                  {log.start_time && log.end_time
+                                    ? formatShiftTimingRange(log.start_time, log.end_time)
+                                    : `${log.running_hours || 0} hrs shift`}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Remarks if available */}
+                            {log.remarks && (
+                              <div className="pt-1 border-t border-[var(--color-hairline)]/80 text-[11px]">
+                                <span className="text-[var(--color-mute)] italic line-clamp-2">
+                                  &ldquo;{log.remarks}&rdquo;
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Pagination Control (Desktop & Mobile) */}
+                      {filteredAndSortedLogs.length > logPageSize && (
+                        <div className="pt-2">
+                          <Pagination
+                            page={logPage}
+                            pageSize={logPageSize}
+                            total={filteredAndSortedLogs.length}
+                            onPageChange={(p) => setLogPage(p)}
+                            pageSizeOptions={[10, 25, 50]}
+                            onPageSizeChange={(sz) => {
+                              setLogPageSize(sz);
+                              setLogPage(1);
+                            }}
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               )}
             </Card>

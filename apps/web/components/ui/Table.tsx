@@ -55,12 +55,15 @@ export function TableRow({
 export function TableHead({
   children,
   className = "",
+  onClick,
 }: {
   children: ReactNode;
   className?: string;
+  onClick?: () => void;
 }) {
   return (
     <th
+      onClick={onClick}
       className={`text-left py-3 px-4 eyebrow whitespace-nowrap text-muted-foreground font-medium ${className}`}
     >
       {children}

@@ -44,7 +44,7 @@ export const RentalReturnModal: React.FC<RentalReturnModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (hasDamage && !damageDescription.trim()) {
       setError('Please provide a description of the observed damage.');
       return;
@@ -53,8 +53,8 @@ export const RentalReturnModal: React.FC<RentalReturnModalProps> = ({
     setError('');
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      onSubmit({
+    try {
+      await Promise.resolve(onSubmit({
         contractNo,
         machineCode,
         returnMeter: parseFloat(returnMeter) || 0,
@@ -62,10 +62,13 @@ export const RentalReturnModal: React.FC<RentalReturnModalProps> = ({
         hasDamage,
         damageDescription,
         photoCount,
-      });
-      setIsSubmitting(false);
+      }));
       onClose();
-    }, 600);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to complete rental return.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

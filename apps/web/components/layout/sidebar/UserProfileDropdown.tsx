@@ -17,7 +17,7 @@ import { LogOut } from "lucide-react";
 import type { User } from "@/lib/types/database";
 import { logout } from "@/app/actions/auth";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
-import { SidebarTooltip } from "@/components/ui";
+import { SidebarTooltip, Button } from "@/components/ui";
 
 interface UserProfileDropdownProps {
   user: User;
@@ -240,13 +240,16 @@ export const UserProfileDropdown = memo(function UserProfileDropdown({
                 <div className="my-1 border-t border-[var(--color-hairline)]" />
 
                 <form action={logout}>
-                  <button
+                  <Button
                     type="submit"
-                    className="flex items-center gap-2 w-full px-3 py-2 rounded-[var(--radius-sm)] text-xs font-semibold text-[var(--color-ink)] hover:bg-rose-500/10 hover:text-rose-600 transition-colors cursor-pointer"
+                    variant="ghost"
+                    size="sm"
+                    fullWidth
+                    icon={<LogOut className="h-3.5 w-3.5 text-rose-500" />}
+                    className="justify-start px-3 py-2 rounded-[var(--radius-sm)] text-xs font-semibold text-[var(--color-ink)] hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
                   >
-                    <LogOut className="h-3.5 w-3.5 text-rose-500" />
                     Sign Out
-                  </button>
+                  </Button>
                 </form>
               </motion.div>
             </div>

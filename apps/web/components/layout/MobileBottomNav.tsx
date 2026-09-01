@@ -24,6 +24,7 @@ import type { User, UserRole } from "@/lib/types/database";
 import { logout } from "@/app/actions/auth";
 import { CommandPalette } from "@/components/ui/CommandPalette";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
+import { Button } from "@/components/ui";
 
 interface MobileBottomNavProps {
   user: User;
@@ -346,13 +347,16 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
               {/* Sign Out Action */}
               <div className="pt-2">
                 <form action={logout}>
-                  <button
+                  <Button
                     type="submit"
-                    className="w-full flex items-center justify-center gap-2 p-3.5 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 font-semibold text-xs hover:bg-rose-500/20 active:scale-[0.98] transition-all"
+                    variant="danger"
+                    size="md"
+                    fullWidth
+                    icon={<AnimatedLogOut size={16} />}
+                    className="p-3.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 font-semibold text-xs border border-rose-500/20 shadow-xs active:scale-[0.98] transition-all justify-center"
                   >
-                    <AnimatedLogOut size={16} />
                     Sign out of account
-                  </button>
+                  </Button>
                 </form>
               </div>
             </motion.div>

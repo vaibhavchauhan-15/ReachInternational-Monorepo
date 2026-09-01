@@ -29,7 +29,7 @@ import type { User, UserRole } from "@/lib/types/database";
 import { logout } from "@/app/actions/auth";
 import { CommandPalette } from "@/components/ui/CommandPalette";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
-import { Logo, ReachInternationalLogo, BRAND_ASSETS } from "@/components/ui";
+import { Logo, ReachInternationalLogo, BRAND_ASSETS, Button } from "@/components/ui";
 
 export interface NavItem {
   href: string;
@@ -200,14 +200,16 @@ const UserMenu = memo(function UserMenu({ user }: { user: User }) {
 
               {/* Sign out */}
               <form action={logout}>
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
+                <Button
                   type="submit"
-                  className="flex items-center gap-2.5 w-full px-3 py-2 rounded-[var(--radius-sm)] text-xs font-semibold text-[var(--color-ink)] hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+                  variant="ghost"
+                  size="sm"
+                  fullWidth
+                  icon={<AnimatedLogOut size={16} className="text-rose-500" />}
+                  className="justify-start px-3 py-2 rounded-[var(--radius-sm)] text-xs font-semibold text-[var(--color-ink)] hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
                 >
-                  <AnimatedLogOut size={16} className="text-rose-500" />
                   Sign Out
-                </motion.button>
+                </Button>
               </form>
             </motion.div>
           </>

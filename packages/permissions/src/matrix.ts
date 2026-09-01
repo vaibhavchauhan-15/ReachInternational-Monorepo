@@ -55,7 +55,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   ],
 
   supervisor: [
-    "machine.view", "machine.edit",
+    "machine.view", "machine.status_update", "machine.assign_operator", "machine.assign_client",
     "complaint.view", "complaint.create",
     "service.view",
     "operator.view", "operator.assign", "operator.log_approve", "operator.create", "operator.salary_manage",

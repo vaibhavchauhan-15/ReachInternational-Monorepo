@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Modal, Input, Select, Button, useToast, SearchableSelect, UserSelect, ClientSelect, type ClientSelectItem } from "@/components/ui";
 import { createMachine, updateMachine, checkMachineSerialNumberAvailable } from "@/app/actions/machines";
 import type { Machine, User } from "@/lib/types/database";
+import { isManagerOrAbove } from "@reachinternational/permissions";
 import { AlertCircle } from "lucide-react";
 
 interface MachineModalProps {
@@ -22,6 +23,10 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
   const [isSaving, setIsSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string>("");
+
+  const isSupervisor = userRole === "supervisor";
+  const canEditSupervisor = (!userRole || isManagerOrAbove(userRole)) && !isSupervisor;
+  const canEditSpecs = !isSupervisor;
 
   const isEdit = !!machine;
 
@@ -45,6 +50,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
   }
 
   const handleSerialBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
+    if (isSupervisor) return;
     const val = e.target.value.trim();
     if (!val) return;
     if (isEdit && machine?.serial_number && machine.serial_number.toLowerCase().trim() === val.toLowerCase()) {
@@ -76,21 +82,24 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
     setFormError("");
 
     const formData = new FormData(e.currentTarget);
-    const model = (formData.get("model") as string)?.trim();
-    const serial_number = (formData.get("serial_number") as string)?.trim();
-    const year_of_mfg = (formData.get("year_of_mfg") as string)?.trim();
-    const manufacturer = (formData.get("manufacturer") as string)?.trim();
 
-    const errors: Record<string, string> = {};
-    if (!model) errors.model = "Model is mandatory";
-    if (!serial_number) errors.serial_number = "Serial Number is mandatory";
-    if (!year_of_mfg) errors.year_of_mfg = "Year of Manufacture is mandatory";
-    if (!manufacturer) errors.manufacturer = "Manufacturer is mandatory";
+    if (!isSupervisor) {
+      const model = (formData.get("model") as string)?.trim();
+      const serial_number = (formData.get("serial_number") as string)?.trim();
+      const year_of_mfg = (formData.get("year_of_mfg") as string)?.trim();
+      const manufacturer = (formData.get("manufacturer") as string)?.trim();
 
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
-      setFormError("All 4 machine specification fields (Model, Serial Number, YUM, Manufacturer) are mandatory.");
-      return;
+      const errors: Record<string, string> = {};
+      if (!model) errors.model = "Model is mandatory";
+      if (!serial_number) errors.serial_number = "Serial Number is mandatory";
+      if (!year_of_mfg) errors.year_of_mfg = "Year of Manufacture is mandatory";
+      if (!manufacturer) errors.manufacturer = "Manufacturer is mandatory";
+
+      if (Object.keys(errors).length > 0) {
+        setFieldErrors(errors);
+        setFormError("All 4 machine specification fields (Model, Serial Number, YUM, Manufacturer) are mandatory.");
+        return;
+      }
     }
 
     setIsSaving(true);
@@ -108,7 +117,14 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
         if (res.fieldErrors) setFieldErrors(res.fieldErrors);
         toast("error", "Failed to save machine", res.error);
       } else {
-        toast("success", isEdit ? "Machine updated" : "Machine registered successfully");
+        toast(
+          "success",
+          isSupervisor
+            ? "Machine status & assignments updated successfully"
+            : isEdit
+            ? "Machine updated successfully"
+            : "Machine registered successfully"
+        );
         setIsSaving(false);
         onSuccess();
         onClose();
@@ -156,11 +172,17 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
     { value: "rented", label: "Rented" },
   ];
 
+  const modalTitle = isSupervisor
+    ? `Update Status & Assignments (${machine?.machine_id || ""})`
+    : isEdit
+    ? `Edit Machine (${machine?.machine_id})`
+    : "Register New Machine";
+
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title={isEdit ? `Edit Machine (${machine.machine_id})` : "Register New Machine"}
+      title={modalTitle}
       size="lg"
     >
       <form id="machine-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -173,52 +195,52 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
 
         {/* SECTION 1: Machine Identity & Specifications */}
         <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 flex flex-col gap-3.5">
-          <div className="pb-2 border-b border-[var(--color-hairline)]">
+          <div className="pb-2 border-b border-[var(--color-hairline)] flex items-center justify-between gap-2">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink)]">
-              Machine Identification & Specifications
+              MACHINE INFO
             </h4>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <Input
-              label="Model *"
+              label={`Model ${canEditSpecs ? "*" : ""}`}
               name="model"
               placeholder="e.g. CAT-320 / JCB-430 / S3246"
               defaultValue={machine?.model || ""}
               error={fieldErrors.model}
-              required
-              disabled={isSaving}
+              required={canEditSpecs}
+              disabled={!canEditSpecs || isSaving}
             />
 
             <Input
-              label="Serial Number *"
+              label={`Serial Number ${canEditSpecs ? "*" : ""}`}
               name="serial_number"
               placeholder="e.g. SN-98745612"
               defaultValue={machine?.serial_number || ""}
               error={fieldErrors.serial_number}
               onBlur={handleSerialBlur}
-              required
-              disabled={isSaving}
+              required={canEditSpecs}
+              disabled={!canEditSpecs || isSaving}
             />
 
             <Input
-              label="Year of Manufacture (YUM) *"
+              label={`Year of Manufacture (YUM) ${canEditSpecs ? "*" : ""}`}
               name="year_of_mfg"
               placeholder="e.g. 2024 / 2025"
               defaultValue={machine?.year_of_mfg || ""}
               error={fieldErrors.year_of_mfg}
-              required
-              disabled={isSaving}
+              required={canEditSpecs}
+              disabled={!canEditSpecs || isSaving}
             />
 
             <Input
-              label="Manufacturer *"
+              label={`Manufacturer ${canEditSpecs ? "*" : ""}`}
               name="manufacturer"
               placeholder="e.g. Toyota / Linde / Komatsu / CAT"
               defaultValue={machine?.manufacturer || ""}
               error={fieldErrors.manufacturer}
-              required
-              disabled={isSaving}
+              required={canEditSpecs}
+              disabled={!canEditSpecs || isSaving}
             />
           </div>
         </div>
@@ -251,7 +273,8 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
                 value={supervisorId}
                 onChange={setSupervisorId}
                 placeholder="Select Supervisor"
-                clearable
+                clearable={canEditSupervisor}
+                disabled={!canEditSupervisor || isSaving}
               />
               <input type="hidden" name="current_supervisor_id" value={supervisorId} />
             </div>
@@ -262,8 +285,9 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
                 users={allOperators}
                 value={operatorId}
                 onChange={setOperatorId}
-                placeholder="Select Operator"
+                placeholder="Search or assign active operator..."
                 clearable
+                disabled={isSaving}
               />
               <input type="hidden" name="current_operator_id" value={operatorId} />
             </div>
@@ -341,7 +365,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
             loading={isSaving}
             className="h-10 sm:h-9 text-xs sm:text-sm font-semibold justify-center"
           >
-            {isEdit ? "Update Machine" : "Register Machine"}
+            {isSupervisor ? "Save Updates" : isEdit ? "Update Machine" : "Register Machine"}
           </Button>
         </div>
       </form>

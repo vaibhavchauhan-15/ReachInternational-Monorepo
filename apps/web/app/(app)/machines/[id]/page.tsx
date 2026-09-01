@@ -34,7 +34,7 @@ async function MachineDetailContent({ id }: { id: string }) {
     user.role === "admin" ||
     user.role === "manager" ||
     user.role === "service_manager";
-  const canEdit = canManage || user.role === "supervisor";
+  const canEdit = canManage;
   const canDelete = canManage;
   const isAssignedEngineer = user.role === "engineer" && machine.engineer_id === user.id;
 

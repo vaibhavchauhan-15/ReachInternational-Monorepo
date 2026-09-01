@@ -43,24 +43,24 @@ const sizeStyles: Record<
 > = {
   sm: {
     container: "p-0.5 sm:p-1 rounded-lg sm:rounded-xl",
-    item: "py-1 px-2.5 sm:py-1.5 sm:px-3 rounded-md sm:rounded-lg",
-    text: "text-xs font-semibold",
-    icon: 14,
-    badge: "text-[10px] px-1 py-0.1",
+    item: "py-1 px-1.5 sm:py-1.5 sm:px-3 rounded-md sm:rounded-lg min-h-[34px] sm:min-h-[36px]",
+    text: "text-[11px] sm:text-xs font-semibold tracking-tight sm:tracking-normal",
+    icon: 13,
+    badge: "text-[9px] sm:text-[10px] px-1 py-0.1",
   },
   md: {
     container: "p-1 sm:p-1.5 rounded-xl sm:rounded-2xl",
-    item: "py-2 px-3 sm:py-2.5 sm:px-4 rounded-lg sm:rounded-xl",
-    text: "text-xs sm:text-sm font-bold",
-    icon: 15,
-    badge: "text-[10px] sm:text-xs px-1.5 py-0.2",
+    item: "py-1.5 px-2 sm:py-2.5 sm:px-4 rounded-lg sm:rounded-xl min-h-[38px] sm:min-h-[42px]",
+    text: "text-xs sm:text-sm font-semibold sm:font-bold tracking-tight sm:tracking-normal",
+    icon: 14,
+    badge: "text-[9px] sm:text-xs px-1 sm:px-1.5 py-0.2",
   },
   lg: {
-    container: "p-1.5 sm:p-2 rounded-2xl",
-    item: "py-2.5 px-4 sm:py-3 sm:px-5 rounded-xl",
-    text: "text-sm sm:text-base font-bold",
-    icon: 17,
-    badge: "text-xs px-2 py-0.5",
+    container: "p-1 sm:p-2 rounded-xl sm:rounded-2xl",
+    item: "py-2 px-3 sm:py-3 sm:px-5 rounded-lg sm:rounded-xl min-h-[42px] sm:min-h-[46px]",
+    text: "text-xs sm:text-base font-bold",
+    icon: 16,
+    badge: "text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5",
   },
 };
 
@@ -136,7 +136,7 @@ export function SegmentedToggle<T extends string = string>({
               />
             )}
 
-            <span className="relative z-10 flex items-center justify-center gap-1.5 sm:gap-2 leading-none">
+            <span className="relative z-10 flex items-center justify-center gap-1 sm:gap-1.5 leading-none max-w-full px-1 sm:px-2 min-w-0">
               {item.icon && (
                 <span className="shrink-0 flex items-center justify-center">
                   {item.icon}
@@ -149,7 +149,7 @@ export function SegmentedToggle<T extends string = string>({
 
               {item.count !== undefined && (
                 <span
-                  className={`ml-0.5 rounded-full font-mono font-bold shrink-0 border ${
+                  className={`ml-1 rounded-full font-mono font-bold shrink-0 border ${
                     config.badge
                   } ${
                     isActive

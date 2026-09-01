@@ -19,6 +19,7 @@ export interface AddMachineModalProps {
   onClose: () => void;
   onSuccess: () => void;
   machineToEdit?: any | null;
+  userRole?: string | null;
 }
 
 export const AddMachineModal: React.FC<AddMachineModalProps> = ({
@@ -26,8 +27,12 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
   onClose,
   onSuccess,
   machineToEdit,
+  userRole,
 }) => {
   const { theme } = useTheme();
+
+  const normalizedRole = (userRole || '').toLowerCase();
+  const isSupervisor = normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor';
 
   const [machineId, setMachineId] = useState('');
   const [model, setModel] = useState('');
@@ -59,8 +64,8 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
         setHourMeter(String(machineToEdit.hour_meter ?? 0));
         setStatus(machineToEdit.status || 'available');
         setHealthStatus(machineToEdit.health_status || 'active');
-        setSupervisorId(machineToEdit.supervisor_id || null);
-        setOperatorId(machineToEdit.operator_id || null);
+        setSupervisorId(machineToEdit.current_supervisor_id || machineToEdit.supervisor_id || null);
+        setOperatorId(machineToEdit.current_operator_id || machineToEdit.operator_id || null);
         setClientId(machineToEdit.client_id || null);
       } else {
         setMachineId('');
@@ -112,62 +117,86 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
     const cleanModel = model.trim();
     const cleanSerial = serialNumber.trim();
 
-    if (!cleanModel) {
-      setErrorMessage('Machine Model is required (e.g. 50B-9 or 8FG30).');
-      return;
-    }
-    if (!cleanSerial) {
-      setErrorMessage('Serial Number is required.');
-      return;
+    if (!isSupervisor) {
+      if (!cleanModel) {
+        setErrorMessage('Machine Model is required (e.g. 50B-9 or 8FG30).');
+        return;
+      }
+      if (!cleanSerial) {
+        setErrorMessage('Serial Number is required.');
+        return;
+      }
     }
 
     setIsLoading(true);
     try {
-      // Check for duplicate serial number before submitting
-      let duplicateQuery = supabase
-        .from('machines')
-        .select('id, machine_id, serial_number')
-        .ilike('serial_number', cleanSerial);
+      if (!isSupervisor) {
+        // Check for duplicate serial number before submitting
+        let duplicateQuery = supabase
+          .from('machines')
+          .select('id, machine_id, serial_number')
+          .ilike('serial_number', cleanSerial);
 
-      if (machineToEdit?.id) {
-        duplicateQuery = duplicateQuery.neq('id', machineToEdit.id);
+        if (machineToEdit?.id) {
+          duplicateQuery = duplicateQuery.neq('id', machineToEdit.id);
+        }
+
+        const { data: existingSerial } = await duplicateQuery.limit(1);
+        if (existingSerial && existingSerial.length > 0) {
+          setErrorMessage(`A machine with Serial Number "${cleanSerial}" already exists in the inventory (${existingSerial[0].machine_id}).`);
+          setIsLoading(false);
+          return;
+        }
       }
 
-      const { data: existingSerial } = await duplicateQuery.limit(1);
-      if (existingSerial && existingSerial.length > 0) {
-        setErrorMessage(`A machine with Serial Number "${cleanSerial}" already exists in the inventory (${existingSerial[0].machine_id}).`);
-        setIsLoading(false);
-        return;
-      }
+      if (isSupervisor && machineToEdit?.id) {
+        // Supervisor operational update payload
+        const supervisorPayload: any = {
+          hour_meter: parseFloat(hourMeter) || 0,
+          status,
+          health_status: healthStatus,
+          current_operator_id: operatorId || null,
+          client_id: status === 'rented' ? (clientId || null) : null,
+          updated_at: new Date().toISOString(),
+        };
 
-      const payload: any = {
-        model: cleanModel,
-        serial_number: cleanSerial,
-        manufacturer: manufacturer.trim() || null,
-        year_of_mfg: yearOfMfg.trim() || null,
-        hour_meter: parseFloat(hourMeter) || 0,
-        status,
-        health_status: healthStatus,
-        supervisor_id: supervisorId || null,
-        operator_id: operatorId || null,
-        client_id: status === 'rented' ? (clientId || null) : null,
-      };
-
-      if (machineId.trim()) {
-        payload.machine_id = machineId.trim().toUpperCase();
-      }
-
-      if (machineToEdit?.id) {
         const { error } = await supabase
           .from('machines')
-          .update(payload)
+          .update(supervisorPayload)
           .eq('id', machineToEdit.id);
+
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('machines')
-          .insert([payload]);
-        if (error) throw error;
+        const payload: any = {
+          model: cleanModel,
+          serial_number: cleanSerial,
+          manufacturer: manufacturer.trim() || null,
+          year_of_mfg: yearOfMfg.trim() || null,
+          hour_meter: parseFloat(hourMeter) || 0,
+          status,
+          health_status: healthStatus,
+          current_supervisor_id: supervisorId || null,
+          current_operator_id: operatorId || null,
+          client_id: status === 'rented' ? (clientId || null) : null,
+          updated_at: new Date().toISOString(),
+        };
+
+        if (machineId.trim()) {
+          payload.machine_id = machineId.trim().toUpperCase();
+        }
+
+        if (machineToEdit?.id) {
+          const { error } = await supabase
+            .from('machines')
+            .update(payload)
+            .eq('id', machineToEdit.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase
+            .from('machines')
+            .insert([payload]);
+          if (error) throw error;
+        }
       }
 
       onSuccess();
@@ -198,7 +227,7 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
                 <Wrench size={18} color={theme.colors.link} />
               </View>
               <Text style={[styles.title, { color: theme.colors.ink }]}>
-                {machineToEdit ? 'Edit Machine' : 'Add New Machine'}
+                {machineToEdit ? (isSupervisor ? `Update Status (${machineToEdit.machine_id})` : 'Edit Machine') : 'Add New Machine'}
               </Text>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -218,6 +247,7 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
               placeholder="e.g. 50B-9 or 8FG30"
               value={model}
               onChangeText={setModel}
+              editable={!isSupervisor}
             />
 
             <Input
@@ -225,6 +255,7 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
               placeholder="e.g. HHKHB303EF0000877"
               value={serialNumber}
               onChangeText={setSerialNumber}
+              editable={!isSupervisor}
             />
 
             <View style={styles.rowInputs}>
@@ -234,6 +265,7 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
                   placeholder="e.g. Hyundai / Toyota"
                   value={manufacturer}
                   onChangeText={setManufacturer}
+                  editable={!isSupervisor}
                 />
               </View>
               <View style={{ flex: 1 }}>
@@ -243,6 +275,7 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
                   value={yearOfMfg}
                   onChangeText={setYearOfMfg}
                   keyboardType="numeric"
+                  editable={!isSupervisor}
                 />
               </View>
             </View>
@@ -254,6 +287,69 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
               onChangeText={setHourMeter}
               keyboardType="numeric"
             />
+
+            {/* Operator Selection */}
+            <View style={styles.sectionGroup}>
+              <Text style={[styles.groupLabel, { color: theme.colors.ink }]}>Assigned Operator</Text>
+              {operators.length === 0 ? (
+                <Text style={[styles.pillText, { color: theme.colors.mute, fontStyle: 'italic' }]}>
+                  No active operators available
+                </Text>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  <TouchableOpacity
+                    onPress={() => setOperatorId(null)}
+                    style={[
+                      styles.pillOption,
+                      {
+                        paddingHorizontal: 12,
+                        minWidth: 90,
+                        borderColor: !operatorId ? theme.colors.link : theme.colors.hairline,
+                        backgroundColor: !operatorId ? theme.colors.link + '15' : theme.colors.canvas,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.pillText,
+                        { color: !operatorId ? theme.colors.link : theme.colors.body },
+                        !operatorId && { fontWeight: '700' },
+                      ]}
+                    >
+                      Unassigned
+                    </Text>
+                  </TouchableOpacity>
+                  {operators.map((o) => {
+                    const isSelected = operatorId === o.id;
+                    return (
+                      <TouchableOpacity
+                        key={o.id}
+                        onPress={() => setOperatorId(isSelected ? null : o.id)}
+                        style={[
+                          styles.pillOption,
+                          {
+                            paddingHorizontal: 12,
+                            minWidth: 100,
+                            borderColor: isSelected ? theme.colors.link : theme.colors.hairline,
+                            backgroundColor: isSelected ? theme.colors.link + '15' : theme.colors.canvas,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.pillText,
+                            { color: isSelected ? theme.colors.link : theme.colors.body },
+                            isSelected && { fontWeight: '700' },
+                          ]}
+                        >
+                          {o.full_name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </View>
 
             {/* Status Pills */}
             <View style={styles.sectionGroup}>
@@ -362,7 +458,7 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
           <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
             <Button label="Cancel" onPress={onClose} variant="outline" size="md" />
             <Button
-              label={machineToEdit ? 'Save Changes' : 'Create Machine'}
+              label={isSupervisor ? 'Save Updates' : machineToEdit ? 'Save Changes' : 'Create Machine'}
               onPress={handleSave}
               isLoading={isLoading}
               variant="primary"

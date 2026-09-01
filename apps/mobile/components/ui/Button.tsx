@@ -3,7 +3,7 @@
  * Standardized button system with variants (primary, secondary, outline, ghost, danger) & loading spinner.
  */
 
-import React from 'react';
+import React, { useState, useRef } from 'react';
 import {
   TouchableOpacity,
   Text,
@@ -21,7 +21,7 @@ export type ButtonShape = 'pill' | 'square';
 
 export interface ButtonProps {
   label: string;
-  onPress: () => void;
+  onPress?: () => void | Promise<any>;
   variant?: ButtonVariant;
   size?: ButtonSize;
   shape?: ButtonShape;
@@ -45,6 +45,28 @@ export const Button: React.FC<ButtonProps> = ({
   style,
 }) => {
   const { theme } = useTheme();
+
+  const [internalLoading, setInternalLoading] = useState(false);
+  const isExecutingRef = useRef(false);
+
+  const effectiveLoading = Boolean(isLoading || internalLoading);
+
+  const handlePress = async () => {
+    if (disabled || effectiveLoading || isExecutingRef.current) return;
+    if (!onPress) return;
+
+    try {
+      const result: unknown = (onPress as () => unknown)();
+      if (result && typeof (result as { then?: unknown }).then === 'function') {
+        isExecutingRef.current = true;
+        setInternalLoading(true);
+        await (result as Promise<unknown>);
+      }
+    } finally {
+      isExecutingRef.current = false;
+      setInternalLoading(false);
+    }
+  };
 
   const getContainerStyle = (): ViewStyle => {
     let bg = theme.colors.primary;
@@ -91,7 +113,7 @@ export const Button: React.FC<ButtonProps> = ({
       justifyContent: 'center',
       flexDirection: 'row',
       gap: 6,
-      opacity: disabled ? 0.5 : 1,
+      opacity: disabled || effectiveLoading ? 0.5 : 1,
       minHeight,
       minWidth: 44,
       width: fullWidth ? '100%' : 'auto',
@@ -121,16 +143,16 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <TouchableOpacity
-      onPress={onPress}
-      disabled={disabled || isLoading}
+      onPress={handlePress}
+      disabled={disabled || effectiveLoading}
       activeOpacity={0.7}
       accessible={true}
       accessibilityLabel={label}
       accessibilityRole="button"
-      accessibilityState={{ disabled: disabled || isLoading }}
+      accessibilityState={{ disabled: disabled || effectiveLoading, busy: effectiveLoading }}
       style={[getContainerStyle(), style]}
     >
-      {isLoading ? (
+      {effectiveLoading ? (
         <ActivityIndicator
           size="small"
           color={variant === 'primary' ? theme.colors.onPrimary : theme.colors.link}

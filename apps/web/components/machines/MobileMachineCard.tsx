@@ -16,6 +16,7 @@ import type { Machine } from "@/lib/types/database";
 interface MobileMachineCardProps {
   machine: Machine;
   isAdmin: boolean;
+  isSupervisor?: boolean;
   onEdit: (machine: Machine) => void;
   onDelete: (machine: Machine) => void;
 }
@@ -23,6 +24,7 @@ interface MobileMachineCardProps {
 export function MobileMachineCard({
   machine,
   isAdmin,
+  isSupervisor = false,
   onEdit,
   onDelete,
 }: MobileMachineCardProps) {
@@ -180,15 +182,29 @@ export function MobileMachineCard({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onEdit(machine)}
-            className="h-8 px-3 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-            title="Edit Machine"
-          >
-            <AnimatedEdit size={14} className="text-amber-500 shrink-0" />
-            <span>Edit</span>
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => onEdit(machine)}
+              className="h-8 px-3 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title="Edit Machine Specifications"
+            >
+              <AnimatedEdit size={14} className="text-amber-500 shrink-0" />
+              <span>Edit</span>
+            </button>
+          )}
+
+          {isSupervisor && !isAdmin && (
+            <button
+              type="button"
+              onClick={() => onEdit(machine)}
+              className="h-8 px-3 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title="Update Status & Assignments"
+            >
+              <AnimatedEdit size={14} className="text-sky-500 shrink-0" />
+              <span>Update Status</span>
+            </button>
+          )}
 
           {isAdmin && (
             <button

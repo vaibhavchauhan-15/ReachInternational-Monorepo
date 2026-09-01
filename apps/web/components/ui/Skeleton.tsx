@@ -204,72 +204,64 @@ export function MachinesSkeleton() {
 
 export function MachineDetailSkeleton() {
   return (
-    <div className="flex flex-col gap-6" aria-label="Loading machine details...">
+    <div className="flex flex-col gap-4 sm:gap-6 pb-20 md:pb-8 max-w-7xl mx-auto px-2 sm:px-4 md:px-6 w-full" aria-label="Loading machine details...">
       {/* Back button */}
-      <Skeleton className="h-4 w-24" />
+      <Skeleton className="h-4 w-28" />
 
-      {/* Header title block */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <Skeleton className="h-10 w-10 rounded-[var(--radius-sm)]" />
-          <div className="flex flex-col gap-1.5">
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-7 w-32" />
-              <Skeleton className="h-5 w-16 rounded-full" />
+      {/* Hero Header Card */}
+      <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-5 md:p-6 shadow-2xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+            <Skeleton className="h-11 w-11 sm:h-13 sm:w-13 rounded-xl shrink-0" />
+            <div className="flex flex-wrap items-center gap-2">
+              <Skeleton className="h-7 sm:h-8 w-44 sm:w-60 rounded-lg" />
+              <Skeleton className="h-5 w-20 rounded-full" />
             </div>
-            <Skeleton className="h-4 w-48" />
           </div>
+          <Skeleton className="h-9 w-28 rounded-xl self-end sm:self-center shrink-0" />
         </div>
-        <Skeleton className="h-9 w-24 rounded-[var(--radius-md)]" />
       </div>
 
-      {/* Summary Cards Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Card key={i} padding="md">
-            <div className="flex flex-col gap-1 mb-4">
-              <Skeleton className="h-3 w-20" />
-              <Skeleton className="h-5 w-32" />
-            </div>
-            <div className="flex flex-col gap-3">
-              <div className="flex justify-between">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-24" />
-              </div>
-              <div className="flex justify-between">
-                <Skeleton className="h-4 w-20" />
-                <Skeleton className="h-4 w-16" />
-              </div>
-              <div className="flex justify-between">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-24" />
-              </div>
-            </div>
-          </Card>
-        ))}
+      {/* Segmented Toggle Bar */}
+      <div className="grid grid-cols-2 sm:inline-flex sm:w-auto p-1 rounded-xl bg-neutral-100 dark:bg-neutral-900 border border-[var(--color-hairline)] gap-1">
+        <Skeleton className="h-9 w-full sm:w-44 rounded-lg" />
+        <Skeleton className="h-9 w-full sm:w-52 rounded-lg" />
       </div>
 
-      {/* Form Card Placeholder */}
-      <Card padding="lg">
-        <div className="flex flex-col gap-1 mb-4">
-          <Skeleton className="h-3 w-16" />
-          <Skeleton className="h-5 w-40" />
+      {/* Basic Info Card Skeleton */}
+      <Card padding="md" className="sm:p-6">
+        <div className="flex items-center justify-between pb-3 border-b border-[var(--color-hairline)]">
+          <Skeleton className="h-5 w-24 rounded" />
+          <Skeleton className="h-4 w-20 rounded-full" />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-          <Skeleton className="h-10 w-full rounded-[var(--radius-md)]" />
-          <Skeleton className="h-10 w-full rounded-[var(--radius-md)]" />
-          <Skeleton className="h-24 w-full md:col-span-2 rounded-[var(--radius-md)]" />
-          <Skeleton className="h-10 w-36 rounded-[var(--radius-md)]" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5 mt-3.5">
+          {Array.from({ length: 10 }).map((_, i) => (
+            <div key={i} className="p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)] flex flex-col gap-1.5">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+          ))}
         </div>
       </Card>
 
-      {/* History Table Card */}
-      <Card padding="md">
-        <div className="flex flex-col gap-1 mb-4">
-          <Skeleton className="h-3 w-24" />
-          <Skeleton className="h-5 w-36" />
+      {/* Client Details Card Skeleton */}
+      <Card padding="md" className="sm:p-6">
+        <div className="flex items-center justify-between pb-3 border-b border-[var(--color-hairline)]">
+          <Skeleton className="h-5 w-44 rounded" />
+          <Skeleton className="h-4 w-28 rounded-full" />
         </div>
-        <SkeletonTable columns={4} rows={5} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3.5 mt-3.5">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)] flex flex-col gap-1.5">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-4 w-32" />
+            </div>
+          ))}
+        </div>
+        <div className="mt-3.5 p-3.5 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)] flex flex-col gap-2">
+          <Skeleton className="h-3 w-28" />
+          <Skeleton className="h-4 w-full" />
+        </div>
       </Card>
     </div>
   );

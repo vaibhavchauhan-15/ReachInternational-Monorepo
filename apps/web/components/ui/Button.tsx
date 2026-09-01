@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
-import { ReactNode, forwardRef } from "react";
+import { ReactNode, forwardRef, useState, useRef } from "react";
+import { useFormStatus } from "react-dom";
 import { AnimatedLoader } from "./animated-icons";
 
 export type ButtonVariant =
@@ -100,6 +103,17 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
       ...rest
     } = props;
 
+    // React 19 Form Status integration for Server Action form submissions
+    const formStatus = useFormStatus();
+    const isSubmitType = ("type" in rest && rest.type === "submit") || Boolean((rest as any).formAction);
+    const isFormPending = isSubmitType && Boolean(formStatus?.pending);
+
+    // Internal state for async onClick handler tracking & duplicate submission locking
+    const [internalLoading, setInternalLoading] = useState(false);
+    const isExecutingRef = useRef(false);
+
+    const effectiveLoading = Boolean(loading || internalLoading || isFormPending);
+
     // Derive default size from variant if not explicitly provided
     const effectiveSize: ButtonSize =
       size ??
@@ -128,7 +142,7 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
 
     const renderLabel = () => {
       if (!children) return null;
-      if (isResponsive && (icon || loading)) {
+      if (isResponsive && (icon || effectiveLoading)) {
         return <span className="hidden sm:inline whitespace-nowrap leading-none">{children}</span>;
       }
       return <span className="whitespace-nowrap leading-none">{children}</span>;
@@ -136,7 +150,7 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
 
     const content = (
       <>
-        {loading ? (
+        {effectiveLoading ? (
           <span className="inline-flex items-center justify-center shrink-0">
             <AnimatedLoader isSpinning size={16} />
           </span>
@@ -144,7 +158,7 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
           <span className="inline-flex items-center justify-center shrink-0 leading-none">{icon}</span>
         ) : null}
         {renderLabel()}
-        {!loading && (iconPosition === "right" || trailingIcon) ? (
+        {!effectiveLoading && (iconPosition === "right" || trailingIcon) ? (
           <span className="inline-flex items-center justify-center shrink-0 leading-none">{trailingIcon || icon}</span>
         ) : null}
       </>
@@ -152,28 +166,77 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
 
     if ("href" in props && props.href !== undefined) {
       const { href, disabled, target, rel, title, onClick } = rest as LinkProps;
+      const handleLinkClick = async (e: React.MouseEvent<HTMLAnchorElement>) => {
+        if (disabled || effectiveLoading || isExecutingRef.current) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        if (onClick) {
+          try {
+            const result: unknown = (onClick as (event: React.MouseEvent<HTMLAnchorElement>) => unknown)(e);
+            if (result && typeof (result as { then?: unknown }).then === "function") {
+              isExecutingRef.current = true;
+              setInternalLoading(true);
+              await (result as Promise<unknown>);
+            }
+          } finally {
+            isExecutingRef.current = false;
+            setInternalLoading(false);
+          }
+        }
+      };
+
       return (
         <Link
           ref={ref as any}
           href={href}
-          className={`${classes} ${disabled ? "opacity-50 pointer-events-none" : ""}`}
+          className={`${classes} ${disabled || effectiveLoading ? "opacity-50 pointer-events-none" : ""}`}
           target={target}
           rel={rel}
           title={title}
-          onClick={onClick}
+          onClick={handleLinkClick}
+          aria-disabled={disabled || effectiveLoading}
+          aria-busy={effectiveLoading}
         >
           {content}
         </Link>
       );
     }
 
-    const { disabled, type = "button", ...buttonRest } = rest as ButtonProps;
+    const { disabled, type = "button", onClick, ...buttonRest } = rest as ButtonProps;
+
+    const handleButtonClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
+      if (disabled || effectiveLoading || isExecutingRef.current) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
+
+      if (onClick) {
+        try {
+          const result: unknown = (onClick as (event: React.MouseEvent<HTMLButtonElement>) => unknown)(e);
+          if (result && typeof (result as { then?: unknown }).then === "function") {
+            isExecutingRef.current = true;
+            setInternalLoading(true);
+            await (result as Promise<unknown>);
+          }
+        } finally {
+          isExecutingRef.current = false;
+          setInternalLoading(false);
+        }
+      }
+    };
+
     return (
       <button
         ref={ref as any}
         type={type}
-        className={classes}
-        disabled={disabled || loading}
+        className={`${classes} ${disabled || effectiveLoading ? "disabled:opacity-50 disabled:cursor-not-allowed" : ""}`}
+        disabled={disabled || effectiveLoading}
+        onClick={handleButtonClick}
+        aria-disabled={disabled || effectiveLoading}
+        aria-busy={effectiveLoading}
         {...buttonRest}
       >
         {content}

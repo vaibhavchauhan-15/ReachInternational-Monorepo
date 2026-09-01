@@ -204,12 +204,14 @@ function CustomFilterSelector({
 function RowActionsMenu({
   machine,
   canEdit,
+  isSupervisor,
   isAdmin,
   onEdit,
   onDelete,
 }: {
   machine: Machine;
   canEdit: boolean;
+  isSupervisor: boolean;
   isAdmin: boolean;
   onEdit: (m: Machine) => void;
   onDelete: (m: Machine) => void;
@@ -231,8 +233,8 @@ function RowActionsMenu({
   const updatePosition = useCallback(() => {
     if (!buttonRef.current) return;
     const rect = buttonRef.current.getBoundingClientRect();
-    const menuWidth = 176; // 11rem = 176px (w-44)
-    const menuHeight = isAdmin ? 140 : 96;
+    const menuWidth = 208; // 13rem = 208px
+    const menuHeight = isAdmin ? 140 : isSupervisor ? 96 : 48;
     const spaceBelow = window.innerHeight - rect.bottom;
     const shouldOpenUpwards = spaceBelow < menuHeight + 16;
 
@@ -250,7 +252,7 @@ function RowActionsMenu({
       left: leftPos,
       openUpwards: shouldOpenUpwards,
     });
-  }, [isAdmin]);
+  }, [isAdmin, isSupervisor]);
 
   const toggleOpen = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -331,10 +333,11 @@ function RowActionsMenu({
                   position: "fixed",
                   top: `${coords.top}px`,
                   left: `${coords.left}px`,
-                  width: "176px",
+                  width: "208px",
                 }}
                 className="pointer-events-auto z-50 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1 shadow-xl text-xs space-y-0.5"
               >
+                {/* 1. Manager/Admin: Edit Machine Specifications */}
                 {canEdit && (
                   <button
                     type="button"
@@ -344,13 +347,37 @@ function RowActionsMenu({
                     }}
                     className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
                   >
-                    <AnimatedEdit size={14} className="text-amber-500" />
+                    <AnimatedEdit size={14} className="text-amber-500 shrink-0" />
                     <span>Edit Machine</span>
                   </button>
                 )}
 
+                {/* 2. Supervisor: Update Status & Assignments */}
+                {isSupervisor && !canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpen(false);
+                      onEdit(machine);
+                    }}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
+                  >
+                    <AnimatedEdit size={14} className="text-sky-500 shrink-0" />
+                    <span>Update Status & Assignments</span>
+                  </button>
+                )}
 
+                {/* 3. All Users: View Details */}
+                <Link
+                  href={`/machines/${machine.id}`}
+                  onClick={() => setOpen(false)}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
+                >
+                  <AnimatedFileText size={14} className="text-neutral-500 shrink-0" />
+                  <span>View Details</span>
+                </Link>
 
+                {/* 4. Manager/Admin: Delete Machine */}
                 {isAdmin && (
                   <>
                     <div className="my-1 border-t border-[var(--color-hairline)]" />
@@ -362,7 +389,7 @@ function RowActionsMenu({
                       }}
                       className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
                     >
-                      <AnimatedTrash size={14} className="text-rose-500" />
+                      <AnimatedTrash size={14} className="text-rose-500 shrink-0" />
                       <span>Delete Machine</span>
                     </button>
                   </>
@@ -649,8 +676,9 @@ export function MachineListClient({
     userRole === "admin" ||
     userRole === "manager" ||
     userRole === "service_manager";
+  const isSupervisor = userRole === "supervisor";
   const isAdmin = canManage;
-  const canEdit = canManage || userRole === "supervisor";
+  const canEdit = canManage;
   const canCreateMachine = canManage;
   const canDelete = canManage;
 
@@ -1002,6 +1030,7 @@ export function MachineListClient({
           <RowActionsMenu
             machine={row}
             canEdit={canEdit}
+            isSupervisor={isSupervisor}
             isAdmin={isAdmin}
             onEdit={(m) => {
               setEditingMachine(m);
@@ -1012,7 +1041,7 @@ export function MachineListClient({
         ),
       },
     ],
-    [canEdit, isAdmin]
+    [canEdit, isSupervisor, isAdmin]
   );
 
   return (
@@ -1331,6 +1360,7 @@ export function MachineListClient({
                     key={m.id}
                     machine={m}
                     isAdmin={isAdmin}
+                    isSupervisor={isSupervisor}
                     onEdit={(mach: Machine) => {
                       setEditingMachine(mach);
                       setModalOpen(true);
@@ -1382,6 +1412,7 @@ export function MachineListClient({
                       key={m.id}
                       machine={m}
                       isAdmin={isAdmin}
+                      isSupervisor={isSupervisor}
                       onEdit={(mach: Machine) => {
                         setEditingMachine(mach);
                         setModalOpen(true);
@@ -1433,6 +1464,7 @@ export function MachineListClient({
                       key={m.id}
                       machine={m}
                       isAdmin={isAdmin}
+                      isSupervisor={isSupervisor}
                       onEdit={(mach: Machine) => {
                         setEditingMachine(mach);
                         setModalOpen(true);

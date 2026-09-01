@@ -1684,20 +1684,24 @@ export function OperationsClient({
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--color-hairline)]">
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => setShowAssignModal(false)}
-                className="px-3.5 py-1.5 rounded-xl border border-[var(--color-hairline)] text-xs font-bold text-[var(--color-mute)] hover:text-[var(--color-ink)] cursor-pointer"
+                disabled={submitting}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
-                disabled={submitting || !selectedMachineId || !selectedOperatorId}
-                className="px-4 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-md cursor-pointer transition-all disabled:opacity-50"
+                variant="primary"
+                size="sm"
+                loading={submitting}
+                disabled={!selectedMachineId || !selectedOperatorId}
               >
-                {submitting ? "Assigning..." : "Confirm & Assign Operator"}
-              </button>
+                Confirm & Assign Operator
+              </Button>
             </div>
           </form>
         </div>
@@ -1760,21 +1764,25 @@ export function OperationsClient({
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button
+            <div className="flex justify-end gap-2 pt-2 border-t border-[var(--color-hairline)]">
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => setShowHireOperatorModal(false)}
-                className="px-3.5 py-1.5 rounded-xl border border-[var(--color-hairline)] text-xs font-bold text-[var(--color-mute)] cursor-pointer"
+                disabled={submitting}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
-                disabled={submitting}
-                className="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold cursor-pointer"
+                variant="primary"
+                size="sm"
+                loading={submitting}
+                className="bg-emerald-600 hover:bg-emerald-700"
               >
-                {submitting ? "Hiring..." : "Hire & Register Operator"}
-              </button>
+                Hire & Register Operator
+              </Button>
             </div>
           </form>
         </div>
@@ -1854,21 +1862,25 @@ export function OperationsClient({
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button
+            <div className="flex justify-end gap-2 pt-2 border-t border-[var(--color-hairline)]">
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => setShowSiteMovementModal(false)}
-                className="px-3.5 py-1.5 rounded-xl border border-[var(--color-hairline)] text-xs font-bold text-[var(--color-mute)] cursor-pointer"
+                disabled={submitting}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
-                disabled={submitting}
-                className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold cursor-pointer"
+                variant="primary"
+                size="sm"
+                loading={submitting}
+                className="bg-indigo-600 hover:bg-indigo-700"
               >
-                {submitting ? "Saving..." : "Record Site Movement"}
-              </button>
+                Record Site Movement
+              </Button>
             </div>
           </form>
         </div>
@@ -1952,21 +1964,25 @@ export function OperationsClient({
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button
+            <div className="flex justify-end gap-2 pt-2 border-t border-[var(--color-hairline)]">
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => setShowPayoutModal(false)}
-                className="px-3.5 py-1.5 rounded-xl border border-[var(--color-hairline)] text-xs font-bold text-[var(--color-mute)] cursor-pointer"
+                disabled={submitting}
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
-                disabled={submitting}
-                className="px-4 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold cursor-pointer"
+                variant="primary"
+                size="sm"
+                loading={submitting}
+                className="bg-amber-600 hover:bg-amber-700"
               >
-                {submitting ? "Saving..." : "Record Salary Payout"}
-              </button>
+                Record Salary Payout
+              </Button>
             </div>
           </form>
         </div>

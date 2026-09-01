@@ -43,8 +43,9 @@ export function CreateTaskModal({
   const [selectedUserId, setSelectedUserId] = useState<string>(
     initialTask?.assignees?.[0]?.user_id || users[0]?.id || ''
   );
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!description.trim()) {
       Alert.alert('Required', 'Please enter task description / instructions');
       return;
@@ -65,17 +66,24 @@ export function CreateTaskModal({
       return;
     }
 
-    onSave({
-      id: initialTask?.id,
-      title: finalTitle,
-      description,
-      due_date: dueDate,
-      due_time: dueTime,
-      priority,
-      reminder_offset: reminderOffset,
-      assignee_ids: [selectedUserId],
-    });
-    onClose();
+    setIsSaving(true);
+    try {
+      await Promise.resolve(onSave({
+        id: initialTask?.id,
+        title: finalTitle,
+        description,
+        due_date: dueDate,
+        due_time: dueTime,
+        priority,
+        reminder_offset: reminderOffset,
+        assignee_ids: [selectedUserId],
+      }));
+      onClose();
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to save task.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -83,7 +91,7 @@ export function CreateTaskModal({
       <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
         {/* Screen Header */}
         <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
-          <TouchableOpacity onPress={onClose} style={styles.backBtn}>
+          <TouchableOpacity onPress={onClose} disabled={isSaving} style={styles.backBtn}>
             <Text style={[styles.backIcon, { color: theme.colors.ink }]}>←</Text>
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.colors.ink }]}>
@@ -91,9 +99,12 @@ export function CreateTaskModal({
           </Text>
           <TouchableOpacity
             onPress={handleSave}
-            style={[styles.saveCta, { backgroundColor: theme.colors.primary }]}
+            disabled={isSaving}
+            style={[styles.saveCta, { backgroundColor: theme.colors.primary, opacity: isSaving ? 0.6 : 1 }]}
           >
-            <Text style={[styles.saveCtaText, { color: theme.colors.onPrimary }]}>SAVE</Text>
+            <Text style={[styles.saveCtaText, { color: theme.colors.onPrimary }]}>
+              {isSaving ? 'SAVING...' : 'SAVE'}
+            </Text>
           </TouchableOpacity>
         </View>
 

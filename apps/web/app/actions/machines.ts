@@ -23,7 +23,7 @@ function isValidUuid(id?: string | null): boolean {
 
 export async function createMachine(state: MachineFormState, formData: FormData): Promise<MachineFormState> {
   try {
-    await requireRole("admin", "super_admin", "manager", "service_manager", "store_manager");
+    await requireRole("admin", "super_admin", "manager", "service_manager");
 
     const supabase = await createSupabaseServerClient();
     const {
@@ -166,7 +166,7 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
     return { error: "Invalid machine ID format." };
   }
   try {
-    await requireRole("admin", "super_admin", "manager", "service_manager", "store_manager", "supervisor");
+    const caller = await requireRole("admin", "super_admin", "manager", "service_manager", "supervisor");
     const supabase = await createSupabaseServerClient();
     const {
       data: { user },
@@ -174,17 +174,72 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
 
     if (!user) return { error: "Authentication required. Please log in to update machine details." };
 
+    const isSupervisor = caller.role === "supervisor";
+
+    const current_operator_id = (formData.get("current_operator_id") as string)?.trim() || null;
+    const client_id = (formData.get("client_id") as string)?.trim() || null;
+    const hour_meter = parseFloat((formData.get("hour_meter") as string) || "0") || 0;
+    const health_status = (formData.get("health_status") as string) || "active";
+    const status = (formData.get("status") as string) || "available";
+
+    if (!["active", "under_maintenance", "breakdown"].includes(health_status)) {
+      return { error: "Invalid health status option selected." };
+    }
+    if (!["available", "rented"].includes(status)) {
+      return { error: "Invalid rental status option selected." };
+    }
+    if (hour_meter < 0 || isNaN(hour_meter)) {
+      return { error: "Hour meter reading cannot be negative." };
+    }
+
+    // If supervisor is updating, strictly apply only operational updates (HMR, Health, Rental Status, Operator, Client)
+    if (isSupervisor) {
+      const updateData: Record<string, any> = {
+        hour_meter,
+        health_status,
+        status,
+        current_operator_id: current_operator_id && isValidUuid(current_operator_id) ? current_operator_id : null,
+        client_id: status === "rented" && isValidUuid(client_id) ? client_id : null,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from("machines")
+        .update(updateData)
+        .eq("id", id);
+
+      if (error) {
+        return formatMachineDatabaseError(error);
+      }
+
+      await logAudit({
+        action: "machine.operational_updated",
+        entity_type: "machine",
+        entity_id: id,
+        metadata: {
+          hour_meter,
+          health_status,
+          status,
+          current_operator_id: updateData.current_operator_id,
+          client_id: updateData.client_id,
+        },
+      });
+
+      revalidateTag(TAGS.machines, "max");
+      revalidateTag(TAGS.machinesMeta, "max");
+      revalidateTag(TAGS.dashboardKpis, "max");
+      revalidateTag(TAGS.machineDetail(id), "max");
+
+      return { success: true };
+    }
+
+    // Full Manager / Admin update pathway
     const machine_id = (formData.get("machine_id") as string)?.trim()?.toUpperCase();
     const model = (formData.get("model") as string)?.trim() || null;
     const serial_number = (formData.get("serial_number") as string)?.trim() || null;
     const year_of_mfg = (formData.get("year_of_mfg") as string)?.trim() || null;
     const manufacturer = (formData.get("manufacturer") as string)?.trim() || null;
     const current_supervisor_id = (formData.get("current_supervisor_id") as string)?.trim() || null;
-    const current_operator_id = (formData.get("current_operator_id") as string)?.trim() || null;
-    const client_id = (formData.get("client_id") as string)?.trim() || null;
-    const hour_meter = parseFloat((formData.get("hour_meter") as string) || "0") || 0;
-    const health_status = (formData.get("health_status") as string) || "active";
-    const status = (formData.get("status") as string) || "available";
 
     const updateErrors: Record<string, string> = {};
 
@@ -268,6 +323,109 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
   }
 }
 
+export async function updateMachineOperationalStatus(
+  machineId: string,
+  payload: {
+    hour_meter?: number;
+    current_operator_id?: string | null;
+    client_id?: string | null;
+    health_status?: "active" | "under_maintenance" | "breakdown";
+    status?: "available" | "rented";
+  }
+): Promise<{ success?: boolean; error?: string }> {
+  if (!isValidUuid(machineId)) {
+    return { error: "Invalid machine ID format." };
+  }
+  try {
+    await requireRole("admin", "super_admin", "manager", "service_manager", "supervisor");
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { error: "Authentication required." };
+    }
+
+    const updateData: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (payload.hour_meter !== undefined) {
+      const hmr = Number(payload.hour_meter);
+      if (isNaN(hmr) || hmr < 0) {
+        return { error: "Hour meter reading cannot be negative." };
+      }
+      updateData.hour_meter = hmr;
+    }
+
+    if (payload.health_status !== undefined) {
+      if (!["active", "under_maintenance", "breakdown"].includes(payload.health_status)) {
+        return { error: "Invalid health status option." };
+      }
+      updateData.health_status = payload.health_status;
+    }
+
+    if (payload.status !== undefined) {
+      if (!["available", "rented"].includes(payload.status)) {
+        return { error: "Invalid rental status option." };
+      }
+      updateData.status = payload.status;
+      if (payload.status === "available") {
+        updateData.client_id = null;
+      }
+    }
+
+    if (payload.current_operator_id !== undefined) {
+      updateData.current_operator_id =
+        payload.current_operator_id && isValidUuid(payload.current_operator_id)
+          ? payload.current_operator_id
+          : null;
+    }
+
+    if (payload.client_id !== undefined && payload.status !== "available") {
+      updateData.client_id =
+        payload.client_id && isValidUuid(payload.client_id)
+          ? payload.client_id
+          : null;
+    }
+
+    const { error } = await supabase
+      .from("machines")
+      .update(updateData)
+      .eq("id", machineId);
+
+    if (error) {
+      const formatted = formatMachineDatabaseError(error);
+      return { error: formatted.error };
+    }
+
+    await logAudit({
+      action: "machine.operational_status_updated",
+      entity_type: "machine",
+      entity_id: machineId,
+      metadata: updateData,
+    });
+
+    revalidateTag(TAGS.machines, "max");
+    revalidateTag(TAGS.machinesMeta, "max");
+    revalidateTag(TAGS.dashboardKpis, "max");
+    revalidateTag(TAGS.machineDetail(machineId), "max");
+
+    return { success: true };
+  } catch (err: unknown) {
+    if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
+      throw err;
+    }
+    const rawMsg = err instanceof Error ? err.message : "Failed to update machine status";
+    return {
+      error: rawMsg.includes("row-level security")
+        ? "Permission denied: Your account role does not have authorization to update machine status."
+        : rawMsg,
+    };
+  }
+}
+
 export async function deleteMachine(id: string): Promise<{ success?: boolean; error?: string }> {
   if (!isValidUuid(id)) {
     return { error: "Invalid machine ID format." };
@@ -311,7 +469,7 @@ export async function reassignMachineSupervisor(machineId: string, supervisorId:
     return { error: "Invalid supervisor ID format." };
   }
   try {
-    await requireRole("admin", "super_admin", "service_manager");
+    await requireRole("admin", "super_admin", "manager", "service_manager");
     const supabase = await createSupabaseServerClient();
     const { error } = await supabase.from("machines").update({ current_supervisor_id: supervisorId || null }).eq("id", machineId);
     
