@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Modal, Input, Select, Button, useToast, SearchableSelect, UserSelect } from "@/components/ui";
-import { createMachine, updateMachine } from "@/app/actions/machines";
+import { Modal, Input, Select, Button, useToast, SearchableSelect, UserSelect, ClientSelect, type ClientSelectItem } from "@/components/ui";
+import { createMachine, updateMachine, checkMachineSerialNumberAvailable } from "@/app/actions/machines";
 import type { Machine, User } from "@/lib/types/database";
-import { AnimatedWrench, AnimatedCpu, AnimatedShieldCheck } from "@/components/ui/animated-icons";
 import { AlertCircle } from "lucide-react";
 
 interface MachineModalProps {
@@ -13,13 +12,14 @@ interface MachineModalProps {
   machine?: Machine | null;
   supervisors?: User[];
   operators?: User[];
+  clients?: ClientSelectItem[];
   userRole?: string;
   onSuccess: () => void;
 }
 
-export function MachineModal({ open, onClose, machine, supervisors = [], operators = [], userRole, onSuccess }: MachineModalProps) {
+export function MachineModal({ open, onClose, machine, supervisors = [], operators = [], clients = [], userRole, onSuccess }: MachineModalProps) {
   const { toast } = useToast();
-  const [isPending, startTransition] = useTransition();
+  const [isSaving, setIsSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string>("");
 
@@ -27,6 +27,9 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
 
   const [supervisorId, setSupervisorId] = useState<string>(() => machine?.current_supervisor_id || "");
   const [operatorId, setOperatorId] = useState<string>(() => machine?.current_operator_id || "");
+  const [rentalStatus, setRentalStatus] = useState<string>(() => machine?.status || "available");
+  const [healthStatus, setHealthStatus] = useState<string>(() => machine?.health_status || "active");
+  const [clientId, setClientId] = useState<string>(() => machine?.client_id || "");
 
   // Sync state when machine prop changes
   const [prevMachine, setPrevMachine] = useState(machine);
@@ -34,9 +37,40 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
     setPrevMachine(machine);
     setSupervisorId(machine?.current_supervisor_id || "");
     setOperatorId(machine?.current_operator_id || "");
+    setRentalStatus(machine?.status || "available");
+    setHealthStatus(machine?.health_status || "active");
+    setClientId(machine?.client_id || "");
+    setFieldErrors({});
+    setFormError("");
   }
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSerialBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
+    const val = e.target.value.trim();
+    if (!val) return;
+    if (isEdit && machine?.serial_number && machine.serial_number.toLowerCase().trim() === val.toLowerCase()) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next.serial_number;
+        return next;
+      });
+      return;
+    }
+    const check = await checkMachineSerialNumberAvailable(val, machine?.id);
+    if (!check.available) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        serial_number: `Serial number already registered to machine ${check.existingMachineId}.`,
+      }));
+    } else {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next.serial_number;
+        return next;
+      });
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFieldErrors({});
     setFormError("");
@@ -59,7 +93,8 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
       return;
     }
 
-    startTransition(async () => {
+    setIsSaving(true);
+    try {
       let res;
       if (isEdit && machine) {
         res = await updateMachine(machine.id, {}, formData);
@@ -68,15 +103,22 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
       }
 
       if (res?.error) {
+        setIsSaving(false);
         setFormError(res.error);
         if (res.fieldErrors) setFieldErrors(res.fieldErrors);
         toast("error", "Failed to save machine", res.error);
       } else {
         toast("success", isEdit ? "Machine updated" : "Machine registered successfully");
+        setIsSaving(false);
         onSuccess();
         onClose();
       }
-    });
+    } catch (err: unknown) {
+      setIsSaving(false);
+      const msg = err instanceof Error ? err.message : "An unexpected error occurred while saving machine details.";
+      setFormError(msg);
+      toast("error", "Failed to save machine", msg);
+    }
   };
 
   // Ensure assigned current supervisor is included in options if present
@@ -92,6 +134,14 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
   if (machine?.current_operator && machine.current_operator_id) {
     if (!allOperators.some((o) => o.id === machine.current_operator_id)) {
       allOperators.push(machine.current_operator);
+    }
+  }
+
+  // Ensure assigned client is included in options if present
+  const allClients: ClientSelectItem[] = [...clients];
+  if (machine?.client && machine.client_id) {
+    if (!allClients.some((c) => c.id === machine.client_id)) {
+      allClients.push(machine.client as ClientSelectItem);
     }
   }
 
@@ -123,8 +173,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
 
         {/* SECTION 1: Machine Identity & Specifications */}
         <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 flex flex-col gap-3.5">
-          <div className="flex items-center gap-2 pb-2 border-b border-[var(--color-hairline)]">
-            <AnimatedWrench size={16} className="text-[var(--color-link)]" />
+          <div className="pb-2 border-b border-[var(--color-hairline)]">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink)]">
               Machine Identification & Specifications
             </h4>
@@ -138,7 +187,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
               defaultValue={machine?.model || ""}
               error={fieldErrors.model}
               required
-              disabled={isPending}
+              disabled={isSaving}
             />
 
             <Input
@@ -147,8 +196,9 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
               placeholder="e.g. SN-98745612"
               defaultValue={machine?.serial_number || ""}
               error={fieldErrors.serial_number}
+              onBlur={handleSerialBlur}
               required
-              disabled={isPending}
+              disabled={isSaving}
             />
 
             <Input
@@ -158,7 +208,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
               defaultValue={machine?.year_of_mfg || ""}
               error={fieldErrors.year_of_mfg}
               required
-              disabled={isPending}
+              disabled={isSaving}
             />
 
             <Input
@@ -168,15 +218,14 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
               defaultValue={machine?.manufacturer || ""}
               error={fieldErrors.manufacturer}
               required
-              disabled={isPending}
+              disabled={isSaving}
             />
           </div>
         </div>
 
         {/* SECTION 2: Metering & Fleet Assignment */}
         <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 flex flex-col gap-3.5">
-          <div className="flex items-center gap-2 pb-2 border-b border-[var(--color-hairline)]">
-            <AnimatedCpu size={16} className="text-[var(--color-link)]" />
+          <div className="pb-2 border-b border-[var(--color-hairline)]">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink)]">
               Meter Readings & Personnel Assignment
             </h4>
@@ -192,18 +241,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
               placeholder="e.g. 1250.5"
               defaultValue={machine?.hour_meter ?? 0}
               error={fieldErrors.hour_meter}
-              disabled={isPending}
-            />
-
-            <Input
-              label="Service Count"
-              name="service_count"
-              type="number"
-              min="0"
-              placeholder="e.g. 3"
-              defaultValue={machine?.service_count ?? 0}
-              error={fieldErrors.service_count}
-              disabled={isPending}
+              disabled={isSaving}
             />
 
             <div>
@@ -234,8 +272,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
 
         {/* SECTION 3: Status & Health */}
         <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 flex flex-col gap-3.5">
-          <div className="flex items-center gap-2 pb-2 border-b border-[var(--color-hairline)]">
-            <AnimatedShieldCheck size={16} className="text-[var(--color-link)]" />
+          <div className="pb-2 border-b border-[var(--color-hairline)]">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink)]">
               Status & Health Tracking
             </h4>
@@ -246,17 +283,44 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
               label="Health Status"
               name="health_status"
               options={healthStatusOptions}
-              defaultValue={machine?.health_status || "active"}
-              disabled={isPending}
+              value={healthStatus}
+              onChange={(val) => {
+                const nextVal = typeof val === "string" ? val : val?.target?.value || "active";
+                setHealthStatus(nextVal);
+              }}
+              disabled={isSaving}
             />
 
             <Select
               label="Rental Status"
               name="status"
               options={statusOptions}
-              defaultValue={machine?.status || "available"}
-              disabled={isPending}
+              value={rentalStatus}
+              onChange={(val) => {
+                const nextVal = typeof val === "string" ? val : val?.target?.value || "available";
+                setRentalStatus(nextVal);
+                if (nextVal === "available") {
+                  setClientId("");
+                }
+              }}
+              disabled={isSaving}
             />
+
+            {rentalStatus === "rented" && (
+              <div className="sm:col-span-2 pt-0.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                <ClientSelect
+                  label="Assigned Client"
+                  clients={allClients}
+                  value={clientId}
+                  onChange={(selectedId) => setClientId(selectedId)}
+                  placeholder="Search and select client renting this machine..."
+                  clearable
+                  disabled={isSaving}
+                  error={fieldErrors.client_id}
+                />
+                <input type="hidden" name="client_id" value={clientId} />
+              </div>
+            )}
           </div>
         </div>
 
@@ -266,7 +330,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
             type="button"
             variant="secondary"
             onClick={onClose}
-            disabled={isPending}
+            disabled={isSaving}
             className="h-10 sm:h-9 text-xs sm:text-sm font-semibold justify-center"
           >
             Cancel
@@ -274,7 +338,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
           <Button
             type="submit"
             variant="primary"
-            loading={isPending}
+            loading={isSaving}
             className="h-10 sm:h-9 text-xs sm:text-sm font-semibold justify-center"
           >
             {isEdit ? "Update Machine" : "Register Machine"}

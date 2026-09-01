@@ -28,6 +28,7 @@ import {
   EmptyState,
   RefreshButton,
   FilterToolbar,
+  SegmentedToggle,
 } from "@/components/ui";
 import dynamic from "next/dynamic";
 import { resendNotification } from "@/app/actions/notifications";
@@ -291,40 +292,17 @@ export function NotificationListClient({
 
       {/* Touch-Friendly Horizontal Filter Pills (Mobile & Desktop) */}
       <div className="flex items-center justify-between gap-2 overflow-x-auto no-scrollbar py-1">
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] shrink-0 max-w-full overflow-x-auto">
-          {filterPills.map((pill) => {
-            const isActive = currentStatus === pill.id;
-            return (
-              <button
-                key={pill.id}
-                onClick={() => updateFilters({ status: pill.id, page: 1 })}
-                className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all whitespace-nowrap ${
-                  isActive
-                    ? "text-[var(--color-ink)] shadow-xs"
-                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-                }`}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="activeFilterPill"
-                    className="absolute inset-0 bg-[var(--color-canvas-elevated)] rounded-lg shadow-xs border border-[var(--color-hairline)]"
-                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  />
-                )}
-                <span className="relative z-10">{pill.label}</span>
-                <span
-                  className={`relative z-10 px-1.5 py-0.5 rounded-full text-[10px] font-mono ${
-                    isActive
-                      ? "bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)]"
-                      : "bg-black/5 dark:bg-white/10 text-[var(--color-mute)]"
-                  }`}
-                >
-                  {pill.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        <SegmentedToggle
+          value={currentStatus}
+          onChange={(val) => updateFilters({ status: val, page: 1 })}
+          layoutIdPrefix="notifications-filter-status"
+          size="sm"
+          items={filterPills.map((pill) => ({
+            id: pill.id,
+            label: pill.label,
+            count: pill.count,
+          }))}
+        />
 
         {/* Mobile Search/Filter Expand Toggle Button */}
         <div className="flex items-center gap-2 sm:hidden shrink-0">

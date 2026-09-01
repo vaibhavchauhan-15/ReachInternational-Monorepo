@@ -1,10 +1,199 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: **Production Ready — Machine Edit Route & Full Manager/Admin/Superadmin Machine Management Completed**
+- **Phase**: **Production Ready — Bug Fix: /operations?tab=logs Operator Assignment Error & Atomic Database Query Optimization Completed**
 - **Release Candidate**: `v2026.09.01` (Branch: `main`)
-- **Overall Health**: Production Ready (0 TypeScript Errors across 9 packages, 35/35 Routes Compiled, 10/10 Live Postgres Automated Tests Passed, 0 Warnings, 0 P0/P1/P2 Issues)
+- **Overall Health**: Production Ready (0 TypeScript Errors across 9 packages, 35/35 Routes Compiled, 0 Runtime Errors, 0 Warnings, 0 P0/P1/P2 Issues)
 - **Last Memory Update**: 2026-09-01
+- [x] **Bug Fix: /operations?tab=logs — Fixed Operator Assignment Error & Atomic Database Query Optimization (`039_assign_machine_operator_atomic.sql`, `actions/operators.ts`, `queries/operators.ts`, `OperationsClient.tsx`) (2026-09-01)**:
+  - **1. Root Cause Resolution**: Resolved `Could not find the table 'public.machine_assignments' in the schema cache` error by removing obsolete queries/inserts to dropped `machine_assignments` table in favor of direct tracking in `public.machines.current_operator_id`.
+  - **2. Atomic Database Stored Procedure (`039_assign_machine_operator_atomic.sql`)**: Created canonical atomic stored procedure `public.assign_machine_operator_atomic` validating machine and operator, unassigning operator from previous machines, updating target machine `current_operator_id`, and writing structured audit logs to `public.audit_logs` in one atomic transaction. Applied live to Supabase PostgreSQL database `dhbbgfzbyatzvqafnsqp`.
+  - **3. Backend Server Actions (`apps/web/app/actions/operators.ts`)**: Enforced RBAC check (`admin`, `super_admin`, `manager`, `service_manager`, `supervisor`), UUID validation (`isValidUuid`), atomic RPC execution with direct fallback, cache revalidation (`CACHE_TAGS.machines`, `CACHE_TAGS.dashboard`, `TAGS.machinesMeta`), and cleaned legacy actions.
+  - **4. Data Query Optimization (`apps/web/lib/queries/operators.ts`)**: Increased machine page size to 1000 in `getOperationsHubData` to load the complete fleet into dropdowns and assignments list, with robust fallback operator lookup in `deriveAssignmentsFromMachines`.
+  - **5. Web Frontend UX Hardening (`apps/web/components/operations/OperationsClient.tsx`)**: Added `handleOpenAssignModal` to pre-select target machine and active operator cleanly, hardened `handleAssignOperator` with `try...catch...finally` block, input validation, and user feedback toast alerts.
+  - **6. Verification**: `pnpm turbo run typecheck --force` passed across 9/9 packages with 0 errors. Next.js production build compiled all 35/35 routes cleanly.
+- [x] **UI Design System: Centralized Reusable `<SegmentedToggle>` Component & Platform-Wide Standardization (`SegmentedToggle.tsx`, `Tabs.tsx`, `index.ts`, `machine-client-view.tsx`, `OperatorDashboard.tsx`, `MobileDueBuckets.tsx`, `ThemeToggle.tsx`, `NotificationListClient.tsx`, `ChallansClient.tsx`, `CrmClient.tsx`, `FinanceClient.tsx`, `ClientDetailClient.tsx`) (2026-09-01)**:
+  - **1. Centralized Reusable Component**: Created canonical generic `<SegmentedToggle>` component with high-contrast track, pure white/elevated active pill, spring physics, proper z-index stacking (`z-0` pill, `relative z-10` content), ARIA accessibility, and 3-tier viewport responsiveness.
+  - **2. Upgraded Tabs Primitive**: Added `variant="segmented"` to `<Tabs>` component to leverage `SegmentedToggle` with full backward compatibility.
+  - **3. Platform-Wide Migration**: Replaced ad-hoc toggle implementations across Machine Details, Operator Dashboard, Mobile Due Buckets, Theme Toggle, Notification List, Challans, CRM, Finance, and Client Details modules.
+  - **4. Verification**: Monorepo typecheck passed across all 9 packages with 0 errors.
+- [x] **Page Feedback: /machines — Assigned Client Visibility in Machine Directory Table & Full Query Optimization (`MachineListClient.tsx`, `queries/machines.ts`, `machines-export.ts`, `PrintableMachineDirectoryModal.tsx`, `MachineRow.tsx`, `apps/mobile/app/(app)/machines.tsx`) (2026-09-01)**:
+  - **1. Assigned Client Visibility in `<EnterpriseTable>` (Feedback #1)**:
+    - Fixed the issue on `/machines` where machines assigned to clients displayed `"—"` instead of their actual client company name.
+    - **Root Cause**: `tableColumns` in `MachineListClient.tsx` accessed `row.customer_name` instead of `row.client?.company_name`. Because the database schema and queries link client entities via `client_id` with joined `client:clients(...)`, `customer_name` was undefined.
+    - **Fix**: Updated `tableColumns` to extract `row.client?.company_name || row.customer_name` and display the client company name in bold typography with the client code (`CLI-XXXX`) rendered cleanly underneath.
+    - Enhanced client-side instant search (`filteredAndSortedMachines`) to search across `client.company_name` and `client.code`.
+  - **2. Full Database Query & Search Optimization (Feedback #2)**:
+    - In `apps/web/lib/queries/machines.ts`:
+      - Fixed server-side `.or()` search filter from non-existent `machine_code` to indexed `machine_id.ilike.%${s}%,model.ilike.%${s}%,serial_number.ilike.%${s}%,manufacturer.ilike.%${s}%`. This eliminates the failed initial query and prevents triggering the slow fallback query on every search.
+      - Changed `{ count: "estimated" }` to `{ count: "exact" }` for 100% accurate pagination counters.
+      - Wrapped `getMachines` with React `cache()` for request-level deduplication across server component render trees.
+  - **3. Cross-System Synchronization (Export Utilities, PDF Modal, Row Component, Mobile App)**:
+    - In `machines-export.ts`: Enhanced Excel and CSV exporters to resolve `m.client?.company_name` (with code) and auto-derive client city/state locations.
+    - In `PrintableMachineDirectoryModal.tsx`: Updated PDF / printable preview table to render `m.client?.company_name` and location.
+    - In `MachineRow.tsx`: Added client code display below company name in directory rows.
+    - In `apps/mobile/app/(app)/machines.tsx`: Synchronized `fetchMachines` to join `client:clients!machines_client_id_fkey`, `current_supervisor:users!machines_current_supervisor_id_fkey`, `current_operator:users!machines_current_operator_id_fkey`, and included client name/code in mobile search filter.
+  - **4. Verification**:
+    - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 1m46s.
+- [x] **Bug Fix: /machines/[id]/edit — Fixed Stuck "Saving Machine Details..." Loading State & Navigation Transition (`machine-edit-client.tsx`, `MachineModal.tsx`, `actions/machines.ts`, `machine-client-view.tsx`) (2026-09-01)**:
+  - **1. Root Cause Identification**:
+    - **A. Conflicting Router Navigation & Refresh**: In `handleSubmit` and `handleDeleteMachine`, calling `router.refresh()` immediately after `router.push('/machines/[id]')` instructed Next.js to cancel the active push transition and re-fetch the current edit route, keeping the component mounted in a perpetual pending/spinning state.
+    - **B. Synthetic Event Object in `<Select>` onChange**: `<Select>` passed a synthetic React ChangeEvent (`{ target: { value: "rented" } }`). Direct assignment in `onChange={(val) => setRentalStatus(val)}` caused `rentalStatus` to store the event Object `[object Object]`, injecting `[object Object]` into the hidden form input and causing PostgreSQL check constraint rejections.
+    - **C. Unhandled Async Transitions**: Without explicit `try/catch` block around the server action and navigation calls, any promise error left the button permanently locked in loading mode.
+  - **2. Explicit State & Error Boundary Resilience (`machine-edit-client.tsx`, `MachineModal.tsx`)**:
+    - Replaced `useTransition` with deterministic `isSaving` and `isDeleting` state hooks wrapped in complete `try...catch...finally` blocks.
+    - Removed conflicting `router.refresh()` after `router.push(...)` so client-side navigation smoothly transfers the user to `/machines/[id]`.
+    - Corrected `<Select>` handlers to safely unpack `typeof val === "string" ? val : val?.target?.value` across both `status` and `health_status`.
+  - **3. Backend Server Action Hardening (`apps/web/app/actions/machines.ts`)**:
+    - Enforced `isValidUuid` check on `current_supervisor_id` and `current_operator_id` in `createMachine` and `updateMachine`, preventing non-UUID string casting errors.
+    - Automatically updated `updated_at: new Date().toISOString()`.
+  - **4. Quality Verification**:
+    - Monorepo typecheck passed across **9/9 packages with 0 errors** (`pnpm turbo run typecheck --force`).
+    - Next.js production build compiled all **35/35 routes cleanly with code 0** (`pnpm --filter @reachinternational/web build`).
+- [x] **Page Feedback: /operations?tab=entry — Remove ❌ Emojis & Shorten Machine Timeline Banner for Mobile Viewports (`OperatorDashboard.tsx`, `MeterLogModal.tsx`) (2026-09-01)**:
+  - **1. Removed ❌ Emojis from Validation Strips (Feedback #1)**: Cleaned all inline error and warning strips across `OperatorDashboard.tsx` (meter warning, shift overlap, sequencing mismatch, invalid times, edit modal) and mobile `MeterLogModal.tsx`, removing redundant `❌` characters while preserving crisp `<AnimatedAlertTriangle />` iconography.
+  - **2. Streamlined Machine Timeline Context Banner (Feedback #2)**: Shortened timeline status text for mobile viewports (`Last shift ended: DD-MM-YYYY, HH:MM AM/PM` with compact badge `Handover from HH:MM AM/PM`), removing redundant boilerplate words. Shortened sequencing validation error message and align CTA.
+  - **3. Cross-Platform Mobile Parity**: Synchronized `apps/mobile/components/work/MeterLogModal.tsx` with identical concise text formatting and error banner styling.
+  - **4. Quality Verification**: Monorepo typecheck passed with **9/9 packages successful (0 errors)** in 1m18s.
+- [x] **Page Feedback: /machines/[id] — Mobile Icon-Only Action Buttons, Pixel-Perfect Alignment & Responsive Toggle-Type Segmented Tab Navbar (`machine-client-view.tsx`, `Button.tsx`) (2026-09-01)**:
+  - **1. Header Action Buttons**: Enhanced `<Button>` with pixel-perfect icon centering and added `mobileIconOnly` to Edit Machine and Delete buttons on `/machines/[id]`, displaying clean icon-only buttons on mobile and full labeled buttons on desktop.
+  - **2. Segmented Toggle Navbar**: Replaced generic tab row with a high-performance 2-column segmented toggle navbar on mobile and an inline toggle bar on desktop with smooth spring layout indicators.
+  - **3. Verification**: `pnpm turbo run typecheck --force` passed across 9/9 packages with 0 errors.
+- [x] **Page Feedback: /machines/[id]/edit — Icon Removal, Subtitle Streamlining & Rented Client Selection Optimization (`machine-edit-client.tsx`, `MachineModal.tsx`, `page.tsx`, `queries/clients.ts`) (2026-09-01)**:
+  - **1. Dynamic Client Selection on "Rented" Status (Feedback #1)**: Dynamic `<ClientSelect>` searchable dropdown with client codes and city chips when status is "Rented". Powered by concurrent `Promise.all([getMachineById(id), getActiveSupervisors(), getActiveOperators(), getClientOptions()])` with minimal column projections (`id, code, company_name, city, state, address, phone`).
+  - **2. Subtitle Paragraph Removal (Feedback #2)**: Removed `"Update fleet master specifications, running hour meter, and operational personnel assignments."` paragraph from the header card on `/machines/[id]/edit`.
+  - **3. Helper Span Removal (Feedback #3)**: Removed `<span>ℹ️ Select the client account currently renting this machine.</span>` helper text from the client select section.
+  - **4. Save Button Icon Removal (Feedback #4)**: Removed `<AnimatedCheck>` icon from the "Save Machine Details" submit button.
+  - **5. Section 1 Icon Removal (Feedback #5)**: Removed `<AnimatedWrench>` icon from Section 1 header.
+  - **6. Section 2 Icon Removal (Feedback #6)**: Removed `<AnimatedCpu>` icon from Section 2 header.
+  - **7. Section 3 Icon Removal (Feedback #7)**: Removed `<AnimatedShieldCheck>` icon from Section 3 header.
+  - **8. Modal UI Streamlining (`MachineModal.tsx`)**: Synchronized modal section headers to remove decorative icons for a unified clean design.
+  - **9. Quality Verification**: Monorepo typecheck passed with **9/9 packages successful (0 errors)** in 2m41s.
+- [x] **Page Feedback: /machines/[id] — Machine Model-Serial No Title, Full Linked CRM Client Data & Lazy-Loaded Hour Meter Running History (`machine-client-view.tsx`, `machines.ts`, `database.ts`, `MachineDetailModal.tsx`, `mobile/machines.tsx`, `page.tsx`) (2026-09-01)**:
+  - **1. Title Format Standardization**: Standardized primary header `<h1>` on `/machines/[id]` to `[Model] - [Serial No]` (e.g. `50B-9 - TY50B-99214`) with copyable Machine ID badge and manufacturer metadata in the sub-header.
+  - **2. Linked CRM Client Entity**: Displayed complete joined CRM client entity from `public.clients` (Company name, Client code `CLI-XXXX`, contact person, mobile with `tel:`, email, city/district/state, GSTIN with copy, PAN with copy, site address with copy, conditional billing address with copy, active rental contract details, and 1-click Call/WhatsApp/Maps touch actions).
+  - **3. Lazy-Loaded Hour Meter Running History**: Removed blocking `getMachineHourMeterLogs` from initial server render `Promise.all` in `page.tsx`. Built on-demand fetching via `getMachineHourLogsAction(machineId)` triggered when the user switches to the running hours tab, complete with table skeleton loaders and error retry handling.
+  - **4. Cross-Platform Mobile Synchronization**: Synchronized `MachineDetailModal.tsx` title to `[Model] - [Serial No]`, projected all client relational fields in `apps/mobile/app/(app)/machines.tsx`, and rendered full CRM client cards.
+  - **5. Quality Verification**: Monorepo typecheck passed with 9/9 packages successful (0 errors). Next.js production build compiled all 35/35 routes cleanly.
+- [x] **Page Feedback: /operations?tab=logs — Remove Subtitle, Remove Notes Container & Restrict Operator Dropdown to Active Operators Only (`OperationsClient.tsx`, `UserSelect.tsx`, `queries/operators.ts`, `queries/machines.ts`, `mobile/AddMachineModal.tsx`) (2026-09-01)**:
+  - **1. Subtitle Removal (Feedback #1)**: Removed description paragraph text (`"Assign an operator to equipment. If the operator is currently operating another machine..."`) from the Assign / Reassign Machine Operator modal.
+  - **2. Notes Container Removal (Feedback #2)**: Removed the optional assignment notes / site instructions textarea container `div` completely from the Assign / Reassign Machine Operator modal.
+  - **3. Active Operator Filtering (Feedback #3)**:
+    - In `apps/web/lib/queries/operators.ts` (`getOperationsHubData`): Changed `operatorsRes` query from multi-role `.in("role", [...]).neq("status", "inactive")` to strictly `.eq("role", "operator").eq("status", "active")`.
+    - In `apps/web/lib/queries/machines.ts` (`getActiveOperators`): Enforced `.eq("status", "active")`.
+    - In `apps/web/components/ui/UserSelect.tsx`: Enhanced `eligibleUsers` to automatically filter for active users (`!u.status || u.status === "active"`) when status is present.
+    - In `apps/web/components/operations/OperationsClient.tsx`: Derived `activeOperators` strictly matching `role === "operator"` and `status === "active"`, and passed `roleFilter={["operator"]}` with placeholder `"Search or select active operator..."` across all modals.
+    - In `apps/mobile/components/machines/AddMachineModal.tsx`: Updated `ops` query to `.eq('role', 'operator').eq('status', 'active')` for complete web-to-mobile consistency.
+  - **4. Quality Verification**: Monorepo typecheck passed across **9/9 packages with 0 errors**. Next.js production build compiled all **35/35 routes cleanly with code 0**.
+- [x] **Feature / Refactor: Complete Removal of Service System, Inventory System, and Compliance & Expiry System Across Monorepo Stack (`038_remove_service_inventory_compliance_systems.sql`, `database.ts`, `machine.ts`, `queries/machines.ts`, `actions/machines.ts`, `machine-client-view.tsx`, `machines/[id]/page.tsx`, `machine-edit-client.tsx`, `MachineModal.tsx`, `MachineListClient.tsx`, `mobile/machines.tsx`, `MachineDetailModal.tsx`, `GlobalCreateModal.tsx`) (2026-09-01)**:
+  - **1. Database Schema Migration (`038_remove_service_inventory_compliance_systems.sql`)**:
+    - Dropped `service_count` column and legacy service/compliance columns (`service_interval_days`, `last_service_date`, `next_service_due_date`, `insurance_policy_no`, `insurance_expiry_date`, `third_party_certificate`, `third_party_expiry_date`, `rto_tax`, `rto_tax_expiry_date`) from `public.machines`.
+    - Dropped all legacy tables idempotently (`service_records`, `machine_complaints`, `complaints`, `engineer_service_summaries`, `inventory_*`, `purchase_orders`, `challans`).
+    - Applied live to Supabase PostgreSQL database `dhbbgfzbyatzvqafnsqp` and verified 15 clean remaining columns.
+  - **2. Monorepo Shared Types & Validation Packages (`packages/types`, `packages/validation`)**:
+    - Removed `service_count` and obsolete compliance/service fields from `Machine` interface in `packages/types/src/database.ts`.
+    - Removed `service_count` from `CreateMachineSchema` in `packages/validation/src/machine.ts`.
+  - **3. Machine Details UI Streamlining (`apps/web/app/(app)/machines/[id]/`)**:
+    - Refactored `machine-client-view.tsx` to 2 clean tabs:
+      1. **Basic Info & Client**: Displays core master parameters (ID, Model, Serial Number, YUM, Manufacturer, HMR, Supervisor, Operator, Health Status, Rental Status) alongside Assigned Client Details with 1-click Contact/Directions Actions (Call, WhatsApp, Google Maps Location, Copy Site Address).
+      2. **Hour Meter Running History**: Complete daily shift logbook entries with log date, client company, operator, start/end meter readings, total running hours, overtime, and remarks.
+    - Removed obsolete tabs: "Service & Breakdown History", "All Parts Used History", "Service Interval Schedule", "Compliance & Expiry", and "Complete Maintenance Service Form" (`service-form.tsx`).
+    - Removed service due badges from the hero banner and `service_count` chip from Basic Info.
+    - Simplified server loader in `machines/[id]/page.tsx` (`Promise.all([getMachineById, getMachineHourMeterLogs, getMachineActiveRental])`).
+  - **4. Web Forms, Queries & Actions Data Layer (`apps/web/`)**:
+    - Removed `service_count` inputs from `/machines/[id]/edit` (`machine-edit-client.tsx`) and modal (`MachineModal.tsx`).
+    - Cleaned `MACHINE_LIST_COLUMNS`, `FALLBACK_COLUMNS`, and `allowedSorts` in `apps/web/lib/queries/machines.ts`.
+    - Removed `getMachineServiceHistory`, `getMachineBreakdownHistory`, `getMachinePartsUsedHistory` query functions.
+    - Cleaned `createMachine`, `updateMachine`, and `importMachinesFromExcel` server actions to eliminate `service_count`.
+    - Updated `GlobalCreateModal.tsx` quick actions to retain active operational resources (`New Client`, `New Machine`).
+    - Updated `MachineListClient.tsx` to render the machine directory directly, removing obsolete service/complaints sub-tabs and action menu items.
+    - Removed dead components, queries, and actions for service hub and complaints.
+    - Redirected `/service` and `/services` routes cleanly to `/machines`.
+  - **5. Cross-Platform Mobile App Synchronization (`apps/mobile/`)**:
+    - Updated `MachineRecord` interface and `fetchMachines` Supabase query in `apps/mobile/app/(app)/machines.tsx` to remove `service_count`.
+    - Updated `MachineDetailModal.tsx` to remove `service_count` from props and layout.
+  - **6. Monorepo Quality Gate & Verification**:
+    - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 30.0s.
+    - `pnpm --filter @reachinternational/web build` compiled all **35/35 Next.js App Router routes cleanly with code 0**.
+    - `pnpm --filter @reachinternational/mobile typecheck` passed with **0 errors**.
+- [x] **Bug Fix: /machines — Resolve React Runtime Crash in EnterpriseTable (`EnterpriseTable.tsx`) (2026-09-01)**:
+  - **Root Cause**: In `apps/web/components/ui/EnterpriseTable.tsx`, bulk action icon rendering used `typeof Icon === "function"` to determine whether to pass the icon to `<AnimateIcon>`. Because `lucide-react` icons and `forwardRef` components are React objects (`{ $$typeof: Symbol(react.forward_ref), render: ... }`), the check failed and fell back to `{Icon}`, attempting to render the raw object as a React child, which triggered the React runtime exception `Objects are not valid as a React child (found: object with keys {$$typeof, render})`.
+  - **Fix**: Replaced with `isValidElement(Icon) ? Icon : <AnimateIcon icon={Icon as any} animation="bounce" size={13} />` with `isValidElement` imported from `"react"`, properly handling both instantiated JSX elements and forwardRef icon components.
+  - **Verification**: `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 33.5s.
+- [x] **Page Feedback: /machines/[id]/edit — Dynamic Client Selection on Rented Status & High-Performance Parallel Queries (`037_add_client_id_to_machines.sql`, `database.ts`, `machine.ts`, `queries/clients.ts`, `queries/machines.ts`, `actions/machines.ts`, `machine-edit-client.tsx`, `MachineModal.tsx`, `MobileMachineCard.tsx`, `MachineRow.tsx`, `AddMachineModal.tsx`, `mobile/machines.tsx`, `MachineDetailModal.tsx`) (2026-09-01)**:
+  - **1. Database Schema Migration (`037_add_client_id_to_machines.sql`)**:
+    - Added `client_id UUID REFERENCES public.clients(id) ON DELETE SET NULL` and created index `idx_machines_client_id ON public.machines(client_id)`.
+    - Executed live migration on Supabase PostgreSQL project `dhbbgfzbyatzvqafnsqp`.
+  - **2. Monorepo Shared Types & Validation (`packages/types`, `packages/validation`)**:
+    - Updated `Machine` interface with `client_id?: string | null` and joined relation `client?: Pick<CRMClient, "id" | "code" | "company_name" | "city" | "state" | "phone" | "contact_person" | "address"> | null`.
+    - Updated `CreateMachineSchema` in `packages/validation/src/machine.ts` with `client_id: z.string().uuid().optional().nullable()`.
+  - **3. High-Performance Parallel Queries & Lightweight Projections (`apps/web/lib/queries/`)**:
+    - Enhanced `getClientOptions()` in `apps/web/lib/queries/clients.ts` with lightweight projection `id, code, company_name, city, state, address, phone`, avoiding N+1 and column over-fetching.
+    - Updated `apps/web/lib/queries/machines.ts` (`MACHINE_LIST_COLUMNS` and fallbacks) to select `client_id` and join `client:clients!machines_client_id_fkey(...)`.
+    - In `apps/web/app/(app)/machines/[id]/edit/page.tsx` & `machines/page.tsx`: Replaced serial waterfalls with optimized concurrent `Promise.all([getMachineById(id), getActiveSupervisors(), getActiveOperators(), getClientOptions()])`.
+  - **4. Backend Server Actions (`apps/web/app/actions/machines.ts`)**:
+    - Updated `createMachine` & `updateMachine` to extract `client_id`. If `status === "rented"`, stores validated `client_id`; if `status === "available"`, sets `client_id = null`.
+  - **5. Web UI/UX (`machine-edit-client.tsx`, `MachineModal.tsx`, `machine-client-view.tsx`, `MachineRow.tsx`, `MobileMachineCard.tsx`)**:
+    - On `/machines/[id]/edit` (`machine-edit-client.tsx`) and `MachineModal.tsx`: When Rental Status is set to "Rented", dynamically animates in `<ClientSelect>` searchable dropdown with client codes and city chips. When set back to "Available", clears client selection.
+    - In `machine-client-view.tsx`, `MachineRow.tsx`, and `MobileMachineCard.tsx`: Displays assigned client company name and client code directly from `machine.client`.
+  - **6. Cross-Platform Mobile App Synchronization (`apps/mobile`)**:
+    - In `AddMachineModal.tsx`: Added client fetching and dynamic horizontal client selection pills when Rental Status is "Rented", setting `client_id`.
+    - In `machines.tsx`: Updated `MachineRecord` and `fetchMachines` to query `client_id` and `client`, displaying assigned client name on mobile cards.
+    - In `MachineDetailModal.tsx`: Added `client` to modal props and displays assigned client company name.
+  - **7. Verification**:
+    - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 1m20s.
+    - `pnpm --filter @reachinternational/web build` compiled all **35/35 Next.js App Router routes cleanly with code 0**.
+- [x] **Page Feedback: /machines — Multi-Format Export (Excel .xlsx, CSV .csv, PDF .pdf/Print) & Duplicate CSV Button Removal (`machines-export.ts`, `PrintableMachineDirectoryModal.tsx`, `EnterpriseTable.tsx`, `MachineListClient.tsx`) (2026-09-01)**:
+  - **1. Duplicate Button Removal from FilterToolbar (Feedback #1)**:
+    - Removed the redundant duplicate `<Button variant="secondary"> <Download size={14} /> CSV ({selectedIds.length}) </Button>` from `<FilterToolbar>`'s `actions` slot on `/machines`.
+  - **2. Dedicated Machine Export Utilities (`apps/web/lib/utils/machines-export.ts`) (Feedback #2)**:
+    - Created `exportMachinesToExcel(machines, filenamePrefix)` using `xlsx` library with styled sheet headers, metadata row, auto-calculated column widths (`!cols`), and summary statistics (Total, Available, Rented, Health Breakdown/Maintenance distribution, Total Fleet HMR hours).
+    - Created `exportMachinesToCSV(machines, filenamePrefix)` with UTF-8 Byte Order Mark (`\uFEFF`) and RFC-compliant quote escaping.
+    - Created `buildMachinesExportFileName(prefix, extension)` generating clean slugs (`Machine-Directory-DD-MM-YYYY-HH-MM.xlsx` / `.csv` / `.pdf`).
+  - **3. Printable Machine Directory & PDF Report Modal (`PrintableMachineDirectoryModal.tsx`) (Feedback #2)**:
+    - Designed print-optimized modal and PDF document matching `PrintableOperatorLogsModal.tsx` and `PrintableSupervisorLogsModal.tsx` standards: Reach logo (`/pdf-logo.png`), header title `MACHINE FLEET DIRECTORY REPORT`, metadata strip, 4-card KPI summary strip, high-density machine table with borders, and 3-column verification sign-off block.
+    - Integrated interactive modal preview with status filter tabs, 1-click **Export CSV (.csv)**, 1-click **Export Excel (.xlsx)**, and 1-click **Print / Save as PDF** (`window.print()`).
+  - **4. Centralized EnterpriseTable Bulk Actions Enhancement (`EnterpriseTable.tsx`, `MachineListClient.tsx`) (Feedback #2)**:
+    - Upgraded `<EnterpriseTable>` floating bulk actions bar when rows are selected (`X selected | [actions]`) to support multiple discrete action buttons with icons, active scaling, and responsive spacing.
+    - Configured `<MachineListClient>` `bulkActions` in both Table and Auto views to provide:
+      - `Excel (${selectedIds.length})` with `<FileSpreadsheet />` icon -> calls `handleExportExcel(selectedIds)`.
+      - `CSV (${selectedIds.length})` with `<FileText />` icon -> calls `handleExportCSV(selectedIds)`.
+      - `PDF (${selectedIds.length})` with `<Printer />` icon -> opens `PrintableMachineDirectoryModal` with selected machines.
+  - **5. PageHeader & HeaderMoreMenu Integration**:
+    - Connected `ExportButton` (`format="xlsx"`) to `handleExportExcel`.
+    - Updated `HeaderMoreMenu` with 1-click options for Bulk Excel Import, Export Excel (.xlsx), Export CSV (.csv), PDF Report / Print, and Refresh Data.
+  - **6. Verification**:
+    - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 55.7s.
+    - `pnpm --filter @reachinternational/web build` compiled all **35/35 Next.js App Router routes cleanly with code 0** (including static generation).
+    - `pnpm --filter @reachinternational/mobile typecheck` passed with **0 errors**.
+- [x] **Feature: Machine Serial Number Duplicate Prevention & Multi-Layer Validation across Frontend, Backend, Excel Import, Mobile App & PostgreSQL Database (`036_enforce_machine_serial_number_unique_and_not_empty.sql`, `machine.ts`, `actions/machines.ts`, `actions/machine-import.ts`, `machine-errors.ts`, `MachineModal.tsx`, `machine-edit-client.tsx`, `AddMachineModal.tsx`) (2026-09-01)**:
+  - **1. Database-Level Case-Insensitive Uniqueness & Non-Empty Check (`036_enforce_machine_serial_number_unique_and_not_empty.sql`)**:
+    - Enforced non-empty check constraint on `public.machines`: `CONSTRAINT check_machines_serial_number_not_empty CHECK (serial_number IS NOT NULL AND length(trim(serial_number)) > 0)`.
+    - Created case-insensitive, trimmed unique index `idx_machines_serial_number_unique_ci` on `public.machines (lower(trim(serial_number)))`.
+    - Applied live to Supabase PostgreSQL database `dhbbgfzbyatzvqafnsqp` and verified active unique rejection.
+  - **2. Shared Validation Package (`packages/validation/src/machine.ts`)**:
+    - Updated `CreateMachineSchema` and `UpdateMachineSchema` to strictly require trimmed, non-empty `serial_number`, `model`, `year_of_mfg`, and `manufacturer`.
+  - **3. Backend Server Actions & Error Sanitization (`apps/web/app/actions/machines.ts`, `machine-errors.ts`)**:
+    - In `createMachine`: Added pre-validation query to detect duplicate serial numbers (case-insensitive) and return actionable user error with the conflicting machine ID (`RI-MC-XXXX`).
+    - In `updateMachine`: Added pre-validation query to detect duplicate serial numbers excluding the currently edited machine ID.
+    - Exported `checkMachineSerialNumberAvailable(serialNumber, excludeMachineId)` server action for real-time frontend duplicate verification.
+    - Updated `formatMachineDatabaseError` in `apps/web/lib/utils/machine-errors.ts` to map `23505` unique violations and `23514` check violations into polite field-level errors.
+  - **4. Excel Bulk Import Engine (`apps/web/app/actions/machine-import.ts`)**:
+    - Implemented dual-stage duplicate validation in `importMachinesFromExcel`:
+      - Stage 1: Pre-fetches all existing machine serial numbers and machine IDs into memory maps (`existingSerialMap`, `existingMachineIdMap`).
+      - Stage 2: Validates mandatory columns and detects intra-file duplicate serial numbers across spreadsheet rows (`seenInFileSerials.set(lowerSerial, rowNum)`).
+      - Reports exact row numbers and friendly reasons (e.g. `Duplicate Serial Number "SN-123" found in spreadsheet (matches Row 2)` and `Serial Number "SN-123" already exists in the inventory (assigned to RI-MC-0014)`).
+  - **5. Web Frontend UI/UX (`MachineModal.tsx`, `machine-edit-client.tsx`)**:
+    - Added real-time on-blur validation (`handleSerialBlur`) calling `checkMachineSerialNumberAvailable` to show instant inline duplicate warnings before submission.
+    - Connected `error={fieldErrors.serial_number}` and form error banners.
+  - **6. Cross-Platform Mobile App Synchronization (`apps/mobile/components/machines/AddMachineModal.tsx`)**:
+    - Added pre-submission duplicate check query against Supabase (`.ilike('serial_number', cleanSerial)`), excluding `machineToEdit?.id`.
+    - Added friendly inline error alerts and `23505` unique constraint error handling.
+  - **7. Verification**:
+    - Live Supabase SQL automated test suite verified duplicate serial number rejection.
+    - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 42.8s.
+    - `pnpm --filter @reachinternational/web build` compiled all **35/35 Next.js App Router routes cleanly with code 0**.
+    - `pnpm --filter @reachinternational/mobile typecheck` passed with **0 errors**.
 - [x] **Feature: Fix /machines/[id]/edit 404 & Full Machine Management for Manager, Admin, Superadmin (`034_allow_managers_and_admins_manage_machines.sql`, `matrix.ts`, `actions/machines.ts`, `machines/[id]/edit/page.tsx`, `machine-edit-client.tsx`, `machine-client-view.tsx`, `MachineListClient.tsx`, `mobile/machines.tsx`, `MachineDetailModal.tsx`) (2026-09-01)**:
   - **1. Route Creation & 404 Resolution (`apps/web/app/(app)/machines/[id]/edit/`)**:
     - Created dedicated Next.js App Router route `apps/web/app/(app)/machines/[id]/edit/page.tsx`, `loading.tsx`, and `machine-edit-client.tsx`, resolving the 404 Not Found error.

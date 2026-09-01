@@ -1,25 +1,31 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import Image from "next/image";
 import {
   AnimatedChevronLeft,
   AnimatedEdit,
   AnimatedClock,
   AnimatedBuilding2,
-  AnimatedFileText,
-  AnimatedPackage,
-  AnimatedSettings,
-  AnimatedWrench,
   AnimatedCheck,
   AnimatedCopy,
   AnimatedMessageSquare,
   AnimatedTrash,
+  AnimatedLoader,
 } from "@/components/ui/animated-icons";
 import { ScissorLiftLogoIcon } from "@/components/branding/ScissorLiftLogoIcon";
-import { Phone, Mail, Check, Copy, MapPin, AlertTriangle, CheckCircle2, FileText, Wrench, PackageCheck, Building2 } from "lucide-react";
+import {
+  Phone,
+  Mail,
+  Check,
+  Copy,
+  MapPin,
+  Building2,
+  ExternalLink,
+  RefreshCw,
+  AlertCircle,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Card,
@@ -28,7 +34,6 @@ import {
   Button,
   EmptyState,
   FadeIn,
-  Modal,
   useToast,
   Table,
   TableHeader,
@@ -37,36 +42,14 @@ import {
   TableHead,
   TableCell,
   ConfirmationDialog,
+  SegmentedToggle,
 } from "@/components/ui";
-import dynamic from "next/dynamic";
-import type { MachineWithEngineer, ServiceRecordWithDetails } from "@/lib/types/database";
+import type { MachineWithEngineer } from "@/lib/types/database";
 import { formatDate, formatShiftTimingRange } from "@reachinternational/utils";
-import { deleteMachine } from "@/app/actions/machines";
-
-const ServiceForm = dynamic(() => import("./service-form").then((mod) => mod.ServiceForm), { ssr: false });
-
-function formatComplianceDate(dateStr?: string | null): string {
-  if (!dateStr) return "1st January 1970";
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    const day = d.getDate();
-    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    const month = months[d.getMonth()];
-    const year = d.getFullYear();
-    const suffix = (day === 1 || day === 21 || day === 31) ? "st" : (day === 2 || day === 22) ? "nd" : (day === 3 || day === 23) ? "rd" : "th";
-    return `${day}${suffix} ${month} ${year}`;
-  } catch {
-    return dateStr;
-  }
-}
+import { deleteMachine, getMachineHourLogsAction } from "@/app/actions/machines";
 
 interface MachineClientViewProps {
   machine: MachineWithEngineer;
-  serviceHistory: ServiceRecordWithDetails[];
-  breakdownHistory?: any[];
-  hourMeterLogs?: any[];
-  partsUsedHistory?: any[];
   activeRental?: any;
   isAdmin: boolean;
   canEdit?: boolean;
@@ -77,16 +60,10 @@ interface MachineClientViewProps {
 
 export function MachineClientView({
   machine,
-  serviceHistory,
-  breakdownHistory = [],
-  hourMeterLogs = [],
-  partsUsedHistory = [],
   activeRental = null,
   isAdmin,
   canEdit,
   canDelete,
-  isAssignedEngineer,
-  currentUserId,
 }: MachineClientViewProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -94,13 +71,55 @@ export function MachineClientView({
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
-  const [activeTab, setActiveTab] = useState<
-    "overview" | "service_breakdown" | "running_hours" | "parts_used" | "service_interval" | "documents" | "complete_service"
-  >("overview");
-  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [copiedBillingAddress, setCopiedBillingAddress] = useState(false);
+  const [copiedGstin, setCopiedGstin] = useState(false);
+  const [copiedPan, setCopiedPan] = useState(false);
+  const [activeTab, setActiveTab] = useState<"overview" | "running_hours">("overview");
+
+  // Lazy loading state for machine hour meter running logs
+  const [hourMeterLogs, setHourMeterLogs] = useState<any[] | null>(null);
+  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [logsError, setLogsError] = useState<string | null>(null);
+  const [hasLoadedLogs, setHasLoadedLogs] = useState(false);
 
   const allowEdit = canEdit ?? isAdmin;
   const allowDelete = canDelete ?? isAdmin;
+
+  // Title formatting: Machine Model - Serial no (with graceful fallbacks)
+  const machineTitle =
+    [machine.model, machine.serial_number].filter(Boolean).join(" - ") ||
+    machine.machine_id ||
+    "Machine Details";
+
+  const loadHourMeterLogs = useCallback(async () => {
+    setIsLoadingLogs(true);
+    setLogsError(null);
+    try {
+      const res = await getMachineHourLogsAction(machine.id);
+      if (res.success && res.logs) {
+        setHourMeterLogs(res.logs);
+        setHasLoadedLogs(true);
+      } else {
+        setLogsError(res.error || "Failed to load hour meter running logs.");
+        setHourMeterLogs([]);
+        setHasLoadedLogs(true);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "An unexpected network error occurred.";
+      setLogsError(msg);
+      setHourMeterLogs([]);
+      setHasLoadedLogs(true);
+    } finally {
+      setIsLoadingLogs(false);
+    }
+  }, [machine.id]);
+
+  const handleTabChange = (tabId: "overview" | "running_hours") => {
+    setActiveTab(tabId);
+    if (tabId === "running_hours" && !hasLoadedLogs && !isLoadingLogs) {
+      loadHourMeterLogs();
+    }
+  };
 
   const handleDeleteMachine = () => {
     startDeleteTransition(async () => {
@@ -110,78 +129,92 @@ export function MachineClientView({
         setDeleteConfirmOpen(false);
       } else {
         toast("success", "Machine deleted", `${machine.machine_id} has been permanently deleted.`);
+        setDeleteConfirmOpen(false);
         router.push("/machines");
-        router.refresh();
       }
     });
   };
 
-  // Calculate Due Status
-  const today = new Date().toISOString().split("T")[0];
-  const todayDate = new Date();
-  const nextDueDateStr = machine.next_service_due_date || today;
-  const dueDate = new Date(nextDueDateStr);
-  const diffTime = dueDate.getTime() - todayDate.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-  let dueVariant: "today" | "tomorrow" | "overdue" | "default" = "default";
-  let dueLabel = "Scheduled";
-
-  if (nextDueDateStr < today) {
-    dueVariant = "overdue";
-    dueLabel = `Overdue by ${Math.abs(diffDays)}d`;
-  } else if (nextDueDateStr === today) {
-    dueVariant = "today";
-    dueLabel = "Due Today";
-  } else if (diffDays === 1) {
-    dueVariant = "tomorrow";
-    dueLabel = "Due Tomorrow";
-  } else if (diffDays > 1) {
-    dueLabel = `Due in ${diffDays}d`;
-  }
-
   const handleCopyCode = () => {
-    navigator.clipboard.writeText(machine.machine_code || machine.machine_id);
+    navigator.clipboard.writeText(machine.machine_id || machine.machine_code || "");
     setCopiedCode(true);
-    toast("success", "Copied!", `Machine code ${machine.machine_code || machine.machine_id} copied to clipboard.`);
+    toast("success", "Copied!", `Machine ID ${machine.machine_id} copied to clipboard.`);
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
-  const clientInfo = activeRental?.client || activeRental?.customer || {
-    company_name: machine.customer_name,
-    client_name: machine.customer_name,
-    code: machine.customer_name ? "CLI-0001" : undefined,
-    contact_person: machine.customer_name,
-    phone: machine.customer_mobile,
-    contact_mobile: machine.customer_mobile,
-    email: machine.customer_email,
-    contact_email: machine.customer_email,
-    address: machine.customer_address,
-    billing_address: machine.customer_address,
-    city: machine.city,
-    state: machine.state,
+  // Linked Client Data from public.clients table (Supabase) via machine.client or activeRental.client
+  const client = machine.client || activeRental?.client || null;
+  const clientCompanyName = client?.company_name || machine.customer_name || "";
+  const clientCode = client?.code || "";
+  const clientContactPerson = client?.contact_person || "";
+  const clientPhone = client?.phone || machine.customer_mobile || "";
+  const clientEmail = (client as any)?.email || machine.customer_email || "";
+  const clientGstin = client?.gstin || "";
+  const clientPan = client?.pan_number || "";
+  const clientAddress = client?.address || machine.customer_address || "";
+  const clientCity = client?.city || machine.city || "";
+  const clientDistrict = client?.district || "";
+  const clientState = client?.state || machine.state || "";
+  const clientPincode = client?.pincode || "";
+  const isBillingAddressDifferent = Boolean(client?.is_billing_address_different);
+  const billingAddress = client?.billing_address || "";
+  const billingCity = client?.billing_city || "";
+  const billingDistrict = client?.billing_district || "";
+  const billingState = client?.billing_state || "";
+  const billingPincode = client?.billing_pincode || "";
+
+  const clientLocationParts = [clientCity, clientDistrict, clientState].filter(Boolean);
+  const clientLocation = clientLocationParts.length > 0 ? Array.from(new Set(clientLocationParts)).join(", ") : "";
+  const hasLinkedClient = Boolean(clientCompanyName || clientAddress || clientPhone || client?.id);
+
+  const fullSiteAddress = [clientAddress, clientLocation, clientPincode ? `PIN: ${clientPincode}` : ""]
+    .filter(Boolean)
+    .join(", ");
+
+  const fullBillingAddress = [
+    billingAddress,
+    [billingCity, billingDistrict, billingState].filter(Boolean).join(", "),
+    billingPincode ? `PIN: ${billingPincode}` : "",
+  ]
+    .filter(Boolean)
+    .join(", ");
+
+  const handleCopySiteAddress = () => {
+    navigator.clipboard.writeText(fullSiteAddress || "—");
+    setCopiedAddress(true);
+    toast("info", "Address Copied!", "Site location address copied to clipboard.");
+    setTimeout(() => setCopiedAddress(false), 2000);
   };
 
-  const clientPhone = clientInfo.phone || clientInfo.contact_mobile || machine.customer_mobile || "";
-  const clientEmail = clientInfo.email || clientInfo.contact_email || machine.customer_email || "";
-  const clientAddress = clientInfo.address || clientInfo.billing_address || machine.customer_address || "";
-  const clientLocation = `${clientInfo.city || machine.city || ""}${clientInfo.state || machine.state ? (clientInfo.city || machine.city ? ", " : "") + (clientInfo.state || machine.state) : ""}`.trim();
-  const hasClientInfo = !!(clientInfo.company_name || clientInfo.client_name || machine.customer_name || clientPhone || clientAddress);
+  const handleCopyBillingAddress = () => {
+    navigator.clipboard.writeText(fullBillingAddress || "—");
+    setCopiedBillingAddress(true);
+    toast("info", "Billing Address Copied!", "Billing address copied to clipboard.");
+    setTimeout(() => setCopiedBillingAddress(false), 2000);
+  };
 
-  const handleCopyAddress = () => {
-    const fullAddr = `${clientAddress}${clientLocation ? `, ${clientLocation}` : ""}`.trim();
-    navigator.clipboard.writeText(fullAddr || "—");
-    setCopiedAddress(true);
-    toast("info", "Address Copied!", "Deployment address copied to clipboard.");
-    setTimeout(() => setCopiedAddress(false), 2000);
+  const handleCopyGstin = () => {
+    if (!clientGstin) return;
+    navigator.clipboard.writeText(clientGstin);
+    setCopiedGstin(true);
+    toast("info", "GSTIN Copied!", `${clientGstin} copied to clipboard.`);
+    setTimeout(() => setCopiedGstin(false), 2000);
+  };
+
+  const handleCopyPan = () => {
+    if (!clientPan) return;
+    navigator.clipboard.writeText(clientPan);
+    setCopiedPan(true);
+    toast("info", "PAN Copied!", `${clientPan} copied to clipboard.`);
+    setTimeout(() => setCopiedPan(false), 2000);
   };
 
   const cleanPhone = clientPhone ? clientPhone.replace(/[^0-9+]/g, "") : "";
   const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
-    `Hello ${clientInfo.contact_person || clientInfo.company_name || machine.customer_name || "Client"}, regarding machine ${machine.machine_code || machine.machine_id} (${machine.model || machine.machine_name}).`
+    `Hello ${clientContactPerson || clientCompanyName || "Client"}, regarding machine ${machine.model ? `${machine.model} (${machine.machine_id})` : machine.machine_id}.`
   )}`;
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-    `${clientInfo.company_name || machine.customer_name || ""} ${clientAddress} ${clientLocation}`.trim()
+    `${clientCompanyName} ${clientAddress} ${clientLocation}`.trim()
   )}`;
 
   return (
@@ -215,36 +248,44 @@ export function MachineClientView({
               </motion.div>
 
               <div className="flex flex-col gap-1 min-w-0 flex-1">
-                {/* Name & Badges Header */}
+                {/* Title: Machine Model - Serial no */}
                 <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                   <h1 className="text-lg sm:text-2xl md:text-3xl font-extrabold text-[var(--color-ink)] tracking-tight">
-                    {machine.machine_name || machine.machine_id}
+                    {machineTitle}
                   </h1>
 
                   <Badge
-                    variant={machine.status === "on_rent" || machine.status === "rented" ? "info" : machine.status === "active" ? "success" : machine.status === "under_maintenance" ? "warning" : "neutral"}
+                    variant={
+                      machine.status === "on_rent" || machine.status === "rented"
+                        ? "info"
+                        : machine.status === "active"
+                        ? "success"
+                        : machine.status === "under_maintenance"
+                        ? "warning"
+                        : "neutral"
+                    }
                   >
                     <span className="capitalize font-semibold text-[11px] sm:text-xs">
-                      {machine.status === "on_rent" || machine.status === "rented" ? "On Rent" : machine.status === "under_maintenance" ? "Under Maintenance" : machine.status}
+                      {machine.status === "on_rent" || machine.status === "rented"
+                        ? "On Rent"
+                        : machine.status === "under_maintenance"
+                        ? "Under Maintenance"
+                        : machine.status}
                     </span>
-                  </Badge>
-
-                  <Badge variant={dueVariant} dot>
-                    <span className="font-semibold text-[11px] sm:text-xs">{dueLabel}</span>
                   </Badge>
                 </div>
 
-                {/* Machine Code & Model */}
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-[var(--color-mute)]">
+                {/* Machine ID, Model, Serial No & Manufacturer metadata */}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--color-mute)]">
                   <div className="inline-flex items-center gap-1">
-                    <span className="font-mono text-[11px] sm:text-xs text-[var(--color-mute)]">ID:</span>
+                    <span className="font-mono text-[11px] sm:text-xs text-[var(--color-mute)] font-semibold">ID:</span>
                     <motion.button
                       whileTap={{ scale: 0.92 }}
                       onClick={handleCopyCode}
-                      title="Copy Unique Code"
-                      className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-md text-[11px] sm:text-xs font-mono bg-[var(--color-hairline-soft-surface)] hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-all active:scale-95 border border-[var(--color-hairline)] cursor-pointer"
+                      title="Copy Unique Machine ID"
+                      className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-md text-[11px] sm:text-xs font-mono bg-[var(--color-hairline-soft-surface)] hover:bg-[var(--color-hairline)] text-[var(--color-ink)] transition-all active:scale-95 border border-[var(--color-hairline)] cursor-pointer"
                     >
-                      <span>{machine.machine_code || machine.machine_id}</span>
+                      <span>{machine.machine_id}</span>
                       {copiedCode ? (
                         <AnimatedCheck size={11} className="text-emerald-600" />
                       ) : (
@@ -254,27 +295,41 @@ export function MachineClientView({
                   </div>
                   {machine.model && (
                     <>
-                      <span>•</span>
-                      <span className="font-mono text-[11px] sm:text-xs text-[var(--color-mute)]">Model: {machine.model}</span>
+                      <span className="text-[var(--color-hairline)]">•</span>
+                      <span className="font-mono text-[11px] sm:text-xs text-[var(--color-mute)]">
+                        Model: <span className="font-semibold text-[var(--color-ink)]">{machine.model}</span>
+                      </span>
                     </>
                   )}
                   {machine.serial_number && (
                     <>
-                      <span>•</span>
-                      <span className="font-mono text-[11px] sm:text-xs text-[var(--color-mute)]">Sr: {machine.serial_number}</span>
+                      <span className="text-[var(--color-hairline)]">•</span>
+                      <span className="font-mono text-[11px] sm:text-xs text-[var(--color-mute)]">
+                        Sr: <span className="font-semibold text-[var(--color-ink)]">{machine.serial_number}</span>
+                      </span>
+                    </>
+                  )}
+                  {machine.manufacturer && (
+                    <>
+                      <span className="text-[var(--color-hairline)]">•</span>
+                      <span className="text-[11px] sm:text-xs text-[var(--color-mute)]">
+                        Mfg: <span className="font-medium text-[var(--color-ink)]">{machine.manufacturer}</span>
+                      </span>
                     </>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Header Action Buttons */}
-            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+            {/* Header Action Buttons (Icon-only on mobile, full labeled on desktop) */}
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 self-end sm:self-center">
               {allowEdit && (
                 <Button
                   variant="secondary"
-                  icon={<AnimatedEdit size={15} className="text-[var(--color-body)]" />}
+                  icon={<AnimatedEdit size={15} className="text-[var(--color-ink)]" />}
                   responsive
+                  mobileIconOnly
+                  title="Edit Machine Details"
                   href={`/machines/${machine.id}/edit`}
                 >
                   Edit Machine
@@ -285,6 +340,8 @@ export function MachineClientView({
                   variant="destructive"
                   icon={<AnimatedTrash size={15} />}
                   responsive
+                  mobileIconOnly
+                  title="Delete Machine"
                   onClick={() => setDeleteConfirmOpen(true)}
                   disabled={isDeleting}
                 >
@@ -296,42 +353,30 @@ export function MachineClientView({
         </div>
       </FadeIn>
 
-      {/* Segmented Navigation Tabs Bar */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar bg-[var(--color-hairline-soft-surface)]/70 p-1 sm:p-1.5 rounded-xl sm:rounded-2xl border border-[var(--color-hairline)]">
-        {[
-          { id: "overview", label: "Basic Info & Client", icon: AnimatedBuilding2 },
-          { id: "service_breakdown", label: `Service & Breakdown History (${serviceHistory.length + breakdownHistory.length})`, icon: AnimatedWrench },
-          { id: "running_hours", label: `Hour Meter Running History (${hourMeterLogs.length})`, icon: AnimatedClock },
-          { id: "parts_used", label: `All Parts Used History (${partsUsedHistory.length})`, icon: AnimatedPackage },
-          { id: "service_interval", label: "Service Interval Schedule", icon: AnimatedSettings },
-          { id: "documents", label: "Compliance & Expiry", icon: AnimatedFileText },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-1.5 py-1.5 px-2.5 sm:py-2 sm:px-3 rounded-lg sm:rounded-xl text-xs font-bold transition-all relative whitespace-nowrap shrink-0 select-none cursor-pointer ${
-                isActive
-                  ? "text-sky-600 dark:text-sky-400 font-extrabold"
-                  : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-              }`}
-            >
-              <Icon size={14} className="shrink-0" />
-              <span>{tab.label}</span>
-              {isActive && (
-                <motion.div
-                  layoutId="activeTabPill"
-                  className="absolute inset-0 bg-[var(--color-canvas-elevated)] rounded-lg sm:rounded-xl shadow-2xs border border-[var(--color-hairline)] -z-10"
-                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                />
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {/* Segmented Toggle Navigation Bar */}
+      <SegmentedToggle<"overview" | "running_hours">
+        value={activeTab}
+        onChange={handleTabChange}
+        layoutIdPrefix="machine-view-tab"
+        items={[
+          {
+            id: "overview",
+            label: "Basic Info & Client",
+            icon: <AnimatedBuilding2 size={15} className="shrink-0" />,
+          },
+          {
+            id: "running_hours",
+            label: "Hour Meter Running History",
+            icon: <AnimatedClock size={15} className="shrink-0" />,
+            badge: isLoadingLogs ? (
+              <span className="inline-flex items-center ml-0.5 shrink-0">
+                <AnimatedLoader isSpinning size={13} className="text-sky-500" />
+              </span>
+            ) : null,
+            count: hasLoadedLogs && hourMeterLogs !== null ? hourMeterLogs.length : undefined,
+          },
+        ]}
+      />
 
       {/* Main Tab Content Panels */}
       <AnimatePresence mode="wait">
@@ -366,22 +411,22 @@ export function MachineClientView({
 
                 <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                   <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Model</span>
-                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm">{machine.model || "-"}</span>
+                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm">{machine.model || "—"}</span>
                 </div>
 
                 <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                   <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Serial No</span>
-                  <span className="font-bold text-[var(--color-ink)] font-mono text-xs sm:text-sm">{machine.serial_number || "-"}</span>
+                  <span className="font-bold text-[var(--color-ink)] font-mono text-xs sm:text-sm">{machine.serial_number || "—"}</span>
                 </div>
 
                 <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                   <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Year Of Mfg (YUM)</span>
-                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm">{machine.year_of_mfg || "-"}</span>
+                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm">{machine.year_of_mfg || "—"}</span>
                 </div>
 
                 <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                   <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Manufacturer</span>
-                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm">{machine.manufacturer || "-"}</span>
+                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm">{machine.manufacturer || "—"}</span>
                 </div>
 
                 <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
@@ -390,18 +435,13 @@ export function MachineClientView({
                 </div>
 
                 <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Services Logged</span>
-                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm">{machine.service_count ?? 0}</span>
-                </div>
-
-                <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                   <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Supervisor</span>
-                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm truncate">{machine.current_supervisor?.full_name || "-"}</span>
+                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm truncate">{machine.current_supervisor?.full_name || "—"}</span>
                 </div>
 
                 <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                   <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Operator</span>
-                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm truncate">{machine.current_operator?.full_name || "-"}</span>
+                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm truncate">{machine.current_operator?.full_name || "—"}</span>
                 </div>
 
                 <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
@@ -420,7 +460,7 @@ export function MachineClientView({
               </div>
             </Card>
 
-            {/* Properly Assigned Client Details Section */}
+            {/* Linked Client Details Section from public.clients table (Supabase) */}
             <Card padding="md" className="card-hover-system sm:p-6 border-sky-500/20 bg-gradient-to-b from-sky-500/[0.03] to-transparent">
               <div className="flex items-center justify-between gap-2 pb-3 border-b border-[var(--color-hairline)]">
                 <div className="flex items-center gap-2">
@@ -428,51 +468,67 @@ export function MachineClientView({
                   <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">
                     Assigned Client Details
                   </h3>
+                  {clientCode && (
+                    <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                      {clientCode}
+                    </span>
+                  )}
                 </div>
-                <Badge variant={machine.status === "on_rent" || machine.status === "rented" ? "info" : "neutral"}>
-                  <span className="text-[10px] sm:text-xs font-semibold">
-                    {machine.status === "on_rent" || machine.status === "rented" ? "On Rent Active" : "Site Deployed"}
-                  </span>
-                </Badge>
+                <div className="flex items-center gap-1.5">
+                  <Badge variant={machine.status === "on_rent" || machine.status === "rented" ? "info" : "neutral"}>
+                    <span className="text-[10px] sm:text-xs font-semibold">
+                      {machine.status === "on_rent" || machine.status === "rented" ? "On Rent Active" : "Site Deployed"}
+                    </span>
+                  </Badge>
+                  {client?.id && (
+                    <Link
+                      href={`/clients?tab=all`}
+                      className="hidden sm:inline-flex items-center gap-1 text-xs text-[var(--color-link)] hover:underline ml-1 font-medium"
+                    >
+                      <span>View Directory</span>
+                      <ExternalLink size={12} />
+                    </Link>
+                  )}
+                </div>
               </div>
 
-              {hasClientInfo ? (
+              {hasLinkedClient ? (
                 <div className="flex flex-col gap-4 mt-4 text-xs sm:text-sm">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                     {/* Company / Client Name */}
-                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)]">
+                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
                       <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">
                         Client / Company Name
                       </span>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="font-bold text-[var(--color-ink)] text-sm sm:text-base">
-                          {clientInfo.company_name || clientInfo.client_name || machine.customer_name}
+                          {clientCompanyName}
                         </p>
-                        {clientInfo.code && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
-                            {clientInfo.code}
+                        {clientCode && (
+                          <span className="inline-flex sm:hidden items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                            {clientCode}
                           </span>
                         )}
                       </div>
                       {activeRental?.contract_number && (
-                        <span className="inline-block mt-1 font-mono text-[11px] text-sky-600 font-bold bg-sky-500/10 px-2 py-0.5 rounded self-start">
+                        <span className="inline-block mt-1.5 font-mono text-[11px] text-sky-600 font-bold bg-sky-500/10 px-2 py-0.5 rounded self-start border border-sky-500/20">
                           Contract: {activeRental.contract_number}
                         </span>
                       )}
                     </div>
 
                     {/* Contact Person */}
-                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)]">
+                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
                       <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">
                         Contact Person
                       </span>
                       <p className="font-semibold text-[var(--color-ink)] text-xs sm:text-sm">
-                        {clientInfo.contact_person || machine.customer_name || "—"}
+                        {clientContactPerson || "—"}
                       </p>
                     </div>
 
                     {/* Contact Phone */}
-                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)]">
+                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
                       <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">
                         Contact Mobile
                       </span>
@@ -481,7 +537,7 @@ export function MachineClientView({
                           href={`tel:${clientPhone}`}
                           className="font-semibold text-[var(--color-link)] hover:underline inline-flex items-center gap-1.5 text-xs sm:text-sm font-mono"
                         >
-                          <Phone className="h-3.5 w-3.5" /> {clientPhone}
+                          <Phone className="h-3.5 w-3.5 shrink-0" /> {clientPhone}
                         </a>
                       ) : (
                         <p className="text-[var(--color-mute)]">—</p>
@@ -490,7 +546,7 @@ export function MachineClientView({
 
                     {/* Contact Email */}
                     {clientEmail && (
-                      <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)]">
+                      <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
                         <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">
                           Contact Email
                         </span>
@@ -503,8 +559,8 @@ export function MachineClientView({
                       </div>
                     )}
 
-                    {/* City & State */}
-                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)]">
+                    {/* City, District & State */}
+                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
                       <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">
                         City & State
                       </span>
@@ -513,29 +569,61 @@ export function MachineClientView({
                       </p>
                     </div>
 
-                    {/* GSTIN if present */}
-                    {clientInfo.gstin && (
-                      <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)]">
-                        <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">
-                          GSTIN
-                        </span>
+                    {/* GSTIN */}
+                    {clientGstin && (
+                      <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">
+                            GSTIN
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleCopyGstin}
+                            className="text-[11px] text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            {copiedGstin ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                            <span>{copiedGstin ? "Copied" : "Copy"}</span>
+                          </button>
+                        </div>
                         <p className="font-mono font-semibold text-[var(--color-ink)] text-xs sm:text-sm">
-                          {clientInfo.gstin}
+                          {clientGstin}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* PAN Number */}
+                    {clientPan && (
+                      <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">
+                            PAN Number
+                          </span>
+                          <button
+                            type="button"
+                            onClick={handleCopyPan}
+                            className="text-[11px] text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            {copiedPan ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                            <span>{copiedPan ? "Copied" : "Copy"}</span>
+                          </button>
+                        </div>
+                        <p className="font-mono font-semibold text-[var(--color-ink)] text-xs sm:text-sm">
+                          {clientPan}
                         </p>
                       </div>
                     )}
                   </div>
 
-                  {/* Site Address with 1-click Copy */}
-                  <div className="flex flex-col p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)]">
-                    <div className="flex items-center justify-between mb-1">
+                  {/* Primary Site Location / Deployment Address */}
+                  <div className="flex flex-col p-3.5 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
+                    <div className="flex items-center justify-between mb-1.5">
                       <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">
                         Site Location / Deployment Address
                       </span>
                       <button
                         type="button"
-                        onClick={handleCopyAddress}
-                        className="text-xs text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-1 cursor-pointer"
+                        onClick={handleCopySiteAddress}
+                        className="text-xs text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-1 cursor-pointer transition-colors"
                       >
                         {copiedAddress ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
                         <span>{copiedAddress ? "Copied" : "Copy Address"}</span>
@@ -543,23 +631,49 @@ export function MachineClientView({
                     </div>
                     <p className="text-xs sm:text-sm text-[var(--color-ink)] leading-relaxed font-medium">
                       {clientAddress || "—"}
+                      {clientLocation && !clientAddress.includes(clientLocation) ? `, ${clientLocation}` : ""}
+                      {clientPincode ? ` - ${clientPincode}` : ""}
                     </p>
                   </div>
 
+                  {/* Billing Address (if separate) */}
+                  {isBillingAddressDifferent && (billingAddress || billingCity) && (
+                    <div className="flex flex-col p-3.5 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">
+                          Billing Address
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleCopyBillingAddress}
+                          className="text-xs text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          {copiedBillingAddress ? <Check className="h-3 w-3 text-emerald-600" /> : <Copy className="h-3 w-3" />}
+                          <span>{copiedBillingAddress ? "Copied" : "Copy Billing Address"}</span>
+                        </button>
+                      </div>
+                      <p className="text-xs sm:text-sm text-[var(--color-ink)] leading-relaxed font-medium">
+                        {fullBillingAddress || "—"}
+                      </p>
+                    </div>
+                  )}
+
                   {/* Rental Contract Timeline & Rate if available */}
                   {activeRental && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)]">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] shadow-2xs">
                       <div>
-                        <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block">Rental Start</span>
+                        <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block mb-0.5">Rental Start</span>
                         <span className="font-semibold text-xs sm:text-sm text-[var(--color-ink)]">{formatDate(activeRental.start_date)}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block">Rental End</span>
+                        <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block mb-0.5">Rental End</span>
                         <span className="font-semibold text-xs sm:text-sm text-[var(--color-ink)]">{formatDate(activeRental.end_date)}</span>
                       </div>
                       <div>
-                        <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block">Rental Rate</span>
-                        <span className="font-semibold text-xs sm:text-sm text-emerald-600">₹{activeRental.monthly_rate || activeRental.rental_rate || 0} / {activeRental.rate_unit || "month"}</span>
+                        <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block mb-0.5">Rental Rate</span>
+                        <span className="font-bold text-xs sm:text-sm text-emerald-600 dark:text-emerald-400">
+                          ₹{(activeRental.monthly_rate || activeRental.rental_rate || 0).toLocaleString("en-IN")} / {activeRental.rate_unit || "month"}
+                        </span>
                       </div>
                     </div>
                   )}
@@ -570,9 +684,9 @@ export function MachineClientView({
                       <motion.a
                         whileTap={{ scale: 0.96 }}
                         href={`tel:${clientPhone}`}
-                        className="flex items-center justify-center gap-1.5 py-2 px-2.5 sm:py-2.5 sm:px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 transition-all text-center font-semibold text-xs"
+                        className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 transition-all text-center font-semibold text-xs min-h-[44px]"
                       >
-                        <Phone className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                        <Phone className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
                         <span className="truncate">Call</span>
                       </motion.a>
                     ) : null}
@@ -583,9 +697,9 @@ export function MachineClientView({
                         href={whatsappUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-1.5 py-2 px-2.5 sm:py-2.5 sm:px-3 rounded-xl bg-green-500/10 hover:bg-green-500/20 text-green-700 dark:text-green-400 border border-green-500/20 transition-all text-center font-semibold text-xs"
+                        className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-green-500/10 hover:bg-green-500/20 text-green-700 dark:text-green-400 border border-green-500/20 transition-all text-center font-semibold text-xs min-h-[44px]"
                       >
-                        <AnimatedMessageSquare size={14} className="shrink-0 text-green-600 dark:text-green-400" />
+                        <AnimatedMessageSquare size={16} className="shrink-0 text-green-600 dark:text-green-400" />
                         <span className="truncate">WhatsApp</span>
                       </motion.a>
                     ) : null}
@@ -595,9 +709,9 @@ export function MachineClientView({
                       href={mapsUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-1.5 py-2 px-2.5 sm:py-2.5 sm:px-3 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 text-sky-700 dark:text-sky-400 border border-sky-500/20 transition-all text-center font-semibold text-xs"
+                      className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 text-sky-700 dark:text-sky-400 border border-sky-500/20 transition-all text-center font-semibold text-xs min-h-[44px]"
                     >
-                      <MapPin className="h-3.5 w-3.5 shrink-0 text-sky-600 dark:text-sky-400" />
+                      <MapPin className="h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" />
                       <span className="truncate">Map Location</span>
                     </motion.a>
                   </div>
@@ -607,134 +721,13 @@ export function MachineClientView({
                   <Building2 className="h-8 w-8 text-[var(--color-mute)] mx-auto mb-2 opacity-50" />
                   <p className="font-bold text-[var(--color-ink)] text-xs sm:text-sm">No Client Assigned</p>
                   <p className="text-xs text-[var(--color-mute)] mt-1 max-w-sm mx-auto">
-                    This machine is currently available in the fleet inventory and has not been assigned to a client contract.
+                    This machine is currently available in the fleet inventory and has not been linked to a client account in the CRM.
                   </p>
-                </div>
-              )}
-            </Card>
-          </motion.div>
-        )}
-
-        {/* TAB 2: SERVICE & BREAKDOWN HISTORY */}
-        {activeTab === "service_breakdown" && (
-          <motion.div
-            key="service_breakdown"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.18 }}
-            className="flex flex-col gap-5"
-          >
-            <Card padding="lg">
-              <CardHeader
-                title="Service Records & Breakdown Malfunction History"
-                eyebrow="Combined Maintenance & FSR Ledger"
-                action={
-                  <div className="flex items-center gap-2">
-                    <Link href="/service?tab=complaints&action=create_complaint">
-                      <Button variant="danger-sm" className="text-xs font-bold py-1.5 px-3">
-                        <AlertTriangle className="h-3.5 w-3.5 mr-1" /> Report Breakdown
+                  {allowEdit && (
+                    <div className="mt-4">
+                      <Button href={`/machines/${machine.id}/edit`} variant="secondary" size="sm">
+                        Assign Client
                       </Button>
-                    </Link>
-                    {(isAssignedEngineer || isAdmin) && (
-                      <Button
-                        variant="primary"
-                        onClick={() => setActiveTab("complete_service")}
-                        className="text-xs font-bold py-1.5 px-3"
-                      >
-                        + Log Maintenance Service
-                      </Button>
-                    )}
-                  </div>
-                }
-              />
-
-              {serviceHistory.length === 0 && breakdownHistory.length === 0 ? (
-                <div className="py-10 text-center">
-                  <EmptyState
-                    title="No Service or Breakdown Logs Found"
-                    description="This machine has no recorded maintenance services or breakdown complaints logged yet."
-                  />
-                </div>
-              ) : (
-                <div className="mt-4 space-y-4">
-                  {/* Maintenance Service Records */}
-                  {serviceHistory.length > 0 && (
-                    <div className="space-y-3">
-                      <h4 className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-ink)] flex items-center gap-1.5">
-                        <Wrench className="h-4 w-4 text-sky-500" /> Maintenance Service Logs ({serviceHistory.length})
-                      </h4>
-
-                      <div className="w-full overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Service Date</TableHead>
-                              <TableHead>Category / Type</TableHead>
-                              <TableHead>Meter (hrs)</TableHead>
-                              <TableHead>Engineer</TableHead>
-                              <TableHead>Status</TableHead>
-                              <TableHead>Notes & Remarks</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {serviceHistory.map((s) => (
-                              <TableRow key={s.id}>
-                                <TableCell className="font-mono text-xs font-bold">{formatDate(s.service_date)}</TableCell>
-                                <TableCell className="font-semibold text-xs">{s.service_category || "Routine Service"}</TableCell>
-                                <TableCell className="font-mono text-xs">{s.hour_meter || 0} hrs</TableCell>
-                                <TableCell className="text-xs">{s.engineer?.full_name || "Assigned Engineer"}</TableCell>
-                                <TableCell>
-                                  <Badge variant={s.service_status === "completed" ? "success" : "warning"}>
-                                    <span className="capitalize">{s.service_status || "completed"}</span>
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-xs text-[var(--color-mute)] max-w-xs truncate">{s.notes || "-"}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Breakdown Complaints */}
-                  {breakdownHistory.length > 0 && (
-                    <div className="space-y-3 pt-4 border-t border-[var(--color-hairline)]">
-                      <h4 className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-ink)] flex items-center gap-1.5">
-                        <AlertTriangle className="h-4 w-4 text-amber-500" /> Breakdown Malfunction Reports ({breakdownHistory.length})
-                      </h4>
-
-                      <div className="w-full overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Complaint No</TableHead>
-                              <TableHead>Reported Date</TableHead>
-                              <TableHead>Malfunction Details</TableHead>
-                              <TableHead>Required Part</TableHead>
-                              <TableHead>Engineer / Supervisor</TableHead>
-                              <TableHead>FSR Status</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {breakdownHistory.map((b) => (
-                              <TableRow key={b.id}>
-                                <TableCell className="font-mono text-xs font-bold text-red-600 dark:text-red-400">{b.complaint_no}</TableCell>
-                                <TableCell className="font-mono text-xs">{formatDate(b.complaint_date)}</TableCell>
-                                <TableCell className="text-xs font-medium max-w-xs truncate">{b.complaint}</TableCell>
-                                <TableCell className="text-xs font-mono">{b.required_part ? `${b.required_part} (${b.part_quantity || 1})` : "-"}</TableCell>
-                                <TableCell className="text-xs">{b.engineer?.full_name || b.supervisor?.full_name || "Technician"}</TableCell>
-                                <TableCell>
-                                  <Badge variant={b.status === "resolved" ? "success" : b.status === "in_progress" ? "info" : "overdue"}>
-                                    <span className="capitalize">{b.status}</span>
-                                  </Badge>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
                     </div>
                   )}
                 </div>
@@ -743,7 +736,7 @@ export function MachineClientView({
           </motion.div>
         )}
 
-        {/* TAB 3: HOUR METER RUNNING HISTORY */}
+        {/* TAB 2: HOUR METER RUNNING HISTORY (Lazy Loaded on Demand) */}
         {activeTab === "running_hours" && (
           <motion.div
             key="running_hours"
@@ -755,24 +748,86 @@ export function MachineClientView({
             <Card padding="lg">
               <CardHeader
                 title="Hour Meter Running Machine History"
-                eyebrow="Operator Daily Logbook with Client & Operator Details"
+                eyebrow="Operator Daily Logbook with Shift Timings & Running Hours"
                 action={
-                  <Link href="/operations?tab=logs">
-                    <Button variant="secondary" className="text-xs font-bold py-1.5 px-3">
-                      + Add Meter Log Entry
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon={<RefreshCw size={13} className={isLoadingLogs ? "animate-spin" : ""} />}
+                      onClick={loadHourMeterLogs}
+                      disabled={isLoadingLogs}
+                      title="Refresh Running Logs"
+                    >
+                      Refresh
                     </Button>
-                  </Link>
+                    <Link href="/operations?tab=entry">
+                      <Button variant="secondary" className="text-xs font-bold py-1.5 px-3">
+                        + Add Meter Log Entry
+                      </Button>
+                    </Link>
+                  </div>
                 }
               />
 
-              {hourMeterLogs.length === 0 ? (
+              {/* Loading Skeleton */}
+              {isLoadingLogs && (
+                <div className="mt-4 flex flex-col gap-3">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
+                    <div className="flex items-center gap-2">
+                      <AnimatedLoader isSpinning size={16} className="text-sky-500" />
+                      <span className="text-xs font-medium text-[var(--color-ink)]">
+                        Loading running meter history...
+                      </span>
+                    </div>
+                  </div>
+                  <div className="w-full rounded-xl border border-[var(--color-hairline)] overflow-hidden">
+                    <div className="h-10 bg-[var(--color-hairline-soft-surface)]" />
+                    {[1, 2, 3, 4].map((i) => (
+                      <div key={i} className="h-12 border-t border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] animate-pulse flex items-center px-4 gap-4">
+                        <div className="h-4 w-20 bg-[var(--color-hairline)] rounded" />
+                        <div className="h-4 w-28 bg-[var(--color-hairline)] rounded" />
+                        <div className="h-4 w-24 bg-[var(--color-hairline)] rounded" />
+                        <div className="h-4 w-20 bg-[var(--color-hairline)] rounded ml-auto" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Error State */}
+              {!isLoadingLogs && logsError && (
+                <div className="mt-4 p-4 rounded-xl border border-rose-500/30 bg-rose-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 text-xs sm:text-sm font-medium">
+                    <AlertCircle size={16} className="shrink-0" />
+                    <span>{logsError}</span>
+                  </div>
+                  <Button size="sm" variant="secondary" onClick={loadHourMeterLogs}>
+                    <RefreshCw size={13} className="mr-1.5" />
+                    Retry
+                  </Button>
+                </div>
+              )}
+
+              {/* Empty State */}
+              {!isLoadingLogs && !logsError && hasLoadedLogs && (!hourMeterLogs || hourMeterLogs.length === 0) && (
                 <div className="py-10 text-center">
                   <EmptyState
                     title="No Running Meter Logs Logged"
-                    description="Daily hour meter logbook entries recorded by machine operators will be displayed here."
+                    description="Daily hour meter logbook entries recorded by machine operators for this machine will appear here."
+                    action={
+                      <Link href="/operations?tab=entry">
+                        <Button variant="secondary" size="sm">
+                          + Add First Meter Log
+                        </Button>
+                      </Link>
+                    }
                   />
                 </div>
-              ) : (
+              )}
+
+              {/* Data Table */}
+              {!isLoadingLogs && !logsError && hourMeterLogs && hourMeterLogs.length > 0 && (
                 <div className="mt-4 w-full overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
                   <Table>
                     <TableHeader>
@@ -789,19 +844,29 @@ export function MachineClientView({
                     <TableBody>
                       {hourMeterLogs.map((log: any) => (
                         <TableRow key={log.id}>
-                          <TableCell className="font-mono text-xs font-bold">{formatDate(log.log_date)}</TableCell>
-                          <TableCell className="font-medium text-xs">{clientInfo.company_name || machine.customer_name}</TableCell>
-                          <TableCell className="text-xs font-semibold">{log.operator?.full_name || "Operator"}</TableCell>
-                          <TableCell className="font-mono text-xs">
-                            {log.start_time && log.end_time ? formatShiftTimingRange(log.start_time, log.end_time) : `${log.running_hours || 0} hrs`}
+                          <TableCell className="font-mono text-xs font-bold whitespace-nowrap">
+                            {formatDate(log.log_date)}
                           </TableCell>
-                          <TableCell className="font-mono text-xs text-sky-600 dark:text-sky-400 font-bold">
+                          <TableCell className="font-medium text-xs">
+                            {log.client?.company_name || clientCompanyName || "—"}
+                          </TableCell>
+                          <TableCell className="text-xs font-semibold whitespace-nowrap">
+                            {log.operator?.full_name || "Operator"}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs whitespace-nowrap">
+                            {log.start_time && log.end_time
+                              ? formatShiftTimingRange(log.start_time, log.end_time)
+                              : `${log.running_hours || 0} hrs`}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs text-sky-600 dark:text-sky-400 font-bold whitespace-nowrap">
                             {log.start_meter || 0} → {log.end_meter || 0} (+{log.running_hours || 0}h)
                           </TableCell>
-                          <TableCell className="font-mono text-xs text-amber-600 font-semibold">
-                            {log.overtime_hours ? `+${log.overtime_hours} hrs` : "-"}
+                          <TableCell className="font-mono text-xs text-amber-600 dark:text-amber-400 font-semibold whitespace-nowrap">
+                            {log.overtime_hours ? `+${log.overtime_hours} hrs` : "—"}
                           </TableCell>
-                          <TableCell className="text-xs text-[var(--color-mute)] max-w-xs truncate">{log.remarks || "-"}</TableCell>
+                          <TableCell className="text-xs text-[var(--color-mute)] max-w-xs truncate">
+                            {log.remarks || "—"}
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -811,251 +876,7 @@ export function MachineClientView({
             </Card>
           </motion.div>
         )}
-
-        {/* TAB 4: ALL PARTS USED HISTORY */}
-        {activeTab === "parts_used" && (
-          <motion.div
-            key="parts_used"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.18 }}
-          >
-            <Card padding="lg">
-              <CardHeader
-                title="All Spare Parts Used & Issued History"
-                eyebrow="Inventory Issue Challan Ledger"
-                action={
-                  <Link href="/inventory?tab=issue">
-                    <Button variant="secondary" className="text-xs font-bold py-1.5 px-3">
-                      <PackageCheck className="h-3.5 w-3.5 mr-1" /> Issue Part to Machine
-                    </Button>
-                  </Link>
-                }
-              />
-
-              {partsUsedHistory.length === 0 ? (
-                <div className="py-10 text-center">
-                  <EmptyState
-                    title="No Spare Parts Issued"
-                    description="No inventory parts or spare components have been issued to this machine yet."
-                  />
-                </div>
-              ) : (
-                <div className="mt-4 w-full overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Challan / Issue No</TableHead>
-                        <TableHead>Issue Date</TableHead>
-                        <TableHead>Part Number & Description</TableHead>
-                        <TableHead>Qty Issued</TableHead>
-                        <TableHead>Issued To</TableHead>
-                        <TableHead>Returnable</TableHead>
-                        <TableHead>Status</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {partsUsedHistory.flatMap((issue: any) =>
-                        (issue.items || []).map((item: any) => (
-                          <TableRow key={`${issue.id}-${item.id}`}>
-                            <TableCell className="font-mono text-xs font-bold text-sky-600">{issue.challan_number || issue.issue_number}</TableCell>
-                            <TableCell className="font-mono text-xs">{formatDate(issue.issue_date)}</TableCell>
-                            <TableCell className="text-xs">
-                              <span className="font-mono font-bold block">{item.product?.part_number || "PART-SPEC"}</span>
-                              <span className="text-[var(--color-mute)]">{item.product?.name || "Spare Component"}</span>
-                            </TableCell>
-                            <TableCell className="font-mono text-xs font-bold">{item.quantity_issued} {item.unit || "Pcs"}</TableCell>
-                            <TableCell className="text-xs">{issue.issued_to_name || "Service Technician"}</TableCell>
-                            <TableCell>
-                              <Badge variant={item.is_returnable ? "warning" : "neutral"}>
-                                {item.is_returnable ? "Returnable" : "Non-Returnable"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={issue.status === "issued" ? "success" : "neutral"}>
-                                <span className="capitalize">{issue.status}</span>
-                              </Badge>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </Card>
-          </motion.div>
-        )}
-
-        {/* TAB 5: SERVICE INTERVAL & SCHEDULE */}
-        {activeTab === "service_interval" && (
-          <motion.div
-            key="service_interval"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.18 }}
-            className="flex flex-col gap-6"
-          >
-            <Card padding="lg">
-              <CardHeader
-                title="Service Interval & Scheduled Maintenance Rules"
-                eyebrow="Routine Inspection Cycles (90 Days / 180 Days / 250 Hrs / 500 Hrs)"
-              />
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 text-xs sm:text-sm">
-                <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-2">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider block">Service Frequency Interval</span>
-                  <p className="text-xl font-extrabold text-[var(--color-ink)]">{machine.service_interval_days || 90} Days</p>
-                  <p className="text-[11px] text-[var(--color-mute)]">Recommended preventive maintenance cycle</p>
-                </div>
-
-                <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-2">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider block">Last Serviced Date</span>
-                  <p className="text-xl font-extrabold text-[var(--color-ink)]">{machine.last_service_date ? formatDate(machine.last_service_date) : "Never Serviced"}</p>
-                  <p className="text-[11px] text-[var(--color-mute)]">Last logged maintenance completion</p>
-                </div>
-
-                <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-2">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider block">Next Service Due Date</span>
-                  <p className="text-xl font-extrabold text-[var(--color-link)]">{formatDate(machine.next_service_due_date)}</p>
-                  <p className="text-[11px] text-amber-600 font-semibold">{dueLabel}</p>
-                </div>
-              </div>
-
-              {/* Maintenance Schedule Checklist Matrix */}
-              <div className="mt-6 pt-5 border-t border-[var(--color-hairline)] space-y-4">
-                <h4 className="text-xs font-extrabold uppercase tracking-wider text-[var(--color-ink)]">
-                  Standard Preventive Maintenance Checklist Rules
-                </h4>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                  <div className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/50 space-y-1">
-                    <span className="font-bold text-[var(--color-ink)] flex items-center gap-1.5">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600" /> 90-Day / 250-Hour Interval
-                    </span>
-                    <p className="text-[var(--color-mute)] leading-relaxed">
-                      Engine oil filter replacement, air filter inspection/cleaning (`{machine.air_filter_no || "Standard"}`), hydraulic fluid check, battery voltage test, and starter motor teeth inspection (`{machine.starter_motor_teeth || "Standard"}`).
-                    </p>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/50 space-y-1">
-                    <span className="font-bold text-[var(--color-ink)] flex items-center gap-1.5">
-                      <CheckCircle2 className="h-4 w-4 text-sky-600" /> 180-Day / 500-Hour Interval
-                    </span>
-                    <p className="text-[var(--color-mute)] leading-relaxed">
-                      Diesel fuel filter replacement (`{machine.diesel_filter_no || "Standard"}`), headgas kit notch inspection (`{machine.headgas_kit_notch || "Standard"}`), front tyre (`{machine.front_tyre_size || "Standard"}`) & back tyre (`{machine.back_tyre_size || "Standard"}`) wear check, brake pads, and hydraulic hose stress test.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </motion.div>
-        )}
-
-        {/* TAB 6: COMPLIANCE DOCUMENTS */}
-        {activeTab === "documents" && (
-          <motion.div
-            key="documents"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.18 }}
-          >
-            <Card padding="lg">
-              <CardHeader
-                title="Machine Compliance Documents & Certificates"
-                eyebrow="Compliance Vault"
-                action={
-                  <Link href="/documents?action=upload">
-                    <Button variant="primary" className="text-xs font-bold py-1.5 px-3">
-                      <FileText className="h-3.5 w-3.5 mr-1" /> Upload Certificate
-                    </Button>
-                  </Link>
-                }
-              />
-              <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-2 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-[var(--color-ink)]">Insurance Policy Certificate</span>
-                    <Badge variant="warning">Policy Logged</Badge>
-                  </div>
-                  <p className="text-[var(--color-mute)]">Policy No: {machine.insurance_policy_no || "-"}</p>
-                  <p className="text-[var(--color-mute)]">Expires: {formatComplianceDate(machine.insurance_expiry_date)}</p>
-                </div>
-
-                <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-2 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-[var(--color-ink)]">Third Party Fitness Certificate</span>
-                    <Badge variant="success">Valid</Badge>
-                  </div>
-                  <p className="text-[var(--color-mute)]">Cert No: {machine.third_party_certificate || "-"}</p>
-                  <p className="text-[var(--color-mute)]">Expires: {formatComplianceDate(machine.third_party_expiry_date)}</p>
-                </div>
-
-                <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-2 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-[var(--color-ink)]">RTO Tax Receipt</span>
-                    <Badge variant="success">Paid</Badge>
-                  </div>
-                  <p className="text-[var(--color-mute)]">Tax Receipt No: {machine.rto_tax || "-"}</p>
-                  <p className="text-[var(--color-mute)]">Expires: {machine.rto_tax_expiry_date ? formatComplianceDate(machine.rto_tax_expiry_date) : "-"}</p>
-                </div>
-              </div>
-            </Card>
-          </motion.div>
-        )}
-
-        {/* TAB 7: COMPLETE SERVICE FORM */}
-        {activeTab === "complete_service" && (isAssignedEngineer || isAdmin) && (
-          <motion.div
-            key="complete_service"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.18 }}
-          >
-            <Card padding="lg" className="shadow-sm border-[var(--color-link)]/20">
-              <CardHeader
-                title="Complete Maintenance Service"
-                eyebrow="Field Logger"
-                action={
-                  <span className="hidden sm:inline-flex items-center gap-1.5 text-xs text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 px-2.5 py-1 rounded-full font-semibold">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Auto-updates Schedule
-                  </span>
-                }
-              />
-              <div className="mt-4">
-                <ServiceForm machineId={machine.id} engineerId={currentUserId} />
-              </div>
-            </Card>
-          </motion.div>
-        )}
       </AnimatePresence>
-
-      {/* Image Lightbox Modal for attached photos */}
-      <Modal open={!!selectedPhoto} onClose={() => setSelectedPhoto(null)} title="Photo Attachment Preview" size="lg">
-        {selectedPhoto && (
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative w-full max-h-[70vh] flex items-center justify-center overflow-hidden rounded-xl bg-neutral-950 p-2">
-              <Image
-                src={selectedPhoto}
-                alt="Enlarged photo preview"
-                width={800}
-                height={600}
-                unoptimized
-                className="max-h-[65vh] w-auto object-contain rounded-lg shadow-lg"
-              />
-            </div>
-            <div className="flex justify-end w-full">
-              <Button variant="secondary" onClick={() => setSelectedPhoto(null)}>
-                Close Preview
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
 
       {/* Delete Confirmation Dialog */}
       <ConfirmationDialog
@@ -1072,3 +893,4 @@ export function MachineClientView({
     </div>
   );
 }
+

@@ -219,7 +219,6 @@ export function exportSupervisorRunningLogsToExcel({
   ] : viewMode === "machine" && selectedEntityId !== "all" ? [
     filterScopeText,
     `Total Run: ${Math.round(totalRunningHoursAcc * 10) / 10} hrs`,
-    `Total Services: ${machines?.find((m) => m.id === selectedEntityId)?.service_count ?? 0}`,
     `Month: ${monthLabel}`,
     `Export Date: ${displayDateTime}`,
   ] : [

@@ -105,10 +105,6 @@ export async function importMachinesFromExcel(formData: FormData): Promise<BulkI
     "hour meter (hmr)": "hour_meter",
     "hour meter reading (hmr)": "hour_meter",
     "hours": "hour_meter",
-    "service count": "service_count",
-    "service_count": "service_count",
-    "services": "service_count",
-    "total services": "service_count",
     "health status": "health_status",
     "health_status": "health_status",
     "health": "health_status",
@@ -126,7 +122,6 @@ export async function importMachinesFromExcel(formData: FormData): Promise<BulkI
   const colYearOfMfg = getColIndex("year_of_mfg");
   const colManufacturer = getColIndex("manufacturer");
   const colHourMeter = getColIndex("hour_meter");
-  const colServiceCount = getColIndex("service_count");
   const colHealthStatus = getColIndex("health_status");
   const colStatus = getColIndex("status");
 
@@ -136,19 +131,108 @@ export async function importMachinesFromExcel(formData: FormData): Promise<BulkI
     errors: [],
   };
 
+  // Pre-fetch all existing machines from DB for high-speed duplicate detection
+  const { data: dbMachines } = await supabase
+    .from("machines")
+    .select("machine_id, serial_number");
+
+  const existingSerialMap = new Map<string, string>();
+  const existingMachineIdMap = new Map<string, string>();
+
+  if (dbMachines && dbMachines.length > 0) {
+    for (const m of dbMachines) {
+      if (m.serial_number) {
+        existingSerialMap.set(m.serial_number.toLowerCase().trim(), m.machine_id);
+      }
+      if (m.machine_id) {
+        existingMachineIdMap.set(m.machine_id.toUpperCase().trim(), m.machine_id);
+      }
+    }
+  }
+
+  // Intra-file duplicate tracking (maps lower-case string to first row number seen)
+  const seenInFileSerials = new Map<string, number>();
+  const seenInFileMachineIds = new Map<string, number>();
+
   // Process each data row (skip header)
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     const rowNum = i + 1;
 
     try {
-      const machineIdVal = colMachineId >= 0 ? String(row[colMachineId] || "").trim() : "";
+      const machineIdVal = colMachineId >= 0 ? String(row[colMachineId] || "").trim().toUpperCase() : "";
       const model = colModel >= 0 ? String(row[colModel] || "").trim() : "";
       const serialNumber = colSerialNumber >= 0 ? String(row[colSerialNumber] || "").trim() : "";
       const yearOfMfg = colYearOfMfg >= 0 ? String(row[colYearOfMfg] || "").trim() : "";
       const manufacturer = colManufacturer >= 0 ? String(row[colManufacturer] || "").trim() : "";
       const hourMeter = colHourMeter >= 0 ? parseFloat(String(row[colHourMeter] || "0")) || 0 : 0;
-      const serviceCount = colServiceCount >= 0 ? parseInt(String(row[colServiceCount] || "0"), 10) || 0 : 0;
+
+      // Mandatory field validation
+      if (!serialNumber) {
+        result.failed++;
+        result.errors.push({ row: rowNum, reason: "Serial Number is mandatory and cannot be blank." });
+        continue;
+      }
+      if (!model) {
+        result.failed++;
+        result.errors.push({ row: rowNum, reason: "Model is mandatory and cannot be blank." });
+        continue;
+      }
+      if (!manufacturer) {
+        result.failed++;
+        result.errors.push({ row: rowNum, reason: "Manufacturer is mandatory and cannot be blank." });
+        continue;
+      }
+      if (!yearOfMfg) {
+        result.failed++;
+        result.errors.push({ row: rowNum, reason: "Year of manufacture (YUM) is mandatory and cannot be blank." });
+        continue;
+      }
+
+      const lowerSerial = serialNumber.toLowerCase().trim();
+
+      // Check intra-file duplicate serial number
+      if (seenInFileSerials.has(lowerSerial)) {
+        const firstSeen = seenInFileSerials.get(lowerSerial);
+        result.failed++;
+        result.errors.push({
+          row: rowNum,
+          reason: `Duplicate Serial Number "${serialNumber}" found in spreadsheet (matches Row ${firstSeen}).`,
+        });
+        continue;
+      }
+
+      // Check database duplicate serial number
+      if (existingSerialMap.has(lowerSerial)) {
+        const existingMachineId = existingSerialMap.get(lowerSerial);
+        result.failed++;
+        result.errors.push({
+          row: rowNum,
+          reason: `Serial Number "${serialNumber}" already exists in the inventory (assigned to ${existingMachineId}).`,
+        });
+        continue;
+      }
+
+      // Check Machine ID uniqueness if provided in spreadsheet
+      if (machineIdVal) {
+        if (seenInFileMachineIds.has(machineIdVal)) {
+          const firstSeen = seenInFileMachineIds.get(machineIdVal);
+          result.failed++;
+          result.errors.push({
+            row: rowNum,
+            reason: `Duplicate Machine ID "${machineIdVal}" found in spreadsheet (matches Row ${firstSeen}).`,
+          });
+          continue;
+        }
+        if (existingMachineIdMap.has(machineIdVal)) {
+          result.failed++;
+          result.errors.push({
+            row: rowNum,
+            reason: `Machine ID "${machineIdVal}" already exists in the inventory.`,
+          });
+          continue;
+        }
+      }
       
       const rawHealthStatus = colHealthStatus >= 0
         ? String(row[colHealthStatus] || "").trim().toLowerCase().replace(/[\s-]+/g, "_")
@@ -175,12 +259,11 @@ export async function importMachinesFromExcel(formData: FormData): Promise<BulkI
       }
 
       const insertPayload: Record<string, any> = {
-        model: model || null,
-        serial_number: serialNumber || null,
-        year_of_mfg: yearOfMfg || null,
-        manufacturer: manufacturer || null,
+        model,
+        serial_number: serialNumber,
+        year_of_mfg: yearOfMfg,
+        manufacturer,
         hour_meter: hourMeter,
-        service_count: serviceCount,
         health_status: healthStatus,
         status,
         created_by: user.id,
@@ -190,7 +273,11 @@ export async function importMachinesFromExcel(formData: FormData): Promise<BulkI
         insertPayload.machine_id = machineIdVal;
       }
 
-      const { error } = await supabase.from("machines").insert(insertPayload);
+      const { data: insertedData, error } = await supabase
+        .from("machines")
+        .insert(insertPayload)
+        .select("id, machine_id")
+        .single();
 
       if (error) {
         result.failed++;
@@ -198,6 +285,14 @@ export async function importMachinesFromExcel(formData: FormData): Promise<BulkI
         result.errors.push({ row: rowNum, reason: formatted.error });
       } else {
         result.success++;
+        // Track as seen so subsequent rows in the same spreadsheet cannot collide
+        seenInFileSerials.set(lowerSerial, rowNum);
+        const resolvedMachineId = insertedData?.machine_id || machineIdVal || "New Machine";
+        existingSerialMap.set(lowerSerial, resolvedMachineId);
+        if (machineIdVal) {
+          seenInFileMachineIds.set(machineIdVal, rowNum);
+          existingMachineIdMap.set(machineIdVal, machineIdVal);
+        }
       }
     } catch (err: unknown) {
       result.failed++;

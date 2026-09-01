@@ -91,3 +91,5 @@ gi# Database Map — Supabase PostgreSQL Schema
 - `005_fix_dashboard_rpc_user_context.sql`: Fixed security context in RPC function for RLS compliance.
 - `006_email_notifications.sql`: Added `customer_email` to machines; updated notifications channel CHECK to include `'email'` and `'in_app'`.
 - `008_daily_summary_notifications.sql`: Made `machine_id` nullable; added `engineer_summary` alert type; added `payload` + `provider_response` jsonb; partial unique idempotency index for summary emails; recipient/alert-type indexes.
+- `036_enforce_machine_serial_number_unique_and_not_empty.sql`: Case-insensitive trimmed unique index on `machines(lower(trim(serial_number)))` and check constraint.
+- `037_add_client_id_to_machines.sql`: Added `client_id UUID REFERENCES public.clients(id) ON DELETE SET NULL` and index `idx_machines_client_id` on `public.machines`.

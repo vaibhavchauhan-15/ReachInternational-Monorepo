@@ -113,7 +113,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     if (currentStartMs < prevEndMs) {
       return {
         isInvalid: true,
-        message: `Start time (${formatTo12Hour(startTime)}) cannot precede previous log's end time (${latestTimeline.formattedEndDate} at ${latestTimeline.formattedEndTime}). Handover is allowed from ${latestTimeline.formattedEndTime} onwards.`,
+        message: `Start time (${formatTo12Hour(startTime)}) cannot precede previous log end time (${latestTimeline.formattedEndDate}, ${latestTimeline.formattedEndTime}).`,
         recommendedTime: latestTimeline.formattedEndTime,
         recommendedDate: latestTimeline.latestLog?.end_date || latestTimeline.latestLog?.log_date || logDate,
       };
@@ -459,11 +459,11 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Clock size={13} color="#0284c7" />
                     <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '500', flex: 1 }}>
-                      <Text style={{ fontWeight: '700' }}>Timeline Status:</Text> Last log ended on {latestTimeline.formattedEndDate} at {latestTimeline.formattedEndTime}.
+                      <Text style={{ fontWeight: '700' }}>Last shift ended:</Text> {latestTimeline.formattedEndDate}, {latestTimeline.formattedEndTime}
                     </Text>
                   </View>
                   <Text style={{ fontSize: 10, color: '#0284c7', fontWeight: '600' }}>
-                    Exact handover allowed from {latestTimeline.formattedEndTime}
+                    Handover from {latestTimeline.formattedEndTime}
                   </Text>
                 </View>
               )}
@@ -491,7 +491,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               {sequencingError?.isInvalid && (
                 <View style={[styles.alertBox, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error, marginVertical: 2, padding: 10, gap: 8 }]}>
                   <Text style={{ color: theme.colors.error, fontSize: 11, fontWeight: '600' }}>
-                    ❌ {sequencingError.message}
+                    {sequencingError.message}
                   </Text>
                   <TouchableOpacity
                     onPress={() => {
@@ -517,7 +517,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               {!shiftStats.isValid && !sequencingError?.isInvalid && (
                 <View style={[styles.alertBox, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error, marginVertical: 2 }]}>
                   <Text style={{ color: theme.colors.error, fontSize: 11, textAlign: 'center', fontWeight: '600' }}>
-                    ❌ {shiftStats.errorMessage || 'Invalid shift timings.'}
+                    {shiftStats.errorMessage || 'Invalid shift timings.'}
                   </Text>
                 </View>
               )}

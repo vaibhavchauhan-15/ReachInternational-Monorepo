@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/animated-icons";
 import { ArrowRight } from "lucide-react";
 
-import { Card, Badge } from "@/components/ui";
+import { Card, Badge, SegmentedToggle } from "@/components/ui";
 
 interface MachineItem {
   id: string;
@@ -154,50 +154,21 @@ export function MobileDueBuckets({
       {/* Mobile Tabbed View (< lg screens) */}
       <div className="block lg:hidden space-y-3">
         {/* Segmented Control Header */}
-        <div className="p-1 rounded-2xl bg-muted/60 border border-border flex items-center justify-between gap-1 shadow-2xs">
-          {tabs.map((tab) => {
+        <SegmentedToggle<TabType>
+          value={activeTab}
+          onChange={setActiveTab}
+          layoutIdPrefix="mobile-due-buckets"
+          fullWidth
+          items={tabs.map((tab) => {
             const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className="relative flex-1 py-2 px-2.5 rounded-xl flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors focus:outline-none select-none"
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="mobile-due-active-tab"
-                    className="absolute inset-0 bg-card border border-border rounded-xl shadow-xs"
-                    transition={{ type: "spring", stiffness: 450, damping: 30 }}
-                  />
-                )}
-                <span className="relative z-10 flex items-center gap-1.5">
-                  <Icon
-                    className={`h-3.5 w-3.5 ${
-                      isActive ? tab.colorClass : "text-muted-foreground"
-                    }`}
-                  />
-                  <span
-                    className={
-                      isActive ? "text-foreground font-semibold" : "text-muted-foreground font-medium"
-                    }
-                  >
-                    {tab.label}
-                  </span>
-                  <span
-                    className={`px-1.5 py-0.2 text-[10px] font-bold rounded-full ${
-                      isActive
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {tab.count}
-                  </span>
-                </span>
-              </button>
-            );
+            return {
+              id: tab.id,
+              label: tab.label,
+              icon: <Icon className={`h-3.5 w-3.5 ${activeTab === tab.id ? tab.colorClass : "text-muted-foreground"}`} />,
+              count: tab.count,
+            };
           })}
-        </div>
+        />
 
         {/* Dynamic Animated Content Container */}
         <Card padding="md" className="shadow-xs border border-border bg-card">

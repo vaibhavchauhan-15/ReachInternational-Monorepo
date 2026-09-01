@@ -8,21 +8,28 @@ export function formatMachineDatabaseError(error: { code?: string; message?: str
     };
   }
 
-  if (code === "23505" || message.toLowerCase().includes("unique constraint")) {
+  if (code === "23505" || message.toLowerCase().includes("unique constraint") || message.toLowerCase().includes("duplicate key")) {
     if (message.includes("machines_machine_id_key") || message.includes("machine_id")) {
       return {
         error: "A machine with this Machine ID already exists in the inventory.",
         fieldErrors: { machine_id: "Machine ID already taken." },
       };
     }
-    if (message.includes("serial_number")) {
+    if (message.includes("serial_number") || message.includes("idx_machines_serial_number")) {
       return {
         error: "A machine with this Serial Number already exists in the inventory.",
-        fieldErrors: { serial_number: "Serial Number already taken." },
+        fieldErrors: { serial_number: "Serial Number already registered." },
       };
     }
     return {
       error: "A machine record with these unique details already exists.",
+    };
+  }
+
+  if (code === "23514" || message.includes("check_machines_serial_number_not_empty")) {
+    return {
+      error: "Serial number is required and cannot be empty.",
+      fieldErrors: { serial_number: "Serial number is mandatory." },
     };
   }
 

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -9,25 +9,24 @@ import {
   Select,
   useToast,
   UserSelect,
+  ClientSelect,
   ConfirmationDialog,
   Breadcrumb,
+  type ClientSelectItem,
 } from "@/components/ui";
 import {
-  AnimatedWrench,
-  AnimatedCpu,
-  AnimatedShieldCheck,
   AnimatedTrash,
   AnimatedArrowLeft,
-  AnimatedCheck,
 } from "@/components/ui/animated-icons";
 import { AlertCircle } from "lucide-react";
-import { updateMachine, deleteMachine } from "@/app/actions/machines";
+import { updateMachine, deleteMachine, checkMachineSerialNumberAvailable } from "@/app/actions/machines";
 import type { Machine, User, UserRole } from "@/lib/types/database";
 
-interface MachineEditClientProps {
+export interface MachineEditClientProps {
   machine: Machine;
   supervisors?: User[];
   operators?: User[];
+  clients?: ClientSelectItem[];
   userRole: UserRole;
   canDelete: boolean;
 }
@@ -36,19 +35,23 @@ export function MachineEditClient({
   machine,
   supervisors = [],
   operators = [],
+  clients = [],
   userRole,
   canDelete,
 }: MachineEditClientProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const [isPending, startTransition] = useTransition();
-  const [isDeleting, startDeleteTransition] = useTransition();
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string>("");
 
   const [supervisorId, setSupervisorId] = useState<string>(() => machine.current_supervisor_id || "");
   const [operatorId, setOperatorId] = useState<string>(() => machine.current_operator_id || "");
+  const [rentalStatus, setRentalStatus] = useState<string>(() => machine.status || "available");
+  const [healthStatus, setHealthStatus] = useState<string>(() => machine.health_status || "active");
+  const [clientId, setClientId] = useState<string>(() => machine.client_id || "");
 
   // Ensure assigned supervisor/operator are in the options list if present
   const allSupervisors: Array<{ id: string; full_name: string; phone?: string | null; email?: string | null }> = [...supervisors];
@@ -65,6 +68,14 @@ export function MachineEditClient({
     }
   }
 
+  // Ensure assigned client is in the options list if present
+  const allClients: ClientSelectItem[] = [...clients];
+  if (machine.client && machine.client_id) {
+    if (!allClients.some((c) => c.id === machine.client_id)) {
+      allClients.push(machine.client as ClientSelectItem);
+    }
+  }
+
   const healthStatusOptions = [
     { value: "active", label: "Active" },
     { value: "under_maintenance", label: "Under Maintenance" },
@@ -76,7 +87,33 @@ export function MachineEditClient({
     { value: "rented", label: "Rented" },
   ];
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSerialBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
+    const val = e.target.value.trim();
+    if (!val) return;
+    if (machine.serial_number && machine.serial_number.toLowerCase().trim() === val.toLowerCase()) {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next.serial_number;
+        return next;
+      });
+      return;
+    }
+    const check = await checkMachineSerialNumberAvailable(val, machine.id);
+    if (!check.available) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        serial_number: `Serial number already registered to machine ${check.existingMachineId}.`,
+      }));
+    } else {
+      setFieldErrors((prev) => {
+        const next = { ...prev };
+        delete next.serial_number;
+        return next;
+      });
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFieldErrors({});
     setFormError("");
@@ -99,32 +136,45 @@ export function MachineEditClient({
       return;
     }
 
-    startTransition(async () => {
+    setIsSaving(true);
+    try {
       const res = await updateMachine(machine.id, {}, formData);
       if (res?.error) {
+        setIsSaving(false);
         setFormError(res.error);
         if (res.fieldErrors) setFieldErrors(res.fieldErrors);
         toast("error", "Failed to update machine", res.error);
       } else {
         toast("success", "Machine updated successfully", `Parameters for ${machine.machine_id} have been updated.`);
         router.push(`/machines/${machine.id}`);
-        router.refresh();
       }
-    });
+    } catch (err: unknown) {
+      setIsSaving(false);
+      const msg = err instanceof Error ? err.message : "An unexpected error occurred while updating machine details.";
+      setFormError(msg);
+      toast("error", "Failed to update machine", msg);
+    }
   };
 
-  const handleDeleteMachine = () => {
-    startDeleteTransition(async () => {
+  const handleDeleteMachine = async () => {
+    setIsDeleting(true);
+    try {
       const res = await deleteMachine(machine.id);
       if (res?.error) {
+        setIsDeleting(false);
         toast("error", "Failed to delete machine", res.error);
         setDeleteConfirmOpen(false);
       } else {
         toast("success", "Machine deleted", `${machine.machine_id} has been permanently deleted.`);
+        setDeleteConfirmOpen(false);
         router.push("/machines");
-        router.refresh();
       }
-    });
+    } catch (err: unknown) {
+      setIsDeleting(false);
+      const msg = err instanceof Error ? err.message : "An unexpected error occurred while deleting machine.";
+      toast("error", "Failed to delete machine", msg);
+      setDeleteConfirmOpen(false);
+    }
   };
 
   return (
@@ -157,9 +207,6 @@ export function MachineEditClient({
                 Edit Machine: <span className="font-mono text-sky-600 dark:text-sky-400">{machine.machine_id}</span>
               </h1>
             </div>
-            <p className="text-xs sm:text-sm text-[var(--color-mute)] mt-1">
-              Update fleet master specifications, running hour meter, and operational personnel assignments.
-            </p>
           </div>
 
           {canDelete && (
@@ -169,7 +216,7 @@ export function MachineEditClient({
                 size="sm"
                 icon={<AnimatedTrash size={14} />}
                 onClick={() => setDeleteConfirmOpen(true)}
-                disabled={isPending || isDeleting}
+                disabled={isSaving || isDeleting}
               >
                 Delete Machine
               </Button>
@@ -189,8 +236,7 @@ export function MachineEditClient({
 
         {/* SECTION 1: Machine Identification & Specifications */}
         <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-6 shadow-xs space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-[var(--color-hairline)]">
-            <AnimatedWrench size={18} className="text-[var(--color-link)]" />
+          <div className="pb-3 border-b border-[var(--color-hairline)]">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
               1. Machine Identification & Specifications
             </h3>
@@ -212,7 +258,7 @@ export function MachineEditClient({
               defaultValue={machine.model || ""}
               error={fieldErrors.model}
               required
-              disabled={isPending || isDeleting}
+              disabled={isSaving || isDeleting}
             />
 
             <Input
@@ -221,8 +267,9 @@ export function MachineEditClient({
               placeholder="e.g. SN-98745612"
               defaultValue={machine.serial_number || ""}
               error={fieldErrors.serial_number}
+              onBlur={handleSerialBlur}
               required
-              disabled={isPending || isDeleting}
+              disabled={isSaving || isDeleting}
             />
 
             <Input
@@ -232,7 +279,7 @@ export function MachineEditClient({
               defaultValue={machine.year_of_mfg || ""}
               error={fieldErrors.year_of_mfg}
               required
-              disabled={isPending || isDeleting}
+              disabled={isSaving || isDeleting}
             />
 
             <div className="sm:col-span-2">
@@ -243,7 +290,7 @@ export function MachineEditClient({
                 defaultValue={machine.manufacturer || ""}
                 error={fieldErrors.manufacturer}
                 required
-                disabled={isPending || isDeleting}
+                disabled={isSaving || isDeleting}
               />
             </div>
           </div>
@@ -251,8 +298,7 @@ export function MachineEditClient({
 
         {/* SECTION 2: Metering & Fleet Assignment */}
         <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-6 shadow-xs space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-[var(--color-hairline)]">
-            <AnimatedCpu size={18} className="text-[var(--color-link)]" />
+          <div className="pb-3 border-b border-[var(--color-hairline)]">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
               2. Meter Readings & Personnel Assignment
             </h3>
@@ -268,18 +314,7 @@ export function MachineEditClient({
               placeholder="e.g. 1250.5"
               defaultValue={machine.hour_meter ?? 0}
               error={fieldErrors.hour_meter}
-              disabled={isPending || isDeleting}
-            />
-
-            <Input
-              label="Service Count"
-              name="service_count"
-              type="number"
-              min="0"
-              placeholder="e.g. 3"
-              defaultValue={machine.service_count ?? 0}
-              error={fieldErrors.service_count}
-              disabled={isPending || isDeleting}
+              disabled={isSaving || isDeleting}
             />
 
             <div>
@@ -310,8 +345,7 @@ export function MachineEditClient({
 
         {/* SECTION 3: Status & Health Tracking */}
         <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-6 shadow-xs space-y-4">
-          <div className="flex items-center gap-2 pb-3 border-b border-[var(--color-hairline)]">
-            <AnimatedShieldCheck size={18} className="text-[var(--color-link)]" />
+          <div className="pb-3 border-b border-[var(--color-hairline)]">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
               3. Status & Health Tracking
             </h3>
@@ -322,17 +356,44 @@ export function MachineEditClient({
               label="Health Status"
               name="health_status"
               options={healthStatusOptions}
-              defaultValue={machine.health_status || "active"}
-              disabled={isPending || isDeleting}
+              value={healthStatus}
+              onChange={(val) => {
+                const nextVal = typeof val === "string" ? val : val?.target?.value || "active";
+                setHealthStatus(nextVal);
+              }}
+              disabled={isSaving || isDeleting}
             />
 
             <Select
               label="Rental Status"
               name="status"
               options={statusOptions}
-              defaultValue={machine.status || "available"}
-              disabled={isPending || isDeleting}
+              value={rentalStatus}
+              onChange={(val) => {
+                const nextVal = typeof val === "string" ? val : val?.target?.value || "available";
+                setRentalStatus(nextVal);
+                if (nextVal === "available") {
+                  setClientId("");
+                }
+              }}
+              disabled={isSaving || isDeleting}
             />
+
+            {rentalStatus === "rented" && (
+              <div className="sm:col-span-2 pt-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                <ClientSelect
+                  label="Assigned Client"
+                  clients={allClients}
+                  value={clientId}
+                  onChange={(selectedId) => setClientId(selectedId)}
+                  placeholder="Search and select client renting this machine..."
+                  clearable
+                  disabled={isSaving || isDeleting}
+                  error={fieldErrors.client_id}
+                />
+                <input type="hidden" name="client_id" value={clientId} />
+              </div>
+            )}
           </div>
         </div>
 
@@ -341,7 +402,7 @@ export function MachineEditClient({
           <Button
             variant="secondary"
             href={`/machines/${machine.id}`}
-            disabled={isPending || isDeleting}
+            disabled={isSaving || isDeleting}
             className="w-full sm:w-auto"
           >
             Cancel
@@ -351,9 +412,8 @@ export function MachineEditClient({
             <Button
               type="submit"
               variant="primary"
-              loading={isPending}
+              loading={isSaving}
               disabled={isDeleting}
-              icon={<AnimatedCheck size={16} />}
               className="w-full sm:w-auto px-6 font-semibold"
             >
               Save Machine Details

@@ -100,11 +100,12 @@ function formatHourLogsData(rawLogs: any[]): any[] {
   });
 }
 
-function deriveAssignmentsFromMachines(machines: Machine[]): any[] {
+function deriveAssignmentsFromMachines(machines: Machine[], operatorsList: User[] = []): any[] {
   return (machines || [])
     .filter((m: any) => m.current_operator_id || m.current_supervisor_id)
     .map((m: any) => {
       const code = m.machine_id || m.machine_code || m.id || "";
+      const matchedOperator = m.current_operator || (m.current_operator_id ? operatorsList.find((u: any) => u.id === m.current_operator_id) : null) || null;
       return {
         id: `assign-${m.id}`,
         machine_id: m.id,
@@ -124,7 +125,7 @@ function deriveAssignmentsFromMachines(machines: Machine[]): any[] {
           hour_meter: m.hour_meter,
           status: m.status,
         },
-        operator: m.current_operator || null,
+        operator: matchedOperator,
         assigner: m.current_supervisor || null,
       };
     });
@@ -153,7 +154,7 @@ export async function getOperationsHubData(user: User, tab: string = "logs") {
         .order("created_at", { ascending: false })
         .limit(100),
       getClients(undefined, true),
-      getMachines(),
+      getMachines({ pageSize: 1000 }),
     ]);
 
     if (recentLogsRes.error) {
@@ -196,13 +197,13 @@ export async function getOperationsHubData(user: User, tab: string = "logs") {
     operatorsRes,
     hourLogsRes,
   ] = await Promise.all([
-    getMachines(),
+    getMachines({ pageSize: 1000 }),
     getClients(undefined, true),
     supabase
       .from("users")
       .select("id, full_name, email, phone, role, status")
-      .in("role", ["operator", "mechanic", "supervisor", "service_engineer", "admin", "super_admin", "service_manager"])
-      .neq("status", "inactive")
+      .eq("role", "operator")
+      .eq("status", "active")
       .order("full_name"),
     supabase
       .from("machine_hour_logs")
@@ -216,13 +217,14 @@ export async function getOperationsHubData(user: User, tab: string = "logs") {
     console.error("Error fetching supervisor hour logs:", hourLogsRes.error);
   }
 
+  const operatorsList = (operatorsRes.data || []) as User[];
   const formattedLogs = formatHourLogsData(hourLogsRes.data || []);
-  const derivedAssignments = deriveAssignmentsFromMachines(machinesRes.machines);
+  const derivedAssignments = deriveAssignmentsFromMachines(machinesRes.machines, operatorsList);
 
   return {
     machines: machinesRes.machines,
     dbClients: clientsList,
-    operators: (operatorsRes.data || []) as User[],
+    operators: operatorsList,
     assignments: derivedAssignments,
     hourLogs: formattedLogs,
     siteMovements: [],

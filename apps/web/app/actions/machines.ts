@@ -41,8 +41,8 @@ export async function createMachine(state: MachineFormState, formData: FormData)
     const manufacturer = (formData.get("manufacturer") as string)?.trim() || null;
     const current_supervisor_id = (formData.get("current_supervisor_id") as string)?.trim() || null;
     const current_operator_id = (formData.get("current_operator_id") as string)?.trim() || null;
+    const client_id = (formData.get("client_id") as string)?.trim() || null;
     const hour_meter = parseFloat((formData.get("hour_meter") as string) || "0") || 0;
-    const service_count = parseInt((formData.get("service_count") as string) || "0", 10) || 0;
     const health_status = (formData.get("health_status") as string) || "active";
     const status = (formData.get("status") as string) || "available";
 
@@ -64,8 +64,26 @@ export async function createMachine(state: MachineFormState, formData: FormData)
       errors.status = "Invalid status option selected.";
     }
 
-    if (Object.keys(errors).length > 0) {
+    if (Object.keys(errors).length > 0 || !serial_number) {
       return { error: "Please complete all mandatory machine specification fields.", fieldErrors: errors };
+    }
+
+    // Pre-validate uniqueness of Serial Number (case-insensitive)
+    const normalizedSerial = serial_number.trim();
+    const { data: existingSerialMachine } = await supabase
+      .from("machines")
+      .select("id, machine_id, serial_number")
+      .ilike("serial_number", normalizedSerial)
+      .limit(1);
+
+    if (existingSerialMachine && existingSerialMachine.length > 0) {
+      const matchId = existingSerialMachine[0].machine_id || "existing machine";
+      return {
+        error: `A machine with Serial Number "${normalizedSerial}" already exists in the inventory (${matchId}).`,
+        fieldErrors: {
+          serial_number: `Serial Number already registered to machine ${matchId}.`,
+        },
+      };
     }
 
     // Auto-generate next available unique Machine ID if omitted
@@ -100,10 +118,10 @@ export async function createMachine(state: MachineFormState, formData: FormData)
       serial_number,
       year_of_mfg,
       manufacturer,
-      current_supervisor_id: current_supervisor_id || null,
-      current_operator_id: current_operator_id || null,
+      current_supervisor_id: current_supervisor_id && isValidUuid(current_supervisor_id) ? current_supervisor_id : null,
+      current_operator_id: current_operator_id && isValidUuid(current_operator_id) ? current_operator_id : null,
+      client_id: status === "rented" && isValidUuid(client_id) ? client_id : null,
       hour_meter,
-      service_count,
       health_status,
       status,
       created_by: user.id,
@@ -163,8 +181,8 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
     const manufacturer = (formData.get("manufacturer") as string)?.trim() || null;
     const current_supervisor_id = (formData.get("current_supervisor_id") as string)?.trim() || null;
     const current_operator_id = (formData.get("current_operator_id") as string)?.trim() || null;
+    const client_id = (formData.get("client_id") as string)?.trim() || null;
     const hour_meter = parseFloat((formData.get("hour_meter") as string) || "0") || 0;
-    const service_count = parseInt((formData.get("service_count") as string) || "0", 10) || 0;
     const health_status = (formData.get("health_status") as string) || "active";
     const status = (formData.get("status") as string) || "available";
 
@@ -175,8 +193,27 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
     if (!year_of_mfg) updateErrors.year_of_mfg = "Year of manufacture is required.";
     if (!manufacturer) updateErrors.manufacturer = "Manufacturer is required.";
 
-    if (Object.keys(updateErrors).length > 0) {
+    if (Object.keys(updateErrors).length > 0 || !serial_number) {
       return { error: "Please complete all mandatory machine specification fields.", fieldErrors: updateErrors };
+    }
+
+    // Pre-validate uniqueness of Serial Number (case-insensitive, excluding current machine)
+    const normalizedSerial = serial_number.trim();
+    const { data: existingSerialMachine } = await supabase
+      .from("machines")
+      .select("id, machine_id, serial_number")
+      .ilike("serial_number", normalizedSerial)
+      .neq("id", id)
+      .limit(1);
+
+    if (existingSerialMachine && existingSerialMachine.length > 0) {
+      const matchId = existingSerialMachine[0].machine_id || "existing machine";
+      return {
+        error: `A machine with Serial Number "${normalizedSerial}" already exists in the inventory (${matchId}).`,
+        fieldErrors: {
+          serial_number: `Serial Number already registered to machine ${matchId}.`,
+        },
+      };
     }
 
     const updateData: Record<string, any> = {
@@ -184,12 +221,13 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
       serial_number,
       year_of_mfg,
       manufacturer,
-      current_supervisor_id: current_supervisor_id || null,
-      current_operator_id: current_operator_id || null,
+      current_supervisor_id: current_supervisor_id && isValidUuid(current_supervisor_id) ? current_supervisor_id : null,
+      current_operator_id: current_operator_id && isValidUuid(current_operator_id) ? current_operator_id : null,
+      client_id: status === "rented" && isValidUuid(client_id) ? client_id : null,
       hour_meter,
-      service_count,
       health_status,
       status,
+      updated_at: new Date().toISOString(),
     };
 
     if (machine_id) {
@@ -306,3 +344,97 @@ export async function reassignMachineSupervisor(machineId: string, supervisorId:
     };
   }
 }
+
+export async function checkMachineSerialNumberAvailable(
+  serialNumber: string,
+  excludeMachineId?: string
+): Promise<{ available: boolean; existingMachineId?: string }> {
+  if (!serialNumber || !serialNumber.trim()) {
+    return { available: true };
+  }
+  try {
+    const cleanSerial = serialNumber.trim();
+    const supabase = await createSupabaseServerClient();
+    let query = supabase
+      .from("machines")
+      .select("id, machine_id, serial_number")
+      .ilike("serial_number", cleanSerial);
+
+    if (excludeMachineId && isValidUuid(excludeMachineId)) {
+      query = query.neq("id", excludeMachineId);
+    }
+
+    const { data, error } = await query.limit(1);
+    if (error || !data || data.length === 0) {
+      return { available: true };
+    }
+
+    return {
+      available: false,
+      existingMachineId: data[0].machine_id || "existing machine",
+    };
+  } catch {
+    return { available: true };
+  }
+}
+
+export async function getMachineHourLogsAction(machineId: string): Promise<{
+  success: boolean;
+  logs?: any[];
+  error?: string;
+}> {
+  if (!isValidUuid(machineId)) {
+    return { success: false, error: "Invalid machine ID format.", logs: [] };
+  }
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: "Authentication required.", logs: [] };
+    }
+
+    const { data, error } = await supabase
+      .from("machine_hour_logs")
+      .select(`
+        id,
+        machine_id,
+        operator_id,
+        supervisor_id,
+        client_id,
+        log_date,
+        start_meter,
+        end_meter,
+        running_hours,
+        start_time,
+        end_time,
+        overtime_hours,
+        normal_working_hours,
+        is_breakdown,
+        shift,
+        machine_condition,
+        location,
+        remarks,
+        idempotency_key,
+        created_at,
+        operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone, email),
+        client:clients!machine_hour_logs_client_id_fkey(id, code, company_name)
+      `)
+      .eq("machine_id", machineId)
+      .order("log_date", { ascending: false })
+      .limit(50);
+
+    if (error) {
+      return { success: false, error: error.message || "Failed to retrieve machine logs", logs: [] };
+    }
+
+    return { success: true, logs: data || [] };
+  } catch (err: unknown) {
+    const rawMsg = err instanceof Error ? err.message : "Failed to load machine logs";
+    return { success: false, error: rawMsg, logs: [] };
+  }
+}
+
+

@@ -116,34 +116,36 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
     const responsiveClasses =
       isResponsive && icon
         ? effectiveSize === "sm"
-          ? "w-8 sm:w-auto px-0 sm:px-3 justify-center"
-          : "w-9 sm:w-auto px-0 sm:px-4 justify-center"
+          ? "w-8.5 sm:w-auto px-0 sm:px-3 justify-center"
+          : "w-9.5 sm:w-auto px-0 sm:px-3.5 justify-center"
         : "";
 
     const widthClass = fullWidth ? "w-full justify-center" : "";
 
-    const classes = `inline-flex items-center gap-1.5 shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/30 dark:focus-visible:ring-sky-400/30 ${
+    const classes = `inline-flex items-center justify-center gap-1.5 shrink-0 select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/30 dark:focus-visible:ring-sky-400/30 ${
       variantClasses[variant]
     } ${variant === "link" ? "" : sizeClasses[effectiveSize]} ${widthClass} ${responsiveClasses} ${className}`;
 
     const renderLabel = () => {
       if (!children) return null;
       if (isResponsive && (icon || loading)) {
-        return <span className="hidden sm:inline whitespace-nowrap">{children}</span>;
+        return <span className="hidden sm:inline whitespace-nowrap leading-none">{children}</span>;
       }
-      return <span className="whitespace-nowrap">{children}</span>;
+      return <span className="whitespace-nowrap leading-none">{children}</span>;
     };
 
     const content = (
       <>
         {loading ? (
-          <AnimatedLoader isSpinning size={16} className="shrink-0" />
+          <span className="inline-flex items-center justify-center shrink-0">
+            <AnimatedLoader isSpinning size={16} />
+          </span>
         ) : iconPosition === "left" && icon ? (
-          <span className="shrink-0">{icon}</span>
+          <span className="inline-flex items-center justify-center shrink-0 leading-none">{icon}</span>
         ) : null}
         {renderLabel()}
         {!loading && (iconPosition === "right" || trailingIcon) ? (
-          <span className="shrink-0">{trailingIcon || icon}</span>
+          <span className="inline-flex items-center justify-center shrink-0 leading-none">{trailingIcon || icon}</span>
         ) : null}
       </>
     );

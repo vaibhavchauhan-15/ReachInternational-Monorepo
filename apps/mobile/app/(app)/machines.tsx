@@ -30,8 +30,9 @@ export interface MachineRecord {
   status: string;
   health_status: string;
   hour_meter: number;
-  service_count: number;
   customer_name?: string;
+  client_id?: string;
+  client?: { id: string; code?: string; company_name: string } | null;
   supervisor_id?: string;
   operator_id?: string;
   current_supervisor?: { full_name: string } | null;
@@ -109,12 +110,26 @@ export default function MachinesScreen() {
           status,
           health_status,
           hour_meter,
-          service_count,
           customer_name,
-          supervisor_id,
-          operator_id,
-          current_supervisor:users!machines_supervisor_id_fkey(full_name),
-          current_operator:users!machines_operator_id_fkey(full_name)
+          client_id,
+          current_supervisor_id,
+          current_operator_id,
+          client:clients!machines_client_id_fkey(
+            id,
+            code,
+            company_name,
+            contact_person,
+            phone,
+            address,
+            city,
+            district,
+            state,
+            pincode,
+            gstin,
+            pan_number
+          ),
+          current_supervisor:users!machines_current_supervisor_id_fkey(full_name),
+          current_operator:users!machines_current_operator_id_fkey(full_name)
         `)
         .order('created_at', { ascending: false });
 
@@ -145,17 +160,12 @@ export default function MachinesScreen() {
     setTimeout(() => setCopiedId(null), 1800);
   };
 
-  const openDetail = (m: MachineRecord) => {
-    setSelectedMachine({
-      ...m,
-      customer_name: m.customer_name,
-      supervisor_name: m.current_supervisor?.full_name,
-      operator_name: m.current_operator?.full_name,
-    });
+  const openDetail = (m: any) => {
+    setSelectedMachine(m);
     setDetailModalVisible(true);
   };
 
-  const openEdit = (m: MachineRecord) => {
+  const openEdit = (m: any) => {
     setMachineToEdit(m);
     setAddModalVisible(true);
   };
@@ -182,7 +192,10 @@ export default function MachinesScreen() {
       (m.machine_id && m.machine_id.toLowerCase().includes(query)) ||
       (m.model && m.model.toLowerCase().includes(query)) ||
       (m.serial_number && m.serial_number.toLowerCase().includes(query)) ||
-      (m.manufacturer && m.manufacturer.toLowerCase().includes(query));
+      (m.manufacturer && m.manufacturer.toLowerCase().includes(query)) ||
+      (m.client?.company_name && m.client.company_name.toLowerCase().includes(query)) ||
+      (m.client?.code && m.client.code.toLowerCase().includes(query)) ||
+      (m.customer_name && m.customer_name.toLowerCase().includes(query));
 
     const matchesStatus = activeFilter === 'all' || m.status === activeFilter;
 
@@ -341,7 +354,7 @@ export default function MachinesScreen() {
                     <View style={styles.specsItem}>
                       <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Assigned Client:</Text>
                       <Text style={[styles.specsValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                        {m.customer_name || '—'}
+                        {m.client?.company_name || m.customer_name || '—'}
                       </Text>
                     </View>
                   </View>

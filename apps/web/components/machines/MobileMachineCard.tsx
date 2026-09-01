@@ -145,9 +145,9 @@ export function MobileMachineCard({
             <span className="text-[var(--color-mute)] font-medium block">Assigned Client:</span>
             <span
               className="font-bold text-xs text-[var(--color-ink)] mt-0.5 truncate block"
-              title={machine.customer_name || "Unassigned"}
+              title={machine.client?.company_name || machine.customer_name || "Unassigned"}
             >
-              {machine.customer_name || "—"}
+              {machine.client?.company_name || machine.customer_name || "—"}
             </span>
           </div>
         </div>

@@ -3,10 +3,11 @@
 import React from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { motion } from "framer-motion";
+import { SegmentedToggle, type SegmentedToggleSize } from "./SegmentedToggle";
 
 export interface TabItem {
   id: string;
-  label: string;
+  label: string | React.ReactNode;
   count?: number | string;
   icon?: React.ReactNode;
   disabled?: boolean;
@@ -18,8 +19,11 @@ export interface TabsProps {
   onChange?: (tabId: string) => void;
   /** If provided, synchronizes active tab with URL search parameter */
   urlParamKey?: string;
-  /** Variant style: pill category switcher or clean underline tabs */
-  variant?: "pill" | "underline";
+  /** Variant style: high-contrast segmented toggle, pill switcher, or clean underline tabs */
+  variant?: "segmented" | "pill" | "underline";
+  size?: SegmentedToggleSize;
+  responsive?: boolean;
+  fullWidth?: boolean;
   className?: string;
 }
 
@@ -28,7 +32,10 @@ export function Tabs({
   activeTab,
   onChange,
   urlParamKey,
-  variant = "pill",
+  variant = "segmented",
+  size = "md",
+  responsive = true,
+  fullWidth = false,
   className = "",
 }: TabsProps) {
   const router = useRouter();
@@ -46,6 +53,20 @@ export function Tabs({
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     }
   };
+
+  if (variant === "segmented") {
+    return (
+      <SegmentedToggle
+        items={tabs}
+        value={activeTab}
+        onChange={handleTabClick}
+        size={size}
+        responsive={responsive}
+        fullWidth={fullWidth}
+        className={className}
+      />
+    );
+  }
 
   if (variant === "underline") {
     return (

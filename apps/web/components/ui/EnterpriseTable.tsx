@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, ReactNode } from "react";
+import { useState, useMemo, isValidElement, ReactNode } from "react";
 import {
   AnimatedChevronUp,
   AnimatedChevronDown,
@@ -29,6 +29,13 @@ export interface ColumnDef<T> {
 
 export type TableDensity = "compact" | "default" | "comfortable";
 
+export interface BulkAction<TId = string | number> {
+  label: string;
+  icon?: any;
+  onClick: (selectedIds: TId[]) => void;
+  variant?: "default" | "danger" | "secondary" | "outline";
+}
+
 interface EnterpriseTableProps<T extends { id: string | number }> {
   columns: ColumnDef<T>[];
   data: T[];
@@ -40,12 +47,7 @@ interface EnterpriseTableProps<T extends { id: string | number }> {
   selectable?: boolean;
   selectedIds?: (string | number)[];
   onSelectionChange?: (selectedIds: (string | number)[]) => void;
-  bulkActions?: {
-    label: string;
-    icon?: typeof Download;
-    onClick: (selectedIds: (string | number)[]) => void;
-    variant?: "default" | "danger";
-  }[];
+  bulkActions?: BulkAction<string | number>[];
   defaultHiddenColumns?: string[];
   defaultSortColumn?: string | null;
   defaultSortDirection?: "asc" | "desc";
@@ -215,21 +217,37 @@ export function EnterpriseTable<T extends { id: string | number }>({
               exit={{ opacity: 0, y: -4 }}
               className="flex items-center gap-2 bg-[var(--color-ink)] text-white px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-medium shadow-md"
             >
-              <span>{selectedIds.length} selected</span>
-              <div className="h-4 w-px bg-neutral-700 mx-1" />
-              {bulkActions.map((action, idx) => {
-                const Icon = action.icon;
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => action.onClick(selectedIds)}
-                    className="flex items-center gap-1 hover:text-neutral-300 transition-colors cursor-pointer"
-                  >
-                    {Icon && <AnimateIcon icon={Icon} animation="bounce" size={14} />}
-                    {action.label}
-                  </button>
-                );
-              })}
+              <span className="font-semibold text-white/90 whitespace-nowrap">
+                {selectedIds.length} selected
+              </span>
+              <div className="h-4 w-px bg-neutral-700 mx-1 shrink-0" />
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {bulkActions.map((action, idx) => {
+                  const Icon = action.icon;
+                  const isDanger = action.variant === "danger";
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => action.onClick(selectedIds)}
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-semibold transition-all cursor-pointer select-none active:scale-95 whitespace-nowrap ${
+                        isDanger
+                          ? "bg-rose-600/30 hover:bg-rose-600/50 text-rose-200 border border-rose-500/40"
+                          : "bg-neutral-800 hover:bg-neutral-700 text-neutral-100 hover:text-white border border-neutral-700/60 shadow-2xs"
+                      }`}
+                    >
+                      {Icon && (
+                        isValidElement(Icon) ? (
+                          Icon
+                        ) : (
+                          <AnimateIcon icon={Icon as any} animation="bounce" size={13} />
+                        )
+                      )}
+                      <span>{action.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </motion.div>
           ) : (
             <div className="text-xs text-[var(--color-mute)] font-medium">

@@ -64,10 +64,14 @@ export const MachineRow = memo(function MachineRow({
 
       <TableCell>
         <div className="flex flex-col">
-          <span className="font-semibold text-xs text-[var(--color-ink)] truncate max-w-[130px]" title={machine.customer_name || "Unassigned"}>
-            {machine.customer_name || "—"}
+          <span className="font-semibold text-xs text-[var(--color-ink)] truncate max-w-[130px]" title={machine.client?.company_name || machine.customer_name || "Unassigned"}>
+            {machine.client?.company_name || machine.customer_name || "—"}
           </span>
-          <span className="text-[11px] text-[var(--color-mute)]">Assigned Client</span>
+          {machine.client?.code ? (
+            <span className="text-[10px] font-mono text-[var(--color-mute)]">{machine.client.code}</span>
+          ) : (
+            <span className="text-[11px] text-[var(--color-mute)]">Assigned Client</span>
+          )}
         </div>
       </TableCell>
 

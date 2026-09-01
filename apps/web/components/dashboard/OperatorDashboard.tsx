@@ -45,7 +45,7 @@ import {
   submitOperatorHourLogAction,
   updateOperatorHourLogAction,
 } from "@/app/actions/operators";
-import { useToast, CustomTimePicker, CustomDatePicker, Modal, MachineSelect, ClientSelect } from "@/components/ui";
+import { useToast, CustomTimePicker, CustomDatePicker, Modal, MachineSelect, ClientSelect, SegmentedToggle } from "@/components/ui";
 import {
   formatDate,
   formatTo12Hour,
@@ -535,7 +535,7 @@ export function OperatorDashboard({
     if (currentStartMs < prevEndMs) {
       return {
         isInvalid: true,
-        message: `Start time (${operatingStats.resolvedStartDate}, ${formatTo12Hour(startTime)}) cannot precede previous log's end time (${machineTimeline.formattedEndDate}, ${machineTimeline.formattedEndTime}). Handover is allowed from ${machineTimeline.formattedEndTime} onwards.`,
+        message: `Start time (${formatTo12Hour(startTime)}) cannot precede previous log end time (${machineTimeline.formattedEndDate}, ${machineTimeline.formattedEndTime}).`,
         recommendedStartTime: machineTimeline.formattedEndTime,
         recommendedStartDate: machineTimeline.latestLog?.end_date || machineTimeline.latestLog?.log_date || selectedLogDate,
       };
@@ -1017,33 +1017,25 @@ export function OperatorDashboard({
         </div>
 
         {/* Operational Subnav Tab Switcher Controls (Mobile, Tablet & Desktop) */}
-        <div className="flex items-center gap-2 pt-3 border-t border-[var(--color-hairline)] mt-3 sm:mt-4 overflow-x-auto custom-scrollbar flex-nowrap">
-          <button
-            type="button"
-            onClick={() => handleTabSwitch("entry")}
-            className={`px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap min-h-[38px] ${
-              activeTab === "entry"
-                ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 shadow-2xs font-extrabold"
-                : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-            }`}
-          >
-            <AnimatedGauge size={16} /> Log Entry
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleTabSwitch("history")}
-            className={`px-3 sm:px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap min-h-[38px] ${
-              activeTab === "history"
-                ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 shadow-2xs font-extrabold"
-                : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-            }`}
-          >
-            <AnimatedClock size={16} /> Log History
-            <span className="px-2 py-0.5 rounded-full bg-[var(--color-canvas)] text-[10px] border border-[var(--color-hairline)]">
-              {recentLogs.length}
-            </span>
-          </button>
+        <div className="pt-3 border-t border-[var(--color-hairline)] mt-3 sm:mt-4">
+          <SegmentedToggle<"entry" | "history">
+            value={activeTab}
+            onChange={handleTabSwitch}
+            layoutIdPrefix="operator-dashboard-tab"
+            items={[
+              {
+                id: "entry",
+                label: "Log Entry",
+                icon: <AnimatedGauge size={16} />,
+              },
+              {
+                id: "history",
+                label: "Log History",
+                icon: <AnimatedClock size={16} />,
+                count: recentLogs.length,
+              },
+            ]}
+          />
         </div>
       </div>
 
@@ -1122,7 +1114,7 @@ export function OperatorDashboard({
                     </span>
                   )}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+                <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
                   {/* Starting Hour Meter Reading */}
                   <div>
                     <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 truncate">
@@ -1145,7 +1137,7 @@ export function OperatorDashboard({
                         })
                       }
                       placeholder="e.g. 1250.0"
-                      className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                      className="w-full px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 min-h-[42px]"
                     />
                   </div>
 
@@ -1171,7 +1163,7 @@ export function OperatorDashboard({
                         })
                       }
                       placeholder="e.g. 1258.0"
-                      className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                      className="w-full px-2.5 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 min-h-[42px]"
                     />
                   </div>
                 </div>
@@ -1199,22 +1191,22 @@ export function OperatorDashboard({
                 {/* Machine Timeline Context Banner */}
                 {machineTimeline?.latestLog && (
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 px-3 py-2 rounded-xl bg-sky-500/10 border border-sky-500/20 text-[11px] sm:text-xs text-sky-700 dark:text-sky-300">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 sm:gap-2">
                       <Clock size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
                       <span>
-                        <strong className="font-bold">Timeline Status:</strong> Last log ended on{" "}
-                        <span className="font-mono font-semibold">{machineTimeline.formattedEndDate} at {machineTimeline.formattedEndTime}</span>.
+                        <strong className="font-bold">Last shift ended:</strong>{" "}
+                        <span className="font-mono font-semibold">{machineTimeline.formattedEndDate}, {machineTimeline.formattedEndTime}</span>
                       </span>
                     </div>
                     <span className="text-[10px] sm:text-[11px] font-semibold text-sky-600 dark:text-sky-400 bg-sky-500/15 px-2 py-0.5 rounded-md self-start sm:self-auto">
-                      Exact handover allowed from {machineTimeline.formattedEndTime}
+                      Handover from {machineTimeline.formattedEndTime}
                     </span>
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-3.5 items-start">
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5 items-start">
                   {/* Log Date */}
-                  <div className="lg:col-span-3">
+                  <div className="col-span-2 sm:col-span-1 lg:col-span-1">
                     <CustomDatePicker
                       label={
                         <span>
@@ -1229,7 +1221,7 @@ export function OperatorDashboard({
                   </div>
 
                   {/* Start Time */}
-                  <div className="lg:col-span-3">
+                  <div className="col-span-1 sm:col-span-1 lg:col-span-1">
                     <CustomTimePicker
                       label="Start Time"
                       required
@@ -1240,7 +1232,7 @@ export function OperatorDashboard({
                   </div>
 
                   {/* End Time */}
-                  <div className="lg:col-span-3">
+                  <div className="col-span-1 sm:col-span-1 lg:col-span-1">
                     <CustomTimePicker
                       label="End Time"
                       required
@@ -1251,7 +1243,7 @@ export function OperatorDashboard({
                   </div>
 
                   {/* Overtime (Hours) */}
-                  <div className="lg:col-span-3">
+                  <div className="col-span-2 sm:col-span-2 lg:col-span-1">
                     <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 truncate">
                       Overtime (hrs)
                     </label>
@@ -1285,13 +1277,13 @@ export function OperatorDashboard({
                 {meterValidationWarning ? (
                   <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
                     <AnimatedAlertTriangle size={16} className="shrink-0 text-rose-500" />
-                    <span>❌ {meterValidationWarning}</span>
+                    <span>{meterValidationWarning}</span>
                   </div>
                 ) : sequencingValidation?.isInvalid ? (
                   <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <AnimatedAlertTriangle size={16} className="shrink-0 text-rose-500" />
-                      <span>❌ {sequencingValidation.message}</span>
+                      <span>{sequencingValidation.message}</span>
                     </div>
                     {sequencingValidation.recommendedStartTime && (
                       <button
@@ -1316,7 +1308,7 @@ export function OperatorDashboard({
                 ) : !operatingStats.isValid ? (
                   <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
                     <AnimatedAlertTriangle size={16} className="shrink-0 text-rose-500" />
-                    <span>❌ {operatingStats.errorMessage}</span>
+                    <span>{operatingStats.errorMessage}</span>
                   </div>
                 ) : null}
               </div>
@@ -1824,7 +1816,7 @@ export function OperatorDashboard({
               </div>
             </div>
 
-            <div className="grid grid-cols-4 gap-3 border-b border-[var(--color-hairline)] pb-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 border-b border-[var(--color-hairline)] pb-3">
               <div>
                 <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Log Date</span>
                 <span className="font-bold text-[var(--color-ink)]">{formatDate(selectedLogDate)}</span>
@@ -1966,7 +1958,7 @@ export function OperatorDashboard({
 
                 {editShiftOverlapWarning ? (
                   <div className="text-[11px] text-rose-600 dark:text-rose-400 font-bold p-2 rounded-lg bg-rose-500/10 border border-rose-500/20">
-                    ❌ {editShiftOverlapWarning}
+                    {editShiftOverlapWarning}
                   </div>
                 ) : editOperatingStats.isValid ? (
                   editOperatingStats.isOvernight ? (
@@ -1979,7 +1971,7 @@ export function OperatorDashboard({
                   ) : null
                 ) : (
                   <div className="text-[11px] text-rose-600 dark:text-rose-400 font-bold p-2 rounded-lg bg-rose-500/10 border border-rose-500/20">
-                    ❌ {editOperatingStats.errorMessage}
+                    {editOperatingStats.errorMessage}
                   </div>
                 )}
               </div>

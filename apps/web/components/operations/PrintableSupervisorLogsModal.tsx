@@ -80,8 +80,6 @@ function SupervisorLogsReportContent({
     machines?.find((m) => m.id === selectedEntityId) ||
     (logs[0]?.machine as any);
 
-  const totalServices = selectedMachineObj?.service_count ?? 0;
-
   let scopeLabel = "All Operations Fleet";
   if (viewMode === "machine" && selectedEntityId !== "all") {
     const mMfr = selectedMachineObj?.manufacturer || (logs[0]?.machine as any)?.manufacturer || "";
@@ -228,17 +226,10 @@ function SupervisorLogsReportContent({
           <span className="text-[7.5px] sm:text-[8.5px] text-neutral-400 block font-sans font-extrabold uppercase truncate">Total Operating Hrs</span>
           <span className="text-[10px] sm:text-[11px] font-black text-sky-400">{Math.round(totalRunningHours * 10) / 10} hrs</span>
         </div>
-        {viewMode === "machine" ? (
-          <div>
-            <span className="text-[7.5px] sm:text-[8.5px] text-neutral-400 block font-sans font-extrabold uppercase truncate">Total Services</span>
-            <span className="text-[10px] sm:text-[11px] font-black text-emerald-400">{totalServices} Services</span>
-          </div>
-        ) : (
-          <div>
-            <span className="text-[7.5px] sm:text-[8.5px] text-neutral-400 block font-sans font-extrabold uppercase truncate">Total Overtime Hrs</span>
-            <span className="text-[10px] sm:text-[11px] font-black text-amber-400">{Math.round(totalOtHours * 10) / 10} hrs</span>
-          </div>
-        )}
+        <div>
+          <span className="text-[7.5px] sm:text-[8.5px] text-neutral-400 block font-sans font-extrabold uppercase truncate">Total Overtime Hrs</span>
+          <span className="text-[10px] sm:text-[11px] font-black text-amber-400">{Math.round(totalOtHours * 10) / 10} hrs</span>
+        </div>
         <div>
           <span className="text-[7.5px] sm:text-[8.5px] text-neutral-400 block font-sans font-extrabold uppercase truncate">Breakdown Incidents</span>
           <span className="text-[10px] sm:text-[11px] font-black text-rose-400">{totalBreakdowns} Events</span>

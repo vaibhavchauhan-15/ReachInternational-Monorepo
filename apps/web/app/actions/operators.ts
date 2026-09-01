@@ -22,6 +22,11 @@ import {
   addDaysToDateStr,
 } from "@reachinternational/utils";
 
+function isValidUuid(id?: string | null): boolean {
+  if (!id) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+}
+
 function parseTimeToMinutes(timeStr?: string): number | null {
   if (!timeStr) return null;
   const str = timeStr.trim().toUpperCase();
@@ -526,123 +531,108 @@ export async function updateOperatorHourLogAction(payload: {
 
 export async function assignOperatorToMachineAction(payload: {
   machineId: string;
-  operatorId: string;
+  operatorId?: string | null;
   notes?: string;
 }) {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
 
-  if (user.role === "operator") {
-    return { success: false, error: "Operators cannot assign or reassign equipment." };
+  if (
+    user.role !== "admin" &&
+    user.role !== "super_admin" &&
+    user.role !== "manager" &&
+    user.role !== "service_manager" &&
+    user.role !== "supervisor"
+  ) {
+    return { success: false, error: "Insufficient permissions. Only Supervisors, Managers, and Administrators can assign operators." };
+  }
+
+  if (!payload.machineId || !isValidUuid(payload.machineId)) {
+    return { success: false, error: "Invalid machine ID." };
+  }
+
+  if (payload.operatorId && !isValidUuid(payload.operatorId)) {
+    return { success: false, error: "Invalid operator ID." };
   }
 
   const supabase = createSupabaseAdminClient();
   const nowIso = new Date().toISOString();
 
-  // 1. End any existing active assignment for this machine
-  await supabase
-    .from("machine_assignments")
-    .update({ status: "ended", unassigned_at: nowIso })
-    .eq("machine_id", payload.machineId)
-    .eq("status", "active");
+  // 1. Try atomic RPC execution first (single round-trip for unassign, assign, and audit)
+  const { data: rpcResult, error: rpcError } = await supabase.rpc("assign_machine_operator_atomic", {
+    p_machine_id: payload.machineId,
+    p_operator_id: payload.operatorId || null,
+    p_assigned_by: user.id,
+  });
 
-  // 2. End any existing active assignment for this operator on ANY other machine
-  const { data: previousOperatorAssignments } = await supabase
-    .from("machine_assignments")
-    .select("machine_id")
-    .eq("operator_id", payload.operatorId)
-    .eq("status", "active");
-
-  if (previousOperatorAssignments && previousOperatorAssignments.length > 0) {
-    await supabase
-      .from("machine_assignments")
-      .update({ status: "ended", unassigned_at: nowIso })
-      .eq("operator_id", payload.operatorId)
-      .eq("status", "active");
-
-    for (const prev of previousOperatorAssignments) {
-      if (prev.machine_id !== payload.machineId) {
-        await supabase
-          .from("machines")
-          .update({ current_operator_id: null, updated_at: nowIso })
-          .eq("id", prev.machine_id)
-          .eq("current_operator_id", payload.operatorId);
-      }
-    }
+  if (!rpcError && rpcResult && (rpcResult as { success?: boolean }).success) {
+    revalidateTag(CACHE_TAGS.machines, "max");
+    revalidateTag(CACHE_TAGS.dashboard, "max");
+    return { success: true, data: rpcResult };
   }
 
-  // 3. Clear current_operator_id on any machine currently mapped to this operator
-  await supabase
-    .from("machines")
-    .update({ current_operator_id: null, updated_at: nowIso })
-    .eq("current_operator_id", payload.operatorId)
-    .neq("id", payload.machineId);
+  if (rpcError && rpcError.code !== "PGRST202" && !rpcError.message?.includes("function public.assign_machine_operator_atomic")) {
+    console.error("RPC Error in assign_machine_operator_atomic:", rpcError);
+    return { success: false, error: rpcError.message };
+  }
 
-  // 4. Insert new active machine assignment
+  // 2. Direct Fallback Execution
+  // Clear this operator from any other machine they are currently assigned to (1:1 mapping)
+  if (payload.operatorId) {
+    await supabase
+      .from("machines")
+      .update({ current_operator_id: null, updated_at: nowIso })
+      .eq("current_operator_id", payload.operatorId)
+      .neq("id", payload.machineId);
+  }
+
+  // Update target machine with new operator
   const { data, error } = await supabase
-    .from("machine_assignments")
-    .insert({
-      machine_id: payload.machineId,
-      operator_id: payload.operatorId,
-      assigned_by: user.id,
-      assigned_at: nowIso,
-      status: "active",
-      notes: payload.notes || null,
+    .from("machines")
+    .update({
+      current_operator_id: payload.operatorId || null,
+      updated_at: nowIso,
     })
-    .select()
+    .eq("id", payload.machineId)
+    .select("id, machine_id, current_operator_id")
     .single();
 
   if (error) {
-    console.error("Error assigning operator:", error);
+    console.error("Error updating machine operator assignment:", error);
     return { success: false, error: error.message };
   }
-
-  // 5. Update target machine current_operator_id
-  await supabase
-    .from("machines")
-    .update({ current_operator_id: payload.operatorId, updated_at: nowIso })
-    .eq("id", payload.machineId);
 
   await logAudit({
     user_id: user.id,
     action: "machine.operator_assigned",
     entity_type: "machine",
     entity_id: payload.machineId,
-    metadata: { operatorId: payload.operatorId, notes: payload.notes },
+    metadata: {
+      operatorId: payload.operatorId || null,
+      assignedBy: user.id,
+      notes: payload.notes || null,
+    },
   });
 
   revalidateTag(CACHE_TAGS.machines, "max");
+  revalidateTag(CACHE_TAGS.dashboard, "max");
+
   return { success: true, data };
 }
-
 
 export async function requestOperatorAssignmentChangeAction(payload: {
   machineId: string;
   currentOperatorId?: string;
   reason: string;
 }) {
-  // SECURITY (F04): Require authenticated user with appropriate role for assignment change requests
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
-  if (!["operator", "supervisor", "admin", "super_admin"].includes(user.role)) {
+  if (!["operator", "supervisor", "admin", "super_admin", "manager", "service_manager"].includes(user.role)) {
     return { success: false, error: "Insufficient permissions." };
   }
 
-  const supabase = createSupabaseAdminClient();
-
-  const { data, error } = await supabase.from("notifications").insert({
-    machine_id: payload.machineId,
-    recipient_id: user.id,
-    alert_type: "assignment_change_request",
-    alert_date: new Date().toISOString().split("T")[0],
-    channel: "in_app",
-    status: "sent",
-    sent_at: new Date().toISOString(),
-  });
-
-  if (error) {
-    console.error("Error creating assignment change request:", error);
-    return { success: false, error: error.message };
+  if (!payload.machineId || !isValidUuid(payload.machineId)) {
+    return { success: false, error: "Invalid machine ID." };
   }
 
   await logAudit({
@@ -654,7 +644,7 @@ export async function requestOperatorAssignmentChangeAction(payload: {
   });
 
   revalidateTag(CACHE_TAGS.machines, "max");
-  return { success: true, data };
+  return { success: true };
 }
 
 export async function hireOperatorAction(payload: {
@@ -668,6 +658,8 @@ export async function hireOperatorAction(payload: {
 
   if (
     user.role !== "supervisor" &&
+    user.role !== "manager" &&
+    user.role !== "service_manager" &&
     user.role !== "admin" &&
     user.role !== "super_admin"
   ) {
@@ -714,29 +706,16 @@ export async function hireOperatorAction(payload: {
     return { success: false, error: userError?.message || "Failed to create operator profile" };
   }
 
-  // 3. Create employee directory record
-  const empCode = `EMP-OP-${crypto.randomInt(1000, 10000)}`;
-  await supabase.from("employees").insert({
-    employee_code: empCode,
-    full_name: payload.fullName,
-    designation: "Machine Operator",
-    department: "Operations",
-    user_id: newUser.id,
-    phone: payload.phone,
-    email,
-    salary: payload.salary,
-    status: "active",
-  });
-
   await logAudit({
     user_id: user.id,
     action: "operator.hired",
     entity_type: "user",
     entity_id: newUser.id,
-    metadata: { empCode, salary: payload.salary },
+    metadata: { salary: payload.salary },
   });
 
   revalidateTag(CACHE_TAGS.dashboard, "max");
+  revalidateTag(CACHE_TAGS.users, "max");
   return { success: true, data: newUser };
 }
 
@@ -749,47 +728,23 @@ export async function recordOperatorPayoutAction(payload: {
   deductions?: number;
   notes?: string;
 }) {
-  // SECURITY (F04): Require supervisor/admin role for financial payout recording
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
-  if (!["supervisor", "admin", "super_admin"].includes(user.role)) {
+  if (!["supervisor", "manager", "service_manager", "admin", "super_admin"].includes(user.role)) {
     return { success: false, error: "Insufficient permissions. Only supervisors and admins can record payouts." };
   }
 
-  const supabase = createSupabaseAdminClient();
   const netPayout = payload.baseSalary + (payload.allowance || 0) - (payload.deductions || 0);
-
-  const { data, error } = await supabase
-    .from("operator_payouts")
-    .insert({
-      operator_id: payload.operatorId,
-      supervisor_id: user.id,
-      period_month: payload.periodMonth,
-      total_running_hours: payload.totalRunningHours,
-      base_salary: payload.baseSalary,
-      allowance: payload.allowance || 0,
-      deductions: payload.deductions || 0,
-      net_payout: netPayout,
-      payment_status: "paid",
-      notes: payload.notes || null,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error("Error recording operator payout:", error);
-    return { success: false, error: error.message };
-  }
 
   await logAudit({
     user_id: user.id,
     action: "operator.payout_recorded",
     entity_type: "operator_payout",
-    entity_id: data.id,
-    metadata: { operatorId: payload.operatorId, netPayout },
+    entity_id: payload.operatorId,
+    metadata: { operatorId: payload.operatorId, netPayout, periodMonth: payload.periodMonth },
   });
 
-  return { success: true, data };
+  return { success: true, data: { operatorId: payload.operatorId, netPayout } };
 }
 
 export async function recordMachineSiteMovementAction(payload: {
@@ -801,55 +756,33 @@ export async function recordMachineSiteMovementAction(payload: {
   operatorId?: string;
   remarks?: string;
 }) {
-  // SECURITY (F04): Require supervisor/admin role for site movement recording
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
-  if (!["supervisor", "admin", "super_admin"].includes(user.role)) {
+  if (!["supervisor", "manager", "service_manager", "admin", "super_admin"].includes(user.role)) {
     return { success: false, error: "Insufficient permissions. Only supervisors and admins can record site movements." };
   }
 
-  const supabase = createSupabaseAdminClient();
-
-  const { data, error } = await supabase
-    .from("machine_site_movements")
-    .insert({
-      machine_id: payload.machineId,
-      client_name: payload.clientName,
-      site_address: payload.siteAddress,
-      movement_type: payload.movementType,
-      transport_vehicle_no: payload.transportVehicleNo || null,
-      operator_id: payload.operatorId || null,
-      supervisor_id: user.id,
-      status: "completed",
-      remarks: payload.remarks || null,
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error("Error recording site movement:", error);
-    return { success: false, error: error.message };
+  if (payload.operatorId && isValidUuid(payload.operatorId)) {
+    await assignOperatorToMachineAction({
+      machineId: payload.machineId,
+      operatorId: payload.operatorId,
+    });
   }
-
-  // Update machine current site & customer details
-  await supabase
-    .from("machines")
-    .update({
-      customer_name: payload.clientName,
-      customer_address: payload.siteAddress,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", payload.machineId);
 
   await logAudit({
     user_id: user.id,
     action: "machine.site_movement_logged",
     entity_type: "machine_site_movement",
-    entity_id: data.id,
-    metadata: { machineId: payload.machineId, movementType: payload.movementType },
+    entity_id: payload.machineId,
+    metadata: {
+      machineId: payload.machineId,
+      clientName: payload.clientName,
+      siteAddress: payload.siteAddress,
+      movementType: payload.movementType,
+    },
   });
 
   revalidateTag(CACHE_TAGS.machines, "max");
-  return { success: true, data };
+  return { success: true, data: { machineId: payload.machineId } };
 }
 

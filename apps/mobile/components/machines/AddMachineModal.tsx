@@ -39,9 +39,11 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
   const [healthStatus, setHealthStatus] = useState<'active' | 'under_maintenance' | 'breakdown'>('active');
   const [supervisorId, setSupervisorId] = useState<string | null>(null);
   const [operatorId, setOperatorId] = useState<string | null>(null);
+  const [clientId, setClientId] = useState<string | null>(null);
 
   const [supervisors, setSupervisors] = useState<Array<{ id: string; full_name: string }>>([]);
   const [operators, setOperators] = useState<Array<{ id: string; full_name: string }>>([]);
+  const [clients, setClients] = useState<Array<{ id: string; code?: string; company_name: string }>>([]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -59,6 +61,7 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
         setHealthStatus(machineToEdit.health_status || 'active');
         setSupervisorId(machineToEdit.supervisor_id || null);
         setOperatorId(machineToEdit.operator_id || null);
+        setClientId(machineToEdit.client_id || null);
       } else {
         setMachineId('');
         setModel('');
@@ -70,13 +73,14 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
         setHealthStatus('active');
         setSupervisorId(null);
         setOperatorId(null);
+        setClientId(null);
       }
       setErrorMessage('');
-      fetchStaff();
+      fetchStaffAndClients();
     }
   }, [visible, machineToEdit]);
 
-  const fetchStaff = async () => {
+  const fetchStaffAndClients = async () => {
     try {
       const { data: sups } = await supabase
         .from('users')
@@ -88,30 +92,57 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
       const { data: ops } = await supabase
         .from('users')
         .select('id, full_name')
-        .in('role', ['operator', 'service_engineer', 'mechanic'])
+        .eq('role', 'operator')
         .eq('status', 'active');
       if (ops) setOperators(ops);
+
+      const { data: clientList } = await supabase
+        .from('clients')
+        .select('id, code, company_name')
+        .is('deleted_at', null)
+        .order('company_name', { ascending: true });
+      if (clientList) setClients(clientList);
     } catch (e) {
-      console.warn('Error fetching staff in modal:', e);
+      console.warn('Error fetching staff and clients in modal:', e);
     }
   };
 
   const handleSave = async () => {
     setErrorMessage('');
-    if (!model.trim()) {
+    const cleanModel = model.trim();
+    const cleanSerial = serialNumber.trim();
+
+    if (!cleanModel) {
       setErrorMessage('Machine Model is required (e.g. 50B-9 or 8FG30).');
       return;
     }
-    if (!serialNumber.trim()) {
+    if (!cleanSerial) {
       setErrorMessage('Serial Number is required.');
       return;
     }
 
     setIsLoading(true);
     try {
+      // Check for duplicate serial number before submitting
+      let duplicateQuery = supabase
+        .from('machines')
+        .select('id, machine_id, serial_number')
+        .ilike('serial_number', cleanSerial);
+
+      if (machineToEdit?.id) {
+        duplicateQuery = duplicateQuery.neq('id', machineToEdit.id);
+      }
+
+      const { data: existingSerial } = await duplicateQuery.limit(1);
+      if (existingSerial && existingSerial.length > 0) {
+        setErrorMessage(`A machine with Serial Number "${cleanSerial}" already exists in the inventory (${existingSerial[0].machine_id}).`);
+        setIsLoading(false);
+        return;
+      }
+
       const payload: any = {
-        model: model.trim(),
-        serial_number: serialNumber.trim(),
+        model: cleanModel,
+        serial_number: cleanSerial,
         manufacturer: manufacturer.trim() || null,
         year_of_mfg: yearOfMfg.trim() || null,
         hour_meter: parseFloat(hourMeter) || 0,
@@ -119,10 +150,11 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
         health_status: healthStatus,
         supervisor_id: supervisorId || null,
         operator_id: operatorId || null,
+        client_id: status === 'rented' ? (clientId || null) : null,
       };
 
       if (machineId.trim()) {
-        payload.machine_id = machineId.trim();
+        payload.machine_id = machineId.trim().toUpperCase();
       }
 
       if (machineToEdit?.id) {
@@ -141,7 +173,12 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
       onSuccess();
       onClose();
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Failed to save machine. Please check required fields.');
+      const msg = err?.message || '';
+      if (msg.includes('serial_number') || msg.includes('idx_machines_serial_number') || err?.code === '23505') {
+        setErrorMessage(`A machine with Serial Number "${cleanSerial}" already exists in the inventory.`);
+      } else {
+        setErrorMessage(err?.message || 'Failed to save machine. Please check required fields.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -225,7 +262,10 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
                 {(['available', 'rented'] as const).map((s) => (
                   <TouchableOpacity
                     key={s}
-                    onPress={() => setStatus(s)}
+                    onPress={() => {
+                      setStatus(s);
+                      if (s === 'available') setClientId(null);
+                    }}
                     style={[
                       styles.pillOption,
                       { borderColor: status === s ? theme.colors.link : theme.colors.hairline },
@@ -245,6 +285,49 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
                 ))}
               </View>
             </View>
+
+            {/* Assigned Client Selection when Rented */}
+            {status === 'rented' && (
+              <View style={styles.sectionGroup}>
+                <Text style={[styles.groupLabel, { color: theme.colors.ink }]}>Assigned Client</Text>
+                {clients.length === 0 ? (
+                  <Text style={[styles.pillText, { color: theme.colors.mute, fontStyle: 'italic' }]}>
+                    No clients available
+                  </Text>
+                ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                    {clients.map((c) => {
+                      const isSelected = clientId === c.id;
+                      return (
+                        <TouchableOpacity
+                          key={c.id}
+                          onPress={() => setClientId(isSelected ? null : c.id)}
+                          style={[
+                            styles.pillOption,
+                            {
+                              paddingHorizontal: 12,
+                              minWidth: 100,
+                              borderColor: isSelected ? theme.colors.link : theme.colors.hairline,
+                              backgroundColor: isSelected ? theme.colors.link + '15' : theme.colors.canvas,
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.pillText,
+                              { color: isSelected ? theme.colors.link : theme.colors.body },
+                              isSelected && { fontWeight: '700' },
+                            ]}
+                          >
+                            {c.company_name} {c.code ? `(${c.code})` : ''}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                )}
+              </View>
+            )}
 
             {/* Health Status Pills */}
             <View style={styles.sectionGroup}>

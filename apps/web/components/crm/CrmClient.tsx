@@ -44,7 +44,7 @@ import type {
   LeadStatus,
   OpportunityStage,
 } from "@/lib/types/database";
-import { TooltipWrapper } from "@/components/ui";
+import { TooltipWrapper, SegmentedToggle } from "@/components/ui";
 import {
   createSalesLeadAction,
   updateSalesLeadAction,
@@ -463,36 +463,26 @@ export function CrmClient({
       </div>
 
       {/* TOP NAVIGATION MODULE TABS (10 TABS) */}
-      <div className="flex items-center gap-1.5 overflow-x-auto border-b border-[var(--color-hairline)] pb-3 no-scrollbar">
-        {[
-          { id: "dashboard", label: "Dashboard", icon: AnimatedDashboard },
-          { id: "leads", label: `Leads (${leads.length})`, icon: AnimatedClipboardList },
-          { id: "customers", label: `Customers (${customers.length})`, icon: AnimatedUsers },
-          { id: "interactions", label: `Interactions (${interactions.length})`, icon: AnimatedBell },
-          { id: "opportunities", label: `Pipeline (${opportunities.length})`, icon: AnimatedStar },
-          { id: "quotations", label: `Quotations (${quotations.length})`, icon: AnimatedFileText },
-          { id: "orders", label: `Orders (${orders.length})`, icon: AnimatedShoppingBag },
-          { id: "machine-sales", label: `Machine Inventory (${initialAvailableMachines.length})`, icon: AnimatedWrench },
-          { id: "deliveries", label: `Deliveries (${deliveries.length})`, icon: AnimatedPackage },
-          { id: "settings", label: "Settings", icon: AnimatedSettings },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-                activeTab === tab.id
-                  ? "bg-blue-600 text-white shadow-xs"
-                  : "text-[var(--color-body)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-              }`}
-            >
-              <Icon size={14} />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
+      <div className="overflow-x-auto pb-2 no-scrollbar">
+        <SegmentedToggle
+          value={activeTab}
+          onChange={setActiveTab}
+          layoutIdPrefix="crm-module-tabs"
+          size="sm"
+          responsive={false}
+          items={[
+            { id: "dashboard", label: "Dashboard", icon: <AnimatedDashboard size={14} /> },
+            { id: "leads", label: "Leads", icon: <AnimatedClipboardList size={14} />, count: leads.length },
+            { id: "customers", label: "Customers", icon: <AnimatedUsers size={14} />, count: customers.length },
+            { id: "interactions", label: "Interactions", icon: <AnimatedBell size={14} />, count: interactions.length },
+            { id: "opportunities", label: "Pipeline", icon: <AnimatedStar size={14} />, count: opportunities.length },
+            { id: "quotations", label: "Quotations", icon: <AnimatedFileText size={14} />, count: quotations.length },
+            { id: "orders", label: "Orders", icon: <AnimatedShoppingBag size={14} />, count: orders.length },
+            { id: "machine-sales", label: "Inventory", icon: <AnimatedWrench size={14} />, count: initialAvailableMachines.length },
+            { id: "deliveries", label: "Deliveries", icon: <AnimatedPackage size={14} />, count: deliveries.length },
+            { id: "settings", label: "Settings", icon: <AnimatedSettings size={14} /> },
+          ]}
+        />
       </div>
 
       {/* TAB 1: SALES DASHBOARD */}

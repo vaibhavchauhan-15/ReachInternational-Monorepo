@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/animated-icons";
 import type { User, DeliveryChallan } from "@/lib/types/database";
 
-import { TooltipWrapper } from "@/components/ui";
+import { TooltipWrapper, SegmentedToggle } from "@/components/ui";
 
 interface ChallansClientProps {
   user: User;
@@ -124,30 +124,23 @@ export function ChallansClient({ user }: ChallansClientProps) {
         </div>
 
         {/* Status Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar border-t border-[var(--color-hairline)] pt-3">
-          {[
-            { id: "all", label: "All Challans" },
-            { id: "draft", label: "Draft" },
-            { id: "pending", label: "Pending Approval" },
-            { id: "dispatched", label: "Dispatched" },
-            { id: "in_transit", label: "In Transit 🚚" },
-            { id: "delivered", label: "Delivered 🟢" },
-            { id: "returned", label: "Returned ↩" },
-            { id: "cancelled", label: "Cancelled" },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-                activeTab === tab.id
-                  ? "bg-purple-600 text-white shadow-2xs"
-                  : "text-[var(--color-body)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="overflow-x-auto pb-1 no-scrollbar border-t border-[var(--color-hairline)] pt-3">
+          <SegmentedToggle
+            value={activeTab}
+            onChange={setActiveTab}
+            layoutIdPrefix="challans-status-tab"
+            size="sm"
+            items={[
+              { id: "all", label: "All Challans" },
+              { id: "draft", label: "Draft" },
+              { id: "pending", label: "Pending Approval" },
+              { id: "dispatched", label: "Dispatched" },
+              { id: "in_transit", label: "In Transit" },
+              { id: "delivered", label: "Delivered" },
+              { id: "returned", label: "Returned" },
+              { id: "cancelled", label: "Cancelled" },
+            ]}
+          />
         </div>
       </div>
 

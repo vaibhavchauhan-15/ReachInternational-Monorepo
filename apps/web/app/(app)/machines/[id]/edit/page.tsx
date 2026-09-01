@@ -1,4 +1,4 @@
-﻿import { Suspense } from "react";
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/dal";
 import {
@@ -6,6 +6,7 @@ import {
   getActiveSupervisors,
   getActiveOperators,
 } from "@/lib/queries/machines";
+import { getClientOptions } from "@/lib/queries/clients";
 import { Button, EmptyState, Skeleton } from "@/components/ui";
 import { MachineEditClient } from "./machine-edit-client";
 import type { Metadata } from "next";
@@ -53,10 +54,11 @@ async function MachineEditContent({ id }: { id: string }) {
     user.role === "manager" ||
     user.role === "service_manager";
 
-  const [machine, supervisors, operators] = await Promise.all([
+  const [machine, supervisors, operators, clients] = await Promise.all([
     getMachineById(id),
     getActiveSupervisors(),
     getActiveOperators(),
+    getClientOptions(),
   ]);
 
   if (!machine) {
@@ -80,6 +82,7 @@ async function MachineEditContent({ id }: { id: string }) {
       machine={machine}
       supervisors={supervisors}
       operators={operators}
+      clients={clients}
       userRole={user.role}
       canDelete={canDelete}
     />

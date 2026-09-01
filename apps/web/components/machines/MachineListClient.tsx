@@ -15,7 +15,7 @@ import {
   AnimatedSlidersHorizontal,
   AnimatedFileText,
 } from "@/components/ui/animated-icons";
-import { MoreVertical, Download, FileSpreadsheet, Check, X, ChevronDown } from "lucide-react";
+import { MoreVertical, Download, FileSpreadsheet, FileText, Printer, Check, X, ChevronDown } from "lucide-react";
 import {
   Button,
   Pagination,
@@ -32,8 +32,8 @@ import { AnimatedCounter } from "@/components/ui/Motion";
 import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { deleteMachine } from "@/app/actions/machines";
-import type { Machine, User, UserRole, ComplaintWithDetails } from "@/lib/types/database";
-import type { EngineerServicesData } from "@/lib/queries/services";
+import { exportMachinesToExcel, exportMachinesToCSV } from "@/lib/utils/machines-export";
+import type { Machine, User, UserRole } from "@/lib/types/database";
 
 const MobileMachineCard = dynamic(
   () => import("./MobileMachineCard").then((mod) => mod.MobileMachineCard),
@@ -50,13 +50,8 @@ const MachineImportModal = dynamic(
   { ssr: false }
 );
 
-const ComplaintsClient = dynamic(
-  () => import("@/components/complaints/ComplaintsClient").then((mod) => mod.ComplaintsClient),
-  { ssr: false }
-);
-
-const ServicesClient = dynamic(
-  () => import("@/components/services/ServicesClient").then((mod) => mod.ServicesClient),
+const PrintableMachineDirectoryModal = dynamic(
+  () => import("./PrintableMachineDirectoryModal").then((mod) => mod.PrintableMachineDirectoryModal),
   { ssr: false }
 );
 
@@ -66,18 +61,12 @@ interface MachineListClientProps {
   page: number;
   pageSize: number;
   totalPages: number;
-  engineers?: User[];
   supervisors?: User[];
   operators?: User[];
-  cities?: string[];
-  complaints?: ComplaintWithDetails[];
-  serviceData?: EngineerServicesData;
+  clients?: any[];
   userRole: UserRole;
   currentSearch?: string;
   currentStatus?: string;
-  currentEngineerId?: string;
-  currentBucket?: string;
-  initialTab?: string;
 }
 
 // Reusable responsive filter selector dropdown with mobile edge clamping
@@ -218,14 +207,12 @@ function RowActionsMenu({
   isAdmin,
   onEdit,
   onDelete,
-  onNavigate,
 }: {
   machine: Machine;
   canEdit: boolean;
   isAdmin: boolean;
   onEdit: (m: Machine) => void;
   onDelete: (m: Machine) => void;
-  onNavigate: (tab: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -362,17 +349,7 @@ function RowActionsMenu({
                   </button>
                 )}
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    onNavigate("services");
-                  }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
-                >
-                  <AnimatedClipboardList size={14} className="text-emerald-500" />
-                  <span>Update Service</span>
-                </button>
+
 
                 {isAdmin && (
                   <>
@@ -403,12 +380,16 @@ function RowActionsMenu({
 function HeaderMoreMenu({
   isAdmin,
   onOpenImport,
+  onExportExcel,
   onExportCSV,
+  onExportPDF,
   onRefresh,
 }: {
   isAdmin: boolean;
   onOpenImport: () => void;
+  onExportExcel: () => void;
   onExportCSV: () => void;
+  onExportPDF: () => void;
   onRefresh: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -428,8 +409,8 @@ function HeaderMoreMenu({
   const updatePosition = useCallback(() => {
     if (!buttonRef.current) return;
     const rect = buttonRef.current.getBoundingClientRect();
-    const menuWidth = 192; // 12rem = 192px (w-48)
-    const menuHeight = isAdmin ? 140 : 96;
+    const menuWidth = 208; // 13rem = 208px
+    const menuHeight = isAdmin ? 210 : 170;
     const spaceBelow = window.innerHeight - rect.bottom;
     const shouldOpenUpwards = spaceBelow < menuHeight + 16;
 
@@ -527,23 +508,38 @@ function HeaderMoreMenu({
                   position: "fixed",
                   top: `${coords.top}px`,
                   left: `${coords.left}px`,
-                  width: "192px",
+                  width: "208px",
                 }}
-                className="pointer-events-auto z-50 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1 shadow-xl text-xs space-y-0.5"
+                className="pointer-events-auto z-50 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1.5 shadow-xl text-xs space-y-0.5"
               >
                 {isAdmin && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOpen(false);
-                      onOpenImport();
-                    }}
-                    className="w-full flex items-center gap-2 px-2.5 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
-                  >
-                    <AnimatedClipboardList size={16} className="text-sky-500" />
-                    <span>Bulk Excel Import</span>
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setOpen(false);
+                        onOpenImport();
+                      }}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
+                    >
+                      <AnimatedClipboardList size={15} className="text-sky-500" />
+                      <span>Bulk Excel Import</span>
+                    </button>
+                    <div className="my-1 border-t border-[var(--color-hairline)]" />
+                  </>
                 )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    onExportExcel();
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet size={15} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>Export Excel (.xlsx)</span>
+                </button>
 
                 <button
                   type="button"
@@ -551,11 +547,25 @@ function HeaderMoreMenu({
                     setOpen(false);
                     onExportCSV();
                   }}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
                 >
-                  <Download size={16} className="text-emerald-500" />
-                  <span>Export CSV</span>
+                  <FileText size={15} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                  <span>Export CSV (.csv)</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    onExportPDF();
+                  }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
+                >
+                  <Printer size={15} className="text-purple-600 dark:text-purple-400 shrink-0" />
+                  <span>PDF Report / Print</span>
+                </button>
+
+                <div className="my-1 border-t border-[var(--color-hairline)]" />
 
                 <button
                   type="button"
@@ -563,9 +573,9 @@ function HeaderMoreMenu({
                     setOpen(false);
                     onRefresh();
                   }}
-                  className="w-full flex items-center gap-2 px-2.5 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
                 >
-                  <AnimatedRefresh size={16} className="text-amber-500" />
+                  <AnimatedRefresh size={15} className="text-amber-500 shrink-0" />
                   <span>Refresh Data</span>
                 </button>
               </motion.div>
@@ -608,12 +618,10 @@ export function MachineListClient({
   totalPages,
   supervisors = [],
   operators = [],
-  complaints = [],
-  serviceData,
+  clients = [],
   userRole,
   currentSearch = "",
   currentStatus = "all",
-  initialTab = "inventory",
 }: MachineListClientProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -622,7 +630,6 @@ export function MachineListClient({
 
   const [isPending, startTransition] = useTransition();
 
-  const activeTab = searchParams.get("tab") || initialTab;
   const [search, setSearch] = useState(currentSearch);
   const deferredSearch = useDeferredValue(search);
   const [modalOpen, setModalOpen] = useState(false);
@@ -631,6 +638,8 @@ export function MachineListClient({
   const [selectedIds, setSelectedIds] = useState<(string | number)[]>([]);
   const [viewMode, setViewMode] = useState<"auto" | "cards" | "table">("auto");
   const [importModalOpen, setImportModalOpen] = useState(false);
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [pdfSelectedIds, setPdfSelectedIds] = useState<(string | number)[]>([]);
   const [healthStatusFilter, setHealthStatusFilter] = useState<string>("all");
   const [supervisorFilter, setSupervisorFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("machine_id_asc");
@@ -723,56 +732,42 @@ export function MachineListClient({
     });
   }, [deletingMachine, router, toast]);
 
+  const handleExportExcel = useCallback(
+    (ids: (string | number)[] = []) => {
+      const targetMachines =
+        ids.length > 0 ? machines.filter((m) => ids.includes(m.id)) : machines;
+      if (targetMachines.length === 0) {
+        toast("error", "No machines found to export");
+        return;
+      }
+      const prefix = ids.length > 0 ? `Machines-Selected-${targetMachines.length}` : "Machine-Directory";
+      exportMachinesToExcel(targetMachines, prefix);
+      toast("success", `Exported ${targetMachines.length} machines to Excel (.xlsx)`);
+    },
+    [machines, toast]
+  );
+
   const handleExportCSV = useCallback(
     (ids: (string | number)[] = []) => {
       const targetMachines =
         ids.length > 0 ? machines.filter((m) => ids.includes(m.id)) : machines;
-
-      const headers = [
-        "Machine ID",
-        "Model",
-        "Serial No",
-        "Year of Mfg (YUM)",
-        "Manufacturer",
-        "Hour Meter Reading (HMR)",
-        "Assigned Client",
-        "Current Supervisor",
-        "Current Operator",
-        "Health Status",
-        "Status",
-      ].join(",");
-
-      const rows = targetMachines.map((m) => {
-        const supervisorName = m.current_supervisor?.full_name || "Unassigned";
-        const operatorName = m.current_operator?.full_name || "Unassigned";
-        const clientName = m.customer_name || "Unassigned";
-        return [
-          `"${(m.machine_id || "").replace(/"/g, '""')}"`,
-          `"${(m.model || "").replace(/"/g, '""')}"`,
-          `"${(m.serial_number || "").replace(/"/g, '""')}"`,
-          `"${(m.year_of_mfg || "").replace(/"/g, '""')}"`,
-          `"${(m.manufacturer || "").replace(/"/g, '""')}"`,
-          `"${m.hour_meter || 0}"`,
-          `"${clientName.replace(/"/g, '""')}"`,
-          `"${supervisorName.replace(/"/g, '""')}"`,
-          `"${operatorName.replace(/"/g, '""')}"`,
-          `"${(m.health_status || "").replace(/"/g, '""')}"`,
-          `"${(m.status || "").replace(/"/g, '""')}"`,
-        ].join(",");
-      });
-
-      const csvContent =
-        "data:text/csv;charset=utf-8," + [headers, ...rows].join("\n");
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `machines_export_${Date.now()}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      toast("success", `Exported ${targetMachines.length} machine details to CSV`);
+      if (targetMachines.length === 0) {
+        toast("error", "No machines found to export");
+        return;
+      }
+      const prefix = ids.length > 0 ? `Machines-Selected-${targetMachines.length}` : "Machine-Directory";
+      exportMachinesToCSV(targetMachines, prefix);
+      toast("success", `Exported ${targetMachines.length} machines to CSV (.csv)`);
     },
     [machines, toast]
+  );
+
+  const handleOpenPDFModal = useCallback(
+    (ids: (string | number)[] = []) => {
+      setPdfSelectedIds(ids);
+      setPdfModalOpen(true);
+    },
+    []
   );
 
   const statsSummary = useMemo(() => {
@@ -805,7 +800,10 @@ export function MachineListClient({
           m.manufacturer?.toLowerCase().includes(q) ||
           m.year_of_mfg?.toLowerCase().includes(q) ||
           m.current_supervisor?.full_name?.toLowerCase().includes(q) ||
-          m.current_operator?.full_name?.toLowerCase().includes(q)
+          m.current_operator?.full_name?.toLowerCase().includes(q) ||
+          m.client?.company_name?.toLowerCase().includes(q) ||
+          m.client?.code?.toLowerCase().includes(q) ||
+          m.customer_name?.toLowerCase().includes(q)
         );
       });
     }
@@ -914,17 +912,32 @@ export function MachineListClient({
       {
         id: "client",
         header: "CLIENT",
-        accessorKey: "customer_name" as const,
         sortable: true,
-        width: "12%",
-        cell: (row: Machine) => (
-          <span
-            className="text-xs font-semibold text-[var(--color-ink)] truncate block max-w-[120px]"
-            title={row.customer_name || "Unassigned"}
-          >
-            {row.customer_name || "—"}
-          </span>
-        ),
+        width: "13%",
+        cell: (row: Machine) => {
+          const clientName = row.client?.company_name || row.customer_name;
+          const clientCode = row.client?.code;
+          if (!clientName) {
+            return (
+              <span className="text-xs text-[var(--color-mute)] font-medium">—</span>
+            );
+          }
+          return (
+            <div className="flex flex-col min-w-0 max-w-[130px]">
+              <span
+                className="text-xs font-semibold text-[var(--color-ink)] truncate block"
+                title={`${clientName}${clientCode ? ` (${clientCode})` : ""}`}
+              >
+                {clientName}
+              </span>
+              {clientCode && (
+                <span className="text-[10px] font-mono text-[var(--color-mute)] truncate">
+                  {clientCode}
+                </span>
+              )}
+            </div>
+          );
+        },
       },
       {
         id: "supervisor",
@@ -995,53 +1008,34 @@ export function MachineListClient({
               setModalOpen(true);
             }}
             onDelete={(m) => setDeletingMachine(m)}
-            onNavigate={(tab) => updateFilters({ tab, page: 1 })}
           />
         ),
       },
     ],
-    [canEdit, isAdmin, updateFilters]
+    [canEdit, isAdmin]
   );
 
   return (
     <div className="flex flex-col gap-5 pb-24 md:pb-6">
-      {/* TAB 2: Service Logs View */}
-      {activeTab === "services" && serviceData && (
-        <ServicesClient data={serviceData} />
-      )}
-
-      {/* TAB 3: Breakdown Complaints View */}
-      {activeTab === "complaints" && (
-        <ComplaintsClient
-          complaints={complaints}
-          total={complaints.length}
-          machines={[]}
-          engineers={[]}
-          supervisors={supervisors}
-          userRole={userRole}
-        />
-      )}
-
-      {/* TAB 1: Equipment Inventory View */}
-      {activeTab === "inventory" && (
-        <>
-          {/* Canonical Page Header */}
-          <PageHeader
-            title="Machine Directory"
-            breadcrumbs={[{ label: "Machines" }]}
+      {/* Canonical Page Header */}
+      <PageHeader
+        title="Machine Directory"
+        breadcrumbs={[{ label: "Machines" }]}
             actions={
               <div className="flex items-center gap-2">
                 <ExportButton
                   format="xlsx"
                   iconOnly
-                  onClick={() => handleExportCSV(selectedIds)}
+                  onClick={() => handleExportExcel(selectedIds)}
                   tooltip="Export machine directory to Excel (.xlsx)"
                 />
 
                 <HeaderMoreMenu
                   isAdmin={isAdmin}
                   onOpenImport={() => setImportModalOpen(true)}
+                  onExportExcel={() => handleExportExcel(selectedIds)}
                   onExportCSV={() => handleExportCSV(selectedIds)}
+                  onExportPDF={() => handleOpenPDFModal(selectedIds)}
                   onRefresh={() => router.refresh()}
                 />
 
@@ -1189,16 +1183,6 @@ export function MachineListClient({
                     <span>Table</span>
                   </button>
                 </div>
-
-                {isAdmin && selectedIds.length > 0 && (
-                  <Button
-                    variant="secondary"
-                    onClick={() => handleExportCSV(selectedIds)}
-                    className="text-xs justify-center shrink-0 h-9"
-                  >
-                    <Download size={14} className="mr-1" /> CSV ({selectedIds.length})
-                  </Button>
-                )}
               </div>
             }
           >
@@ -1369,9 +1353,19 @@ export function MachineListClient({
                   onSelectionChange={setSelectedIds}
                   bulkActions={[
                     {
-                      label: "Export Selected CSV",
-                      icon: Download,
-                      onClick: handleExportCSV,
+                      label: `Excel (${selectedIds.length})`,
+                      icon: FileSpreadsheet,
+                      onClick: (ids) => handleExportExcel(ids),
+                    },
+                    {
+                      label: `CSV (${selectedIds.length})`,
+                      icon: FileText,
+                      onClick: (ids) => handleExportCSV(ids),
+                    },
+                    {
+                      label: `PDF (${selectedIds.length})`,
+                      icon: Printer,
+                      onClick: (ids) => handleOpenPDFModal(ids),
                     },
                   ]}
                   emptyMessage="No machines match your criteria"
@@ -1411,9 +1405,19 @@ export function MachineListClient({
                   onSelectionChange={setSelectedIds}
                   bulkActions={[
                     {
-                      label: "Export Selected CSV",
-                      icon: Download,
-                      onClick: handleExportCSV,
+                      label: `Excel (${selectedIds.length})`,
+                      icon: FileSpreadsheet,
+                      onClick: (ids) => handleExportExcel(ids),
+                    },
+                    {
+                      label: `CSV (${selectedIds.length})`,
+                      icon: FileText,
+                      onClick: (ids) => handleExportCSV(ids),
+                    },
+                    {
+                      label: `PDF (${selectedIds.length})`,
+                      icon: Printer,
+                      onClick: (ids) => handleOpenPDFModal(ids),
                     },
                   ]}
                   emptyMessage="No machines match your criteria"
@@ -1452,8 +1456,6 @@ export function MachineListClient({
               />
             </div>
           )}
-        </>
-      )}
 
       {/* Machine Create / Edit Modal */}
       {modalOpen && (
@@ -1466,6 +1468,7 @@ export function MachineListClient({
           machine={editingMachine}
           supervisors={supervisors}
           operators={operators}
+          clients={clients}
           userRole={userRole}
           onSuccess={() => {
             setModalOpen(false);
@@ -1484,6 +1487,24 @@ export function MachineListClient({
             setImportModalOpen(false);
             router.refresh();
           }}
+        />
+      )}
+
+      {/* Machine Directory PDF & Printable Report Modal */}
+      {pdfModalOpen && (
+        <PrintableMachineDirectoryModal
+          open={pdfModalOpen}
+          onClose={() => {
+            setPdfModalOpen(false);
+            setPdfSelectedIds([]);
+          }}
+          machines={machines}
+          selectedIds={pdfSelectedIds}
+          title={
+            pdfSelectedIds.length > 0
+              ? `Selected Machines PDF Report (${pdfSelectedIds.length})`
+              : "Machine Fleet Directory PDF Report"
+          }
         />
       )}
 

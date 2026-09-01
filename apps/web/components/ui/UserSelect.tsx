@@ -93,10 +93,13 @@ export function UserSelect({
 
   const isAllSelected = allowAll && (value === "all" || value === "");
 
-  // Optional role filtering
+  // Optional role & status filtering
   const eligibleUsers = useMemo(() => {
-    if (!roleFilter || roleFilter.length === 0) return users;
-    return users.filter((u) => u.role && roleFilter.includes(u.role));
+    let filtered = users;
+    if (roleFilter && roleFilter.length > 0) {
+      filtered = filtered.filter((u) => u.role && roleFilter.includes(u.role));
+    }
+    return filtered.filter((u) => !u.status || u.status === "active");
   }, [users, roleFilter]);
 
   const selectedUser = useMemo(() => {

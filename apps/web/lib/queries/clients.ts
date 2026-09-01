@@ -51,12 +51,24 @@ export const getClientById = cache(async (id: string): Promise<CRMClient | null>
   return clients.find((c) => c.id === id) ?? null;
 });
 
+export interface ClientOptionItem {
+  id: string;
+  label: string;
+  code?: string;
+  company_name: string;
+  client_name?: string;
+  city?: string;
+  state?: string;
+  address?: string;
+  phone?: string;
+}
+
 export const getClientOptions = unstable_cache(
-  async (): Promise<{ id: string; label: string; code?: string }[]> => {
+  async (): Promise<ClientOptionItem[]> => {
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase
       .from("clients")
-      .select("id, code, company_name")
+      .select("id, code, company_name, city, state, address, phone")
       .is("deleted_at", null)
       .order("company_name", { ascending: true });
 
@@ -65,10 +77,16 @@ export const getClientOptions = unstable_cache(
     return data.map((c: any) => ({
       id: c.id,
       label: c.company_name || c.code || "Unknown Client",
+      company_name: c.company_name || c.code || "Unknown Client",
+      client_name: c.company_name,
       code: c.code || undefined,
+      city: c.city || undefined,
+      state: c.state || undefined,
+      address: c.address || undefined,
+      phone: c.phone || undefined,
     }));
   },
-  ["client-options-v3"],
+  ["client-options-v4"],
   { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.clients] }
 );
 

@@ -1,15 +1,15 @@
 import { z } from "zod";
 
 export const CreateMachineSchema = z.object({
-  machine_id: z.string().uuid().optional().nullable(),
-  model: z.string().max(100, "Model cannot exceed 100 characters").optional().nullable(),
-  serial_number: z.string().max(100, "Serial number cannot exceed 100 characters").optional().nullable(),
-  year_of_mfg: z.string().max(10, "Year of MFG cannot exceed 10 characters").optional().nullable(),
-  manufacturer: z.string().max(100, "Manufacturer cannot exceed 100 characters").optional().nullable(),
+  machine_id: z.string().max(50, "Machine ID cannot exceed 50 characters").optional().nullable(),
+  model: z.string().trim().min(1, "Model is required").max(100, "Model cannot exceed 100 characters"),
+  serial_number: z.string().trim().min(1, "Serial number is required").max(100, "Serial number cannot exceed 100 characters"),
+  year_of_mfg: z.string().trim().min(1, "Year of manufacture is required").max(10, "Year of MFG cannot exceed 10 characters"),
+  manufacturer: z.string().trim().min(1, "Manufacturer is required").max(100, "Manufacturer cannot exceed 100 characters"),
   current_supervisor_id: z.string().uuid().optional().nullable(),
   hour_meter: z.number().min(0).optional().default(0),
-  service_count: z.number().int().min(0).optional().default(0),
   current_operator_id: z.string().uuid().optional().nullable(),
+  client_id: z.string().uuid().optional().nullable(),
   health_status: z.enum(["active", "under_maintenance", "breakdown"]).optional().default("active"),
   status: z.enum(["available", "rented"]).optional().default("available"),
   // Backward compatibility fields during transition

@@ -1,8 +1,7 @@
 import { Suspense } from "react";
 import { getCurrentUser, protectOperatorRoute } from "@/lib/dal";
 import { getMachines, getActiveSupervisors, getActiveOperators } from "@/lib/queries/machines";
-import { getMachineComplaints } from "@/lib/queries/complaints";
-import { getEngineerServicesData } from "@/lib/queries/services";
+import { getClientOptions } from "@/lib/queries/clients";
 import { MachineListClient } from "@/components/machines/MachineListClient";
 import { MachinesSkeleton } from "@/components/ui";
 
@@ -11,10 +10,7 @@ interface MachinesPageProps {
     search?: string;
     status?: string;
     city?: string;
-    engineer_id?: string;
-    bucket?: string;
     page?: string;
-    tab?: string;
   }>;
 }
 
@@ -27,12 +23,8 @@ async function MachinesContent({ searchParams }: MachinesPageProps) {
   const page = parseInt(resolvedParams.page || "1", 10);
   const search = resolvedParams.search || "";
   const status = resolvedParams.status || "all";
-  const city = resolvedParams.city || "all";
-  const engineer_id = resolvedParams.engineer_id || "all";
-  const bucket = resolvedParams.bucket || "all";
-  const initialTab = resolvedParams.tab || "inventory";
 
-  const [machineData, supervisors, operators, complaintData, serviceData] = await Promise.all([
+  const [machineData, supervisors, operators, clients] = await Promise.all([
     getMachines({
       search,
       status,
@@ -41,8 +33,7 @@ async function MachinesContent({ searchParams }: MachinesPageProps) {
     }),
     getActiveSupervisors(),
     getActiveOperators(),
-    getMachineComplaints(),
-    getEngineerServicesData(),
+    getClientOptions(),
   ]);
 
   return (
@@ -52,18 +43,12 @@ async function MachinesContent({ searchParams }: MachinesPageProps) {
       page={machineData.page}
       pageSize={machineData.pageSize}
       totalPages={machineData.totalPages}
-      engineers={[]}
       supervisors={supervisors}
       operators={operators}
-      cities={[]}
-      complaints={complaintData.complaints}
-      serviceData={serviceData}
+      clients={clients}
       userRole={user.role}
       currentSearch={search}
       currentStatus={status}
-      currentEngineerId={engineer_id}
-      currentBucket={bucket}
-      initialTab={initialTab}
     />
   );
 }

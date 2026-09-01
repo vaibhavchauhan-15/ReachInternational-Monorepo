@@ -57,7 +57,7 @@ import {
   updateFinanceSettingsAction,
 } from "@/app/actions/finance";
 
-import { Select } from "@/components/ui";
+import { Select, SegmentedToggle } from "@/components/ui";
 
 interface FinanceClientProps {
   user: User;
@@ -384,39 +384,27 @@ export function FinanceClient({
       </div>
 
       {/* 11 Navigation Tabs */}
-      <div className="border-b border-[var(--color-hairline)] overflow-x-auto scrollbar-none">
-        <div className="flex items-center gap-1 min-w-max pb-2">
-          {[
-            { id: "dashboard", label: "Dashboard", icon: PieChart },
-            { id: "sales-review", label: "Sales & Rental Review", icon: FileText },
-            { id: "invoices", label: "Invoices & Notes", icon: FileCheck },
-            { id: "payments", label: "Payment Ledger", icon: CreditCard },
-            { id: "receivables", label: "Receivables Aging", icon: Clock },
-            { id: "payables", label: "Payables & Vendors", icon: Building2 },
-            { id: "po-match", label: "3-Way Match Verification", icon: ShieldCheck },
-            { id: "expenses", label: "Expenses", icon: TrendingDown },
-            { id: "payroll", label: "Payroll Summaries", icon: Users },
-            { id: "reports", label: "Financial Reports", icon: TrendingUp },
-            { id: "settings", label: "Finance Settings", icon: Sliders },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => handleTabChange(tab.id)}
-                className={`px-3.5 py-2 text-sm font-medium rounded-xl flex items-center gap-2 transition-all ${
-                  isActive
-                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                    : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+      <div className="overflow-x-auto pb-2 no-scrollbar">
+        <SegmentedToggle
+          value={activeTab}
+          onChange={handleTabChange}
+          layoutIdPrefix="finance-module-tabs"
+          size="sm"
+          responsive={false}
+          items={[
+            { id: "dashboard", label: "Dashboard", icon: <PieChart className="h-4 w-4" /> },
+            { id: "sales-review", label: "Sales & Rental", icon: <FileText className="h-4 w-4" /> },
+            { id: "invoices", label: "Invoices", icon: <FileCheck className="h-4 w-4" /> },
+            { id: "payments", label: "Ledger", icon: <CreditCard className="h-4 w-4" /> },
+            { id: "receivables", label: "Receivables", icon: <Clock className="h-4 w-4" /> },
+            { id: "payables", label: "Payables", icon: <Building2 className="h-4 w-4" /> },
+            { id: "po-match", label: "3-Way Match", icon: <ShieldCheck className="h-4 w-4" /> },
+            { id: "expenses", label: "Expenses", icon: <TrendingDown className="h-4 w-4" /> },
+            { id: "payroll", label: "Payroll", icon: <Users className="h-4 w-4" /> },
+            { id: "reports", label: "Reports", icon: <TrendingUp className="h-4 w-4" /> },
+            { id: "settings", label: "Settings", icon: <Sliders className="h-4 w-4" /> },
+          ]}
+        />
       </div>
 
       {/* TAB CONTENT RENDER */}

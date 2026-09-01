@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AnimatedClock,
@@ -13,6 +13,7 @@ import {
   AnimatedStar,
   AnimatedSearch,
   AnimatedUserCheck,
+  AnimatedX,
 } from "@/components/ui/animated-icons";
 import { Badge, Button, Select, useToast, TooltipWrapper, MachineSelect, ClientSelect, UserSelect, SearchableSelect } from "@/components/ui";
 import type { Machine, User, MachineAssignment, MachineHourLog, MachineWithEngineer, CRMClient } from "@/lib/types/database";
@@ -188,12 +189,15 @@ export function OperationsClient({
     (hourLogs.find((l) => l.machine_id === activeMachineId)?.machine as any) ||
     orderedMachines[0];
 
-  // Derived ordered operators list (ordered by most recent activity in logs - strictly role=operator)
-  const operatorOnlyUsers = operators.filter((op) => op.role === "operator");
+  // Derived active operators list (strictly role=operator and status=active)
+  const activeOperators = useMemo(
+    () => operators.filter((op) => op.role === "operator" && (op.status === "active" || !op.status)),
+    [operators]
+  );
   const logOperatorIdsInOrder = Array.from(new Set(hourLogs.map((l) => l.operator_id).filter(Boolean)));
-  const remainingOperators = operatorOnlyUsers.filter((op) => !logOperatorIdsInOrder.includes(op.id));
+  const remainingOperators = activeOperators.filter((op) => !logOperatorIdsInOrder.includes(op.id));
   const orderedOperators: User[] = [
-    ...logOperatorIdsInOrder.map((id) => operatorOnlyUsers.find((op) => op.id === id)).filter(Boolean) as User[],
+    ...logOperatorIdsInOrder.map((id) => activeOperators.find((op) => op.id === id)).filter(Boolean) as User[],
     ...remainingOperators,
   ];
 
@@ -366,23 +370,51 @@ export function OperationsClient({
   const loggedDaysCount = new Set(filteredHourLogs.map((l) => l.log_date)).size;
   const displayWorkingDays = loggedDaysCount > 0 ? loggedDaysCount : 26;
 
+  const handleOpenAssignModal = (targetMachineId?: string, targetOperatorId?: string) => {
+    if (targetMachineId) {
+      setSelectedMachineId(targetMachineId);
+    } else if (activeMachineId && machines.some((m) => m.id === activeMachineId)) {
+      setSelectedMachineId(activeMachineId);
+    } else if (!selectedMachineId && machines[0]?.id) {
+      setSelectedMachineId(machines[0].id);
+    }
+
+    if (targetOperatorId) {
+      setSelectedOperatorId(targetOperatorId);
+    } else if (!selectedOperatorId && activeOperators[0]?.id) {
+      setSelectedOperatorId(activeOperators[0].id);
+    }
+
+    setShowAssignModal(true);
+  };
+
   const handleAssignOperator = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitting(true);
-    const res = await assignOperatorToMachineAction({
-      machineId: selectedMachineId,
-      operatorId: selectedOperatorId,
-      notes,
-    });
-    setSubmitting(false);
+    if (!selectedMachineId || !selectedOperatorId) {
+      toast("error", "Please select both a target machine and an active operator.");
+      return;
+    }
 
-    if (res.success) {
-      toast("success", "Operator assigned to machine successfully");
-      setShowAssignModal(false);
-      setNotes("");
-      router.refresh();
-    } else {
-      toast("error", `Error assigning operator: ${res.error}`);
+    setSubmitting(true);
+    try {
+      const res = await assignOperatorToMachineAction({
+        machineId: selectedMachineId,
+        operatorId: selectedOperatorId,
+        notes,
+      });
+
+      if (res.success) {
+        toast("success", "Operator assigned to equipment successfully.");
+        setShowAssignModal(false);
+        setNotes("");
+        router.refresh();
+      } else {
+        toast("error", `Error assigning operator: ${res.error || "Failed to assign operator"}`);
+      }
+    } catch (err: any) {
+      toast("error", `Error assigning operator: ${err?.message || "Failed to assign operator"}`);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -514,7 +546,7 @@ export function OperationsClient({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="primary" onClick={() => setShowAssignModal(true)}>
+            <Button variant="primary" onClick={() => handleOpenAssignModal()}>
               <AnimatedUserCheck size={15} /> Assign Operator
             </Button>
           </div>
@@ -756,7 +788,7 @@ export function OperationsClient({
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs pt-0.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 text-xs pt-0.5">
                 <div>
                   <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Manufacturer</span>
                   <span className="font-bold text-[var(--color-ink)]">
@@ -779,12 +811,6 @@ export function OperationsClient({
                   <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Total Run Hours</span>
                   <span className="font-bold font-mono text-sky-600 dark:text-sky-400">
                     {Math.round(totalFilteredRunHours * 10) / 10} hrs
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Total Services</span>
-                  <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                    {activeMachineObj.service_count ?? 0} Services
                   </span>
                 </div>
                 <div>
@@ -1439,11 +1465,7 @@ export function OperationsClient({
                         {userRole !== "operator" && (
                           <button
                             type="button"
-                            onClick={() => {
-                              setSelectedMachineId(ass.machine_id);
-                              if (ass.operator_id) setSelectedOperatorId(ass.operator_id);
-                              setShowAssignModal(true);
-                            }}
+                            onClick={() => handleOpenAssignModal(ass.machine_id, ass.operator_id || undefined)}
                             className="px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20 text-[11px] font-bold cursor-pointer"
                           >
                             Reassign
@@ -1595,18 +1617,24 @@ export function OperationsClient({
 
       {/* MODAL: Assign / Reassign Machine Operator */}
       {showAssignModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
           <form
             onSubmit={handleAssignOperator}
             className="bg-[var(--color-canvas-elevated)] p-6 rounded-2xl border border-[var(--color-hairline)] max-w-md w-full space-y-4 shadow-xl"
           >
-            <h3 className="text-base font-extrabold text-[var(--color-ink)] flex items-center gap-2">
-              <AnimatedUserCheck size={18} className="text-sky-500" /> Assign / Reassign Machine Operator
-            </h3>
-
-            <p className="text-xs text-[var(--color-mute)]">
-              Assign an operator to equipment. If the operator is currently operating another machine, their assignment will be automatically updated here.
-            </p>
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-extrabold text-[var(--color-ink)] flex items-center gap-2">
+                <AnimatedUserCheck size={18} className="text-sky-500 shrink-0" /> Assign / Reassign Machine Operator
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAssignModal(false)}
+                className="p-1 rounded-lg text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas)] cursor-pointer transition-colors"
+                aria-label="Close modal"
+              >
+                <AnimatedX size={16} />
+              </button>
+            </div>
 
             <div className="space-y-3">
               {/* Select Machine */}
@@ -1624,12 +1652,14 @@ export function OperationsClient({
                 required
                 value={selectedOperatorId}
                 onChange={(opId) => setSelectedOperatorId(opId)}
-                users={operators}
+                users={activeOperators}
+                roleFilter={["operator"]}
+                placeholder="Search or select active operator..."
               />
 
               {/* Reassignment Notice Banner */}
               {(() => {
-                const selectedOp = operators.find((op) => op.id === selectedOperatorId);
+                const selectedOp = activeOperators.find((op) => op.id === selectedOperatorId) || operators.find((op) => op.id === selectedOperatorId);
                 const activeAss = assignments.find((a) => a.operator_id === selectedOperatorId && a.status === "active");
                 const currentMach = activeAss
                   ? machines.find((m) => m.id === activeAss.machine_id)
@@ -1651,23 +1681,9 @@ export function OperationsClient({
                 }
                 return null;
               })()}
-
-              {/* Notes */}
-              <div>
-                <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">
-                  Assignment Notes / Site Instructions (Optional)
-                </label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Enter any shift details, site location, or assignment notes..."
-                  rows={2}
-                  className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--color-link-soft)]"
-                />
-              </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2">
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--color-hairline)]">
               <button
                 type="button"
                 onClick={() => setShowAssignModal(false)}
@@ -1677,7 +1693,7 @@ export function OperationsClient({
               </button>
               <button
                 type="submit"
-                disabled={submitting}
+                disabled={submitting || !selectedMachineId || !selectedOperatorId}
                 className="px-4 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-md cursor-pointer transition-all disabled:opacity-50"
               >
                 {submitting ? "Assigning..." : "Confirm & Assign Operator"}
@@ -1832,7 +1848,8 @@ export function OperationsClient({
                 label="Assigned Operator on Site"
                 value={moveOperatorId}
                 onChange={(opId) => setMoveOperatorId(opId)}
-                users={operators}
+                users={activeOperators}
+                roleFilter={["operator"]}
                 clearable
               />
             </div>
@@ -1871,7 +1888,8 @@ export function OperationsClient({
                 required
                 value={payoutOperatorId}
                 onChange={(opId) => setPayoutOperatorId(opId)}
-                users={operators}
+                users={activeOperators}
+                roleFilter={["operator"]}
               />
 
               <div className="grid grid-cols-2 gap-2">

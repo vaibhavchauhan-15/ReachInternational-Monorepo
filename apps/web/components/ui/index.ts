@@ -121,6 +121,12 @@ export {
 export { PageHeader } from "./PageHeader";
 export { Card, CardHeader } from "./Card";
 export { Tabs, type TabsProps, type TabItem } from "./Tabs";
+export {
+  SegmentedToggle,
+  type SegmentedToggleItem,
+  type SegmentedToggleProps,
+  type SegmentedToggleSize,
+} from "./SegmentedToggle";
 export { Breadcrumb, type BreadcrumbProps, type BreadcrumbItem } from "./Breadcrumb";
 export {
   PageContainer,

@@ -22,8 +22,22 @@ export interface MachineDetailModalProps {
     status: string;
     health_status: string;
     hour_meter: number;
-    service_count: number;
     customer_name?: string;
+    client_id?: string;
+    client?: {
+      id: string;
+      code?: string;
+      company_name: string;
+      contact_person?: string;
+      phone?: string;
+      address?: string;
+      city?: string;
+      district?: string;
+      state?: string;
+      pincode?: string;
+      gstin?: string;
+      pan_number?: string;
+    } | null;
     supervisor_name?: string;
     operator_name?: string;
   };
@@ -45,13 +59,22 @@ export const MachineDetailModal: React.FC<MachineDetailModalProps> = ({
     status: 'available',
     health_status: 'active',
     hour_meter: 1420,
-    service_count: 3,
     customer_name: 'Saint Gobain',
     supervisor_name: 'Rajesh Kumar',
     operator_name: 'Vikram Singh',
   },
 }) => {
   const { theme } = useTheme();
+
+  // Title: Model - Serial No
+  const displayTitle =
+    [machineData.model, machineData.serial_number].filter(Boolean).join(' - ') ||
+    machineData.machine_id ||
+    'Machine Details';
+
+  const client = machineData.client;
+  const clientCompanyName = client?.company_name || machineData.customer_name;
+  const clientLocation = [client?.city, client?.district, client?.state].filter(Boolean).join(', ');
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -63,12 +86,12 @@ export const MachineDetailModal: React.FC<MachineDetailModalProps> = ({
               <View style={[styles.iconWrap, { backgroundColor: theme.colors.canvas }]}>
                 <Truck size={20} color={theme.colors.link} />
               </View>
-              <View>
-                <Text style={[styles.title, { color: theme.colors.ink }]}>
-                  {machineData.machine_id}
+              <View style={{ flex: 1, paddingRight: spacingNumeric.sm }}>
+                <Text style={[styles.title, { color: theme.colors.ink }]} numberOfLines={1}>
+                  {displayTitle}
                 </Text>
                 <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
-                  Model: {machineData.model || 'N/A'} • Sr: {machineData.serial_number || 'N/A'}
+                  ID: {machineData.machine_id} {machineData.manufacturer ? `• ${machineData.manufacturer}` : ''}
                 </Text>
               </View>
             </View>
@@ -99,30 +122,77 @@ export const MachineDetailModal: React.FC<MachineDetailModalProps> = ({
                 </View>
                 <View style={styles.gridItem}>
                   <Text style={[styles.lbl, { color: theme.colors.mute }]}>Model</Text>
-                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.model || '-'}</Text>
+                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.model || '—'}</Text>
                 </View>
                 <View style={styles.gridItem}>
                   <Text style={[styles.lbl, { color: theme.colors.mute }]}>Serial No</Text>
-                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.serial_number || '-'}</Text>
+                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.serial_number || '—'}</Text>
                 </View>
                 <View style={styles.gridItem}>
                   <Text style={[styles.lbl, { color: theme.colors.mute }]}>Year of Mfg (YUM)</Text>
-                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.year_of_mfg || '-'}</Text>
+                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.year_of_mfg || '—'}</Text>
                 </View>
                 <View style={styles.gridItem}>
                   <Text style={[styles.lbl, { color: theme.colors.mute }]}>Manufacturer</Text>
-                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.manufacturer || '-'}</Text>
+                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.manufacturer || '—'}</Text>
                 </View>
                 <View style={styles.gridItem}>
                   <Text style={[styles.lbl, { color: theme.colors.mute }]}>Hour Meter (HMR)</Text>
-                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.hour_meter} hrs</Text>
-                </View>
-                <View style={styles.gridItem}>
-                  <Text style={[styles.lbl, { color: theme.colors.mute }]}>Assigned Client</Text>
-                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.customer_name || 'Unassigned'}</Text>
+                  <Text style={[styles.val, { color: theme.colors.link }]}>{machineData.hour_meter} hrs</Text>
                 </View>
               </View>
             </View>
+
+            {/* Linked Client Details (CRM) Card */}
+            {clientCompanyName ? (
+              <View style={[styles.sectionCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                <View style={styles.sectionTitleRow}>
+                  <Truck size={16} color={theme.colors.link} />
+                  <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>Assigned Client (CRM)</Text>
+                </View>
+
+                <View style={styles.grid}>
+                  <View style={[styles.gridItem, { width: '100%' }]}>
+                    <Text style={[styles.lbl, { color: theme.colors.mute }]}>Company Name</Text>
+                    <Text style={[styles.val, { color: theme.colors.ink }]}>
+                      {clientCompanyName} {client?.code ? `(${client.code})` : ''}
+                    </Text>
+                  </View>
+                  {client?.contact_person && (
+                    <View style={styles.gridItem}>
+                      <Text style={[styles.lbl, { color: theme.colors.mute }]}>Contact Person</Text>
+                      <Text style={[styles.val, { color: theme.colors.ink }]}>{client.contact_person}</Text>
+                    </View>
+                  )}
+                  {client?.phone && (
+                    <View style={styles.gridItem}>
+                      <Text style={[styles.lbl, { color: theme.colors.mute }]}>Phone</Text>
+                      <Text style={[styles.val, { color: theme.colors.link }]}>{client.phone}</Text>
+                    </View>
+                  )}
+                  {clientLocation ? (
+                    <View style={styles.gridItem}>
+                      <Text style={[styles.lbl, { color: theme.colors.mute }]}>Location</Text>
+                      <Text style={[styles.val, { color: theme.colors.ink }]}>{clientLocation}</Text>
+                    </View>
+                  ) : null}
+                  {client?.gstin ? (
+                    <View style={styles.gridItem}>
+                      <Text style={[styles.lbl, { color: theme.colors.mute }]}>GSTIN</Text>
+                      <Text style={[styles.val, { color: theme.colors.ink }]}>{client.gstin}</Text>
+                    </View>
+                  ) : null}
+                  {client?.address && (
+                    <View style={[styles.gridItem, { width: '100%' }]}>
+                      <Text style={[styles.lbl, { color: theme.colors.mute }]}>Site Address</Text>
+                      <Text style={[styles.val, { color: theme.colors.ink }]}>
+                        {client.address} {client.pincode ? `- ${client.pincode}` : ''}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            ) : null}
 
             {/* Personnel Assignment Card */}
             <View style={[styles.sectionCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>

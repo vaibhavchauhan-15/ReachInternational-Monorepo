@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/animated-icons";
 import { motion } from "framer-motion";
 import type { User, CRMClient } from "@/lib/types/database";
+import { SegmentedToggle } from "@/components/ui";
 
 interface ClientDetailClientProps {
   user: User;
@@ -28,79 +29,64 @@ export function ClientDetailClient({ user, clientId }: ClientDetailClientProps) 
   const client: CRMClient = {
     id: clientId,
     company_name: "ABC Infrastructure Pvt Ltd",
-    client_name: "ABC Infrastructure Pvt Ltd",
-    code: "CLI-ABC-01",
-    contact_person: "Rajesh Sharma (Procurement Head)",
-    email: "rajesh@abcinfra.com",
+    code: "CLI-0001",
+    contact_person: "Rajesh Sharma",
     phone: "+91 98765 43210",
-    address: "Plot 12, Industrial Area Phase 1",
-    city: "Delhi",
-    state: "Delhi",
-    branch_id: "br-1",
-    machine_count: 12,
-    open_complaints: 2,
+    city: "Mumbai",
+    state: "Maharashtra",
     status: "active",
-    created_at: "2024-01-15",
-  };
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  } as CRMClient;
 
   return (
-    <div className="w-full space-y-6">
-      {/* Top Breadcrumb */}
-      <Link
-        href="/crm"
-        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors"
-      >
-        <AnimatedChevronLeft size={16} />
-        <span>Back to CRM Directory</span>
-      </Link>
+    <div className="space-y-6">
+      {/* Breadcrumb / Back */}
+      <div className="flex items-center gap-2 text-xs text-[var(--color-mute)]">
+        <Link href="/crm" className="hover:text-[var(--color-ink)] transition-colors flex items-center gap-1">
+          <AnimatedChevronLeft size={14} /> Back to CRM
+        </Link>
+        <span>/</span>
+        <span className="text-[var(--color-ink)] font-semibold">{client.company_name}</span>
+      </div>
 
-      {/* Client Header Card */}
-      <div className="p-6 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--color-hairline)] pb-4">
-          <div>
-            <span className="text-xs font-mono font-bold text-[var(--color-mute)]">{client.code}</span>
-            <h1 className="text-2xl font-extrabold text-[var(--color-ink)] tracking-tight">{client.client_name}</h1>
-            <p className="text-xs text-[var(--color-mute)] flex items-center gap-2 mt-1">
-              <AnimatedMapPin size={14} className="text-sky-500" />
-              {[client.city, client.state].filter(Boolean).join(", ") || "—"}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300">
-              Active Client
-            </span>
+      {/* Client Profile Header Card */}
+      <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-6 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center justify-center font-bold text-xl">
+              {client.company_name.charAt(0)}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold text-[var(--color-ink)]">{client.company_name}</h1>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold">
+                  {client.code}
+                </span>
+              </div>
+              <p className="text-xs text-[var(--color-mute)] mt-0.5">Primary Contact: {client.contact_person || "Not specified"}</p>
+            </div>
           </div>
         </div>
 
-        {/* Sub-Tabs Navigation (Item 7 Requirement!) */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar border-b border-[var(--color-hairline)]">
-          {[
-            { id: "overview", label: "Overview", icon: AnimatedUsers },
-            { id: "machines", label: "🚜 Machines (12)", icon: AnimatedWrench },
-            { id: "service", label: "🔧 Service History", icon: AnimatedWrench },
-            { id: "complaints", label: "🔴 Complaints (2)", icon: AnimatedAlertTriangle },
-            { id: "documents", label: "📄 Documents (5)", icon: AnimatedFileText },
-            { id: "contacts", label: "📞 Contacts", icon: AnimatedPhone },
-            { id: "activity", label: "📋 Activity Trail", icon: AnimatedActivity },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id as any)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-                  activeTab === tab.id
-                    ? "bg-blue-600 text-white shadow-2xs"
-                    : "text-[var(--color-body)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-                }`}
-              >
-                <Icon size={14} />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
+        {/* Dynamic Client Sub-Module Navigation Tabs */}
+        <div className="border-t border-[var(--color-hairline)] pt-4 overflow-x-auto no-scrollbar">
+          <SegmentedToggle<"overview" | "machines" | "service" | "complaints" | "documents" | "contacts" | "activity">
+            value={activeTab}
+            onChange={setActiveTab}
+            layoutIdPrefix="client-detail-tabs"
+            size="sm"
+            responsive={false}
+            items={[
+              { id: "overview", label: "Overview", icon: <AnimatedUsers size={14} /> },
+              { id: "machines", label: "Machines", icon: <AnimatedWrench size={14} />, count: 12 },
+              { id: "service", label: "Service History", icon: <AnimatedWrench size={14} /> },
+              { id: "complaints", label: "Complaints", icon: <AnimatedAlertTriangle size={14} />, count: 2 },
+              { id: "documents", label: "Documents", icon: <AnimatedFileText size={14} />, count: 5 },
+              { id: "contacts", label: "Contacts", icon: <AnimatedPhone size={14} /> },
+              { id: "activity", label: "Activity Trail", icon: <AnimatedActivity size={14} /> },
+            ]}
+          />
         </div>
 
         {/* Sub-Tab View */}

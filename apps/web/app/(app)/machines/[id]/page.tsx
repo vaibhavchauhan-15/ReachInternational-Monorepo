@@ -2,10 +2,6 @@ import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/dal";
 import {
   getMachineById,
-  getMachineServiceHistory,
-  getMachineBreakdownHistory,
-  getMachineHourMeterLogs,
-  getMachinePartsUsedHistory,
   getMachineActiveRental,
 } from "@/lib/queries/machines";
 import { EmptyState, MachineDetailSkeleton } from "@/components/ui";
@@ -15,19 +11,10 @@ async function MachineDetailContent({ id }: { id: string }) {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const [
-    machine,
-    serviceHistory,
-    breakdownHistory,
-    hourMeterLogs,
-    partsUsedHistory,
-    activeRental,
-  ] = await Promise.all([
+  // On initial page load, only fetch machine and active rental metadata.
+  // Machine hour meter running logs are lazy-loaded on demand when the tab is selected.
+  const [machine, activeRental] = await Promise.all([
     getMachineById(id),
-    getMachineServiceHistory(id),
-    getMachineBreakdownHistory(id),
-    getMachineHourMeterLogs(id),
-    getMachinePartsUsedHistory(id),
     getMachineActiveRental(id),
   ]);
 
@@ -54,10 +41,6 @@ async function MachineDetailContent({ id }: { id: string }) {
   return (
     <MachineClientView
       machine={machine}
-      serviceHistory={serviceHistory}
-      breakdownHistory={breakdownHistory}
-      hourMeterLogs={hourMeterLogs}
-      partsUsedHistory={partsUsedHistory}
       activeRental={activeRental}
       isAdmin={canManage}
       canEdit={canEdit}

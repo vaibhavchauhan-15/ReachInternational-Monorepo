@@ -219,8 +219,8 @@ export interface Machine {
   manufacturer: string | null;
   current_supervisor_id: string | null;
   hour_meter: number;
-  service_count: number;
   current_operator_id: string | null;
+  client_id?: string | null;
   health_status: MachineHealthStatus;
   status: MachineStatus;
   created_by: string | null;
@@ -228,6 +228,28 @@ export interface Machine {
   updated_at: string;
   current_operator?: Pick<User, "id" | "full_name" | "phone" | "email"> | null;
   current_supervisor?: Pick<User, "id" | "full_name" | "phone" | "email"> | null;
+  client?: Pick<
+    CRMClient,
+    | "id"
+    | "code"
+    | "company_name"
+    | "city"
+    | "district"
+    | "state"
+    | "pincode"
+    | "phone"
+    | "contact_person"
+    | "address"
+    | "gstin"
+    | "pan_number"
+    | "is_billing_address_different"
+    | "billing_address"
+    | "billing_city"
+    | "billing_district"
+    | "billing_state"
+    | "billing_pincode"
+    | "status"
+  > | CRMClient | null;
 
   // Backward-compatibility optional fields for transition
   machine_code?: string;
@@ -240,23 +262,6 @@ export interface Machine {
   state?: string;
   branch_id?: string | null;
   engineer_id?: string | null;
-  next_service_due_date?: string;
-  service_interval_days?: number;
-  category_name?: string | null;
-  last_service_date?: string | null;
-  engine_serial_no?: string | null;
-  insurance_policy_no?: string | null;
-  insurance_expiry_date?: string | null;
-  third_party_certificate?: string | null;
-  third_party_expiry_date?: string | null;
-  rto_tax?: string | null;
-  rto_tax_expiry_date?: string | null;
-  air_filter_no?: string | null;
-  starter_motor_teeth?: string | null;
-  diesel_filter_no?: string | null;
-  headgas_kit_notch?: string | null;
-  front_tyre_size?: string | null;
-  back_tyre_size?: string | null;
 }
 
 export interface MachineWithEngineer extends Machine {
