@@ -235,7 +235,7 @@ export async function deleteMachine(id: string): Promise<{ success?: boolean; er
     return { error: "Invalid machine ID format." };
   }
   try {
-    await requireRole("admin", "super_admin");
+    await requireRole("admin", "super_admin", "manager", "service_manager");
     const supabase = await createSupabaseServerClient();
     const { error } = await supabase.from("machines").delete().eq("id", id);
     

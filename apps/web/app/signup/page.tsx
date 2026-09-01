@@ -23,7 +23,13 @@ import {
   ReachInternationalLogo,
   type SelectOption,
 } from "@/components/ui";
-import { validateAadhaarNumber, validateLicenseNumber, formatAadhaar } from "@reachinternational/utils";
+import {
+  validateAadhaarNumber,
+  validateLicenseNumber,
+  formatAadhaar,
+  INDIAN_STATES,
+  getStateById,
+} from "@reachinternational/utils";
 
 const signupRoleOptions: SelectOption[] = [
   { value: "service_engineer", label: "Service Engineer" },
@@ -35,6 +41,11 @@ const signupRoleOptions: SelectOption[] = [
   { value: "mechanic", label: "Mechanic / Technician" },
   { value: "hr_manager", label: "HR Manager" },
 ];
+
+const stateSelectOptions: SelectOption[] = INDIAN_STATES.map((s) => ({
+  value: String(s.id),
+  label: s.name,
+}));
 
 export default function SignupPage() {
   const [state, setState] = useState<AuthFormState>({});
@@ -48,6 +59,7 @@ export default function SignupPage() {
     city: "",
     district: "",
     state: "",
+    state_id: "",
     aadhaar_number: "",
     license_number: "",
     password: "",
@@ -64,7 +76,16 @@ export default function SignupPage() {
       formattedVal = value.toUpperCase();
     }
 
-    setFormValues((prev) => ({ ...prev, [field]: formattedVal }));
+    if (field === "state_id") {
+      const matchedState = getStateById(value);
+      setFormValues((prev) => ({
+        ...prev,
+        state_id: value,
+        state: matchedState ? matchedState.name : prev.state,
+      }));
+    } else {
+      setFormValues((prev) => ({ ...prev, [field]: formattedVal }));
+    }
 
     // Instant validation for Aadhaar
     if (field === "aadhaar_number") {
@@ -78,10 +99,11 @@ export default function SignupPage() {
       }
     }
 
-    if (fieldErrors[field]) {
+    if (fieldErrors[field] || (field === "state_id" && fieldErrors.state)) {
       setFieldErrors((prev) => {
         const copy = { ...prev };
         delete copy[field];
+        if (field === "state_id") delete copy.state;
         return copy;
       });
     }
@@ -119,6 +141,9 @@ export default function SignupPage() {
 
     // Client-side pre-flight checks
     const errors: Record<string, string> = {};
+    if (!formValues.state.trim() && !formValues.state_id) {
+      errors.state = "State is required.";
+    }
     if (!formValues.aadhaar_number.trim()) {
       errors.aadhaar_number = "Aadhaar card number is required.";
     } else {
@@ -165,6 +190,7 @@ export default function SignupPage() {
           city: result.fieldValues?.city ?? prev.city,
           district: result.fieldValues?.district ?? prev.district,
           state: result.fieldValues?.state ?? prev.state,
+          state_id: result.fieldValues?.state_id ?? prev.state_id,
           aadhaar_number: result.fieldValues?.aadhaar_number ?? prev.aadhaar_number,
           license_number: result.fieldValues?.license_number ?? prev.license_number,
         }));
@@ -347,12 +373,12 @@ export default function SignupPage() {
                 </div>
               </div>
 
-              {/* Row 3: City | District | State (3-Column layout) */}
+              {/* Row 3: City/Town/Village | District | State (3-Column layout) */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
                 <Input
                   id="signup-city"
                   name="city"
-                  label="City"
+                  label="City/Town/Village"
                   type="text"
                   value={formValues.city}
                   onChange={(e) => handleChange("city", e.target.value)}
@@ -377,19 +403,36 @@ export default function SignupPage() {
                   icon={<AnimatedMapPin size={15} />}
                 />
 
-                <Input
-                  id="signup-state"
-                  name="state"
-                  label="State"
-                  type="text"
-                  value={formValues.state}
-                  onChange={(e) => handleChange("state", e.target.value)}
-                  placeholder="Maharashtra"
-                  required
-                  autoComplete="address-level1"
-                  error={fieldErrors.state}
-                  icon={<AnimatedMapPin size={15} />}
-                />
+                {/* State Dropdown Selector */}
+                <div className="flex flex-col gap-1 w-full" id="signup-state-container">
+                  <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none">
+                    State <span className="text-rose-500 font-semibold">*</span>
+                  </label>
+                  <input type="hidden" name="state" value={formValues.state} />
+                  <input type="hidden" name="state_id" value={formValues.state_id} />
+                  <SearchableSelect
+                    options={stateSelectOptions}
+                    value={formValues.state_id}
+                    onChange={(val, opt) => {
+                      setFormValues((prev) => ({
+                        ...prev,
+                        state_id: val,
+                        state: opt?.label || prev.state,
+                      }));
+                      if (fieldErrors.state) {
+                        setFieldErrors((prev) => {
+                          const copy = { ...prev };
+                          delete copy.state;
+                          return copy;
+                        });
+                      }
+                    }}
+                    placeholder="Select state..."
+                    clearable={false}
+                    error={fieldErrors.state}
+                    className="w-full text-xs sm:text-[13px]"
+                  />
+                </div>
               </div>
 
               {/* Row 4: Aadhaar Card Number | Driving Licence Number */}

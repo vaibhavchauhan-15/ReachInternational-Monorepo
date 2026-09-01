@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
-import { validateAadhaarNumber, validateLicenseNumber } from "@reachinternational/utils";
+import { validateAadhaarNumber, validateLicenseNumber, getStateById, getStateByName } from "@reachinternational/utils";
 
 export interface AuthFormState {
   error?: string;
@@ -185,7 +185,29 @@ export async function signup(
   const phone = ((formData.get("phone") as string) || "").trim();
   const city = ((formData.get("city") as string) || "").trim();
   const district = ((formData.get("district") as string) || "").trim();
-  const stateName = ((formData.get("state") as string) || "").trim();
+  const stateRaw = ((formData.get("state") as string) || "").trim();
+  const stateIdRaw = formData.get("state_id") as string | null;
+
+  // Resolve state_id and normalized state name
+  let resolvedStateId: number | null = null;
+  let resolvedStateName = stateRaw;
+
+  if (stateIdRaw && !isNaN(Number(stateIdRaw)) && Number(stateIdRaw) > 0) {
+    const matchedState = getStateById(Number(stateIdRaw));
+    if (matchedState) {
+      resolvedStateId = matchedState.id;
+      resolvedStateName = matchedState.name;
+    }
+  }
+
+  if (!resolvedStateId && stateRaw) {
+    const matchedState = getStateByName(stateRaw);
+    if (matchedState) {
+      resolvedStateId = matchedState.id;
+      resolvedStateName = matchedState.name;
+    }
+  }
+
   const aadhaarNumber = ((formData.get("aadhaar_number") as string) || "").trim();
   const licenseNumber = ((formData.get("license_number") as string) || "").trim();
   const password = (formData.get("password") as string) || "";
@@ -215,7 +237,8 @@ export async function signup(
     role,
     city,
     district,
-    state: stateName,
+    state: resolvedStateName,
+    state_id: resolvedStateId ? String(resolvedStateId) : "",
     aadhaar_number: aadhaarNumber,
     license_number: licenseNumber,
     password,
@@ -227,9 +250,9 @@ export async function signup(
   if (!fullName) fieldErrors.full_name = "Full name is required.";
   if (!email) fieldErrors.email = "Email address is required.";
   if (!phone) fieldErrors.phone = "Mobile number is required.";
-  if (!city) fieldErrors.city = "City is required.";
+  if (!city) fieldErrors.city = "City/Town/Village is required.";
   if (!district) fieldErrors.district = "District is required.";
-  if (!stateName) fieldErrors.state = "State is required.";
+  if (!resolvedStateName) fieldErrors.state = "State is required.";
   if (!aadhaarNumber) fieldErrors.aadhaar_number = "Aadhaar card number is required.";
   if (!password) fieldErrors.password = "Password is required.";
   if (!confirmPassword) fieldErrors.confirm_password = "Confirm password is required.";
@@ -436,8 +459,9 @@ export async function signup(
         role: role,
         city,
         district,
-        state: stateName,
-        location: `${city}, ${district}, ${stateName}`,
+        state: resolvedStateName,
+        state_id: resolvedStateId,
+        location: `${city}, ${district}, ${resolvedStateName}`,
         aadhaar_number: cleanAadhaar,
         license_number: formattedLicense,
       },
@@ -538,8 +562,9 @@ export async function signup(
       role: role, 
       city, 
       district, 
-      state: stateName, 
-      location: `${city}, ${district}, ${stateName}`,
+      state: resolvedStateName, 
+      state_id: resolvedStateId,
+      location: `${city}, ${district}, ${resolvedStateName}`,
       has_aadhaar: !!aadhaarNumber,
       has_license: !!licenseNumber,
     },

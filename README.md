@@ -34,13 +34,13 @@
 
 ### 1. 🚜 Machine Management (`/machines`)
 - **Fleet Directory & Specifications**: Track machinery fleet details including Model Name, Serial Number, Manufacturer, Year of Manufacture (YUM), Current HMR (Hour Meter Reading), Assigned Supervisor, Assigned Operator, and Client details.
-- **Full Machine Lifecycle**: Add new machines, edit machine parameters, and delete machines with admin authorization.
-- **Search & Filters**: Multi-option filters by Model Name, Serial Number, Manufacturer, and Client Name.
+- **Full Machine Lifecycle**: Add new machines, edit machine parameters via dedicated `/machines/[id]/edit` full-page editor and modals, and delete machines with authorized RBAC permissions for `manager`, `service_manager`, `admin`, and `super_admin`.
+- **Search & Filters**: Multi-option filters by Model Name, Serial Number, Manufacturer, Health Status, Supervisor, and Client Name.
 
-### 2. 👥 User & Employee Management (`/users`)
+### 2. 👥 User & Employee Management (`/users` & `/signup`)
 - **System Accounts Directory**: Unified management of system users and staff accounts with active status tracking.
-- **Mandatory Profile & Identity Fields**: Strictly enforces Full Name, Email Address, 10-digit Mobile Phone Number, System Role, Complete Address (City, District, State), and Regulatory Identity Details (Aadhaar Card Number with mathematical Verhoeff checksum & masked `XXXX-XXXX-1294` PII formatting and Driving Licence Number) across user profiles and self-registration.
-- **Self-Service Registration & Admin Access Governance**: Users request platform access choosing their functional role (`manager`, `service_manager`, `service_engineer`, `supervisor`, `store_manager`, `operator`, `mechanic`, `hr_manager`). The chosen role is preserved in `public.users.role` in `pending` status, displayed in the Admin Pending User Approvals panel with distinct role badges, and maintained without modification upon administrator approval.
+- **Mandatory Profile & Address Fields**: Strictly enforces Full Name, Email Address, 10-digit Mobile Phone Number, System Role, Normalized Address (**City/Town/Village**, **District**, and **State / Union Territory** referencing canonical `public.states` with `state_id`), and Regulatory Identity Details (Aadhaar Card Number with mathematical Verhoeff checksum & masked `XXXX-XXXX-1294` PII formatting and Driving Licence Number) across user profiles, admin modals, and self-registration.
+- **Self-Service Registration & Admin Access Governance**: Users request platform access via `/signup` choosing their functional role (`manager`, `service_manager`, `service_engineer`, `supervisor`, `store_manager`, `operator`, `mechanic`, `hr_manager`) and selecting their State/UT from a standardized dropdown linked to `public.states(id)`. The chosen role and `state_id` are preserved in `public.users` in `pending` status, displayed in the Admin Pending User Approvals panel with distinct role badges, and maintained without modification upon administrator approval.
 - **Multi-Selection & Bulk Actions**: Select individual or all filtered user accounts with a master checkbox and floating bulk actions bar. Perform instant formatted Excel (`.xlsx`) or CSV (`.csv`) export downloads and high-concurrency Bulk Deletions with safety self-delete guards, super admin protection, optimistic UI removals, and audit logging.
 - **Account Actions**: Create new user accounts, edit employee profiles, activate/deactivate accounts, and delete user accounts with full structured audit logging.
 
@@ -186,7 +186,7 @@ ReachInternational-Monorepo/
 
 The core database is built on 7 central tables in Supabase PostgreSQL:
 
-1. `public.users`: System user accounts (email, phone, role, city, district, state, aadhaar_number, license_number, status).
+1. `public.users`: System user accounts (email, phone, role, city, district, state, state_id references states(id), aadhaar_number, license_number, status).
 2. `public.machines`: Machine fleet master (machine_code, model, serial_number, manufacturer, year_of_manufacture, hour_meter, customer_name, status).
 3. `public.machine_hour_logs`: Daily running hour logs (machine_id, client_id, operator_id, supervisor_id, log_date, start_time, end_time, start_meter, end_meter, running_hours, normal_working_hours, overtime_hours, is_breakdown, location, remarks, idempotency_key).
 4. `public.clients`: Registered clients & customer sites (client_code, client_name, contact_person, phone, email, address, city, state).

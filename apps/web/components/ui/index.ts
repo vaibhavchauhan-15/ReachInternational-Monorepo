@@ -137,6 +137,7 @@ export { MetricCard } from "./MetricCard";
 export { Sparkline } from "./Sparkline";
 export { CommandPalette } from "./CommandPalette";
 export { RefreshButton } from "./RefreshButton";
+export { PullToRefresh, usePullToRefresh, type PullToRefreshProps } from "./PullToRefresh";
 export {
   Avatar,
   AvatarImage,

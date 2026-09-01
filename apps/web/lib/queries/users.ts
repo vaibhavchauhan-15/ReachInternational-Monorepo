@@ -15,7 +15,7 @@ export interface UserListParams {
 }
 
 const USER_SELECT_COLUMNS =
-  "id, full_name, email, phone, role, status, city, district, state, aadhaar_number, license_number, created_at, updated_at";
+  "id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, created_at, updated_at";
 
 export async function getUserList(params: UserListParams = {}) {
   await requireRole("admin", "super_admin", "service_manager", "hr_manager");

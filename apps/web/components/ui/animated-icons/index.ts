@@ -33,6 +33,7 @@ export const AnimatedRotateCw = createAnimatedIcon(L.RotateCw, "spin");
 export const AnimatedDownload = createAnimatedIcon(L.Download, "arrow-down");
 export const AnimatedUpload = createAnimatedIcon(L.Upload, "arrow-up");
 export const AnimatedSettings = createAnimatedIcon(L.Settings, "gear");
+export const AnimatedSave = createAnimatedIcon(L.Save, "bounce");
 
 // Status & Alerts Icons
 export const AnimatedCheck = createAnimatedIcon(L.Check, "draw");

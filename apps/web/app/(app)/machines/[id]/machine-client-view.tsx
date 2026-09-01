@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -15,6 +16,7 @@ import {
   AnimatedCheck,
   AnimatedCopy,
   AnimatedMessageSquare,
+  AnimatedTrash,
 } from "@/components/ui/animated-icons";
 import { ScissorLiftLogoIcon } from "@/components/branding/ScissorLiftLogoIcon";
 import { Phone, Mail, Check, Copy, MapPin, AlertTriangle, CheckCircle2, FileText, Wrench, PackageCheck, Building2 } from "lucide-react";
@@ -34,10 +36,12 @@ import {
   TableRow,
   TableHead,
   TableCell,
+  ConfirmationDialog,
 } from "@/components/ui";
 import dynamic from "next/dynamic";
 import type { MachineWithEngineer, ServiceRecordWithDetails } from "@/lib/types/database";
 import { formatDate, formatShiftTimingRange } from "@reachinternational/utils";
+import { deleteMachine } from "@/app/actions/machines";
 
 const ServiceForm = dynamic(() => import("./service-form").then((mod) => mod.ServiceForm), { ssr: false });
 
@@ -65,6 +69,8 @@ interface MachineClientViewProps {
   partsUsedHistory?: any[];
   activeRental?: any;
   isAdmin: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
   isAssignedEngineer: boolean;
   currentUserId: string;
 }
@@ -77,16 +83,38 @@ export function MachineClientView({
   partsUsedHistory = [],
   activeRental = null,
   isAdmin,
+  canEdit,
+  canDelete,
   isAssignedEngineer,
   currentUserId,
 }: MachineClientViewProps) {
+  const router = useRouter();
   const { toast } = useToast();
+  const [isDeleting, startDeleteTransition] = useTransition();
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [activeTab, setActiveTab] = useState<
     "overview" | "service_breakdown" | "running_hours" | "parts_used" | "service_interval" | "documents" | "complete_service"
   >("overview");
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+
+  const allowEdit = canEdit ?? isAdmin;
+  const allowDelete = canDelete ?? isAdmin;
+
+  const handleDeleteMachine = () => {
+    startDeleteTransition(async () => {
+      const res = await deleteMachine(machine.id);
+      if (res?.error) {
+        toast("error", "Failed to delete machine", res.error);
+        setDeleteConfirmOpen(false);
+      } else {
+        toast("success", "Machine deleted", `${machine.machine_id} has been permanently deleted.`);
+        router.push("/machines");
+        router.refresh();
+      }
+    });
+  };
 
   // Calculate Due Status
   const today = new Date().toISOString().split("T")[0];
@@ -240,9 +268,9 @@ export function MachineClientView({
               </div>
             </div>
 
-            {/* Header Action Button */}
-            {isAdmin && (
-              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+            {/* Header Action Buttons */}
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+              {allowEdit && (
                 <Button
                   variant="secondary"
                   icon={<AnimatedEdit size={15} className="text-[var(--color-body)]" />}
@@ -251,8 +279,19 @@ export function MachineClientView({
                 >
                   Edit Machine
                 </Button>
-              </div>
-            )}
+              )}
+              {allowDelete && (
+                <Button
+                  variant="destructive"
+                  icon={<AnimatedTrash size={15} />}
+                  responsive
+                  onClick={() => setDeleteConfirmOpen(true)}
+                  disabled={isDeleting}
+                >
+                  Delete
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </FadeIn>
@@ -1017,6 +1056,19 @@ export function MachineClientView({
           </div>
         )}
       </Modal>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmationDialog
+        isOpen={deleteConfirmOpen}
+        onClose={() => setDeleteConfirmOpen(false)}
+        onConfirm={handleDeleteMachine}
+        title="Delete Machine"
+        description={`Are you sure you want to permanently delete machine ${machine.machine_id} (${machine.model || "Unknown Model"})? This action cannot be undone and will remove related logs.`}
+        confirmLabel="Delete Machine"
+        cancelLabel="Keep Machine"
+        variant="danger"
+        loading={isDeleting}
+      />
     </div>
   );
 }

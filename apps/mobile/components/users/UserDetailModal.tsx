@@ -39,6 +39,7 @@ export interface UserRecord {
   city?: string;
   district?: string;
   state?: string;
+  state_id?: number | null;
   aadhaar_number?: string | null;
   license_number?: string | null;
   created_at?: string;

@@ -635,9 +635,15 @@ export function MachineListClient({
   const [supervisorFilter, setSupervisorFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("machine_id_asc");
 
-  const isAdmin = userRole === "super_admin" || userRole === "admin";
-  const canEdit = isAdmin || userRole === "manager" || userRole === "service_manager" || userRole === "supervisor";
-  const canCreateMachine = isAdmin || userRole === "manager" || userRole === "service_manager";
+  const canManage =
+    userRole === "super_admin" ||
+    userRole === "admin" ||
+    userRole === "manager" ||
+    userRole === "service_manager";
+  const isAdmin = canManage;
+  const canEdit = canManage || userRole === "supervisor";
+  const canCreateMachine = canManage;
+  const canDelete = canManage;
 
   const supervisorOptions = useMemo(() => {
     const map = new Map<string, string>();

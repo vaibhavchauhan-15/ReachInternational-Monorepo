@@ -7,6 +7,7 @@ import {
   RefreshControl,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { Card, Badge, Input, Button, useTheme, MobileHeader } from '../../components/ui';
 import { MachineDetailModal } from '../../components/machines/MachineDetailModal';
@@ -15,7 +16,7 @@ import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { Search, Plus, Wrench, Copy, Check, Edit2 } from 'lucide-react-native';
+import { Search, Plus, Wrench, Copy, Check, Edit2, Trash2 } from 'lucide-react-native';
 
 export type StatusFilter = 'all' | 'available' | 'rented';
 
@@ -66,8 +67,33 @@ export default function MachinesScreen() {
   const isManagerOrAdmin =
     normalizedRole === 'admin' ||
     normalizedRole === 'super_admin' ||
-    normalizedRole === 'service_manager' ||
-    normalizedRole === 'supervisor';
+    normalizedRole === 'manager' ||
+    normalizedRole === 'service_manager';
+  const canEdit = isManagerOrAdmin || normalizedRole === 'supervisor';
+  const canDelete = isManagerOrAdmin;
+
+  const handleDeleteMachine = (m: MachineRecord) => {
+    Alert.alert(
+      'Delete Machine',
+      `Are you sure you want to permanently delete machine ${m.machine_id} (${m.model || 'Unknown Model'})? This action cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase.from('machines').delete().eq('id', m.id);
+              if (error) throw error;
+              fetchMachines();
+            } catch (err: any) {
+              Alert.alert('Error', err?.message || 'Failed to delete machine');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const fetchMachines = useCallback(async () => {
     try {
@@ -341,13 +367,22 @@ export default function MachinesScreen() {
                 {/* Card Actions Footer */}
                 <View style={[styles.cardActions, { borderTopColor: theme.colors.hairline }]}>
                   <View style={styles.actionsLeft}>
-                    {isManagerOrAdmin && (
+                    {canEdit && (
                       <Button
                         label="Edit"
                         onPress={() => openEdit(m)}
                         size="sm"
                         variant="ghost"
                         icon={<Edit2 size={12} color={theme.colors.body} />}
+                      />
+                    )}
+                    {canDelete && (
+                      <Button
+                        label="Delete"
+                        onPress={() => handleDeleteMachine(m)}
+                        size="sm"
+                        variant="danger"
+                        icon={<Trash2 size={12} color={theme.colors.error} />}
                       />
                     )}
                     <Button
@@ -377,6 +412,16 @@ export default function MachinesScreen() {
           visible={detailModalVisible}
           onClose={() => setDetailModalVisible(false)}
           machineData={selectedMachine}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          onEdit={() => {
+            setDetailModalVisible(false);
+            openEdit(selectedMachine);
+          }}
+          onDelete={() => {
+            setDetailModalVisible(false);
+            handleDeleteMachine(selectedMachine);
+          }}
         />
       )}
 

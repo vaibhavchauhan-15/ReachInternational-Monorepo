@@ -13,7 +13,14 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { Button, Input, Card, useTheme } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { validateAadhaarNumber, validateLicenseNumber, formatAadhaar } from '@reachinternational/utils';
+import {
+  validateAadhaarNumber,
+  validateLicenseNumber,
+  formatAadhaar,
+  INDIAN_STATES,
+  getStateById,
+  getStateByName,
+} from '@reachinternational/utils';
 import {
   User,
   Mail,
@@ -52,6 +59,9 @@ export default function SignupScreen() {
   const [city, setCity] = useState('');
   const [district, setDistrict] = useState('');
   const [stateVal, setStateVal] = useState('');
+  const [stateId, setStateId] = useState<number | null>(null);
+  const [stateModalVisible, setStateModalVisible] = useState(false);
+  const [stateSearch, setStateSearch] = useState('');
   const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
   const [password, setPassword] = useState('');
@@ -84,14 +94,14 @@ export default function SignupScreen() {
       return;
     }
     if (!city.trim() || city.trim().length < 2) {
-      setErrorMessage('City is required.');
+      setErrorMessage('City/Town/Village is required.');
       return;
     }
     if (!district.trim() || district.trim().length < 2) {
       setErrorMessage('District is required.');
       return;
     }
-    if (!stateVal.trim() || stateVal.trim().length < 2) {
+    if (!stateVal.trim() && !stateId) {
       setErrorMessage('State is required.');
       return;
     }
@@ -140,6 +150,8 @@ export default function SignupScreen() {
             city: city.trim(),
             district: district.trim(),
             state: stateVal.trim(),
+            state_id: stateId,
+            location: `${city.trim()}, ${district.trim()}, ${stateVal.trim()}`,
             aadhaar_number: cleanAadhaar,
             license_number: formattedLic,
           },
@@ -283,7 +295,7 @@ export default function SignupScreen() {
           <View style={styles.rowInputs}>
             <View style={{ flex: 1 }}>
               <Input
-                label="City *"
+                label="City/Town/Village *"
                 placeholder="Pune"
                 value={city}
                 onChangeText={setCity}
@@ -301,13 +313,34 @@ export default function SignupScreen() {
             </View>
           </View>
 
-          <Input
-            label="State *"
-            placeholder="Maharashtra"
-            value={stateVal}
-            onChangeText={setStateVal}
-            leftIcon={<MapPin size={16} color={theme.colors.mute} />}
-          />
+          {/* State Selector Trigger */}
+          <View style={styles.inputGroup}>
+            <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>State *</Text>
+            <TouchableOpacity
+              onPress={() => setStateModalVisible(true)}
+              activeOpacity={0.8}
+              style={[
+                styles.selectTrigger,
+                { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
+              ]}
+            >
+              <View style={styles.roleSelectedLeft}>
+                <MapPin size={16} color={theme.colors.mute} />
+                <Text
+                  style={[
+                    styles.roleSelectTitle,
+                    {
+                      color: stateVal ? theme.colors.ink : theme.colors.mute,
+                      fontWeight: stateVal ? '600' : '400',
+                    },
+                  ]}
+                >
+                  {stateVal || 'Select state or UT...'}
+                </Text>
+              </View>
+              <ChevronDown size={16} color={theme.colors.mute} />
+            </TouchableOpacity>
+          </View>
 
           <Input
             label="Aadhaar Card Number *"
@@ -406,6 +439,64 @@ export default function SignupScreen() {
                       </Text>
                       <Text style={[styles.roleItemDesc, { color: theme.colors.mute }]}>{r.desc}</Text>
                     </View>
+                    {isSelected && <Check size={18} color={theme.colors.link} />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* State Picker Bottom Sheet Modal */}
+      <Modal visible={stateModalVisible} animationType="slide" transparent onRequestClose={() => setStateModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
+              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select State / UT</Text>
+              <TouchableOpacity onPress={() => setStateModalVisible(false)} style={styles.modalCloseBtn}>
+                <X size={18} color={theme.colors.ink} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ paddingHorizontal: spacingNumeric.md, paddingVertical: spacingNumeric.xs }}>
+              <Input
+                placeholder="Search state..."
+                value={stateSearch}
+                onChangeText={setStateSearch}
+                leftIcon={<MapPin size={15} color={theme.colors.mute} />}
+              />
+            </View>
+
+            <ScrollView style={styles.roleListScroll} showsVerticalScrollIndicator={false}>
+              {INDIAN_STATES.filter((s) => s.name.toLowerCase().includes(stateSearch.toLowerCase().trim())).map((s) => {
+                const isSelected = stateId === s.id || stateVal === s.name;
+                return (
+                  <TouchableOpacity
+                    key={s.id}
+                    onPress={() => {
+                      setStateId(s.id);
+                      setStateVal(s.name);
+                      setStateModalVisible(false);
+                      setStateSearch('');
+                    }}
+                    style={[
+                      styles.roleItemRow,
+                      { borderBottomColor: theme.colors.hairline },
+                      isSelected && { backgroundColor: theme.colors.link + '12' },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.roleItemTitle,
+                        {
+                          color: isSelected ? theme.colors.link : theme.colors.ink,
+                          fontWeight: isSelected ? '700' : '500',
+                        },
+                      ]}
+                    >
+                      {s.name}
+                    </Text>
                     {isSelected && <Check size={18} color={theme.colors.link} />}
                   </TouchableOpacity>
                 );

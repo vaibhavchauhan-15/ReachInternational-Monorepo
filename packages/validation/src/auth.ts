@@ -197,6 +197,7 @@ export const SignupSchema = z.object({
   city: z.string().trim().min(2, "City is required").max(100, "City name cannot exceed 100 characters"),
   district: z.string().trim().min(2, "District is required").max(100, "District name cannot exceed 100 characters"),
   state: z.string().trim().min(2, "State is required").max(100, "State name cannot exceed 100 characters"),
+  state_id: z.number().int().positive().optional().nullable(),
   aadhaar_number: AadhaarRequiredFieldSchema,
   license_number: LicenseFieldSchema,
 });
@@ -210,6 +211,7 @@ export const CreateUserSchema = z.object({
   city: z.string().trim().min(2, "City is required").max(100, "City name cannot exceed 100 characters"),
   district: z.string().trim().min(2, "District is required").max(100, "District name cannot exceed 100 characters"),
   state: z.string().trim().min(2, "State is required").max(100, "State name cannot exceed 100 characters"),
+  state_id: z.number().int().positive().optional().nullable(),
   aadhaar_number: AadhaarFieldSchema,
   license_number: LicenseFieldSchema,
 });
@@ -221,6 +223,7 @@ export const UpdateUserSchema = z.object({
   city: z.string().trim().min(2, "City is required").max(100, "City name cannot exceed 100 characters"),
   district: z.string().trim().min(2, "District is required").max(100, "District name cannot exceed 100 characters"),
   state: z.string().trim().min(2, "State is required").max(100, "State name cannot exceed 100 characters"),
+  state_id: z.number().int().positive().optional().nullable(),
   aadhaar_number: AadhaarFieldSchema,
   license_number: LicenseFieldSchema,
 });

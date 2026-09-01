@@ -1,3 +1,97 @@
+- **Feature: Fix /machines/[id]/edit 404 & Full Machine Management for Manager, Admin, Superadmin (`034_allow_managers_and_admins_manage_machines.sql`, `matrix.ts`, `actions/machines.ts`, `machines/[id]/edit/page.tsx`, `machine-edit-client.tsx`, `machine-client-view.tsx`, `MachineListClient.tsx`, `mobile/machines.tsx`, `MachineDetailModal.tsx`) (2026-09-01)**:
+  - **1. Route Creation & 404 Resolution (`apps/web/app/(app)/machines/[id]/edit/`)**:
+    - Created dedicated Next.js App Router route `apps/web/app/(app)/machines/[id]/edit/page.tsx`, `loading.tsx`, and `machine-edit-client.tsx`, resolving the 404 Not Found error.
+    - Implemented full-page 3-section structured form (Identification & Specifications, Meter Readings & Personnel Assignment, Status & Health Tracking) with Geist design tokens, real-time validation, supervisor/operator `<UserSelect>`, cancel/back navigation, delete confirmation dialog, and save mutation.
+  - **2. Database & RLS Security Hardening (`034_allow_managers_and_admins_manage_machines.sql`)**:
+    - Updated `machines_delete_authorized` on `public.machines` to include `manager`, `service_manager`, `admin`, `super_admin`, and `company_admin`.
+    - Maintained and synchronized `machines_insert_authorized` and `machines_update_authorized`.
+    - Applied live to Supabase PostgreSQL project `dhbbgfzbyatzvqafnsqp` and verified active policies.
+  - **3. Permissions Package (`packages/permissions/src/matrix.ts`)**:
+    - Added `"machine.delete"` to `admin` and `manager`.
+    - Added `"machine.create"`, `"machine.edit"`, `"machine.delete"`, `"machine.assign"` to `service_manager`.
+  - **4. Backend Server Actions (`apps/web/app/actions/machines.ts`)**:
+    - Updated `deleteMachine` to authorize `"admin", "super_admin", "manager", "service_manager"`.
+  - **5. Web App Frontend Synchronization (`machine-client-view.tsx`, `page.tsx`, `MachineListClient.tsx`)**:
+    - Updated `machines/[id]/page.tsx` and `machine-client-view.tsx` to enable Edit Machine and Delete Machine action buttons for `manager`, `service_manager`, `admin`, and `super_admin`.
+    - Updated `MachineListClient.tsx` to authorize `manager` and `service_manager` for row actions, mobile cards, and bulk actions.
+  - **6. Mobile App Synchronization (`apps/mobile/app/(app)/machines.tsx`, `MachineDetailModal.tsx`, `AddMachineModal.tsx`)**:
+    - Updated `isManagerOrAdmin`, `canEdit`, and `canDelete` to include `'manager'`, `'service_manager'`, `'admin'`, `'super_admin'`.
+    - Added native `handleDeleteMachine` with confirmation alert dialog on mobile touch cards and inside `MachineDetailModal.tsx`.
+    - Included `manager` in staff dropdown queries in `AddMachineModal.tsx`.
+  - **7. Verification**:
+    - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)**.
+    - `pnpm --filter @reachinternational/web build` compiled all **35/35 Next.js App Router routes cleanly with code 0** (including dynamic `/machines/[id]/edit`).
+- **Page Feedback: /signup — State Dropdown Selection via `public.states(id)`, Relational `state_id` User Mapping & "City/Town/Village" Label (`states.ts`, `SignupPage`, `auth.ts`, `validation`, `UserEditModal.tsx`, `apps/mobile/app/(auth)/signup.tsx`) (2026-09-01)**:
+  - **1. Shared Utilities & Validation (`packages/*`)**:
+    - Created `packages/utils/src/states.ts` exporting canonical `INDIAN_STATES` with all 36 Indian States & UTs (IDs 1–38 matching `public.states`), `getStateById()`, and `getStateByName()`.
+    - Exported `states.ts` from canonical utils barrel (`packages/utils/src/index.ts`).
+    - Added `state_id: z.number().int().positive().optional().nullable()` to `SignupSchema`, `CreateUserSchema`, and `UpdateUserSchema` in `packages/validation/src/auth.ts`.
+  - **2. Web Application (`apps/web/app/signup/page.tsx`)**:
+    - Changed input label from `"City"` to `"City/Town/Village"`.
+    - Replaced raw text State `<Input>` with `<SearchableSelect>` populated with `INDIAN_STATES` sorted alphabetically with fast search.
+    - Linked `state_id` and normalized state name in form state and included hidden form inputs.
+    - Updated `apps/web/app/actions/auth.ts` to extract `state_id` and `state`, resolve canonical names and IDs, and pass `state_id` into `supabase.auth.signUp()` user metadata so database trigger `handle_new_user()` populates `state_id` in `public.users`.
+    - Updated `UserEditModal.tsx` to use `<SearchableSelect>` with `INDIAN_STATES` for consistent state selection.
+  - **3. Mobile Application Synchronization (`apps/mobile/app/(auth)/signup.tsx`)**:
+    - Changed `"City *"` label to `"City/Town/Village *"`.
+    - Added State touch trigger and searchable Bottom Sheet Modal for selecting from all 36 Indian States & UTs with checkmark indicators.
+    - Passed `state_id` and `state` in auth signup options.
+  - **4. Quality Verification**:
+    - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 1m9s.
+    - `pnpm --filter @reachinternational/web build` compiled all **35/35 routes cleanly with code 0** in 11.8s.
+- **Page Feedback: /users — User State Normalization, Relational states(id) Linkage via state_id & State Filter Standardization (`035_normalize_user_states_and_add_state_id.sql`, `users-client.tsx`, `UserEditModal.tsx`, `database.ts`, `users.ts`, `auth.ts`, `apps/mobile/app/(app)/users.tsx`) (2026-09-01)**:
+  - **1. Database-Level State Normalization & Relational Key**:
+    - Ensured `public.states` table exists with primary key `id smallint` and B-tree index `idx_states_name`.
+    - Added `state_id SMALLINT REFERENCES public.states(id) ON DELETE SET NULL` to `public.users` with index `idx_users_state_id`.
+    - Normalized all 65 user records in the live database without typos (`Gujarat`, `Uttar Pradesh`, `Assam`, `Bihar`, `Maharashtra`, `Madhya Pradesh`, `West Bengal`, `Delhi`, `Rajasthan`, `Dadra and Nagar Haveli and Daman and Diu`).
+    - Updated `handle_new_user()` trigger to resolve `state_id` automatically from `public.states`.
+  - **2. Frontend Filter Standardization (`/users`)**:
+    - Changed dropdown selector label from `"Region"` to `"State"`.
+    - Changed `ariaLabel` from `"Filter by region or state"` to `"Filter by state"`.
+    - Changed default option from `"All Regions"` to `"All States"`.
+    - Built alphabetical options from normalized state names and IDs.
+    - Updated active filter chip from `"Region: ..."` to `"State: ..."` with accessible `"Clear state filter"` button.
+    - Updated filtering engine to match on `u.state_id` and normalized `u.state`.
+  - **3. Monorepo Shared Types & DAL**:
+    - In `packages/types/src/database.ts`: Added `state_id?: number | null;` to `User`.
+    - In `apps/web/lib/queries/users.ts`: Added `state_id` to `USER_SELECT_COLUMNS`.
+    - In `apps/web/app/actions/users.ts`: Added `resolveStateInfo` helper and included `state_id` across `getAllUsers`, `getPendingUsers`, `createUser`, `editUser`.
+    - In `apps/mobile/`: Synchronized `UserRecord` and `users.tsx` with `state_id`.
+  - **4. Verification**:
+    - Live Supabase SQL query verified 100% normalized state distribution across all 65 users (0 nulls, 0 typos).
+    - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 54.8s.
+    - `pnpm --filter @reachinternational/web build` compiled all **35/35 routes cleanly with code 0**.
+    - `node supabase/verify_seed.mjs` passed with code 0.
+- **Page Feedback: /users — Remove Redundant Eye Icon from Mobile User Cards (`MobileUserCard.tsx`, `apps/mobile/app/(app)/users.tsx`) (2026-09-01)**:
+  - **1. Mobile User Card Header Streamline (`MobileUserCard.tsx`)**: Removed the redundant eye icon button (`<AnimatedEye size={15} />`) from the mobile user card header on `/users` on viewport 412×915, keeping the clean status indicator badge and right arrow chevron (`AnimatedChevronRight`).
+  - **2. Cross-Platform Mobile Parity (`apps/mobile/app/(app)/users.tsx`)**: Synchronized mobile app to replace the `Eye` icon button with a right arrow chevron (`<ChevronRight size={16} />`) for 100% web-to-mobile consistency.
+  - **3. Verification**: `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 33.47s.
+- **Feature: Universal Mobile Swipe Down to Refresh (Pull-to-Refresh) across all Pages, Subpages, Tabs & Modals (`PullToRefresh.tsx`, `index.ts`, `refresh.ts`, `layout.tsx`, `apps/mobile/app/(app)/profile.tsx`) (2026-09-01)**:
+  - **1. Touch Gesture Engine & Strict Accidental Refresh Prevention (`PullToRefresh.tsx`)**:
+    - Added **Strict Start-Time Scroll Validation (`canPullRef`)**: Pull-to-refresh can ONLY initiate if the touch began when the page was already at the absolute top (`scrollY <= 0.5`). Touching while scrolling down or in the middle of a page permanently disqualifies the gesture.
+    - Added **Upward Scroll & Drag Intent Lock**: Any upward drag (`deltaY < 0`) or horizontal swipe immediately deactivates pull-to-refresh, preventing accidental triggers during normal reading, scrolling up, or fast flick gestures.
+    - Added **Interactive Input Gating**: Automatically bypasses `<input>`, `<textarea>`, `<select>`, modal dialogs, and dropdown menus.
+    - Increased deliberate pull threshold to `75px` with a `12px` activation threshold to prevent micro-touch jitter.
+    - Implemented smooth logarithmic rubber-band physics dampening (`Math.min(115, Math.pow(effectiveDelta, 0.8) * 1.5)`).
+  - **2. Clean & Modern Vercel Geist UI/UX (`PullToRefresh.tsx`)**:
+    - Floating pill centered at top of viewport (`fixed top-0 left-0 right-0 z-[99999] pointer-events-none`).
+    - Ultra-clean SVG circular progress ring (0% to 100%) with Reach Sky Blue active stroke and subtle dark/light contrast.
+    - Micro-arrow with smooth 180° rotation on release threshold.
+    - High-precision spinner (`<RefreshCw className="animate-spin text-sky-500" />`) during active refresh.
+    - Completion checkmark (`<Check className="text-emerald-500" />`) with `"Updated"` status text before smooth spring retraction.
+    - Multi-stage haptic feedback via `navigator.vibrate` (12ms at threshold, 15ms on trigger, 8ms on completion).
+  - **3. Context & Custom Hook (`usePullToRefresh`, `PullToRefreshProvider`)**:
+    - Exported `usePullToRefresh` hook allowing optional custom handler registration for any page or tab component.
+  - **4. Global Coverage with Zero Missing Pages (`apps/web/app/layout.tsx`)**:
+    - Wrapped root `{children}` with `<PullToRefresh>`, guaranteeing 100% route coverage across all 35+ routes (dashboard, operations tabs, machines, clients, users, inventory, rentals, services, finance, hr, notifications, login, signup, etc.).
+  - **5. Server Actions & Cache Revalidation (`apps/web/app/actions/refresh.ts`)**:
+    - Enhanced `refreshPageDataAction` to support authenticated and public routes safely, purging all core operational cache tags (`dashboard`, `machines`, `services`, `complaints`, `notifications`, `users`, `hourLogs`, `assignments`, `categories`) and revalidating current paths.
+  - **6. Cross-Platform Mobile Parity (`apps/mobile/app/(app)/profile.tsx`)**:
+    - Synchronized `apps/mobile` with `RefreshControl` in `profile.tsx`, ensuring 100% of mobile app screens have native swipe down to refresh support.
+  - **7. Quality Verification**:
+    - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 1m10s.
+    - `pnpm --filter @reachinternational/web build` compiled all **35/35 Next.js App Router routes cleanly with code 0**.
+    - `pnpm --filter @reachinternational/mobile typecheck` passed with **0 errors**.
 - **Feature: Machine Log Sequencing & Overlap Prevention across Frontend, Backend & PostgreSQL Database (`033_machine_log_sequencing_and_overlap_prevention.sql`, `operators.ts`, `OperatorDashboard.tsx`, `MeterLogModal.tsx`, `date.ts`, `hourMeter.ts`, `database.ts`) (2026-08-31)**:
   - **1. Database-Level Zero Overlap & Concurrency Enforcement (PostgreSQL GiST & Advisory Locks)**:
     - Applied Migration `033_machine_log_sequencing_and_overlap_prevention.sql` with `btree_gist` extension.

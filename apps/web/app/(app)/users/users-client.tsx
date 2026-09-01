@@ -728,26 +728,32 @@ export function UsersPageClient({
     [router, showEditModal, toast]
   );
 
-  // Extract unique regions/states from usersList
+  // Extract unique normalized states from usersList
   const stateOptions = useMemo(() => {
-    const statesSet = new Set<string>();
+    const statesMap = new Map<string, { id: string; label: string }>();
+
     usersList.forEach((u) => {
       if (u.state && u.state.trim()) {
-        statesSet.add(u.state.trim());
-      } else if (u.location && u.location.trim()) {
-        statesSet.add(u.location.trim());
-      } else if (u.city && u.city.trim()) {
-        statesSet.add(u.city.trim());
+        const cleanState = u.state.trim();
+        const key = u.state_id ? String(u.state_id) : cleanState.toLowerCase();
+        if (!statesMap.has(key)) {
+          statesMap.set(key, {
+            id: key,
+            label: cleanState,
+          });
+        }
       }
     });
 
-    const sortedStates = Array.from(statesSet).sort((a, b) => a.localeCompare(b));
+    const sortedStates = Array.from(statesMap.values()).sort((a, b) =>
+      a.label.localeCompare(b.label)
+    );
 
     return [
-      { id: "all", label: "All Regions", dotColor: "" },
+      { id: "all", label: "All States", dotColor: "" },
       ...sortedStates.map((st) => ({
-        id: st.toLowerCase(),
-        label: st,
+        id: st.id,
+        label: st.label,
         dotColor: "bg-indigo-500",
       })),
     ];
@@ -806,10 +812,11 @@ export function UsersPageClient({
         return false;
       }
 
-      // 4. State / Region Filter
+      // 4. State Filter
       if (stateFilter !== "all") {
-        const userState = (u.state || u.location || u.city || "").toLowerCase();
-        if (userState !== stateFilter) {
+        const matchesStateId = u.state_id !== undefined && u.state_id !== null && String(u.state_id) === stateFilter;
+        const matchesStateName = (u.state || "").toLowerCase() === stateFilter.toLowerCase();
+        if (!matchesStateId && !matchesStateName) {
           return false;
         }
       }
@@ -1308,7 +1315,7 @@ export function UsersPageClient({
         }
       >
         <div className="flex flex-col gap-3 w-full">
-          {/* Responsive Custom Dropdown Filter Selectors for Role, Status, Region, KYC, Joined Date & Sort */}
+          {/* Responsive Custom Dropdown Filter Selectors for Role, Status, State, KYC, Joined Date & Sort */}
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-2.5 w-full">
             {/* 1. Role Selector */}
             <div className="w-full sm:w-56 min-w-0">
@@ -1334,14 +1341,14 @@ export function UsersPageClient({
               />
             </div>
 
-            {/* 3. State / Region Selector */}
+            {/* 3. State Selector */}
             <div className="w-full sm:w-48 min-w-0">
               <CustomFilterSelector
-                label="Region"
+                label="State"
                 value={stateFilter}
                 onChange={setStateFilter}
                 options={stateOptions}
-                ariaLabel="Filter by region or state"
+                ariaLabel="Filter by state"
                 align="left"
               />
             </div>
@@ -1430,12 +1437,12 @@ export function UsersPageClient({
               )}
               {stateFilter !== "all" && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60">
-                  <span>Region: {stateOptions.find((s) => s.id === stateFilter)?.label || stateFilter}</span>
+                  <span>State: {stateOptions.find((s) => s.id === stateFilter)?.label || stateFilter}</span>
                   <button
                     type="button"
                     onClick={() => setStateFilter("all")}
                     className="hover:text-rose-500 cursor-pointer p-0.5 rounded-full"
-                    aria-label="Clear region filter"
+                    aria-label="Clear state filter"
                   >
                     <X className="h-3 w-3" />
                   </button>

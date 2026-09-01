@@ -21,7 +21,19 @@ import { Modal, Input, SearchableSelect, Button } from "@/components/ui";
 import type { SelectOption } from "@/components/ui/SearchableSelect";
 import type { User, UserRole } from "@/lib/types/database";
 import type { Branch } from "@/lib/queries/branches";
-import { validateAadhaarNumber, validateLicenseNumber, formatAadhaar } from "@reachinternational/utils";
+import {
+  validateAadhaarNumber,
+  validateLicenseNumber,
+  formatAadhaar,
+  INDIAN_STATES,
+  getStateById,
+  getStateByName,
+} from "@reachinternational/utils";
+
+const stateSelectOptions: SelectOption[] = INDIAN_STATES.map((s) => ({
+  value: String(s.id),
+  label: s.name,
+}));
 
 const allRoleSelectOptions: SelectOption[] = [
   {
@@ -102,13 +114,20 @@ export function UserEditModal({
   loading,
   onSubmit,
 }: UserEditModalProps) {
+  const matchedState = user.state_id
+    ? getStateById(user.state_id)
+    : user.state
+    ? getStateByName(user.state)
+    : undefined;
+
   const [editForm, setEditForm] = useState({
     full_name: user.full_name,
     phone: user.phone || "+91 ",
     role: user.role,
     city: user.city || "",
     district: user.district || "",
-    state: user.state || "",
+    state: matchedState ? matchedState.name : user.state || "",
+    state_id: matchedState ? String(matchedState.id) : user.state_id ? String(user.state_id) : "",
     aadhaar_number: user.aadhaar_number ? formatAadhaar(user.aadhaar_number) : "",
     license_number: user.license_number || "",
   });
@@ -122,7 +141,16 @@ export function UserEditModal({
       formattedVal = val.toUpperCase();
     }
 
-    setEditForm((prev) => ({ ...prev, [field]: formattedVal }));
+    if (field === "state_id") {
+      const st = getStateById(val);
+      setEditForm((prev) => ({
+        ...prev,
+        state_id: val,
+        state: st ? st.name : prev.state,
+      }));
+    } else {
+      setEditForm((prev) => ({ ...prev, [field]: formattedVal }));
+    }
 
     // Real-time check
     if (field === "aadhaar_number") {
@@ -136,10 +164,11 @@ export function UserEditModal({
       }
     }
 
-    if (errors[field]) {
+    if (errors[field] || (field === "state_id" && errors.state)) {
       setErrors((prev) => {
         const copy = { ...prev };
         delete copy[field];
+        if (field === "state_id") delete copy.state;
         return copy;
       });
     }
@@ -162,6 +191,10 @@ export function UserEditModal({
   const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const newErrors: Record<string, string> = {};
+
+    if (!editForm.state.trim() && !editForm.state_id) {
+      newErrors.state = "State is required.";
+    }
 
     if (editForm.aadhaar_number.trim()) {
       const aadhaarRes = validateAadhaarNumber(editForm.aadhaar_number);
@@ -203,6 +236,8 @@ export function UserEditModal({
         className="flex flex-col gap-5"
       >
         <input type="hidden" name="role" value={editForm.role} />
+        <input type="hidden" name="state" value={editForm.state} />
+        <input type="hidden" name="state_id" value={editForm.state_id} />
 
         {/* Section 1: User Identity */}
         <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3.5">
@@ -245,7 +280,7 @@ export function UserEditModal({
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Input
-              label="City *"
+              label="City/Town/Village *"
               name="city"
               icon={<AnimatedMapPin size={16} className="text-emerald-500" />}
               value={editForm.city}
@@ -262,15 +297,33 @@ export function UserEditModal({
               placeholder="e.g. Pune"
               required
             />
-            <Input
-              label="State *"
-              name="state"
-              icon={<AnimatedMapPin size={16} className="text-emerald-500" />}
-              value={editForm.state}
-              onChange={(e) => setEditForm((prev) => ({ ...prev, state: e.target.value }))}
-              placeholder="e.g. Maharashtra"
-              required
-            />
+            <div className="flex flex-col gap-1 w-full">
+              <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none">
+                State <span className="text-rose-500 font-semibold">*</span>
+              </label>
+              <SearchableSelect
+                options={stateSelectOptions}
+                value={editForm.state_id}
+                onChange={(val, opt) => {
+                  setEditForm((prev) => ({
+                    ...prev,
+                    state_id: val,
+                    state: opt?.label || prev.state,
+                  }));
+                  if (errors.state) {
+                    setErrors((prev) => {
+                      const copy = { ...prev };
+                      delete copy.state;
+                      return copy;
+                    });
+                  }
+                }}
+                placeholder="Select state..."
+                clearable={false}
+                error={errors.state}
+                className="w-full text-xs sm:text-[13px]"
+              />
+            </div>
           </div>
         </div>
 

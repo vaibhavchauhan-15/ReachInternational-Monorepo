@@ -42,6 +42,42 @@ function isValidUuid(id?: string | null): boolean {
   return UUID_REGEX.test(id.trim());
 }
 
+async function resolveStateInfo(
+  supabase: any,
+  rawState?: string,
+  rawStateId?: number | string | null
+): Promise<{ state_id: number | null; state: string }> {
+  const stateIdNum = rawStateId ? Number(rawStateId) : null;
+  const stateName = (rawState || "").trim();
+
+  if (stateIdNum && Number.isFinite(stateIdNum) && stateIdNum > 0) {
+    const { data } = await supabase.from("states").select("id, name").eq("id", stateIdNum).maybeSingle();
+    if (data) {
+      return { state_id: data.id, state: data.name };
+    }
+  }
+
+  if (stateName) {
+    const { data } = await supabase.from("states").select("id, name").ilike("name", stateName).limit(1).maybeSingle();
+    if (data) {
+      return { state_id: data.id, state: data.name };
+    }
+    const lower = stateName.toLowerCase();
+    if (["gujarat", "gujrat", "gujrati", "gujarati"].includes(lower)) return { state_id: 24, state: "Gujarat" };
+    if (["up", "uttar pradesh", "utter pradesh", "uttar pardesh"].includes(lower)) return { state_id: 9, state: "Uttar Pradesh" };
+    if (["assam", "aasam"].includes(lower)) return { state_id: 18, state: "Assam" };
+    if (["madhya pradesh", "madhady pradesh", "mp"].includes(lower)) return { state_id: 23, state: "Madhya Pradesh" };
+    if (["bihar"].includes(lower)) return { state_id: 10, state: "Bihar" };
+    if (["maharashtra"].includes(lower)) return { state_id: 27, state: "Maharashtra" };
+    if (["west bengal"].includes(lower)) return { state_id: 19, state: "West Bengal" };
+    if (["delhi", "new delhi"].includes(lower)) return { state_id: 7, state: "Delhi" };
+    if (["rajasthan"].includes(lower)) return { state_id: 8, state: "Rajasthan" };
+    if (lower.includes("dad") || lower.includes("haveli")) return { state_id: 38, state: "Dadra and Nagar Haveli and Daman and Diu" };
+  }
+
+  return { state_id: stateIdNum, state: stateName };
+}
+
 // Get all users (admin only)
 export async function getAllUsers(): Promise<User[]> {
   await requireRole("admin", "super_admin", "service_manager", "hr_manager");
@@ -49,7 +85,7 @@ export async function getAllUsers(): Promise<User[]> {
   
   const { data, error } = await supabase
     .from("users")
-    .select("id, full_name, email, phone, role, status, city, district, state, aadhaar_number, license_number, created_at")
+    .select("id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, created_at")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -67,7 +103,7 @@ export async function getPendingUsers(): Promise<User[]> {
   
   const { data, error } = await supabase
     .from("users")
-    .select("id, full_name, email, phone, role, status, city, district, state, aadhaar_number, license_number, created_at")
+    .select("id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, created_at")
     .eq("status", "pending")
     .order("created_at", { ascending: true });
 
@@ -373,6 +409,9 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
       }
     }
 
+    // Resolve state_id and normalized state name from states table
+    const stateInfo = await resolveStateInfo(adminSupabase, state, formData.get("state_id") as string);
+
     // Create user with admin client (default status: active, no admin approval required)
     const { data, error } = await adminSupabase.auth.admin.createUser({
       email,
@@ -384,8 +423,9 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
         phone: phone || null,
         city,
         district,
-        state,
-        location: `${city}, ${district}, ${state}`,
+        state: stateInfo.state,
+        state_id: stateInfo.state_id,
+        location: `${city}, ${district}, ${stateInfo.state}`,
         aadhaar_number: cleanAadhaar,
         license_number: formattedLicense,
         status: "active",
@@ -405,7 +445,7 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
       return { error: "Failed to create user. Please try again." };
     }
 
-    // Update status to active and sync role, phone, city, district, state, aadhaar_number, license_number
+    // Update status to active and sync role, phone, city, district, state, state_id, aadhaar_number, license_number
     const { error: updateError } = await adminSupabase
       .from("users")
       .update({
@@ -414,7 +454,8 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
         phone: phone || null,
         city,
         district,
-        state,
+        state: stateInfo.state,
+        state_id: stateInfo.state_id,
         aadhaar_number: cleanAadhaar,
         license_number: formattedLicense,
       })
@@ -870,6 +911,9 @@ export async function editUser(userId: string, formData: FormData): Promise<User
       }
     }
     
+    // Resolve state_id and normalized state name from states table
+    const stateInfo = await resolveStateInfo(adminSupabase, state, formData.get("state_id") as string);
+    
     // Update auth user metadata
     const { error: authError } = await adminSupabase.auth.admin.updateUserById(userId, {
       user_metadata: { 
@@ -877,8 +921,9 @@ export async function editUser(userId: string, formData: FormData): Promise<User
         phone: phone || null,
         city,
         district,
-        state,
-        location: `${city}, ${district}, ${state}`,
+        state: stateInfo.state,
+        state_id: stateInfo.state_id,
+        location: `${city}, ${district}, ${stateInfo.state}`,
         aadhaar_number: cleanAadhaar,
         license_number: formattedLicense,
         ...(role ? { role } : {}),
@@ -895,7 +940,8 @@ export async function editUser(userId: string, formData: FormData): Promise<User
       phone: phone || null,
       city,
       district,
-      state,
+      state: stateInfo.state,
+      state_id: stateInfo.state_id,
       aadhaar_number: cleanAadhaar,
       license_number: formattedLicense,
     };

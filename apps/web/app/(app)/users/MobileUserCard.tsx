@@ -7,7 +7,6 @@ import {
   AnimatedPhone,
   AnimatedMapPin,
   AnimatedChevronRight,
-  AnimatedEye,
 } from "@/components/ui/animated-icons";
 import type { User } from "@/lib/types/database";
 
@@ -261,18 +260,6 @@ export const MobileUserCard = memo(function MobileUserCard({
 
         <div className="flex items-center gap-1.5 shrink-0">
           {getStatusIndicator(user.status)}
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenSheet(user);
-            }}
-            aria-label={`View details for ${user.full_name}`}
-            className="p-1 rounded-md text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-all cursor-pointer"
-            title="View user details"
-          >
-            <AnimatedEye size={15} />
-          </button>
           <AnimatedChevronRight
             size={14}
             className="text-[var(--color-mute)] group-hover:text-[var(--color-ink)] group-hover:translate-x-0.5 transition-all"

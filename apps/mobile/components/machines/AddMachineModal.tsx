@@ -81,7 +81,7 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
       const { data: sups } = await supabase
         .from('users')
         .select('id, full_name')
-        .in('role', ['supervisor', 'service_manager', 'admin', 'super_admin'])
+        .in('role', ['supervisor', 'manager', 'service_manager', 'admin', 'super_admin'])
         .eq('status', 'active');
       if (sups) setSupervisors(sups);
 

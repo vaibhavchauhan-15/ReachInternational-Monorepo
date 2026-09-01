@@ -32,7 +32,7 @@ import {
   Square,
   Mail,
   Clock,
-  Eye,
+  ChevronRight,
 } from 'lucide-react-native';
 
 function formatRoleName(role: string): string {
@@ -87,7 +87,7 @@ export default function UsersScreen() {
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('id, full_name, email, phone, role, status, city, district, state, created_at')
+        .select('id, full_name, email, phone, role, status, city, district, state, state_id, created_at')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -590,18 +590,7 @@ export default function UsersScreen() {
 
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Badge status={u.status === 'active' ? 'active' : 'inactive'} customLabel={u.status.toUpperCase()} />
-                      <TouchableOpacity
-                        onPress={() => openUserDetail(u)}
-                        style={{
-                          padding: 4,
-                          borderRadius: 6,
-                          backgroundColor: theme.colors.hairlineSoft,
-                        }}
-                        activeOpacity={0.7}
-                        accessibilityLabel={`View details for ${u.full_name}`}
-                      >
-                        <Eye size={14} color={theme.colors.mute} />
-                      </TouchableOpacity>
+                      <ChevronRight size={16} color={theme.colors.mute} />
                     </View>
                   </View>
 

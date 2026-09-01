@@ -40,7 +40,7 @@ export const metadata: Metadata = {
   manifest: "/site.webmanifest",
 };
 
-import { TooltipProvider, ToastProvider } from "@/components/ui";
+import { TooltipProvider, ToastProvider, PullToRefresh } from "@/components/ui";
 
 export default function RootLayout({
   children,
@@ -74,7 +74,9 @@ export default function RootLayout({
         <ThemeProvider>
           <ToastProvider>
             <TooltipProvider delayDuration={200}>
-              {children}
+              <PullToRefresh>
+                {children}
+              </PullToRefresh>
               <AgentationWrapper />
               <CookieConsent />
             </TooltipProvider>

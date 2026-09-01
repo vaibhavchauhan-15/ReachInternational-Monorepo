@@ -8,6 +8,10 @@ export interface MachineDetailModalProps {
   visible: boolean;
   onClose: () => void;
   machineId?: string;
+  onEdit?: () => void;
+  onDelete?: () => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
   machineData?: {
     id: string;
     machine_id: string;
@@ -28,6 +32,10 @@ export interface MachineDetailModalProps {
 export const MachineDetailModal: React.FC<MachineDetailModalProps> = ({
   visible,
   onClose,
+  onEdit,
+  onDelete,
+  canEdit,
+  canDelete,
   machineData = {
     id: 'mch-001',
     machine_id: 'RI-MC-0001',
@@ -139,6 +147,14 @@ export const MachineDetailModal: React.FC<MachineDetailModalProps> = ({
           {/* Footer Action */}
           <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
             <Button label="Close" onPress={onClose} variant="outline" size="md" />
+            <View style={styles.footerRight}>
+              {canDelete && onDelete && (
+                <Button label="Delete" onPress={onDelete} variant="danger" size="md" />
+              )}
+              {canEdit && onEdit && (
+                <Button label="Edit Machine" onPress={onEdit} variant="primary" size="md" />
+              )}
+            </View>
           </View>
         </View>
       </View>
@@ -236,5 +252,14 @@ const styles = StyleSheet.create({
   footer: {
     padding: spacingNumeric.lg,
     borderTopWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacingNumeric.sm,
+  },
+  footerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingNumeric.sm,
   },
 });

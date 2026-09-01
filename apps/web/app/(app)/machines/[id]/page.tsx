@@ -42,7 +42,13 @@ async function MachineDetailContent({ id }: { id: string }) {
     );
   }
 
-  const isAdmin = user.role === "super_admin" || user.role === "admin";
+  const canManage =
+    user.role === "super_admin" ||
+    user.role === "admin" ||
+    user.role === "manager" ||
+    user.role === "service_manager";
+  const canEdit = canManage || user.role === "supervisor";
+  const canDelete = canManage;
   const isAssignedEngineer = user.role === "engineer" && machine.engineer_id === user.id;
 
   return (
@@ -53,7 +59,9 @@ async function MachineDetailContent({ id }: { id: string }) {
       hourMeterLogs={hourMeterLogs}
       partsUsedHistory={partsUsedHistory}
       activeRental={activeRental}
-      isAdmin={isAdmin}
+      isAdmin={canManage}
+      canEdit={canEdit}
+      canDelete={canDelete}
       isAssignedEngineer={isAssignedEngineer}
       currentUserId={user.id}
     />

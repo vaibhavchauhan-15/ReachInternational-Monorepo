@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { Card, Badge, Button, useTheme, MobileHeader } from '../../components/ui';
@@ -10,11 +10,24 @@ export default function ProfileScreen() {
   const { user, role, signOut } = useAuth();
   const { theme, isDark, setMode } = useTheme();
   const router = useRouter();
+  const [refreshing, setRefreshing] = useState(false);
 
   const handleLogout = async () => {
     await signOut();
     router.replace('/(auth)/login');
   };
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      // Simulate profile sync duration
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
 
   const metadata = user?.user_metadata || {};
   const fullName = metadata.full_name || (user?.email ? user.email.split('@')[0] : 'User');
@@ -29,7 +42,11 @@ export default function ProfileScreen() {
         subtitle="Account credentials, field operational scope & system preferences"
       />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
+      >
         {/* User Identity Card */}
         <Card variant="elevated" style={styles.card}>
           <View style={styles.avatarRow}>

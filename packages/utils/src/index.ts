@@ -10,5 +10,6 @@ export * from './object';
 export * from './clipboard';
 export * from './ssti';
 export * from './sanitize';
+export * from './states';
 
 export const UTILS_PACKAGE = "@reachinternational/utils";

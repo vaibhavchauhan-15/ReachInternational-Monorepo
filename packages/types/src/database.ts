@@ -90,6 +90,7 @@ export interface User {
   city?: string | null;
   district?: string | null;
   state?: string | null;
+  state_id?: number | null;
   aadhaar_number?: string | null;
   license_number?: string | null;
   email: string;

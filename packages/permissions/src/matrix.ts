@@ -7,7 +7,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   super_admin: ["*"],
 
   admin: [
-    "machine.view", "machine.create", "machine.edit", "machine.assign",
+    "machine.view", "machine.create", "machine.edit", "machine.delete", "machine.assign",
     "complaint.view", "complaint.create", "complaint.assign", "complaint.update", "complaint.close",
     "service.view", "service.plan", "service.create", "service.assign", "service.update", "service.close",
     "fsr.view", "fsr.create", "fsr.update", "fsr.review", "fsr.approve",
@@ -23,7 +23,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   ],
 
   service_manager: [
-    "machine.view", "machine.edit",
+    "machine.view", "machine.create", "machine.edit", "machine.delete", "machine.assign",
     "complaint.view", "complaint.create", "complaint.assign", "complaint.update", "complaint.close", "complaint.escalate", "complaint.update_status",
     "service.view", "service.plan", "service.create", "service.assign", "service.update", "service.close", "service.cancel", "service.reschedule", "service.complete", "service.approve",
     "fsr.view", "fsr.review", "fsr.approve",
@@ -126,7 +126,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
   ],
 
   manager: [
-    "machine.view", "machine.create", "machine.edit", "machine.assign",
+    "machine.view", "machine.create", "machine.edit", "machine.delete", "machine.assign",
     "complaint.view", "complaint.create", "complaint.assign", "complaint.update", "complaint.close",
     "service.view", "service.plan", "service.create", "service.assign", "service.update", "service.close",
     "fsr.view", "fsr.create", "fsr.update", "fsr.review", "fsr.approve",
