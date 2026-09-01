@@ -173,7 +173,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
   ];
 
   const modalTitle = isSupervisor
-    ? `Update Status & Assignments (${machine?.machine_id || ""})`
+    ? `Update Status (${machine?.machine_id || ""})`
     : isEdit
     ? `Edit Machine (${machine?.machine_id})`
     : "Register New Machine";

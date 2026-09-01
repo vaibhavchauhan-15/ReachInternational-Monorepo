@@ -1,10 +1,14 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: **Production Ready — Machine Modal Header Cleanup & "Locked" Badge Removal Completed**
+- **Phase**: **Production Ready — Shortened Supervisor Modal Title Completed**
 - **Release Candidate**: `v2026.09.01` (Branch: `main`)
 - **Overall Health**: Production Ready (0 TypeScript Errors across 9 packages, 35/35 Routes Compiled, 0 Runtime Errors, 0 Warnings, 0 P0/P1/P2 Issues)
 - **Last Memory Update**: 2026-09-01
+- [x] **Page Feedback: /machines?tab=inventory — Shortened Supervisor Modal Title (`MachineModal.tsx`, `MachineListClient.tsx`) (2026-09-01)**:
+  - **1. Shortened Modal Title**: Changed supervisor modal title in `MachineModal.tsx` to `"Update Status (${machine.machine_id})"`.
+  - **2. Row Action Menu**: Synchronized supervisor label in `MachineListClient.tsx` to `"Update Status"`.
+  - **3. Verification**: Verified with 0 TS errors across all 9 packages.
 - [x] **Page Feedback: /machines?tab=inventory — Machine Modal Header Cleanup & "Locked" Badge Removal (`MachineModal.tsx`, `AddMachineModal.tsx`) (2026-09-01)**:
   - **1. Removed Locked Badge**: Removed `"Locked (Manager Only)"` badge from Section 1 in `MachineModal.tsx` and cleaned `(Locked)` tags in mobile `AddMachineModal.tsx`.
   - **2. Standardized Section Header**: Renamed Section 1 heading from `"Machine Identification & Specifications"` to `"MACHINE INFO"`.

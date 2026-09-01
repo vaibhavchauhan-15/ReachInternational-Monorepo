@@ -1,3 +1,9 @@
+- **Page Feedback: /machines?tab=inventory — Shortened Supervisor Modal Title (`MachineModal.tsx`, `MachineListClient.tsx`) (2026-09-01)**:
+  - **1. Shortened Modal Title (Feedback #1)**:
+    - Updated modal dialog title for supervisors in `apps/web/components/machines/MachineModal.tsx` from `"Update Status & Assignments (${machine.machine_id})"` to `"Update Status (${machine.machine_id})"`.
+    - Synchronized supervisor action button in `apps/web/components/machines/MachineListClient.tsx` row action menu to `"Update Status"`.
+  - **2. Verification & Quality Gate**:
+    - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 40.4s.
 - **Page Feedback: /machines?tab=inventory — Machine Modal Header Cleanup & "Locked" Badge Removal (`MachineModal.tsx`, `AddMachineModal.tsx`) (2026-09-01)**:
   - **1. Removed Locked Badge (Feedback #1)**:
     - Removed `"Locked (Manager Only)"` badge from Section 1 in `apps/web/components/machines/MachineModal.tsx`.

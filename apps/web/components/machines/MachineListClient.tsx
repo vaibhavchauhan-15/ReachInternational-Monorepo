@@ -352,7 +352,7 @@ function RowActionsMenu({
                   </button>
                 )}
 
-                {/* 2. Supervisor: Update Status & Assignments */}
+                {/* 2. Supervisor: Update Status */}
                 {isSupervisor && !canEdit && (
                   <button
                     type="button"
@@ -363,7 +363,7 @@ function RowActionsMenu({
                     className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer"
                   >
                     <AnimatedEdit size={14} className="text-sky-500 shrink-0" />
-                    <span>Update Status & Assignments</span>
+                    <span>Update Status</span>
                   </button>
                 )}
 

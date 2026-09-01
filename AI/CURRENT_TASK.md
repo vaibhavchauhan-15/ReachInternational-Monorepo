@@ -1,6 +1,17 @@
 # Current Task Context
 
-## Completed Task (2026-09-01) — Page Feedback: /machines?tab=inventory — Machine Modal Header Cleanup & "Locked" Badge Removal (`MachineModal.tsx`, `AddMachineModal.tsx`)
+## Completed Task (2026-09-01) — Page Feedback: /machines?tab=inventory — Shortened Supervisor Modal Title (`MachineModal.tsx`, `MachineListClient.tsx`)
+
+**Goal**:
+1. **Shorten Modal Title for Supervisors (Feedback #1)**:
+   - In `apps/web/components/machines/MachineModal.tsx`, updated the dialog title for supervisors from `"Update Status & Assignments (${machine.machine_id})"` to concise `"Update Status (${machine.machine_id})"`.
+   - In `apps/web/components/machines/MachineListClient.tsx`, synchronized the row action menu label to `"Update Status"`.
+2. **Monorepo Quality Gate & Verification**:
+   - `pnpm turbo run typecheck --force` passed with **9/9 packages successful (0 errors)** in 40.4s.
+
+---
+
+## Previous Task (2026-09-01) — Page Feedback: /machines?tab=inventory — Machine Modal Header Cleanup & "Locked" Badge Removal (`MachineModal.tsx`, `AddMachineModal.tsx`)
 
 **Goal**:
 1. **Remove "Locked (Manager Only)" Badge (Feedback #1)**:

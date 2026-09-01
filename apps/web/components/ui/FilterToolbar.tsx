@@ -147,8 +147,8 @@ export function FilterToolbar({
               opacity: 1,
               height: "auto",
               transition: {
-                height: { duration: 0.28, ease: [0.16, 1, 0.3, 1] },
-                opacity: { duration: 0.22, ease: "easeOut", delay: 0.04 },
+                height: { duration: 0.26, ease: [0.16, 1, 0.3, 1] },
+                opacity: { duration: 0.2, ease: "easeOut", delay: 0.03 },
               },
             }}
             exit={{
@@ -156,24 +156,16 @@ export function FilterToolbar({
               height: 0,
               transition: {
                 height: { duration: 0.22, ease: [0.16, 1, 0.3, 1] },
-                opacity: { duration: 0.16, ease: "easeIn" },
+                opacity: { duration: 0.16, ease: "easeInOut" },
               },
             }}
             onAnimationStart={() => setIsAnimating(true)}
             onAnimationComplete={() => setIsAnimating(false)}
             style={{ willChange: isAnimating ? "height, opacity" : "auto" }}
-            className={isAnimating ? "overflow-hidden" : "overflow-visible"}
+            className={`w-full ${isAnimating || !isOpen ? "overflow-hidden" : "overflow-visible"}`}
           >
-            <div className="pt-3 mt-3 border-t border-[var(--color-hairline)] overflow-visible">
-              <motion.div
-                initial={{ y: -6, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -4, opacity: 0 }}
-                transition={{ duration: 0.2, ease: "easeOut" }}
-                className="overflow-visible"
-              >
-                {children}
-              </motion.div>
+            <div className="pt-3 mt-3 border-t border-[var(--color-hairline)]">
+              {children}
             </div>
           </motion.div>
         )}
