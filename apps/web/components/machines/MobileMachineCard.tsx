@@ -154,24 +154,105 @@ export function MobileMachineCard({
           </div>
         </div>
 
+        {/* Personnel Section */}
         <div className="pt-2 border-t border-[var(--color-hairline)] grid grid-cols-2 gap-2 text-[11px]">
           <div>
-            <span className="text-[var(--color-mute)] font-medium block">Supervisor:</span>
-            <span
-              className="font-semibold text-xs text-[var(--color-ink)] truncate block mt-0.5"
-              title={machine.current_supervisor?.full_name || "Unassigned"}
-            >
-              {machine.current_supervisor?.full_name || "Unassigned"}
-            </span>
+            <div className="flex items-center justify-between mb-0.5">
+              <span className="text-[var(--color-mute)] font-medium">Supervisor:</span>
+              {Array.isArray(machine.supervisors) && machine.supervisors.length > 3 && (
+                <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400">
+                  +{machine.supervisors.length - 3}
+                </span>
+              )}
+            </div>
+            {(() => {
+              const sups = Array.isArray(machine.supervisors) && machine.supervisors.length > 0
+                ? machine.supervisors.filter((s) => Boolean(s?.full_name))
+                : machine.current_supervisor?.full_name ? [machine.current_supervisor] : [];
+              
+              if (sups.length === 0) {
+                return <span className="text-xs text-[var(--color-mute)] italic">Unassigned</span>;
+              }
+
+              const count = sups.length;
+              const visible = sups.slice(0, 3);
+              const remaining = count > 3 ? count - 3 : 0;
+              const textSize =
+                count === 1
+                  ? "text-xs font-semibold"
+                  : count === 2
+                  ? "text-[11px] leading-tight font-semibold"
+                  : "text-[10px] leading-[1.25] font-semibold";
+
+              return (
+                <div className="flex flex-col gap-0.5 min-w-0" title={sups.map((s) => s.full_name).join(", ")}>
+                  {visible.map((s, idx) => {
+                    const isLast = idx === visible.length - 1;
+                    return (
+                      <div key={s.id || idx} className="flex items-center gap-1 min-w-0">
+                        <span className={`${textSize} text-[var(--color-ink)] truncate block`}>
+                          {s.full_name}
+                        </span>
+                        {isLast && remaining > 0 && (
+                          <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 shrink-0">
+                            +{remaining}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
           <div>
-            <span className="text-[var(--color-mute)] font-medium block">Operator:</span>
-            <span
-              className="font-semibold text-xs text-[var(--color-ink)] truncate block mt-0.5"
-              title={machine.current_operator?.full_name || "Unassigned"}
-            >
-              {machine.current_operator?.full_name || "Unassigned"}
-            </span>
+            <div className="flex items-center justify-between mb-0.5">
+              <span className="text-[var(--color-mute)] font-medium">Operator (24h):</span>
+              {Array.isArray(machine.operators) && machine.operators.length > 3 && (
+                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                  +{machine.operators.length - 3}
+                </span>
+              )}
+            </div>
+            {(() => {
+              const ops = Array.isArray(machine.operators) && machine.operators.length > 0
+                ? machine.operators.filter((o) => Boolean(o?.full_name))
+                : machine.current_operator?.full_name ? [machine.current_operator] : [];
+              
+              if (ops.length === 0) {
+                return <span className="text-xs text-[var(--color-mute)] italic">Unassigned</span>;
+              }
+
+              const count = ops.length;
+              const visible = ops.slice(0, 3);
+              const remaining = count > 3 ? count - 3 : 0;
+              const textSize =
+                count === 1
+                  ? "text-xs font-semibold"
+                  : count === 2
+                  ? "text-[11px] leading-tight font-semibold"
+                  : "text-[10px] leading-[1.25] font-semibold";
+
+              return (
+                <div className="flex flex-col gap-0.5 min-w-0" title={ops.map((o) => o.full_name).join(", ")}>
+                  {visible.map((o, idx) => {
+                    const isLast = idx === visible.length - 1;
+                    return (
+                      <div key={o.id || idx} className="flex items-center gap-1 min-w-0">
+                        <span className={`${textSize} text-[var(--color-ink)] truncate block`}>
+                          {o.full_name}
+                        </span>
+                        {isLast && remaining > 0 && (
+                          <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
+                            +{remaining}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>

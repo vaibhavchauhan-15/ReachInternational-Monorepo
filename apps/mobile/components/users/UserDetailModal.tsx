@@ -26,6 +26,7 @@ import {
   UserX,
   Copy,
   Check,
+  Clock,
 } from 'lucide-react-native';
 import { maskAadhaar, formatLicenseNumber } from '@reachinternational/utils';
 
@@ -36,6 +37,8 @@ export interface UserRecord {
   phone?: string;
   role: string;
   status: string;
+  shift_time?: string | null;
+  address?: string | null;
   city?: string;
   district?: string;
   state?: string;
@@ -219,11 +222,28 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
             <View style={[styles.sectionCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
               <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>ACCOUNT SPECIFICATIONS</Text>
 
+              {/* Shift Schedule */}
+              <View style={styles.infoRow}>
+                <Clock size={14} color={theme.colors.link} />
+                <Text style={[styles.infoLabel, { color: theme.colors.mute }]}>Shift Timing:</Text>
+                <Text style={[styles.infoValue, { color: theme.colors.ink }]}>{user.shift_time || 'Standard / Day Shift'}</Text>
+              </View>
+
               <View style={styles.infoRow}>
                 <Phone size={14} color={theme.colors.mute} />
                 <Text style={[styles.infoLabel, { color: theme.colors.mute }]}>Phone:</Text>
                 <Text style={[styles.infoValue, { color: theme.colors.ink }]}>{user.phone || '—'}</Text>
               </View>
+
+              {user.address && (
+                <View style={styles.infoRow}>
+                  <MapPin size={14} color={theme.colors.mute} />
+                  <Text style={[styles.infoLabel, { color: theme.colors.mute }]}>Street Address:</Text>
+                  <Text style={[styles.infoValue, { color: theme.colors.ink }]} numberOfLines={2}>
+                    {user.address}
+                  </Text>
+                </View>
+              )}
 
               <View style={styles.infoRow}>
                 <MapPin size={14} color={theme.colors.mute} />

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/dal";
-import { getAllUsersCached } from "@/lib/queries/users";
+import { getAllUsersCached, getPendingProfileChangeRequests } from "@/lib/queries/users";
 import { UsersPageClient } from "./users-client";
 import { UsersSkeleton } from "@/components/ui";
 
@@ -22,7 +22,8 @@ async function UsersPageContent() {
     currentUser.role === "admin" ||
     currentUser.role === "super_admin" ||
     currentUser.role === "service_manager" ||
-    currentUser.role === "hr_manager";
+    currentUser.role === "hr_manager" ||
+    currentUser.role === "manager";
   const isSuperAdmin = currentUser.role === "super_admin";
 
   if (!isAuthorized) {
@@ -34,13 +35,17 @@ async function UsersPageContent() {
     );
   }
 
-  const allUsers = await getAllUsersCached();
+  const [allUsers, profileChangeRequests] = await Promise.all([
+    getAllUsersCached(),
+    getPendingProfileChangeRequests(currentUser.role),
+  ]);
   const pendingUsers = allUsers.filter((u) => u.status === "pending");
 
   return (
     <UsersPageClient
       users={allUsers}
       pendingUsers={pendingUsers}
+      profileChangeRequests={profileChangeRequests}
       currentUser={currentUser}
       isSuperAdmin={isSuperAdmin}
     />

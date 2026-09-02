@@ -235,11 +235,23 @@ export function OperatorDashboard({
     [availableMachines, selectedMachineId, assignedMachine]
   );
 
-  // Helper to find associated client for a machine from recent logs or dbClients
+  // Helper to find associated client for a machine from direct machine relation, recent logs, or dbClients
   const findClientForMachine = useCallback(
     (mId: string, machineObj?: Machine | null) => {
       if (!mId) return dbClients.length > 0 ? dbClients[0] : null;
-      // 1. Look in recent logs for this specific machine
+
+      // 1. Check direct client object or client_id attached to machine object
+      if (machineObj) {
+        if ((machineObj as any).client) {
+          return (machineObj as any).client as CRMClient;
+        }
+        if ((machineObj as any).client_id) {
+          const matchedClient = dbClients.find((c) => c.id === (machineObj as any).client_id);
+          if (matchedClient) return matchedClient;
+        }
+      }
+
+      // 2. Look in recent logs for this specific machine
       const logForMachine = recentLogs.find((l) => l.machine_id === mId && (l.client_id || (l as any).client));
       if (logForMachine) {
         if (logForMachine.client_id) {
@@ -250,7 +262,8 @@ export function OperatorDashboard({
           return (logForMachine as any).client as CRMClient;
         }
       }
-      // 2. Look in any recent logs
+
+      // 3. Look in any recent logs
       const anyLogWithClient = recentLogs.find((l) => l.client_id || (l as any).client);
       if (anyLogWithClient) {
         if (anyLogWithClient.client_id) {
@@ -261,7 +274,8 @@ export function OperatorDashboard({
           return (anyLogWithClient as any).client as CRMClient;
         }
       }
-      // 3. Fallback to first client in DB
+
+      // 4. Fallback to first client in DB
       return dbClients.length > 0 ? dbClients[0] : null;
     },
     [recentLogs, dbClients]
@@ -1183,12 +1197,12 @@ export function OperatorDashboard({
                   </span>
                   {operatingStats.isValid ? (
                     operatingStats.isOvernight && (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20 inline-flex items-center gap-1.5 shadow-2xs font-mono">
+                      <span className="text-[10px] sm:text-[11px] font-bold text-indigo-600 dark:text-indigo-400 font-mono inline-flex items-center gap-1">
                         🌙 Overnight · {operatingStats.durationFormatted}
                       </span>
                     )
                   ) : (
-                    <span className="text-[11px] text-rose-500 font-semibold">
+                    <span className="text-[10px] sm:text-[11px] text-rose-500 font-semibold">
                       {operatingStats.errorMessage || "Enter shift times"}
                     </span>
                   )}
@@ -1196,23 +1210,18 @@ export function OperatorDashboard({
 
                 {/* Machine Timeline Context Banner */}
                 {machineTimeline?.latestLog && (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 px-3 py-2 rounded-xl bg-sky-500/10 border border-sky-500/20 text-[11px] sm:text-xs text-sky-700 dark:text-sky-300">
-                    <div className="flex items-center gap-1.5 sm:gap-2">
-                      <Clock size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
-                      <span>
-                        <strong className="font-bold">Last shift ended:</strong>{" "}
-                        <span className="font-mono font-semibold">{machineTimeline.formattedEndDate}, {machineTimeline.formattedEndTime}</span>
-                      </span>
-                    </div>
-                    <span className="text-[10px] sm:text-[11px] font-semibold text-sky-600 dark:text-sky-400 bg-sky-500/15 px-2 py-0.5 rounded-md self-start sm:self-auto">
-                      Handover from {machineTimeline.formattedEndTime}
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-sky-500/10 border border-sky-500/20 text-[11px] sm:text-xs text-sky-700 dark:text-sky-300">
+                    <Clock size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                    <span>
+                      <strong className="font-bold">Handover from</strong>{" "}
+                      <span className="font-mono font-semibold">{machineTimeline.formattedEndDate}, {machineTimeline.formattedEndTime}</span>
                     </span>
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5 items-start">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5 items-start">
                   {/* Log Date */}
-                  <div className="col-span-2 sm:col-span-1 lg:col-span-1">
+                  <div className="col-span-1">
                     <CustomDatePicker
                       label={
                         <span>
@@ -1227,7 +1236,7 @@ export function OperatorDashboard({
                   </div>
 
                   {/* Start Time */}
-                  <div className="col-span-1 sm:col-span-1 lg:col-span-1">
+                  <div className="col-span-1">
                     <CustomTimePicker
                       label="Start Time"
                       required
@@ -1238,7 +1247,7 @@ export function OperatorDashboard({
                   </div>
 
                   {/* End Time */}
-                  <div className="col-span-1 sm:col-span-1 lg:col-span-1">
+                  <div className="col-span-1">
                     <CustomTimePicker
                       label="End Time"
                       required
@@ -1249,7 +1258,7 @@ export function OperatorDashboard({
                   </div>
 
                   {/* Overtime (Hours) */}
-                  <div className="col-span-2 sm:col-span-2 lg:col-span-1">
+                  <div className="col-span-1">
                     <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 truncate">
                       Overtime (hrs)
                     </label>
@@ -1274,7 +1283,7 @@ export function OperatorDashboard({
                         })
                       }
                       placeholder="e.g. 0.0"
-                      className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 min-h-[42px]"
+                      className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 min-h-[42px] h-10 sm:h-[42px]"
                     />
                   </div>
                 </div>
@@ -1949,7 +1958,7 @@ export function OperatorDashboard({
                   maxDaysOld={7}
                 />
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <CustomTimePicker
                       label="Start Time"

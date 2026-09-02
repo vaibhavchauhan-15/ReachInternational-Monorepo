@@ -115,7 +115,9 @@ export default function MachinesScreen() {
           customer_name,
           client_id,
           current_supervisor_id,
+          supervisor_ids,
           current_operator_id,
+          operator_ids,
           client:clients!machines_client_id_fkey(
             id,
             code,
@@ -130,15 +132,49 @@ export default function MachinesScreen() {
             gstin,
             pan_number
           ),
-          current_supervisor:users!machines_current_supervisor_id_fkey(full_name),
-          current_operator:users!machines_current_operator_id_fkey(full_name)
+          current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, shift_time),
+          current_operator:users!machines_current_operator_id_fkey(id, full_name, shift_time)
         `)
         .order('created_at', { ascending: false });
 
       if (error) {
         console.warn('Error fetching machines:', error);
       } else if (data) {
-        setMachines(data as any);
+        // Hydrate all personnel
+        const allUserIds = new Set<string>();
+        data.forEach((m: any) => {
+          if (Array.isArray(m.supervisor_ids)) m.supervisor_ids.forEach((id: string) => id && allUserIds.add(id));
+          if (Array.isArray(m.operator_ids)) m.operator_ids.forEach((id: string) => id && allUserIds.add(id));
+        });
+
+        let usersMap = new Map<string, any>();
+        if (allUserIds.size > 0) {
+          const { data: usersData } = await supabase
+            .from('users')
+            .select('id, full_name, shift_time')
+            .in('id', Array.from(allUserIds));
+
+          (usersData || []).forEach((u: any) => {
+            usersMap.set(u.id, u);
+          });
+        }
+
+        const hydrated = data.map((m: any) => {
+          const sups = Array.isArray(m.supervisor_ids) && m.supervisor_ids.length > 0
+            ? m.supervisor_ids.map((id: string) => usersMap.get(id) || (m.current_supervisor?.id === id ? m.current_supervisor : null)).filter(Boolean)
+            : m.current_supervisor ? [m.current_supervisor] : [];
+          const ops = Array.isArray(m.operator_ids) && m.operator_ids.length > 0
+            ? m.operator_ids.map((id: string) => usersMap.get(id) || (m.current_operator?.id === id ? m.current_operator : null)).filter(Boolean)
+            : m.current_operator ? [m.current_operator] : [];
+
+          return {
+            ...m,
+            supervisors: sups,
+            operators: ops,
+          };
+        });
+
+        setMachines(hydrated as any);
       }
     } catch (err) {
       console.error('Error fetching live machines:', err);
@@ -365,16 +401,70 @@ export default function MachinesScreen() {
 
                   <View style={styles.specsGrid}>
                     <View style={styles.specsItem}>
-                      <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Supervisor:</Text>
-                      <Text style={[styles.personnelText, { color: theme.colors.ink }]} numberOfLines={1}>
-                        {m.current_supervisor?.full_name || 'Unassigned'}
+                      <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>
+                        Supervisor{Array.isArray((m as any).supervisors) && (m as any).supervisors.length > 3 ? ` (+${(m as any).supervisors.length - 3})` : ''}:
                       </Text>
+                      {(() => {
+                        const sups = Array.isArray((m as any).supervisors) && (m as any).supervisors.length > 0
+                          ? (m as any).supervisors.filter((s: any) => Boolean(s?.full_name))
+                          : m.current_supervisor?.full_name ? [m.current_supervisor] : [];
+                        
+                        if (sups.length === 0) {
+                          return <Text style={[styles.personnelText, { color: theme.colors.mute, fontStyle: 'italic' }]}>Unassigned</Text>;
+                        }
+
+                        const count = sups.length;
+                        const visible = sups.slice(0, 3);
+                        const fontSize = count === 1 ? 12 : count === 2 ? 11 : 10;
+                        const lineHeight = count === 1 ? 16 : count === 2 ? 14 : 13;
+
+                        return (
+                          <View style={{ gap: 2, marginTop: 2 }}>
+                            {visible.map((s: any, idx: number) => (
+                              <Text
+                                key={s.id || idx}
+                                style={[styles.personnelText, { color: theme.colors.ink, fontSize, lineHeight }]}
+                                numberOfLines={1}
+                              >
+                                {s.full_name}
+                              </Text>
+                            ))}
+                          </View>
+                        );
+                      })()}
                     </View>
                     <View style={styles.specsItem}>
-                      <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Operator:</Text>
-                      <Text style={[styles.personnelText, { color: theme.colors.ink }]} numberOfLines={1}>
-                        {m.current_operator?.full_name || 'Unassigned'}
+                      <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>
+                        Operator{Array.isArray((m as any).operators) && (m as any).operators.length > 3 ? ` (+${(m as any).operators.length - 3})` : ''}:
                       </Text>
+                      {(() => {
+                        const ops = Array.isArray((m as any).operators) && (m as any).operators.length > 0
+                          ? (m as any).operators.filter((o: any) => Boolean(o?.full_name))
+                          : m.current_operator?.full_name ? [m.current_operator] : [];
+                        
+                        if (ops.length === 0) {
+                          return <Text style={[styles.personnelText, { color: theme.colors.mute, fontStyle: 'italic' }]}>Unassigned</Text>;
+                        }
+
+                        const count = ops.length;
+                        const visible = ops.slice(0, 3);
+                        const fontSize = count === 1 ? 12 : count === 2 ? 11 : 10;
+                        const lineHeight = count === 1 ? 16 : count === 2 ? 14 : 13;
+
+                        return (
+                          <View style={{ gap: 2, marginTop: 2 }}>
+                            {visible.map((o: any, idx: number) => (
+                              <Text
+                                key={o.id || idx}
+                                style={[styles.personnelText, { color: theme.colors.ink, fontSize, lineHeight }]}
+                                numberOfLines={1}
+                              >
+                                {o.full_name}
+                              </Text>
+                            ))}
+                          </View>
+                        );
+                      })()}
                     </View>
                   </View>
                 </View>

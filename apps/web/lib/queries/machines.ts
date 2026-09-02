@@ -30,17 +30,71 @@ const MACHINE_LIST_COLUMNS = `
   year_of_mfg,
   manufacturer,
   current_supervisor_id,
+  supervisor_ids,
   hour_meter,
   current_operator_id,
+  operator_ids,
   client_id,
   health_status,
   status,
   created_at,
   updated_at,
-  current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email),
-  current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email),
+  current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email, shift_time),
+  current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email, shift_time),
   client:clients!machines_client_id_fkey(id, code, company_name, city, district, state, pincode, phone, contact_person, address, gstin, pan_number, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode, status)
 `;
+
+async function hydrateMachinesPersonnel(machines: any[], supabase: any): Promise<any[]> {
+  if (!machines || machines.length === 0) return [];
+  const allUserIds = new Set<string>();
+  machines.forEach((m) => {
+    if (Array.isArray(m.supervisor_ids)) {
+      m.supervisor_ids.forEach((id: string) => id && allUserIds.add(id));
+    }
+    if (m.current_supervisor_id) allUserIds.add(m.current_supervisor_id);
+    if (Array.isArray(m.operator_ids)) {
+      m.operator_ids.forEach((id: string) => id && allUserIds.add(id));
+    }
+    if (m.current_operator_id) allUserIds.add(m.current_operator_id);
+  });
+
+  const usersMap = new Map<string, any>();
+  if (allUserIds.size > 0) {
+    const { data: usersData } = await supabase
+      .from("users")
+      .select("id, full_name, phone, email, shift_time, role")
+      .in("id", Array.from(allUserIds));
+
+    (usersData || []).forEach((u: any) => {
+      usersMap.set(u.id, u);
+    });
+  }
+
+  return machines.map((m) => {
+    const supIds = Array.isArray(m.supervisor_ids) && m.supervisor_ids.length > 0
+      ? m.supervisor_ids
+      : m.current_supervisor_id ? [m.current_supervisor_id] : [];
+    const opIds = Array.isArray(m.operator_ids) && m.operator_ids.length > 0
+      ? m.operator_ids
+      : m.current_operator_id ? [m.current_operator_id] : [];
+
+    const supervisorsList = supIds.map((id: string) => usersMap.get(id) || (m.current_supervisor?.id === id ? m.current_supervisor : null)).filter(Boolean);
+    const operatorsList = opIds.map((id: string) => usersMap.get(id) || (m.current_operator?.id === id ? m.current_operator : null)).filter(Boolean);
+
+    const cleanSupIds = Array.from(new Set(supervisorsList.map((s: any) => s.id)));
+    const cleanOpIds = Array.from(new Set(operatorsList.map((o: any) => o.id)));
+
+    return {
+      ...m,
+      supervisor_ids: cleanSupIds,
+      operator_ids: cleanOpIds,
+      supervisors: supervisorsList,
+      operators: operatorsList,
+      current_supervisor: supervisorsList[0] || m.current_supervisor || null,
+      current_operator: operatorsList[0] || m.current_operator || null,
+    };
+  });
+}
 
 export const getMachines = cache(async (params: MachineListParams = {}) => {
   const user = await getCurrentUser();
@@ -68,9 +122,9 @@ export const getMachines = cache(async (params: MachineListParams = {}) => {
 
   // Role scoping
   if (user.role === "operator") {
-    query = query.eq("current_operator_id", user.id);
+    query = query.or(`current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}}`);
   } else if (user.role === "supervisor") {
-    query = query.eq("current_supervisor_id", user.id);
+    query = query.or(`current_supervisor_id.eq.${user.id},supervisor_ids.cs.{${user.id}}`);
   }
 
   // Search across indexed machine columns
@@ -89,7 +143,7 @@ export const getMachines = cache(async (params: MachineListParams = {}) => {
     query = query.eq("health_status", health_status);
   }
   if (current_supervisor_id && current_supervisor_id !== "all") {
-    query = query.eq("current_supervisor_id", current_supervisor_id);
+    query = query.or(`current_supervisor_id.eq.${current_supervisor_id},supervisor_ids.cs.{${current_supervisor_id}}`);
   }
 
   // Sorting
@@ -186,7 +240,8 @@ export const getMachines = cache(async (params: MachineListParams = {}) => {
   }
 
   // Backwards & forwards compatibility mapping for machine_id / machine_code / machine_name
-  const formattedMachines = (data ?? []).map((m: any) => {
+  const hydrated = await hydrateMachinesPersonnel(data ?? [], supabase);
+  const formattedMachines = hydrated.map((m: any) => {
     const code = m.machine_id || m.id;
     return {
       ...m,
@@ -224,15 +279,17 @@ const getCachedMachineById = unstable_cache(
         year_of_mfg,
         manufacturer,
         current_supervisor_id,
+        supervisor_ids,
         hour_meter,
         current_operator_id,
+        operator_ids,
         client_id,
         health_status,
         status,
         created_at,
         updated_at,
-        current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email),
-        current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email),
+        current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email, shift_time),
+        current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email, shift_time),
         client:clients!machines_client_id_fkey(id, code, company_name, city, district, state, pincode, phone, contact_person, address, gstin, pan_number, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode, status)
       `;
 
@@ -253,7 +310,8 @@ const getCachedMachineById = unstable_cache(
       return null;
     }
 
-    const machineData = data as any;
+    const hydratedList = await hydrateMachinesPersonnel([data], supabase);
+    const machineData = hydratedList[0] || data;
     const code = machineData.machine_id || machineData.machine_code || machineData.id;
     return {
       ...machineData,
@@ -262,7 +320,7 @@ const getCachedMachineById = unstable_cache(
       machine_name: machineData.model ? `${code} (${machineData.model})` : code,
     } as unknown as Machine;
   },
-  ["machine-detail-by-id-v3"],
+  ["machine-detail-by-id-v4"],
   { revalidate: CACHE_TIERS.CLASS_B_FLEET, tags: [TAGS.machines] }
 );
 
@@ -279,7 +337,7 @@ export const getActiveSupervisors = unstable_cache(
     // Query users table strictly for users with role = 'supervisor' and active/non-inactive status
     const { data: usersData } = await supabase
       .from("users")
-      .select("id, full_name, phone, email, role")
+      .select("id, full_name, phone, email, role, shift_time")
       .eq("role", "supervisor")
       .neq("status", "inactive")
       .order("full_name");
@@ -293,6 +351,7 @@ export const getActiveSupervisors = unstable_cache(
         phone: u.phone,
         email: u.email,
         role: u.role,
+        shift_time: u.shift_time || null,
         status: "active",
       } as User);
     });
@@ -317,6 +376,7 @@ export const getActiveSupervisors = unstable_cache(
             phone: e.phone,
             email: e.email,
             role: "supervisor",
+            shift_time: null,
             status: "active",
           } as User);
         }
@@ -327,7 +387,7 @@ export const getActiveSupervisors = unstable_cache(
       a.full_name.localeCompare(b.full_name)
     );
   },
-  ["active-supervisors-v5"],
+  ["active-supervisors-v6"],
   { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta] }
 );
 
@@ -353,7 +413,7 @@ export const getActiveOperators = unstable_cache(
 
     const { data: usersData } = await supabase
       .from("users")
-      .select("id, full_name, phone, email, role, status")
+      .select("id, full_name, phone, email, role, status, shift_time")
       .eq("role", "operator")
       .eq("status", "active")
       .order("full_name");
@@ -367,6 +427,7 @@ export const getActiveOperators = unstable_cache(
         phone: u.phone,
         email: u.email,
         role: u.role,
+        shift_time: u.shift_time || null,
         status: "active",
       } as User);
     });
@@ -392,6 +453,7 @@ export const getActiveOperators = unstable_cache(
             phone: e.phone,
             email: e.email,
             role: "operator",
+            shift_time: null,
             status: "active",
           } as User);
         }
@@ -402,7 +464,7 @@ export const getActiveOperators = unstable_cache(
       a.full_name.localeCompare(b.full_name)
     );
   },
-  ["active-operators-v5"],
+  ["active-operators-v6"],
   { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta] }
 );
 

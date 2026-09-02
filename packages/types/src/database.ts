@@ -87,6 +87,8 @@ export interface User {
   status: UserStatus;
   branch_id?: string | null;
   location?: string | null;
+  address?: string | null;
+  shift_time?: string | null;
   city?: string | null;
   district?: string | null;
   state?: string | null;
@@ -96,6 +98,22 @@ export interface User {
   email: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface ProfileChangeRequest {
+  id: string;
+  user_id: string;
+  requester_role: UserRole;
+  current_data: Partial<User>;
+  requested_data: Partial<User>;
+  target_approver_role: string;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  rejection_reason?: string | null;
+  created_at: string;
+  updated_at: string;
+  user?: Pick<User, "id" | "full_name" | "email" | "role" | "phone"> | null;
 }
 
 export interface Employee {
@@ -218,16 +236,20 @@ export interface Machine {
   year_of_mfg: string | null;
   manufacturer: string | null;
   current_supervisor_id: string | null;
+  supervisor_ids?: string[] | null;
   hour_meter: number;
   current_operator_id: string | null;
+  operator_ids?: string[] | null;
   client_id?: string | null;
   health_status: MachineHealthStatus;
   status: MachineStatus;
   created_by: string | null;
   created_at: string;
   updated_at: string;
-  current_operator?: Pick<User, "id" | "full_name" | "phone" | "email"> | null;
-  current_supervisor?: Pick<User, "id" | "full_name" | "phone" | "email"> | null;
+  current_operator?: Pick<User, "id" | "full_name" | "phone" | "email" | "shift_time"> | null;
+  current_supervisor?: Pick<User, "id" | "full_name" | "phone" | "email" | "shift_time"> | null;
+  supervisors?: Array<Pick<User, "id" | "full_name" | "phone" | "email" | "shift_time">> | null;
+  operators?: Array<Pick<User, "id" | "full_name" | "phone" | "email" | "shift_time">> | null;
   client?: Pick<
     CRMClient,
     | "id"

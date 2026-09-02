@@ -82,18 +82,47 @@ export default function UsersScreen() {
   const [createModalVisible, setCreateModalVisible] = useState(false);
 
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [profileRequests, setProfileRequests] = useState<any[]>([]);
+  const [approvingProfileId, setApprovingProfileId] = useState<string | null>(null);
+  const [isBulkApprovingProfile, setIsBulkApprovingProfile] = useState(false);
+  const [isBulkRejectingProfile, setIsBulkRejectingProfile] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('id, full_name, email, phone, role, status, city, district, state, state_id, created_at')
+        .select('id, full_name, email, phone, role, status, city, district, state, state_id, shift_time, address, aadhaar_number, license_number, created_at')
         .order('created_at', { ascending: false });
 
       if (error) {
         console.warn('Error fetching users:', error);
       } else if (data) {
         setUsers(data as any);
+      }
+
+      // Fetch pending profile change requests
+      try {
+        const { data: pReqs } = await supabase
+          .from('profile_change_requests')
+          .select(`
+            id,
+            user_id,
+            requester_role,
+            current_data,
+            requested_data,
+            target_approver_role,
+            status,
+            created_at,
+            user:users!profile_change_requests_user_id_fkey(id, full_name, email, role, phone)
+          `)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false });
+
+        if (pReqs) {
+          setProfileRequests(pReqs);
+        }
+      } catch (pErr) {
+        console.warn('Note on fetching profile change requests:', pErr);
       }
     } catch (err) {
       console.error('Error fetching live users:', err);
@@ -111,6 +140,113 @@ export default function UsersScreen() {
     setRefreshing(true);
     fetchUsers();
   }, [fetchUsers]);
+
+  const handleApproveProfileReq = async (reqId: string, reqData: any, userId: string) => {
+    setApprovingProfileId(reqId);
+    try {
+      // 1. Update user row
+      const { error: userErr } = await supabase
+        .from('users')
+        .update({
+          ...reqData,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId);
+
+      if (userErr) throw userErr;
+
+      // 2. Mark request approved
+      const { error: reqErr } = await supabase
+        .from('profile_change_requests')
+        .update({
+          status: 'approved',
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', reqId);
+
+      if (reqErr) throw reqErr;
+
+      Alert.alert('Approved', 'Profile changes have been approved and applied.');
+      fetchUsers();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to approve profile changes.');
+    } finally {
+      setApprovingProfileId(null);
+    }
+  };
+
+  const handleRejectProfileReq = async (reqId: string) => {
+    setApprovingProfileId(reqId);
+    try {
+      const { error } = await supabase
+        .from('profile_change_requests')
+        .update({
+          status: 'rejected',
+          reviewed_at: new Date().toISOString(),
+        })
+        .eq('id', reqId);
+
+      if (error) throw error;
+      Alert.alert('Rejected', 'Profile change request has been declined.');
+      fetchUsers();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to reject profile changes.');
+    } finally {
+      setApprovingProfileId(null);
+    }
+  };
+
+  const handleApproveAllProfileReqs = async () => {
+    if (profileRequests.length === 0) return;
+    setIsBulkApprovingProfile(true);
+    try {
+      for (const pr of profileRequests) {
+        await supabase
+          .from('users')
+          .update({
+            ...pr.requested_data,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', pr.user_id);
+
+        await supabase
+          .from('profile_change_requests')
+          .update({
+            status: 'approved',
+            reviewed_at: new Date().toISOString(),
+          })
+          .eq('id', pr.id);
+      }
+      Alert.alert('Success', `Approved all ${profileRequests.length} profile requests.`);
+      fetchUsers();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to bulk approve profile requests.');
+    } finally {
+      setIsBulkApprovingProfile(false);
+    }
+  };
+
+  const handleRejectAllProfileReqs = async () => {
+    if (profileRequests.length === 0) return;
+    setIsBulkRejectingProfile(true);
+    try {
+      const reqIds = profileRequests.map((r) => r.id);
+      await supabase
+        .from('profile_change_requests')
+        .update({
+          status: 'rejected',
+          reviewed_at: new Date().toISOString(),
+        })
+        .in('id', reqIds);
+
+      Alert.alert('Success', `Rejected all ${profileRequests.length} profile requests.`);
+      fetchUsers();
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to bulk reject profile requests.');
+    } finally {
+      setIsBulkRejectingProfile(false);
+    }
+  };
 
   const handleApprove = async (userId: string) => {
     setApprovingId(userId);
@@ -427,7 +563,127 @@ export default function UsersScreen() {
           </Card>
         </View>
 
-        {/* Pending Approvals Section */}
+        {/* Profile Detail Change Requests Section */}
+        {profileRequests.length > 0 && (
+          <View style={styles.pendingSection}>
+            <View style={[styles.pendingHeaderRow, { justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <ShieldCheck size={16} color="#6366f1" />
+                <Text style={[styles.pendingTitle, { color: theme.colors.ink }]}>Profile Change Requests</Text>
+                <Badge status="pending" customLabel={`${profileRequests.length} Pending`} />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Button
+                  label={`Accept All (${profileRequests.length})`}
+                  onPress={handleApproveAllProfileReqs}
+                  isLoading={isBulkApprovingProfile}
+                  variant="primary"
+                  size="sm"
+                />
+                <Button
+                  label="Reject All"
+                  onPress={handleRejectAllProfileReqs}
+                  isLoading={isBulkRejectingProfile}
+                  variant="ghost"
+                  size="sm"
+                />
+              </View>
+            </View>
+
+            {profileRequests.map((pr) => {
+              const reqUser = pr.user || pr.current_data || {};
+              const reqData = pr.requested_data || {};
+              const currData = pr.current_data || {};
+              const isApproving = approvingProfileId === pr.id;
+
+              return (
+                <Card key={pr.id} style={[styles.pendingCard, { borderLeftWidth: 3, borderLeftColor: '#6366f1' }]}>
+                  <View style={{ gap: 8 }}>
+                    {/* User Info Header */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View style={[styles.avatarCircle, { backgroundColor: 'rgba(99,102,241,0.1)', borderColor: 'rgba(99,102,241,0.3)', borderWidth: 1 }]}>
+                          <Text style={[styles.avatarLetter, { color: '#6366f1' }]}>
+                            {reqUser.full_name ? reqUser.full_name[0].toUpperCase() : 'U'}
+                          </Text>
+                        </View>
+                        <View>
+                          <Text style={[styles.pendingName, { color: theme.colors.ink }]}>{reqUser.full_name || 'User'}</Text>
+                          <Text style={[styles.pendingEmail, { color: theme.colors.mute }]}>{reqUser.email}</Text>
+                        </View>
+                      </View>
+                      <View style={[styles.pendingTimeChip, { backgroundColor: 'rgba(99,102,241,0.1)', borderColor: 'rgba(99,102,241,0.2)' }]}>
+                        <Clock size={9} color="#6366f1" />
+                        <Text style={[styles.pendingTimeChipText, { color: '#6366f1' }]}>
+                          {pr.created_at ? formatTinyRelativeTime(pr.created_at) : 'Just now'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Diffs Summary */}
+                    <View style={{ backgroundColor: theme.colors.canvasElevated, padding: 8, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.hairline }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: theme.colors.mute, textTransform: 'uppercase', marginBottom: 4 }}>
+                        Requested Changes:
+                      </Text>
+                      {reqData.full_name && reqData.full_name !== currData.full_name && (
+                        <Text style={{ fontSize: 11, color: theme.colors.ink, marginBottom: 2 }}>
+                          • Name: <Text style={{ textDecorationLine: 'line-through', color: theme.colors.mute }}>{currData.full_name || '—'}</Text> → <Text style={{ fontWeight: '700', color: theme.colors.success }}>{reqData.full_name}</Text>
+                        </Text>
+                      )}
+                      {reqData.shift_time && reqData.shift_time !== currData.shift_time && (
+                        <Text style={{ fontSize: 11, color: theme.colors.ink, marginBottom: 2 }}>
+                          • Shift: <Text style={{ textDecorationLine: 'line-through', color: theme.colors.mute }}>{currData.shift_time || 'Standard'}</Text> → <Text style={{ fontWeight: '700', color: theme.colors.link }}>{reqData.shift_time}</Text>
+                        </Text>
+                      )}
+                      {reqData.phone && reqData.phone !== currData.phone && (
+                        <Text style={{ fontSize: 11, color: theme.colors.ink, marginBottom: 2 }}>
+                          • Phone: <Text style={{ textDecorationLine: 'line-through', color: theme.colors.mute }}>{currData.phone || '—'}</Text> → <Text style={{ fontWeight: '700', color: theme.colors.success }}>{reqData.phone}</Text>
+                        </Text>
+                      )}
+                      {reqData.address && reqData.address !== currData.address && (
+                        <Text style={{ fontSize: 11, color: theme.colors.ink, marginBottom: 2 }}>
+                          • Address: <Text style={{ textDecorationLine: 'line-through', color: theme.colors.mute }}>{currData.address || '—'}</Text> → <Text style={{ fontWeight: '700', color: theme.colors.success }}>{reqData.address}</Text>
+                        </Text>
+                      )}
+                      {reqData.aadhaar_number && reqData.aadhaar_number !== currData.aadhaar_number && (
+                        <Text style={{ fontSize: 11, color: theme.colors.ink, marginBottom: 2 }}>
+                          • Aadhaar: <Text style={{ textDecorationLine: 'line-through', color: theme.colors.mute }}>{currData.aadhaar_number || '—'}</Text> → <Text style={{ fontWeight: '700', color: theme.colors.success }}>{reqData.aadhaar_number}</Text>
+                        </Text>
+                      )}
+                      {reqData.license_number && reqData.license_number !== currData.license_number && (
+                        <Text style={{ fontSize: 11, color: theme.colors.ink, marginBottom: 2 }}>
+                          • Licence: <Text style={{ textDecorationLine: 'line-through', color: theme.colors.mute }}>{currData.license_number || '—'}</Text> → <Text style={{ fontWeight: '700', color: theme.colors.success }}>{reqData.license_number}</Text>
+                        </Text>
+                      )}
+                    </View>
+
+                    {/* Action Buttons */}
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                      <Button
+                        label="Approve Change"
+                        onPress={() => handleApproveProfileReq(pr.id, reqData, pr.user_id)}
+                        isLoading={isApproving}
+                        variant="primary"
+                        size="sm"
+                        style={{ flex: 1 }}
+                      />
+                      <Button
+                        label="Reject"
+                        onPress={() => handleRejectProfileReq(pr.id)}
+                        disabled={isApproving}
+                        variant="outline"
+                        size="sm"
+                        style={{ flex: 1 }}
+                      />
+                    </View>
+                  </View>
+                </Card>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Pending Registrations Approvals Section */}
         {pendingUsers.length > 0 && (
           <View style={styles.pendingSection}>
             <View style={[styles.pendingHeaderRow, { justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }]}>

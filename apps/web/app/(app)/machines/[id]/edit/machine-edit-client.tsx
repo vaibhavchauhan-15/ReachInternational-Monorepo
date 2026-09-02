@@ -9,6 +9,7 @@ import {
   Select,
   useToast,
   UserSelect,
+  MultiUserSelect,
   ClientSelect,
   ConfirmationDialog,
   Breadcrumb,
@@ -56,21 +57,43 @@ export function MachineEditClient({
     machine.machine_id ||
     "Machine Details";
 
-  const [supervisorId, setSupervisorId] = useState<string>(() => machine.current_supervisor_id || "");
-  const [operatorId, setOperatorId] = useState<string>(() => machine.current_operator_id || "");
+  const initialSupervisorIds = Array.isArray(machine.supervisor_ids) && machine.supervisor_ids.length > 0
+    ? machine.supervisor_ids
+    : machine.current_supervisor_id ? [machine.current_supervisor_id] : [];
+
+  const initialOperatorIds = Array.isArray(machine.operator_ids) && machine.operator_ids.length > 0
+    ? machine.operator_ids
+    : machine.current_operator_id ? [machine.current_operator_id] : [];
+
+  const [supervisorIds, setSupervisorIds] = useState<string[]>(initialSupervisorIds);
+  const [operatorIds, setOperatorIds] = useState<string[]>(initialOperatorIds);
   const [rentalStatus, setRentalStatus] = useState<string>(() => machine.status || "available");
   const [healthStatus, setHealthStatus] = useState<string>(() => machine.health_status || "active");
   const [clientId, setClientId] = useState<string>(() => machine.client_id || "");
 
-  // Ensure assigned supervisor/operator are in the options list if present
-  const allSupervisors: Array<{ id: string; full_name: string; phone?: string | null; email?: string | null }> = [...supervisors];
+  // Ensure assigned supervisors/operators are in the options list if present
+  const allSupervisors: Array<{ id: string; full_name: string; phone?: string | null; email?: string | null; shift_time?: string | null }> = [...supervisors];
+  if (Array.isArray(machine.supervisors)) {
+    machine.supervisors.forEach((s) => {
+      if (s && !allSupervisors.some((item) => item.id === s.id)) {
+        allSupervisors.push(s);
+      }
+    });
+  }
   if (machine.current_supervisor && machine.current_supervisor_id) {
     if (!allSupervisors.some((s) => s.id === machine.current_supervisor_id)) {
       allSupervisors.push(machine.current_supervisor);
     }
   }
 
-  const allOperators: Array<{ id: string; full_name: string; phone?: string | null; email?: string | null }> = [...operators];
+  const allOperators: Array<{ id: string; full_name: string; phone?: string | null; email?: string | null; shift_time?: string | null }> = [...operators];
+  if (Array.isArray(machine.operators)) {
+    machine.operators.forEach((o) => {
+      if (o && !allOperators.some((item) => item.id === o.id)) {
+        allOperators.push(o);
+      }
+    });
+  }
   if (machine.current_operator && machine.current_operator_id) {
     if (!allOperators.some((o) => o.id === machine.current_operator_id)) {
       allOperators.push(machine.current_operator);
@@ -340,28 +363,29 @@ export function MachineEditClient({
             </div>
 
             <div>
-              <UserSelect
-                label="Current Supervisor"
+              <MultiUserSelect
+                label="Assigned Supervisors (Multi-Shift Oversight)"
                 users={allSupervisors}
-                value={supervisorId}
-                onChange={setSupervisorId}
-                placeholder="Select Supervisor"
-                clearable={canEditSupervisor}
+                values={supervisorIds}
+                onChange={setSupervisorIds}
+                placeholder="Search & assign supervisors..."
                 disabled={!canEditSupervisor || isSaving || isDeleting}
               />
-              <input type="hidden" name="current_supervisor_id" value={supervisorId} />
+              <input type="hidden" name="supervisor_ids" value={JSON.stringify(supervisorIds)} />
+              <input type="hidden" name="current_supervisor_id" value={supervisorIds[0] || ""} />
             </div>
 
             <div>
-              <UserSelect
-                label="Current Operator"
+              <MultiUserSelect
+                label="Assigned Operators (24h Shift Execution)"
                 users={allOperators}
-                value={operatorId}
-                onChange={setOperatorId}
-                placeholder="Select Operator"
-                clearable
+                values={operatorIds}
+                onChange={setOperatorIds}
+                placeholder="Search & assign operators..."
+                disabled={isSaving || isDeleting}
               />
-              <input type="hidden" name="current_operator_id" value={operatorId} />
+              <input type="hidden" name="operator_ids" value={JSON.stringify(operatorIds)} />
+              <input type="hidden" name="current_operator_id" value={operatorIds[0] || ""} />
             </div>
           </div>
         </div>

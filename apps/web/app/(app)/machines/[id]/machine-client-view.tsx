@@ -31,6 +31,10 @@ import {
   ArrowUpDown,
   SlidersHorizontal,
   Calendar,
+  Users,
+  UserCheck,
+  Shield,
+  Wrench,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -158,6 +162,26 @@ export function MachineClientView({
     toast("success", "Copied!", `Machine ID ${machine.machine_id} copied to clipboard.`);
     setTimeout(() => setCopiedId(false), 2000);
   };
+
+  const assignedSupervisors = useMemo(() => {
+    if (Array.isArray(machine.supervisors) && machine.supervisors.length > 0) {
+      return machine.supervisors;
+    }
+    if (machine.current_supervisor) {
+      return [machine.current_supervisor];
+    }
+    return [];
+  }, [machine.supervisors, machine.current_supervisor]);
+
+  const assignedOperators = useMemo(() => {
+    if (Array.isArray(machine.operators) && machine.operators.length > 0) {
+      return machine.operators;
+    }
+    if (machine.current_operator) {
+      return [machine.current_operator];
+    }
+    return [];
+  }, [machine.operators, machine.current_operator]);
 
   // Derived unique operators list for filter dropdown
   const availableOperators = useMemo(() => {
@@ -592,13 +616,39 @@ export function MachineClientView({
                 </div>
 
                 <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Supervisor</span>
-                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm truncate">{machine.current_supervisor?.full_name || "—"}</span>
+                  <div className="flex items-center justify-between gap-1 mb-0.5">
+                    <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Supervisors</span>
+                    {assignedSupervisors.length > 0 && (
+                      <span className="text-[10px] font-mono text-teal-600 dark:text-teal-400 font-bold">
+                        {assignedSupervisors.length}
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm truncate">
+                    {assignedSupervisors.length === 0
+                      ? "—"
+                      : assignedSupervisors.length === 1
+                      ? assignedSupervisors[0].full_name
+                      : `${assignedSupervisors[0].full_name} +${assignedSupervisors.length - 1} more`}
+                  </span>
                 </div>
 
                 <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Operator</span>
-                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm truncate">{machine.current_operator?.full_name || "—"}</span>
+                  <div className="flex items-center justify-between gap-1 mb-0.5">
+                    <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Operators</span>
+                    {assignedOperators.length > 0 && (
+                      <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 font-bold">
+                        {assignedOperators.length} (24h)
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm truncate">
+                    {assignedOperators.length === 0
+                      ? "—"
+                      : assignedOperators.length === 1
+                      ? assignedOperators[0].full_name
+                      : `${assignedOperators[0].full_name} +${assignedOperators.length - 1} more`}
+                  </span>
                 </div>
 
                 <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
@@ -613,6 +663,169 @@ export function MachineClientView({
                   <span className="font-bold text-sky-600 dark:text-sky-400 text-xs sm:text-sm capitalize">
                     {machine.status === "rented" || machine.status === "on_rent" ? "On Rent" : "Available"}
                   </span>
+                </div>
+              </div>
+            </Card>
+
+            {/* Assigned Shift Personnel Card (24h Multi-Shift Coverage) */}
+            <Card padding="md" className="card-hover-system sm:p-6 border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
+              <div className="flex items-center justify-between gap-2 pb-3 border-b border-[var(--color-hairline)]">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                  <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">
+                    Assigned Shift Personnel (24h Fleet Coverage)
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono text-[var(--color-mute)] bg-[var(--color-hairline-soft-surface)] px-2 py-0.5 rounded-md border border-[var(--color-hairline)]">
+                    <Clock size={11} className="text-sky-500" />
+                    8-Hour Shifts
+                  </span>
+                  <Link
+                    href={`/machines/${machine.id}/edit`}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-link)] hover:underline"
+                  >
+                    <AnimatedEdit size={12} />
+                    <span>Manage Staff</span>
+                  </Link>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+                {/* 1. Supervisors Panel */}
+                <div className="flex flex-col gap-2.5 p-3 sm:p-4 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)]">
+                  <div className="flex items-center justify-between pb-2 border-b border-[var(--color-hairline)]">
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+                      <span className="text-xs font-bold text-[var(--color-ink)]">
+                        Supervisors ({assignedSupervisors.length})
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-semibold text-teal-700 dark:text-teal-300 bg-teal-500/10 px-1.5 py-0.5 rounded border border-teal-500/20">
+                      Oversight & Verification
+                    </span>
+                  </div>
+
+                  {assignedSupervisors.length === 0 ? (
+                    <div className="py-4 text-center text-xs text-[var(--color-mute)] italic">
+                      No supervisors assigned to this machine.
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {assignedSupervisors.map((sup, idx) => (
+                        <div
+                          key={sup.id || idx}
+                          className="flex items-center justify-between p-2.5 rounded-lg bg-[var(--color-hairline-soft-surface)]/50 border border-[var(--color-hairline)] text-xs"
+                        >
+                          <div className="min-w-0 pr-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-[var(--color-ink)] truncate">
+                                {sup.full_name}
+                              </span>
+                              <span className="text-[10px] font-mono text-[var(--color-mute)]">
+                                Shift {idx + 1}
+                              </span>
+                            </div>
+                            {sup.shift_time && (
+                              <div className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
+                                <Clock size={10} />
+                                <span>{sup.shift_time}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {sup.phone && (
+                              <a
+                                href={`tel:${sup.phone}`}
+                                title={`Call ${sup.full_name}`}
+                                className="p-1.5 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-mute)] hover:text-sky-600 hover:border-sky-500/40 transition-colors"
+                              >
+                                <Phone size={12} />
+                              </a>
+                            )}
+                            {sup.email && (
+                              <a
+                                href={`mailto:${sup.email}`}
+                                title={`Email ${sup.full_name}`}
+                                className="p-1.5 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-mute)] hover:text-sky-600 hover:border-sky-500/40 transition-colors"
+                              >
+                                <Mail size={12} />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Operators Panel */}
+                <div className="flex flex-col gap-2.5 p-3 sm:p-4 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)]">
+                  <div className="flex items-center justify-between pb-2 border-b border-[var(--color-hairline)]">
+                    <div className="flex items-center gap-2">
+                      <Wrench className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                      <span className="text-xs font-bold text-[var(--color-ink)]">
+                        Operators ({assignedOperators.length})
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                      Hour Logging & Operations
+                    </span>
+                  </div>
+
+                  {assignedOperators.length === 0 ? (
+                    <div className="py-4 text-center text-xs text-[var(--color-mute)] italic">
+                      No operators assigned. Assign operators to enable 24h shift logging.
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {assignedOperators.map((op, idx) => (
+                        <div
+                          key={op.id || idx}
+                          className="flex items-center justify-between p-2.5 rounded-lg bg-[var(--color-hairline-soft-surface)]/50 border border-[var(--color-hairline)] text-xs"
+                        >
+                          <div className="min-w-0 pr-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-[var(--color-ink)] truncate">
+                                {op.full_name}
+                              </span>
+                              <span className="text-[10px] font-mono text-amber-700 dark:text-amber-300 bg-amber-500/10 px-1.5 py-0.2 rounded">
+                                Shift {idx + 1}
+                              </span>
+                            </div>
+                            {op.shift_time && (
+                              <div className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
+                                <Clock size={10} />
+                                <span>{op.shift_time}</span>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {op.phone && (
+                              <a
+                                href={`tel:${op.phone}`}
+                                title={`Call ${op.full_name}`}
+                                className="p-1.5 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-mute)] hover:text-amber-600 hover:border-amber-500/40 transition-colors"
+                              >
+                                <Phone size={12} />
+                              </a>
+                            )}
+                            {op.email && (
+                              <a
+                                href={`mailto:${op.email}`}
+                                title={`Email ${op.full_name}`}
+                                className="p-1.5 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-mute)] hover:text-amber-600 hover:border-amber-500/40 transition-colors"
+                              >
+                                <Mail size={12} />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </Card>

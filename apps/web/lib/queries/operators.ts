@@ -135,7 +135,7 @@ function deriveAssignmentsFromMachines(machines: Machine[], operatorsList: User[
  * High-performance, tab-aware operations hub data loader.
  * Replaces direct inline database queries in operations/page.tsx.
  */
-export async function getOperationsHubData(user: User, tab: string = "logs") {
+export const getOperationsHubData = cache(async (user: User, tab: string = "logs") => {
   const supabase = createSupabaseAdminClient();
 
   // 1. Operator Entry Tab: Only fetch operator assignment + recent logs
@@ -143,8 +143,9 @@ export async function getOperationsHubData(user: User, tab: string = "logs") {
     const [assignedMachineRes, recentLogsRes, clientsList, allMachinesRes] = await Promise.all([
       supabase
         .from("machines")
-        .select("id, machine_id, model, serial_number, hour_meter, status, manufacturer")
-        .eq("current_operator_id", user.id)
+        .select("id, machine_id, model, serial_number, hour_meter, status, manufacturer, client_id, current_operator_id, operator_ids, current_supervisor_id, supervisor_ids, client:clients(id, code, company_name, address, city, state, phone)")
+        .or(`current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}}`)
+        .limit(1)
         .maybeSingle(),
       supabase
         .from("machine_hour_logs")
@@ -233,15 +234,16 @@ export async function getOperationsHubData(user: User, tab: string = "logs") {
     recentLogs: [],
     allMachines: machinesRes.machines as unknown as MachineWithEngineer[],
   };
-}
+});
 
-export async function getOperatorEntryContext(operatorId: string) {
+export const getOperatorEntryContext = cache(async (operatorId: string) => {
   const supabase = createSupabaseAdminClient();
   const { data: machine } = await supabase
     .from("machines")
-    .select("id, machine_id, model, serial_number, hour_meter, status, manufacturer")
-    .eq("current_operator_id", operatorId)
+    .select("id, machine_id, model, serial_number, hour_meter, status, manufacturer, client_id, current_operator_id, operator_ids, current_supervisor_id, supervisor_ids, client:clients(id, code, company_name, address, city, state, phone)")
+    .or(`current_operator_id.eq.${operatorId},operator_ids.cs.{${operatorId}}`)
+    .limit(1)
     .maybeSingle();
 
   return { assignedMachine: machine };
-}
+});

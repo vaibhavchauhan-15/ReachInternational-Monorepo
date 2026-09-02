@@ -21,6 +21,36 @@ function isValidUuid(id?: string | null): boolean {
   return UUID_REGEX.test(id.trim());
 }
 
+function parseUuidArray(formData: FormData, fieldName: string, fallbackField?: string): string[] {
+  const raw = (formData.get(fieldName) as string)?.trim();
+  let ids: string[] = [];
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        ids = parsed.map((item) => String(item).trim()).filter(isValidUuid);
+      } else if (isValidUuid(raw)) {
+        ids = [raw];
+      }
+    } catch {
+      if (isValidUuid(raw)) {
+        ids = [raw];
+      }
+    }
+  }
+  if (ids.length === 0) {
+    const all = formData.getAll(fieldName).map((item) => String(item).trim()).filter(isValidUuid);
+    if (all.length > 0) ids = all;
+  }
+  if (ids.length === 0 && fallbackField) {
+    const fallbackVal = (formData.get(fallbackField) as string)?.trim();
+    if (fallbackVal && isValidUuid(fallbackVal)) {
+      ids = [fallbackVal];
+    }
+  }
+  return Array.from(new Set(ids));
+}
+
 export async function createMachine(state: MachineFormState, formData: FormData): Promise<MachineFormState> {
   try {
     await requireRole("admin", "super_admin", "manager", "service_manager");
@@ -39,8 +69,10 @@ export async function createMachine(state: MachineFormState, formData: FormData)
     const serial_number = (formData.get("serial_number") as string)?.trim() || null;
     const year_of_mfg = (formData.get("year_of_mfg") as string)?.trim() || null;
     const manufacturer = (formData.get("manufacturer") as string)?.trim() || null;
-    const current_supervisor_id = (formData.get("current_supervisor_id") as string)?.trim() || null;
-    const current_operator_id = (formData.get("current_operator_id") as string)?.trim() || null;
+    const supervisor_ids = parseUuidArray(formData, "supervisor_ids", "current_supervisor_id");
+    const operator_ids = parseUuidArray(formData, "operator_ids", "current_operator_id");
+    const current_supervisor_id = supervisor_ids[0] || null;
+    const current_operator_id = operator_ids[0] || null;
     const client_id = (formData.get("client_id") as string)?.trim() || null;
     const hour_meter = parseFloat((formData.get("hour_meter") as string) || "0") || 0;
     const health_status = (formData.get("health_status") as string) || "active";
@@ -118,8 +150,10 @@ export async function createMachine(state: MachineFormState, formData: FormData)
       serial_number,
       year_of_mfg,
       manufacturer,
-      current_supervisor_id: current_supervisor_id && isValidUuid(current_supervisor_id) ? current_supervisor_id : null,
-      current_operator_id: current_operator_id && isValidUuid(current_operator_id) ? current_operator_id : null,
+      supervisor_ids,
+      current_supervisor_id,
+      operator_ids,
+      current_operator_id,
       client_id: status === "rented" && isValidUuid(client_id) ? client_id : null,
       hour_meter,
       health_status,
@@ -141,6 +175,10 @@ export async function createMachine(state: MachineFormState, formData: FormData)
       action: "machine.created",
       entity_type: "machine",
       entity_id: data?.id,
+      metadata: {
+        supervisor_ids,
+        operator_ids,
+      },
     });
 
     revalidateTag(TAGS.machines, "max");
@@ -176,7 +214,8 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
 
     const isSupervisor = caller.role === "supervisor";
 
-    const current_operator_id = (formData.get("current_operator_id") as string)?.trim() || null;
+    const operator_ids = parseUuidArray(formData, "operator_ids", "current_operator_id");
+    const current_operator_id = operator_ids[0] || null;
     const client_id = (formData.get("client_id") as string)?.trim() || null;
     const hour_meter = parseFloat((formData.get("hour_meter") as string) || "0") || 0;
     const health_status = (formData.get("health_status") as string) || "active";
@@ -192,13 +231,14 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
       return { error: "Hour meter reading cannot be negative." };
     }
 
-    // If supervisor is updating, strictly apply only operational updates (HMR, Health, Rental Status, Operator, Client)
+    // If supervisor is updating, strictly apply only operational updates (HMR, Health, Rental Status, Operators, Client)
     if (isSupervisor) {
       const updateData: Record<string, any> = {
         hour_meter,
         health_status,
         status,
-        current_operator_id: current_operator_id && isValidUuid(current_operator_id) ? current_operator_id : null,
+        operator_ids,
+        current_operator_id,
         client_id: status === "rented" && isValidUuid(client_id) ? client_id : null,
         updated_at: new Date().toISOString(),
       };
@@ -220,6 +260,7 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
           hour_meter,
           health_status,
           status,
+          operator_ids,
           current_operator_id: updateData.current_operator_id,
           client_id: updateData.client_id,
         },
@@ -239,7 +280,8 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
     const serial_number = (formData.get("serial_number") as string)?.trim() || null;
     const year_of_mfg = (formData.get("year_of_mfg") as string)?.trim() || null;
     const manufacturer = (formData.get("manufacturer") as string)?.trim() || null;
-    const current_supervisor_id = (formData.get("current_supervisor_id") as string)?.trim() || null;
+    const supervisor_ids = parseUuidArray(formData, "supervisor_ids", "current_supervisor_id");
+    const current_supervisor_id = supervisor_ids[0] || null;
 
     const updateErrors: Record<string, string> = {};
 
@@ -276,8 +318,10 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
       serial_number,
       year_of_mfg,
       manufacturer,
-      current_supervisor_id: current_supervisor_id && isValidUuid(current_supervisor_id) ? current_supervisor_id : null,
-      current_operator_id: current_operator_id && isValidUuid(current_operator_id) ? current_operator_id : null,
+      supervisor_ids,
+      current_supervisor_id,
+      operator_ids,
+      current_operator_id,
       client_id: status === "rented" && isValidUuid(client_id) ? client_id : null,
       hour_meter,
       health_status,
@@ -328,6 +372,8 @@ export async function updateMachineOperationalStatus(
   payload: {
     hour_meter?: number;
     current_operator_id?: string | null;
+    operator_ids?: string[] | null;
+    supervisor_ids?: string[] | null;
     client_id?: string | null;
     health_status?: "active" | "under_maintenance" | "breakdown";
     status?: "available" | "rented";
@@ -376,11 +422,27 @@ export async function updateMachineOperationalStatus(
       }
     }
 
-    if (payload.current_operator_id !== undefined) {
-      updateData.current_operator_id =
+    if (payload.operator_ids !== undefined) {
+      const validOps = Array.isArray(payload.operator_ids)
+        ? payload.operator_ids.filter(isValidUuid)
+        : [];
+      updateData.operator_ids = validOps;
+      updateData.current_operator_id = validOps[0] || null;
+    } else if (payload.current_operator_id !== undefined) {
+      const opId =
         payload.current_operator_id && isValidUuid(payload.current_operator_id)
           ? payload.current_operator_id
           : null;
+      updateData.current_operator_id = opId;
+      updateData.operator_ids = opId ? [opId] : [];
+    }
+
+    if (payload.supervisor_ids !== undefined) {
+      const validSups = Array.isArray(payload.supervisor_ids)
+        ? payload.supervisor_ids.filter(isValidUuid)
+        : [];
+      updateData.supervisor_ids = validSups;
+      updateData.current_supervisor_id = validSups[0] || null;
     }
 
     if (payload.client_id !== undefined && payload.status !== "available") {

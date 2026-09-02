@@ -181,8 +181,12 @@ function MachineDirectoryReportContent({
           <tbody className="divide-y divide-neutral-300">
             {machines.length > 0 ? (
               machines.map((m, idx) => {
-                const supervisorName = m.current_supervisor?.full_name || "Unassigned";
-                const operatorName = m.current_operator?.full_name || "Unassigned";
+                const supervisorName = Array.isArray(m.supervisors) && m.supervisors.length > 0
+                  ? m.supervisors.map((s) => s.full_name).filter(Boolean).join(", ")
+                  : m.current_supervisor?.full_name || "Unassigned";
+                const operatorName = Array.isArray(m.operators) && m.operators.length > 0
+                  ? m.operators.map((o) => o.full_name).filter(Boolean).join(", ")
+                  : m.current_operator?.full_name || "Unassigned";
                 const clientName = m.client?.company_name
                   ? `${m.client.company_name}${m.client.code ? ` (${m.client.code})` : ""}`
                   : (m.customer_name || "—");

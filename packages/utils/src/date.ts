@@ -136,24 +136,27 @@ export function formatTo12Hour(timeStr?: string | null): string {
   const trimmed = timeStr.trim().toUpperCase();
   if (!trimmed) return '';
 
-  // Already formatted with AM/PM (e.g. "06:00 AM", "6:00PM", "06:00:00 AM")
-  const ampmMatch = trimmed.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)$/i);
+  // Already formatted with AM/PM (e.g. "06:00 AM", "6:00PM", "010:030 AM", "06:00:00 AM")
+  const ampmMatch = trimmed.match(/^(\d{1,3}):(\d{1,3})(?::\d{2})?\s*(AM|PM)$/i);
   if (ampmMatch) {
-    const h = parseInt(ampmMatch[1], 10);
-    const m = ampmMatch[2];
+    const rawH = parseInt(ampmMatch[1], 10);
+    const rawM = parseInt(ampmMatch[2], 10);
     const p = ampmMatch[3].toUpperCase();
-    return `${String(h).padStart(2, '0')}:${m} ${p}`;
+    const h = isNaN(rawH) ? 0 : rawH;
+    const m = isNaN(rawM) ? 0 : rawM;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')} ${p}`;
   }
 
-  // 24-hour format (e.g. "06:00:00", "18:00:00", "18:30", "6:00")
-  const match24 = trimmed.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  // 24-hour format (e.g. "06:00:00", "18:00:00", "18:30", "6:00", "010:030")
+  const match24 = trimmed.match(/^(\d{1,3}):(\d{1,3})(?::\d{2})?$/);
   if (match24) {
     let hours = parseInt(match24[1], 10);
-    const minutes = match24[2];
+    const rawM = parseInt(match24[2], 10);
+    const minutes = isNaN(rawM) ? 0 : rawM;
     const period = hours >= 12 ? 'PM' : 'AM';
     hours = hours % 12;
     if (hours === 0) hours = 12;
-    return `${String(hours).padStart(2, '0')}:${minutes} ${period}`;
+    return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${period}`;
   }
 
   return trimmed;
@@ -214,7 +217,7 @@ export function addDaysToDateStr(dateStr: string, days: number): string {
 export function parseTimeToMinutes(timeStr?: string | null): number | null {
   if (!timeStr) return null;
   const str = timeStr.trim().toUpperCase();
-  const match = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  const match = str.match(/^(\d{1,3}):(\d{1,3})\s*(AM|PM)?$/i);
   if (!match) return null;
 
   let hours = parseInt(match[1], 10);
@@ -237,7 +240,7 @@ export function parseDateTimeToDate(dateStr?: string | null, timeStr?: string | 
   if (dParts.length < 3 || isNaN(dParts[0]) || isNaN(dParts[1]) || isNaN(dParts[2])) return null;
 
   const tTrimmed = timeStr.trim().toUpperCase();
-  const match = tTrimmed.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
+  const match = tTrimmed.match(/^(\d{1,3}):(\d{1,3})(?::\d{2})?\s*(AM|PM)?$/i);
   if (!match) return null;
 
   let hours = parseInt(match[1], 10);

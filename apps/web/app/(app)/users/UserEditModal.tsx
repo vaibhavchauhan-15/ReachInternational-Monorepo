@@ -124,6 +124,8 @@ export function UserEditModal({
     full_name: user.full_name,
     phone: user.phone || "+91 ",
     role: user.role,
+    shift_time: user.shift_time || "",
+    address: user.address || "",
     city: user.city || "",
     district: user.district || "",
     state: matchedState ? matchedState.name : user.state || "",
@@ -274,8 +276,25 @@ export function UserEditModal({
         <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3.5">
           <div className="pb-2 border-b border-[var(--color-hairline)]">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-              User Address & Work Location
+              User Address & Operations
             </h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Shift Schedule"
+              name="shift_time"
+              value={editForm.shift_time}
+              onChange={(e) => setEditForm((prev) => ({ ...prev, shift_time: e.target.value }))}
+              placeholder="e.g. Day Shift (08:00 AM - 08:00 PM)"
+            />
+            <Input
+              label="Street Address"
+              name="address"
+              value={editForm.address}
+              onChange={(e) => setEditForm((prev) => ({ ...prev, address: e.target.value }))}
+              placeholder="e.g. Plot 42, MIDC Ind Area"
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

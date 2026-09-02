@@ -1,8 +1,14 @@
 "use client";
 
 import React from "react";
-import { CustomTimePicker, CustomTimePickerProps } from "./CustomTimePicker";
+import {
+  CustomTimePicker,
+  CustomTimePickerProps,
+  TimeInput,
+  TimeInputProps,
+} from "./CustomTimePicker";
 
+export type { CustomTimePickerProps, TimeInputProps };
 export type TimePickerProps = CustomTimePickerProps;
 
 export const TimePicker: React.FC<TimePickerProps> = (props) => {
@@ -11,4 +17,5 @@ export const TimePicker: React.FC<TimePickerProps> = (props) => {
 
 TimePicker.displayName = "TimePicker";
 
-export { CustomTimePicker };
+export { CustomTimePicker, TimeInput };
+

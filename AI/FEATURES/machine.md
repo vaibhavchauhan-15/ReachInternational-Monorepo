@@ -19,15 +19,19 @@ Manages machine fleet registry, serial numbers, client assignments, supervisor a
 - `deleteMachine()`: Permanently deletes a machine record.
 - `importMachinesFromExcel()`: Bulk imports machines from Excel file with validation and duplicate prevention.
 
-## Form Fields & Technical Parameters (MachineModal & Machine Detail Page)
+## Form Fields & Technical Parameters (MachineModal, Machine Edit & Machine Detail Page)
 - **Equipment Master Specs**: `machine_id` (auto-generated e.g. `RI-MC-0001`), `model` (required), `serial_number` (required, unique), `manufacturer` (required), `year_of_mfg` (required), `hour_meter` (HMR).
-- **Assignments & Personnel**: `current_supervisor_id`, `current_operator_id`, `client_id` (when rented).
+- **Assignments & Personnel (24h Multi-Shift Fleet Coverage)**:
+  - `supervisor_ids UUID[]`: Array of assigned supervisors across operational shifts (with GIN index and automatic primary element sync to `current_supervisor_id`).
+  - `operator_ids UUID[]`: Array of assigned operators across operational shifts (with GIN index and automatic primary element sync to `current_operator_id`).
+  - `MultiUserSelect`: Searchable multi-chip selector with shift timing metadata tags (e.g. `08:00 AM - 08:00 PM`), removable chips, and clear all.
+  - `client_id`: Assigned client organization (when rented).
 - **Operational Status**: `health_status` (`active`, `under_maintenance`, `breakdown`), `status` (`available`, `rented`).
 
 ## Machine Detail View (`/machines/[id]`)
 - **2-Tab Streamlined Architecture**:
-  1. **Basic Info & Client**: Displays core master parameters (ID, Model, Serial Number, YUM, Manufacturer, HMR, Supervisor, Operator, Health Status, Rental Status) alongside Assigned Client Details with 1-click Contact/Directions Actions (Call, WhatsApp, Google Maps Location, Copy Site Address).
-  2. **Hour Meter Running History**: Complete daily shift logbook entries with log date, client company, operator, start/end meter readings, total running hours, overtime, and remarks.
+  1. **Basic Info & Client**: Displays core master parameters (ID, Model, Serial Number, YUM, Manufacturer, HMR, Rental Status, Health Status), dedicated **"Assigned Shift Personnel (24h Fleet Coverage)"** section detailing all assigned supervisors and operators with shift times and communication shortcuts, and Assigned Client Details with 1-click Contact/Directions Actions (Call, WhatsApp, Google Maps Location, Copy Site Address).
+  2. **Hours Meter Logs**: Complete daily shift logbook entries with log date, client company, operator, start/end meter readings, total running hours, and remarks.
 
 ## Serial Number Duplicate Prevention & Validation
 - **Database Unique Constraint**: Case-insensitive, trimmed unique index `idx_machines_serial_number_unique_ci` on `public.machines (lower(trim(serial_number)))`.

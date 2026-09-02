@@ -112,6 +112,8 @@ export function UserCreateModal({
     password: "",
     role: "service_engineer" as UserRole,
     branch_id: "none",
+    shift_time: "Day Shift (08:00 AM - 08:00 PM)",
+    address: "",
     city: "",
     district: "",
     state: "",
@@ -291,8 +293,25 @@ export function UserCreateModal({
         <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3.5">
           <div className="pb-2 border-b border-[var(--color-hairline)]">
             <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-              2. User Address & Work Location
+              2. User Address & Operations
             </h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="Shift Schedule"
+              name="shift_time"
+              value={createForm.shift_time}
+              onChange={(e) => setCreateForm((prev) => ({ ...prev, shift_time: e.target.value }))}
+              placeholder="e.g. Day Shift (08:00 AM - 08:00 PM)"
+            />
+            <Input
+              label="Street Address"
+              name="address"
+              value={createForm.address}
+              onChange={(e) => setCreateForm((prev) => ({ ...prev, address: e.target.value }))}
+              placeholder="e.g. Plot 42, MIDC Ind Area"
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

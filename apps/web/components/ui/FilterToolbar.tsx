@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useState, useEffect, useRef } from "react";
 import {
   AnimatedSearch,
   AnimatedSlidersHorizontal,
@@ -46,7 +45,15 @@ export function FilterToolbar({
   onSubmitSearch,
 }: FilterToolbarProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
-  const [isAnimating, setIsAnimating] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Sync external defaultOpen if changed
+  useEffect(() => {
+    if (defaultOpen !== undefined) {
+      setIsOpen(defaultOpen);
+    }
+  }, [defaultOpen]);
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,13 +61,13 @@ export function FilterToolbar({
   };
 
   const toggleOpen = () => {
-    setIsAnimating(true);
+    setIsTransitioning(true);
     setIsOpen((prev) => !prev);
   };
 
   return (
     <div
-      className={`p-3 sm:p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs ${className}`}
+      className={`p-3 sm:p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs transition-shadow duration-200 ${className}`}
     >
       {/* Top Toolbar Row: Search Input + Filter Toggle Button + Actions */}
       <form onSubmit={handleFormSubmit} className="flex items-center gap-2 sm:gap-2.5">
@@ -81,7 +88,7 @@ export function FilterToolbar({
             <button
               type="button"
               onClick={() => onSearchChange("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
               title="Clear search query"
             >
               <AnimatedX size={14} />
@@ -94,6 +101,8 @@ export function FilterToolbar({
           <button
             type="button"
             onClick={toggleOpen}
+            aria-expanded={isOpen}
+            aria-controls="filter-panel-content"
             className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold active:scale-95 transition-all duration-200 shrink-0 select-none cursor-pointer ${
               isOpen || activeFilterCount > 0
                 ? "bg-[var(--color-ink)] text-[var(--color-canvas)] border-[var(--color-ink)] shadow-xs"
@@ -120,7 +129,7 @@ export function FilterToolbar({
           </button>
         )}
 
-        {/* Custom Actions (e.g. Export / Custom Buttons / View Switcher) */}
+        {/* Custom Actions (e.g. View Switcher / Custom Buttons) */}
         {actions}
 
         {/* Quick Reset Filters Button */}
@@ -137,39 +146,33 @@ export function FilterToolbar({
         )}
       </form>
 
-      {/* Expandable / Collapsible Filter Panel with Buttery Smooth Transition */}
-      <AnimatePresence initial={false}>
-        {isOpen && children && (
-          <motion.div
-            key="filter-panel"
-            initial={{ opacity: 0, height: 0 }}
-            animate={{
-              opacity: 1,
-              height: "auto",
-              transition: {
-                height: { duration: 0.26, ease: [0.16, 1, 0.3, 1] },
-                opacity: { duration: 0.2, ease: "easeOut", delay: 0.03 },
-              },
-            }}
-            exit={{
-              opacity: 0,
-              height: 0,
-              transition: {
-                height: { duration: 0.22, ease: [0.16, 1, 0.3, 1] },
-                opacity: { duration: 0.16, ease: "easeInOut" },
-              },
-            }}
-            onAnimationStart={() => setIsAnimating(true)}
-            onAnimationComplete={() => setIsAnimating(false)}
-            style={{ willChange: isAnimating ? "height, opacity" : "auto" }}
-            className={`w-full ${isAnimating || !isOpen ? "overflow-hidden" : "overflow-visible"}`}
+      {/* Expandable / Collapsible Filter Drawer with High-Performance CSS Grid Animation */}
+      {children && (
+        <div
+          ref={panelRef}
+          id="filter-panel-content"
+          onTransitionEnd={(e) => {
+            if (e.target === panelRef.current) {
+              setIsTransitioning(false);
+            }
+          }}
+          className={`grid transition-[grid-template-rows,opacity] ${
+            isOpen
+              ? "grid-rows-[1fr] opacity-100 duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+              : "grid-rows-[0fr] opacity-0 duration-250 ease-[cubic-bezier(0.4,0,0.2,1)] pointer-events-none"
+          }`}
+        >
+          <div
+            className={`min-h-0 transition-opacity duration-200 ${
+              !isOpen || isTransitioning ? "overflow-hidden" : "overflow-visible"
+            }`}
           >
-            <div className="pt-3 mt-3 border-t border-[var(--color-hairline)]">
+            <div className="pt-3.5 mt-3 border-t border-[var(--color-hairline)]">
               {children}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

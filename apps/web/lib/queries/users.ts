@@ -4,7 +4,7 @@ import { unstable_cache } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser, requireRole } from "@/lib/dal";
 import { TAGS, CACHE_TIERS } from "@/lib/cache";
-import type { User, UserRole, UserStatus } from "@/lib/types/database";
+import type { User, UserRole, UserStatus, ProfileChangeRequest } from "@/lib/types/database";
 
 export interface UserListParams {
   search?: string;
@@ -15,7 +15,7 @@ export interface UserListParams {
 }
 
 const USER_SELECT_COLUMNS =
-  "id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, created_at, updated_at";
+  "id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, address, shift_time, created_at, updated_at";
 
 export async function getUserList(params: UserListParams = {}) {
   await requireRole("admin", "super_admin", "service_manager", "hr_manager");
@@ -82,8 +82,63 @@ export const getAllUsersCached = unstable_cache(
 
     return (data as unknown as User[]) || [];
   },
-  ["all-users-directory-v2"],
+  ["all-users-directory-v3"],
   { revalidate: CACHE_TIERS.CLASS_C_OPERATIONAL, tags: [TAGS.users] }
+);
+
+/**
+ * Fetch pending profile detail change requests based on the approver's hierarchy.
+ * - super_admin: sees all pending requests
+ * - admin: sees pending requests from manager and below
+ * - manager / service_manager / hr_manager: sees pending requests from supervisor, operator, engineer, mechanic, etc.
+ */
+export const getPendingProfileChangeRequests = unstable_cache(
+  async (userRole: UserRole): Promise<ProfileChangeRequest[]> => {
+    const supabase = createSupabaseAdminClient();
+
+    let query = supabase
+      .from("profile_change_requests")
+      .select(`
+        id,
+        user_id,
+        requester_role,
+        current_data,
+        requested_data,
+        target_approver_role,
+        status,
+        reviewed_by,
+        reviewed_at,
+        rejection_reason,
+        created_at,
+        updated_at,
+        user:users!profile_change_requests_user_id_fkey(id, full_name, email, role, phone, shift_time, address, city, district, state, aadhaar_number, license_number)
+      `)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+
+    if (userRole === "super_admin") {
+      // Super admin can review all requests
+    } else if (userRole === "admin") {
+      // Admin can review requests from manager and below
+      query = query.not("requester_role", "in", '("super_admin","admin")');
+    } else if (["manager", "service_manager", "hr_manager", "store_manager"].includes(userRole)) {
+      // Manager can review requests from supervisor and below
+      query = query.not("requester_role", "in", '("super_admin","admin","manager","service_manager","hr_manager","store_manager")');
+    } else {
+      // Non-approvers see empty
+      return [];
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error("[DAL] Error in getPendingProfileChangeRequests:", error.message || error);
+      return [];
+    }
+
+    return (data as unknown as ProfileChangeRequest[]) || [];
+  },
+  ["pending-profile-change-requests-v1"],
+  { revalidate: 30, tags: [TAGS.users] }
 );
 
 export const getUserOptions = unstable_cache(

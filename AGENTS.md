@@ -26,6 +26,7 @@ Read these memory and rule files in order:
    - `AI/RULES/ARCHITECTURE.md`
    - `AI/RULES/DESIGN-SYSTEM.md`
    - `AI/RULES/UI-UX.md`
+   - `AI/RULES/GLOBAL-RESPONSIVE-DESIGN.md`
    - `AI/RULES/PERFORMANCE.md`
    - `AI/RULES/SECURITY.md`
    - `AI/RULES/AUTHENTICATION-AUTHORIZATION.md`
@@ -38,6 +39,7 @@ Read these memory and rule files in order:
 6. **Cross-Platform UI & Agent Rules (`.agents/rules/`)**:
    - `.agents/rules/mandatory_rules_reading_and_enforcement.md`
    - `.agents/rules/responsive_cross_platform_design.md`
+   - `.agents/rules/global_responsive_design.md`
    - `.agents/rules/web_mobile_ui_consistency.md`
 
 Never scan the entire repository unless these files explicitly instruct you to. All AI coding agents MUST strictly follow and enforce all rules in both `AI/RULES/` and `.agents/rules/` without exception on EVERY single task, session, and change.

@@ -69,6 +69,82 @@ interface MachineListClientProps {
   currentStatus?: string;
 }
 
+// Dynamic multi-personnel cell renderer with scalable typography (1 name -> 12px, 2 names -> 11px, 3+ names -> 10px)
+function PersonnelCell({
+  users,
+  fallbackUser,
+  badgeVariant = "teal",
+}: {
+  users?: Array<Pick<User, "id" | "phone" | "full_name" | "email" | "shift_time"> | User> | null;
+  fallbackUser?: Pick<User, "id" | "phone" | "full_name" | "email" | "shift_time"> | User | null;
+  badgeVariant?: "teal" | "amber";
+}) {
+  const personnel = useMemo(() => {
+    if (Array.isArray(users) && users.length > 0) {
+      return users.filter((u) => Boolean(u?.full_name));
+    }
+    if (fallbackUser?.full_name) {
+      return [fallbackUser];
+    }
+    return [];
+  }, [users, fallbackUser]);
+
+  if (personnel.length === 0) {
+    return <span className="text-xs text-[var(--color-mute)] italic">Unassigned</span>;
+  }
+
+  const count = personnel.length;
+  const visible = personnel.slice(0, 3);
+  const remainingCount = count > 3 ? count - 3 : 0;
+  const allNames = personnel.map((p) => p.full_name).join(", ");
+
+  // Dynamic typography sizing:
+  // 1 person   -> text-xs font-medium (12px standard)
+  // 2 persons  -> text-[11px] leading-tight font-medium
+  // 3+ persons -> text-[10px] leading-[1.25] font-medium
+  const textSizeClass =
+    count === 1
+      ? "text-xs font-medium"
+      : count === 2
+      ? "text-[11px] leading-tight font-medium"
+      : "text-[10px] leading-[1.25] font-medium";
+
+  const badgeColorClass =
+    badgeVariant === "teal"
+      ? "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20"
+      : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20";
+
+  return (
+    <div
+      className="flex flex-col gap-0.5 min-w-0 py-0.5 justify-center"
+      title={allNames}
+    >
+      {visible.map((p, idx) => {
+        const isLastVisible = idx === visible.length - 1;
+        return (
+          <div key={p.id || idx} className="flex items-center gap-1 min-w-0">
+            <span
+              className={`${textSizeClass} text-[var(--color-body)] truncate block ${
+                remainingCount > 0 && isLastVisible ? "max-w-[85px]" : "max-w-[120px]"
+              }`}
+            >
+              {p.full_name}
+            </span>
+            {isLastVisible && remainingCount > 0 && (
+              <span
+                className={`text-[9px] font-bold px-1 py-0.2 rounded border shrink-0 ${badgeColorClass}`}
+                title={`+${remainingCount} more: ${personnel.slice(3).map((u) => u.full_name).join(", ")}`}
+              >
+                +{remainingCount}
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // Reusable responsive filter selector dropdown with mobile edge clamping
 function CustomFilterSelector({
   label,
@@ -872,6 +948,7 @@ export function MachineListClient({
     [updateFilters]
   );
 
+  // Full unified columns mapping for high density table
   const tableColumns = useMemo(
     () => [
       {
@@ -883,9 +960,9 @@ export function MachineListClient({
         cell: (row: Machine) => (
           <Link
             href={`/machines/${row.id}`}
-            className="font-mono text-xs font-bold text-[var(--color-ink)] hover:text-sky-600 dark:hover:text-sky-400 hover:underline whitespace-nowrap"
+            className="font-bold text-[var(--color-ink)] hover:text-sky-600 dark:hover:text-sky-400 transition-colors font-mono text-xs hover:underline whitespace-nowrap"
           >
-            {row.machine_id}
+            {row.machine_id || row.machine_code || "—"}
           </Link>
         ),
       },
@@ -894,67 +971,77 @@ export function MachineListClient({
         header: "MODEL",
         accessorKey: "model" as const,
         sortable: true,
-        width: "10%",
+        width: "12%",
         cell: (row: Machine) => (
-          <span className="text-xs font-semibold text-[var(--color-ink)] whitespace-nowrap">
+          <span className="font-semibold text-[var(--color-ink)] text-xs truncate block max-w-[120px]" title={row.model || ""}>
             {row.model || "—"}
           </span>
         ),
       },
       {
-        id: "serial_no",
-        header: "SERIAL NO.",
+        id: "serial_number",
+        header: "SERIAL NO",
         accessorKey: "serial_number" as const,
-        sortable: true,
-        width: "11%",
+        width: "12%",
         cell: (row: Machine) => (
-          <span className="font-mono text-xs text-[var(--color-body)] font-medium whitespace-nowrap">
+          <span className="font-mono text-[var(--color-mute)] text-xs truncate block max-w-[120px]" title={row.serial_number || ""}>
             {row.serial_number || "—"}
           </span>
         ),
       },
       {
-        id: "yum",
+        id: "year_of_mfg",
         header: "YUM",
         accessorKey: "year_of_mfg" as const,
-        sortable: true,
         width: "6%",
         cell: (row: Machine) => (
-          <span className="text-xs text-[var(--color-mute)] font-medium whitespace-nowrap">
+          <span className="text-[var(--color-body)] text-xs font-mono">
             {row.year_of_mfg || "—"}
           </span>
         ),
       },
       {
-        id: "hours",
-        header: "HMR (HRS)",
-        accessorKey: "hour_meter" as const,
-        sortable: true,
+        id: "manufacturer",
+        header: "MFR",
+        accessorKey: "manufacturer" as const,
         width: "9%",
         cell: (row: Machine) => (
-          <span className="font-mono text-xs font-bold text-[var(--color-ink)] whitespace-nowrap">
-            {row.hour_meter || 0}
+          <span className="text-[var(--color-body)] text-xs truncate block max-w-[90px]" title={row.manufacturer || ""}>
+            {row.manufacturer || "—"}
+          </span>
+        ),
+      },
+      {
+        id: "hour_meter",
+        header: "HMR",
+        accessorKey: "hour_meter" as const,
+        sortable: true,
+        width: "7%",
+        cell: (row: Machine) => (
+          <span className="font-mono font-bold text-sky-600 dark:text-sky-400 text-xs">
+            {row.hour_meter ?? 0}
           </span>
         ),
       },
       {
         id: "client",
-        header: "CLIENT",
-        sortable: true,
-        width: "13%",
+        header: "ASSIGNED CLIENT",
+        width: "14%",
         cell: (row: Machine) => {
           const clientName = row.client?.company_name || row.customer_name;
           const clientCode = row.client?.code;
           if (!clientName) {
             return (
-              <span className="text-xs text-[var(--color-mute)] font-medium">—</span>
+              <span className="text-xs text-[var(--color-mute)] italic">
+                Unassigned
+              </span>
             );
           }
           return (
-            <div className="flex flex-col min-w-0 max-w-[130px]">
+            <div className="flex flex-col min-w-0 pr-1">
               <span
-                className="text-xs font-semibold text-[var(--color-ink)] truncate block"
-                title={`${clientName}${clientCode ? ` (${clientCode})` : ""}`}
+                className="text-xs font-bold text-[var(--color-ink)] truncate max-w-[130px]"
+                title={clientName}
               >
                 {clientName}
               </span>
@@ -971,33 +1058,25 @@ export function MachineListClient({
         id: "supervisor",
         header: "SUPERVISOR",
         width: "12%",
-        cell: (row: Machine) => {
-          const name = row.current_supervisor?.full_name || "Unassigned";
-          return (
-            <span
-              className="text-xs font-medium text-[var(--color-body)] truncate block max-w-[110px]"
-              title={name}
-            >
-              {name}
-            </span>
-          );
-        },
+        cell: (row: Machine) => (
+          <PersonnelCell
+            users={row.supervisors}
+            fallbackUser={row.current_supervisor}
+            badgeVariant="teal"
+          />
+        ),
       },
       {
         id: "operator",
-        header: "OPERATOR",
+        header: "OPERATOR (24H)",
         width: "12%",
-        cell: (row: Machine) => {
-          const name = row.current_operator?.full_name || "Unassigned";
-          return (
-            <span
-              className="text-xs font-medium text-[var(--color-body)] truncate block max-w-[110px]"
-              title={name}
-            >
-              {name}
-            </span>
-          );
-        },
+        cell: (row: Machine) => (
+          <PersonnelCell
+            users={row.operators}
+            fallbackUser={row.current_operator}
+            badgeVariant="amber"
+          />
+        ),
       },
       {
         id: "health_status",

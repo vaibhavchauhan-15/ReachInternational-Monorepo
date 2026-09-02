@@ -19,6 +19,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "operator.view", "operator.assign", "operator.log_approve",
     "notification.view", "notification.send",
     "user.view", "user.create", "user.edit", "user.assign_role",
+    "profile.edit_self", "profile.approve_changes",
     "report.view", "report.export", "audit.view", "settings.view"
   ],
 
@@ -31,6 +32,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "employee.view", "engineer.workload.view", "mechanic.workload.view", "mechanic.assign",
     "operator.view", "rental.view",
     "notification.view", "notification.send",
+    "profile.edit_self", "profile.approve_changes",
     "report.view", "report.export", "audit.view"
   ],
 
@@ -41,6 +43,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "fsr.view", "fsr.create", "fsr.update",
     "inventory.view", "inventory.request",
     "operator.view", "notification.view",
+    "profile.edit_self",
     "report.view", "audit.view"
   ],
 
@@ -51,6 +54,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "fsr.view", "fsr.create", "fsr.update",
     "inventory.view", "inventory.request",
     "operator.view", "notification.view",
+    "profile.edit_self",
     "report.view", "audit.view"
   ],
 
@@ -60,6 +64,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "service.view",
     "operator.view", "operator.assign", "operator.log_approve", "operator.create", "operator.salary_manage",
     "site_movement.view", "site_movement.manage",
+    "profile.edit_self",
     "notification.view", "notification.send"
   ],
 
@@ -70,6 +75,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "fsr.view", "fsr.create", "fsr.update",
     "inventory.view", "inventory.request", "part_request.create", "part_request.view",
     "operator.view", "rental.view",
+    "profile.edit_self",
     "notification.view",
     "report.view", "audit.view"
   ],
@@ -87,6 +93,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "part_request.create",
     "part_request.view",
     "rental.view",
+    "profile.edit_self",
     "notification.view",
     "notification.send",
     "report.view",
@@ -109,6 +116,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "rental.view",
     "finance.view",
     "notification.view", "notification.send",
+    "profile.edit_self",
     "report.view", "report.export", "audit.view",
     "settings.view", "settings.edit"
   ],
@@ -120,6 +128,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "employee.document.manage",
     "user_request.create", "user_request.view", "user.view",
     "notification.view", "notification.send",
+    "profile.edit_self", "profile.approve_changes",
     "report.view", "report.export",
     "audit.view",
     "settings.view", "settings.edit"
@@ -141,6 +150,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "operator.view", "operator.assign", "operator.log_approve",
     "notification.view", "notification.send",
     "user.view", "user.create", "user.edit",
+    "profile.edit_self", "profile.approve_changes",
     "report.view", "report.export", "audit.view", "settings.view"
   ],
 };

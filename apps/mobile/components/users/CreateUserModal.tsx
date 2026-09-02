@@ -13,7 +13,7 @@ import { Button, Input, useTheme } from '../ui';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { validateAadhaarNumber, validateLicenseNumber, formatAadhaar } from '@reachinternational/utils';
-import { X, UserPlus, User, Mail, Phone, Lock, MapPin, ChevronDown, Check, ShieldCheck, CreditCard } from 'lucide-react-native';
+import { X, UserPlus, User, Mail, Phone, Lock, MapPin, ChevronDown, Check, ShieldCheck, CreditCard, Clock } from 'lucide-react-native';
 
 const USER_ROLES = [
   { value: 'service_engineer', label: 'Service Engineer' },
@@ -45,6 +45,8 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('service_engineer');
   const [rolePickerVisible, setRolePickerVisible] = useState(false);
+  const [shiftTime, setShiftTime] = useState('Day Shift (08:00 AM - 08:00 PM)');
+  const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [district, setDistrict] = useState('');
   const [stateVal, setStateVal] = useState('');
@@ -79,7 +81,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
     if (aadhaarNumber.trim()) {
       const aadhaarRes = validateAadhaarNumber(aadhaarNumber);
       if (!aadhaarRes.isValid) {
-        setError(aadhaarRes.error || 'Please enter a valid 12-digit Aadhaar number.');
+        setError(aadhaarRes.error || 'Invalid Aadhaar number.');
         return;
       }
       cleanAadhaar = aadhaarRes.clean || null;
@@ -89,7 +91,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
     if (licenseNumber.trim()) {
       const licRes = validateLicenseNumber(licenseNumber);
       if (!licRes.isValid) {
-        setError(licRes.error || 'Please enter a valid driving licence number.');
+        setError(licRes.error || 'Invalid driving licence format.');
         return;
       }
       formattedLic = licRes.formatted || licenseNumber.trim().toUpperCase();
@@ -106,9 +108,12 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
             full_name: fullName.trim(),
             phone: cleanPhone,
             role,
+            shift_time: shiftTime.trim() || null,
+            address: address.trim() || null,
             city: city.trim(),
             district: district.trim(),
             state: stateVal.trim(),
+            location: `${city.trim()}, ${district.trim()}, ${stateVal.trim()}`,
             aadhaar_number: cleanAadhaar,
             license_number: formattedLic,
           },
@@ -197,6 +202,22 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
                 <ChevronDown size={16} color={theme.colors.mute} />
               </TouchableOpacity>
             </View>
+
+            <Input
+              label="Shift Schedule"
+              placeholder="e.g. Day Shift (08:00 AM - 08:00 PM)"
+              value={shiftTime}
+              onChangeText={setShiftTime}
+              leftIcon={<Clock size={16} color={theme.colors.mute} />}
+            />
+
+            <Input
+              label="Street Address"
+              placeholder="e.g. Plot 42, MIDC Area"
+              value={address}
+              onChangeText={setAddress}
+              leftIcon={<MapPin size={16} color={theme.colors.mute} />}
+            />
 
             <View style={styles.rowInputs}>
               <View style={{ flex: 1 }}>

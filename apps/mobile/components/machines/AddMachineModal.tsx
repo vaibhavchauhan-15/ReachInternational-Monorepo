@@ -43,11 +43,11 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
   const [status, setStatus] = useState<'available' | 'rented'>('available');
   const [healthStatus, setHealthStatus] = useState<'active' | 'under_maintenance' | 'breakdown'>('active');
   const [supervisorId, setSupervisorId] = useState<string | null>(null);
-  const [operatorId, setOperatorId] = useState<string | null>(null);
+  const [operatorIds, setOperatorIds] = useState<string[]>([]);
   const [clientId, setClientId] = useState<string | null>(null);
 
   const [supervisors, setSupervisors] = useState<Array<{ id: string; full_name: string }>>([]);
-  const [operators, setOperators] = useState<Array<{ id: string; full_name: string }>>([]);
+  const [operators, setOperators] = useState<Array<{ id: string; full_name: string; shift_time?: string }>>([]);
   const [clients, setClients] = useState<Array<{ id: string; code?: string; company_name: string }>>([]);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -65,7 +65,12 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
         setStatus(machineToEdit.status || 'available');
         setHealthStatus(machineToEdit.health_status || 'active');
         setSupervisorId(machineToEdit.current_supervisor_id || machineToEdit.supervisor_id || null);
-        setOperatorId(machineToEdit.current_operator_id || machineToEdit.operator_id || null);
+        const ops = Array.isArray(machineToEdit.operator_ids) && machineToEdit.operator_ids.length > 0
+          ? machineToEdit.operator_ids
+          : machineToEdit.current_operator_id || machineToEdit.operator_id
+          ? [machineToEdit.current_operator_id || machineToEdit.operator_id]
+          : [];
+        setOperatorIds(ops);
         setClientId(machineToEdit.client_id || null);
       } else {
         setMachineId('');
@@ -77,7 +82,7 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
         setStatus('available');
         setHealthStatus('active');
         setSupervisorId(null);
-        setOperatorId(null);
+        setOperatorIds([]);
         setClientId(null);
       }
       setErrorMessage('');
@@ -150,12 +155,12 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
       }
 
       if (isSupervisor && machineToEdit?.id) {
-        // Supervisor operational update payload
         const supervisorPayload: any = {
           hour_meter: parseFloat(hourMeter) || 0,
           status,
           health_status: healthStatus,
-          current_operator_id: operatorId || null,
+          operator_ids: operatorIds,
+          current_operator_id: operatorIds[0] || null,
           client_id: status === 'rented' ? (clientId || null) : null,
           updated_at: new Date().toISOString(),
         };
@@ -175,8 +180,10 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
           hour_meter: parseFloat(hourMeter) || 0,
           status,
           health_status: healthStatus,
+          supervisor_ids: supervisorId ? [supervisorId] : [],
           current_supervisor_id: supervisorId || null,
-          current_operator_id: operatorId || null,
+          operator_ids: operatorIds,
+          current_operator_id: operatorIds[0] || null,
           client_id: status === 'rented' ? (clientId || null) : null,
           updated_at: new Date().toISOString(),
         };
@@ -213,10 +220,16 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
     }
   };
 
+  const toggleOperator = (opId: string) => {
+    setOperatorIds((prev) =>
+      prev.includes(opId) ? prev.filter((id) => id !== opId) : [...prev, opId]
+    );
+  };
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.overlay}
       >
         <View style={[styles.sheet, { backgroundColor: theme.colors.canvasElevated }]}>
@@ -288,43 +301,30 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
               keyboardType="numeric"
             />
 
-            {/* Operator Selection */}
+            {/* Operator Selection (Multi-Shift Assignment) */}
             <View style={styles.sectionGroup}>
-              <Text style={[styles.groupLabel, { color: theme.colors.ink }]}>Assigned Operator</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <Text style={[styles.groupLabel, { color: theme.colors.ink }]}>
+                  Assigned Operators ({operatorIds.length}) (24h Shifts)
+                </Text>
+                {operatorIds.length > 0 && (
+                  <TouchableOpacity onPress={() => setOperatorIds([])}>
+                    <Text style={{ fontSize: 11, color: theme.colors.link, fontWeight: '600' }}>Clear</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               {operators.length === 0 ? (
                 <Text style={[styles.pillText, { color: theme.colors.mute, fontStyle: 'italic' }]}>
                   No active operators available
                 </Text>
               ) : (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                  <TouchableOpacity
-                    onPress={() => setOperatorId(null)}
-                    style={[
-                      styles.pillOption,
-                      {
-                        paddingHorizontal: 12,
-                        minWidth: 90,
-                        borderColor: !operatorId ? theme.colors.link : theme.colors.hairline,
-                        backgroundColor: !operatorId ? theme.colors.link + '15' : theme.colors.canvas,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.pillText,
-                        { color: !operatorId ? theme.colors.link : theme.colors.body },
-                        !operatorId && { fontWeight: '700' },
-                      ]}
-                    >
-                      Unassigned
-                    </Text>
-                  </TouchableOpacity>
                   {operators.map((o) => {
-                    const isSelected = operatorId === o.id;
+                    const isSelected = operatorIds.includes(o.id);
                     return (
                       <TouchableOpacity
                         key={o.id}
-                        onPress={() => setOperatorId(isSelected ? null : o.id)}
+                        onPress={() => toggleOperator(o.id)}
                         style={[
                           styles.pillOption,
                           {
@@ -342,7 +342,7 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
                             isSelected && { fontWeight: '700' },
                           ]}
                         >
-                          {o.full_name}
+                          {isSelected ? '✓ ' : ''}{o.full_name}
                         </Text>
                       </TouchableOpacity>
                     );

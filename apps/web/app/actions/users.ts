@@ -308,6 +308,8 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
     const city = (formData.get("city") as string)?.trim() || "";
     const district = (formData.get("district") as string)?.trim() || "";
     const state = (formData.get("state") as string)?.trim() || "";
+    const address = (formData.get("address") as string)?.trim() || null;
+    const shiftTime = (formData.get("shift_time") as string)?.trim() || null;
     const aadhaarNumber = (formData.get("aadhaar_number") as string)?.trim() || "";
     const licenseNumber = (formData.get("license_number") as string)?.trim() || "";
 
@@ -421,6 +423,8 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
         full_name: fullName,
         role: role,
         phone: phone || null,
+        address: address || null,
+        shift_time: shiftTime || null,
         city,
         district,
         state: stateInfo.state,
@@ -445,13 +449,15 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
       return { error: "Failed to create user. Please try again." };
     }
 
-    // Update status to active and sync role, phone, city, district, state, state_id, aadhaar_number, license_number
+    // Update status to active and sync role, phone, city, district, state, state_id, aadhaar_number, license_number, address, shift_time
     const { error: updateError } = await adminSupabase
       .from("users")
       .update({
         status: "active",
         role: role,
         phone: phone || null,
+        address: address || null,
+        shift_time: shiftTime || null,
         city,
         district,
         state: stateInfo.state,
@@ -822,6 +828,8 @@ export async function editUser(userId: string, formData: FormData): Promise<User
     const city = (formData.get("city") as string)?.trim() || "";
     const district = (formData.get("district") as string)?.trim() || "";
     const state = (formData.get("state") as string)?.trim() || "";
+    const address = (formData.get("address") as string)?.trim() || null;
+    const shiftTime = (formData.get("shift_time") as string)?.trim() || null;
     const aadhaarNumber = (formData.get("aadhaar_number") as string)?.trim() || "";
     const licenseNumber = (formData.get("license_number") as string)?.trim() || "";
     
@@ -919,6 +927,8 @@ export async function editUser(userId: string, formData: FormData): Promise<User
       user_metadata: { 
         full_name: fullName, 
         phone: phone || null,
+        address: address || null,
+        shift_time: shiftTime || null,
         city,
         district,
         state: stateInfo.state,
@@ -938,6 +948,8 @@ export async function editUser(userId: string, formData: FormData): Promise<User
     const updatePayload: Record<string, unknown> = {
       full_name: fullName,
       phone: phone || null,
+      address: address || null,
+      shift_time: shiftTime || null,
       city,
       district,
       state: stateInfo.state,

@@ -30,7 +30,7 @@ function isValidUuid(id?: string | null): boolean {
 function parseTimeToMinutes(timeStr?: string): number | null {
   if (!timeStr) return null;
   const str = timeStr.trim().toUpperCase();
-  const match = str.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
+  const match = str.match(/^(\d{1,3}):(\d{1,3})\s*(AM|PM)?$/i);
   if (!match) return null;
 
   let hours = parseInt(match[1], 10);

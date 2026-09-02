@@ -25,6 +25,8 @@ import { logout } from "@/app/actions/auth";
 import { CommandPalette } from "@/components/ui/CommandPalette";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Button } from "@/components/ui";
+import { EditProfileModal } from "@/components/profile/EditProfileModal";
+import { Phone, MapPin, ShieldCheck, Clock, FileText, Edit, Shield } from "lucide-react";
 
 interface MobileBottomNavProps {
   user: User;
@@ -58,8 +60,9 @@ const roleLabels: Record<UserRole, string> = {
 export function MobileBottomNav({ user }: MobileBottomNavProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [cmdOpen, setCmdOpen] = useState(false);
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
 
   // Global ⌘K / Search shortcut listener
   useEffect(() => {
@@ -290,10 +293,6 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
                       <span className="badge-base bg-muted text-muted-foreground text-[10px]">
                         {roleLabels[user.role]}
                       </span>
-                      <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        Active
-                      </span>
                     </div>
                   </div>
                 </div>
@@ -309,39 +308,103 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
                 </div>
               </div>
 
-              {/* Profile Quick Links */}
-              <div className="space-y-1.5">
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-1 mb-2">
-                  Quick Management
-                </p>
+              {/* User Detailed Operational & Identity Profile Info */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">
+                    Profile & Operational Info
+                  </span>
+                </div>
 
-                {(user.role === "super_admin" || user.role === "admin") && (
-                  <Link
-                    href="/audit-logs"
-                    onClick={() => setProfileSheetOpen(false)}
-                    className="flex items-center justify-between p-3 rounded-xl bg-background border border-border hover:bg-muted transition-colors text-xs font-medium text-foreground"
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <AnimatedFileText size={16} className="text-muted-foreground" />
-                      Audit Logs
-                    </span>
-                    <AnimatedChevronRight size={16} className="text-muted-foreground" />
-                  </Link>
-                )}
+                <div className="grid grid-cols-1 gap-2">
+                  {/* Shift Time Card */}
+                  <div className="flex items-center gap-3 p-2.5 rounded-xl bg-background border border-border shadow-2xs">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
+                      <Clock size={16} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                        Shift Schedule
+                      </p>
+                      <p className="text-xs font-semibold text-foreground truncate mt-0.5">
+                        {user.shift_time || "Not Assigned (Standard)"}
+                      </p>
+                    </div>
+                  </div>
 
-                {user.role === "super_admin" && (
-                  <Link
-                    href="/settings"
-                    onClick={() => setProfileSheetOpen(false)}
-                    className="flex items-center justify-between p-3 rounded-xl bg-background border border-border hover:bg-muted transition-colors text-xs font-medium text-foreground"
-                  >
-                    <span className="flex items-center gap-2.5">
-                      <AnimatedSettings size={16} className="text-muted-foreground" />
-                      System Settings
-                    </span>
-                    <AnimatedChevronRight size={16} className="text-muted-foreground" />
-                  </Link>
-                )}
+                  {/* Phone / Mobile Card */}
+                  <div className="flex items-center gap-3 p-2.5 rounded-xl bg-background border border-border shadow-2xs">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                      <Phone size={16} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                        Mobile Phone
+                      </p>
+                      <p className="text-xs font-semibold font-mono text-foreground truncate mt-0.5">
+                        {user.phone || "—"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Address Card */}
+                  <div className="flex items-start gap-3 p-2.5 rounded-xl bg-background border border-border shadow-2xs">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 mt-0.5">
+                      <MapPin size={16} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                        Address
+                      </p>
+                      <p className="text-xs font-semibold text-foreground leading-snug mt-0.5">
+                        {[user.address, user.city, user.district, user.state].filter(Boolean).join(", ") || "—"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Identity Docs (Aadhaar & Licence) Grid */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="p-2.5 rounded-xl bg-background border border-border shadow-2xs">
+                      <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+                        <ShieldCheck size={14} className="text-indigo-500" />
+                        <span className="text-[10px] font-bold uppercase tracking-wide">Aadhaar</span>
+                      </div>
+                      <p className="text-xs font-mono font-semibold text-foreground truncate">
+                        {user.aadhaar_number
+                          ? user.aadhaar_number.length >= 12
+                            ? `XXXX-XXXX-${user.aadhaar_number.slice(-4)}`
+                            : user.aadhaar_number
+                          : "Not Provided"}
+                      </p>
+                    </div>
+
+                    <div className="p-2.5 rounded-xl bg-background border border-border shadow-2xs">
+                      <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
+                        <FileText size={14} className="text-purple-500" />
+                        <span className="text-[10px] font-bold uppercase tracking-wide">Licence</span>
+                      </div>
+                      <p className="text-xs font-mono font-semibold text-foreground truncate uppercase">
+                        {user.license_number || "Not Provided"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Edit Profile Action Button */}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="md"
+                  fullWidth
+                  onClick={() => {
+                    setProfileSheetOpen(false);
+                    setEditProfileOpen(true);
+                  }}
+                  icon={<Edit size={14} className="text-sky-500" />}
+                  className="h-10 rounded-xl justify-center font-bold text-xs shadow-xs border border-border hover:bg-muted active:scale-[0.98] transition-all"
+                >
+                  Edit Profile
+                </Button>
               </div>
 
               {/* Sign Out Action */}
@@ -363,6 +426,15 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Edit Profile Modal */}
+      {user && (
+        <EditProfileModal
+          user={user}
+          isOpen={editProfileOpen}
+          onClose={() => setEditProfileOpen(false)}
+        />
+      )}
 
       {/* Mobile Search Command Palette Modal */}
       {user && (

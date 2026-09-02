@@ -19,6 +19,7 @@ import {
   AnimatedCheck,
   AnimatedEye,
   AnimatedEyeOff,
+  AnimatedClock,
 } from "@/components/ui/animated-icons";
 import { Shield, ShieldAlert, ShieldCheck, Copy, Check } from "lucide-react";
 import { Button, Badge, Select, Dialog, DialogContent, TooltipWrapper, useToast } from "@/components/ui";
@@ -299,6 +300,28 @@ export function UserDetailSheet({
                       )}
                     </button>
                   </div>
+                </div>
+              )}
+
+              {/* Shift Timing */}
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1.5">
+                  <AnimatedClock size={14} className="text-sky-500" /> Shift Timing
+                </span>
+                <span className="font-semibold text-[var(--color-ink)]">
+                  {user.shift_time || "Standard / Day Shift"}
+                </span>
+              </div>
+
+              {/* Street Address */}
+              {user.address && (
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-[var(--color-mute)] font-medium flex items-center gap-1.5 shrink-0">
+                    <AnimatedMapPin size={14} className="text-amber-500" /> Street Address
+                  </span>
+                  <span className="font-semibold text-[var(--color-ink)] text-right leading-tight max-w-[240px]">
+                    {user.address}
+                  </span>
                 </div>
               )}
 

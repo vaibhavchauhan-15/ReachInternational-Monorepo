@@ -9,7 +9,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import { useTheme, Button } from '../ui';
+import { useTheme, Button, TimeInput } from '../ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import type { Task, User } from '@reachinternational/types';
 import { summarizeTaskTitle } from '@reachinternational/utils';
@@ -158,17 +158,12 @@ export function CreateTaskModal({
             </View>
 
             <View style={[styles.fieldGroup, { flex: 1 }]}>
-              <Text style={[styles.fieldLabel, { color: theme.colors.mute }]}>Due Time</Text>
-              <View style={[styles.inputBox, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                <Text style={styles.inputIcon}>🕒</Text>
-                <TextInput
-                  value={dueTime}
-                  onChangeText={setDueTime}
-                  placeholder="10:00"
-                  placeholderTextColor={theme.colors.faint}
-                  style={[styles.textInput, { color: theme.colors.ink }]}
-                />
-              </View>
+              <TimeInput
+                label="Due Time"
+                value={dueTime}
+                onChangeText={setDueTime}
+                containerStyle={{ marginBottom: 0 }}
+              />
             </View>
           </View>
 

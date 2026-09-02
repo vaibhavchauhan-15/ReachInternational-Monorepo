@@ -10,7 +10,7 @@ import {
   Platform,
   Switch,
 } from 'react-native';
-import { Button, Input, useTheme } from '../ui';
+import { Button, Input, TimeInput, useTheme } from '../ui';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { X, Check, ChevronDown, Clock, AlertTriangle } from 'lucide-react-native';
@@ -454,33 +454,33 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                   backgroundColor: 'rgba(14, 165, 233, 0.08)',
                   borderColor: 'rgba(14, 165, 233, 0.25)',
                   borderWidth: 1,
-                  gap: 4,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
                 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Clock size={13} color="#0284c7" />
-                    <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '500', flex: 1 }}>
-                      <Text style={{ fontWeight: '700' }}>Last shift ended:</Text> {latestTimeline.formattedEndDate}, {latestTimeline.formattedEndTime}
+                  <Clock size={14} color="#0284c7" />
+                  <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '500', flex: 1 }}>
+                    <Text style={{ fontWeight: '700' }}>Handover from</Text>{' '}
+                    <Text style={{ fontWeight: '700', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                      {latestTimeline.formattedEndDate}, {latestTimeline.formattedEndTime}
                     </Text>
-                  </View>
-                  <Text style={{ fontSize: 10, color: '#0284c7', fontWeight: '600' }}>
-                    Handover from {latestTimeline.formattedEndTime}
                   </Text>
                 </View>
               )}
 
               <View style={styles.rowInputs}>
                 <View style={{ flex: 1 }}>
-                  <Input
+                  <TimeInput
                     label="Start Time *"
-                    placeholder="06:00 AM"
+                    required
                     value={startTime}
                     onChangeText={setStartTime}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Input
+                  <TimeInput
                     label="End Time *"
-                    placeholder="02:00 PM"
+                    required
                     value={endTime}
                     onChangeText={setEndTime}
                   />

@@ -3,14 +3,30 @@ import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { Card, Badge, Button, useTheme, MobileHeader } from '../../components/ui';
+import { EditProfileModal } from '../../components/profile/EditProfileModal';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { LogOut, Sun, Moon, Shield, Building, MapPin, Phone, Mail, User } from 'lucide-react-native';
+import {
+  LogOut,
+  Sun,
+  Moon,
+  Shield,
+  ShieldCheck,
+  Building,
+  MapPin,
+  Phone,
+  Mail,
+  User,
+  Clock,
+  FileText,
+  Edit,
+} from 'lucide-react-native';
 
 export default function ProfileScreen() {
-  const { user, role, signOut } = useAuth();
+  const { user, role, signOut, refreshSession } = useAuth();
   const { theme, isDark, setMode } = useTheme();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
 
   const handleLogout = async () => {
     await signOut();
@@ -20,19 +36,31 @@ export default function ProfileScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
-      // Simulate profile sync duration
-      await new Promise((resolve) => setTimeout(resolve, 600));
+      if (refreshSession) {
+        await refreshSession();
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
     } catch (e) {
       console.error(e);
     } finally {
       setRefreshing(false);
     }
-  }, []);
+  }, [refreshSession]);
 
   const metadata = user?.user_metadata || {};
   const fullName = metadata.full_name || (user?.email ? user.email.split('@')[0] : 'User');
   const userPhone = metadata.phone || '—';
+  const shiftSchedule = metadata.shift_time || 'General / Day Shift (08:00 AM - 08:00 PM)';
   const locationString = [metadata.city, metadata.district, metadata.state].filter(Boolean).join(', ') || '—';
+  const fullAddress = metadata.address
+    ? `${metadata.address}${locationString !== '—' ? `, ${locationString}` : ''}`
+    : locationString;
+  const aadhaarDisplay = metadata.aadhaar_number
+    ? metadata.aadhaar_number.length >= 12
+      ? `XXXX-XXXX-${metadata.aadhaar_number.slice(-4)}`
+      : metadata.aadhaar_number
+    : 'Not Provided';
+  const licenceDisplay = metadata.license_number || 'Not Provided';
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
@@ -47,7 +75,7 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
       >
-        {/* User Identity Card */}
+        {/* User Identity & Operations Card */}
         <Card variant="elevated" style={styles.card}>
           <View style={styles.avatarRow}>
             <View style={[styles.avatarCircle, { backgroundColor: theme.colors.ink }]}>
@@ -63,6 +91,7 @@ export default function ProfileScreen() {
 
           <View style={styles.divider} />
 
+          {/* Role */}
           <View style={styles.infoRow}>
             <Shield size={14} color={theme.colors.link} />
             <Text style={[styles.label, { color: theme.colors.mute }]}>System Role:</Text>
@@ -71,6 +100,18 @@ export default function ProfileScreen() {
 
           <View style={styles.divider} />
 
+          {/* Shift Schedule */}
+          <View style={styles.infoRow}>
+            <Clock size={14} color={theme.colors.link} />
+            <Text style={[styles.label, { color: theme.colors.mute }]}>Shift Timing:</Text>
+            <Text style={[styles.value, { color: theme.colors.ink }]} numberOfLines={1}>
+              {shiftSchedule}
+            </Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* Phone */}
           <View style={styles.infoRow}>
             <Phone size={14} color={theme.colors.mute} />
             <Text style={[styles.label, { color: theme.colors.mute }]}>Mobile Phone:</Text>
@@ -79,19 +120,47 @@ export default function ProfileScreen() {
 
           <View style={styles.divider} />
 
+          {/* Address */}
           <View style={styles.infoRow}>
             <MapPin size={14} color={theme.colors.success} />
-            <Text style={[styles.label, { color: theme.colors.mute }]}>Location:</Text>
-            <Text style={[styles.value, { color: theme.colors.ink }]} numberOfLines={1}>{locationString}</Text>
+            <Text style={[styles.label, { color: theme.colors.mute }]}>Address:</Text>
+            <Text style={[styles.value, { color: theme.colors.ink }]} numberOfLines={2}>
+              {fullAddress}
+            </Text>
           </View>
 
           <View style={styles.divider} />
 
+          {/* Aadhaar Number */}
           <View style={styles.infoRow}>
-            <Building size={14} color={theme.colors.mute} />
-            <Text style={[styles.label, { color: theme.colors.mute }]}>Scope:</Text>
-            <Text style={[styles.value, { color: theme.colors.ink }]}>Reach International Fleet (India)</Text>
+            <ShieldCheck size={14} color="#6366f1" />
+            <Text style={[styles.label, { color: theme.colors.mute }]}>Aadhaar Card:</Text>
+            <Text style={[styles.value, { color: theme.colors.ink, fontFamily: 'monospace' }]} numberOfLines={1}>
+              {aadhaarDisplay}
+            </Text>
           </View>
+
+          <View style={styles.divider} />
+
+          {/* Driving Licence */}
+          <View style={styles.infoRow}>
+            <FileText size={14} color="#8b5cf6" />
+            <Text style={[styles.label, { color: theme.colors.mute }]}>Driving Licence:</Text>
+            <Text style={[styles.value, { color: theme.colors.ink, fontFamily: 'monospace' }]} numberOfLines={1}>
+              {licenceDisplay}
+            </Text>
+          </View>
+
+          {/* Edit Profile CTA */}
+          <Button
+            label="Edit Profile"
+            onPress={() => setEditModalVisible(true)}
+            variant="outline"
+            size="sm"
+            icon={<Edit size={14} color={theme.colors.link} />}
+            fullWidth
+            style={{ marginTop: spacingNumeric.sm + 4 }}
+          />
         </Card>
 
         {/* System Preferences Card */}
@@ -120,6 +189,12 @@ export default function ProfileScreen() {
           style={{ marginTop: spacingNumeric.md }}
         />
       </ScrollView>
+
+      <EditProfileModal
+        visible={editModalVisible}
+        onClose={() => setEditModalVisible(false)}
+        onSuccess={onRefresh}
+      />
     </View>
   );
 }

@@ -14,4 +14,6 @@ export * from './OptimizedList';
 export * from './MobileHeader';
 export * from './MainMenuModal';
 export * from './CustomBottomTabBar';
+export * from './TimeInput';
+
 

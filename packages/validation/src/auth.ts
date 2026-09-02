@@ -228,6 +228,19 @@ export const UpdateUserSchema = z.object({
   license_number: LicenseFieldSchema,
 });
 
+export const ProfileUpdateSchema = z.object({
+  full_name: z.string().trim().min(2, "Full name is required").max(100, "Full name cannot exceed 100 characters"),
+  phone: z.string().trim().min(10, "Mobile number is required (min 10 digits)").max(15, "Mobile number cannot exceed 15 digits"),
+  shift_time: z.string().trim().max(100, "Shift timing cannot exceed 100 characters").optional().nullable(),
+  address: z.string().trim().max(255, "Address cannot exceed 255 characters").optional().nullable(),
+  city: z.string().trim().min(2, "City is required").max(100, "City name cannot exceed 100 characters"),
+  district: z.string().trim().min(2, "District is required").max(100, "District name cannot exceed 100 characters"),
+  state: z.string().trim().min(2, "State is required").max(100, "State name cannot exceed 100 characters"),
+  state_id: z.number().int().positive().optional().nullable(),
+  aadhaar_number: AadhaarFieldSchema,
+  license_number: LicenseFieldSchema,
+});
+
 export const ResetPasswordSchema = z.object({
   email: z.string().trim().email("Invalid email address").max(255, "Email address cannot exceed 255 characters"),
 });
@@ -243,5 +256,7 @@ export type LoginInput = z.infer<typeof LoginSchema>;
 export type SignupInput = z.infer<typeof SignupSchema>;
 export type CreateUserInput = z.infer<typeof CreateUserSchema>;
 export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
+export type ProfileUpdateInput = z.infer<typeof ProfileUpdateSchema>;
 export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
 export type UserAccountRequestInput = z.infer<typeof UserAccountRequestSchema>;
+

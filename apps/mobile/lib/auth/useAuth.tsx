@@ -17,6 +17,7 @@ export interface AuthContextType {
   can: (permission: PermissionCode) => boolean;
   canAny: (permissions: PermissionCode[]) => boolean;
   signOut: () => Promise<void>;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -27,6 +28,7 @@ const AuthContext = createContext<AuthContextType>({
   can: () => false,
   canAny: () => false,
   signOut: async () => {},
+  refreshSession: async () => {},
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -103,6 +105,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await supabase.auth.signOut();
   };
 
+  const refreshSession = async (): Promise<void> => {
+    const { data: { session } } = await supabase.auth.getSession();
+    setSession(session);
+    setUser(session?.user ?? null);
+    await syncUserProfile(session);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -113,6 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         can,
         canAny,
         signOut,
+        refreshSession,
       }}
     >
       {children}

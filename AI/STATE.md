@@ -1,10 +1,128 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: **Production Ready — Shortened Supervisor Modal Title Completed**
-- **Release Candidate**: `v2026.09.01` (Branch: `main`)
+- **Phase**: **Production Ready — Dynamic Multi-Personnel Display & Scalable Font Sizing in Machine Table Completed**
+- **Release Candidate**: `v2026.09.02` (Branch: `main`)
 - **Overall Health**: Production Ready (0 TypeScript Errors across 9 packages, 35/35 Routes Compiled, 0 Runtime Errors, 0 Warnings, 0 P0/P1/P2 Issues)
-- **Last Memory Update**: 2026-09-01
+- **Last Memory Update**: 2026-09-02
+- [x] **Page Feedback: /machines — Dynamic Multi-Personnel Table Cell Display & Scalable Font Sizing (`MachineListClient.tsx`, `MobileMachineCard.tsx`, `apps/mobile/app/(app)/machines.tsx`) (2026-09-02)**:
+  - **1. Dynamic Up-to-3 Person Names Display (Feedback #1)**:
+    - Updated supervisor and operator table columns in `<MachineListClient>` (`<EnterpriseTable>`) via dedicated `<PersonnelCell>` helper to display up to 3 person names directly in the table cell.
+    - If 0 assignees: renders `"Unassigned"` in muted italic text.
+    - If > 3 assignees: renders 3 visible names + inline `+{remainingCount}` badge indicator on the 3rd line, with complete roster available via tooltip (`title={allNames}`).
+  - **2. Dynamic Typography Sizing Scaling**:
+    - **1 Person**: Standard 12px text (`text-xs font-medium`).
+    - **2 Persons**: Scaled down to 11px text (`text-[11px] leading-tight font-medium`) across 2 stacked lines.
+    - **3+ Persons**: Scaled down to 10px text (`text-[10px] leading-[1.25] font-medium`) across 3 stacked lines to fit smoothly into the table cell row height.
+    - Automatically increases or decreases font size based on the number of assigned personnel.
+  - **3. Cross-Platform Mobile Synchronization**:
+    - Synchronized mobile touch cards in `MobileMachineCard.tsx` and React Native mobile cards in `apps/mobile/app/(app)/machines.tsx` to render up to 3 names with proportional font scaling.
+  - **4. Monorepo Quality Gate Verification**: `pnpm turbo run typecheck` passed across **9/9 packages successful (0 errors)** in 49.996s.
+- [x] **Page Feedback: /operations?tab=entry — Compact Overnight Indicator & Cross-Platform Responsive Grid Optimization (`OperatorDashboard.tsx`, `CustomTimePicker.tsx`) (2026-09-02)**:
+  - **1. Compact Overnight Indicator (Feedback #1)**:
+    - Removed bulky outer padding (`px-2.5 py-1`), border (`border-indigo-500/20`), background, and shadow from the `🌙 Overnight · [duration]` indicator in `OperatorDashboard.tsx`.
+    - Made it a clean inline monospace text element (`text-[10px] sm:text-[11px] font-bold text-indigo-600 dark:text-indigo-400 font-mono inline-flex items-center gap-1`) so it fits seamlessly into the header line without pushing down lower form elements.
+  - **2. Multi-Tier Responsive Grid Optimization (Feedback #2)**:
+    - Refactored Shift Timing fields (Log Date, Start Time, End Time, Overtime) from a rigid layout to an ultra-responsive multi-tier grid:
+      - **Mobile (< 640px)**: 1 column (`grid-cols-1`) with full width per field to prevent squeezed inputs or horizontal overflow.
+      - **Tablet (640px–1023px)**: 2 columns (`sm:grid-cols-2`) with spacious side-by-side pairing.
+      - **Desktop (≥ 1024px)**: 4 columns (`lg:grid-cols-4`) in 1 neat, balanced row.
+    - Updated `CustomTimePicker.tsx` hours and minutes inputs to `min-w-0 flex-1` with padding `px-1.5 sm:px-2` and `shrink-0` colon separator to guarantee flawless responsiveness across all devices from 320px up to 4K displays.
+  - **3. Monorepo Quality Gate Verification**: `pnpm turbo run typecheck` passed with **9/9 packages successful (0 errors)** in 19.767s.
+- [x] **Page Feedback: /operations?tab=entry — SegmentedToggle Reuse for AM/PM & Streamlined Handover Context Banner (`CustomTimePicker.tsx`, `OperatorDashboard.tsx`, `MeterLogModal.tsx`, `apps/mobile`) (2026-09-02)**:
+  - **1. Reused Canonical `<SegmentedToggle>` for AM/PM (Feedback #1)**:
+    - Replaced the previous ad-hoc button container with the monorepo's canonical `<SegmentedToggle<"AM" | "PM">>` component inside `CustomTimePicker.tsx`.
+    - Configured with `size="sm"`, `responsive={false}`, dynamic `disabled` propagation, and unique `useId()` layout prefix for smooth Framer Motion spring physics without layout collisions.
+  - **2. Removed Redundant "Last shift ended" Container (Feedback #2)**:
+    - Removed the redundant nested `.flex` container displaying `"Last shift ended: [date], [time]"` in `OperatorDashboard.tsx` to streamline the shift entry banner.
+  - **3. Full Date & Time in Handover Banner (Feedback #3)**:
+    - Retained the primary Handover element in `OperatorDashboard.tsx` and enhanced it to display both formatted date and time (`Handover from {machineTimeline.formattedEndDate}, {machineTimeline.formattedEndTime}`).
+  - **4. Cross-Platform Mobile Parity (`apps/mobile`)**:
+    - Synchronized mobile `apps/mobile/components/work/MeterLogModal.tsx` machine timeline banner to display unified `"Handover from [date], [time]"` with clock icon.
+  - **5. Monorepo Quality Gate Verification**: `pnpm turbo run typecheck` passed with **9/9 packages successful (0 errors)** in 39.985s.
+- [x] **Page Feedback: /operations?tab=entry — Leading Zero Normalization (010=10, 030=30), Time Sanitization & Operations Hub Query Optimization (`CustomTimePicker.tsx`, `TimeInput.tsx`, `packages/utils/src/date.ts`, `actions/operators.ts`, `queries/operators.ts`, `OperatorDashboard.tsx`) (2026-09-02)**:
+  - **1. Automatic Leading Zero Normalization (`030 -> 30`, `010 -> 10`)**:
+    - Enhanced `handleHourChange` and `handleMinuteChange` across both Web (`CustomTimePicker.tsx`) and Mobile (`TimeInput.tsx`) to automatically detect and sanitize 3-digit inputs with leading zeros (e.g. `010` → `10`, `030` → `30`, `008` → `8`).
+    - Expanded input `maxLength` to 3 so users typing while a default `0` or `08` is in the field immediately resolve to the intended 2-digit integer without blocking or manual backspacing.
+    - Updated `parseTimeString` to parse 1–3 digits so `010:030 AM` safely evaluates to `10:30 AM` (`10` and `30` stored in database).
+  - **2. Shared Date & Time Utilities Normalization (`packages/utils/src/date.ts`, `actions/operators.ts`)**:
+    - Updated `formatTo12Hour`, `parseTimeToMinutes`, and `parseDateTimeToDate` to support 1–3 digit regex matching (`^(\d{1,3}):(\d{1,3})`), ensuring consistent database storage, shift calculations, and server-side overlap checks.
+  - **3. Operations Hub Query & Hydration Optimization (`queries/operators.ts`, `OperatorDashboard.tsx`)**:
+    - Wrapped `getOperationsHubData` and `getOperatorEntryContext` in React `cache()` for per-request deduplication.
+    - Enriched assigned machine query projection to include `client_id` and joined `client:clients(id, code, company_name, address, city, state, phone)`.
+    - Optimized `findClientForMachine` in `OperatorDashboard.tsx` to immediately read joined client metadata directly from the machine record before querying recent log history.
+  - **4. Monorepo Quality Gate Verification**: `pnpm turbo run typecheck` passed with **9/9 packages successful (0 errors)** in 44.17s; Next.js production build compiled all **35/35 routes cleanly with code 0** in 32.5s.
+- [x] **Page Feedback: /machines/[id]/edit — Fixed Machine Personnel Assignments & MultiUserSelect Candidate Prioritization Across Frontend & Backend (`public.machines`, `MultiUserSelect.tsx`, `queries/machines.ts`, `machine-edit-client.tsx`, `MachineModal.tsx`) (2026-09-02)**:
+  - **1. Database Multi-Assignment Normalization**: Resolved the issue where `RI-MC-0001` (`e956380b-d995-42e1-9b1e-f99a443f4587`) contained extra unselected supervisor and operator IDs from earlier multi-shift test data. Normalized row in Supabase Postgres `dhbbgfzbyatzvqafnsqp` to strictly contain its single real supervisor (**Monu Verma**) and single operator (**Deepak Patel**).
+  - **2. Backend DAL & Hydration Normalization (`queries/machines.ts`)**: In `hydrateMachinesPersonnel`, normalized `supervisor_ids` and `operator_ids` to strictly match valid hydrated user entities.
+  - **3. MultiUserSelect Candidate Prioritization (`MultiUserSelect.tsx`, `machine-edit-client.tsx`, `MachineModal.tsx`)**: In `MultiUserSelect.tsx`, sorted popover dropdown candidates so currently selected/assigned staff appear first at the top with active checkmarks. Ensured candidate lists in edit views include all assignees.
+  - **4. Monorepo Quality Gate Verification**: `pnpm turbo run typecheck` passed with **9/9 packages successful (0 errors)** in 15.097s; Next.js build compiled **35/35 routes cleanly (0 errors)**.
+- [x] **Page Feedback: /operations?tab=entry — Complete Radial Clock Time Picker Removal & Manual Time Input Replacement Across Web and Mobile (`CustomTimePicker.tsx`, `TimeInput.tsx`, `TimePicker.tsx`, `DateTimePicker.tsx`, `OperatorDashboard.tsx`, `EditProfileModal.tsx`, `CreateTaskModal.tsx`, `MeterLogModal.tsx`, `apps/mobile`) (2026-09-02)**:
+  - **1. Radial Clock Removal**: Completely removed all SVG radial clock dials, pointer angle calculations, needle drag event listeners, and complex popover dialogs from the monorepo.
+  - **2. Manual Time Input Architecture**: Built unified `<TimeInput>` (aliased to `<CustomTimePicker>` / `<TimePicker>` for 100% backward compatibility):
+    - **Hours Input**: Required, valid integer range 1–12, zero-padded on blur (`01`–`12`), with inline error validation (`"Hour is required (1–12)"`, `"Hour must be between 1 and 12"`).
+    - **Minutes Input**: Optional, valid integer range 0–60. Automatically treated as `0` (`00`) if left blank for rapid operational shift entry. Inline error validation for values < 0 or > 60.
+    - **AM/PM Switcher**: High-contrast segmented toggle with instant period switching.
+    - **Inline Error Alert**: Crisp inline error banner matching Geist design tokens (`text-rose-500` with `<AnimatedAlertTriangle>`).
+    - **Bidirectional Format Synchronization**: Converts seamlessly between 12-hour AM/PM string (`"08:00 AM"`, `"06:30 PM"`) and database/form state with zero layout jitter.
+  - **3. Cross-Platform Mobile Parity (`apps/mobile`)**: Created native React Native `<TimeInput>` in `apps/mobile/components/ui/TimeInput.tsx` and synchronized `MeterLogModal.tsx`, `EditProfileModal.tsx`, and `CreateTaskModal.tsx`.
+  - **4. Form Submission & Shift Workflow Verification**: Verified shift timing computation (`computeShiftTiming`), normal shifts, handover shift sequencing, overnight shifts, breakdown logging, and strict form submission blocking when invalid.
+  - **5. Monorepo Quality Gate Verification**: `pnpm turbo run typecheck` passed across **9/9 packages successful (0 errors)**; Next.js build compiled all **35/35 routes cleanly (0 errors)**.
+- [x] **Page Feedback: /machines/[id] — Multiple Supervisors and Operators Assignment Support for 24h Fleet Coverage Across Monorepo Stack (`043_support_multiple_supervisors_and_operators.sql`, `@reachinternational/types`, `@reachinternational/validation`, `MultiUserSelect.tsx`, `actions/machines.ts`, `queries/machines.ts`, `queries/operators.ts`, `machine-client-view.tsx`, `machine-edit-client.tsx`, `MachineModal.tsx`, `MachineListClient.tsx`, `MobileMachineCard.tsx`, `machines-export.ts`, `PrintableMachineDirectoryModal.tsx`, `apps/mobile`) (2026-09-02)**:
+  - **1. Full-Stack Multi-Personnel Assignment**: Implemented multiple supervisor (`supervisor_ids UUID[]`) and multiple operator (`operator_ids UUID[]`) assignment support per machine to power 24/7 continuous operations across 8-hour shifts.
+  - **2. Live PostgreSQL Migration `043`**: Added GIN indexes, sync triggers maintaining `current_supervisor_id` & `current_operator_id` backward compatibility, updated supervisor operational restriction triggers, and updated RLS policies on Supabase database `dhbbgfzbyatzvqafnsqp`.
+  - **3. Shared Packages & Reusable MultiUserSelect Component**: Extended types and validation schemas, and built reusable `<MultiUserSelect>` component with shift timing tags, removable chips, search, and clear all actions.
+  - **4. Backend DAL Batch Hydration**: Added single-query batch hydration `hydrateMachinesPersonnel` and updated server actions and queries with array-containment checks.
+  - **5. Machine Details 24h Fleet Personnel Card**: Added dedicated "Assigned Shift Personnel (24h Fleet Coverage)" section on `/machines/[id]` displaying all assigned supervisors and operators with shift times and communication actions.
+  - **6. Directory Table, Search & Exports**: Updated table columns with assignee count badges, full search/filter support, and comma-separated export in Excel, CSV, and PDF.
+  - **7. Mandatory Mobile App Synchronization**: Updated mobile machine fetch query, machine cards, detail modal, and AddMachineModal with multi-operator selection.
+  - **8. Monorepo Quality Gate Verification**: `pnpm turbo run typecheck` passed with **9/9 packages successful (0 errors)** in 18.1s; Next.js build compiled **35/35 routes cleanly (0 errors)**.
+- [x] **Page Feedback: /machines — Edit Profile Modal Streamlining, Clock UI Time Pickers, Section Consolidation & Address Simplification (`EditProfileModal.tsx`, `UserProfileDropdown.tsx`, `MobileBottomNav.tsx`, `apps/mobile`) (2026-09-02)**:
+  - **1. Modal Title Standardization (Feedback #1)**: Updated dialog title from `"Edit My Profile & Shift Details"` to `"Edit Profile"` in both web and mobile (`EditProfileModal.tsx`, `UserProfileDropdown.tsx`, `MobileBottomNav.tsx`, `apps/mobile/profile.tsx`).
+  - **2. Direct Shift Start & End Time with Precision Clock UI (Feedback #2)**: Replaced preset select dropdown and custom shift text toggle with direct **Shift Start Time** and **Shift End Time** inputs powered by `<CustomTimePicker>` (SVG radial clock dial UI with instant hour/minute/AM/PM selection) across web and mobile.
+  - **3. Section 3: "Address" (Feedback #3)**: Renamed section heading from `"3. Address & Location"` to concise `"3. Address"`.
+  - **4. Section 2: "Shift Timing" (Feedback #4)**: Renamed section heading from `"2. Shift Timing & Operations"` to concise `"2. Shift Timing"`, removing redundant subtitle metadata.
+  - **5. Section 1: "Personal Details" (Feedback #5)**: Renamed section heading from `"1. Personal & Contact Information"` to concise `"1. Personal Details"`.
+  - **6. Consolidated Aadhaar & Driving Licence into Personal Details (Feedback #6)**: Moved Aadhaar Card Number and Driving Licence inputs directly into Section 1 ("1. Personal Details") right below Full Name and Mobile Phone, eliminating Section 4 completely.
+  - **7. Removed Street Address Container (Feedback #7)**: Removed Street / Residential address field completely; Section 3 strictly captures normalized location (**State / UT**, **District**, and **City / Town**).
+  - **8. Mandatory Web-to-Mobile Synchronization**: Synchronized mobile `apps/mobile/components/profile/EditProfileModal.tsx` and `apps/mobile/app/(app)/profile.tsx` with identical titles, streamlined personal details, start/end shift timing, and address structure.
+  - **9. Monorepo Quality Gate Verification**: `pnpm turbo run typecheck` passed with **9/9 packages successful (0 errors)** in 23.47s.
+- [x] **Page Feedback: /machines — UserProfileDropdown Dynamic Profile Card Redesign, Full Detailed Info, Icon-Only Edit & Clean UI (`UserProfileDropdown.tsx`, `MobileBottomNav.tsx`) (2026-09-02)**:
+  - **1. Removed Redundant Admin Links (Feedback #1)**: Removed `.space-y-0.5` links container (`User Management`, `Audit Security Logs`, `Platform Settings`) from the profile card popover since all items exist in the main sidebar.
+  - **2. Slightly Bigger Dynamic View Card with Full User Info (Feedbacks #2 & #3)**: Expanded card width to `330px` with dynamic viewport-bounded positioning. Rendered email, mobile phone, shift schedule, residential/city/district/state address, masked Aadhaar (`XXXX-XXXX-1234`), and driving licence in high-contrast Geist micro-cards.
+  - **3. Icon-Only Edit Button (Feedback #4)**: Replaced full text button with a top-right icon-only edit trigger button (`<Edit size={13} />`) in the profile header.
+  - **4. Removed "Active" Status Badge (Feedback #5)**: Removed green `"Active"` badge from `UserProfileDropdown.tsx` and `MobileBottomNav.tsx`.
+  - **5. Monorepo Quality Gate Verification**: `pnpm turbo run typecheck` passed across **9/9 packages successful (0 errors)** in 1m19s.
+- [x] **Page Feedback: /machines — Complete FilterToolbar Architecture Redesign from Scratch with CSS Grid & Hardware-Accelerated Animation (`FilterToolbar.tsx`) (2026-09-01)**:
+  - **1. Architecture Redesign from Scratch**:
+    - Completely replaced the Framer Motion height calculation and unmounting system with a native, hardware-accelerated CSS Grid `grid-template-rows: 0fr <-> 1fr` architecture.
+    - Achieves buttery-smooth 60/120 FPS open and close animations with zero JavaScript measuring overhead or layout jumps.
+    - Opening: `grid-rows-[1fr] opacity-100 duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]`.
+    - Closing: `grid-rows-[0fr] opacity-0 duration-250 ease-[cubic-bezier(0.4,0,0.2,1)] pointer-events-none`.
+    - Automated transition listener (`onTransitionEnd`) seamlessly switches between `overflow-hidden` during transitions and `overflow-visible` when stationary open, ensuring dropdown popovers float without clipping.
+  - **2. Monorepo Quality Gate Verification**:
+    - Monorepo `pnpm turbo run typecheck` passed with **9/9 packages successful (0 errors)** in 18.91s.
+- [x] **Page Feedback: /machines?tab=inventory — User Profile Details, Self-Service Edits, Hierarchical Approval Workflow, and Mobile Bottom Nav Cleanup (`042_add_shift_address_and_profile_change_requests.sql`, `profile_change_requests`, `MobileBottomNav.tsx`, `EditProfileModal.tsx`, `ProfileChangeRequestsSection.tsx`, `profile.tsx`, `users.tsx`, `apps/mobile`) (2026-09-01)**:
+  - **1. Mobile Bottom Nav Cleanup**: Removed `"Quick Management"` paragraph and link list from `<MobileBottomNav>`. Rendered user details summary and "Edit Profile & Shift Details" trigger modal.
+  - **2. Full User Profile Details**: Added `shift_time` and `address` to `public.users`. Extended `UserProfileDropdown.tsx`, `UserDetailSheet.tsx`, `profile.tsx`, `UserCreateModal.tsx`, `UserEditModal.tsx`, `CreateUserModal.tsx`, and `UserDetailModal.tsx` to render Shift Timing, Mobile, Street Address, City/District/State, Aadhaar Number (masked), and Driving Licence.
+  - **3. Self-Service Profile Edits & Approval Hierarchy**: Built `apps/web/components/profile/EditProfileModal.tsx` and mobile `apps/mobile/components/profile/EditProfileModal.tsx` with server actions in `apps/web/app/actions/profile.ts`:
+    - `super_admin`: Direct instant database update (no approval needed).
+    - `admin`: Requests routed to `super_admin`. Admin can approve lower-role requests.
+    - `manager` / `service_manager` / `hr_manager` / `store_manager`: Requests routed to `admin`.
+    - `supervisor`: Requests routed to `manager`. Supervisor has **0 approval access**.
+    - Field Staff (`operator`, `engineer`, `mechanic`): Requests routed to `manager`.
+  - **4. Dedicated Profile Change Requests Review Section**: Built `<ProfileChangeRequestsSection>` on `/users` and mobile `apps/mobile/app/(app)/users.tsx` completely separated from new registration requests (`status = 'pending'`), with side-by-side diffs, individual Approve/Reject, and batch Accept All / Reject All actions.
+  - **5. Monorepo Quality Gate Verification**:
+    - `pnpm turbo run typecheck` passed with **9/9 packages successful (0 errors)** in 32.6s.
+    - `pnpm --filter @reachinternational/web build` passed with **35/35 routes compiled (0 errors)** in 55s.
+- [x] **Page Feedback: /machines — FilterToolbar Smooth Collapse Animation & Dropdown Popover Visibility (`FilterToolbar.tsx`, `MachineListClient.tsx`) (2026-09-01)**:
+  - **1. Smooth Collapse Transition**:
+    - Removed nested inner `motion.div` that translated `y: -4` during exit and caused visual text jumping and snapping during drawer collapse.
+    - Synchronized Framer Motion easing curve (`[0.16, 1, 0.3, 1]`) and opacity transition (`easeInOut`) for a buttery-smooth collapse matching the expand animation.
+    - Dynamically applied `overflow-hidden` during transitions and `overflow-visible` when stationary so dropdown popovers (Rental, Health, Supervisor, Sort) float cleanly without boundary clipping.
+  - **2. Quality Gate & Bug Fixes**:
+    - Monorepo `pnpm turbo run typecheck` passed with **9/9 packages successful (0 errors)** in 490ms (Full Turbo).
+    - Verified live expand/collapse animation and popover selections in browser on `/machines`.
 - [x] **Page Feedback: /machines?tab=inventory — Shortened Supervisor Modal Title (`MachineModal.tsx`, `MachineListClient.tsx`) (2026-09-01)**:
   - **1. Shortened Modal Title**: Changed supervisor modal title in `MachineModal.tsx` to `"Update Status (${machine.machine_id})"`.
   - **2. Row Action Menu**: Synchronized supervisor label in `MachineListClient.tsx` to `"Update Status"`.

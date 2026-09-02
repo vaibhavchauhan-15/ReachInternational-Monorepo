@@ -44,13 +44,20 @@ import {
   bulkRejectUsers,
   editUser,
 } from "@/app/actions/users";
+import {
+  approveProfileChangeRequest,
+  rejectProfileChangeRequest,
+  bulkApproveProfileChangeRequests,
+  bulkRejectProfileChangeRequests,
+} from "@/app/actions/profile";
 import { exportUsersToExcel, exportUsersToCSV } from "@/lib/utils/users-export";
 import { formatDateTime, formatTimeAgo, formatTinyRelativeTime } from "@reachinternational/utils";
 import { UserRow } from "./UserRow";
 import { MobileUserCard } from "./MobileUserCard";
 import { UserDetailSheet } from "./UserDetailSheet";
+import { ProfileChangeRequestsSection } from "./ProfileChangeRequestsSection";
 import dynamic from "next/dynamic";
-import type { User, UserRole } from "@/lib/types/database";
+import type { User, UserRole, ProfileChangeRequest } from "@/lib/types/database";
 
 const UserCreateModal = dynamic(() => import("./UserCreateModal").then(mod => mod.UserCreateModal), { ssr: false });
 const UserEditModal = dynamic(() => import("./UserEditModal").then(mod => mod.UserEditModal), { ssr: false });
@@ -353,6 +360,7 @@ function CustomFilterSelector({
 interface UsersPageClientProps {
   users: User[];
   pendingUsers: User[];
+  profileChangeRequests?: ProfileChangeRequest[];
   currentUser: User;
   isSuperAdmin: boolean;
 }
@@ -360,6 +368,7 @@ interface UsersPageClientProps {
 export function UsersPageClient({
   users,
   pendingUsers,
+  profileChangeRequests = [],
   currentUser,
   isSuperAdmin,
 }: UsersPageClientProps) {
@@ -370,6 +379,7 @@ export function UsersPageClient({
   // Optimistic local state synchronized with server props
   const [usersList, setUsersList] = useState<User[]>(users);
   const [pendingUsersList, setPendingUsersList] = useState<User[]>(pendingUsers);
+  const [profileRequestsList, setProfileRequestsList] = useState<ProfileChangeRequest[]>(profileChangeRequests);
 
   useEffect(() => {
     setUsersList(users);
@@ -379,7 +389,12 @@ export function UsersPageClient({
     setPendingUsersList(pendingUsers);
   }, [pendingUsers]);
 
+  useEffect(() => {
+    setProfileRequestsList(profileChangeRequests);
+  }, [profileChangeRequests]);
+
   const [loading, setLoading] = useState<{ type: "approve" | "reject" | "create" | "reset" | "toggle" | "role" | "delete" | "edit"; id: string } | null>(null);
+  const [profileLoading, setProfileLoading] = useState<{ type: "approve" | "reject"; id: string } | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
@@ -412,6 +427,10 @@ export function UsersPageClient({
   const [isBulkApproving, setIsBulkApproving] = useState(false);
   const [isBulkRejecting, setIsBulkRejecting] = useState(false);
   const [showRejectAllConfirm, setShowRejectAllConfirm] = useState(false);
+
+  // Bulk Profile Approvals State
+  const [isBulkApprovingProfile, setIsBulkApprovingProfile] = useState(false);
+  const [isBulkRejectingProfile, setIsBulkRejectingProfile] = useState(false);
 
   // Search and Filter State
   const [searchTerm, setSearchTerm] = useState("");
@@ -557,6 +576,113 @@ export function UsersPageClient({
       toast("error", err?.message || "Failed to reject all users.");
     }
   }, [pendingUsersList, usersList, router, toast]);
+
+  // Handlers for Profile Change Requests with Optimistic Feedback
+  const handleApproveProfileChange = useCallback(
+    async (requestId: string) => {
+      const prevList = profileRequestsList;
+      const targetReq = profileRequestsList.find((r) => r.id === requestId);
+      setProfileRequestsList((prev) => prev.filter((r) => r.id !== requestId));
+      setProfileLoading({ type: "approve", id: requestId });
+
+      // Optimistically update the user in the main directory table if present
+      if (targetReq?.user_id && targetReq?.requested_data) {
+        setUsersList((prev) =>
+          prev.map((u) => (u.id === targetReq.user_id ? { ...u, ...targetReq.requested_data } : u))
+        );
+      }
+
+      try {
+        const res = await approveProfileChangeRequest(requestId);
+        setProfileLoading(null);
+        if (res.error) {
+          setProfileRequestsList(prevList);
+          toast("error", res.error);
+        } else {
+          toast("success", res.message || "Profile changes approved and applied.");
+          router.refresh();
+        }
+      } catch (err: any) {
+        setProfileRequestsList(prevList);
+        setProfileLoading(null);
+        toast("error", err?.message || "An unexpected error occurred.");
+      }
+    },
+    [profileRequestsList, router, toast]
+  );
+
+  const handleRejectProfileChange = useCallback(
+    async (requestId: string, reason?: string) => {
+      const prevList = profileRequestsList;
+      setProfileRequestsList((prev) => prev.filter((r) => r.id !== requestId));
+      setProfileLoading({ type: "reject", id: requestId });
+
+      try {
+        const res = await rejectProfileChangeRequest(requestId, reason);
+        setProfileLoading(null);
+        if (res.error) {
+          setProfileRequestsList(prevList);
+          toast("error", res.error);
+        } else {
+          toast("success", res.message || "Profile change request rejected.");
+          router.refresh();
+        }
+      } catch (err: any) {
+        setProfileRequestsList(prevList);
+        setProfileLoading(null);
+        toast("error", err?.message || "An unexpected error occurred.");
+      }
+    },
+    [profileRequestsList, router, toast]
+  );
+
+  const handleApproveAllProfileChanges = useCallback(async () => {
+    if (profileRequestsList.length === 0) return;
+    const prevList = profileRequestsList;
+    const requestIds = profileRequestsList.map((r) => r.id);
+    setProfileRequestsList([]);
+    setIsBulkApprovingProfile(true);
+
+    try {
+      const res = await bulkApproveProfileChangeRequests(requestIds);
+      setIsBulkApprovingProfile(false);
+      if (res.error) {
+        setProfileRequestsList(prevList);
+        toast("error", res.error);
+      } else {
+        toast("success", res.message || "All profile change requests approved.");
+        router.refresh();
+      }
+    } catch (err: any) {
+      setProfileRequestsList(prevList);
+      setIsBulkApprovingProfile(false);
+      toast("error", err?.message || "Failed to bulk approve profile requests.");
+    }
+  }, [profileRequestsList, router, toast]);
+
+  const handleRejectAllProfileChanges = useCallback(async () => {
+    if (profileRequestsList.length === 0) return;
+    const prevList = profileRequestsList;
+    const requestIds = profileRequestsList.map((r) => r.id);
+    setProfileRequestsList([]);
+    setIsBulkRejectingProfile(true);
+
+    try {
+      const res = await bulkRejectProfileChangeRequests(requestIds);
+      setIsBulkRejectingProfile(false);
+      if (res.error) {
+        setProfileRequestsList(prevList);
+        toast("error", res.error);
+      } else {
+        toast("success", res.message || "All profile change requests rejected.");
+        router.refresh();
+      }
+    } catch (err: any) {
+      setProfileRequestsList(prevList);
+      setIsBulkRejectingProfile(false);
+      toast("error", err?.message || "Failed to bulk reject profile requests.");
+    }
+  }, [profileRequestsList, router, toast]);
 
   const handleCreateUser = useCallback(
     async (formData: FormData) => {
@@ -1018,7 +1144,7 @@ export function UsersPageClient({
       />
 
       {/* Metrics Snapshot Header Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
+      <div className={`grid grid-cols-2 md:grid-cols-4 ${profileRequestsList.length > 0 ? "lg:grid-cols-5" : ""} gap-3.5`}>
         <motion.div
           whileTap={{ scale: 0.98 }}
           onClick={() => {
@@ -1096,7 +1222,7 @@ export function UsersPageClient({
         >
           <div className="flex items-center justify-between text-[var(--color-mute)]">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-              Pending Approvals
+              New Registrations
             </span>
             <AnimatedShieldAlert size={16} className="text-amber-600 dark:text-amber-400" />
           </div>
@@ -1104,7 +1230,40 @@ export function UsersPageClient({
             <AnimatedCounter value={pendingUsersList.length} />
           </div>
         </motion.div>
+
+        {profileRequestsList.length > 0 && (
+          <motion.div
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              const el = document.getElementById("profile-change-requests-section");
+              if (el) el.scrollIntoView({ behavior: "smooth" });
+            }}
+            className="cursor-pointer p-4 rounded-[var(--radius-md)] border border-indigo-500/40 bg-indigo-50/30 dark:bg-indigo-950/20 shadow-xs ring-1 ring-indigo-500/20 hover:border-indigo-500 transition-all col-span-2 sm:col-span-1"
+          >
+            <div className="flex items-center justify-between text-[var(--color-mute)]">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-300">
+                Profile Updates
+              </span>
+              <AnimatedShieldAlert size={16} className="text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <div className="text-2xl font-extrabold text-indigo-700 dark:text-indigo-300 mt-1">
+              <AnimatedCounter value={profileRequestsList.length} />
+            </div>
+          </motion.div>
+        )}
       </div>
+
+      {/* Dedicated Profile Change Requests Section */}
+      <ProfileChangeRequestsSection
+        requests={profileRequestsList}
+        onApprove={handleApproveProfileChange}
+        onReject={handleRejectProfileChange}
+        onApproveAll={handleApproveAllProfileChanges}
+        onRejectAll={handleRejectAllProfileChanges}
+        loadingState={profileLoading}
+        isBulkApproving={isBulkApprovingProfile}
+        isBulkRejecting={isBulkRejectingProfile}
+      />
 
       {/* Pending Approvals Mobile & Desktop Card Section */}
       {pendingUsersList.length > 0 && (

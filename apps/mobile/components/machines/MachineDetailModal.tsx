@@ -40,6 +40,10 @@ export interface MachineDetailModalProps {
     } | null;
     supervisor_name?: string;
     operator_name?: string;
+    supervisors?: Array<{ id: string; full_name: string; phone?: string; shift_time?: string }>;
+    operators?: Array<{ id: string; full_name: string; phone?: string; shift_time?: string }>;
+    current_supervisor?: { id: string; full_name: string; phone?: string; shift_time?: string } | null;
+    current_operator?: { id: string; full_name: string; phone?: string; shift_time?: string } | null;
   };
 }
 
@@ -195,17 +199,29 @@ export const MachineDetailModal: React.FC<MachineDetailModalProps> = ({
             {/* Personnel Assignment Card */}
             <View style={[styles.sectionCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
               <View style={styles.sectionTitleRow}>
-                <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>Assigned Personnel</Text>
+                <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>Assigned Personnel (24h Fleet Coverage)</Text>
               </View>
 
               <View style={styles.grid}>
                 <View style={styles.gridItem}>
-                  <Text style={[styles.lbl, { color: theme.colors.mute }]}>Supervisor</Text>
-                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.supervisor_name || 'Unassigned'}</Text>
+                  <Text style={[styles.lbl, { color: theme.colors.mute }]}>
+                    Supervisors ({Array.isArray(machineData.supervisors) && machineData.supervisors.length > 0 ? machineData.supervisors.length : (machineData.supervisor_name || machineData.current_supervisor?.full_name ? 1 : 0)})
+                  </Text>
+                  <Text style={[styles.val, { color: theme.colors.ink }]}>
+                    {Array.isArray(machineData.supervisors) && machineData.supervisors.length > 0
+                      ? machineData.supervisors.map((s: any) => s.full_name + (s.shift_time ? ` (${s.shift_time})` : '')).join(', ')
+                      : machineData.current_supervisor?.full_name || machineData.supervisor_name || 'Unassigned'}
+                  </Text>
                 </View>
                 <View style={styles.gridItem}>
-                  <Text style={[styles.lbl, { color: theme.colors.mute }]}>Operator</Text>
-                  <Text style={[styles.val, { color: theme.colors.ink }]}>{machineData.operator_name || 'Unassigned'}</Text>
+                  <Text style={[styles.lbl, { color: theme.colors.mute }]}>
+                    Operators ({Array.isArray(machineData.operators) && machineData.operators.length > 0 ? machineData.operators.length : (machineData.operator_name || machineData.current_operator?.full_name ? 1 : 0)})
+                  </Text>
+                  <Text style={[styles.val, { color: theme.colors.ink }]}>
+                    {Array.isArray(machineData.operators) && machineData.operators.length > 0
+                      ? machineData.operators.map((o: any) => o.full_name + (o.shift_time ? ` (${o.shift_time})` : '')).join(', ')
+                      : machineData.current_operator?.full_name || machineData.operator_name || 'Unassigned'}
+                  </Text>
                 </View>
               </View>
             </View>

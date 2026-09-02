@@ -34,14 +34,16 @@ export {
 export { MachineSelect, type MachineSelectProps, type MachineSelectItem } from "./MachineSelect";
 export { ClientSelect, type ClientSelectProps, type ClientSelectItem } from "./ClientSelect";
 export { UserSelect, type UserSelectProps, type UserSelectItem } from "./UserSelect";
+export { MultiUserSelect, type MultiUserSelectProps, type MultiUserSelectItem } from "./MultiUserSelect";
 
 // 4. Date & Time Components
 export { CustomDatePicker, type CustomDatePickerProps } from "./CustomDatePicker";
 export { DatePicker, type DatePickerProps } from "./DatePicker";
 export { DateRangePicker, type DateRangePickerProps, type DateRange } from "./DateRangePicker";
-export { CustomTimePicker, type CustomTimePickerProps } from "./CustomTimePicker";
+export { CustomTimePicker, TimeInput, type CustomTimePickerProps, type TimeInputProps } from "./CustomTimePicker";
 export { TimePicker, type TimePickerProps } from "./TimePicker";
 export { DateTimePicker, type DateTimePickerProps } from "./DateTimePicker";
+
 
 // 5. Search & Filtering Controls
 export { SearchBox, type SearchBoxProps } from "./SearchBox";
