@@ -41,9 +41,24 @@ export function exportSupervisorRunningLogsToExcel({
     filtered = filtered.filter((log) => log.machine_id === selectedEntityId);
   } else if (viewMode === "client" && selectedEntityId !== "all") {
     filtered = filtered.filter((log) => {
-      const clientName = (log.machine as any)?.customer_name || "Unassigned Client";
-      const matchesClient = clientName.toLowerCase() === selectedEntityId.toLowerCase();
-      if (!matchesClient) return false;
+      const matchesId =
+        log.client_id === selectedEntityId || (log as any)?.client?.id === selectedEntityId;
+      const clientName =
+        (log as any)?.client?.client_name ||
+        (log as any)?.client?.company_name ||
+        (log.machine as any)?.customer_name ||
+        "";
+      const matchesName =
+        clientName.toLowerCase().trim() === selectedEntityId.toLowerCase().trim();
+      const isClientMch = machines?.some(
+        (m) =>
+          (m.client_id === selectedEntityId ||
+            (m as any).client?.id === selectedEntityId ||
+            ((m as any).client?.company_name || (m as any).customer_name || "").toLowerCase().trim() === selectedEntityId.toLowerCase().trim()) &&
+          m.id === log.machine_id
+      );
+
+      if (!matchesId && !matchesName && !isClientMch) return false;
 
       if (selectedSite && selectedSite !== "all") {
         const mObj = log.machine as any;

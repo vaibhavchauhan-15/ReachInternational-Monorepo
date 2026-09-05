@@ -877,7 +877,7 @@ export async function assignOperatorToMachineAction(payload: {
 
   await logAudit({
     user_id: user.id,
-    action: "machine.operator_assigned",
+    action: payload.operatorId ? "machine.operator_assigned" : "machine.operator_unassigned",
     entity_type: "machine",
     entity_id: payload.machineId,
     metadata: {

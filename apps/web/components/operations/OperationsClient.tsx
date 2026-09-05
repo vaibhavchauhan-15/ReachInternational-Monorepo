@@ -127,7 +127,7 @@ export function OperationsClient({
 
   // Form states: Assignment
   const [selectedMachineId, setSelectedMachineId] = useState(machines[0]?.id || "");
-  const [selectedOperatorId, setSelectedOperatorId] = useState(operators[0]?.id || "");
+  const [selectedOperatorId, setSelectedOperatorId] = useState("");
   const [reassignReason, setReassignReason] = useState("");
   const [notes, setNotes] = useState("");
 
@@ -164,7 +164,7 @@ export function OperationsClient({
   // Supervisor Running Hours Log Filtering & View Mode State
   const [logsViewMode, setLogsViewMode] = useState<"machine" | "client" | "operator">("machine");
   const [logsSelectedMachineId, setLogsSelectedMachineId] = useState<string>("");
-  const [logsSelectedClientName, setLogsSelectedClientName] = useState<string>("");
+  const [logsSelectedClientId, setLogsSelectedClientId] = useState<string>("");
   const [logsSelectedSite, setLogsSelectedSite] = useState<string>("all");
   const [logsSelectedClientMachineId, setLogsSelectedClientMachineId] = useState<string>("all");
   const [logsSelectedOperatorId, setLogsSelectedOperatorId] = useState<string>("");
@@ -206,109 +206,186 @@ export function OperationsClient({
       ? logsSelectedOperatorId
       : orderedOperators[0]?.id || "";
 
-  // Derived unique clients list (ordered by database clients and log activity)
-  const uniqueClients = Array.from(
-    new Set(
-      [
-        ...dbClients.map((c) => c.client_name),
-        ...hourLogs.map((l) => (l as any)?.client?.client_name || (l.machine as any)?.customer_name),
-        ...machines.map((m) => (m as any)?.customer_name),
-      ].filter(Boolean)
-    )
-  ) as string[];
+  // Comprehensive clients list derived from dbClients and hourLogs/machines
+  const allClientsList = useMemo(() => {
+    const clientsMap = new Map<string, any>();
 
-  const activeClientName =
-    logsSelectedClientName && logsSelectedClientName !== "all"
-      ? logsSelectedClientName
-      : uniqueClients[0] || "";
+    // 1. Seed with database clients
+    (dbClients || []).forEach((c) => {
+      const name = c.company_name || c.client_name || (c as any).name || "Client";
+      clientsMap.set(c.id, {
+        ...c,
+        client_name: name,
+        company_name: name,
+        name,
+      });
+    });
 
-  const activeDbClient = dbClients.find(
-    (c) => (c.company_name || c.client_name || "").toLowerCase() === activeClientName.toLowerCase()
-  );
+    // 2. Discover any clients in logs that might not be in dbClients
+    hourLogs.forEach((l) => {
+      const c = (l as any).client;
+      if (c && c.id && !clientsMap.has(c.id)) {
+        const name = c.company_name || c.client_name || "Client";
+        clientsMap.set(c.id, {
+          id: c.id,
+          code: c.code,
+          client_name: name,
+          company_name: name,
+          name: name,
+          city: c.city,
+          state: c.state,
+          address: c.address,
+          phone: c.phone,
+        });
+      }
+    });
+
+    // 3. Discover any clients in machines that might not be in dbClients
+    machines.forEach((m) => {
+      const c = (m as any).client;
+      if (c && c.id && !clientsMap.has(c.id)) {
+        const name = c.company_name || c.client_name || "Client";
+        clientsMap.set(c.id, {
+          id: c.id,
+          code: c.code,
+          client_name: name,
+          company_name: name,
+          name: name,
+          city: c.city,
+          state: c.state,
+          address: c.address,
+          phone: c.phone,
+        });
+      }
+    });
+
+    return Array.from(clientsMap.values());
+  }, [dbClients, hourLogs, machines]);
+
+  // Active selected client resolution
+  const activeClient = useMemo(() => {
+    if (!allClientsList.length) return null;
+
+    // If explicitly selected by ID or Name
+    if (logsSelectedClientId && logsSelectedClientId !== "all") {
+      const found = allClientsList.find(
+        (c) =>
+          c.id === logsSelectedClientId ||
+          c.client_name?.toLowerCase().trim() === logsSelectedClientId.toLowerCase().trim() ||
+          c.company_name?.toLowerCase().trim() === logsSelectedClientId.toLowerCase().trim()
+      );
+      if (found) return found;
+    }
+
+    // Default to the client that has active hour logs, so supervisor immediately sees records
+    const clientWithLogs = allClientsList.find((c) =>
+      hourLogs.some(
+        (l) =>
+          l.client_id === c.id ||
+          (l.client as any)?.id === c.id ||
+          (l.client as any)?.client_name?.toLowerCase().trim() === c.client_name?.toLowerCase().trim() ||
+          (l.client as any)?.company_name?.toLowerCase().trim() === c.company_name?.toLowerCase().trim()
+      )
+    );
+    return clientWithLogs || allClientsList[0];
+  }, [allClientsList, logsSelectedClientId, hourLogs]);
+
+  const activeClientId = activeClient?.id || "";
+  const activeClientName = activeClient?.company_name || activeClient?.client_name || activeClient?.name || "";
+  const activeDbClient = activeClient;
 
   // Derived machine IDs associated with active selected client from logs
-  const clientMachineIdsFromLogs = Array.from(
-    new Set(
-      hourLogs
-        .filter((l) => {
-          const cName = (l as any)?.client?.client_name || (l.machine as any)?.customer_name || "";
-          return cName.toLowerCase() === activeClientName.toLowerCase();
-        })
-        .map((l) => l.machine_id)
-        .filter(Boolean)
-    )
-  );
+  const clientMachineIdsFromLogs = useMemo(() => {
+    if (!activeClientId && !activeClientName) return [];
+    return Array.from(
+      new Set(
+        hourLogs
+          .filter((l) => {
+            if (activeClientId && (l.client_id === activeClientId || (l as any)?.client?.id === activeClientId)) return true;
+            const cName = (l as any)?.client?.client_name || (l as any)?.client?.company_name || (l.machine as any)?.customer_name || "";
+            return activeClientName && cName.toLowerCase().trim() === activeClientName.toLowerCase().trim();
+          })
+          .map((l) => l.machine_id)
+          .filter(Boolean)
+      )
+    );
+  }, [hourLogs, activeClientId, activeClientName]);
 
-  // Derived machines rented by active selected client
-  const clientMachines = machines.filter(
-    (m) =>
-      ((m as any)?.customer_name || "").toLowerCase() === activeClientName.toLowerCase() ||
-      clientMachineIdsFromLogs.includes(m.id)
-  );
+  // Derived machines rented by active selected client (assigned via client_id, client relation, or logs)
+  const clientMachines = useMemo(() => {
+    if (!activeClientId && !activeClientName) return [];
+    return machines.filter((m) => {
+      if (activeClientId && m.client_id === activeClientId) return true;
+      if (activeClientId && (m as any).client?.id === activeClientId) return true;
+      const mClientName =
+        (m as any).client?.company_name ||
+        (m as any).client?.client_name ||
+        (m as any).customer_name ||
+        "";
+      if (activeClientName && mClientName.toLowerCase().trim() === activeClientName.toLowerCase().trim()) return true;
+      if (clientMachineIdsFromLogs.includes(m.id)) return true;
+      return false;
+    });
+  }, [machines, activeClientId, activeClientName, clientMachineIdsFromLogs]);
 
   // Derived unique site locations for active selected client
-  const clientSites = Array.from(
-    new Set(
-      [
-        ...clientMachines.map((m) => {
-          const addr = (m as any)?.customer_address;
-          const city = (m as any)?.city;
-          if (addr && city) return `${addr}, ${city}`;
-          if (addr) return addr;
-          if (city) return city;
-          return null;
-        }),
-        ...hourLogs
-          .filter((l) => {
-            const cName = (l as any)?.client?.client_name || (l.machine as any)?.customer_name || "";
-            return cName.toLowerCase() === activeClientName.toLowerCase();
-          })
-          .map((l) => {
-            const loc = l.location;
-            const addr = (l.machine as any)?.customer_address;
-            const city = (l.machine as any)?.city;
-            if (loc) return loc;
-            if (addr && city) return `${addr}, ${city}`;
-            if (addr) return addr;
-            if (city) return city;
-            return null;
-          }),
-      ].filter(Boolean)
-    )
-  ) as string[];
+  const clientSites = useMemo(() => {
+    const sites = new Set<string>();
+    if (activeClient?.city && activeClient?.state) {
+      sites.add(`${activeClient.city}, ${activeClient.state}`);
+    } else if (activeClient?.city) {
+      sites.add(activeClient.city);
+    } else if (activeClient?.address) {
+      sites.add(activeClient.address);
+    }
 
-  // Effective selected site location (If client has only 1 site, default to that single site per feedback item 4)
+    clientMachines.forEach((m) => {
+      const addr = (m as any)?.customer_address;
+      const city = (m as any)?.city;
+      if (addr && city) sites.add(`${addr}, ${city}`);
+      else if (addr) sites.add(addr);
+      else if (city) sites.add(city);
+    });
+
+    hourLogs.forEach((l) => {
+      const isClientLog =
+        (activeClientId && (l.client_id === activeClientId || (l as any)?.client?.id === activeClientId)) ||
+        (activeClientName && ((l as any)?.client?.client_name || (l as any)?.client?.company_name || "").toLowerCase().trim() === activeClientName.toLowerCase().trim()) ||
+        clientMachines.some((m) => m.id === l.machine_id);
+
+      if (isClientLog && l.location) {
+        sites.add(l.location);
+      }
+    });
+
+    return Array.from(sites).filter(Boolean);
+  }, [activeClient, clientMachines, hourLogs, activeClientId, activeClientName]);
+
+  // Effective selected site location (default to "all")
   const effectiveSelectedSite =
-    clientSites.length === 1
-      ? clientSites[0]
-      : logsSelectedSite;
+    logsSelectedSite && logsSelectedSite !== "all"
+      ? (clientSites.includes(logsSelectedSite) ? logsSelectedSite : "all")
+      : "all";
 
-  // Effective selected client machine ID (If client has only 1 rented machine, default to that single machine per feedback item 5)
-  const effectiveSelectedClientMachineId =
-    clientMachines.length === 1
-      ? clientMachines[0].id
-      : logsSelectedClientMachineId;
+  // Effective selected client machine ID (By default select "all" per feedback #2)
+  const effectiveSelectedClientMachineId = useMemo(() => {
+    if (!logsSelectedClientMachineId || logsSelectedClientMachineId === "all") {
+      return "all";
+    }
+    if (!clientMachines.some((m) => m.id === logsSelectedClientMachineId)) {
+      return "all";
+    }
+    return logsSelectedClientMachineId;
+  }, [logsSelectedClientMachineId, clientMachines]);
 
-  // Active selected client details object (for Client Header Card)
-  const clientMachineObj = (
-    hourLogs.find((l) => {
-      const cName = (l as any)?.client?.client_name || (l.machine as any)?.customer_name || "";
-      return cName.toLowerCase() === activeClientName.toLowerCase();
-    })?.machine ||
-    machines.find((m) => (m as any)?.customer_name?.toLowerCase() === activeClientName.toLowerCase())
-  ) as any;
-
-  const clientMobile = activeDbClient?.phone || clientMachineObj?.customer_mobile || "—";
-  const clientEmail = activeDbClient?.email || clientMachineObj?.customer_email || "—";
+  // Active selected client details (for Client Header Card)
+  const clientMobile = activeDbClient?.phone || "—";
+  const clientEmail = activeDbClient?.email || "—";
   const clientCityState = activeDbClient?.city
     ? `${activeDbClient.city}${activeDbClient.state ? `, ${activeDbClient.state}` : ""}`
-    : clientMachineObj?.city
-    ? `${clientMachineObj.city}${clientMachineObj.state ? `, ${clientMachineObj.state}` : ""}`
     : "—";
-  const clientAddress = activeDbClient?.address || clientMachineObj?.customer_address || "—";
-  const clientFleetCount = clientMachines.length || hourLogs.filter(
-    (l) => ((l as any)?.client?.client_name || (l.machine as any)?.customer_name || "").toLowerCase() === activeClientName.toLowerCase()
-  ).length;
+  const clientAddress = activeDbClient?.address || "—";
+  const clientFleetCount = clientMachines.length;
 
   // Filtered running hour logs
   let filteredHourLogs = hourLogs;
@@ -327,8 +404,23 @@ export function OperationsClient({
     );
   } else if (logsViewMode === "client") {
     filteredHourLogs = filteredHourLogs.filter((log) => {
-      const clientName = (log as any)?.client?.client_name || (log.machine as any)?.customer_name || "Unassigned Client";
-      const matchesClient = clientName.toLowerCase() === activeClientName.toLowerCase();
+      // Check if log belongs to the selected client
+      const matchesClientId =
+        Boolean(activeClientId) &&
+        (log.client_id === activeClientId || (log as any)?.client?.id === activeClientId);
+
+      const logClientName =
+        (log as any)?.client?.client_name ||
+        (log as any)?.client?.company_name ||
+        (log.machine as any)?.customer_name ||
+        "";
+      const matchesClientName =
+        Boolean(activeClientName) &&
+        logClientName.toLowerCase().trim() === activeClientName.toLowerCase().trim();
+
+      const isClientMachine = clientMachines.some((m) => m.id === log.machine_id);
+
+      const matchesClient = matchesClientId || matchesClientName || isClientMachine;
       if (!matchesClient) return false;
 
       // Optional Site Location filter
@@ -338,7 +430,7 @@ export function OperationsClient({
         if (!siteStr.toLowerCase().includes(effectiveSelectedSite.toLowerCase())) return false;
       }
 
-      // Optional Client Machine filter
+      // Optional Client Machine filter (defaults to "all" to show all client logs)
       if (effectiveSelectedClientMachineId && effectiveSelectedClientMachineId !== "all") {
         if (log.machine_id !== effectiveSelectedClientMachineId) return false;
       }
@@ -370,6 +462,48 @@ export function OperationsClient({
   const loggedDaysCount = new Set(filteredHourLogs.map((l) => l.log_date)).size;
   const displayWorkingDays = loggedDaysCount > 0 ? loggedDaysCount : 26;
 
+  const currentSelectedMachine = useMemo(
+    () => machines.find((m) => m.id === selectedMachineId),
+    [machines, selectedMachineId]
+  );
+
+  const currentRegisteredOperator = useMemo(() => {
+    if (!currentSelectedMachine) return null;
+
+    // 1. Direct joined current_operator on machine object
+    if ((currentSelectedMachine as any).current_operator) {
+      return (currentSelectedMachine as any).current_operator;
+    }
+
+    // 2. Direct current_operator_id on machine object
+    const opId = currentSelectedMachine.current_operator_id || (currentSelectedMachine as any).operator_id;
+    if (opId) {
+      const fromOps = operators.find((u) => u.id === opId);
+      if (fromOps) return fromOps;
+    }
+
+    // 3. Active assignments list
+    const activeAss = assignments.find(
+      (a) => a.machine_id === currentSelectedMachine.id && a.status === "active" && a.operator_id
+    );
+    if (activeAss) {
+      if ((activeAss as any).operator) return (activeAss as any).operator;
+      const fromOps = operators.find((u) => u.id === activeAss.operator_id);
+      if (fromOps) return fromOps;
+    }
+
+    // 4. operators array or operator_ids array on machine
+    if (Array.isArray((currentSelectedMachine as any).operators) && (currentSelectedMachine as any).operators.length > 0) {
+      return (currentSelectedMachine as any).operators[0];
+    }
+    if (Array.isArray((currentSelectedMachine as any).operator_ids) && (currentSelectedMachine as any).operator_ids.length > 0) {
+      const fromOps = operators.find((u) => u.id === (currentSelectedMachine as any).operator_ids[0]);
+      if (fromOps) return fromOps;
+    }
+
+    return null;
+  }, [currentSelectedMachine, operators, assignments]);
+
   const handleOpenAssignModal = (targetMachineId?: string, targetOperatorId?: string) => {
     if (targetMachineId) {
       setSelectedMachineId(targetMachineId);
@@ -381,8 +515,8 @@ export function OperationsClient({
 
     if (targetOperatorId) {
       setSelectedOperatorId(targetOperatorId);
-    } else if (!selectedOperatorId && activeOperators[0]?.id) {
-      setSelectedOperatorId(activeOperators[0].id);
+    } else {
+      setSelectedOperatorId("");
     }
 
     setShowAssignModal(true);
@@ -395,6 +529,11 @@ export function OperationsClient({
       return;
     }
 
+    if (currentRegisteredOperator && selectedOperatorId === currentRegisteredOperator.id) {
+      toast("error", "This operator is already registered to the selected machine. Please choose a different operator.");
+      return;
+    }
+
     setSubmitting(true);
     try {
       const res = await assignOperatorToMachineAction({
@@ -404,15 +543,52 @@ export function OperationsClient({
       });
 
       if (res.success) {
-        toast("success", "Operator assigned to equipment successfully.");
+        toast(
+          "success",
+          currentRegisteredOperator
+            ? "Operator reassigned to equipment successfully."
+            : "Operator assigned to equipment successfully."
+        );
         setShowAssignModal(false);
         setNotes("");
+        setSelectedOperatorId("");
         router.refresh();
       } else {
         toast("error", `Error assigning operator: ${res.error || "Failed to assign operator"}`);
       }
     } catch (err: any) {
       toast("error", `Error assigning operator: ${err?.message || "Failed to assign operator"}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleUnassignOperator = async () => {
+    if (!selectedMachineId) return;
+    const opName = currentRegisteredOperator?.full_name || currentRegisteredOperator?.name || "the current operator";
+    const machLabel = currentSelectedMachine ? formatMachineSelectLabel(currentSelectedMachine) : "this machine";
+    if (!window.confirm(`Are you sure you want to unassign ${opName} from ${machLabel}?`)) {
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const res = await assignOperatorToMachineAction({
+        machineId: selectedMachineId,
+        operatorId: null,
+        notes: "Unassigned operator via Operations Hub",
+      });
+
+      if (res.success) {
+        toast("success", "Operator unassigned from equipment successfully.");
+        setShowAssignModal(false);
+        setSelectedOperatorId("");
+        router.refresh();
+      } else {
+        toast("error", `Error unassigning operator: ${res.error || "Failed to unassign operator"}`);
+      }
+    } catch (err: any) {
+      toast("error", `Error unassigning operator: ${err?.message || "Failed to unassign operator"}`);
     } finally {
       setSubmitting(false);
     }
@@ -592,8 +768,10 @@ export function OperationsClient({
                   type="button"
                   onClick={() => {
                     setLogsViewMode("client");
-                    if (!logsSelectedClientName || logsSelectedClientName === "all") {
-                      setLogsSelectedClientName(uniqueClients[0] || "");
+                    if (!logsSelectedClientId || logsSelectedClientId === "all") {
+                      if (activeClientId) {
+                        setLogsSelectedClientId(activeClientId);
+                      }
                     }
                   }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
@@ -640,18 +818,14 @@ export function OperationsClient({
                 <div>
                   <ClientSelect
                     label="Select Client"
-                    value={activeClientName}
+                    value={activeClientId}
                     onChange={(val, clientObj) => {
-                      const cName = clientObj?.client_name || clientObj?.name || val;
-                      setLogsSelectedClientName(cName);
+                      const nextId = clientObj?.id || val;
+                      setLogsSelectedClientId(nextId);
                       setLogsSelectedSite("all");
                       setLogsSelectedClientMachineId("all");
                     }}
-                    clients={
-                      dbClients && dbClients.length > 0
-                        ? dbClients
-                        : uniqueClients.map((c) => ({ id: c, client_name: c, name: c }))
-                    }
+                    clients={allClientsList}
                     placeholder="Select Client..."
                   />
                 </div>
@@ -676,10 +850,10 @@ export function OperationsClient({
                   <MachineSelect
                     label="Select Machine"
                     value={effectiveSelectedClientMachineId}
-                    onChange={(mId) => setLogsSelectedClientMachineId(mId)}
+                    onChange={(mId) => setLogsSelectedClientMachineId(mId || "all")}
                     machines={clientMachines}
-                    allowAll={clientMachines.length > 1}
-                    allLabel="All Client Rented Machines"
+                    allowAll={true}
+                    allLabel="All Machines"
                   />
                 </div>
 
@@ -1643,7 +1817,8 @@ export function OperationsClient({
           >
             <div className="flex items-center justify-between">
               <h3 className="text-base font-extrabold text-[var(--color-ink)] flex items-center gap-2">
-                <AnimatedUserCheck size={18} className="text-sky-500 shrink-0" /> Assign / Reassign Machine Operator
+                <AnimatedUserCheck size={18} className="text-sky-500 shrink-0" />
+                {currentRegisteredOperator ? "Reassign Machine Operator" : "Assign Machine Operator"}
               </h3>
               <button
                 type="button"
@@ -1655,29 +1830,129 @@ export function OperationsClient({
               </button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3.5">
               {/* Select Machine */}
               <MachineSelect
                 label="Select Target Machine"
                 required
                 value={selectedMachineId}
-                onChange={(mId) => setSelectedMachineId(mId)}
+                onChange={(mId) => {
+                  setSelectedMachineId(mId);
+                  setSelectedOperatorId("");
+                }}
                 machines={machines}
               />
 
+              {/* Current Registered Operator Status */}
+              {currentRegisteredOperator ? (
+                <div className="p-3.5 rounded-xl bg-sky-500/5 dark:bg-sky-500/10 border border-sky-500/20 text-xs space-y-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 font-bold text-sky-700 dark:text-sky-300">
+                      <AnimatedUserCheck size={15} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                      <span>Currently Registered Operator</span>
+                    </div>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      Assigned
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 pt-1 border-t border-sky-500/15">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-extrabold text-[var(--color-ink)] text-sm truncate">
+                        {currentRegisteredOperator.full_name || currentRegisteredOperator.name || "Assigned Operator"}
+                      </div>
+                      <div className="text-[11px] text-[var(--color-mute)] flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 font-mono">
+                        {currentRegisteredOperator.phone && <span>📞 {currentRegisteredOperator.phone}</span>}
+                        {currentRegisteredOperator.email && <span className="truncate">✉️ {currentRegisteredOperator.email}</span>}
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleUnassignOperator}
+                      disabled={submitting}
+                      className="text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 border-rose-200 dark:border-rose-900 shrink-0 text-[11px] h-7 px-2.5"
+                      title="Unassign current operator from this machine"
+                    >
+                      Unassign
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-3.5 rounded-xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 text-xs space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 font-bold text-amber-700 dark:text-amber-400">
+                      <AnimatedAlertTriangle size={15} className="text-amber-500 shrink-0" />
+                      <span>Current Assignment Status</span>
+                    </div>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                      Unassigned
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[var(--color-mute)] pt-0.5">
+                    This equipment currently has no operator registered. Select an operator below to assign.
+                  </p>
+                </div>
+              )}
+
               {/* Select Operator */}
               <UserSelect
-                label="Select Machine Operator"
+                label={
+                  currentRegisteredOperator
+                    ? "Select Replacement / New Operator"
+                    : "Select Operator to Assign"
+                }
                 required
                 value={selectedOperatorId}
                 onChange={(opId) => setSelectedOperatorId(opId)}
                 users={activeOperators}
                 roleFilter={["operator"]}
-                placeholder="Search or select active operator..."
+                placeholder={
+                  currentRegisteredOperator
+                    ? "Search or select other operator to reassign..."
+                    : "Search or select active operator..."
+                }
               />
 
-              {/* Reassignment Notice Banner */}
+              {/* Notice if same operator is picked */}
+              {selectedOperatorId && currentRegisteredOperator && selectedOperatorId === currentRegisteredOperator.id && (
+                <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-800 dark:text-sky-300 text-xs flex items-center gap-2">
+                  <span>ℹ️</span>
+                  <span>
+                    <strong>{currentRegisteredOperator.full_name}</strong> is already registered to this machine. Please select another operator.
+                  </span>
+                </div>
+              )}
+
+              {/* Assignment / Reassignment Summary Banner */}
+              {selectedOperatorId && (!currentRegisteredOperator || selectedOperatorId !== currentRegisteredOperator.id) && (() => {
+                const selectedOp = activeOperators.find((op) => op.id === selectedOperatorId) || operators.find((op) => op.id === selectedOperatorId);
+                return (
+                  <div className="p-2.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-xs space-y-1">
+                    <div className="font-bold text-[var(--color-ink)] flex items-center gap-1.5">
+                      <AnimatedUserCheck size={14} className="text-sky-500 shrink-0" />
+                      {currentRegisteredOperator ? "Reassignment Summary" : "New Assignment Summary"}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="font-semibold text-[var(--color-mute)] truncate">
+                        {currentRegisteredOperator?.full_name || "Unassigned"}
+                      </span>
+                      <span className="text-sky-500 font-bold shrink-0">➔</span>
+                      <span className="font-extrabold text-sky-600 dark:text-sky-400 truncate">
+                        {selectedOp?.full_name || "Selected Operator"}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Reassignment Notice Banner if selected operator is assigned elsewhere */}
               {(() => {
+                if (!selectedOperatorId || (currentRegisteredOperator && selectedOperatorId === currentRegisteredOperator.id)) {
+                  return null;
+                }
                 const selectedOp = activeOperators.find((op) => op.id === selectedOperatorId) || operators.find((op) => op.id === selectedOperatorId);
                 const activeAss = assignments.find((a) => a.operator_id === selectedOperatorId && a.status === "active");
                 const currentMach = activeAss
@@ -1689,11 +1964,11 @@ export function OperationsClient({
                     <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs space-y-1">
                       <div className="font-bold flex items-center gap-1.5">
                         <AnimatedAlertTriangle size={14} className="text-amber-500 shrink-0" />
-                        Operator Reassignment Notice
+                        Operator Transfer Notice
                       </div>
                       <div>
                         <strong>{selectedOp?.full_name || "Selected Operator"}</strong> is currently assigned to{" "}
-                        <strong>{formatMachineSelectLabel(currentMach)}</strong>. Assigning them here will transfer their assignment to the target machine.
+                        <strong>{formatMachineSelectLabel(currentMach)}</strong>. Assigning them here will transfer their assignment to this machine.
                       </div>
                     </div>
                   );
@@ -1717,9 +1992,13 @@ export function OperationsClient({
                 variant="primary"
                 size="sm"
                 loading={submitting}
-                disabled={!selectedMachineId || !selectedOperatorId}
+                disabled={
+                  !selectedMachineId ||
+                  !selectedOperatorId ||
+                  (!!currentRegisteredOperator && selectedOperatorId === currentRegisteredOperator.id)
+                }
               >
-                Confirm & Assign Operator
+                {currentRegisteredOperator ? "Confirm & Reassign Operator" : "Confirm & Assign Operator"}
               </Button>
             </div>
           </form>

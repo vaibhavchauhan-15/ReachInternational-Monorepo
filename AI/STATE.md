@@ -1,10 +1,29 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: **Production Ready — Sidebar Collapse State Persistence & Page Refresh Optimization**
+- **Phase**: **Production Ready — Operations Client Selection, Default All Machines & Client-Wise Log Filtering**
 - **Release Candidate**: `v2026.09.05` (Branch: `main`)
 - **Overall Health**: Production Ready (0 TypeScript Errors across 9 packages, 35/35 Routes Compiled, 0 Runtime Errors, 0 Warnings, 0 P0/P1/P2 Issues)
 - **Last Memory Update**: 2026-09-05
+- [x] **Page Feedback: /operations?tab=logs — Client Selection Fix, Default 'All Machines' & Client-Wise Fleet and Log Filtering (`ClientSelect.tsx`, `OperationsClient.tsx`, `PrintableSupervisorLogsModal.tsx`, `supervisor-logs-export.ts`) (2026-09-05)**:
+  - **1. Resilient Client Selection Architecture (`ClientSelect.tsx`, `OperationsClient.tsx`)**:
+    - Resolved the issue where clicking a client left the trigger button showing `"Select Client..."` due to ID vs name mismatches.
+    - Updated `ClientSelect.tsx` to match selected clients flexibly by `c.id === value`, `c.client_name === value`, `c.company_name === value`, `c.name === value`, or `c.code === value`.
+    - In `OperationsClient.tsx`, transitioned state management to `logsSelectedClientId` backed by `allClientsList` (combining `dbClients` and runtime log entities).
+    - Defaulted active client selection to clients with active hour logs (e.g. Saint Gobain with 31 logs) or the first available client so supervisors immediately see data.
+  - **2. Default 'All Machines' Selection (`OperationsClient.tsx`)**:
+    - Addressed feedback requesting `"by default select all machine"`.
+    - Set `allowAll={true}` and `allLabel="All Machines"` in `<MachineSelect>` under Client view mode.
+    - Configured `effectiveSelectedClientMachineId` to default to `"all"`, displaying the full fleet count badge (e.g. `18 Total` or `1 Total`) and eliminating the empty `"Search or select machine..."` placeholder.
+  - **3. Complete Client Fleet Discovery & Client-Wise Log Filtering (`OperationsClient.tsx`, `PrintableSupervisorLogsModal.tsx`, `supervisor-logs-export.ts`)**:
+    - Re-architected `clientMachines` derivation to check `m.client_id === activeClientId`, `(m as any).client?.id === activeClientId`, and company name comparisons, ensuring all 18 machines rented to JK Paper Ltd. appear in the machine select dropdown.
+    - Enhanced `filteredHourLogs` in Client mode to match by `log.client_id`, `log.client.id`, company name, and machine fleet ownership.
+    - Synchronized client matching across the web data table, printable supervisor report modal (`PrintableSupervisorLogsModal.tsx`), and Excel spreadsheet export (`supervisor-logs-export.ts`).
+  - **4. Monorepo Quality Gate Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: Passed with **0 errors**.
+    - `pnpm -r exec tsc --noEmit`: Passed across all **9 workspace packages with 0 errors**.
+    - `pnpm --filter @reachinternational/web build`: Passed with all **35/35 routes compiled cleanly (code 0)**.
+    - Automated tests: `test_future_shift_validation.mjs` (9/9 passed, 100%), `test_breakdown_submission_and_linking.mjs` (all passed, 100%).
 - [x] **Page Feedback: /operations?tab=entry — Complete Web Sidebar Architecture Rewrite & Zero-Jitter Refresh Persistence (`ThemeScript.tsx`, `layout.tsx`, `sidebar.tsx`, `AppShellClient.tsx`) (2026-09-05)**:
   - **1. Pre-Boot DOM & Cookie Synchronization (`apps/web/components/theme/ThemeScript.tsx`)**:
     - Synchronously evaluates `reachinternational_sidebar_collapsed` in `localStorage` and fallback `document.cookie` before `<body>` renders.

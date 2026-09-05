@@ -69,7 +69,18 @@ export function ClientSelect({
 
   const selectedClient = useMemo(() => {
     if (isAllSelected) return null;
-    return clients.find((c) => c.id === value) || null;
+    if (!value) return null;
+    const vLower = value.toLowerCase().trim();
+    return (
+      clients.find(
+        (c) =>
+          c.id === value ||
+          (c.client_name && c.client_name.toLowerCase().trim() === vLower) ||
+          (c.company_name && c.company_name.toLowerCase().trim() === vLower) ||
+          (c.name && c.name.toLowerCase().trim() === vLower) ||
+          (c.code && c.code.toLowerCase().trim() === vLower)
+      ) || null
+    );
   }, [clients, value, isAllSelected]);
 
   const clientLocationStr = useMemo(() => {
@@ -282,7 +293,11 @@ export function ClientSelect({
               </div>
             ) : (
               filteredClients.map((c) => {
-                const isSelected = c.id === value;
+                const isSelected =
+                  c.id === value ||
+                  (selectedClient ? c.id === selectedClient.id : false) ||
+                  (c.client_name && c.client_name.toLowerCase().trim() === value.toLowerCase().trim()) ||
+                  (c.company_name && c.company_name.toLowerCase().trim() === value.toLowerCase().trim());
                 const cName = c.company_name || c.client_name || c.name || "Client";
                 const cLoc = getFormattedClientLocation(c);
                 return (
