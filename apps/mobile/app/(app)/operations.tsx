@@ -13,7 +13,7 @@ import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { formatShiftTimingRange, formatTo12Hour } from '@reachinternational/utils';
+import { formatShiftTimingRange, formatTo12Hour, formatExactTimestamp, splitExactTimestamp, formatDate, parseBreakdownString } from '@reachinternational/utils';
 import {
   Clock,
   Gauge,
@@ -46,6 +46,7 @@ export interface HourLogRecord {
   remarks?: string;
   operator_id?: string;
   client_id?: string;
+  created_at?: string;
   machine?: { machine_id: string; model?: string; serial_number?: string } | null;
   operator?: { full_name: string } | null;
   client?: { name: string } | null;
@@ -103,11 +104,13 @@ export default function OperationsScreen() {
           remarks,
           operator_id,
           client_id,
+          created_at,
           machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number),
           operator:users!machine_hour_logs_operator_id_fkey(id, full_name),
           client:clients!machine_hour_logs_client_id_fkey(id, company_name)
         `)
         .order('log_date', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(100);
 
       if (isOperator && user?.id) {
@@ -432,11 +435,30 @@ export default function OperationsScreen() {
 
                       <View style={styles.badgeColumn}>
                         {log.is_breakdown ? (
-                          <View style={[styles.breakdownBadge, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error }]}>
-                            <AlertTriangle size={11} color={theme.colors.error} />
-                            <Text style={[styles.breakdownBadgeText, { color: theme.colors.error }]}>
-                              {breakdownText}
-                            </Text>
+                          <View style={[styles.breakdownBadge, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error, alignItems: 'flex-end', paddingHorizontal: 6, paddingVertical: 2 }]}>
+                            {(() => {
+                              const bkdParsed = parseBreakdownString((log as any).breakdown_duration || log.remarks);
+                              const bkdStart = (log as any).breakdown_start_time || bkdParsed?.startTime;
+                              const bkdEnd = (log as any).breakdown_end_time || bkdParsed?.endTime;
+                              const bkdDur = bkdParsed?.durationFormatted || bkdParsed?.durationText || breakdownText;
+                              return bkdStart && bkdEnd ? (
+                                <>
+                                  <Text style={{ fontSize: 9.5, fontFamily: 'GeistMono_700Bold', color: theme.colors.error }}>
+                                    {bkdStart} - {bkdEnd}
+                                  </Text>
+                                  <Text style={{ fontSize: 8.5, fontFamily: 'GeistMono_700Bold', color: theme.colors.error, opacity: 0.85 }}>
+                                    ({bkdDur})
+                                  </Text>
+                                </>
+                              ) : (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                                  <AlertTriangle size={11} color={theme.colors.error} />
+                                  <Text style={[styles.breakdownBadgeText, { color: theme.colors.error }]}>
+                                    {breakdownText}
+                                  </Text>
+                                </View>
+                              );
+                            })()}
                           </View>
                         ) : (
                           <View style={[styles.breakdownBadge, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
@@ -452,7 +474,7 @@ export default function OperationsScreen() {
                     <View style={styles.metaRow}>
                       <View style={styles.metaItem}>
                         <Calendar size={12} color={theme.colors.mute} />
-                        <Text style={[styles.metaText, { color: theme.colors.mute }]}>{log.log_date}</Text>
+                        <Text style={[styles.metaText, { color: theme.colors.mute }]}>{formatDate(log.log_date)}</Text>
                       </View>
                       <View style={styles.metaItem}>
                         <UserCheck size={12} color={theme.colors.mute} />
@@ -460,6 +482,13 @@ export default function OperationsScreen() {
                           {log.operator?.full_name || 'Operator'}
                         </Text>
                       </View>
+                      {log.created_at ? (
+                        <View style={[styles.metaItem, { backgroundColor: theme.colors.link + '15', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }]}>
+                          <Text style={{ fontSize: 10, fontFamily: 'GeistMono_700Bold', color: theme.colors.link }}>
+                            {formatExactTimestamp(log.created_at, true)}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
 
                     {/* Inset Metrics Grid */}
@@ -499,6 +528,35 @@ export default function OperationsScreen() {
                             +{log.overtime_hours}h Overtime
                           </Text>
                         </View>
+                      ) : null}
+
+                      {/* Exact Log Entry Timestamp Row */}
+                      {log.created_at ? (
+                        <>
+                          <View style={[styles.specsDivider, { backgroundColor: theme.colors.hairline }]} />
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacingNumeric.xs, paddingVertical: 2 }}>
+                            <Text style={{ fontSize: 10, color: theme.colors.mute, fontWeight: '600' }}>
+                              Exact Entry Timestamp:
+                            </Text>
+                            {(() => {
+                              const splitTs = splitExactTimestamp(log.created_at, true);
+                              return splitTs ? (
+                                <View style={{ alignItems: 'flex-end' }}>
+                                  <Text style={{ fontSize: 10, fontFamily: 'GeistMono_700Bold', color: theme.colors.link }}>
+                                    {splitTs.time}
+                                  </Text>
+                                  <Text style={{ fontSize: 9, fontFamily: 'GeistMono_500Medium', color: theme.colors.mute }}>
+                                    {splitTs.date}
+                                  </Text>
+                                </View>
+                              ) : (
+                                <Text style={{ fontSize: 10, fontFamily: 'GeistMono_700Bold', color: theme.colors.link }}>
+                                  {formatExactTimestamp(log.created_at, true)}
+                                </Text>
+                              );
+                            })()}
+                          </View>
+                        </>
                       ) : null}
 
                       {(log.client?.name || log.location) && (
@@ -668,7 +726,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   breakdownBadgeText: { fontSize: 10, fontWeight: '800' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 2 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 2, flexWrap: 'wrap' },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaText: { fontSize: 11 },
   specsWell: { padding: spacingNumeric.sm, borderRadius: radiusNumeric.sm, borderWidth: 1, marginTop: 4 },

@@ -27,8 +27,8 @@ import {
 } from "@/app/actions/operators";
 import { PrintableSupervisorLogsModal } from "./PrintableSupervisorLogsModal";
 import { MONTH_NAMES, getLogMonthNumber, formatCompactTiming } from "@/lib/utils/operator-logs-export";
-import { formatDate } from "@reachinternational/utils";
-import { Printer } from "lucide-react";
+import { formatDate, formatExactTimestamp, formatTimeAgo } from "@reachinternational/utils";
+import { Printer, Clock } from "lucide-react";
 
 export interface OperationsClientProps {
   machines: Machine[];
@@ -1065,7 +1065,18 @@ export function OperationsClient({
                       return (
                         <tr key={log.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
                           <td className="px-3 py-3 text-center font-bold text-xs text-[var(--color-mute)] font-mono">{idx + 1}</td>
-                          <td className="px-4 py-3 font-semibold font-mono whitespace-nowrap">{formatDate(log.log_date)}</td>
+                          <td className="px-4 py-3 font-mono whitespace-nowrap">
+                            <div className="font-semibold text-[var(--color-ink)] text-xs">{formatDate(log.log_date)}</div>
+                            {log.created_at ? (
+                              <div
+                                className="text-[10px] text-sky-600 dark:text-sky-400 font-bold flex items-center gap-1 mt-0.5"
+                                title={`Exact log entry timestamp: ${formatExactTimestamp(log.created_at, true)}`}
+                              >
+                                <Clock size={10} className="text-sky-500 shrink-0" />
+                                <span>{formatExactTimestamp(log.created_at, true)}</span>
+                              </div>
+                            ) : null}
+                          </td>
                           {logsViewMode === "operator" ? (
                             <>
                               <td className="px-4 py-3 font-semibold font-mono whitespace-nowrap">
@@ -1235,8 +1246,16 @@ export function OperationsClient({
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <span className="text-[10px] font-mono text-[var(--color-mute)] block font-bold">{log.log_date}</span>
-                        <h4 className="font-extrabold text-sm text-[var(--color-ink)]">{mObj?.model || mObj?.machine_code || "—"}</h4>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-mono text-[var(--color-mute)] font-bold">{formatDate(log.log_date)}</span>
+                          {log.created_at && (
+                            <span className="text-[9.5px] font-mono text-sky-600 dark:text-sky-400 font-bold inline-flex items-center gap-1 bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
+                              <Clock size={9} className="text-sky-500 shrink-0" />
+                              {formatExactTimestamp(log.created_at, true)}
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="font-extrabold text-sm text-[var(--color-ink)] mt-0.5">{mObj?.model || mObj?.machine_code || "—"}</h4>
                         <span className="text-[11px] font-mono text-[var(--color-mute)]">
                           {mObj?.serial_number ? `S/N: ${mObj.serial_number}` : mObj?.machine_code ? `S/N: ${mObj.machine_code}` : "—"}
                         </span>

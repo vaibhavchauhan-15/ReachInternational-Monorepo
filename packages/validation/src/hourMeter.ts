@@ -17,10 +17,23 @@ export const CreateHourLogSchema = z.object({
   overtime_hours: z.number().min(0).optional().nullable(),
   normal_working_hours: z.number().min(0).optional().nullable(),
   is_breakdown: z.boolean().optional().nullable(),
+  breakdown_start_time: z.string().max(20, "Breakdown start time string cannot exceed 20 characters").optional().nullable(),
+  breakdown_end_time: z.string().max(20, "Breakdown end time string cannot exceed 20 characters").optional().nullable(),
+  breakdown_duration: z.string().max(100, "Breakdown duration string cannot exceed 100 characters").optional().nullable(),
+  breakdown_hours: z.number().min(0).optional().nullable(),
   idempotency_key: z.string().max(128, "Idempotency key cannot exceed 128 characters").optional().nullable(),
 }).refine((data) => data.end_meter >= data.start_meter, {
   message: "End meter reading cannot be less than start meter reading",
   path: ["end_meter"],
+}).refine((data) => {
+  if (!data.end_datetime) return true;
+  const endMs = new Date(data.end_datetime).getTime();
+  if (isNaN(endMs)) return true;
+  // Allow 60 seconds grace period for network latency and clock skew
+  return endMs <= Date.now() + 60 * 1000;
+}, {
+  message: "Cannot log before shift end.",
+  path: ["end_datetime"],
 });
 
 export type CreateHourLogInput = z.infer<typeof CreateHourLogSchema>;

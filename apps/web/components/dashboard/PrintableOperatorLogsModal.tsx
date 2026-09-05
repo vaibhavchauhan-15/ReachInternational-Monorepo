@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { Modal } from "@/components/ui";
 import type { User, Machine } from "@/lib/types/database";
 import type { OperatorHourLog } from "./OperatorDashboard";
-import { formatDate, formatTo12Hour } from "@reachinternational/utils";
+import { formatDate, formatExactTimestamp, splitExactTimestamp, formatTo12Hour, parseBreakdownString } from "@reachinternational/utils";
 import {
   exportOperatorLogsToExcel,
   MONTH_NAMES,
@@ -147,16 +147,16 @@ function OperatorLogsReportContent({
         <table className="w-full text-left border border-neutral-900 border-collapse print-table min-w-[660px] sm:min-w-0">
           <thead>
             <tr className="bg-neutral-900 text-white font-bold text-[8px] uppercase tracking-wider">
-              <th className="p-0.5 border border-neutral-800 w-[4%] sm:w-[20px] text-center align-middle">S.N</th>
-              <th className="p-0.5 border border-neutral-800 w-[9%] sm:w-[55px] font-mono text-center align-middle whitespace-nowrap">DATE</th>
-              <th className="p-1 border border-neutral-800 w-[18%] sm:w-[125px] align-middle">MACHINE NAME</th>
-              <th className="p-0.5 border border-neutral-800 w-[10%] sm:w-[65px] font-mono text-center align-middle whitespace-nowrap">MCH CODE</th>
+              <th className="p-0.5 border border-neutral-800 w-[3%] sm:w-[20px] text-center align-middle">S.N</th>
+              <th className="p-0.5 border border-neutral-800 w-[8%] sm:w-[55px] font-mono text-center align-middle whitespace-nowrap">SHIFT DATE</th>
+              <th className="p-0.5 border border-neutral-800 w-[11%] sm:w-[70px] font-mono text-center align-middle whitespace-nowrap">ENTRY TIME</th>
+              <th className="p-0.5 border border-neutral-800 w-[11%] sm:w-[75px] font-mono text-center align-middle whitespace-nowrap">SERIAL NO.</th>
+              <th className="p-0.5 border border-neutral-800 w-[10%] sm:w-[65px] font-mono text-center align-middle whitespace-nowrap">MODEL</th>
               <th className="p-0.5 border border-neutral-800 w-[12%] sm:w-[75px] font-mono text-center align-middle whitespace-nowrap">METER (HRS)</th>
               <th className="p-0.5 border border-neutral-800 w-[12%] sm:w-[75px] font-mono text-center align-middle whitespace-nowrap">TIMINGS</th>
-              <th className="p-0.5 border border-neutral-800 text-center w-[5%] sm:w-[28px] align-middle whitespace-nowrap">OP</th>
-              <th className="p-0.5 border border-neutral-800 text-center w-[5%] sm:w-[28px] align-middle whitespace-nowrap">OT</th>
-              <th className="p-0.5 border border-neutral-800 text-center w-[7%] sm:w-[45px] align-middle whitespace-nowrap">BREAKDOWN</th>
-              <th className="p-1 border border-neutral-800 w-[18%] sm:auto align-middle">REMARKS</th>
+              <th className="p-0.5 border border-neutral-800 text-center w-[5%] sm:w-[30px] align-middle whitespace-nowrap">OT</th>
+              <th className="p-0.5 border border-neutral-800 text-center w-[13%] sm:w-[85px] align-middle whitespace-nowrap">BREAKDOWN</th>
+              <th className="p-1 border border-neutral-800 w-[15%] sm:auto align-middle">REMARKS</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-neutral-300">
@@ -166,14 +166,20 @@ function OperatorLogsReportContent({
                 const opHrs = log.running_hours || computeDurationHours(log.start_time, log.end_time);
                 const otHrs = log.overtime_hours || 0;
 
-                const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*([^\]]+)\]/i) || (log.remarks || "").match(/Breakdown\s*(?:Duration)?:?\s*(\d+h?\s*\d*m?)/i);
-                const bkdDetails = bkdMatch ? bkdMatch[1].trim() : isBkd ? "Breakdown" : null;
+                const bkdParsed = parseBreakdownString((log as any).breakdown_duration || log.remarks);
+                const bkdDetails = (log as any).breakdown_duration || (bkdParsed?.fullBreakdownString || null);
                 const cleanRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim() || "—";
-                let bkdDurationOnly = bkdDetails;
+                let bkdDurationOnly = bkdParsed?.durationFormatted || bkdParsed?.durationText || bkdDetails;
                 if (bkdDurationOnly) {
                   bkdDurationOnly = bkdDurationOnly.replace(/^Breakdown\s*\((.*)\)$/i, "$1").replace(/^Machine Breakdown\s*\((.*)\)$/i, "$1").replace(/^Breakdown\s*/i, "").replace(/\s*duration$/i, "").trim();
                 }
                 const displayBkdText = isBkd ? (bkdDurationOnly && bkdDurationOnly.toLowerCase() !== "breakdown" ? bkdDurationOnly : "Breakdown") : "0";
+
+                const mSerial = log.machine?.serial_number || assignedMachine?.serial_number || "—";
+                const mModel = log.machine?.model || assignedMachine?.model || "Standard";
+                const splitTs = splitExactTimestamp(log.created_at, true);
+                const bkdStartTime = (log as any).breakdown_start_time || bkdParsed?.startTime || null;
+                const bkdEndTime = (log as any).breakdown_end_time || bkdParsed?.endTime || null;
 
                 return (
                   <tr key={log.id || idx} className="bg-white">
@@ -181,14 +187,27 @@ function OperatorLogsReportContent({
                     <td className="p-0.5 border border-neutral-300 font-mono text-neutral-800 text-center align-middle text-[8px] whitespace-nowrap">
                       {formatDate(log.log_date)}
                     </td>
-                    <td className="p-1 border border-neutral-300 font-bold text-neutral-900 align-middle text-[9px] leading-tight">
-                      {log.machine?.machine_name || assignedMachine?.machine_name || "Machine"}
-                    </td>
-                    <td className="p-0.5 border border-neutral-300 font-mono text-[8.5px] font-semibold text-neutral-700 text-center align-middle whitespace-nowrap">
-                      {log.machine?.machine_code || assignedMachine?.machine_code || "—"}
+                    <td className="p-0.5 border border-neutral-300 font-mono text-neutral-800 text-center align-middle text-[8px] whitespace-nowrap">
+                      {splitTs ? (
+                        <div>
+                          <div className="font-bold text-neutral-900 leading-tight">{splitTs.time}</div>
+                          <div className="text-[6.5px] text-neutral-500 font-medium">{splitTs.date}</div>
+                        </div>
+                      ) : log.created_at ? (
+                        formatExactTimestamp(log.created_at, false)
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className="p-0.5 border border-neutral-300 font-mono text-[8px] font-bold text-neutral-900 text-center align-middle whitespace-nowrap">
-                      {log.start_meter ?? 0} → {log.end_meter ?? 0}
+                      {mSerial}
+                    </td>
+                    <td className="p-0.5 border border-neutral-300 font-mono text-[8px] font-semibold text-neutral-700 text-center align-middle whitespace-nowrap">
+                      {mModel}
+                    </td>
+                    <td className="p-0.5 border border-neutral-300 font-mono text-[8px] text-center align-middle whitespace-nowrap">
+                      <div className="font-bold text-neutral-900">{log.start_meter ?? 0} → {log.end_meter ?? 0}</div>
+                      <div className="text-[7px] text-sky-800 font-bold">(+{log.running_hours ?? Math.max(0, (log.end_meter ?? 0) - (log.start_meter ?? 0))}h)</div>
                     </td>
                     <td className="p-0.5 border border-neutral-300 font-mono text-[8px] text-neutral-800 text-center align-middle whitespace-nowrap">
                       <div>{formatCompactTiming(log.start_time, log.end_time)}</div>
@@ -196,17 +215,21 @@ function OperatorLogsReportContent({
                         {(log as any).normal_working_hours ?? 8}h normal
                       </div>
                     </td>
-                    <td className="p-0.5 border border-neutral-300 text-center align-middle font-mono font-bold text-[8.5px] whitespace-nowrap">
-                      {opHrs}h
-                    </td>
                     <td className="p-0.5 border border-neutral-300 text-center align-middle font-mono font-bold text-[8.5px] text-amber-700 whitespace-nowrap">
                       {otHrs > 0 ? `${otHrs}h` : "0h"}
                     </td>
                     <td className="p-0.5 border border-neutral-300 text-[8px] text-center align-middle whitespace-nowrap">
                       {isBkd ? (
-                        <span className="font-extrabold text-rose-700 block text-[8px] font-mono text-center whitespace-nowrap">
-                          {displayBkdText}
-                        </span>
+                        bkdStartTime && bkdEndTime ? (
+                          <div className="text-rose-700 font-mono text-center">
+                            <div className="font-extrabold text-[8px] leading-tight">{bkdStartTime} - {bkdEndTime}</div>
+                            <div className="text-[7px] font-bold text-rose-700/90">({bkdDurationOnly || "Breakdown"})</div>
+                          </div>
+                        ) : (
+                          <span className="font-extrabold text-rose-700 block text-[8px] font-mono text-center whitespace-nowrap">
+                            {displayBkdText}
+                          </span>
+                        )
                       ) : (
                         <span className="font-bold text-neutral-800 block text-[8px] text-center font-mono whitespace-nowrap">
                           0

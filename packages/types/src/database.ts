@@ -328,6 +328,10 @@ export interface MachineHourLog {
   overtime_hours?: number | null;
   normal_working_hours?: number | null;
   is_breakdown?: boolean | null;
+  breakdown_start_time?: string | null;
+  breakdown_end_time?: string | null;
+  breakdown_duration?: string | null;
+  breakdown_hours?: number | null;
   idempotency_key?: string | null;
   created_at: string;
   operator?: Pick<User, "id" | "full_name" | "phone" | "email"> | null;

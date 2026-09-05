@@ -324,8 +324,8 @@ export function CustomDatePicker({
               {label}
               {required && <span className="text-rose-500 ml-0.5">*</span>}
             </label>
-            <span className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold tracking-tight">
-              Allowed: 7 days window
+            <span className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold tracking-tight shrink-0">
+              <span className="hidden xs:inline">Allowed: </span>7d window
             </span>
           </div>
         )}

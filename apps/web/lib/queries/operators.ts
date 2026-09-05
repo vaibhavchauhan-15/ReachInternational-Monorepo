@@ -8,6 +8,7 @@ import { getMachines } from "@/lib/queries/machines";
 import { getClients } from "@/lib/queries/clients";
 import type { Machine, MachineWithEngineer, User } from "@/lib/types/database";
 import type { OperatorHourLog } from "@/components/dashboard/OperatorDashboard";
+import { parseBreakdownString } from "@reachinternational/utils";
 
 const HOUR_LOG_PROJECTION = `
   id,
@@ -80,6 +81,11 @@ function formatHourLogsData(rawLogs: any[]): any[] {
         }
       : null;
 
+    const bkdInfo = parseBreakdownString(log.breakdown_duration || log.remarks);
+    const breakdownDuration = log.breakdown_duration || (bkdInfo?.fullBreakdownString || null);
+    const breakdownStartTime = log.breakdown_start_time || (bkdInfo?.startTime || null);
+    const breakdownEndTime = log.breakdown_end_time || (bkdInfo?.endTime || null);
+
     return {
       ...log,
       start_meter: startMtr,
@@ -87,6 +93,9 @@ function formatHourLogsData(rawLogs: any[]): any[] {
       running_hours: running,
       overtime_hours: ot,
       normal_working_hours: normalWorking ?? 8,
+      breakdown_start_time: breakdownStartTime,
+      breakdown_end_time: breakdownEndTime,
+      breakdown_duration: breakdownDuration,
       client: formattedClient,
       machine: m
         ? {

@@ -126,23 +126,23 @@ export const TimeInput: React.FC<TimeInputProps> = ({
 
     if (!trimmedH) {
       if (required || touched) {
-        hourErr = 'Hour is required (1–12)';
+        hourErr = 'Hour required (1–12)';
       }
     } else {
       const hNum = parseInt(trimmedH, 10);
       if (isNaN(hNum) || hNum < 1 || hNum > 12) {
-        hourErr = 'Hour must be between 1 and 12';
+        hourErr = 'Hour must be 1–12';
       }
     }
 
     if (trimmedM !== '') {
       const mNum = parseInt(trimmedM, 10);
       if (isNaN(mNum) || mNum < 0 || mNum > 60) {
-        minuteErr = 'Minutes must be between 0 and 60';
+        minuteErr = 'Minutes must be 0–60';
       }
     }
 
-    const hasError = Boolean(hourErr || minuteErr);
+    const hasError = Boolean(hourErr || minuteErr || externalError);
     const errorMessage = externalError || hourErr || minuteErr || null;
 
     return {
@@ -289,11 +289,10 @@ export const TimeInput: React.FC<TimeInputProps> = ({
     emitFormattedTime(hour, minute, newPeriod);
   };
 
-  const hourBorderColor = validation.hourError
-    ? theme.colors.error
-    : theme.colors.hairline;
+  const hourInputRef = React.useRef<TextInput>(null);
+  const minuteInputRef = React.useRef<TextInput>(null);
 
-  const minuteBorderColor = validation.minuteError
+  const containerBorderColor = validation.hasError
     ? theme.colors.error
     : theme.colors.hairline;
 
@@ -306,44 +305,45 @@ export const TimeInput: React.FC<TimeInputProps> = ({
         </Text>
       )}
 
-      <View style={styles.inputRow}>
-        {/* Hours Box */}
-        <View
-          style={[
-            styles.digitBox,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: hourBorderColor,
-            },
-          ]}
-        >
+      {/* Unified Cohesive Time Picker Shell */}
+      <View
+        style={[
+          styles.unifiedShell,
+          {
+            backgroundColor: theme.colors.canvasElevated,
+            borderColor: containerBorderColor,
+          },
+        ]}
+      >
+        {/* Left: Digital Time Inputs */}
+        <View style={styles.digitalCluster}>
           <TextInput
+            ref={hourInputRef}
             keyboardType="number-pad"
             maxLength={3}
             value={hour}
-            onChangeText={handleHourChange}
+            onChangeText={(val) => {
+              handleHourChange(val);
+              const digits = val.replace(/\D/g, '');
+              if (digits.length === 2) {
+                const num = parseInt(digits, 10);
+                if (!isNaN(num) && num >= 1 && num <= 12) {
+                  minuteInputRef.current?.focus();
+                }
+              }
+            }}
             onBlur={handleHourBlur}
             placeholder="08"
             placeholderTextColor={theme.colors.faint}
             editable={!disabled}
+            selectTextOnFocus
             style={[styles.digitInput, { color: theme.colors.ink }]}
           />
-        </View>
 
-        {/* Colon */}
-        <Text style={[styles.colonText, { color: theme.colors.mute }]}>:</Text>
+          <Text style={[styles.colonText, { color: theme.colors.mute }]}>:</Text>
 
-        {/* Minutes Box */}
-        <View
-          style={[
-            styles.digitBox,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: minuteBorderColor,
-            },
-          ]}
-        >
           <TextInput
+            ref={minuteInputRef}
             keyboardType="number-pad"
             maxLength={3}
             value={minute}
@@ -352,27 +352,34 @@ export const TimeInput: React.FC<TimeInputProps> = ({
             placeholder="00"
             placeholderTextColor={theme.colors.faint}
             editable={!disabled}
+            selectTextOnFocus
             style={[styles.digitInput, { color: theme.colors.ink }]}
           />
         </View>
 
-        {/* AM / PM Segmented Switcher */}
+        {/* Right: Horizontal AM / PM Segmented Switcher */}
         <View
           style={[
             styles.periodContainer,
             {
               borderColor: theme.colors.hairline,
-              backgroundColor: theme.colors.canvasElevated,
+              backgroundColor: theme.colors.canvas,
             },
           ]}
         >
           <TouchableOpacity
             disabled={disabled}
             onPress={() => handlePeriodChange('AM')}
+            activeOpacity={0.7}
             style={[
               styles.periodBtn,
               period === 'AM' && {
-                backgroundColor: theme.colors.ink,
+                backgroundColor: theme.colors.canvasElevated,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.1,
+                shadowRadius: 2,
+                elevation: 1,
               },
             ]}
           >
@@ -380,8 +387,8 @@ export const TimeInput: React.FC<TimeInputProps> = ({
               style={[
                 styles.periodText,
                 {
-                  color: period === 'AM' ? theme.colors.canvasElevated : theme.colors.mute,
-                  fontWeight: period === 'AM' ? '700' : '500',
+                  color: period === 'AM' ? theme.colors.link : theme.colors.mute,
+                  fontWeight: period === 'AM' ? '800' : '600',
                 },
               ]}
             >
@@ -392,10 +399,16 @@ export const TimeInput: React.FC<TimeInputProps> = ({
           <TouchableOpacity
             disabled={disabled}
             onPress={() => handlePeriodChange('PM')}
+            activeOpacity={0.7}
             style={[
               styles.periodBtn,
               period === 'PM' && {
-                backgroundColor: theme.colors.ink,
+                backgroundColor: theme.colors.canvasElevated,
+                shadowColor: '#000',
+                shadowOffset: { width: 0, height: 1 },
+                shadowOpacity: 0.1,
+                shadowRadius: 2,
+                elevation: 1,
               },
             ]}
           >
@@ -403,8 +416,8 @@ export const TimeInput: React.FC<TimeInputProps> = ({
               style={[
                 styles.periodText,
                 {
-                  color: period === 'PM' ? theme.colors.canvasElevated : theme.colors.mute,
-                  fontWeight: period === 'PM' ? '700' : '500',
+                  color: period === 'PM' ? theme.colors.link : theme.colors.mute,
+                  fontWeight: period === 'PM' ? '800' : '600',
                 },
               ]}
             >
@@ -440,51 +453,53 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  inputRow: {
+  unifiedShell: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
-  digitBox: {
-    flex: 1,
+    justifyContent: 'space-between',
     height: 44,
-    borderWidth: 1,
+    paddingHorizontal: 10,
     borderRadius: radiusNumeric.sm,
-    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  digitalCluster: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    gap: 2,
   },
   digitInput: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     textAlign: 'center',
-    width: '100%',
-    height: '100%',
+    width: 32,
+    height: 36,
+    padding: 0,
     fontVariant: ['tabular-nums'],
   },
   colonText: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '700',
+    paddingHorizontal: 2,
+    opacity: 0.7,
   },
   periodContainer: {
     flexDirection: 'row',
-    height: 44,
+    height: 32,
     borderWidth: 1,
-    borderRadius: radiusNumeric.sm,
-    padding: 3,
-    gap: 3,
+    borderRadius: 8,
+    padding: 2,
+    gap: 2,
     alignItems: 'center',
   },
   periodBtn: {
-    height: 36,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
-    minWidth: 40,
   },
   periodText: {
-    fontSize: 12,
+    fontSize: 11,
   },
   errorText: {
     fontSize: 11,

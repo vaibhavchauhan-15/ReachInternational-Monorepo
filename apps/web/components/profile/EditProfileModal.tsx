@@ -354,7 +354,7 @@ export function EditProfileModal({
             2. Shift Timing
           </h4>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2 sm:gap-3">
             <CustomTimePicker
               label="Shift Start Time"
               value={startTime}

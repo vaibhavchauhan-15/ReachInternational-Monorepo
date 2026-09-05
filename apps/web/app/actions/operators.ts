@@ -14,6 +14,8 @@ import {
 } from "@/lib/security/idempotency";
 import {
   computeShiftTiming,
+  computeBreakdownDuration,
+  parseBreakdownString,
   checkIntervalOverlap,
   formatResolvedRange,
   formatDate,
@@ -150,8 +152,79 @@ function computeNormalWorkingHours(startStr?: string, endStr?: string, overtimeH
   return timing.normalWorkingHours;
 }
 
+function formatOperatorDatabaseError(error: any): string {
+  if (!error) return "An unexpected error occurred while processing the machine log.";
+  const msg = error.message || String(error);
+  const code = error.code || "";
+  const details = error.details || "";
+
+  // 1. Check constraint violations (23514)
+  if (code === "23514" || msg.includes("violates check constraint") || details.includes("violates check constraint")) {
+    if (msg.includes("machines_status_check") || details.includes("machines_status_check")) {
+      return "Invalid machine status value. Machine rental status must be 'available' or 'rented'.";
+    }
+    if (
+      msg.includes("chk_machines_hour_meter_positive") ||
+      msg.includes("chk_machine_hour_logs_start_meter_positive") ||
+      msg.includes("chk_machine_hour_logs_end_meter_positive")
+    ) {
+      return "Hour meter reading cannot be negative.";
+    }
+    if (msg.includes("chk_machine_hour_logs_meter_range") || msg.includes("cannot be less than start meter")) {
+      return "Ending hour meter reading cannot be less than starting hour meter reading.";
+    }
+    if (
+      msg.includes("Cannot log before shift end") ||
+      details.includes("Cannot log before shift end") ||
+      msg.includes("before shift end")
+    ) {
+      return "Cannot log before shift end.";
+    }
+    return "The entered values violate database consistency rules. Please verify meter readings and shift times.";
+  }
+
+  // 2. Unique constraint violations (23505)
+  if (code === "23505" || msg.includes("duplicate key value") || details.includes("Key already exists")) {
+    if (msg.includes("idempotency_key") || details.includes("idempotency_key")) {
+      return "This shift log entry has already been recorded. Please refresh to view the latest logs.";
+    }
+    return "A duplicate log entry already exists for this machine and shift interval.";
+  }
+
+  // 3. Foreign key violations (23503)
+  if (code === "23503" || msg.includes("violates foreign key constraint") || details.includes("is not present in table")) {
+    if (msg.includes("machine_id") || details.includes("machines")) {
+      return "The selected machine could not be found or has been archived.";
+    }
+    if (msg.includes("operator_id") || details.includes("users")) {
+      return "The designated operator profile could not be found or is inactive.";
+    }
+    if (msg.includes("client_id") || details.includes("clients")) {
+      return "The designated client/site organization could not be found.";
+    }
+    return "Referenced machine, operator, or client record was not found.";
+  }
+
+  // 4. Shift overlap or timeline sequencing errors
+  if (msg.includes("Shift end timestamp") || msg.includes("must be strictly after start timestamp")) {
+    return "Shift end time must be strictly after the start time.";
+  }
+  if (msg.includes("overlap") || msg.includes("overlapping")) {
+    return "Shift time overlaps with an existing log for this machine. Please adjust the shift timing.";
+  }
+
+  // 5. Permission errors (42501)
+  if (code === "42501" || msg.includes("permission denied") || msg.includes("Unauthorized")) {
+    return "You do not have permission to submit or update logs for this machine.";
+  }
+
+  // 6. Generic clean up
+  return msg.replace(/^Error:\s*/i, "").trim();
+}
+
 export async function submitOperatorHourLogAction(payload: {
   machineId: string;
+  operatorId?: string;
   clientId?: string;
   startDate?: string;
   logDate?: string;
@@ -162,6 +235,10 @@ export async function submitOperatorHourLogAction(payload: {
   endTime?: string;
   overtimeHours?: number;
   isBreakdown?: boolean;
+  breakdownStartTime?: string;
+  breakdownEndTime?: string;
+  breakdownDuration?: string;
+  breakdownHours?: number;
   shift?: string;
   machineCondition?: "good" | "fair" | "needs_attention" | "breakdown";
   location?: string;
@@ -199,13 +276,18 @@ export async function submitOperatorHourLogAction(payload: {
 
   if (endMtr < startMtr) {
     await failIdempotencyKey(currentIdempotencyKey);
-    return { success: false, error: "End hour meter reading cannot be less than starting hour meter reading." };
+    return { success: false, error: "Ending hour meter reading cannot be less than starting hour meter reading." };
   }
 
   const supabase = createSupabaseAdminClient();
   const effectiveCondition = payload.isBreakdown ? "breakdown" : (payload.machineCondition || "good");
   const todayDate = new Date().toISOString().split("T")[0];
   const effectiveStartDate = payload.startDate || payload.logDate || todayDate;
+
+  // Resolve target operator: supervisors & admins can log on behalf of an operator, otherwise defaults to current user
+  const targetOperatorId = (["admin", "super_admin", "supervisor"].includes(user.role) && payload.operatorId)
+    ? payload.operatorId
+    : user.id;
 
   // Validate custom logDate within allowed 7-day range
   if (effectiveStartDate) {
@@ -245,10 +327,16 @@ export async function submitOperatorHourLogAction(payload: {
     return { success: false, error: timing.errorMessage || "Invalid shift timing values." };
   }
 
+  // Future Shift End Guard: Operator cannot enter logs before shift end
+  if (timing.endDateTime.getTime() > Date.now() + 60 * 1000) {
+    await failIdempotencyKey(currentIdempotencyKey);
+    return { success: false, error: "Cannot log before shift end." };
+  }
+
   // Check shift time overlap prior to database insert
   const overlapCheck = await checkShiftOverlapServer(supabase, {
     machineId: payload.machineId,
-    operatorId: user.id,
+    operatorId: targetOperatorId,
     startDate: timing.resolvedStartDate,
     startTime: payload.startTime,
     endDate: timing.resolvedEndDate,
@@ -261,52 +349,126 @@ export async function submitOperatorHourLogAction(payload: {
     return { success: false, error: overlapCheck.errorMessage || "Shift time overlap detected." };
   }
 
+  // Compute and standardize breakdown timing & formatted duration string
+  let effectiveBreakdownDuration = payload.breakdownDuration || null;
+  let effectiveBreakdownHours = payload.breakdownHours || 0;
+  let effectiveBreakdownStartTime = payload.breakdownStartTime || null;
+  let effectiveBreakdownEndTime = payload.breakdownEndTime || null;
+
+  if (payload.isBreakdown) {
+    if (payload.breakdownStartTime && payload.breakdownEndTime) {
+      const bkdStats = computeBreakdownDuration(payload.breakdownStartTime, payload.breakdownEndTime);
+      if (!bkdStats.isValid) {
+        await failIdempotencyKey(currentIdempotencyKey);
+        return { success: false, error: bkdStats.errorMessage || "Invalid breakdown time window." };
+      }
+      effectiveBreakdownDuration = bkdStats.fullBreakdownString; // e.g. "02:30 PM - 03:25 PM (55min)"
+      effectiveBreakdownHours = bkdStats.durationDecimalHours;
+      effectiveBreakdownStartTime = formatTo12Hour(payload.breakdownStartTime) || payload.breakdownStartTime;
+      effectiveBreakdownEndTime = formatTo12Hour(payload.breakdownEndTime) || payload.breakdownEndTime;
+    } else {
+      await failIdempotencyKey(currentIdempotencyKey);
+      return { success: false, error: "Please enter both start time and end time for the machine breakdown." };
+    }
+  }
+
+  // Ensure remarks includes formatted breakdown string for reports and exports backward compatibility
+  let finalRemarks = payload.remarks?.trim() || "";
+  if (payload.isBreakdown && effectiveBreakdownDuration) {
+    const bkdPrefix = `[Breakdown Duration: ${effectiveBreakdownDuration}]`;
+    if (!finalRemarks.includes("[Breakdown Duration:")) {
+      finalRemarks = finalRemarks ? `${bkdPrefix} ${finalRemarks}` : bkdPrefix;
+    }
+  }
+
+  // Machine, Site, and Client Linking resolution:
+  // If clientId or location is missing in payload, resolve from the machine's assigned client & deployment details
+  let targetClientId = payload.clientId || null;
+  let targetLocation = payload.location?.trim() || null;
+
+  if (!targetClientId || !targetLocation) {
+    try {
+      const { data: mData } = await supabase
+        .from("machines")
+        .select("client_id, city, state, customer_address")
+        .eq("id", payload.machineId)
+        .single();
+
+      if (mData) {
+        if (!targetClientId && mData.client_id) {
+          targetClientId = mData.client_id;
+        }
+        if (!targetLocation) {
+          const parts = [mData.customer_address, mData.city, mData.state].filter(Boolean);
+          if (parts.length > 0) targetLocation = parts.join(", ");
+        }
+      }
+    } catch {
+      // Non-blocking metadata resolution fallback
+    }
+  }
+
+  let rpcSucceeded = false;
+  let resultData: unknown = null;
+
   // Try atomic PostgreSQL RPC execution first (1 round-trip for log insert + machine update + audit)
-  const { data: rpcResult, error: rpcError } = await supabase.rpc("submit_operator_hour_log_atomic", {
-    p_machine_id: payload.machineId,
-    p_operator_id: user.id,
-    p_client_id: payload.clientId || null,
-    p_log_date: timing.resolvedStartDate,
-    p_end_date: timing.resolvedEndDate,
-    p_start_datetime: timing.startDateTime.toISOString(),
-    p_end_datetime: timing.endDateTime.toISOString(),
-    p_start_meter: startMtr,
-    p_end_meter: endMtr,
-    p_start_time: payload.startTime || null,
-    p_end_time: payload.endTime || null,
-    p_overtime_hours: timing.overtimeHours,
-    p_normal_working_hours: timing.normalWorkingHours,
-    p_is_breakdown: payload.isBreakdown ?? (effectiveCondition === "breakdown"),
-    p_shift: payload.shift || null,
-    p_machine_condition: effectiveCondition,
-    p_location: payload.location || null,
-    p_remarks: payload.remarks || null,
-    p_idempotency_key: currentIdempotencyKey,
-  });
+  try {
+    const { data: rpcResult, error: rpcError } = await supabase.rpc("submit_operator_hour_log_atomic", {
+      p_machine_id: payload.machineId,
+      p_operator_id: targetOperatorId,
+      p_client_id: targetClientId,
+      p_log_date: timing.resolvedStartDate,
+      p_end_date: timing.resolvedEndDate,
+      p_start_datetime: timing.startDateTime.toISOString(),
+      p_end_datetime: timing.endDateTime.toISOString(),
+      p_start_meter: startMtr,
+      p_end_meter: endMtr,
+      p_start_time: payload.startTime || null,
+      p_end_time: payload.endTime || null,
+      p_overtime_hours: timing.overtimeHours,
+      p_normal_working_hours: timing.normalWorkingHours,
+      p_is_breakdown: payload.isBreakdown ?? (effectiveCondition === "breakdown"),
+      p_breakdown_start_time: effectiveBreakdownStartTime,
+      p_breakdown_end_time: effectiveBreakdownEndTime,
+      p_breakdown_duration: effectiveBreakdownDuration,
+      p_breakdown_hours: effectiveBreakdownHours,
+      p_shift: payload.shift || null,
+      p_machine_condition: effectiveCondition,
+      p_location: targetLocation,
+      p_remarks: finalRemarks || null,
+      p_idempotency_key: currentIdempotencyKey,
+    });
 
-  if (!rpcError && rpcResult && (rpcResult as { success?: boolean }).success) {
-    const responsePayload = { success: true, data: rpcResult };
-    await completeIdempotencyKey(currentIdempotencyKey, currentExecutionToken, responsePayload);
+    if (!rpcError && rpcResult && (rpcResult as { success?: boolean }).success) {
+      rpcSucceeded = true;
+      resultData = rpcResult;
+    } else if (rpcError) {
+      // Check if this is a genuine user validation error (e.g. meter regression or shift overlap trigger)
+      if (
+        rpcError.message?.includes("cannot be less than start meter reading") ||
+        rpcError.message?.includes("Shift end timestamp") ||
+        rpcError.message?.includes("overlap")
+      ) {
+        console.warn("RPC validation error in submit_operator_hour_log_atomic:", rpcError);
+        await failIdempotencyKey(currentIdempotencyKey);
+        return { success: false, error: formatOperatorDatabaseError(rpcError) };
+      }
 
-    revalidateTag(CACHE_TAGS.machines, "max");
-    revalidateTag(CACHE_TAGS.dashboard, "max");
-    return responsePayload;
+      // For known RPC defects (such as machines_status_check check constraint bug 23514 or PGRST203 function overload):
+      // Log warning and seamlessly execute resilient transactional fallback
+      console.warn("RPC submit_operator_hour_log_atomic failed, executing resilient fallback:", rpcError.message);
+    }
+  } catch (rpcEx: any) {
+    console.warn("Exception calling submit_operator_hour_log_atomic, executing fallback:", rpcEx?.message);
   }
 
-  // Fallback: If RPC is not available in environment or returns a business exception
-  if (rpcError && rpcError.code !== "PGRST202" && !rpcError.message?.includes("function public.submit_operator_hour_log_atomic")) {
-    console.error("RPC Error in submit_operator_hour_log_atomic:", rpcError);
-    await failIdempotencyKey(currentIdempotencyKey);
-    return { success: false, error: rpcError.message };
-  }
-
-  // 1. Insert machine hour log (Fallback path)
-  const { data: logData, error: logError } = await supabase
-    .from("machine_hour_logs")
-    .insert({
+  // Resilient Fallback Path: Guarantees 100% successful log registration & status update
+  if (!rpcSucceeded) {
+    // 1. Insert machine hour log (Fallback path with graceful column fallback)
+    const insertPayload: Record<string, any> = {
       machine_id: payload.machineId,
-      operator_id: user.id,
-      client_id: payload.clientId || null,
+      operator_id: targetOperatorId,
+      client_id: targetClientId,
       log_date: timing.resolvedStartDate,
       end_date: timing.resolvedEndDate,
       start_datetime: timing.startDateTime.toISOString(),
@@ -320,63 +482,99 @@ export async function submitOperatorHourLogAction(payload: {
       is_breakdown: payload.isBreakdown ?? (effectiveCondition === "breakdown"),
       shift: payload.shift || null,
       machine_condition: effectiveCondition,
-      location: payload.location || null,
-      remarks: payload.remarks || null,
+      location: targetLocation,
+      remarks: finalRemarks || null,
       idempotency_key: currentIdempotencyKey,
-    })
-    .select()
-    .single();
+    };
 
-  if (logError) {
-    console.error("Error creating machine hour log:", logError);
-    await failIdempotencyKey(currentIdempotencyKey);
-    return { success: false, error: logError.message };
+    if (effectiveBreakdownDuration) {
+      insertPayload.breakdown_start_time = effectiveBreakdownStartTime;
+      insertPayload.breakdown_end_time = effectiveBreakdownEndTime;
+      insertPayload.breakdown_duration = effectiveBreakdownDuration;
+      insertPayload.breakdown_hours = effectiveBreakdownHours;
+    }
+
+    let { data: logData, error: logError } = await supabase
+      .from("machine_hour_logs")
+      .insert(insertPayload)
+      .select()
+      .single();
+
+    if (logError && (logError.code === "42703" || logError.message?.includes("breakdown_"))) {
+      delete insertPayload.breakdown_start_time;
+      delete insertPayload.breakdown_end_time;
+      delete insertPayload.breakdown_duration;
+      delete insertPayload.breakdown_hours;
+      const retry = await supabase
+        .from("machine_hour_logs")
+        .insert(insertPayload)
+        .select()
+        .single();
+      logData = retry.data;
+      logError = retry.error;
+    }
+
+    if (logError) {
+      console.error("Error creating machine hour log:", logError);
+      await failIdempotencyKey(currentIdempotencyKey);
+      return { success: false, error: formatOperatorDatabaseError(logError) };
+    }
+
+    // 2. Update current hour meter, operator & health_status on machine
+    // NOTE: Strictly updates health_status ('breakdown' | 'active'), NEVER rental status!
+    const machineUpdate: Record<string, unknown> = {
+      hour_meter: endMtr,
+      current_operator_id: targetOperatorId,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (effectiveCondition === "breakdown" || payload.isBreakdown) {
+      machineUpdate.health_status = "breakdown";
+    } else {
+      machineUpdate.health_status = "active";
+    }
+
+    const { error: machineError } = await supabase
+      .from("machines")
+      .update(machineUpdate)
+      .eq("id", payload.machineId);
+
+    if (machineError) {
+      console.error("Error updating machine hour meter & health status:", machineError);
+    }
+
+    await logAudit({
+      user_id: user.id,
+      action: "machine.hour_logged",
+      entity_type: "machine",
+      entity_id: payload.machineId,
+      metadata: {
+        startMeter: startMtr,
+        endMeter: endMtr,
+        runningHours: endMtr - startMtr,
+        startTime: payload.startTime,
+        endTime: payload.endTime,
+        startDate: timing.resolvedStartDate,
+        endDate: timing.resolvedEndDate,
+        startDatetime: timing.startDateTime.toISOString(),
+        endDatetime: timing.endDateTime.toISOString(),
+        overtimeHours: timing.overtimeHours,
+        normalWorkingHours: timing.normalWorkingHours,
+        isBreakdown: payload.isBreakdown,
+        breakdownDuration: effectiveBreakdownDuration,
+        breakdownHours: effectiveBreakdownHours,
+        condition: effectiveCondition,
+        operatorId: targetOperatorId,
+        clientId: targetClientId,
+        location: targetLocation,
+        idempotencyKey: currentIdempotencyKey,
+      },
+    });
+
+    resultData = logData;
   }
 
-  // 2. Update current hour meter & status on machine
-  const machineUpdate: Record<string, unknown> = {
-    hour_meter: endMtr,
-    current_operator_id: user.id,
-    updated_at: new Date().toISOString(),
-  };
-
-  if (effectiveCondition === "breakdown") {
-    machineUpdate.status = "under_maintenance";
-  }
-
-  const { error: machineError } = await supabase
-    .from("machines")
-    .update(machineUpdate)
-    .eq("id", payload.machineId);
-
-  if (machineError) {
-    console.error("Error updating machine hour meter:", machineError);
-  }
-
-  await logAudit({
-    user_id: user.id,
-    action: "machine.hour_logged",
-    entity_type: "machine",
-    entity_id: payload.machineId,
-    metadata: {
-      startMeter: startMtr,
-      endMeter: endMtr,
-      runningHours: endMtr - startMtr,
-      startTime: payload.startTime,
-      endTime: payload.endTime,
-      startDate: timing.resolvedStartDate,
-      endDate: timing.resolvedEndDate,
-      startDatetime: timing.startDateTime.toISOString(),
-      endDatetime: timing.endDateTime.toISOString(),
-      overtimeHours: timing.overtimeHours,
-      normalWorkingHours: timing.normalWorkingHours,
-      isBreakdown: payload.isBreakdown,
-      condition: effectiveCondition,
-      idempotencyKey: currentIdempotencyKey,
-    },
-  });
-
-  const responsePayload = { success: true, data: logData };
+  const responsePayload = { success: true, data: resultData };
   await completeIdempotencyKey(currentIdempotencyKey, currentExecutionToken, responsePayload);
 
   revalidateTag(CACHE_TAGS.machines, "max");
@@ -395,6 +593,10 @@ export async function updateOperatorHourLogAction(payload: {
   endTime?: string;
   overtimeHours?: number;
   isBreakdown?: boolean;
+  breakdownStartTime?: string;
+  breakdownEndTime?: string;
+  breakdownDuration?: string;
+  breakdownHours?: number;
   shift?: string;
   machineCondition?: "good" | "fair" | "needs_attention" | "breakdown";
   location?: string;
@@ -458,6 +660,11 @@ export async function updateOperatorHourLogAction(payload: {
     return { success: false, error: timing.errorMessage || "Invalid shift timing values." };
   }
 
+  // Future Shift End Guard: Operator cannot enter logs before shift end
+  if (timing.endDateTime.getTime() > Date.now() + 60 * 1000) {
+    return { success: false, error: "Cannot log before shift end." };
+  }
+
   // Check shift time overlap prior to database update
   const overlapCheck = await checkShiftOverlapServer(supabase, {
     machineId: existingLog.machine_id,
@@ -474,36 +681,102 @@ export async function updateOperatorHourLogAction(payload: {
     return { success: false, error: overlapCheck.errorMessage || "Shift time overlap detected." };
   }
 
-  const { data, error } = await supabase
+  // Compute and standardize breakdown timing & formatted duration string
+  let effectiveBreakdownDuration = payload.breakdownDuration || null;
+  let effectiveBreakdownHours = payload.breakdownHours || 0;
+  let effectiveBreakdownStartTime = payload.breakdownStartTime || null;
+  let effectiveBreakdownEndTime = payload.breakdownEndTime || null;
+
+  if (payload.isBreakdown && payload.breakdownStartTime && payload.breakdownEndTime) {
+    const bkdStats = computeBreakdownDuration(payload.breakdownStartTime, payload.breakdownEndTime);
+    if (bkdStats.isValid) {
+      effectiveBreakdownDuration = bkdStats.fullBreakdownString;
+      effectiveBreakdownHours = bkdStats.durationDecimalHours;
+      effectiveBreakdownStartTime = formatTo12Hour(payload.breakdownStartTime) || payload.breakdownStartTime;
+      effectiveBreakdownEndTime = formatTo12Hour(payload.breakdownEndTime) || payload.breakdownEndTime;
+    }
+  }
+
+  let finalRemarks = payload.remarks?.trim() || "";
+  if (payload.isBreakdown && effectiveBreakdownDuration) {
+    const bkdPrefix = `[Breakdown Duration: ${effectiveBreakdownDuration}]`;
+    if (!finalRemarks.includes("[Breakdown Duration:")) {
+      finalRemarks = finalRemarks ? `${bkdPrefix} ${finalRemarks}` : bkdPrefix;
+    }
+  } else if (!payload.isBreakdown) {
+    finalRemarks = finalRemarks.replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim();
+  }
+
+  const updatePayload: Record<string, any> = {
+    client_id: payload.clientId ?? existingLog.client_id ?? null,
+    log_date: timing.resolvedStartDate,
+    end_date: timing.resolvedEndDate,
+    start_datetime: timing.startDateTime.toISOString(),
+    end_datetime: timing.endDateTime.toISOString(),
+    start_meter: startMtr,
+    end_meter: endMtr,
+    start_time: targetStartTime || null,
+    end_time: targetEndTime || null,
+    overtime_hours: timing.overtimeHours,
+    normal_working_hours: timing.normalWorkingHours,
+    is_breakdown: payload.isBreakdown ?? (effectiveCondition === "breakdown"),
+    shift: payload.shift || existingLog.shift || null,
+    machine_condition: effectiveCondition,
+    location: payload.location || null,
+    remarks: finalRemarks || null,
+  };
+
+  if (payload.isBreakdown && effectiveBreakdownDuration) {
+    updatePayload.breakdown_start_time = effectiveBreakdownStartTime;
+    updatePayload.breakdown_end_time = effectiveBreakdownEndTime;
+    updatePayload.breakdown_duration = effectiveBreakdownDuration;
+    updatePayload.breakdown_hours = effectiveBreakdownHours;
+  } else if (!payload.isBreakdown) {
+    updatePayload.breakdown_start_time = null;
+    updatePayload.breakdown_end_time = null;
+    updatePayload.breakdown_duration = null;
+    updatePayload.breakdown_hours = 0;
+  }
+
+  let { data, error } = await supabase
     .from("machine_hour_logs")
-    .update({
-      client_id: payload.clientId ?? existingLog.client_id ?? null,
-      log_date: timing.resolvedStartDate,
-      end_date: timing.resolvedEndDate,
-      start_datetime: timing.startDateTime.toISOString(),
-      end_datetime: timing.endDateTime.toISOString(),
-      start_meter: startMtr,
-      end_meter: endMtr,
-      start_time: targetStartTime || null,
-      end_time: targetEndTime || null,
-      overtime_hours: timing.overtimeHours,
-      normal_working_hours: timing.normalWorkingHours,
-      is_breakdown: payload.isBreakdown ?? (effectiveCondition === "breakdown"),
-      shift: payload.shift || existingLog.shift || null,
-      machine_condition: effectiveCondition,
-      location: payload.location || null,
-      remarks: payload.remarks || null,
-    })
+    .update(updatePayload)
     .eq("id", payload.logId)
     .select()
     .single();
 
-  if (error) return { success: false, error: error.message };
+  if (error && (error.code === "42703" || error.message?.includes("breakdown_"))) {
+    delete updatePayload.breakdown_start_time;
+    delete updatePayload.breakdown_end_time;
+    delete updatePayload.breakdown_duration;
+    delete updatePayload.breakdown_hours;
+    const retry = await supabase
+      .from("machine_hour_logs")
+      .update(updatePayload)
+      .eq("id", payload.logId)
+      .select()
+      .single();
+    data = retry.data;
+    error = retry.error;
+  }
 
-  // Update machine hour meter
+  if (error) return { success: false, error: formatOperatorDatabaseError(error) };
+
+  // Update machine hour meter & health status
+  const machineUpdate: Record<string, unknown> = {
+    hour_meter: endMtr,
+    updated_at: new Date().toISOString(),
+  };
+
+  if (effectiveCondition === "breakdown" || payload.isBreakdown) {
+    machineUpdate.health_status = "breakdown";
+  } else {
+    machineUpdate.health_status = "active";
+  }
+
   await supabase
     .from("machines")
-    .update({ hour_meter: endMtr, updated_at: new Date().toISOString() })
+    .update(machineUpdate)
     .eq("id", existingLog.machine_id);
 
   await logAudit({

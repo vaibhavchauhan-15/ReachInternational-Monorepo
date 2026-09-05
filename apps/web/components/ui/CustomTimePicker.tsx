@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Clock } from "lucide-react";
+import { motion } from "framer-motion";
 import { AnimatedAlertTriangle } from "./animated-icons";
-import { SegmentedToggle, type SegmentedToggleItem } from "./SegmentedToggle";
-
+import { cn } from "@/lib/utils";
 
 export interface CustomTimePickerProps {
   value?: string;
@@ -19,6 +19,8 @@ export interface CustomTimePickerProps {
   disabled?: boolean;
   error?: string;
   helperText?: string;
+  /** Layout orientation for the AM/PM toggle. Defaults to "horizontal" for polished, legible tap targets. */
+  toggleOrientation?: "horizontal" | "vertical";
 }
 
 export type TimeInputProps = CustomTimePickerProps;
@@ -95,6 +97,7 @@ export function CustomTimePicker({
   disabled = false,
   error: externalError,
   helperText,
+  toggleOrientation = "horizontal",
 }: CustomTimePickerProps) {
   // Parse initial state from value prop
   const parsed = useMemo(() => parseTimeString(value), [value]);
@@ -103,6 +106,10 @@ export function CustomTimePicker({
   const [minute, setMinute] = useState<string>(parsed.minute);
   const [period, setPeriod] = useState<"AM" | "PM">(parsed.period);
   const [touched, setTouched] = useState<boolean>(false);
+
+  const hourInputRef = useRef<HTMLInputElement>(null);
+  const minuteInputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Sync internal state if external value changes
   useEffect(() => {
@@ -213,6 +220,41 @@ export function CustomTimePicker({
 
     setHour(sanitized);
     emitFormattedTime(sanitized, minute, period);
+
+    // Ergonomic auto-advance: if 2 digits entered and valid (e.g. "08", "12"), advance focus to minute input
+    if (sanitized.length === 2) {
+      const num = parseInt(sanitized, 10);
+      if (!isNaN(num) && num >= 1 && num <= 12) {
+        setTimeout(() => {
+          minuteInputRef.current?.focus();
+          minuteInputRef.current?.select();
+        }, 10);
+      }
+    }
+  };
+
+  const handleHourKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === ":" || e.key === "Enter" || (e.key === "ArrowRight" && hour.length > 0)) {
+      e.preventDefault();
+      minuteInputRef.current?.focus();
+      minuteInputRef.current?.select();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setTouched(true);
+      const curr = parseInt(hour, 10) || 12;
+      const next = curr >= 12 ? 1 : curr + 1;
+      const padded = String(next).padStart(2, "0");
+      setHour(padded);
+      emitFormattedTime(padded, minute, period);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setTouched(true);
+      const curr = parseInt(hour, 10) || 1;
+      const prev = curr <= 1 ? 12 : curr - 1;
+      const padded = String(prev).padStart(2, "0");
+      setHour(padded);
+      emitFormattedTime(padded, minute, period);
+    }
   };
 
   const handleHourBlur = () => {
@@ -262,6 +304,34 @@ export function CustomTimePicker({
     emitFormattedTime(hour, sanitized, period);
   };
 
+  const handleMinuteKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && minute === "") {
+      e.preventDefault();
+      hourInputRef.current?.focus();
+      hourInputRef.current?.select();
+    } else if (e.key === "ArrowLeft" && (e.currentTarget.selectionStart === 0 || minute === "")) {
+      e.preventDefault();
+      hourInputRef.current?.focus();
+      hourInputRef.current?.select();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setTouched(true);
+      const curr = parseInt(minute, 10) || 0;
+      const next = (curr + 5) % 60;
+      const padded = String(next).padStart(2, "0");
+      setMinute(padded);
+      emitFormattedTime(hour, padded, period);
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setTouched(true);
+      const curr = parseInt(minute, 10) || 0;
+      const prev = (curr - 5 + 60) % 60;
+      const padded = String(prev).padStart(2, "0");
+      setMinute(padded);
+      emitFormattedTime(hour, padded, period);
+    }
+  };
+
   const handleMinuteBlur = () => {
     setTouched(true);
     const trimmedM = minute.trim();
@@ -284,18 +354,26 @@ export function CustomTimePicker({
   };
 
   const timePickerId = React.useId();
-  const amPmItems = useMemo<SegmentedToggleItem<"AM" | "PM">[]>(
-    () => [
-      { id: "AM", label: "AM", disabled },
-      { id: "PM", label: "PM", disabled },
-    ],
-    [disabled]
-  );
 
   const handlePeriodChange = (newPeriod: "AM" | "PM") => {
     setTouched(true);
     setPeriod(newPeriod);
     emitFormattedTime(hour, minute, newPeriod);
+  };
+
+  const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (
+      e.target === containerRef.current ||
+      (e.target as HTMLElement).classList.contains("time-cluster-area")
+    ) {
+      if (!hour) {
+        hourInputRef.current?.focus();
+        hourInputRef.current?.select();
+      } else {
+        minuteInputRef.current?.focus();
+        minuteInputRef.current?.select();
+      }
+    }
   };
 
   return (
@@ -304,82 +382,136 @@ export function CustomTimePicker({
         <label
           className={
             labelClassName ||
-            "block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 flex items-center gap-1.5"
+            "block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 flex items-center gap-1.5 min-w-0"
           }
         >
-          <Clock className={`h-3.5 w-3.5 ${iconColor}`} />
-          <span>{label}</span>
-          {required && <span className="text-rose-500 font-bold ml-0.5">*</span>}
+          <Clock className={`h-3.5 w-3.5 ${iconColor} shrink-0`} />
+          <span className="truncate">{label}</span>
+          {required && <span className="text-rose-500 font-bold ml-0.5 shrink-0">*</span>}
         </label>
       )}
 
-      <div className="flex items-center gap-1.5 sm:gap-2">
-        {/* Hours Input */}
-        <div className="relative flex-1 min-w-0">
+      {/* Unified Cohesive Time Picker Shell */}
+      <div
+        ref={containerRef}
+        onClick={handleContainerClick}
+        className={cn(
+          "group relative flex items-center justify-between w-full min-h-[38px] sm:min-h-[42px] h-9.5 sm:h-[42px] px-2 xs:px-2.5 sm:px-3 rounded-xl border bg-[var(--color-canvas)] text-[var(--color-ink)] transition-all shadow-2xs cursor-text",
+          "focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 dark:focus-within:ring-sky-400/20 dark:focus-within:border-sky-400",
+          validation.hasError || Boolean(externalError)
+            ? "border-rose-500 focus-within:ring-rose-500/20 focus-within:border-rose-500 dark:border-rose-500"
+            : "border-[var(--color-hairline)] hover:border-neutral-300 dark:hover:border-neutral-700",
+          disabled && "opacity-50 pointer-events-none bg-neutral-100 dark:bg-neutral-900 cursor-not-allowed"
+        )}
+      >
+        {/* Left: Digital Time Input Cluster */}
+        <div className="time-cluster-area flex items-center gap-0.5 sm:gap-1 min-w-0">
+          {/* Hours Input */}
           <input
+            ref={hourInputRef}
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
             maxLength={3}
             value={hour}
             onChange={handleHourChange}
+            onKeyDown={handleHourKeyDown}
             onBlur={handleHourBlur}
+            onFocus={(e) => e.target.select()}
             disabled={disabled}
             placeholder="08"
             aria-label="Hours (1-12)"
-            className={`w-full h-10 px-1.5 sm:px-2 text-center font-mono text-xs sm:text-sm font-bold rounded-lg sm:rounded-xl border bg-[var(--color-canvas)] text-[var(--color-ink)] transition-all shadow-2xs focus:outline-none focus:ring-2 ${
-              validation.hourError
-                ? "border-rose-500 focus:ring-rose-500/20 focus:border-rose-500"
-                : "border-[var(--color-hairline)] focus:ring-sky-500/20 focus:border-sky-500 dark:focus:ring-sky-400/20 dark:focus:border-sky-400"
-            }`}
+            className="w-7 xs:w-7.5 sm:w-8 h-7 sm:h-8 p-0 text-center font-mono text-xs sm:text-sm font-bold rounded-lg bg-transparent hover:bg-neutral-200/50 dark:hover:bg-neutral-800/70 focus:bg-neutral-200/60 dark:focus:bg-neutral-800 text-[var(--color-ink)] focus:outline-none transition-colors select-all"
           />
-        </div>
 
-        {/* Colon Separator */}
-        <span className="font-mono text-sm sm:text-base font-bold text-[var(--color-mute)] select-none shrink-0">
-          :
-        </span>
+          {/* Colon Separator */}
+          <span className="font-mono text-xs sm:text-sm font-bold text-[var(--color-mute)] select-none px-0.25 opacity-70 shrink-0">
+            :
+          </span>
 
-        {/* Minutes Input (Optional, Treated as 00 if left blank) */}
-        <div className="relative flex-1 min-w-0">
+          {/* Minutes Input */}
           <input
+            ref={minuteInputRef}
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
             maxLength={3}
             value={minute}
             onChange={handleMinuteChange}
+            onKeyDown={handleMinuteKeyDown}
             onBlur={handleMinuteBlur}
+            onFocus={(e) => e.target.select()}
             disabled={disabled}
             placeholder="00"
             aria-label="Minutes (0-60, optional)"
-            className={`w-full h-10 px-1.5 sm:px-2 text-center font-mono text-xs sm:text-sm font-bold rounded-lg sm:rounded-xl border bg-[var(--color-canvas)] text-[var(--color-ink)] transition-all shadow-2xs focus:outline-none focus:ring-2 ${
-              validation.minuteError
-                ? "border-rose-500 focus:ring-rose-500/20 focus:border-rose-500"
-                : "border-[var(--color-hairline)] focus:ring-sky-500/20 focus:border-sky-500 dark:focus:ring-sky-400/20 dark:focus:border-sky-400"
-            }`}
+            className="w-7 xs:w-7.5 sm:w-8 h-7 sm:h-8 p-0 text-center font-mono text-xs sm:text-sm font-bold rounded-lg bg-transparent hover:bg-neutral-200/50 dark:hover:bg-neutral-800/70 focus:bg-neutral-200/60 dark:focus:bg-neutral-800 text-[var(--color-ink)] focus:outline-none transition-colors select-all"
           />
         </div>
 
-        {/* Reused Canonical SegmentedToggle for AM / PM */}
-        <div className="shrink-0 flex items-center">
-          <SegmentedToggle<"AM" | "PM">
-            size="sm"
-            responsive={false}
-            items={amPmItems}
-            value={period}
-            onChange={handlePeriodChange}
-            layoutIdPrefix={`timepicker-ampm-${timePickerId}`}
-            ariaLabel="Select AM or PM period"
-            className="h-10 flex items-center justify-center p-0.5 rounded-lg sm:rounded-xl shadow-2xs border border-[var(--color-hairline)] shrink-0"
-            itemClassName="min-h-[34px] px-2 sm:px-3 text-[11px] sm:text-xs font-bold"
-          />
+        {/* Right: Sleek Polished AM/PM Segmented Toggle */}
+        <div className="shrink-0 ml-1 sm:ml-2">
+          <div
+            role="tablist"
+            aria-label="Select AM or PM period"
+            className={cn(
+              "relative p-0.5 rounded-lg bg-neutral-100 dark:bg-neutral-900 border border-neutral-200/80 dark:border-neutral-800 shadow-inner select-none transition-colors",
+              toggleOrientation === "vertical"
+                ? "inline-flex flex-col gap-0.5"
+                : "inline-flex items-center gap-0.5"
+            )}
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={period === "AM"}
+              disabled={disabled}
+              onClick={() => handlePeriodChange("AM")}
+              className={cn(
+                "relative px-1.5 xs:px-2 sm:px-2.5 py-0.5 sm:py-1 text-[10px] xs:text-[10.5px] sm:text-xs font-bold rounded-[6px] transition-all cursor-pointer select-none leading-none z-10 flex items-center justify-center",
+                period === "AM"
+                  ? "text-sky-600 dark:text-sky-400 font-extrabold"
+                  : "text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-white font-medium"
+              )}
+            >
+              {period === "AM" && (
+                <motion.div
+                  layoutId={`ampm-active-${timePickerId}`}
+                  className="absolute inset-0 bg-white dark:bg-neutral-800 rounded-[6px] shadow-xs border border-neutral-200/90 dark:border-neutral-700/80 -z-10"
+                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                />
+              )}
+              AM
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              aria-selected={period === "PM"}
+              disabled={disabled}
+              onClick={() => handlePeriodChange("PM")}
+              className={cn(
+                "relative px-1.5 xs:px-2 sm:px-2.5 py-0.5 sm:py-1 text-[10px] xs:text-[10.5px] sm:text-xs font-bold rounded-[6px] transition-all cursor-pointer select-none leading-none z-10 flex items-center justify-center",
+                period === "PM"
+                  ? "text-sky-600 dark:text-sky-400 font-extrabold"
+                  : "text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-white font-medium"
+              )}
+            >
+              {period === "PM" && (
+                <motion.div
+                  layoutId={`ampm-active-${timePickerId}`}
+                  className="absolute inset-0 bg-white dark:bg-neutral-800 rounded-[6px] shadow-xs border border-neutral-200/90 dark:border-neutral-700/80 -z-10"
+                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                />
+              )}
+              PM
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Inline Validation Error Message */}
       {validation.errorMessage && (
-        <p className="text-[11px] text-rose-500 dark:text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+        <p className="text-[10px] sm:text-[11px] text-rose-500 dark:text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
           <AnimatedAlertTriangle size={12} className="shrink-0 text-rose-500" />
           <span>{validation.errorMessage}</span>
         </p>
@@ -395,4 +527,5 @@ export function CustomTimePicker({
 }
 
 export const TimeInput = CustomTimePicker;
+
 

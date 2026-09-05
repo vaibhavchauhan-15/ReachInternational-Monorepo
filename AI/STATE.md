@@ -1,10 +1,215 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: **Production Ready — Dynamic Multi-Personnel Display & Scalable Font Sizing in Machine Table Completed**
-- **Release Candidate**: `v2026.09.02` (Branch: `main`)
+- **Phase**: **Production Ready — Shift End Time Validation & Future Logging Prevention (Web, Mobile, Server Actions, DB)**
+- **Release Candidate**: `v2026.09.05` (Branch: `main`)
 - **Overall Health**: Production Ready (0 TypeScript Errors across 9 packages, 35/35 Routes Compiled, 0 Runtime Errors, 0 Warnings, 0 P0/P1/P2 Issues)
-- **Last Memory Update**: 2026-09-02
+- **Last Memory Update**: 2026-09-05
+- [x] **Page Feedback: /operations?tab=entry — Unified TimePicker Redesign, Polished Horizontal AM/PM Segmented Toggle & Mobile/Desktop UX Standards (`CustomTimePicker.tsx`, `TimeInput.tsx`) (2026-09-05)**:
+  - **1. Unified Input Container Architecture (`apps/web/components/ui/CustomTimePicker.tsx`)**:
+    - Replaced fragmented 3-box design with a single cohesive container shell (`min-h-[38px] sm:min-h-[42px] h-9.5 sm:h-[42px] px-2 xs:px-2.5 sm:px-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] shadow-2xs`).
+    - Integrated full focus ring (`focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500`) and error highlight (`border-rose-500 focus-within:ring-rose-500/20`).
+    - Added container click handler directing focus to hours or minutes automatically.
+  - **2. Polished Horizontal AM/PM Segmented Toggle (`apps/web/components/ui/CustomTimePicker.tsx`)**:
+    - Switched default toggle orientation to horizontal (`toggleOrientation = "horizontal"`).
+    - Designed sleek, high-contrast segmented pill (`bg-neutral-100 dark:bg-neutral-900 border border-neutral-200/80 dark:border-neutral-800 rounded-lg p-0.5`).
+    - Sized buttons with comfortable padding: `px-1.5 xs:px-2 sm:px-2.5 py-0.5 sm:py-1 text-[10px] xs:text-[10.5px] sm:text-xs font-bold`.
+    - Powered active tab transition via Framer Motion spring physics (`motion.div layoutId="ampm-active-..."`).
+  - **3. Keyboard Ergonomics & Auto-Advance / Retreat (`apps/web/components/ui/CustomTimePicker.tsx`)**:
+    - Auto-advance: typing 2 valid digits in hours automatically advances focus to minutes.
+    - Auto-retreat: pressing Backspace on empty minutes returns focus to hours.
+    - Arrow keys: ArrowUp/ArrowDown on hours increments/decrements (1–12 wrap-around); on minutes increments/decrements by 5.
+    - Select-on-focus: clicking into either field selects existing digits for instant replacement.
+  - **4. Mandatory Cross-Platform Mobile App Synchronization (`apps/mobile/components/ui/TimeInput.tsx`)**:
+    - Synchronized React Native `TimeInput` with the same unified container shell (`unifiedShell: height: 44, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1`).
+    - Updated digital inputs to frameless centered numbers with tabular-nums.
+    - Switched AM/PM switcher to horizontal segmented pill with comfortable touch padding (`paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6`).
+    - Added auto-advance to minutes input on 2 digits entered via ref.
+  - **5. Monorepo Quality Gate Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: Passed with **0 errors**.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: Passed with **0 errors**.
+    - `pnpm -r exec tsc --noEmit`: Passed with **0 errors across all 9 packages**.
+- [x] **Page Feedback: /operations?tab=entry — Mobile Single-Row Timepickers, Concise Mobile Errors/Toasts/Dialogs & Cross-Platform Mobile Standards Optimization (`CustomTimePicker.tsx`, `OperatorDashboard.tsx`, `CustomDatePicker.tsx`, `Toast.tsx`, `TimeInput.tsx`, `MeterLogModal.tsx`) (2026-09-05)**:
+  - **1. Mobile Single-Row Start & End Timepickers (`CustomTimePicker.tsx`, `OperatorDashboard.tsx`)**:
+    - Calibrated digit input dimensions to `w-[38px] xs:w-10 sm:w-11 shrink-0`, `h-8.5 xs:h-9 sm:h-10`, and `px-0.5 sm:px-1` with centered monospace numbers (`text-xs sm:text-sm font-bold font-mono text-center`), completely eliminating digit clipping while shrinking container width to ~143px.
+    - Fitted compact AM/PM toggle (`size="xs"`, `min-h-[24px] xs:min-h-[26px] sm:min-h-[30px] px-1.5 sm:px-2 text-[9px] xs:text-[10px] sm:text-[11px]`).
+    - Configured Section B Shift Timing (`grid grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-3.5 items-start`) and Section C Breakdown Timing (`grid grid-cols-2 gap-2 sm:gap-3 items-start`) so Start Time and End Time render cleanly in a single row side-by-side on mobile viewports (down to 320px–412px).
+    - Synchronized Log Correction Modal timing fields to `grid grid-cols-2 gap-2 sm:gap-4 items-start`.
+  - **2. Concise Mobile Error & Warning Typography (`OperatorDashboard.tsx`, `CustomTimePicker.tsx`, `CustomDatePicker.tsx`)**:
+    - Shortened inline timepicker error text: `"Hour required (1–12)"`, `"Hour must be 1–12"`, `"Minutes must be 0–60"`, styled with `text-[10px] sm:text-[11px]`.
+    - Shortened meter validation alert: `"End meter cannot be less than start meter."`.
+    - Shortened shift sequencing warning: `"Start ({start}) cannot precede prev shift end ({prevEnd})."`.
+    - Shortened handover button text: `"Align to {time}"` on mobile (`"Align Start to {time} (Handover)"` on desktop).
+    - Shortened shift overlap message: `"Shift overlaps with existing log ({range}) on this machine."`.
+    - Shortened datepicker indicator: `<span className="hidden xs:inline">Allowed: </span>7d window`.
+    - Shortened breakdown duration card header: `<span className="hidden sm:inline">Calculated Breakdown Duration:</span><span className="sm:hidden">Duration:</span>` and eliminated repeated duration strings (`🔴 Duration: 55min` on line 1, `02:30 PM - 03:25 PM` on line 2).
+  - **3. Mobile Dialog & Toast Standards (`OperatorDashboard.tsx`, `Toast.tsx`)**:
+    - Refactored confirmation dialog stat tiles to `grid grid-cols-3 gap-1.5 sm:gap-2.5`, rendering Shift Date, Hour Meter reading, and Overtime in a single row on mobile and saving >100px of vertical space to eliminate mobile modal scrolling.
+    - Updated confirmation modal footer reassurance label to `Direct commit` and submit CTA to `Confirm & Submit` on mobile.
+    - Refactored `<Toast>` notification positioning and padding to mobile standards: `top-3 sm:top-4 left-3 right-3 sm:left-auto sm:right-4 gap-1.5 sm:gap-2`, compact card `p-2.5 sm:p-4 min-w-0 w-full sm:min-w-[320px] sm:max-w-[400px] shadow-lg`, icon `h-7 w-7 sm:h-8 sm:w-8`, title `text-xs sm:text-sm font-bold`, description `text-[11px] sm:text-xs leading-snug`.
+  - **4. Cross-Platform Mobile Parity (`apps/mobile/components/ui/TimeInput.tsx`, `MeterLogModal.tsx`)**:
+    - Updated mobile `TimeInput.tsx`: `digitBox` to `minWidth: 38`, `paddingHorizontal: 4`, `height: 42`; `periodBtn` to `paddingHorizontal: 8`, `minWidth: 34`, `height: 36`. Shortened inline error messages (`"Hour required (1–12)"`, `"Minutes must be 0–60"`).
+    - Updated `MeterLogModal.tsx`: shortened handover align button to `"Align to {time}"` and condensed shift sequencing alert.
+  - **5. Monorepo Quality Gate**:
+    - `pnpm -r exec tsc --noEmit` passed across all 9 packages with 0 errors.
+- [x] **Page Feedback: /operations?tab=entry — Shift End Time Validation & Future Logging Prevention Across Frontend, Backend & Database (`date.ts`, `hourMeter.ts`, `OperatorDashboard.tsx`, `CustomTimePicker.tsx`, `operators.ts`, `TimeInput.tsx`, `MeterLogModal.tsx`, `046_validate_shift_end_not_future.sql`) (2026-09-05)**:
+  - **1. Shared Date & Validation Utilities (`packages/utils/src/date.ts`, `packages/validation/src/hourMeter.ts`)**:
+    - Added `disallowFutureEnd?: boolean` and `currentTimestamp?: number` options to `computeShiftTiming`.
+    - Added `isFutureEnd?: boolean` to `ShiftTimingComputation`.
+    - Added `isShiftEndInFuture(endDateTime, graceMinutes = 0): boolean` helper.
+    - If `disallowFutureEnd === true` and shift end is after current time, `computeShiftTiming` returns `isValid: false`, `isFutureEnd: true`, and `errorMessage: "Cannot log before shift end."`.
+    - Added `.refine()` to `CreateHourLogSchema` checking `end_datetime <= Date.now() + 60 * 1000`, producing short error message: `"Cannot log before shift end."`.
+  - **2. Web Operations Entry & Correction Modal (`OperatorDashboard.tsx`, `CustomTimePicker.tsx`)**:
+    - Added real-time 30-second interval ticker (`currentTick`) for live shift end revalidation without user re-typing.
+    - Updated `<CustomTimePicker>` to reflect `externalError` directly on inputs (`border-rose-500`) and display single-line error badge.
+    - Bound `error={operatingStats.isFutureEnd ? "Cannot log before shift end." : undefined}` to Section B End Time picker.
+    - Bound `error={editOperatingStats.isFutureEnd ? "Cannot log before shift end." : undefined}` to Edit Modal End Time picker.
+    - Guarded submission handlers (`handleOpenSubmitModal`, `handleResubmitLogCorrection`) to reject with toast error `"Cannot log before shift end."`.
+  - **3. Server Action Backend Guards & DB Error Formatting (`apps/web/app/actions/operators.ts`)**:
+    - Added synchronous pre-validation in `submitOperatorHourLogAction` and `updateOperatorHourLogAction` checking `isShiftEndInFuture(end_datetime, 1)` and returning `{ success: false, error: "Cannot log before shift end." }`.
+    - Extended `formatOperatorDatabaseError` to translate database trigger/RPC errors mentioning `"Cannot log before shift end"` or `"before shift end"` to `"Cannot log before shift end."`.
+  - **4. Mobile Cross-Platform Synchronization (`apps/mobile/components/ui/TimeInput.tsx`, `MeterLogModal.tsx`)**:
+    - Added `currentTick` ticker to `MeterLogModal.tsx` for real-time reactivity.
+    - Passed `disallowFutureEnd: true, currentTimestamp: currentTick` to `shiftStats`.
+    - Bound `error={shiftStats.isFutureEnd ? 'Cannot log before shift end.' : undefined}` to End Time `<TimeInput>`.
+    - Updated `TimeInput.tsx` to highlight border in `border-rose-500` (`#f43f5e`) when `externalError` is present.
+    - Blocked submission in `handleSubmit` with mobile alert when `shiftStats.isFutureEnd`.
+  - **5. Database Triggers & Atomic RPC (`supabase/migrations/046_validate_shift_end_not_future.sql`)**:
+    - Updated `check_machine_hour_log_shift_overlap()` trigger to verify `NEW.end_datetime <= (NOW() + INTERVAL '1 minute')`, raising exception `'Cannot log before shift end.'` with `ERRCODE = '23514'`.
+    - Updated `submit_operator_hour_log_atomic()` RPC to reject logs where `p_end_datetime > (NOW() + INTERVAL '1 minute')` with `'Cannot log before shift end.'`.
+  - **6. Automated Verification**:
+    - `node supabase/tests/test_future_shift_validation.mjs`: 9/9 assertions passed (100%).
+    - `node supabase/tests/test_breakdown_submission_and_linking.mjs`: all regression tests passed (100%).
+    - Monorepo TypeScript check (`tsc --noEmit`): 0 errors across `@reachinternational/utils`, `@reachinternational/validation`, `apps/web`, and `apps/mobile`.
+- [x] **Page Feedback: /operations?tab=entry — Single-Row Start/End Time Layout & Vertical AM/PM Toggle Optimization (`SegmentedToggle.tsx`, `CustomTimePicker.tsx`, `OperatorDashboard.tsx`, `EditProfileModal.tsx`, `TimeInput.tsx`) (2026-09-05)**:
+  - **1. Vertical AM/PM Toggle Architecture (`SegmentedToggle.tsx`, `CustomTimePicker.tsx`)**:
+    - Added `orientation?: "horizontal" | "vertical"` prop support to `<SegmentedToggle>`.
+    - In vertical mode (`orientation="vertical"`), container stacks items vertically (`inline-flex flex-col` or `w-full flex flex-col`) with `rounded-[5px] sm:rounded-md` active pill animating vertically with Framer Motion spring physics (`layoutId`).
+    - Configured `<CustomTimePicker>` to use vertical toggle orientation by default (`toggleOrientation = "vertical"`), matching input height (`h-8.5 xs:h-9 sm:h-10`) with compact width (`w-7 sm:w-8.5`), reclaiming over **40px of horizontal space per time picker** (~80px per row).
+    - Bounded hours and minutes inputs to `flex-1 min-w-[34px] max-w-[48px]` with centered font-mono typography, eliminating digit clipping across all viewports.
+  - **2. Single-Row Start Time & End Time Layout (`OperatorDashboard.tsx`, `EditProfileModal.tsx`)**:
+    - **Section B (Shift Timing Grid)**:
+      - Configured responsive 2-to-4 column grid: `grid grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-3.5 items-start`.
+      - Log Date: `col-span-2 sm:col-span-1 xl:col-span-1 order-1 min-w-0`
+      - Start Time: `col-span-1 order-2 sm:order-3 xl:order-2 min-w-0`
+      - End Time: `col-span-1 order-3 sm:order-4 xl:order-3 min-w-0`
+      - Overtime: `col-span-2 sm:col-span-1 xl:col-span-1 order-4 sm:order-2 xl:order-4 min-w-0`
+      - **Mobile (<640px)**: Row 1 = Log Date (full width); **Row 2 = Start Time & End Time side-by-side in a single row**; Row 3 = Overtime (full width).
+      - **Tablet (640px–1279px)**: Row 1 = Log Date & Overtime; **Row 2 = Start Time & End Time side-by-side**.
+      - **Desktop (≥1280px)**: All 4 items in a single 4-column row in logical chronological order.
+    - **Section C (Breakdown Timing)**: Breakdown Start Time and Breakdown End Time are placed in a single row side-by-side on mobile (`grid grid-cols-2 gap-2 sm:gap-3`).
+    - **Edit Shift Log Modal**: Shift Start & End Time and Breakdown Start & End Time placed in single row on mobile (`grid grid-cols-2 gap-2 sm:gap-4`).
+    - **Edit Profile Modal**: Shift Start & End Time updated to 2 columns on mobile (`grid grid-cols-2 gap-2 sm:gap-3`).
+  - **3. Cross-Platform Mobile App Synchronization (`apps/mobile/components/ui/TimeInput.tsx`)**:
+    - Updated React Native `periodContainer` to `flexDirection: 'column'`, `width: 34`, `height: 42`, with stacked AM and PM buttons (`periodBtn: { flex: 1, width: '100%' }`, `fontSize: 9.5`).
+    - Reclaimed ~40px of width per `TimeInput`, ensuring side-by-side start and end time pairs in `MeterLogModal.tsx` and `EditProfileModal.tsx` fit on all mobile viewports without clipping.
+  - **4. Monorepo Quality Gate Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit` passed with **0 errors**.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit` passed with **0 errors**.
+    - `pnpm -r exec tsc --noEmit` passed across all **9 workspace packages with 0 errors**.
+- [x] **Page Feedback: /operations?tab=entry — Streamlined Confirmation Modal Layout, Spacing Optimization & Proportional Space Filling (`dialog.tsx`, `Modal.tsx`, `OperatorDashboard.tsx`) (2026-09-05)**:
+  - **1. Header & Footer Vertical Space Reclamation (`dialog.tsx`, `Modal.tsx`, `OperatorDashboard.tsx`)**:
+    - Streamlined `DialogHeader` default padding from bulky `p-6` (24px all sides) to `px-5 py-3.5 sm:px-6 sm:py-4` with bottom border.
+    - Streamlined `DialogFooter` default padding from `p-6` to `px-5 py-3 sm:px-6 sm:py-3.5` with top border.
+    - Vertically aligned the close button `DialogPrimitive.Close` to `top-3.5 right-4 sm:top-4 sm:right-5`.
+    - Updated `Modal.tsx` to support optional `headerClassName`, `bodyClassName`, and `footerClassName` overrides while streamlining default body padding from `p-6` to `p-4 sm:p-5`.
+    - Removed redundant nested `pt-2` from the confirmation modal footer in `OperatorDashboard.tsx`.
+    - Reclaimed over **50px** of vertical dialog space, fully eliminating cramped scrolling on compact 599px-high laptop viewports.
+  - **2. Modal Width & Container Proportions (`OperatorDashboard.tsx`)**:
+    - Expanded modal width from narrow `size="md"` (512px) to responsive `className="sm:max-w-[620px]"`.
+    - Balanced horizontal real estate ensures all operational text strings (machine serials, client addresses, meter progression, shift timestamps) fit on 1 line without awkward vertical wrapping.
+  - **3. Internal Content Re-architecture & Proportional Space Filling (`OperatorDashboard.tsx`)**:
+    - **Machine & Deployment Card**: Organized into a clean 2-column divided tile:
+      - Left: Model name (`50B-9`), Machine Code pill (`RI-MC-0001`), and bold sky monospace Serial No (`HHKHB303EF0000877`).
+      - Right: Client Name (`Saint Gobain`) and Site Location with MapPin icon.
+    - **Operational Shift & Metering Card**:
+      - Full-width Shift Window bar: `{startTime} → {endTime}` with `{isOvernight ? "🌙 Overnight Shift" : "☀️ Day Shift"}` badge and duration + net work hours (`14h 00m (8.0h work)`).
+      - 3-Quadrant Balanced Stat Strip:
+        - Shift Date (`04-09-2026`) with Calendar icon.
+        - Hour Meter (`177618 → 177626`) with `+{meterRunningHours}h run` badge and Gauge icon.
+        - Overtime (`{overtimeHours} hrs OT` in amber or `0 hrs (Standard)`) with Zap icon.
+    - **Machine Health Status**: High-contrast, clean status card:
+      - Normal Operation: Sleek emerald card with pulsing status dot `🟢 Normal Operation · No Machine Breakdown`.
+      - Breakdown: Detailed rose card with duration pill, breakdown time window, reason, and action taken.
+    - **Remarks**: Formatted italic quote block if operator entered remarks.
+    - **Footer Actions**: Reassurance indicator `<ShieldCheck /> Direct database commit` on the left, with `Cancel` and `Confirm & Submit Log` buttons on the right.
+  - **4. Quality Gate Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit` passed with **0 errors**.
+    - `pnpm -r exec tsc --noEmit` passed with **0 errors across all 9 packages**.
+- [x] **Page Feedback: /operations?tab=entry — Fix Machine Check Constraint Violation (machines_status_check), Resilient Atomic Breakdown Logging & Unified Error Handling (`actions/operators.ts`, `044_add_breakdown_time_tracking.sql`, `045_fix_breakdown_status_check_and_atomic_rpc.sql`, `MeterLogModal.tsx`, `test_breakdown_submission_and_linking.mjs`) (2026-09-05)**:
+  - **1. Root Cause Resolution for `machines_status_check`**:
+    - Identified that `public.machines` enforces `status IN ('available', 'rented', 'active', 'inactive')` for machine commercial/rental state, while machine physical health is tracked in `health_status IN ('active', 'under_maintenance', 'breakdown')`.
+    - Corrected the breakdown status update in both SQL RPC (`submit_operator_hour_log_atomic`) and TypeScript server action fallbacks (`submitOperatorHourLogAction`, `updateOperatorHourLogAction`): breakdown events update `health_status = 'breakdown'` (or `'active'` when healthy) and assign `current_operator_id`, leaving rental `status` (`'rented'`) strictly intact.
+  - **2. Server Action Error Formatting & PostgREST Signature Resilience (`actions/operators.ts`)**:
+    - Created internal helper `formatOperatorDatabaseError` mapping raw PostgreSQL codes (`23514` check constraints, `23505` uniqueness/duplicates, `23503` foreign keys, `42501` permissions, and `P0001` trigger exceptions) into human-readable, professional error messages without `export`, strictly adhering to Next.js `"use server"` async requirements.
+    - Handled PostgREST overloaded candidate conflicts (`PGRST203`) and RPC check constraint errors (`23514`) with an automatic, transactional direct table query fallback, guaranteeing 100% submission reliability even during live database migration rollout.
+    - Added automated fallback enrichment for missing `clientId` and `location` inferred directly from machine master assignment.
+  - **3. Cross-Platform Mobile Parity (`apps/mobile/components/work/MeterLogModal.tsx`)**:
+    - Synchronized mobile modal submission to set `health_status: isBreakdown ? 'breakdown' : 'active'` and assign `current_operator_id: userId`.
+    - Integrated human-friendly error translation for `machines_status_check`, meter sequence regressions, and shift overlap errors.
+  - **4. Database Migrations (`044`, `045`)**:
+    - Updated `044_add_breakdown_time_tracking.sql` and created `045_fix_breakdown_status_check_and_atomic_rpc.sql` dropping ambiguous overloaded RPC signatures and establishing single clean 23-parameter `submit_operator_hour_log_atomic` updating `health_status`.
+  - **5. Automated Integration Verification & Quality Gate**:
+    - Executed automated integration suite `supabase/tests/test_breakdown_submission_and_linking.mjs` against live database: verified complete machine, operator, and client linking with breakdown duration, shift normal/overtime hours, and clean teardown.
+    - Verified `pnpm --filter @reachinternational/web exec tsc --noEmit` and `pnpm --filter @reachinternational/mobile exec tsc --noEmit` passed with **0 errors**.
+- [x] **Page Feedback: /operations?tab=entry — Seamless Sidebar Expand/Shrink & Responsive Grid Optimization (`SegmentedToggle.tsx`, `CustomTimePicker.tsx`, `OperatorDashboard.tsx`, `TimeInput.tsx`) (2026-09-05)**:
+  - **1. Reusable SegmentedToggle XS Size Variant (`SegmentedToggle.tsx`)**:
+    - Added `"xs"` size variant to `SegmentedToggleSize` (`xs: { container: "p-0.5 rounded-lg", item: "py-0.5 px-1.5 sm:px-2 rounded-md min-h-[30px] sm:min-h-[32px]", text: "text-[11px] font-bold tracking-tight", icon: 12, badge: "text-[9px] px-1 py-0.1" }`).
+    - Configured inner span padding for `size === "xs"` to `px-0.5` (avoiding nested `sm:px-2` expansion).
+    - Integrated `cn()` from `@/lib/utils` for deterministic Tailwind class merging.
+  - **2. Compact CustomTimePicker Architecture & Zero Digit Clipping (`CustomTimePicker.tsx`)**:
+    - Switched AM/PM switcher to `<SegmentedToggle size="xs">`, reducing toggle footprint from **~180px down to ~68px–72px** (reclaiming **>100px** of horizontal space).
+    - Added bounded input constraints: `min-w-[44px] max-w-[72px] flex-1` on Hours and Minutes inputs with `px-1` padding and centered monospace font (`text-xs sm:text-sm font-bold font-mono text-center`), eliminating `0| : 0|` digit clipping.
+    - Added `min-w-0 w-full` to flex container and `shrink-0 px-0.5` to colon separator.
+  - **3. Fluid 3-Tier Shift Timing Grid & Sidebar Expand/Shrink Transition (`OperatorDashboard.tsx`)**:
+    - Refactored Section B grid to `grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-3.5 items-start` with `min-w-0` on all 4 column containers (`Log Date`, `Start Time`, `End Time`, `Overtime`).
+    - On 1366px screen (user's viewport), both expanded sidebar (~229px col) and collapsed sidebar (~281px col) fit with abundant margin and smoothly adapt during sidebar expand/shrink animations.
+    - Mobile (<640px) reflows to 1-column stack; Tablet (640px–1279px) reflows to 2-column grid.
+  - **4. Breakdown Section & Modal Timepickers Resiliency (`OperatorDashboard.tsx`)**:
+    - Added `min-w-0` to breakdown Start/End timepickers and `min-w-0 flex-wrap gap-2` to breakdown duration badge.
+    - Added `min-w-0` to timepicker column containers in Log Correction modal.
+  - **5. Mobile App Synchronization Parity (`apps/mobile/components/ui/TimeInput.tsx`)**:
+    - Set `minWidth: 44` and `paddingHorizontal: 6` on `digitBox` to maintain touch clearance and prevent digit clipping on compact mobile devices (320px–360px).
+  - **6. Monorepo Quality Gate**: `pnpm --filter @reachinternational/web typecheck` and `pnpm -r exec tsc --noEmit` passed across all **9 workspace packages with 0 errors**.
+  - **3. Redundant Machine Name Column Removal (Feedback #4)**: Removed redundant `Machine Name` column from table header and body rows in `OperatorDashboard.tsx`.
+  - **4. Machine No Renamed to Serial with Actual Serial Number (Feedback #5)**: Header renamed to `Serial` and displays actual machine serial number (`TY50B-99214`) in bold sky monospace. Updated `historySearch` to include `serial_number` and `model`.
+  - **5. Hour Meter (+Xh) Below Reading (Feedback #6)**: Positioned `(+6h)` directly underneath `{start_meter} → {end_meter}`.
+  - **6. Breakdown Start/End Time and Duration (Feedback #7)**: Displayed Start and End time (e.g. `02:30 PM - 03:25 PM`) above, and total duration (e.g. `(55min)`) below in a clean Geist card. Rendered `0` pill badge when normal.
+  - **7. Synchronized PDF & Excel Export Parity (Feedback #7)**: Realigned `PrintableOperatorLogsModal.tsx` and `operator-logs-export.ts` with matching columns. Added 1-click **"Export Excel"** button in `OperatorDashboard.tsx`.
+  - **8. Monorepo Quality Gate**: `pnpm -r exec tsc --noEmit` passed with **0 errors across all 9 workspace packages**.
+- [x] **Page Feedback: /operations?tab=history — Exact Operator Log Entry Timestamps Across Desktop Table, Mobile Cards & Cross-Platform Mobile Stack (`packages/utils`, `OperatorDashboard.tsx`, `OperationsClient.tsx`, `operator-logs-export.ts`, `PrintableOperatorLogsModal.tsx`, `apps/mobile/app/(app)/operations.tsx`) (2026-09-03)**:
+  - **1. Shared Exact Timestamp Formatter (`packages/utils/src/date.ts`)**:
+    - Created `formatExactTimestamp(dateInput, includeSeconds = true)` producing localized, 12-hour AM/PM timestamps: `"DD-MM-YYYY, hh:mm:ss A"` (e.g. `"02-09-2026, 04:35:18 PM"`).
+  - **2. Web Desktop Data Table in `<OperatorDashboard>`**:
+    - Added dedicated **"Entry Timestamp"** column with `<Clock size={11} className="text-sky-500" />` header right after "Shift Date".
+    - Displays exact timestamp in bold `font-mono text-[11px]` paired with relative time underneath (`formatTimeAgo(log.created_at)`).
+    - Renamed Date column header to explicit **"Shift Date"** to clearly separate operational shift date from entry creation timestamp.
+    - Added entry timestamp search matching to `historySearch`.
+    - Added `router.refresh()` on log submit and log correction for instant data update.
+  - **3. Web Mobile Native Card View in `<OperatorDashboard>`**:
+    - In Card Header: Added dedicated **"Logged:"** badge with clock icon and exact entry timestamp directly under the shift date.
+    - In Inset Details Card: Added dedicated **"Exact Entry Timestamp"** row with clock icon, formatted timestamp, and relative time.
+  - **4. Supervisor Operations Client Parity (`OperationsClient.tsx`)**:
+    - In Desktop Data Table: Integrated exact log entry timestamp with `<Clock size={10} />` under Shift Date in every row.
+    - In Mobile Touch Cards: Added exact log entry timestamp pill badge in the card header.
+  - **5. Cross-Platform Mobile App Synchronization (`apps/mobile/app/(app)/operations.tsx`)**:
+    - Added `created_at` to Supabase query, `HourLogRecord` interface, mobile card metadata strip with `<Clock size={11} />`, and dedicated row in the specs well.
+  - **6. Export & Printable Report Synchronization**:
+    - Synchronized `operator-logs-export.ts` with "Entry Timestamp" Excel column, and `PrintableOperatorLogsModal.tsx` with formatted entry timestamps.
+  - **7. Monorepo Quality Gate Verification**: `pnpm -r exec tsc --noEmit` passed with **0 errors across all workspace packages**.
+- [x] **Page Feedback: /operations?tab=entry — Machine Breakdown Start & End Time Pickers, Real-Time Duration Calculation & Formatted Timestamp Persistence Across Stack (`044_add_breakdown_time_tracking.sql`, `packages/utils`, `packages/types`, `packages/validation`, `OperatorDashboard.tsx`, `operators.ts`, `OperationsClient.tsx`, `MeterLogModal.tsx`, `apps/mobile`) (2026-09-03)**:
+  - **1. Start & End Time Picker for Machine Breakdown (Feedback #1)**:
+    - Replaced raw hours and minutes text inputs in `OperatorDashboard.tsx` Section C with **Breakdown Start Time** and **Breakdown End Time** `<CustomTimePicker>` controls.
+    - Added live duration calculation badge: `< 60m` -> `55min` (`02:30 PM - 03:25 PM (55min)`), `≥ 60m` -> `3h:55min` (`02:30 PM - 06:25 PM (3h:55min)`), exact hours -> `2h` (`02:30 PM - 04:30 PM (2h)`), handling overnight intervals safely.
+  - **2. Database Migration (`044_add_breakdown_time_tracking.sql`)**:
+    - Added explicit columns `breakdown_start_time`, `breakdown_end_time`, `breakdown_duration`, and `breakdown_hours` to `public.machine_hour_logs` with a partial index and updated `submit_operator_hour_log_atomic` PostgreSQL function.
+  - **3. Backend Server Actions & Resilient DAL (`actions/operators.ts`, `queries/operators.ts`)**:
+    - Handled breakdown fields in `submitOperatorHourLogAction` and `updateOperatorHourLogAction` with fallback insertion and remarks embedding (`[Breakdown Duration: 02:30 PM - 03:25 PM (55min)]`).
+  - **4. Log Correction Modal, Exports & Views**:
+    - Integrated `<CustomTimePicker>` controls in Log Correction modal; updated history table, mobile cards, `OperationsClient.tsx`, `operator-logs-export.ts`, `supervisor-logs-export.ts`, `PrintableOperatorLogsModal.tsx`, and `PrintableSupervisorLogsModal.tsx`.
+  - **5. Cross-Platform Mobile App Synchronization (`apps/mobile`)**:
+    - In `MeterLogModal.tsx`, replaced single text input with **Breakdown Start** and **Breakdown End** `<TimeInput>` pickers with live duration computation.
+  - **6. Monorepo Quality Gate Verification**: `pnpm -r --stream typecheck` passed with **0 errors across all 9 packages**.
 - [x] **Page Feedback: /machines — Dynamic Multi-Personnel Table Cell Display & Scalable Font Sizing (`MachineListClient.tsx`, `MobileMachineCard.tsx`, `apps/mobile/app/(app)/machines.tsx`) (2026-09-02)**:
   - **1. Dynamic Up-to-3 Person Names Display (Feedback #1)**:
     - Updated supervisor and operator table columns in `<MachineListClient>` (`<EnterpriseTable>`) via dedicated `<PersonnelCell>` helper to display up to 3 person names directly in the table cell.

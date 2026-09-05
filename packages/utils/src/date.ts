@@ -71,6 +71,85 @@ export function formatDateTime(dateInput: string | Date | null | undefined): str
   return `${day}-${month}-${year}, ${hours}:${minutes}`;
 }
 
+/**
+ * Formats an exact timestamp (e.g. log entry / audit timestamp) in 12-hour AM/PM format.
+ * Format: "DD-MM-YYYY, hh:mm:ss A" (e.g. "02-09-2026, 04:35:18 PM")
+ * When includeSeconds is false: "DD-MM-YYYY, hh:mm A" (e.g. "02-09-2026, 04:35 PM")
+ */
+export function formatExactTimestamp(
+  dateInput: string | Date | null | undefined,
+  includeSeconds: boolean = true
+): string {
+  if (!dateInput) return '—';
+  let date: Date;
+  if (typeof dateInput === 'string') {
+    const cleanStr = dateInput.trim();
+    if (!cleanStr) return '—';
+    date = new Date(cleanStr);
+  } else {
+    date = dateInput;
+  }
+  if (isNaN(date.getTime())) return '—';
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+
+  let rawHours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  const period = rawHours >= 12 ? 'PM' : 'AM';
+  let hours = rawHours % 12;
+  if (hours === 0) hours = 12;
+  const hoursStr = String(hours).padStart(2, '0');
+
+  if (includeSeconds) {
+    return `${day}-${month}-${year}, ${hoursStr}:${minutes}:${seconds} ${period}`;
+  }
+  return `${day}-${month}-${year}, ${hoursStr}:${minutes} ${period}`;
+}
+
+/**
+ * Splits an exact timestamp into separate Time and Date strings.
+ * Format: { time: "06:15:24 PM", date: "02-09-2026" } or null if invalid.
+ */
+export function splitExactTimestamp(
+  dateInput: string | Date | null | undefined,
+  includeSeconds: boolean = true
+): { time: string; date: string } | null {
+  if (!dateInput) return null;
+  let date: Date;
+  if (typeof dateInput === 'string') {
+    const cleanStr = dateInput.trim();
+    if (!cleanStr) return null;
+    date = new Date(cleanStr);
+  } else {
+    date = dateInput;
+  }
+  if (isNaN(date.getTime())) return null;
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+
+  let rawHours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  const period = rawHours >= 12 ? 'PM' : 'AM';
+  let hours = rawHours % 12;
+  if (hours === 0) hours = 12;
+  const hoursStr = String(hours).padStart(2, '0');
+
+  const time = includeSeconds
+    ? `${hoursStr}:${minutes}:${seconds} ${period}`
+    : `${hoursStr}:${minutes} ${period}`;
+  const dateStr = `${day}-${month}-${year}`;
+
+  return { time, date: dateStr };
+}
+
+
+
 export function formatTimeAgo(dateInput: string | Date | null | undefined): string {
   if (!dateInput) return '—';
   let date: Date;
@@ -195,6 +274,7 @@ export interface ShiftTimingComputation {
   breakHours: number;
   isValid: boolean;
   errorMessage: string | null;
+  isFutureEnd?: boolean;
 }
 
 /**
@@ -296,6 +376,8 @@ export function computeShiftTiming(params: {
   endDate?: string | null;
   endTime?: string | null;
   manualOvertime?: number;
+  disallowFutureEnd?: boolean;
+  currentTimestamp?: number;
 }): ShiftTimingComputation {
   const { startDate, logDate, startTime, endDate, endTime, manualOvertime } = params;
   const effectiveStartDate = startDate || logDate || new Date().toISOString().split('T')[0];
@@ -453,6 +535,29 @@ export function computeShiftTiming(params: {
     };
   }
 
+  const nowMs = params.currentTimestamp || Date.now();
+  const isFutureEnd = Boolean(endDateTime && endDateTime.getTime() > nowMs);
+
+  if (params.disallowFutureEnd && isFutureEnd) {
+    return {
+      startDateTime,
+      endDateTime,
+      resolvedStartDate: effectiveStartDate,
+      resolvedEndDate: effectiveEndDate,
+      resolvedRangeFormatted: formatResolvedRange(effectiveStartDate, startTime, effectiveEndDate, endTime),
+      durationHours,
+      durationMinutes: diffMinutes,
+      durationFormatted,
+      isOvernight,
+      overtimeHours,
+      normalWorkingHours,
+      breakHours,
+      isValid: false,
+      errorMessage: 'Cannot log before shift end.',
+      isFutureEnd: true,
+    };
+  }
+
   return {
     startDateTime,
     endDateTime,
@@ -468,7 +573,20 @@ export function computeShiftTiming(params: {
     breakHours,
     isValid: true,
     errorMessage: null,
+    isFutureEnd,
   };
+}
+
+/**
+ * Validates whether a shift end datetime is in the future.
+ * Optionally allows a small grace period (in minutes) for network lag / clock skew.
+ */
+export function isShiftEndInFuture(
+  endDateTime: Date | null | undefined,
+  graceMinutes: number = 0
+): boolean {
+  if (!endDateTime) return false;
+  return endDateTime.getTime() > Date.now() + graceMinutes * 60 * 1000;
 }
 
 /**
@@ -570,4 +688,151 @@ export function findLatestMachineLogTimeline(
   };
 }
 
+export interface BreakdownDurationComputation {
+  durationFormatted: string; // e.g. "55min", "3h:55min", "2h"
+  fullBreakdownString: string; // e.g. "02:30 PM - 03:25 PM (55min)", "02:30 PM - 06:25 PM (3h:55min)"
+  hours: number;
+  minutes: number;
+  totalMinutes: number;
+  durationDecimalHours: number; // e.g. 0.92, 3.92
+  isValid: boolean;
+  errorMessage?: string;
+}
 
+/**
+ * Computes breakdown duration, formatted label, and timestamp range between Start Time and End Time.
+ * Formats:
+ * - When < 60 mins: "(55min)" -> "02:30 PM - 03:25 PM (55min)"
+ * - When >= 60 mins with minutes: "(3h:55min)" -> "02:30 PM - 06:25 PM (3h:55min)"
+ * - When exact hours: "(2h)" -> "02:30 PM - 04:30 PM (2h)"
+ * Supports overnight breakdowns crossing midnight safely.
+ */
+export function computeBreakdownDuration(
+  startTime?: string | null,
+  endTime?: string | null
+): BreakdownDurationComputation {
+  if (!startTime || !endTime) {
+    return {
+      durationFormatted: '',
+      fullBreakdownString: '',
+      hours: 0,
+      minutes: 0,
+      totalMinutes: 0,
+      durationDecimalHours: 0,
+      isValid: false,
+      errorMessage: 'Breakdown start time and end time are required.',
+    };
+  }
+
+  const sMins = parseTimeToMinutes(startTime);
+  const eMins = parseTimeToMinutes(endTime);
+
+  if (sMins === null || eMins === null) {
+    return {
+      durationFormatted: '',
+      fullBreakdownString: '',
+      hours: 0,
+      minutes: 0,
+      totalMinutes: 0,
+      durationDecimalHours: 0,
+      isValid: false,
+      errorMessage: 'Invalid breakdown time format.',
+    };
+  }
+
+  if (sMins === eMins) {
+    return {
+      durationFormatted: '0min',
+      fullBreakdownString: '',
+      hours: 0,
+      minutes: 0,
+      totalMinutes: 0,
+      durationDecimalHours: 0,
+      isValid: false,
+      errorMessage: 'Breakdown start time and end time cannot be identical.',
+    };
+  }
+
+  // Handle standard interval and overnight interval (crossing midnight)
+  let totalMinutes = eMins - sMins;
+  if (totalMinutes < 0) {
+    totalMinutes += 24 * 60;
+  }
+
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  const durationDecimalHours = Math.round((totalMinutes / 60) * 100) / 100;
+
+  let durationFormatted = '';
+  if (hours === 0) {
+    durationFormatted = `${minutes}min`;
+  } else if (minutes === 0) {
+    durationFormatted = `${hours}h`;
+  } else {
+    durationFormatted = `${hours}h:${minutes}min`;
+  }
+
+  const formattedStart = formatTo12Hour(startTime) || startTime.trim();
+  const formattedEnd = formatTo12Hour(endTime) || endTime.trim();
+  const fullBreakdownString = `${formattedStart} - ${formattedEnd} (${durationFormatted})`;
+
+  return {
+    durationFormatted,
+    fullBreakdownString,
+    hours,
+    minutes,
+    totalMinutes,
+    durationDecimalHours,
+    isValid: true,
+  };
+}
+
+/**
+ * Parses breakdown string or remarks to extract start time, end time, and duration formatted text.
+ * Matches:
+ * - "02:30 PM - 03:25 PM (55min)"
+ * - "[Breakdown Duration: 02:30 PM - 03:25 PM (55min)]"
+ * - "02:30Pm-03:25pm(55min)"
+ * - Legacy format "[Breakdown Duration: 2h 30m]"
+ */
+export function parseBreakdownString(rawString?: string | null): {
+  startTime?: string;
+  endTime?: string;
+  durationText?: string;
+  durationFormatted?: string;
+  fullBreakdownString?: string;
+} | null {
+  if (!rawString) return null;
+  const clean = rawString.trim();
+
+  // Pattern 1: Range with parentheses e.g. "02:30 PM - 03:25 PM (55min)" or with "[Breakdown Duration: ...]"
+  const rangeMatch = clean.match(
+    /(?:\[Breakdown(?:\s+Duration)?:\s*)?(\d{1,2}:\d{2}\s*(?:AM|PM)?)\s*[-–—]\s*(\d{1,2}:\d{2}\s*(?:AM|PM)?)\s*\(([^)]+)\)\]?/i
+  );
+  if (rangeMatch) {
+    const startTime = formatTo12Hour(rangeMatch[1]) || rangeMatch[1].trim();
+    const endTime = formatTo12Hour(rangeMatch[2]) || rangeMatch[2].trim();
+    const durationFormatted = rangeMatch[3].trim();
+    return {
+      startTime,
+      endTime,
+      durationText: durationFormatted,
+      durationFormatted,
+      fullBreakdownString: `${startTime} - ${endTime} (${durationFormatted})`,
+    };
+  }
+
+  // Pattern 2: Legacy format e.g. "[Breakdown Duration: 2h 30m]" or "Breakdown (2h 30m)"
+  const legacyMatch = clean.match(
+    /(?:\[Breakdown(?:\s+Duration)?:\s*|Breakdown\s*\()?\s*(\d+h(?:\s*\d+m)?|\d+m)\)?\]?/i
+  );
+  if (legacyMatch) {
+    return {
+      durationText: legacyMatch[1].trim(),
+      durationFormatted: legacyMatch[1].trim(),
+      fullBreakdownString: legacyMatch[1].trim(),
+    };
+  }
+
+  return null;
+}

@@ -28,11 +28,17 @@ import {
   Info,
   RotateCcw,
   FileCheck,
+  FileCheck2,
   AlertOctagon,
   ArrowRight,
   Check,
   Printer,
   Download,
+  Building2,
+  MapPin,
+  Gauge,
+  Zap,
+  ShieldCheck,
 } from "lucide-react";
 
 import type {
@@ -46,11 +52,17 @@ import {
   updateOperatorHourLogAction,
 } from "@/app/actions/operators";
 import { useToast, CustomTimePicker, CustomDatePicker, Modal, MachineSelect, ClientSelect, SegmentedToggle, Button } from "@/components/ui";
+import { cn } from "@/lib/utils";
 import {
   formatDate,
+  formatExactTimestamp,
+  splitExactTimestamp,
+  formatTimeAgo,
   formatTo12Hour,
   formatShiftTimingRange,
   computeShiftTiming,
+  computeBreakdownDuration,
+  parseBreakdownString,
   parseDateTimeToDate,
   formatResolvedRange,
   addDaysToDateStr,
@@ -58,6 +70,7 @@ import {
   checkIntervalOverlap,
 } from "@reachinternational/utils";
 import { PrintableOperatorLogsModal } from "./PrintableOperatorLogsModal";
+import { exportOperatorLogsToExcel } from "@/lib/utils/operator-logs-export";
 import { handleClipboardPaste } from "@/lib/security/clipboard";
 import { HmrSchema, RemarksSchema } from "@reachinternational/validation";
 
@@ -90,6 +103,10 @@ export interface OperatorHourLog {
   overtime_hours?: number;
   normal_working_hours?: number;
   is_breakdown?: boolean;
+  breakdown_start_time?: string | null;
+  breakdown_end_time?: string | null;
+  breakdown_duration?: string | null;
+  breakdown_hours?: number | null;
   running_hours?: number;
   shift?: string;
   machine_condition?: string;
@@ -121,6 +138,13 @@ export function OperatorDashboard({
   const searchParams = useSearchParams();
   const urlTab = searchParams.get("tab");
   const [activeTab, setActiveTab] = useState<"entry" | "history">(urlTab === "history" ? "history" : "entry");
+
+  // Interval ticker for real-time validation against current time (e.g. shift conclusion)
+  const [currentTick, setCurrentTick] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTick(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (urlTab === "history") {
@@ -201,13 +225,24 @@ export function OperatorDashboard({
       const q = historySearch.toLowerCase().trim();
       const mName = log.machine?.machine_name?.toLowerCase() || "";
       const mCode = log.machine?.machine_code?.toLowerCase() || "";
+      const mSerial = log.machine?.serial_number?.toLowerCase() || "";
+      const mModel = log.machine?.model?.toLowerCase() || "";
       const dateStr = log.log_date ? formatDate(log.log_date).toLowerCase() : "";
+      const timestampStr = log.created_at ? formatExactTimestamp(log.created_at, true).toLowerCase() : "";
       const remarksStr = log.remarks?.toLowerCase() || "";
-      return mName.includes(q) || mCode.includes(q) || dateStr.includes(q) || remarksStr.includes(q);
+      return (
+        mName.includes(q) ||
+        mCode.includes(q) ||
+        mSerial.includes(q) ||
+        mModel.includes(q) ||
+        dateStr.includes(q) ||
+        timestampStr.includes(q) ||
+        remarksStr.includes(q)
+      );
     });
   }, [recentLogs, historyDateFilter, historySearch]);
 
-  // PDF Print Modal State
+  // PDF Print & Excel Export Modal State
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
 
   const handleExportPdfClick = () => {
@@ -216,6 +251,15 @@ export function OperatorDashboard({
       return;
     }
     setShowPrintModal(true);
+  };
+
+  const handleExportExcelClick = () => {
+    if (filteredLogs.length === 0) {
+      toast("error", "No Logs Available", "There are no machine logs matching current filters to export.");
+      return;
+    }
+    exportOperatorLogsToExcel(filteredLogs, user, selectedMachine, "all");
+    toast("success", "Export Successful", "Operator shift log report downloaded as Excel (.xlsx)");
   };
 
   // Machine Selection (Pre-filled with assigned machine, fallback to first machine if available)
@@ -370,6 +414,8 @@ export function OperatorDashboard({
   const [overtimeHours, setOvertimeHours] = useState<string>("0");
   const [isManualOvertime, setIsManualOvertime] = useState<boolean>(false);
   const [isBreakdown, setIsBreakdown] = useState<boolean>(false);
+  const [breakdownStartTime, setBreakdownStartTime] = useState<string>("02:30 PM");
+  const [breakdownEndTime, setBreakdownEndTime] = useState<string>("03:25 PM");
   const [breakdownHours, setBreakdownHours] = useState<string>("0");
   const [breakdownMinutes, setBreakdownMinutes] = useState<string>("0");
   const [breakdownReason, setBreakdownReason] = useState<string>("");
@@ -392,10 +438,35 @@ export function OperatorDashboard({
   const [editEndTime, setEditEndTime] = useState<string>("");
   const [editOvertime, setEditOvertime] = useState<string>("0");
   const [editBreakdown, setEditBreakdown] = useState<boolean>(false);
+  const [editBreakdownStartTime, setEditBreakdownStartTime] = useState<string>("02:30 PM");
+  const [editBreakdownEndTime, setEditBreakdownEndTime] = useState<string>("03:25 PM");
   const [editBreakdownHours, setEditBreakdownHours] = useState<string>("0");
   const [editBreakdownMinutes, setEditBreakdownMinutes] = useState<string>("0");
   const [editRemarks, setEditRemarks] = useState<string>("");
   const [updatingLog, setUpdatingLog] = useState(false);
+
+  // Close editing log modal on Escape key
+  useEffect(() => {
+    if (!editingLog) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setEditingLog(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [editingLog]);
+
+  // Real-time breakdown duration computation
+  const breakdownStats = useMemo(() => {
+    if (!isBreakdown) return null;
+    return computeBreakdownDuration(breakdownStartTime, breakdownEndTime);
+  }, [isBreakdown, breakdownStartTime, breakdownEndTime]);
+
+  const editBreakdownStats = useMemo(() => {
+    if (!editBreakdown) return null;
+    return computeBreakdownDuration(editBreakdownStartTime, editBreakdownEndTime);
+  }, [editBreakdown, editBreakdownStartTime, editBreakdownEndTime]);
 
   // Real-time operating duration, normal working hours & overtime calculation
   const operatingStats = useMemo(() => {
@@ -405,8 +476,10 @@ export function OperatorDashboard({
       startTime,
       endTime,
       manualOvertime: isNaN(ot) ? undefined : ot,
+      disallowFutureEnd: true,
+      currentTimestamp: currentTick,
     });
-  }, [selectedLogDate, startTime, endTime, overtimeHours]);
+  }, [selectedLogDate, startTime, endTime, overtimeHours, currentTick]);
 
   const handleStartTimeChange = (val: string) => {
     setStartTime(val);
@@ -414,6 +487,8 @@ export function OperatorDashboard({
       logDate: selectedLogDate,
       startTime: val,
       endTime,
+      disallowFutureEnd: true,
+      currentTimestamp: currentTick,
     });
     if (stats.isValid && !isManualOvertime) {
       setOvertimeHours(String(stats.overtimeHours));
@@ -426,6 +501,8 @@ export function OperatorDashboard({
       logDate: selectedLogDate,
       startTime,
       endTime: val,
+      disallowFutureEnd: true,
+      currentTimestamp: currentTick,
     });
     if (stats.isValid && !isManualOvertime) {
       setOvertimeHours(String(stats.overtimeHours));
@@ -445,7 +522,7 @@ export function OperatorDashboard({
     const s = parseFloat(startMeter);
     const e = parseFloat(endMeter);
     if (!isNaN(s) && !isNaN(e) && e < s) {
-      return "Ending hour meter reading cannot be less than starting hour meter reading.";
+      return "End meter cannot be less than start meter.";
     }
     return null;
   }, [startMeter, endMeter]);
@@ -549,7 +626,7 @@ export function OperatorDashboard({
     if (currentStartMs < prevEndMs) {
       return {
         isInvalid: true,
-        message: `Start time (${formatTo12Hour(startTime)}) cannot precede previous log end time (${machineTimeline.formattedEndDate}, ${machineTimeline.formattedEndTime}).`,
+        message: `Start (${formatTo12Hour(startTime)}) cannot precede prev shift end (${machineTimeline.formattedEndDate}, ${machineTimeline.formattedEndTime}).`,
         recommendedStartTime: machineTimeline.formattedEndTime,
         recommendedStartDate: machineTimeline.latestLog?.end_date || machineTimeline.latestLog?.log_date || selectedLogDate,
       };
@@ -592,7 +669,7 @@ export function OperatorDashboard({
 
       if (exStart && exEnd && !isNaN(exStart.getTime()) && !isNaN(exEnd.getTime())) {
         if (checkIntervalOverlap(currentStart, currentEnd, exStart, exEnd)) {
-          return `Time overlap detected: The requested period (${operatingStats.resolvedRangeFormatted}) overlaps with an existing log (${exRangeFormatted}) on this machine. Operating time periods must not overlap.`;
+          return `Shift overlaps with existing log (${exRangeFormatted}) on this machine.`;
         }
       }
     }
@@ -737,7 +814,7 @@ export function OperatorDashboard({
     if (!isBreakdown) {
       completed++;
     } else {
-      if (parseInt(breakdownHours) > 0 || parseInt(breakdownMinutes) > 0) {
+      if (breakdownStats?.isValid) {
         completed++;
       }
     }
@@ -749,7 +826,8 @@ export function OperatorDashboard({
       !shiftOverlapWarning &&
       !sequencingValidation?.isInvalid &&
       !meterValidationWarning &&
-      !!selectedMachineId;
+      !!selectedMachineId &&
+      (!isBreakdown || !!breakdownStats?.isValid);
     return { completed, total: 4, isReady };
   }, [
     selectedMachineId,
@@ -758,8 +836,7 @@ export function OperatorDashboard({
     sequencingValidation,
     meterValidationWarning,
     isBreakdown,
-    breakdownHours,
-    breakdownMinutes,
+    breakdownStats,
   ]);
 
   // Trigger submission check (opens confirmation modal if valid)
@@ -776,8 +853,8 @@ export function OperatorDashboard({
       return;
     }
 
-    if (!operatingStats.isValid) {
-      toast("error", "Invalid Operating Hours", operatingStats.errorMessage || "Please verify start and end times.");
+    if (operatingStats.isFutureEnd || !operatingStats.isValid) {
+      toast("error", operatingStats.isFutureEnd ? "Shift In Progress" : "Invalid Operating Hours", operatingStats.errorMessage || "Cannot log before shift end.");
       return;
     }
 
@@ -791,9 +868,11 @@ export function OperatorDashboard({
       return;
     }
 
-    if (isBreakdown && (parseInt(breakdownHours) || 0) === 0 && (parseInt(breakdownMinutes) || 0) === 0) {
-      toast("error", "Breakdown Duration Required", "Please enter breakdown duration hours or minutes.");
-      return;
+    if (isBreakdown) {
+      if (!breakdownStats?.isValid) {
+        toast("error", "Invalid Breakdown Time", breakdownStats?.errorMessage || "Please enter valid breakdown start and end times.");
+        return;
+      }
     }
 
     setShowConfirmModal(true);
@@ -810,12 +889,15 @@ export function OperatorDashboard({
       const startMtrNum = parseFloat(startMeter) || 0;
       const endMtrNum = parseFloat(endMeter) || startMtrNum;
 
+      const bkdDurationStr = isBreakdown && breakdownStats?.isValid ? breakdownStats.fullBreakdownString : undefined;
+      const bkdDecimalHours = isBreakdown && breakdownStats?.isValid ? breakdownStats.durationDecimalHours : 0;
+      const bkdStart = isBreakdown && breakdownStats?.isValid ? breakdownStartTime : undefined;
+      const bkdEnd = isBreakdown && breakdownStats?.isValid ? breakdownEndTime : undefined;
+
       // Build breakdown details string
       let finalRemarks = remarks.trim();
-      if (isBreakdown) {
-        const bkdH = parseInt(breakdownHours) || 0;
-        const bkdM = parseInt(breakdownMinutes) || 0;
-        const bkdDetails = `[Breakdown Duration: ${bkdH}h ${bkdM}m]`;
+      if (isBreakdown && bkdDurationStr) {
+        const bkdDetails = `[Breakdown Duration: ${bkdDurationStr}]`;
         if (!finalRemarks.includes("[Breakdown Duration:")) {
           finalRemarks = finalRemarks ? `${bkdDetails} ${finalRemarks}` : bkdDetails;
         }
@@ -836,6 +918,10 @@ export function OperatorDashboard({
         endTime,
         overtimeHours: overtimeNum,
         isBreakdown,
+        breakdownStartTime: bkdStart,
+        breakdownEndTime: bkdEnd,
+        breakdownDuration: bkdDurationStr,
+        breakdownHours: bkdDecimalHours,
         machineCondition: isBreakdown ? "breakdown" : "good",
         remarks: finalRemarks,
         idempotencyKey,
@@ -846,6 +932,8 @@ export function OperatorDashboard({
         setMessage({ type: "success", text: "Daily machine log submitted and stored directly in database successfully." });
         setRemarks("");
         setIsBreakdown(false);
+        setBreakdownStartTime("02:30 PM");
+        setBreakdownEndTime("03:25 PM");
         setBreakdownHours("0");
         setBreakdownMinutes("0");
         setBreakdownReason("");
@@ -855,6 +943,7 @@ export function OperatorDashboard({
         setStartMeter(String(endMtrNum));
         setEndMeter(String(endMtrNum));
         clearDraft();
+        router.refresh();
       } else {
         setMessage({ type: "error", text: res.error || "Failed to submit daily machine log." });
         toast("error", "Submission Failed", res.error || "Could not submit daily machine log.");
@@ -876,8 +965,10 @@ export function OperatorDashboard({
       startTime: editStartTime,
       endTime: editEndTime,
       manualOvertime: isNaN(ot) ? undefined : ot,
+      disallowFutureEnd: true,
+      currentTimestamp: currentTick,
     });
-  }, [editLogDate, editStartTime, editEndTime, editOvertime]);
+  }, [editLogDate, editStartTime, editEndTime, editOvertime, currentTick]);
 
   // Edit Modal Overlap Check against other logs for this machine
   const editShiftOverlapWarning = useMemo(() => {
@@ -934,15 +1025,18 @@ export function OperatorDashboard({
     setEditBreakdown(isBkd);
 
     let rawRemarks = log.remarks || "";
-    const bkdMatch = rawRemarks.match(/\[Breakdown Duration:\s*(\d+)h\s*(\d+)m\]/);
-    if (bkdMatch) {
-      setEditBreakdownHours(bkdMatch[1] || "0");
-      setEditBreakdownMinutes(bkdMatch[2] || "0");
-      rawRemarks = rawRemarks.replace(/\[Breakdown Duration:\s*\d+h\s*\d+m\]\s*/, "");
+    const bkdParsed = parseBreakdownString(log.breakdown_duration || rawRemarks);
+    if (bkdParsed?.startTime && bkdParsed?.endTime) {
+      setEditBreakdownStartTime(bkdParsed.startTime);
+      setEditBreakdownEndTime(bkdParsed.endTime);
+    } else if (log.breakdown_start_time && log.breakdown_end_time) {
+      setEditBreakdownStartTime(formatTo12Hour(log.breakdown_start_time) || "02:30 PM");
+      setEditBreakdownEndTime(formatTo12Hour(log.breakdown_end_time) || "03:25 PM");
     } else {
-      setEditBreakdownHours("0");
-      setEditBreakdownMinutes("0");
+      setEditBreakdownStartTime("02:30 PM");
+      setEditBreakdownEndTime("03:25 PM");
     }
+    rawRemarks = rawRemarks.replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim();
     setEditRemarks(rawRemarks);
   };
 
@@ -951,13 +1045,18 @@ export function OperatorDashboard({
     e.preventDefault();
     if (!editingLog) return;
 
-    if (!editOperatingStats.isValid) {
-      toast("error", "Invalid Shift Timings", editOperatingStats.errorMessage || "Please verify start and end date and time.");
+    if (editOperatingStats.isFutureEnd || !editOperatingStats.isValid) {
+      toast("error", editOperatingStats.isFutureEnd ? "Shift In Progress" : "Invalid Shift Timings", editOperatingStats.errorMessage || "Cannot log before shift end.");
       return;
     }
 
     if (editShiftOverlapWarning) {
       toast("error", "Shift Overlap Error", editShiftOverlapWarning);
+      return;
+    }
+
+    if (editBreakdown && !editBreakdownStats?.isValid) {
+      toast("error", "Invalid Breakdown Timings", editBreakdownStats?.errorMessage || "Please verify breakdown start and end times.");
       return;
     }
 
@@ -972,14 +1071,19 @@ export function OperatorDashboard({
       return;
     }
 
+    const bkdDurationStr = editBreakdown && editBreakdownStats?.isValid ? editBreakdownStats.fullBreakdownString : undefined;
+    const bkdDecimalHours = editBreakdown && editBreakdownStats?.isValid ? editBreakdownStats.durationDecimalHours : 0;
+    const bkdStart = editBreakdown && editBreakdownStats?.isValid ? editBreakdownStartTime : undefined;
+    const bkdEnd = editBreakdown && editBreakdownStats?.isValid ? editBreakdownEndTime : undefined;
+
     let finalRemarks = editRemarks.trim();
-    if (editBreakdown) {
-      const bkdH = parseInt(editBreakdownHours) || 0;
-      const bkdM = parseInt(editBreakdownMinutes) || 0;
-      const durationStr = `[Breakdown Duration: ${bkdH}h ${bkdM}m]`;
+    if (editBreakdown && bkdDurationStr) {
+      const durationStr = `[Breakdown Duration: ${bkdDurationStr}]`;
       if (!finalRemarks.includes("[Breakdown Duration:")) {
         finalRemarks = finalRemarks ? `${durationStr} ${finalRemarks}` : durationStr;
       }
+    } else if (!editBreakdown) {
+      finalRemarks = finalRemarks.replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim();
     }
 
     const res = await updateOperatorHourLogAction({
@@ -994,6 +1098,10 @@ export function OperatorDashboard({
       endTime: editEndTime,
       overtimeHours: parseFloat(editOvertime) || 0,
       isBreakdown: editBreakdown,
+      breakdownStartTime: bkdStart,
+      breakdownEndTime: bkdEnd,
+      breakdownDuration: bkdDurationStr,
+      breakdownHours: bkdDecimalHours,
       machineCondition: editBreakdown ? "breakdown" : "good",
       remarks: finalRemarks,
     });
@@ -1002,6 +1110,7 @@ export function OperatorDashboard({
     if (res.success) {
       toast("success", "Log Resubmitted", "Your updated daily machine log has been resubmitted.");
       setEditingLog(null);
+      router.refresh();
     } else {
       toast("error", "Update Failed", res.error || "Could not update daily log.");
     }
@@ -1219,9 +1328,9 @@ export function OperatorDashboard({
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3.5 items-start">
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-3.5 items-start">
                   {/* Log Date */}
-                  <div className="col-span-1">
+                  <div className="col-span-2 sm:col-span-1 xl:col-span-1 order-1 min-w-0">
                     <CustomDatePicker
                       label={
                         <span>
@@ -1236,7 +1345,7 @@ export function OperatorDashboard({
                   </div>
 
                   {/* Start Time */}
-                  <div className="col-span-1">
+                  <div className="col-span-1 order-2 sm:order-3 xl:order-2 min-w-0">
                     <CustomTimePicker
                       label="Start Time"
                       required
@@ -1247,18 +1356,19 @@ export function OperatorDashboard({
                   </div>
 
                   {/* End Time */}
-                  <div className="col-span-1">
+                  <div className="col-span-1 order-3 sm:order-4 xl:order-3 min-w-0">
                     <CustomTimePicker
                       label="End Time"
                       required
                       value={endTime}
                       onChange={handleEndTimeChange}
                       iconColor="text-rose-500"
+                      error={operatingStats.isFutureEnd ? "Cannot log before shift end." : undefined}
                     />
                   </div>
 
                   {/* Overtime (Hours) */}
-                  <div className="col-span-1">
+                  <div className="col-span-2 sm:col-span-1 xl:col-span-1 order-4 sm:order-2 xl:order-4 min-w-0">
                     <label className="block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 truncate">
                       Overtime (hrs)
                     </label>
@@ -1283,22 +1393,22 @@ export function OperatorDashboard({
                         })
                       }
                       placeholder="e.g. 0.0"
-                      className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 min-h-[42px] h-10 sm:h-[42px]"
+                      className="w-full px-2.5 sm:px-3.5 py-1.5 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs sm:text-sm font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 min-h-[38px] sm:min-h-[42px] h-9 sm:h-[42px]"
                     />
                   </div>
                 </div>
 
                 {/* Validation & Warning Strip */}
                 {meterValidationWarning ? (
-                  <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
-                    <AnimatedAlertTriangle size={16} className="shrink-0 text-rose-500" />
+                  <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
+                    <AnimatedAlertTriangle size={15} className="shrink-0 text-rose-500" />
                     <span>{meterValidationWarning}</span>
                   </div>
                 ) : sequencingValidation?.isInvalid ? (
-                  <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <AnimatedAlertTriangle size={16} className="shrink-0 text-rose-500" />
-                      <span>{sequencingValidation.message}</span>
+                  <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <AnimatedAlertTriangle size={15} className="shrink-0 text-rose-500" />
+                      <span className="truncate">{sequencingValidation.message}</span>
                     </div>
                     {sequencingValidation.recommendedStartTime && (
                       <button
@@ -1309,20 +1419,21 @@ export function OperatorDashboard({
                             setSelectedLogDate(sequencingValidation.recommendedStartDate);
                           }
                         }}
-                        className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold transition-all shadow-2xs cursor-pointer self-start sm:self-auto whitespace-nowrap"
+                        className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[10px] sm:text-[11px] font-bold transition-all shadow-2xs cursor-pointer self-start sm:self-auto whitespace-nowrap"
                       >
-                        Align Start to {sequencingValidation.recommendedStartTime} (Handover)
+                        <span className="sm:hidden">Align to {sequencingValidation.recommendedStartTime}</span>
+                        <span className="hidden sm:inline">Align Start to {sequencingValidation.recommendedStartTime} (Handover)</span>
                       </button>
                     )}
                   </div>
                 ) : shiftOverlapWarning ? (
-                  <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
-                    <AnimatedAlertTriangle size={16} className="shrink-0 text-rose-500" />
+                  <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
+                    <AnimatedAlertTriangle size={15} className="shrink-0 text-rose-500" />
                     <span>{shiftOverlapWarning}</span>
                   </div>
                 ) : !operatingStats.isValid ? (
-                  <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
-                    <AnimatedAlertTriangle size={16} className="shrink-0 text-rose-500" />
+                  <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
+                    <AnimatedAlertTriangle size={15} className="shrink-0 text-rose-500" />
                     <span>{operatingStats.errorMessage}</span>
                   </div>
                 ) : null}
@@ -1334,69 +1445,88 @@ export function OperatorDashboard({
             {/* ============================================ */}
             <div className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/40 space-y-2.5 sm:space-y-4">
               {/* Segmented Control Switcher */}
-              <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => setIsBreakdown(false)}
-                  className={`py-2 sm:py-2.5 px-3 sm:px-4 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer min-h-[42px] ${
+                  className={`py-2 sm:py-2.5 px-2.5 sm:px-4 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer min-h-[38px] sm:min-h-[42px] ${
                     !isBreakdown
                       ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-2 ring-emerald-500/20 shadow-2xs"
                       : "border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)]"
                   }`}
                 >
-                  <CheckCircle2 size={16} /> Normal
+                  <CheckCircle2 size={15} /> Normal
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setIsBreakdown(true)}
-                  className={`py-2 sm:py-2.5 px-3 sm:px-4 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer min-h-[42px] ${
+                  className={`py-2 sm:py-2.5 px-2.5 sm:px-4 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer min-h-[38px] sm:min-h-[42px] ${
                     isBreakdown
                       ? "border-rose-500 bg-rose-500/10 text-rose-600 dark:text-rose-400 ring-2 ring-rose-500/20 shadow-2xs"
                       : "border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-mute)] hover:text-[var(--color-ink)]"
                   }`}
                 >
-                  <AnimatedAlertTriangle size={16} /> Machine Breakdown
+                  <AnimatedAlertTriangle size={15} /> <span className="hidden xs:inline">Machine </span>Breakdown
                 </button>
               </div>
 
               {/* Progressive Disclosure Breakdown Details Container */}
               {isBreakdown && (
-                <div className="p-3 sm:p-4 rounded-xl border border-rose-500/30 bg-rose-500/5 animate-in fade-in slide-in-from-top-2 duration-200">
-                  {/* Breakdown Duration Inputs */}
-                  <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-[var(--color-ink)] mb-1">
-                        Breakdown Duration (Hours) <span className="text-rose-500 font-bold ml-0.5">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="24"
-                        required={isBreakdown}
-                        value={breakdownHours}
-                        onChange={(e) => setBreakdownHours(e.target.value)}
-                        placeholder="e.g. 2"
-                        className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-rose-500/30 bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
+                <div className="p-3 sm:p-4 rounded-xl border border-rose-500/30 bg-rose-500/5 animate-in fade-in slide-in-from-top-2 duration-200 space-y-3">
+                  {/* Breakdown Start & End Time Pickers (Single row on mobile) */}
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3 items-start">
+                    <div className="min-w-0">
+                      <CustomTimePicker
+                        label={<><span className="hidden sm:inline">Breakdown </span>Start Time</>}
+                        required
+                        value={breakdownStartTime}
+                        onChange={setBreakdownStartTime}
+                        iconColor="text-amber-500"
                       />
                     </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-[var(--color-ink)] mb-1">
-                        Breakdown Duration (Minutes) <span className="text-rose-500 font-bold ml-0.5">*</span>
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="59"
-                        step="5"
-                        required={isBreakdown}
-                        value={breakdownMinutes}
-                        onChange={(e) => setBreakdownMinutes(e.target.value)}
-                        placeholder="e.g. 30"
-                        className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-rose-500/30 bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
+                    <div className="min-w-0">
+                      <CustomTimePicker
+                        label={<><span className="hidden sm:inline">Breakdown </span>End Time</>}
+                        required
+                        value={breakdownEndTime}
+                        onChange={setBreakdownEndTime}
+                        iconColor="text-rose-500"
                       />
                     </div>
                   </div>
+
+                  {/* Real-time Computed Breakdown Duration Badge */}
+                  {breakdownStats && (
+                    <div className={`p-2 sm:p-2.5 rounded-lg border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-2 text-xs min-w-0 ${
+                      breakdownStats.isValid
+                        ? "bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300"
+                        : "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300"
+                    }`}>
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 min-w-0">
+                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
+                        <span className="font-semibold truncate text-[11px] sm:text-xs">
+                          {breakdownStats.isValid ? (
+                            <>
+                              <span className="hidden sm:inline">Calculated Breakdown Duration:</span>
+                              <span className="sm:hidden">Duration:</span>
+                            </>
+                          ) : "Breakdown Timing Notice:"}
+                        </span>
+                        <span className="font-mono font-bold px-1.5 sm:px-2 py-0.5 rounded bg-rose-500/20 text-rose-800 dark:text-rose-200 text-[11px] sm:text-xs shrink-0">
+                          {breakdownStats.isValid ? breakdownStats.durationFormatted : "Invalid"}
+                        </span>
+                      </div>
+                      <div className="font-mono text-[10px] sm:text-[11px] font-bold opacity-90 truncate sm:shrink-0">
+                        {breakdownStats.isValid ? (
+                          <>
+                            <span className="sm:hidden">{formatTo12Hour(breakdownStartTime)} - {formatTo12Hour(breakdownEndTime)}</span>
+                            <span className="hidden sm:inline">{breakdownStats.fullBreakdownString}</span>
+                          </>
+                        ) : breakdownStats.errorMessage}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1474,6 +1604,16 @@ export function OperatorDashboard({
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleExportExcelClick}
+                className="px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
+                title="Export filtered machine logs to Excel (.xlsx)"
+              >
+                <Download className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span className="hidden sm:inline">Export Excel</span>
+              </button>
+
               <button
                 type="button"
                 onClick={handleExportPdfClick}
@@ -1569,9 +1709,9 @@ export function OperatorDashboard({
                   const isToday = isLogFromToday(log.log_date);
                   const canEdit = isLogEditable(log.log_date);
 
-                  const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*(\d+h\s*\d+m)[^\]]*\]/);
-                  const bkdDurationStr = bkdMatch ? bkdMatch[1] : null;
-                  const displayRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/, "") || "—";
+                  const bkdParsed = parseBreakdownString(log.breakdown_duration || log.remarks);
+                  const bkdDurationStr = log.breakdown_duration || (bkdParsed?.fullBreakdownString || null);
+                  const displayRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "") || "—";
                   const normalHrs = log.normal_working_hours !== undefined && log.normal_working_hours !== null
                     ? Number(log.normal_working_hours)
                     : (() => {
@@ -1583,27 +1723,58 @@ export function OperatorDashboard({
                         return stats.normalWorkingHours;
                       })();
 
+                  const mSerial = log.machine?.serial_number || allMachines.find((m) => m.id === log.machine_id)?.serial_number || assignedMachine?.serial_number || "—";
+                  const mModel = log.machine?.model || allMachines.find((m) => m.id === log.machine_id)?.model || assignedMachine?.model || model || "Standard";
+
+                  const splitTs = splitExactTimestamp(log.created_at, true);
+                  const bkdStartTime = log.breakdown_start_time || bkdParsed?.startTime || null;
+                  const bkdEndTime = log.breakdown_end_time || bkdParsed?.endTime || null;
+                  const bkdDurationOnly = bkdParsed?.durationFormatted || bkdParsed?.durationText || (bkdDurationStr ? bkdDurationStr.replace(/^Breakdown\s*\((.*)\)$/i, "$1").replace(/^Machine Breakdown\s*\((.*)\)$/i, "$1").replace(/^Breakdown\s*/i, "").replace(/\s*duration$/i, "").trim() : null);
+
                   return (
                     <div
                       key={log.id}
                       className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2.5 shadow-2xs hover:border-sky-500/30 transition-all"
                     >
                       {/* Mobile Card Header */}
-                      <div className="flex items-center justify-between border-b border-[var(--color-hairline)] pb-2.5">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-xs font-bold text-[var(--color-ink)]">
-                            {formatDate(log.log_date)}
-                          </span>
-                          <span className="font-mono text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
-                            {log.machine?.machine_code || machineNo || "MCH-001"}
-                          </span>
+                      <div className="flex items-start justify-between border-b border-[var(--color-hairline)] pb-2.5 gap-2">
+                        <div className="flex flex-col gap-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-xs font-bold text-[var(--color-ink)]">
+                              {formatDate(log.log_date)}
+                            </span>
+                            <span className="font-mono text-[10px] font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
+                              S/N: {mSerial}
+                            </span>
+                            <span className="text-[10px] font-semibold text-[var(--color-mute)]">
+                              {mModel}
+                            </span>
+                          </div>
+                          {/* Exact Log Entry Timestamp (Time on top, Date below, NO clock icon) */}
+                          <div className="text-[10px] font-mono text-[var(--color-mute)]">
+                            {splitTs ? (
+                              <div className="flex items-baseline gap-1.5">
+                                <span className="font-bold text-sky-600 dark:text-sky-400">{splitTs.time}</span>
+                                <span className="text-[var(--color-mute)] text-[9.5px]">({splitTs.date})</span>
+                              </div>
+                            ) : (
+                              <span>{formatDate(log.log_date)}</span>
+                            )}
+                          </div>
                         </div>
                         {isBkd ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 inline-flex items-center gap-1">
-                            🔴 {bkdDurationStr || "Breakdown"}
-                          </span>
+                          <div className="px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 flex flex-col items-end shrink-0">
+                            {bkdStartTime && bkdEndTime ? (
+                              <>
+                                <span className="font-mono">{bkdStartTime} - {bkdEndTime}</span>
+                                <span className="font-mono text-[9px] opacity-90">({bkdDurationOnly || "Breakdown"})</span>
+                              </>
+                            ) : (
+                              <span>🔴 {bkdDurationStr || "Breakdown"}</span>
+                            )}
+                          </div>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] border border-[var(--color-hairline)] inline-flex items-center gap-1 font-mono">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] border border-[var(--color-hairline)] inline-flex items-center gap-1 font-mono shrink-0">
                             0
                           </span>
                         )}
@@ -1612,19 +1783,24 @@ export function OperatorDashboard({
                       {/* Mobile Card Content */}
                       <div className="space-y-1.5 text-xs">
                         <div className="flex items-center justify-between">
-                          <span className="font-extrabold text-[var(--color-ink)]">
-                            {log.machine?.machine_name || machineName || "Machine"}
+                          <span className="font-extrabold text-[var(--color-ink)] font-mono">
+                            Serial: {mSerial}
                           </span>
                           <span className="text-[11px] text-[var(--color-mute)] font-medium">
-                            {log.machine?.model || model || "Standard"}
+                            {mModel}
                           </span>
                         </div>
 
                         <div className="flex items-center justify-between text-[11px] pt-1">
                           <span className="text-[var(--color-mute)] font-medium">Hour Meter Reading:</span>
-                          <span className="font-mono font-bold text-[var(--color-ink)]">
-                            {log.start_meter ?? 0} → {log.end_meter ?? 0} ({log.running_hours ?? Math.max(0, (log.end_meter ?? 0) - (log.start_meter ?? 0))} hrs)
-                          </span>
+                          <div className="text-right">
+                            <span className="font-mono font-bold text-[var(--color-ink)] block">
+                              {log.start_meter ?? 0} → {log.end_meter ?? 0}
+                            </span>
+                            <span className="text-[10px] font-semibold text-sky-600 dark:text-sky-400 font-mono block">
+                              (+{log.running_hours ?? Math.max(0, (log.end_meter ?? 0) - (log.start_meter ?? 0))} hrs)
+                            </span>
+                          </div>
                         </div>
 
                         <div className="flex items-center justify-between text-[11px]">
@@ -1644,11 +1820,32 @@ export function OperatorDashboard({
                         {log.overtime_hours ? (
                           <div className="flex items-center justify-between text-[11px]">
                             <span className="text-[var(--color-mute)] font-medium">Overtime:</span>
-                            <span className="font-bold text-amber-600 dark:text-amber-400">
+                            <span className="font-bold text-amber-600 dark:text-amber-400 font-mono">
                               {log.overtime_hours} hrs OT
                             </span>
                           </div>
                         ) : null}
+
+                        {/* Exact Log Entry Timestamp Row (NO Clock icon, Time on top, Date below, NO relative time) */}
+                        <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[var(--color-hairline)]/60">
+                          <span className="text-[var(--color-mute)] font-medium">
+                            Exact Entry Timestamp:
+                          </span>
+                          <div className="text-right font-mono">
+                            {splitTs ? (
+                              <>
+                                <span className="font-bold text-sky-600 dark:text-sky-400 text-[10.5px] block">
+                                  {splitTs.time}
+                                </span>
+                                <span className="text-[9.5px] text-[var(--color-mute)] block">
+                                  {splitTs.date}
+                                </span>
+                              </>
+                            ) : (
+                              <span className="text-[10px] text-[var(--color-mute)]">—</span>
+                            )}
+                          </div>
+                        </div>
 
                         {displayRemarks !== "—" && (
                           <div className="pt-1 text-[11px] text-[var(--color-mute)] line-clamp-2 italic bg-[var(--color-canvas-elevated)] p-2 rounded-lg border border-[var(--color-hairline)]">
@@ -1683,14 +1880,14 @@ export function OperatorDashboard({
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-[var(--color-hairline)] text-[var(--color-mute)] font-mono text-[10px] font-extrabold tracking-wider uppercase bg-[var(--color-canvas)]/40">
-                      <th className="p-3.5 rounded-l-lg">Date</th>
-                      <th className="p-3.5">Machine Name</th>
-                      <th className="p-3.5">Machine No</th>
-                      <th className="p-3.5">Model</th>
-                      <th className="p-3.5">Hour Meter (hrs)</th>
-                      <th className="p-3.5">Timings / Working Time</th>
-                      <th className="p-3.5">Overtime</th>
-                      <th className="p-3.5">Breakdown</th>
+                      <th className="p-3.5 rounded-l-lg whitespace-nowrap">Shift Date</th>
+                      <th className="p-3.5 whitespace-nowrap font-mono">Entry Timestamp</th>
+                      <th className="p-3.5 whitespace-nowrap font-mono">Serial</th>
+                      <th className="p-3.5 whitespace-nowrap font-mono">Model</th>
+                      <th className="p-3.5 whitespace-nowrap font-mono">Hour Meter (hrs)</th>
+                      <th className="p-3.5 whitespace-nowrap font-mono">Timings / Working Time</th>
+                      <th className="p-3.5 whitespace-nowrap font-mono">Overtime</th>
+                      <th className="p-3.5 whitespace-nowrap font-mono">Breakdown</th>
                       <th className="p-3.5">Remarks</th>
                       <th className="p-3.5 text-right rounded-r-lg">Action</th>
                     </tr>
@@ -1701,9 +1898,9 @@ export function OperatorDashboard({
                       const isToday = isLogFromToday(log.log_date);
                       const canEdit = isLogEditable(log.log_date);
 
-                      const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*(\d+h\s*\d+m)[^\]]*\]/);
-                      const bkdDurationStr = bkdMatch ? bkdMatch[1] : null;
-                      const displayRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/, "") || "—";
+                      const bkdParsed = parseBreakdownString(log.breakdown_duration || log.remarks);
+                      const bkdDurationStr = log.breakdown_duration || (bkdParsed?.fullBreakdownString || null);
+                      const displayRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "") || "—";
                       const normalHrs = log.normal_working_hours !== undefined && log.normal_working_hours !== null
                         ? Number(log.normal_working_hours)
                         : (() => {
@@ -1715,22 +1912,46 @@ export function OperatorDashboard({
                             return stats.normalWorkingHours;
                           })();
 
+                      const mSerial = log.machine?.serial_number || allMachines.find((m) => m.id === log.machine_id)?.serial_number || assignedMachine?.serial_number || "—";
+                      const mModel = log.machine?.model || allMachines.find((m) => m.id === log.machine_id)?.model || assignedMachine?.model || model || "Standard";
+
+                      const splitTs = splitExactTimestamp(log.created_at, true);
+                      const bkdStartTime = log.breakdown_start_time || bkdParsed?.startTime || null;
+                      const bkdEndTime = log.breakdown_end_time || bkdParsed?.endTime || null;
+                      const bkdDurationOnly = bkdParsed?.durationFormatted || bkdParsed?.durationText || (bkdDurationStr ? bkdDurationStr.replace(/^Breakdown\s*\((.*)\)$/i, "$1").replace(/^Machine Breakdown\s*\((.*)\)$/i, "$1").replace(/^Breakdown\s*/i, "").replace(/\s*duration$/i, "").trim() : null);
+
                       return (
                         <tr key={log.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors">
                           <td className="p-3.5 font-semibold text-[var(--color-ink)] whitespace-nowrap font-mono text-[11px]">
                             {formatDate(log.log_date)}
                           </td>
-                          <td className="p-3.5 font-bold text-[var(--color-ink)] whitespace-nowrap">
-                            {log.machine?.machine_name || machineName || "Machine"}
+                          <td className="p-3.5 whitespace-nowrap font-mono">
+                            {splitTs ? (
+                              <div className="flex flex-col">
+                                <span className="font-bold text-[var(--color-ink)] text-[11px]">{splitTs.time}</span>
+                                <span className="text-[10px] text-[var(--color-mute)] font-medium">{splitTs.date}</span>
+                              </div>
+                            ) : log.created_at ? (
+                              <div className="flex flex-col">
+                                <span className="font-bold text-[var(--color-ink)] text-[11px]">{formatExactTimestamp(log.created_at, true)}</span>
+                              </div>
+                            ) : (
+                              <span className="text-[var(--color-mute)] italic text-[10px]">—</span>
+                            )}
                           </td>
-                          <td className="p-3.5 font-mono font-bold text-sky-600 dark:text-sky-400 whitespace-nowrap">
-                            {log.machine?.machine_code || machineNo || "MCH-001"}
+                          <td className="p-3.5 font-mono font-bold text-sky-600 dark:text-sky-400 whitespace-nowrap text-[11px]">
+                            {mSerial}
                           </td>
-                          <td className="p-3.5 text-[var(--color-ink)] whitespace-nowrap">
-                            {log.machine?.model || model || "Standard"}
+                          <td className="p-3.5 text-[var(--color-ink)] font-medium whitespace-nowrap text-xs">
+                            {mModel}
                           </td>
-                          <td className="p-3.5 font-mono font-bold text-[var(--color-ink)] whitespace-nowrap text-[11px]">
-                            {log.start_meter ?? 0} → {log.end_meter ?? 0} <span className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold">(+{log.running_hours ?? Math.max(0, (log.end_meter ?? 0) - (log.start_meter ?? 0))}h)</span>
+                          <td className="p-3.5 font-mono whitespace-nowrap">
+                            <div className="font-bold text-[var(--color-ink)] text-[11px]">
+                              {log.start_meter ?? 0} → {log.end_meter ?? 0}
+                            </div>
+                            <div className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold mt-0.5">
+                              (+{log.running_hours ?? Math.max(0, (log.end_meter ?? 0) - (log.start_meter ?? 0))}h)
+                            </div>
                           </td>
                           <td className="p-3.5 whitespace-nowrap">
                             <div className="font-medium text-[var(--color-ink)] font-mono text-[11px]">
@@ -1741,14 +1962,27 @@ export function OperatorDashboard({
                               <span className="text-[var(--color-mute)] font-normal text-[9.5px]">(excl. OT)</span>
                             </div>
                           </td>
-                          <td className="p-3.5 font-bold text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                          <td className="p-3.5 font-bold text-amber-600 dark:text-amber-400 whitespace-nowrap font-mono text-xs">
                             {log.overtime_hours ? `${log.overtime_hours} hrs` : "0 hrs"}
                           </td>
                           <td className="p-3.5 whitespace-nowrap">
                             {isBkd ? (
-                              <span className="px-2.5 py-1 rounded-full text-[10px] font-extrabold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 inline-flex items-center gap-1">
-                                🔴 {bkdDurationStr || "Breakdown"}
-                              </span>
+                              <div className="inline-flex flex-col px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400">
+                                {bkdStartTime && bkdEndTime ? (
+                                  <>
+                                    <span className="font-mono text-[11px] font-bold leading-tight">
+                                      {bkdStartTime} - {bkdEndTime}
+                                    </span>
+                                    <span className="font-mono text-[10px] font-semibold opacity-90 text-center">
+                                      ({bkdDurationOnly || "Breakdown"})
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="font-mono text-[10.5px] font-bold">
+                                    🔴 {bkdDurationStr || "Breakdown"}
+                                  </span>
+                                )}
+                              </div>
                             ) : (
                               <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[var(--color-canvas)] text-[var(--color-ink)] border border-[var(--color-hairline)] inline-flex items-center gap-1 font-mono">
                                 0
@@ -1791,106 +2025,213 @@ export function OperatorDashboard({
       <Modal
         open={showConfirmModal}
         onClose={() => setShowConfirmModal(false)}
-        title="Submit Daily Machine Log?"
-        size="md"
+        title={
+          <div className="flex items-center gap-2.5">
+            <div className="h-7 w-7 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+              <FileCheck2 size={16} />
+            </div>
+            <div>
+              <span className="font-bold text-sm sm:text-base text-[var(--color-ink)]">Submit Daily Machine Log?</span>
+              <span className="block text-[11px] text-[var(--color-mute)] font-normal -mt-0.5">
+                <span className="hidden sm:inline">Please review your shift parameters before direct database commit</span>
+                <span className="sm:hidden">Review shift parameters before commit</span>
+              </span>
+            </div>
+          </div>
+        }
+        className="sm:max-w-[620px]"
         footer={
-          <div className="flex items-center justify-end gap-2.5 w-full pt-2">
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => setShowConfirmModal(false)}
-              disabled={submitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              loading={submitting}
-              onClick={() => handleExecuteSubmit()}
-            >
-              Confirm & Submit Log
-            </Button>
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2.5 w-full">
+            <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-mute)]">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+              <span>
+                <span className="hidden sm:inline">Direct database commit</span>
+                <span className="sm:hidden">Direct commit</span>
+              </span>
+            </div>
+            <div className="flex items-center justify-end gap-2 shrink-0">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowConfirmModal(false)}
+                disabled={submitting}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                loading={submitting}
+                onClick={() => handleExecuteSubmit()}
+              >
+                <span className="hidden sm:inline">Confirm & Submit Log</span>
+                <span className="sm:hidden">Confirm & Submit</span>
+              </Button>
+            </div>
           </div>
         }
       >
-        <div className="space-y-4 text-xs">
-          <div className="p-3.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-3">
-            <div className="grid grid-cols-2 gap-3 border-b border-[var(--color-hairline)] pb-3">
-              <div>
-                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Machine Model</span>
-                <span className="font-bold text-[var(--color-ink)] text-sm">{selectedMachine?.model || selectedMachine?.machine_name || "Machine"}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Machine Serial No.</span>
-                <span className="font-mono font-bold text-sky-600 dark:text-sky-400">{selectedMachine?.serial_number || machineNo || "—"}</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 border-b border-[var(--color-hairline)] pb-3">
-              <div>
-                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Client Name</span>
-                <span className="font-bold text-[var(--color-ink)]">{selectedClient?.client_name || selectedMachine?.customer_name || "Unassigned Client"}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Site Location</span>
-                <span className="font-bold text-[var(--color-ink)]">{clientLocation || "—"}</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3 border-b border-[var(--color-hairline)] pb-3">
-              <div>
-                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Log Date</span>
-                <span className="font-bold text-[var(--color-ink)]">{formatDate(selectedLogDate)}</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Hour Meter</span>
-                <span className="font-mono font-bold text-[var(--color-ink)]">{startMeter} → {endMeter} (+{meterRunningHours}h)</span>
-              </div>
-              <div>
-                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Shift Timing</span>
-                <span className="font-bold text-[var(--color-ink)] block text-[11px] font-mono">
-                  {operatingStats.resolvedRangeFormatted || `${startTime} → ${endTime}`}
+        <div className="space-y-3 text-xs">
+          {/* 1. DEPLOYMENT & MACHINE CONTEXT */}
+          <div className="rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] p-3 sm:p-3.5 grid grid-cols-1 sm:grid-cols-2 gap-3 divide-y sm:divide-y-0 sm:divide-x divide-[var(--color-hairline)]">
+            {/* Machine Details */}
+            <div className="space-y-1">
+              <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <Layers className="h-3 w-3 text-sky-500 shrink-0" /> Machine Identification
+              </span>
+              <div className="flex items-center gap-2 pt-0.5">
+                <span className="font-bold text-[var(--color-ink)] text-sm">
+                  {selectedMachine?.model || selectedMachine?.machine_name || "Machine"}
                 </span>
-                <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400 font-mono">
-                  {operatingStats.isOvernight ? "🌙 Overnight · " : "☀️ Day · "}{operatingStats.durationFormatted} ({operatingStats.normalWorkingHours.toFixed(1)}h work)
-                </span>
+                {(selectedMachine?.machine_code || machineNo) && (
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] text-[var(--color-mute)] font-semibold">
+                    {selectedMachine?.machine_code || machineNo}
+                  </span>
+                )}
               </div>
-              <div>
-                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-0.5">Overtime</span>
-                <span className="font-bold text-amber-600 dark:text-amber-400">{overtimeHours || "0"} hrs OT</span>
+              <div className="text-xs font-mono font-bold text-sky-600 dark:text-sky-400">
+                Serial: {selectedMachine?.serial_number || machineNo || "—"}
               </div>
             </div>
 
-            <div>
-              <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-1">Machine Status</span>
-              {isBreakdown ? (
-                <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 font-bold">
-                  🔴 Machine Breakdown ({breakdownHours}h {breakdownMinutes}m duration)
+            {/* Client & Deployment Site */}
+            <div className="space-y-1 sm:pl-3 pt-2 sm:pt-0">
+              <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <Building2 className="h-3 w-3 text-emerald-500 shrink-0" /> Deployment Site & Client
+              </span>
+              <div className="font-bold text-[var(--color-ink)] text-sm truncate pt-0.5">
+                {selectedClient?.client_name || selectedMachine?.customer_name || "Unassigned Client"}
+              </div>
+              <div className="text-xs text-[var(--color-mute)] flex items-start gap-1">
+                <MapPin className="h-3 w-3 text-neutral-400 shrink-0 mt-0.5" />
+                <span className="line-clamp-2 leading-relaxed">{clientLocation || "—"}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. OPERATIONAL SHIFT & METERING CARD */}
+          <div className="rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] p-3 sm:p-3.5 space-y-2.5">
+            {/* Shift Timing Bar */}
+            <div className="bg-[var(--color-canvas-elevated)] p-2.5 rounded-lg border border-[var(--color-hairline)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+              <div className="flex items-center gap-2">
+                <Clock className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider">Shift Window:</span>
+                <span className="font-mono font-bold text-[var(--color-ink)] text-xs sm:text-[13px]">
+                  {startTime} → {endTime}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] font-mono font-bold">
+                <span className={cn(
+                  "px-2 py-0.5 rounded-md text-[10px] font-bold",
+                  operatingStats.isOvernight
+                    ? "bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800"
+                    : "bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800"
+                )}>
+                  {operatingStats.isOvernight ? "🌙 Overnight Shift" : "☀️ Day Shift"}
+                </span>
+                <span className="text-sky-600 dark:text-sky-400">
+                  {operatingStats.durationFormatted} ({operatingStats.normalWorkingHours.toFixed(1)}h work)
+                </span>
+              </div>
+            </div>
+
+            {/* 3 Balanced Stat Tiles (Single row across all viewports) */}
+            <div className="grid grid-cols-3 gap-1.5 sm:gap-2.5">
+              {/* Log Date */}
+              <div className="bg-[var(--color-canvas-elevated)] p-2 sm:p-2.5 rounded-lg border border-[var(--color-hairline)] flex flex-col justify-between">
+                <span className="text-[9px] sm:text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider flex items-center gap-1 mb-1 truncate">
+                  <Calendar className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-neutral-400 shrink-0" /> <span className="hidden sm:inline">Shift </span>Date
+                </span>
+                <span className="font-mono font-bold text-[var(--color-ink)] text-[11px] sm:text-[13px] truncate">
+                  {formatDate(selectedLogDate)}
+                </span>
+              </div>
+
+              {/* Hour Meter */}
+              <div className="bg-[var(--color-canvas-elevated)] p-2 sm:p-2.5 rounded-lg border border-[var(--color-hairline)] flex flex-col justify-between">
+                <div className="flex items-center justify-between mb-1 gap-1">
+                  <span className="text-[9px] sm:text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider flex items-center gap-1 truncate">
+                    <Gauge className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-sky-500 shrink-0" /> <span className="hidden sm:inline">Hour </span>Meter
+                  </span>
+                  <span className="font-mono font-bold text-[9px] sm:text-[10px] text-sky-600 dark:text-sky-400 px-1 py-0.2 rounded bg-sky-50 dark:bg-sky-950/50 border border-sky-200 dark:border-sky-800 shrink-0">
+                    +{meterRunningHours}h<span className="hidden sm:inline"> run</span>
+                  </span>
                 </div>
-              ) : (
-                <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold">
-                  🟢 Normal (0 breakdown hours)
+                <span className="font-mono font-bold text-[var(--color-ink)] text-[11px] sm:text-[13px] truncate">
+                  {startMeter} → {endMeter}
+                </span>
+              </div>
+
+              {/* Overtime */}
+              <div className="bg-[var(--color-canvas-elevated)] p-2 sm:p-2.5 rounded-lg border border-[var(--color-hairline)] flex flex-col justify-between">
+                <span className="text-[9px] sm:text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider flex items-center gap-1 mb-1 truncate">
+                  <Zap className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-amber-500 shrink-0" /> Overtime
+                </span>
+                {parseFloat(overtimeHours) > 0 ? (
+                  <span className="font-mono font-bold text-amber-600 dark:text-amber-400 text-[11px] sm:text-[13px] truncate">
+                    {overtimeHours} hrs OT
+                  </span>
+                ) : (
+                  <span className="font-mono font-medium text-[var(--color-mute)] text-[11px] sm:text-[13px] truncate">
+                    0h (Std)
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 3. MACHINE HEALTH & BREAKDOWN STATUS */}
+          {isBreakdown ? (
+            <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 text-rose-700 dark:text-rose-400 space-y-1.5">
+              <div className="flex items-center justify-between font-bold text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
+                  <span className="font-mono uppercase tracking-wide">Machine Status: Breakdown Reported</span>
+                </div>
+                <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-rose-500/20 font-bold border border-rose-500/30">
+                  {breakdownStats?.durationFormatted || `${breakdownHours}h ${breakdownMinutes}m`}
+                </span>
+              </div>
+              <div className="text-xs font-mono flex items-center gap-1.5 text-rose-800 dark:text-rose-300">
+                <Clock className="h-3 w-3 text-rose-500 shrink-0" />
+                <span>Breakdown Timing: {breakdownStats?.fullBreakdownString || `${breakdownStartTime} - ${breakdownEndTime}`}</span>
+              </div>
+              {breakdownReason && (
+                <div className="text-xs font-medium text-[var(--color-ink)] bg-white/60 dark:bg-black/20 p-1.5 rounded border border-rose-500/20">
+                  <span className="font-bold text-rose-600 dark:text-rose-400">Reason:</span> {breakdownReason}
+                </div>
+              )}
+              {actionTaken && (
+                <div className="text-xs font-medium text-[var(--color-ink)] bg-white/60 dark:bg-black/20 p-1.5 rounded border border-rose-500/20">
+                  <span className="font-bold text-rose-600 dark:text-rose-400">Action:</span> {actionTaken}
                 </div>
               )}
             </div>
-
-            {remarks.trim() && (
-              <div>
-                <span className="text-[10px] text-[var(--color-mute)] font-extrabold uppercase block mb-0.5">Remarks / Notes</span>
-                <p className="text-[var(--color-ink)] font-medium italic bg-[var(--color-canvas-elevated)] p-2 rounded-lg border border-[var(--color-hairline)]">
-                  "{remarks}"
-                </p>
+          ) : (
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 font-bold text-xs">
+              <div className="flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <span>Machine Status: Normal Operation</span>
               </div>
-            )}
-          </div>
+              <span className="text-[11px] font-medium text-emerald-600/90 dark:text-emerald-400/90 font-mono">
+                No Machine Breakdown
+              </span>
+            </div>
+          )}
 
-          <p className="text-[11px] text-[var(--color-mute)] font-medium flex items-center gap-1.5">
-            <Info className="h-3.5 w-3.5 text-sky-500 shrink-0" />
-            Once submitted, this daily machine log entry will be saved directly into the database.
-          </p>
+          {/* 4. REMARKS (IF ANY) */}
+          {remarks.trim() && (
+            <div className="bg-[var(--color-canvas)] p-2.5 rounded-xl border border-[var(--color-hairline)]">
+              <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-1">
+                Remarks / Operational Notes
+              </span>
+              <p className="text-[var(--color-ink)] font-medium italic bg-[var(--color-canvas-elevated)] p-2 rounded-lg border border-[var(--color-hairline)] leading-relaxed">
+                "{remarks}"
+              </p>
+            </div>
+          )}
         </div>
       </Modal>
 
@@ -1898,21 +2239,30 @@ export function OperatorDashboard({
       {/* 5. EDIT LOG MODAL FOR CORRECTIONS            */}
       {/* ============================================ */}
       {editingLog && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-[var(--color-hairline)] pb-3">
-              <h3 className="text-sm font-bold text-[var(--color-ink)] flex items-center gap-2">
-                <Edit className="h-4 w-4 text-amber-500" /> Edit Daily Machine Log Entry
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] rounded-2xl max-w-lg sm:max-w-xl w-full shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)] sm:max-h-[85vh] overflow-hidden">
+            {/* Header - Icon removed per feedback */}
+            <div className="flex items-center justify-between border-b border-[var(--color-hairline)] px-5 sm:px-6 py-3.5 shrink-0 bg-[var(--color-canvas-elevated)]">
+              <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">
+                Edit Daily Machine Log Entry
               </h3>
               <button
+                type="button"
                 onClick={() => setEditingLog(null)}
-                className="text-xs text-[var(--color-mute)] hover:text-[var(--color-ink)] cursor-pointer"
+                className="rounded-lg p-1.5 text-[var(--color-mute)] hover:bg-[var(--color-hairline-soft-surface)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
+                title="Close (Esc)"
               >
-                ✕ Close
+                <AnimatedX size={16} />
+                <span className="sr-only">Close</span>
               </button>
             </div>
 
-            <form onSubmit={handleResubmitLogCorrection} className="space-y-4 text-xs">
+            {/* Scrollable Form Body - Isolated inside modal boundaries */}
+            <form
+              id="edit-log-correction-form"
+              onSubmit={handleResubmitLogCorrection}
+              className="flex-1 overflow-y-auto px-5 sm:px-6 py-4 space-y-4 text-xs custom-scrollbar min-h-0"
+            >
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-[var(--color-ink)] mb-1">
@@ -1945,7 +2295,7 @@ export function OperatorDashboard({
               </div>
 
               {/* Edit Shift Timing */}
-              <div className="space-y-3 p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/40">
+              <div className="space-y-3 p-3 sm:p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/40">
                 <CustomDatePicker
                   label={
                     <span>
@@ -1958,8 +2308,8 @@ export function OperatorDashboard({
                   maxDaysOld={7}
                 />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
+                <div className="grid grid-cols-2 gap-2 sm:gap-4 items-start">
+                  <div className="min-w-0">
                     <CustomTimePicker
                       label="Start Time"
                       required
@@ -1969,13 +2319,14 @@ export function OperatorDashboard({
                     />
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <CustomTimePicker
                       label="End Time"
                       required
                       value={editEndTime}
                       onChange={(val) => setEditEndTime(val)}
                       iconColor="text-rose-500"
+                      error={editOperatingStats.isFutureEnd ? "Cannot log before shift end." : undefined}
                     />
                   </div>
                 </div>
@@ -2042,33 +2393,42 @@ export function OperatorDashboard({
               </div>
 
               {editBreakdown && (
-                <div className="p-3 rounded-xl border border-rose-500/30 bg-rose-500/5 space-y-2">
-                  <span className="block text-[11px] font-bold text-rose-600 dark:text-rose-400">Breakdown Duration</span>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-[10px] text-[var(--color-mute)] font-medium">Hours</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="24"
-                        value={editBreakdownHours}
-                        onChange={(e) => setEditBreakdownHours(e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-rose-500/30 bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)]"
+                <div className="p-3 sm:p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/5 space-y-3">
+                  <span className="block text-[11px] font-bold text-rose-600 dark:text-rose-400">Breakdown Timing</span>
+                  <div className="grid grid-cols-2 gap-2 sm:gap-4 items-start">
+                    <div className="min-w-0">
+                      <CustomTimePicker
+                        label="Start Time"
+                        required
+                        value={editBreakdownStartTime}
+                        onChange={setEditBreakdownStartTime}
+                        iconColor="text-amber-500"
                       />
                     </div>
-                    <div>
-                      <label className="block text-[10px] text-[var(--color-mute)] font-medium">Minutes</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="59"
-                        step="5"
-                        value={editBreakdownMinutes}
-                        onChange={(e) => setEditBreakdownMinutes(e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-rose-500/30 bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)]"
+                    <div className="min-w-0">
+                      <CustomTimePicker
+                        label="End Time"
+                        required
+                        value={editBreakdownEndTime}
+                        onChange={setEditBreakdownEndTime}
+                        iconColor="text-rose-500"
                       />
                     </div>
                   </div>
+                  {editBreakdownStats && (
+                    <div className={`p-2 rounded-lg border text-xs flex flex-wrap items-center justify-between gap-2 font-mono min-w-0 ${
+                      editBreakdownStats.isValid
+                        ? "bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400"
+                        : "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400"
+                    }`}>
+                      <span className="font-bold truncate">
+                        {editBreakdownStats.isValid ? `Duration: ${editBreakdownStats.durationFormatted}` : editBreakdownStats.errorMessage}
+                      </span>
+                      {editBreakdownStats.isValid && (
+                        <span className="text-[11px] opacity-90 truncate">{editBreakdownStats.fullBreakdownString}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2081,29 +2441,31 @@ export function OperatorDashboard({
                   className="w-full px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-medium text-[var(--color-ink)]"
                 />
               </div>
-
-              <div className="flex items-center gap-2 pt-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="md"
-                  onClick={() => setEditingLog(null)}
-                  disabled={updatingLog}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="md"
-                  loading={updatingLog}
-                  className="flex-1"
-                >
-                  Resubmit Entry
-                </Button>
-              </div>
             </form>
+
+            {/* Sticky Action Footer */}
+            <div className="flex items-center gap-2 px-5 sm:px-6 py-3.5 border-t border-[var(--color-hairline)] shrink-0 bg-[var(--color-canvas-elevated)]">
+              <Button
+                type="button"
+                variant="secondary"
+                size="md"
+                onClick={() => setEditingLog(null)}
+                disabled={updatingLog}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                form="edit-log-correction-form"
+                variant="primary"
+                size="md"
+                loading={updatingLog}
+                className="flex-1"
+              >
+                Resubmit Entry
+              </Button>
+            </div>
           </div>
         </div>
       )}

@@ -2,6 +2,7 @@
 
 import React, { useId } from "react";
 import { motion } from "framer-motion";
+import { cn } from "@/lib/utils";
 
 export interface SegmentedToggleItem<T extends string = string> {
   id: T;
@@ -13,7 +14,7 @@ export interface SegmentedToggleItem<T extends string = string> {
   title?: string;
 }
 
-export type SegmentedToggleSize = "sm" | "md" | "lg";
+export type SegmentedToggleSize = "xs" | "sm" | "md" | "lg";
 
 export interface SegmentedToggleProps<T extends string = string> {
   items: SegmentedToggleItem<T>[];
@@ -22,6 +23,8 @@ export interface SegmentedToggleProps<T extends string = string> {
   /** Optional layoutId prefix for Framer Motion spring transition */
   layoutIdPrefix?: string;
   size?: SegmentedToggleSize;
+  /** Layout orientation: "horizontal" (default) or "vertical" */
+  orientation?: "horizontal" | "vertical";
   /** If true, forces full width on all viewports */
   fullWidth?: boolean;
   /** If true (default), automatically adapts to equal-width grid on mobile and inline-flex on desktop */
@@ -41,6 +44,13 @@ const sizeStyles: Record<
     badge: string;
   }
 > = {
+  xs: {
+    container: "p-0.5 rounded-lg",
+    item: "py-0.5 px-1.5 sm:px-2 rounded-md min-h-[30px] sm:min-h-[32px]",
+    text: "text-[11px] font-bold tracking-tight",
+    icon: 12,
+    badge: "text-[9px] px-1 py-0.1",
+  },
   sm: {
     container: "p-0.5 sm:p-1 rounded-lg sm:rounded-xl",
     item: "py-1 px-1.5 sm:py-1.5 sm:px-3 rounded-md sm:rounded-lg min-h-[34px] sm:min-h-[36px]",
@@ -70,6 +80,7 @@ export function SegmentedToggle<T extends string = string>({
   onChange,
   layoutIdPrefix,
   size = "md",
+  orientation = "horizontal",
   fullWidth = false,
   responsive = true,
   className = "",
@@ -79,6 +90,7 @@ export function SegmentedToggle<T extends string = string>({
   const autoId = useId();
   const effectiveLayoutId = `${layoutIdPrefix || "segmented-toggle"}-${autoId}`;
   const config = sizeStyles[size];
+  const isVertical = orientation === "vertical";
 
   // Derive responsive grid columns for mobile based on item count (up to 4)
   const mobileColsClass =
@@ -90,7 +102,11 @@ export function SegmentedToggle<T extends string = string>({
       ? "grid-cols-4"
       : "grid-flow-col auto-cols-max overflow-x-auto";
 
-  const containerLayoutClass = fullWidth
+  const containerLayoutClass = isVertical
+    ? fullWidth
+      ? "w-full flex flex-col"
+      : "inline-flex flex-col"
+    : fullWidth
     ? `w-full grid ${mobileColsClass} sm:grid sm:${mobileColsClass}`
     : responsive
     ? `w-full grid ${mobileColsClass} sm:w-auto sm:inline-flex sm:items-center sm:gap-1.5`
@@ -100,7 +116,12 @@ export function SegmentedToggle<T extends string = string>({
     <div
       role="tablist"
       aria-label={ariaLabel || "Segmented navigation toggle"}
-      className={`relative self-start bg-neutral-100 dark:bg-neutral-900/90 border border-neutral-200/80 dark:border-neutral-800 shadow-inner select-none transition-colors ${config.container} ${containerLayoutClass} ${className}`}
+      className={cn(
+        "relative self-start bg-neutral-100 dark:bg-neutral-900/90 border border-neutral-200/80 dark:border-neutral-800 shadow-inner select-none transition-colors",
+        config.container,
+        containerLayoutClass,
+        className
+      )}
     >
       {items.map((item) => {
         const isActive = item.id === value;
@@ -120,23 +141,34 @@ export function SegmentedToggle<T extends string = string>({
                 onChange(item.id);
               }
             }}
-            className={`relative flex items-center justify-center transition-colors cursor-pointer text-center select-none ${
-              config.item
-            } ${config.text} ${
+            className={cn(
+              "relative flex items-center justify-center transition-colors cursor-pointer text-center select-none",
+              isVertical ? "flex-1 min-h-0 py-0 px-0.5" : config.item,
+              config.text,
               isActive
                 ? "text-sky-600 dark:text-sky-400 font-extrabold"
-                : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-medium hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50"
-            } ${item.disabled ? "opacity-40 cursor-not-allowed pointer-events-none" : ""} ${itemClassName}`}
+                : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-medium hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50",
+              item.disabled && "opacity-40 cursor-not-allowed pointer-events-none",
+              itemClassName
+            )}
           >
             {isActive && (
               <motion.div
                 layoutId={effectiveLayoutId}
-                className="absolute inset-0 bg-white dark:bg-neutral-800 shadow-xs border border-neutral-200/90 dark:border-neutral-700/80 rounded-lg sm:rounded-xl z-0 pointer-events-none"
+                className={cn(
+                  "absolute inset-0 bg-white dark:bg-neutral-800 shadow-xs border border-neutral-200/90 dark:border-neutral-700/80 z-0 pointer-events-none",
+                  isVertical ? "rounded-[5px] sm:rounded-md" : "rounded-lg sm:rounded-xl"
+                )}
                 transition={{ type: "spring", stiffness: 450, damping: 32 }}
               />
             )}
 
-            <span className="relative z-10 flex items-center justify-center gap-1 sm:gap-1.5 leading-none max-w-full px-1 sm:px-2 min-w-0">
+            <span
+              className={cn(
+                "relative z-10 flex items-center justify-center gap-1 leading-none max-w-full min-w-0",
+                isVertical ? "px-0" : size === "xs" ? "px-0.5" : "sm:gap-1.5 px-1 sm:px-2"
+              )}
+            >
               {item.icon && (
                 <span className="shrink-0 flex items-center justify-center">
                   {item.icon}
@@ -149,13 +181,13 @@ export function SegmentedToggle<T extends string = string>({
 
               {item.count !== undefined && (
                 <span
-                  className={`ml-1 rounded-full font-mono font-bold shrink-0 border ${
-                    config.badge
-                  } ${
+                  className={cn(
+                    "ml-1 rounded-full font-mono font-bold shrink-0 border",
+                    config.badge,
                     isActive
                       ? "bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/25"
                       : "bg-neutral-200/80 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border-neutral-300/60 dark:border-neutral-700/60"
-                  }`}
+                  )}
                 >
                   {item.count}
                 </span>

@@ -70,9 +70,11 @@
   - **Timeline Context Banner & 1-Click Handover Alignment**: Real-time banner displays previous log end time and handover eligibility with a 1-click button to align start time to exact handover.
   - **PostgreSQL GiST Exclusion & Concurrency Protection**: Atomic `[start_datetime, end_datetime)` GiST exclusion constraint and transaction-level advisory locks prevent race conditions during concurrent submissions.
   - **Section A (Machine & Client Info)**: Auto-populates Machine Model, Serial Number, Client Name, and Client Site Location.
-  - **Section B (Time, Meter Readings & Normal Working Time)**: Manual `<TimeInput>` (separate Hours [1-12] & Minutes [0-60, auto-0] fields with AM/PM toggle) for Start/End times, automatic 1-hour break deduction, live shift duration breakdown, Overtime computation, Normal Working Time calculation ($\text{Duration} - \text{OT} - 1.0\text{h}$), starting/ending HMR, breakdown duration toggle, and remarks.
+  - **Section B (Time, Meter Readings & Normal Working Time)**: Mobile-optimized `<CustomTimePicker>` / `<TimeInput>` (compact Hours [1-12] & Minutes [0-60] fields with vertical AM/PM segmented toggle) paired side-by-side in a single row on mobile viewports without digit clipping, automatic 1-hour break deduction, live shift duration breakdown, Overtime computation, Normal Working Time calculation ($\text{Duration} - \text{OT} - 1.0\text{h}$), and starting/ending HMR.
+  - **Shift End Time Validation & Future Logging Prevention**: Strict 3-tier validation (Frontend, Server Actions/Zod, and PostgreSQL DB trigger & RPC) preventing operators from submitting logs before their shift has completed (e.g. attempting to log 02:00 PM when current time is 01:00 PM). Live 30-second interval ticker highlights future shift ends with `border-rose-500` and displays the concise error `"Cannot log before shift end."` optimized for compact mobile and desktop viewports.
+  - **Section C (Machine Breakdown Tracking & Formatted Timestamp Persistence)**: Start Time and End Time time pickers for equipment breakdowns, live duration calculation (e.g. `(55min)` or `(3h:55min)`), and structured database storage (`breakdown_start_time`, `breakdown_end_time`, `breakdown_duration`, `breakdown_hours` columns and `[Breakdown Duration: 02:30 PM - 03:25 PM (55min)]` formatted remarks) across web, mobile, and PostgreSQL schema.
 - **Log History (`tab=history`)**:
-  - Operators inspect past submitted daily machine logs with real-time shift timings alongside normal working time (excl. OT), overtime badges, and breakdown duration indicators.
+  - Operators inspect past submitted daily machine logs with real-time shift timings alongside normal working time (excl. OT), overtime badges, and breakdown duration indicators (`🔴 02:30 PM - 03:25 PM (55min)`).
   - **7-Day Edit Locking Window**: Operators can edit and resubmit logs created within the past 7 days across desktop and mobile card views, after which logs are automatically locked to prevent retro-edits.
 
 ### 5. 🏢 Client Directory & Tax/Billing Management (`/clients`)
@@ -199,8 +201,8 @@ ReachInternational-Monorepo/
 The core database is built on 7 central tables in Supabase PostgreSQL:
 
 1. `public.users`: System user accounts (email, phone, role, city, district, state, state_id references states(id), aadhaar_number, license_number, status).
-2. `public.machines`: Machine fleet master (machine_code, model, serial_number, manufacturer, year_of_manufacture, hour_meter, customer_name, status).
-3. `public.machine_hour_logs`: Daily running hour logs (machine_id, client_id, operator_id, supervisor_id, log_date, start_time, end_time, start_meter, end_meter, running_hours, normal_working_hours, overtime_hours, is_breakdown, location, remarks, idempotency_key).
+2. `public.machines`: Machine fleet master (machine_code, model, serial_number, manufacturer, year_of_manufacture, hour_meter, customer_name, status, health_status, current_operator_id).
+3. `public.machine_hour_logs`: Daily running hour logs (machine_id, client_id, operator_id, supervisor_id, log_date, start_time, end_time, start_meter, end_meter, running_hours, normal_working_hours, overtime_hours, is_breakdown, breakdown_start_time, breakdown_end_time, breakdown_duration, breakdown_hours, location, remarks, idempotency_key).
 4. `public.clients`: Registered clients & customer sites (client_code, client_name, contact_person, phone, email, address, city, state).
 5. `public.states`: Official Indian State and Union Territory directory with official smallint LGD codes (36 entities).
 6. `public.districts`: Official Indian Administrative Districts directory (784 districts mapped to `states(id)` with smallint LGD codes).

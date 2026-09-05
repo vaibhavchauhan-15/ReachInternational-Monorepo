@@ -306,7 +306,7 @@ function SupervisorLogsReportContent({
                 const locationStr = log.location || ((log as any)?.client?.city ? `${(log as any).client.city}, ${(log as any).client.state || ""}` : mObj?.customer_address ? `${mObj.customer_address}${mObj.city ? `, ${mObj.city}` : ""}` : mObj?.city || "—");
 
                 const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*([^\]]+)\]/i) || (log.remarks || "").match(/Breakdown\s*(?:Duration)?:?\s*(\d+h?\s*\d*m?)/i);
-                const bkdDetails = bkdMatch ? bkdMatch[1].trim() : isBkd ? "Breakdown" : null;
+                const bkdDetails = (log as any).breakdown_duration || (bkdMatch ? bkdMatch[1].trim() : isBkd ? "Breakdown" : null);
                 const cleanRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim() || "—";
                 let bkdDurationOnly = bkdDetails;
                 if (bkdDurationOnly) {

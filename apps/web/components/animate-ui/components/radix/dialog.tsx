@@ -141,7 +141,7 @@ export const DialogContent = React.forwardRef<
                   {children}
                   {showCloseButton && (
                     <TooltipWrapper content="Close modal (Esc)" side="left">
-                      <DialogPrimitive.Close className="absolute right-5 top-5 rounded-[var(--radius-sm)] p-1.5 text-[var(--color-mute)] transition-colors hover:bg-[var(--color-hairline-soft-surface)] hover:text-[var(--color-ink)] focus:outline-none cursor-pointer">
+                      <DialogPrimitive.Close className="absolute right-4 sm:right-5 top-3.5 sm:top-4 rounded-[var(--radius-sm)] p-1.5 text-[var(--color-mute)] transition-colors hover:bg-[var(--color-hairline-soft-surface)] hover:text-[var(--color-ink)] focus:outline-none cursor-pointer">
                         <AnimatedX size={16} />
                         <span className="sr-only">Close</span>
                       </DialogPrimitive.Close>
@@ -164,7 +164,7 @@ export const DialogHeader = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col space-y-1.5 p-6 border-b border-[var(--color-hairline)]",
+      "flex flex-col space-y-1.5 px-5 py-3.5 sm:px-6 sm:py-4 border-b border-[var(--color-hairline)]",
       className
     )}
     {...props}
@@ -178,7 +178,7 @@ export const DialogFooter = ({
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end gap-3 p-6 border-t border-[var(--color-hairline)]",
+      "flex flex-col-reverse sm:flex-row sm:justify-end gap-3 px-5 py-3 sm:px-6 sm:py-3.5 border-t border-[var(--color-hairline)]",
       className
     )}
     {...props}

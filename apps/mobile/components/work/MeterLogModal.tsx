@@ -18,6 +18,7 @@ import { validateMobileClipboardInput } from '../../lib/security/clipboard';
 import { HmrSchema } from '@reachinternational/validation';
 import {
   computeShiftTiming,
+  computeBreakdownDuration,
   findLatestMachineLogTimeline,
   formatTo12Hour,
   formatDate,
@@ -54,7 +55,14 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   const [location, setLocation] = useState('');
   const [remarks, setRemarks] = useState('');
   const [isBreakdown, setIsBreakdown] = useState(false);
-  const [breakdownDuration, setBreakdownDuration] = useState('1h 30m');
+  const [breakdownStartTime, setBreakdownStartTime] = useState('02:30 PM');
+  const [breakdownEndTime, setBreakdownEndTime] = useState('03:25 PM');
+
+  // Real-time computed breakdown duration
+  const breakdownStats = React.useMemo(() => {
+    if (!isBreakdown) return null;
+    return computeBreakdownDuration(breakdownStartTime, breakdownEndTime);
+  }, [isBreakdown, breakdownStartTime, breakdownEndTime]);
 
   // 7-day past dates list (Today + past 7 days)
   const pastDates = React.useMemo(() => {
@@ -92,6 +100,13 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
+  // Interval ticker for real-time validation against current clock
+  const [currentTick, setCurrentTick] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTick(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Shift duration, normal working time and overtime calculation via canonical helper
   const shiftStats = React.useMemo(() => {
     const ot = parseFloat(overtimeHours);
@@ -100,8 +115,10 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       startTime,
       endTime,
       manualOvertime: isNaN(ot) ? undefined : ot,
+      disallowFutureEnd: true,
+      currentTimestamp: currentTick,
     });
-  }, [logDate, startTime, endTime, overtimeHours]);
+  }, [logDate, startTime, endTime, overtimeHours, currentTick]);
 
   // Real-time sequencing check against machine timeline
   const sequencingError = React.useMemo(() => {
@@ -113,7 +130,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     if (currentStartMs < prevEndMs) {
       return {
         isInvalid: true,
-        message: `Start time (${formatTo12Hour(startTime)}) cannot precede previous log end time (${latestTimeline.formattedEndDate}, ${latestTimeline.formattedEndTime}).`,
+        message: `Start (${formatTo12Hour(startTime)}) cannot precede prev shift end (${latestTimeline.formattedEndDate}, ${latestTimeline.formattedEndTime}).`,
         recommendedTime: latestTimeline.formattedEndTime,
         recommendedDate: latestTimeline.latestLog?.end_date || latestTimeline.latestLog?.log_date || logDate,
       };
@@ -222,13 +239,18 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       return;
     }
 
-    if (!shiftStats.isValid) {
-      setError(shiftStats.errorMessage || 'End Date + Time must always be later than Start Date + Time.');
+    if (shiftStats.isFutureEnd || !shiftStats.isValid) {
+      setError(shiftStats.errorMessage || 'Cannot log before shift end.');
       return;
     }
 
     if (sequencingError?.isInvalid) {
       setError(sequencingError.message);
+      return;
+    }
+
+    if (isBreakdown && !breakdownStats?.isValid) {
+      setError(breakdownStats?.errorMessage || 'Please enter valid breakdown start and end times.');
       return;
     }
 
@@ -239,9 +261,20 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData?.user?.id;
 
+      let bkdDurationFormatted = '';
+      let bkdStart = '';
+      let bkdEnd = '';
+      let bkdDecimalHours = 0;
+      if (isBreakdown && breakdownStats?.isValid) {
+        bkdDurationFormatted = breakdownStats.fullBreakdownString;
+        bkdStart = breakdownStartTime.trim();
+        bkdEnd = breakdownEndTime.trim();
+        bkdDecimalHours = breakdownStats.durationDecimalHours;
+      }
+
       let remarksPayload = remarks.trim();
-      if (isBreakdown && breakdownDuration.trim()) {
-        remarksPayload = `[Breakdown Duration: ${breakdownDuration.trim()}] ${remarksPayload}`.trim();
+      if (isBreakdown && bkdDurationFormatted) {
+        remarksPayload = `[Breakdown Duration: ${bkdDurationFormatted}] ${remarksPayload}`.trim();
       }
 
       const idempotencyKey = `ihl_m_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -258,6 +291,12 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         overtime_hours: shiftStats.overtimeHours,
         normal_working_hours: shiftStats.normalWorkingHours,
         is_breakdown: isBreakdown,
+        breakdown_start_time: bkdStart || null,
+        breakdown_end_time: bkdEnd || null,
+        breakdown_duration: bkdDurationFormatted || null,
+        breakdown_hours: bkdDecimalHours,
+        shift: null,
+        machine_condition: isBreakdown ? 'breakdown' : 'good',
         remarks: remarksPayload || null,
         operator_id: userId || null,
         idempotency_key: idempotencyKey,
@@ -273,14 +312,19 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
 
       if (insertErr) throw insertErr;
 
-      // Update machine hour_meter
+      // Update machine hour_meter, operator & health status
       if (machineId && endVal > 0) {
+        const mUpdate: Record<string, any> = {
+          hour_meter: endVal,
+          health_status: isBreakdown ? 'breakdown' : 'active',
+          updated_at: new Date().toISOString(),
+        };
+        if (userId) {
+          mUpdate.current_operator_id = userId;
+        }
         await supabase
           .from('machines')
-          .update({
-            hour_meter: endVal,
-            health_status: isBreakdown ? 'breakdown' : 'active',
-          })
+          .update(mUpdate)
           .eq('id', machineId);
       }
 
@@ -290,7 +334,21 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         onClose();
       }, 1000);
     } catch (err: any) {
-      setError(err?.message || 'Failed to submit meter log.');
+      let errMsg = err?.message || 'Failed to submit meter log.';
+      if (errMsg.includes('violates check constraint') || errMsg.includes('23514')) {
+        if (errMsg.includes('machines_status_check')) {
+          errMsg = "Invalid machine status value. Machine rental status must be 'available' or 'rented'.";
+        } else if (errMsg.includes('chk_machine_hour_logs_meter_range') || errMsg.includes('cannot be less than start meter')) {
+          errMsg = "Ending hour meter reading cannot be less than starting hour meter reading.";
+        } else {
+          errMsg = "Database validation failed. Please verify meter readings and timings.";
+        }
+      } else if (errMsg.includes('Shift end timestamp') || errMsg.includes('must be strictly after start timestamp')) {
+        errMsg = "Shift end time must be strictly after the start time.";
+      } else if (errMsg.includes('overlap') || errMsg.includes('overlapping')) {
+        errMsg = "Shift time overlaps with an existing log for this machine.";
+      }
+      setError(errMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -483,6 +541,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                     required
                     value={endTime}
                     onChangeText={setEndTime}
+                    error={shiftStats.isFutureEnd ? 'Cannot log before shift end.' : undefined}
                   />
                 </View>
               </View>
@@ -508,7 +567,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                     }}
                   >
                     <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>
-                      Align Start to {sequencingError.recommendedTime} (Handover)
+                      Align to {sequencingError.recommendedTime}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -548,12 +607,47 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
             </View>
 
             {isBreakdown && (
-              <Input
-                label="Breakdown Duration (e.g. 1h 30m) *"
-                placeholder="1h 30m"
-                value={breakdownDuration}
-                onChangeText={setBreakdownDuration}
-              />
+              <View style={{ gap: 10, marginVertical: 4 }}>
+                <View style={styles.rowInputs}>
+                  <View style={{ flex: 1 }}>
+                    <TimeInput
+                      label="Breakdown Start *"
+                      required
+                      value={breakdownStartTime}
+                      onChangeText={setBreakdownStartTime}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <TimeInput
+                      label="Breakdown End *"
+                      required
+                      value={breakdownEndTime}
+                      onChangeText={setBreakdownEndTime}
+                    />
+                  </View>
+                </View>
+
+                {breakdownStats && (
+                  <View style={[styles.alertBox, {
+                    backgroundColor: breakdownStats.isValid ? theme.colors.error + '14' : theme.colors.warning + '14',
+                    borderColor: breakdownStats.isValid ? theme.colors.error : theme.colors.warning,
+                    padding: 8,
+                    borderRadius: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }]}>
+                    <Text style={{ color: breakdownStats.isValid ? theme.colors.error : theme.colors.warning, fontSize: 11, fontWeight: '700' }}>
+                      {breakdownStats.isValid ? `Duration: ${breakdownStats.durationFormatted}` : breakdownStats.errorMessage}
+                    </Text>
+                    {breakdownStats.isValid && (
+                      <Text style={{ color: breakdownStats.isValid ? theme.colors.error : theme.colors.warning, fontSize: 10, fontFamily: 'monospace' }}>
+                        {breakdownStats.fullBreakdownString}
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </View>
             )}
 
             <Input

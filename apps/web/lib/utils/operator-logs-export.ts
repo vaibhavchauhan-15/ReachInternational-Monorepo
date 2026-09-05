@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
 import type { User, Machine } from "@/lib/types/database";
 import type { OperatorHourLog } from "@/components/dashboard/OperatorDashboard";
-import { formatDate, formatTo12Hour } from "@reachinternational/utils";
+import { formatDate, formatExactTimestamp, formatTo12Hour, parseBreakdownString } from "@reachinternational/utils";
 
 // Time string parser (e.g. "08:00 AM", "05:30 PM", "17:00") -> total minutes from midnight
 function parseTimeToMinutes(timeStr?: string): number | null {
@@ -181,21 +181,18 @@ export function exportOperatorLogsToExcel(
   // Table Headers
   const tableHeaders = [
     "S.No",
-    "Log Date",
-    "Machine Name",
-    "Machine Code",
+    "Shift Date",
+    "Entry Timestamp",
+    "Serial No",
     "Model",
     "Start Meter (hrs)",
     "End Meter (hrs)",
     "Meter Run (hrs)",
-    "Start Time",
-    "End Time",
-    "Shift Duration",
-    "Normal Working Time (excl. OT & 1h break)",
-    "Overtime Hours",
-    "Breakdown",
-    "Breakdown Duration",
-    "Breakdown Reason / Action",
+    "Shift Timings",
+    "Normal Working Time (hrs)",
+    "Overtime (hrs)",
+    "Breakdown Timing (Start - End)",
+    "Breakdown Total Time",
     "Remarks / Notes",
   ];
 
@@ -225,32 +222,32 @@ export function exportOperatorLogsToExcel(
     totalNormalHours += normalHrs;
     totalOtHours += otHrs;
 
-    const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*([^\]]+)\]/i) || (log.remarks || "").match(/Breakdown\s*(?:Duration)?:?\s*(\d+h?\s*\d*m?)/i);
-    const bkdDetails = bkdMatch ? bkdMatch[1].trim() : isBkd ? "Breakdown" : null;
+    const mSerial = log.machine?.serial_number || (assignedMachine as any)?.serial_number || log.machine?.machine_code || assignedMachine?.machine_code || "—";
+    const mModel = log.machine?.model || assignedMachine?.model || "Standard";
+
+    const bkdParsed = parseBreakdownString((log as any).breakdown_duration || log.remarks);
+    const bkdStartTime = (log as any).breakdown_start_time || bkdParsed?.startTime || null;
+    const bkdEndTime = (log as any).breakdown_end_time || bkdParsed?.endTime || null;
+    const bkdTimingStr = isBkd && bkdStartTime && bkdEndTime ? `${bkdStartTime} - ${bkdEndTime}` : isBkd ? "Breakdown" : "—";
+    const bkdDurationOnly = bkdParsed?.durationFormatted || bkdParsed?.durationText || (log as any).breakdown_duration || "Breakdown";
+    const displayBkdText = isBkd ? bkdDurationOnly : "0";
+
     const cleanRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim() || "—";
-    let bkdDurationOnly = bkdDetails;
-    if (bkdDurationOnly) {
-      bkdDurationOnly = bkdDurationOnly.replace(/^Breakdown\s*\((.*)\)$/i, "$1").replace(/^Machine Breakdown\s*\((.*)\)$/i, "$1").replace(/^Breakdown\s*/i, "").replace(/\s*duration$/i, "").trim();
-    }
-    const displayBkdText = isBkd ? (bkdDurationOnly && bkdDurationOnly.toLowerCase() !== "breakdown" ? bkdDurationOnly : "Breakdown") : "0";
 
     return [
       index + 1,
       formatDate(log.log_date),
-      log.machine?.machine_name || assignedMachine?.machine_name || "Machine",
-      log.machine?.machine_code || assignedMachine?.machine_code || "—",
-      log.machine?.model || assignedMachine?.model || "—",
+      log.created_at ? formatExactTimestamp(log.created_at, true) : "—",
+      mSerial,
+      mModel,
       startMtr,
       endMtr,
       `${meterRun} hrs`,
-      log.start_time || "06:00 AM",
-      log.end_time || "02:00 PM",
-      `${opHrs} hrs`,
+      `${formatTo12Hour(log.start_time) || "06:00 AM"} - ${formatTo12Hour(log.end_time) || "02:00 PM"}`,
       `${normalHrs} hrs`,
       `${otHrs} hrs`,
+      bkdTimingStr,
       displayBkdText,
-      isBkd ? (bkdDetails || "Breakdown") : "—",
-      isBkd ? (bkdDetails || "Breakdown") : "—",
       cleanRemarks,
     ];
   });
@@ -265,13 +262,10 @@ export function exportOperatorLogsToExcel(
     "",
     "",
     `Meter Run: ${Math.round(totalMeterRun * 10) / 10} hrs`,
-    "",
-    "",
     `Total Shift: ${Math.round(totalOpHours * 10) / 10} hrs`,
     `Total Normal: ${Math.round(totalNormalHours * 10) / 10} hrs`,
     `Total OT: ${Math.round(totalOtHours * 10) / 10} hrs`,
     `Breakdowns: ${totalBreakdowns}`,
-    "",
     "",
     "",
   ];
@@ -292,21 +286,19 @@ export function exportOperatorLogsToExcel(
   // Define column widths for optimal viewing
   worksheet["!cols"] = [
     { wch: 8 },  // S.No
-    { wch: 15 }, // Log Date
-    { wch: 32 }, // Machine Name
-    { wch: 18 }, // Machine Code
-    { wch: 18 }, // Model
-    { wch: 18 }, // Start Meter (hrs)
-    { wch: 18 }, // End Meter (hrs)
-    { wch: 18 }, // Meter Run (hrs)
-    { wch: 14 }, // Start Time
-    { wch: 14 }, // End Time
-    { wch: 18 }, // Operating Hours
-    { wch: 16 }, // Overtime Hours
-    { wch: 16 }, // Machine Status
-    { wch: 22 }, // Breakdown Duration
-    { wch: 35 }, // Breakdown Reason
-    { wch: 40 }, // Remarks
+    { wch: 14 }, // Shift Date
+    { wch: 24 }, // Entry Timestamp
+    { wch: 18 }, // Serial No
+    { wch: 16 }, // Model
+    { wch: 16 }, // Start Meter (hrs)
+    { wch: 16 }, // End Meter (hrs)
+    { wch: 16 }, // Meter Run (hrs)
+    { wch: 22 }, // Shift Timings
+    { wch: 22 }, // Normal Working Time
+    { wch: 15 }, // Overtime Hours
+    { wch: 26 }, // Breakdown Timing (Start - End)
+    { wch: 22 }, // Breakdown Total Time
+    { wch: 35 }, // Remarks / Notes
   ];
 
   const workbook = XLSX.utils.book_new();

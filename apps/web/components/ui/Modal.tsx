@@ -23,6 +23,9 @@ export interface ModalProps {
   size?: "sm" | "md" | "lg" | "xl";
   from?: DialogFrom;
   className?: string;
+  headerClassName?: string;
+  bodyClassName?: string;
+  footerClassName?: string;
 }
 
 const sizeClasses = {
@@ -43,6 +46,9 @@ export function Modal({
   size = "md",
   from = "center",
   className,
+  headerClassName,
+  bodyClassName,
+  footerClassName,
 }: ModalProps) {
   return (
     <Dialog open={open} onOpenChange={(val) => { if (!val) onClose(); }}>
@@ -52,7 +58,7 @@ export function Modal({
         className={cn(sizeClasses[size], className)}
       >
         {(title || description || headerActions) && (
-          <DialogHeader className="pr-12">
+          <DialogHeader className={cn("pr-12", headerClassName)}>
             <div className="flex items-center justify-between gap-4 w-full">
               <div className="flex flex-col space-y-1.5 min-w-0 flex-1">
                 {title && <DialogTitle>{title}</DialogTitle>}
@@ -66,8 +72,8 @@ export function Modal({
             </div>
           </DialogHeader>
         )}
-        <div className="flex-1 overflow-y-auto p-6">{children}</div>
-        {footer && <DialogFooter>{footer}</DialogFooter>}
+        <div className={cn("flex-1 overflow-y-auto p-4 sm:p-5", bodyClassName)}>{children}</div>
+        {footer && <DialogFooter className={footerClassName}>{footer}</DialogFooter>}
       </DialogContent>
     </Dialog>
   );
