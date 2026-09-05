@@ -15,12 +15,13 @@ export const SIDEBAR_KEYBOARD_SHORTCUT = "b";
 
 interface SidebarContextValue {
   collapsed: boolean;
-  setCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
+  setCollapsed: (value: boolean | ((prev: boolean) => boolean)) => void;
   toggleCollapse: () => void;
   mobileOpen: boolean;
   setMobileOpen: React.Dispatch<React.SetStateAction<boolean>>;
   toggleMobile: () => void;
   isMobile: boolean;
+  isInteractive: boolean;
 }
 
 const SidebarContext = React.createContext<SidebarContextValue | null>(null);
@@ -38,6 +39,7 @@ export interface SidebarProviderProps {
   defaultCollapsed?: boolean;
   collapsed?: boolean;
   onCollapsedChange?: (collapsed: boolean) => void;
+  isInteractive?: boolean;
 }
 
 export function SidebarProvider({
@@ -45,13 +47,24 @@ export function SidebarProvider({
   defaultCollapsed = false,
   collapsed: controlledCollapsed,
   onCollapsedChange,
+  isInteractive: controlledIsInteractive,
 }: SidebarProviderProps) {
   const [internalCollapsed, setInternalCollapsed] = React.useState(defaultCollapsed);
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [isMobile, setIsMobile] = React.useState(false);
+  const [internalIsInteractive, setInternalIsInteractive] = React.useState(false);
 
   const isControlled = controlledCollapsed !== undefined;
   const collapsed = isControlled ? controlledCollapsed : internalCollapsed;
+  const isInteractive = controlledIsInteractive !== undefined ? controlledIsInteractive : internalIsInteractive;
+
+  React.useEffect(() => {
+    // Enable animations only after mount so initial SSR/refresh renders stiffly without animation
+    const timer = requestAnimationFrame(() => {
+      setInternalIsInteractive(true);
+    });
+    return () => cancelAnimationFrame(timer);
+  }, []);
 
   const setCollapsed = React.useCallback(
     (value: boolean | ((prev: boolean) => boolean)) => {
@@ -101,34 +114,42 @@ export function SidebarProvider({
       setMobileOpen,
       toggleMobile,
       isMobile,
+      isInteractive,
     }),
-    [collapsed, setCollapsed, toggleCollapse, mobileOpen, setMobileOpen, toggleMobile, isMobile]
+    [collapsed, setCollapsed, toggleCollapse, mobileOpen, setMobileOpen, toggleMobile, isMobile, isInteractive]
   );
 
   return <SidebarContext.Provider value={value}>{children}</SidebarContext.Provider>;
 }
 
-export type SidebarProps = React.ComponentPropsWithoutRef<typeof motion.aside>;
+export interface SidebarProps extends React.HTMLAttributes<HTMLElement> {
+  children: React.ReactNode;
+}
 
-export function Sidebar({ className, children, ...props }: SidebarProps) {
-  const { collapsed } = useSidebar();
+export function Sidebar({ className, style, children, ...props }: SidebarProps) {
+  const { collapsed, isInteractive } = useSidebar();
 
   return (
-    <motion.aside
-      initial={false}
-      animate={{ width: collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED }}
-      transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
+    <aside
+      data-sidebar="desktop"
+      data-collapsed={collapsed}
+      style={{
+        width: collapsed ? `${SIDEBAR_WIDTH_COLLAPSED}px` : `${SIDEBAR_WIDTH_EXPANDED}px`,
+        ...style,
+      }}
       className={cn(
-        "fixed top-0 left-0 bottom-0 z-40 hidden md:flex flex-col bg-[var(--color-canvas-elevated)] border-r border-[var(--color-hairline)] select-none overflow-hidden",
+        "fixed top-0 left-0 bottom-0 z-40 hidden md:flex flex-col bg-[var(--color-canvas-elevated)] border-r border-[var(--color-hairline)] select-none overflow-hidden will-change-[width]",
+        isInteractive
+          ? "transition-[width] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
+          : "transition-none",
         className
       )}
       {...props}
     >
       {children}
-    </motion.aside>
+    </aside>
   );
 }
-
 
 export function SidebarHeader({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
@@ -236,7 +257,7 @@ export const SidebarMenuButton = React.forwardRef<HTMLButtonElement, SidebarMenu
         ref={ref}
         type="button"
         className={cn(
-          "relative flex items-center gap-3 rounded-xl transition-all duration-150 cursor-pointer select-none font-semibold text-xs",
+          "relative flex items-center gap-3 rounded-xl transition-colors duration-150 cursor-pointer select-none font-semibold text-xs",
           collapsed ? "justify-center h-11 w-11 mx-auto p-0" : "w-full px-3.5 py-2.5",
           active
             ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold border border-sky-500/20 shadow-2xs"
@@ -382,7 +403,6 @@ export function CollapsibleTrigger({
     </button>
   );
 }
-
 
 export function CollapsibleContent({
   children,

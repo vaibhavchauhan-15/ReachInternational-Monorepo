@@ -34,6 +34,21 @@ export function ThemeScript() {
       root.classList.remove('dark');
       root.style.colorScheme = 'light';
     }
+
+    var sbKey = 'reachinternational_sidebar_collapsed';
+    var sbStored = localStorage.getItem(sbKey);
+    var cookieMatch = document.cookie.match(/(?:^|;\\s*)reachinternational_sidebar_collapsed=(true|false)/);
+    var isCollapsed = sbStored !== null ? sbStored === 'true' : (cookieMatch ? cookieMatch[1] === 'true' : false);
+
+    if (isCollapsed) {
+      root.classList.add('sidebar-collapsed');
+      root.style.setProperty('--sidebar-width', '72px');
+    } else {
+      root.classList.remove('sidebar-collapsed');
+      root.style.setProperty('--sidebar-width', '280px');
+    }
+
+    document.cookie = sbKey + '=' + isCollapsed + '; path=/; max-age=31536000; SameSite=Lax';
   } catch (e) {}
 })();
 `;

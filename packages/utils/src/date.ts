@@ -501,7 +501,7 @@ export function computeShiftTiming(params: {
       normalWorkingHours: 0,
       breakHours: 1.0,
       isValid: false,
-      errorMessage: 'End Date + Time must be later than Start Date + Time.',
+      errorMessage: 'End time must be after start time.',
     };
   }
 
@@ -531,7 +531,7 @@ export function computeShiftTiming(params: {
       normalWorkingHours,
       breakHours,
       isValid: false,
-      errorMessage: 'Shift duration cannot exceed 24 hours.',
+      errorMessage: 'Shift cannot exceed 24 hours.',
     };
   }
 

@@ -1,10 +1,127 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: **Production Ready — Shift End Time Validation & Future Logging Prevention (Web, Mobile, Server Actions, DB)**
+- **Phase**: **Production Ready — Sidebar Collapse State Persistence & Page Refresh Optimization**
 - **Release Candidate**: `v2026.09.05` (Branch: `main`)
 - **Overall Health**: Production Ready (0 TypeScript Errors across 9 packages, 35/35 Routes Compiled, 0 Runtime Errors, 0 Warnings, 0 P0/P1/P2 Issues)
 - **Last Memory Update**: 2026-09-05
+- [x] **Page Feedback: /operations?tab=entry — Complete Web Sidebar Architecture Rewrite & Zero-Jitter Refresh Persistence (`ThemeScript.tsx`, `layout.tsx`, `sidebar.tsx`, `AppShellClient.tsx`) (2026-09-05)**:
+  - **1. Pre-Boot DOM & Cookie Synchronization (`apps/web/components/theme/ThemeScript.tsx`)**:
+    - Synchronously evaluates `reachinternational_sidebar_collapsed` in `localStorage` and fallback `document.cookie` before `<body>` renders.
+    - If collapsed (`true`): immediately adds class `sidebar-collapsed` and sets `--sidebar-width: 72px` on `document.documentElement`.
+    - If expanded (`false`): removes `sidebar-collapsed` and sets `--sidebar-width: 280px`.
+    - Synchronously maintains `document.cookie` (`path=/; max-age=31536000; SameSite=Lax`).
+    - Guarantees the browser receives and parses the exact sidebar width on Frame 0 before any React code executes, preventing any visual flash or FOUC.
+  - **2. Dynamic SSR Cookie Hydration (`apps/web/app/(app)/layout.tsx`)**:
+    - Added `export const dynamic = "force-dynamic";` and `export const revalidate = 0;`.
+    - Ensures Next.js App Router always evaluates authenticated app layouts dynamically and never serves a stale cached layout chunk with outdated cookie state.
+    - Reads `reachinternational_sidebar_collapsed` cookie safely via `await cookies()` and passes `defaultCollapsed={sidebarCookie === "true"}` to `<AppShellClient>`.
+  - **3. Re-architected Core Sidebar UI Primitives (`apps/web/components/ui/sidebar.tsx`)**:
+    - **Eliminated Framer Motion Width Tweening**: Replaced `<motion.aside animate={{ width: ... }}>` with a pure `<aside>` element. Eliminated Framer Motion hydration width tweening that caused the expand-then-close glitch.
+    - **GPU-Accelerated CSS Transitions**: Applied `transition-[width] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]` guarded by `isInteractive`.
+    - **Zero-Duration Initial Mount**: Transitions are strictly disabled (`transition-none`) on initial mount and page refresh, rendering stiffly with 0ms animation. Once interactive, user-initiated clicks glide smoothly at 200ms.
+    - Sized explicitly via `style={{ width: collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED }}`.
+    - Preserved 100% of the visual styling, Geist tokens, and keyboard shortcut (`Ctrl+B` / `Cmd+B`).
+  - **4. Cohesive State Management in App Shell (`apps/web/components/layout/AppShellClient.tsx`)**:
+    - Initialized `collapsed` state strictly with `defaultCollapsed` from SSR.
+    - Added `isInteractive` guard: `md:pl-[var(--sidebar-width)]` on the main workspace wrapper uses `isInteractive ? "transition-[padding] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]" : "transition-none"`, preventing horizontal content sliding on page load.
+    - Implemented atomic `saveSidebarState(next: boolean)` updating `localStorage`, `document.cookie`, `document.documentElement.classList`, and CSS variable `--sidebar-width`.
+  - **5. Monorepo Quality Gate Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: Passed with **0 errors**.
+    - `pnpm -r exec tsc --noEmit`: Passed across all **9 workspace packages with 0 errors**.
+    - `pnpm --filter @reachinternational/web build`: Passed with all **35/35 routes compiled cleanly (code 0)**.
+- [x] **Page Feedback: /operations?tab=entry — Blue Inner Toggle Background with White Text & Grey/Off-Black Inactive Period Display (`CustomTimePicker.tsx`, `TimeInput.tsx`) (2026-09-05)**:
+  - **1. Vibrant Blue Active Inner Pill (`apps/web/components/ui/CustomTimePicker.tsx`)**:
+    - Replaced the white active sliding pill (`bg-white dark:bg-neutral-800`) with a vibrant primary blue pill (`bg-sky-600 dark:bg-sky-500 shadow-2xs`) in `<motion.div layoutId="ampm-active-..." />`.
+    - Switched active button typography from blue text to crisp, high-contrast white text (`text-white font-extrabold`).
+    - Styled inactive button typography in clean grey / off-black (`text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-bold`).
+    - Applied consistently across both horizontal and vertical toggle orientations.
+  - **2. Cross-Platform Mobile App Synchronization (`apps/mobile/components/ui/TimeInput.tsx`)**:
+    - Synchronized React Native `TimeInput.tsx`: active button uses `backgroundColor: theme.colors.link` with text `color: '#ffffff'` and `fontWeight: '800'`.
+    - Inactive button uses `color: theme.colors.mute` and `backgroundColor: 'transparent'`.
+  - **3. Monorepo Quality Gate Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: Passed with **0 errors**.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: Passed with **0 errors**.
+- [x] **Page Feedback: /operations?tab=entry — Eliminate Duplicate Shift Timing Errors, Header Total Shift Time Display & Cross-Platform Error Box Optimization (`OperatorDashboard.tsx`, `CustomTimePicker.tsx`, `TimeInput.tsx`, `MeterLogModal.tsx`, `packages/utils/src/date.ts`) (2026-09-05)**:
+  - **1. Shift Timing Header Total Duration Display (`apps/web/components/dashboard/OperatorDashboard.tsx`)**:
+    - Removed `operatingStats.errorMessage` from the top-right of the Shift Timing section header.
+    - When `operatingStats.durationMinutes > 0`, displays the total calculated shift time:
+      - Overnight: `<span className="text-[10px] sm:text-[11px] font-bold text-indigo-600 dark:text-indigo-400 font-mono inline-flex items-center gap-1">🌙 Overnight · {operatingStats.durationFormatted}</span>`
+      - Regular: `<span className="text-[10px] sm:text-[11px] font-bold text-sky-600 dark:text-sky-400 font-mono inline-flex items-center gap-1">{operatingStats.durationFormatted}</span>`
+    - When no times or invalid duration (≤ 0), renders nothing (`null`), leaving the header clean and uncluttered.
+    - Synchronized identical header duration in the Log Correction Modal (`editOperatingStats`).
+  - **2. CustomTimePicker Error Redundancy Removal (`apps/web/components/ui/CustomTimePicker.tsx`, `apps/web/components/dashboard/OperatorDashboard.tsx`)**:
+    - Extended `CustomTimePickerProps` with `isInvalid?: boolean` and `hideErrorMessage?: boolean`.
+    - In `CustomTimePicker.tsx`, updated container border class to highlight with `border-rose-500` when `isInvalid` is true, without requiring an error message string that renders duplicate inline text.
+    - In Section B End Time picker, replaced `error={operatingStats.isFutureEnd ? ... : undefined}` with `isInvalid={operatingStats.isFutureEnd}`.
+    - In Edit Modal End Time picker, replaced `error={editOperatingStats.isFutureEnd ? ... : undefined}` with `isInvalid={editOperatingStats.isFutureEnd}`.
+  - **3. Bottom Error Box Optimization (`apps/web/components/dashboard/OperatorDashboard.tsx`, `packages/utils/src/date.ts`)**:
+    - Retained the bottom error box as the ONLY location displaying shift timing errors.
+    - Optimized padding and spacing for mobile (≤640px) and desktop (≥1024px): `px-2.5 py-1.5 sm:px-3 sm:py-2`, `rounded-lg sm:rounded-xl`, `bg-rose-500/[0.08] dark:bg-rose-950/25 border border-rose-500/25 dark:border-rose-500/30`.
+    - Scaled typography and icon: `text-[11px] sm:text-xs font-semibold text-rose-600 dark:text-rose-400 leading-snug` with `<AnimatedAlertTriangle size={14} className="shrink-0 text-rose-500" />`.
+    - Streamlined shift timing error messages in `packages/utils/src/date.ts`:
+      - `diffMs <= 0`: `"End time must be after start time."` (shortened from `"End Date + Time must be later than Start Date + Time."`)
+      - `diffMinutes > 24 * 60`: `"Shift cannot exceed 24 hours."` (shortened from `"Shift duration cannot exceed 24 hours."`)
+      - Future shift end: `"Cannot log before shift end."` (short, direct, on point).
+  - **4. Cross-Platform Mobile App Synchronization (`apps/mobile/components/ui/TimeInput.tsx`, `MeterLogModal.tsx`)**:
+    - Extended React Native `TimeInputProps` with `isInvalid?: boolean` and `hideErrorMessage?: boolean`.
+    - Highlighted container border in `theme.colors.error` when `isInvalid` is true.
+    - In `MeterLogModal.tsx`:
+      - Shift Timing header displays total duration (`{shiftStats.durationFormatted}`) in monospace badge when `shiftStats.durationMinutes > 0`.
+      - Replaced `error={...}` with `isInvalid={shiftStats.isFutureEnd}` on End Time `<TimeInput>`.
+      - Optimized bottom alert box with compact padding (`paddingHorizontal: 12, paddingVertical: 8`), icon, and concise error text.
+  - **5. Monorepo Quality Gate Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: Passed with **0 errors**.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: Passed with **0 errors**.
+    - `pnpm -r exec tsc --noEmit`: Passed across all **9 workspace packages with 0 errors**.
+    - Automated tests: `test_future_shift_validation.mjs` (9/9 passed, 100%), `test_breakdown_submission_and_linking.mjs` (all passed, 100%).
+- [x] **Page Feedback: /operations?tab=entry — Breakdown Timing Label Removal & Clean Top-Right Duration (`OperatorDashboard.tsx`, `MeterLogModal.tsx`) (2026-09-05)**:
+  - **1. Removed Redundant "Breakdown Timing" Label (`apps/web/components/dashboard/OperatorDashboard.tsx`)**:
+    - Removed the redundant `<span className="text-[11px] font-bold ...">Breakdown Timing</span>` text and icon from the top header of the breakdown container.
+    - Retained strictly the total calculated time only (`{breakdownStats.durationFormatted}`, e.g., `3h:55min`) positioned cleanly on the top right (`flex justify-end`) in bold font-mono (`text-[11px] sm:text-xs font-mono font-bold text-rose-600 dark:text-rose-400`).
+    - Synchronized identical label removal in the Log Correction Modal (`editBreakdownStats`).
+  - **2. Mobile App Cross-Platform Parity (`apps/mobile/components/work/MeterLogModal.tsx`)**:
+    - Removed the uppercase `Breakdown Timing` label in `MeterLogModal.tsx` and retained only the right-aligned duration (`{breakdownStats.durationFormatted}`).
+  - **3. Monorepo Quality Gate Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: Passed with **0 errors**.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: Passed with **0 errors**.
+    - `pnpm -r exec tsc --noEmit`: Passed across all **9 workspace packages with 0 errors**.
+- [x] **Page Feedback: /operations?tab=entry — TimePicker AM/PM Segmented Toggle Height, Width & Rounded-Full Edges Polish with Unified Padding (`CustomTimePicker.tsx`, `TimeInput.tsx`, `OperatorDashboard.tsx`) (2026-09-05)**:
+  - **1. AM/PM Toggle Height, Width & Rounded-Full Edges (`apps/web/components/ui/CustomTimePicker.tsx`)**:
+    - Upgraded toggle container `div [Select AM or PM period]` to `h-7 sm:h-8` matching time digit inputs with `rounded-full` capsule curves and `border border-neutral-200/80 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900`.
+    - Sized `button "AM"` and `button "PM"` with `h-full`, `min-w-[28px] xs:min-w-[32px] sm:min-w-[36px]`, `px-2 sm:px-2.5`, `rounded-full`, and centered text.
+    - Enhanced typographic weight: inactive buttons use `font-bold text-neutral-500 hover:text-neutral-800 dark:hover:text-white`, and active buttons use `font-extrabold text-sky-600 dark:text-sky-400`.
+    - Updated active animated indicator (`motion.div layoutId="ampm-active-..."`) to `rounded-full`.
+  - **2. Unified Input Shell Padding Across Start Time & End Time (`apps/web/components/ui/CustomTimePicker.tsx`, `apps/web/components/dashboard/OperatorDashboard.tsx`)**:
+    - Refined `<CustomTimePicker>` shell padding from `px-2 xs:px-2.5 sm:px-3` to `px-2.5 sm:px-3.5`, creating harmonious horizontal padding identical to `CustomDatePicker` (Log Date: `px-3 sm:px-3.5`) and the Overtime input (`px-2.5 sm:px-3.5`).
+    - Synchronized Section C breakdown timing grid and Log Correction Modal timing grids to `gap-2 sm:gap-3.5 items-start`.
+  - **3. Cross-Platform Mobile App Synchronization (`apps/mobile/components/ui/TimeInput.tsx`)**:
+    - Synchronized React Native `TimeInput.tsx`: updated `periodContainer` to `height: 34`, `borderRadius: 17` (`rounded-full`), `padding: 2`.
+    - Sized `periodBtn` to `height: '100%'`, `minWidth: 32`, `paddingHorizontal: 8`, `borderRadius: 15` (`rounded-full`).
+    - Elevated inactive button text weight to `fontWeight: '700'` and active to `'800'`.
+    - Aligned `unifiedShell` padding to `paddingHorizontal: 12` to match web `px-3.5`.
+  - **4. Monorepo Quality Gate Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: Passed with **0 errors**.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: Passed with **0 errors**.
+    - `pnpm -r exec tsc --noEmit`: Passed across all **9 workspace packages with 0 errors**.
+- [x] **Page Feedback: /operations?tab=entry — Breakdown Duration Top-Right Header Relocation & Error-Only Display (`OperatorDashboard.tsx`, `MeterLogModal.tsx`) (2026-09-05)**:
+  - **1. Breakdown Duration Top-Right Card Header Placement (`apps/web/components/dashboard/OperatorDashboard.tsx`)**:
+    - Removed bulky duration banner (`.p-2 sm:p-2.5 rounded-lg border flex ...`) from below the breakdown time pickers that previously pushed down Section D Remarks, Save Draft, and Submit actions.
+    - Integrated clean card header inside the breakdown container: left side displays uppercase tracking label `<AnimatedAlertTriangle size={13} /> Breakdown Timing`, right side displays total calculated time only (`{breakdownStats.durationFormatted}`, e.g. `3h:55min`, `25min`) in bold monospace text (`text-[11px] sm:text-xs font-mono font-bold text-rose-600 dark:text-rose-400`).
+    - Fixed header row layout prevents vertical layout shifts or pushing down of below form components when duration recalculates.
+  - **2. Error-Only Display Below Time Pickers (`apps/web/components/dashboard/OperatorDashboard.tsx`)**:
+    - Area below time pickers renders nothing when valid (`breakdownStats.isValid`).
+    - Only renders an alert banner when an error occurs (`breakdownStats && !breakdownStats.isValid`) showing `{breakdownStats.errorMessage || "Please verify breakdown start and end times."}`.
+    - Synchronized identical top-right duration and error-only display in the Log Correction Modal (`editBreakdownStats`).
+  - **3. Cross-Platform Mobile App Synchronization (`apps/mobile/components/work/MeterLogModal.tsx`)**:
+    - Replaced the bottom duration alert box in `MeterLogModal.tsx` with a clean card container header: left side displays `BREAKDOWN TIMING` in uppercase, right side displays total duration only (`{breakdownStats.durationFormatted}`).
+    - Positioned breakdown start and end `<TimeInput>` pickers in a side-by-side row.
+    - Configured area below time inputs to display only when `breakdownStats && !breakdownStats.isValid`, leaving space clean when valid and preventing modal scrolling.
+  - **4. Monorepo Quality Gate Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: Passed with **0 errors**.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: Passed with **0 errors**.
+    - `pnpm -r exec tsc --noEmit`: Passed across all **9 workspace packages with 0 errors**.
+    - Automated regression suites passed: `test_breakdown_submission_and_linking.mjs` (100%), `test_future_shift_validation.mjs` (9/9 passed).
 - [x] **Page Feedback: /operations?tab=entry — Unified TimePicker Redesign, Polished Horizontal AM/PM Segmented Toggle & Mobile/Desktop UX Standards (`CustomTimePicker.tsx`, `TimeInput.tsx`) (2026-09-05)**:
   - **1. Unified Input Container Architecture (`apps/web/components/ui/CustomTimePicker.tsx`)**:
     - Replaced fragmented 3-box design with a single cohesive container shell (`min-h-[38px] sm:min-h-[42px] h-9.5 sm:h-[42px] px-2 xs:px-2.5 sm:px-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] shadow-2xs`).

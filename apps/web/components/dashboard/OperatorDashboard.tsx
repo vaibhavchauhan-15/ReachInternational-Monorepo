@@ -1304,17 +1304,17 @@ export function OperatorDashboard({
                   <span className="text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider block">
                     Shift Timing
                   </span>
-                  {operatingStats.isValid ? (
-                    operatingStats.isOvernight && (
+                  {operatingStats.durationMinutes > 0 ? (
+                    operatingStats.isOvernight ? (
                       <span className="text-[10px] sm:text-[11px] font-bold text-indigo-600 dark:text-indigo-400 font-mono inline-flex items-center gap-1">
                         🌙 Overnight · {operatingStats.durationFormatted}
                       </span>
+                    ) : (
+                      <span className="text-[10px] sm:text-[11px] font-bold text-sky-600 dark:text-sky-400 font-mono inline-flex items-center gap-1">
+                        {operatingStats.durationFormatted}
+                      </span>
                     )
-                  ) : (
-                    <span className="text-[10px] sm:text-[11px] text-rose-500 font-semibold">
-                      {operatingStats.errorMessage || "Enter shift times"}
-                    </span>
-                  )}
+                  ) : null}
                 </div>
 
                 {/* Machine Timeline Context Banner */}
@@ -1363,7 +1363,7 @@ export function OperatorDashboard({
                       value={endTime}
                       onChange={handleEndTimeChange}
                       iconColor="text-rose-500"
-                      error={operatingStats.isFutureEnd ? "Cannot log before shift end." : undefined}
+                      isInvalid={operatingStats.isFutureEnd}
                     />
                   </div>
 
@@ -1400,14 +1400,14 @@ export function OperatorDashboard({
 
                 {/* Validation & Warning Strip */}
                 {meterValidationWarning ? (
-                  <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
-                    <AnimatedAlertTriangle size={15} className="shrink-0 text-rose-500" />
+                  <div className="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl bg-rose-500/[0.08] dark:bg-rose-950/25 border border-rose-500/25 dark:border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-2 animate-in fade-in duration-150">
+                    <AnimatedAlertTriangle size={14} className="shrink-0 text-rose-500" />
                     <span>{meterValidationWarning}</span>
                   </div>
                 ) : sequencingValidation?.isInvalid ? (
-                  <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl bg-rose-500/[0.08] dark:bg-rose-950/25 border border-rose-500/25 dark:border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-semibold flex flex-col sm:flex-row sm:items-center justify-between gap-2 animate-in fade-in duration-150">
                     <div className="flex items-center gap-2 min-w-0">
-                      <AnimatedAlertTriangle size={15} className="shrink-0 text-rose-500" />
+                      <AnimatedAlertTriangle size={14} className="shrink-0 text-rose-500" />
                       <span className="truncate">{sequencingValidation.message}</span>
                     </div>
                     {sequencingValidation.recommendedStartTime && (
@@ -1427,14 +1427,14 @@ export function OperatorDashboard({
                     )}
                   </div>
                 ) : shiftOverlapWarning ? (
-                  <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
-                    <AnimatedAlertTriangle size={15} className="shrink-0 text-rose-500" />
+                  <div className="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl bg-rose-500/[0.08] dark:bg-rose-950/25 border border-rose-500/25 dark:border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-2 animate-in fade-in duration-150">
+                    <AnimatedAlertTriangle size={14} className="shrink-0 text-rose-500" />
                     <span>{shiftOverlapWarning}</span>
                   </div>
                 ) : !operatingStats.isValid ? (
-                  <div className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl bg-rose-500/10 border border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-2">
-                    <AnimatedAlertTriangle size={15} className="shrink-0 text-rose-500" />
-                    <span>{operatingStats.errorMessage}</span>
+                  <div className="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl bg-rose-500/[0.08] dark:bg-rose-950/25 border border-rose-500/25 dark:border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-2 animate-in fade-in duration-150">
+                    <AnimatedAlertTriangle size={14} className="shrink-0 text-rose-500" />
+                    <span>{operatingStats.errorMessage || "Cannot log before shift end."}</span>
                   </div>
                 ) : null}
               </div>
@@ -1473,9 +1473,18 @@ export function OperatorDashboard({
 
               {/* Progressive Disclosure Breakdown Details Container */}
               {isBreakdown && (
-                <div className="p-3 sm:p-4 rounded-xl border border-rose-500/30 bg-rose-500/5 animate-in fade-in slide-in-from-top-2 duration-200 space-y-3">
+                <div className="p-3 sm:p-4 rounded-xl border border-rose-500/30 bg-rose-500/5 animate-in fade-in slide-in-from-top-2 duration-200 space-y-2.5 sm:space-y-3">
+                  {/* Top Right Calculated Duration Only */}
+                  {breakdownStats?.isValid && (
+                    <div className="flex items-center justify-end min-w-0">
+                      <span className="text-[11px] sm:text-xs font-mono font-bold text-rose-600 dark:text-rose-400">
+                        {breakdownStats.durationFormatted}
+                      </span>
+                    </div>
+                  )}
+
                   {/* Breakdown Start & End Time Pickers (Single row on mobile) */}
-                  <div className="grid grid-cols-2 gap-2 sm:gap-3 items-start">
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3.5 items-start">
                     <div className="min-w-0">
                       <CustomTimePicker
                         label={<><span className="hidden sm:inline">Breakdown </span>Start Time</>}
@@ -1496,35 +1505,11 @@ export function OperatorDashboard({
                     </div>
                   </div>
 
-                  {/* Real-time Computed Breakdown Duration Badge */}
-                  {breakdownStats && (
-                    <div className={`p-2 sm:p-2.5 rounded-lg border flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-2 text-xs min-w-0 ${
-                      breakdownStats.isValid
-                        ? "bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300"
-                        : "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300"
-                    }`}>
-                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 min-w-0">
-                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0" />
-                        <span className="font-semibold truncate text-[11px] sm:text-xs">
-                          {breakdownStats.isValid ? (
-                            <>
-                              <span className="hidden sm:inline">Calculated Breakdown Duration:</span>
-                              <span className="sm:hidden">Duration:</span>
-                            </>
-                          ) : "Breakdown Timing Notice:"}
-                        </span>
-                        <span className="font-mono font-bold px-1.5 sm:px-2 py-0.5 rounded bg-rose-500/20 text-rose-800 dark:text-rose-200 text-[11px] sm:text-xs shrink-0">
-                          {breakdownStats.isValid ? breakdownStats.durationFormatted : "Invalid"}
-                        </span>
-                      </div>
-                      <div className="font-mono text-[10px] sm:text-[11px] font-bold opacity-90 truncate sm:shrink-0">
-                        {breakdownStats.isValid ? (
-                          <>
-                            <span className="sm:hidden">{formatTo12Hour(breakdownStartTime)} - {formatTo12Hour(breakdownEndTime)}</span>
-                            <span className="hidden sm:inline">{breakdownStats.fullBreakdownString}</span>
-                          </>
-                        ) : breakdownStats.errorMessage}
-                      </div>
+                  {/* Only show error in this place if any occurs */}
+                  {breakdownStats && !breakdownStats.isValid && (
+                    <div className="p-2 sm:p-2.5 rounded-lg border bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] sm:text-xs font-bold flex items-center gap-2">
+                      <AnimatedAlertTriangle size={14} className="shrink-0 text-amber-500" />
+                      <span>{breakdownStats.errorMessage || "Please verify breakdown start and end times."}</span>
                     </div>
                   )}
                 </div>
@@ -2296,6 +2281,23 @@ export function OperatorDashboard({
 
               {/* Edit Shift Timing */}
               <div className="space-y-3 p-3 sm:p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/40">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider block">
+                    Shift Timing
+                  </span>
+                  {editOperatingStats.durationMinutes > 0 ? (
+                    editOperatingStats.isOvernight ? (
+                      <span className="text-[10px] sm:text-[11px] font-bold text-indigo-600 dark:text-indigo-400 font-mono inline-flex items-center gap-1">
+                        🌙 Overnight · {editOperatingStats.durationFormatted}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] sm:text-[11px] font-bold text-sky-600 dark:text-sky-400 font-mono inline-flex items-center gap-1">
+                        {editOperatingStats.durationFormatted}
+                      </span>
+                    )
+                  ) : null}
+                </div>
+
                 <CustomDatePicker
                   label={
                     <span>
@@ -2308,7 +2310,7 @@ export function OperatorDashboard({
                   maxDaysOld={7}
                 />
 
-                <div className="grid grid-cols-2 gap-2 sm:gap-4 items-start">
+                <div className="grid grid-cols-2 gap-2 sm:gap-3.5 items-start">
                   <div className="min-w-0">
                     <CustomTimePicker
                       label="Start Time"
@@ -2326,29 +2328,22 @@ export function OperatorDashboard({
                       value={editEndTime}
                       onChange={(val) => setEditEndTime(val)}
                       iconColor="text-rose-500"
-                      error={editOperatingStats.isFutureEnd ? "Cannot log before shift end." : undefined}
+                      isInvalid={editOperatingStats.isFutureEnd}
                     />
                   </div>
                 </div>
 
                 {editShiftOverlapWarning ? (
-                  <div className="text-[11px] text-rose-600 dark:text-rose-400 font-bold p-2 rounded-lg bg-rose-500/10 border border-rose-500/20">
-                    {editShiftOverlapWarning}
+                  <div className="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl bg-rose-500/[0.08] dark:bg-rose-950/25 border border-rose-500/25 dark:border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-2 animate-in fade-in duration-150">
+                    <AnimatedAlertTriangle size={14} className="shrink-0 text-rose-500" />
+                    <span>{editShiftOverlapWarning}</span>
                   </div>
-                ) : editOperatingStats.isValid ? (
-                  editOperatingStats.isOvernight ? (
-                    <div className="text-[11px] text-[var(--color-mute)] flex flex-col sm:flex-row sm:items-center justify-between font-mono bg-[var(--color-canvas-elevated)] p-2 rounded-lg border border-[var(--color-hairline)] gap-1">
-                      <span className="font-bold text-indigo-600 dark:text-indigo-400">
-                        🌙 Overnight · {editOperatingStats.durationFormatted}
-                      </span>
-                      <span className="text-sky-600 dark:text-sky-400 font-bold">{editOperatingStats.normalWorkingHours.toFixed(1)}h working</span>
-                    </div>
-                  ) : null
-                ) : (
-                  <div className="text-[11px] text-rose-600 dark:text-rose-400 font-bold p-2 rounded-lg bg-rose-500/10 border border-rose-500/20">
-                    {editOperatingStats.errorMessage}
+                ) : !editOperatingStats.isValid ? (
+                  <div className="px-2.5 py-1.5 sm:px-3 sm:py-2 rounded-lg sm:rounded-xl bg-rose-500/[0.08] dark:bg-rose-950/25 border border-rose-500/25 dark:border-rose-500/30 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-2 animate-in fade-in duration-150">
+                    <AnimatedAlertTriangle size={14} className="shrink-0 text-rose-500" />
+                    <span>{editOperatingStats.errorMessage || "Cannot log before shift end."}</span>
                   </div>
-                )}
+                ) : null}
               </div>
 
               <div>
@@ -2393,9 +2388,17 @@ export function OperatorDashboard({
               </div>
 
               {editBreakdown && (
-                <div className="p-3 sm:p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/5 space-y-3">
-                  <span className="block text-[11px] font-bold text-rose-600 dark:text-rose-400">Breakdown Timing</span>
-                  <div className="grid grid-cols-2 gap-2 sm:gap-4 items-start">
+                <div className="p-3 sm:p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/5 space-y-2.5 sm:space-y-3">
+                  {/* Top Right Calculated Duration Only */}
+                  {editBreakdownStats?.isValid && (
+                    <div className="flex items-center justify-end min-w-0">
+                      <span className="text-[11px] sm:text-xs font-mono font-bold text-rose-600 dark:text-rose-400">
+                        {editBreakdownStats.durationFormatted}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3.5 items-start">
                     <div className="min-w-0">
                       <CustomTimePicker
                         label="Start Time"
@@ -2415,18 +2418,12 @@ export function OperatorDashboard({
                       />
                     </div>
                   </div>
-                  {editBreakdownStats && (
-                    <div className={`p-2 rounded-lg border text-xs flex flex-wrap items-center justify-between gap-2 font-mono min-w-0 ${
-                      editBreakdownStats.isValid
-                        ? "bg-rose-500/10 border-rose-500/20 text-rose-600 dark:text-rose-400"
-                        : "bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400"
-                    }`}>
-                      <span className="font-bold truncate">
-                        {editBreakdownStats.isValid ? `Duration: ${editBreakdownStats.durationFormatted}` : editBreakdownStats.errorMessage}
-                      </span>
-                      {editBreakdownStats.isValid && (
-                        <span className="text-[11px] opacity-90 truncate">{editBreakdownStats.fullBreakdownString}</span>
-                      )}
+
+                  {/* Only show error in this place if any occurs */}
+                  {editBreakdownStats && !editBreakdownStats.isValid && (
+                    <div className="p-2 rounded-lg border bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-bold flex items-center gap-2">
+                      <AnimatedAlertTriangle size={14} className="shrink-0 text-amber-500" />
+                      <span>{editBreakdownStats.errorMessage || "Please verify breakdown start and end times."}</span>
                     </div>
                   )}
                 </div>

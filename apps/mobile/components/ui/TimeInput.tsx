@@ -25,6 +25,8 @@ export interface TimeInputProps {
   disabled?: boolean;
   containerStyle?: ViewStyle;
   error?: string;
+  isInvalid?: boolean;
+  hideErrorMessage?: boolean;
   helperText?: string;
 }
 
@@ -98,6 +100,8 @@ export const TimeInput: React.FC<TimeInputProps> = ({
   disabled = false,
   containerStyle,
   error: externalError,
+  isInvalid = false,
+  hideErrorMessage = false,
   helperText,
 }) => {
   const { theme } = useTheme();
@@ -142,8 +146,9 @@ export const TimeInput: React.FC<TimeInputProps> = ({
       }
     }
 
-    const hasError = Boolean(hourErr || minuteErr || externalError);
-    const errorMessage = externalError || hourErr || minuteErr || null;
+    const hasInternalError = Boolean(hourErr || minuteErr);
+    const hasError = hasInternalError || Boolean(externalError) || Boolean(isInvalid);
+    const errorMessage = (!hideErrorMessage && (externalError || hourErr || minuteErr)) || null;
 
     return {
       hourError: hourErr,
@@ -151,7 +156,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
       hasError,
       errorMessage,
     };
-  }, [hour, minute, required, touched, externalError]);
+  }, [hour, minute, required, touched, externalError, isInvalid, hideErrorMessage]);
 
   useEffect(() => {
     onErrorChange?.(validation.hasError);
@@ -374,7 +379,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
             style={[
               styles.periodBtn,
               period === 'AM' && {
-                backgroundColor: theme.colors.canvasElevated,
+                backgroundColor: theme.colors.link,
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: 1 },
                 shadowOpacity: 0.1,
@@ -387,8 +392,8 @@ export const TimeInput: React.FC<TimeInputProps> = ({
               style={[
                 styles.periodText,
                 {
-                  color: period === 'AM' ? theme.colors.link : theme.colors.mute,
-                  fontWeight: period === 'AM' ? '800' : '600',
+                  color: period === 'AM' ? '#ffffff' : theme.colors.mute,
+                  fontWeight: period === 'AM' ? '800' : '700',
                 },
               ]}
             >
@@ -403,7 +408,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
             style={[
               styles.periodBtn,
               period === 'PM' && {
-                backgroundColor: theme.colors.canvasElevated,
+                backgroundColor: theme.colors.link,
                 shadowColor: '#000',
                 shadowOffset: { width: 0, height: 1 },
                 shadowOpacity: 0.1,
@@ -416,8 +421,8 @@ export const TimeInput: React.FC<TimeInputProps> = ({
               style={[
                 styles.periodText,
                 {
-                  color: period === 'PM' ? theme.colors.link : theme.colors.mute,
-                  fontWeight: period === 'PM' ? '800' : '600',
+                  color: period === 'PM' ? '#ffffff' : theme.colors.mute,
+                  fontWeight: period === 'PM' ? '800' : '700',
                 },
               ]}
             >
@@ -458,7 +463,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     height: 44,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
   },
@@ -484,17 +489,18 @@ const styles = StyleSheet.create({
   },
   periodContainer: {
     flexDirection: 'row',
-    height: 32,
+    height: 34,
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 17,
     padding: 2,
     gap: 2,
     alignItems: 'center',
   },
   periodBtn: {
+    height: '100%',
+    minWidth: 32,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
   },

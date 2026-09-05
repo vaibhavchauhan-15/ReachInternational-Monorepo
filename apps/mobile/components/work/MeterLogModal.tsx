@@ -486,19 +486,20 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
             <View style={{ gap: 8, marginTop: 4 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text style={[styles.fieldLabel, { color: theme.colors.ink, marginBottom: 0 }]}>Shift Timing</Text>
-                {shiftStats.isValid && shiftStats.isOvernight ? (
+                {shiftStats.durationMinutes > 0 ? (
                   <View style={{
                     paddingHorizontal: 8,
                     paddingVertical: 2,
                     borderRadius: 12,
-                    backgroundColor: 'rgba(99, 102, 241, 0.12)',
+                    backgroundColor: shiftStats.isOvernight ? 'rgba(99, 102, 241, 0.12)' : theme.colors.hairlineSoft,
                   }}>
                     <Text style={{
                       fontSize: 10,
                       fontWeight: '700',
-                      color: '#6366f1',
+                      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+                      color: shiftStats.isOvernight ? '#6366f1' : theme.colors.link,
                     }}>
-                      🌙 Overnight · {shiftStats.durationFormatted}
+                      {shiftStats.isOvernight ? `🌙 Overnight · ${shiftStats.durationFormatted}` : shiftStats.durationFormatted}
                     </Text>
                   </View>
                 ) : null}
@@ -541,7 +542,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                     required
                     value={endTime}
                     onChangeText={setEndTime}
-                    error={shiftStats.isFutureEnd ? 'Cannot log before shift end.' : undefined}
+                    isInvalid={shiftStats.isFutureEnd}
                   />
                 </View>
               </View>
@@ -574,9 +575,21 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               )}
 
               {!shiftStats.isValid && !sequencingError?.isInvalid && (
-                <View style={[styles.alertBox, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error, marginVertical: 2 }]}>
-                  <Text style={{ color: theme.colors.error, fontSize: 11, textAlign: 'center', fontWeight: '600' }}>
-                    {shiftStats.errorMessage || 'Invalid shift timings.'}
+                <View style={[styles.alertBox, {
+                  backgroundColor: theme.colors.error + '14',
+                  borderColor: theme.colors.error + '40',
+                  borderWidth: 1,
+                  marginVertical: 2,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                }]}>
+                  <AlertTriangle size={14} color={theme.colors.error} />
+                  <Text style={{ color: theme.colors.error, fontSize: 11, fontWeight: '600', flex: 1 }}>
+                    {shiftStats.errorMessage || 'Cannot log before shift end.'}
                   </Text>
                 </View>
               )}
@@ -607,7 +620,23 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
             </View>
 
             {isBreakdown && (
-              <View style={{ gap: 10, marginVertical: 4 }}>
+              <View style={{
+                gap: 8,
+                marginVertical: 4,
+                padding: 10,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: theme.colors.error + '40',
+                backgroundColor: theme.colors.error + '08'
+              }}>
+                {breakdownStats?.isValid ? (
+                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: theme.colors.error, fontFamily: 'monospace' }}>
+                      {breakdownStats.durationFormatted}
+                    </Text>
+                  </View>
+                ) : null}
+
                 <View style={styles.rowInputs}>
                   <View style={{ flex: 1 }}>
                     <TimeInput
@@ -627,24 +656,16 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                   </View>
                 </View>
 
-                {breakdownStats && (
+                {breakdownStats && !breakdownStats.isValid && (
                   <View style={[styles.alertBox, {
-                    backgroundColor: breakdownStats.isValid ? theme.colors.error + '14' : theme.colors.warning + '14',
-                    borderColor: breakdownStats.isValid ? theme.colors.error : theme.colors.warning,
+                    backgroundColor: theme.colors.warning + '14',
+                    borderColor: theme.colors.warning,
                     padding: 8,
                     borderRadius: 8,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
                   }]}>
-                    <Text style={{ color: breakdownStats.isValid ? theme.colors.error : theme.colors.warning, fontSize: 11, fontWeight: '700' }}>
-                      {breakdownStats.isValid ? `Duration: ${breakdownStats.durationFormatted}` : breakdownStats.errorMessage}
+                    <Text style={{ color: theme.colors.warning, fontSize: 11, fontWeight: '700' }}>
+                      {breakdownStats.errorMessage || 'Invalid breakdown timing.'}
                     </Text>
-                    {breakdownStats.isValid && (
-                      <Text style={{ color: breakdownStats.isValid ? theme.colors.error : theme.colors.warning, fontSize: 10, fontFamily: 'monospace' }}>
-                        {breakdownStats.fullBreakdownString}
-                      </Text>
-                    )}
                   </View>
                 )}
               </View>

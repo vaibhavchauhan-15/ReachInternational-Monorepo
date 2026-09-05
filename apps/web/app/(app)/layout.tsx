@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { getCurrentUser } from "@/lib/dal";
 import { AppShellClient } from "@/components/layout/AppShellClient";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function AppLayout({
   children,
@@ -21,5 +25,13 @@ export default async function AppLayout({
     redirect("/login?error=account_pending");
   }
 
-  return <AppShellClient user={user}>{children}</AppShellClient>;
+  const cookieStore = await cookies();
+  const sidebarCookie = cookieStore.get("reachinternational_sidebar_collapsed")?.value;
+  const defaultCollapsed = sidebarCookie === "true";
+
+  return (
+    <AppShellClient user={user} defaultCollapsed={defaultCollapsed}>
+      {children}
+    </AppShellClient>
+  );
 }

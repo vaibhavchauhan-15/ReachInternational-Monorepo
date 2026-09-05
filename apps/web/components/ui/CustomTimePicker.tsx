@@ -18,6 +18,8 @@ export interface CustomTimePickerProps {
   className?: string;
   disabled?: boolean;
   error?: string;
+  isInvalid?: boolean;
+  hideErrorMessage?: boolean;
   helperText?: string;
   /** Layout orientation for the AM/PM toggle. Defaults to "horizontal" for polished, legible tap targets. */
   toggleOrientation?: "horizontal" | "vertical";
@@ -96,6 +98,8 @@ export function CustomTimePicker({
   className = "",
   disabled = false,
   error: externalError,
+  isInvalid = false,
+  hideErrorMessage = false,
   helperText,
   toggleOrientation = "horizontal",
 }: CustomTimePickerProps) {
@@ -145,8 +149,9 @@ export function CustomTimePicker({
       }
     }
 
-    const hasError = Boolean(hourErr || minuteErr);
-    const errorMessage = externalError || hourErr || minuteErr || null;
+    const hasInternalError = Boolean(hourErr || minuteErr);
+    const hasError = hasInternalError || Boolean(externalError) || Boolean(isInvalid);
+    const errorMessage = (!hideErrorMessage && (externalError || hourErr || minuteErr)) || null;
 
     return {
       hourError: hourErr,
@@ -154,7 +159,7 @@ export function CustomTimePicker({
       hasError,
       errorMessage,
     };
-  }, [hour, minute, required, touched, externalError]);
+  }, [hour, minute, required, touched, externalError, isInvalid, hideErrorMessage]);
 
   // Notify parent of error state changes
   useEffect(() => {
@@ -396,7 +401,7 @@ export function CustomTimePicker({
         ref={containerRef}
         onClick={handleContainerClick}
         className={cn(
-          "group relative flex items-center justify-between w-full min-h-[38px] sm:min-h-[42px] h-9.5 sm:h-[42px] px-2 xs:px-2.5 sm:px-3 rounded-xl border bg-[var(--color-canvas)] text-[var(--color-ink)] transition-all shadow-2xs cursor-text",
+          "group relative flex items-center justify-between w-full min-h-[38px] sm:min-h-[42px] h-9.5 sm:h-[42px] px-2.5 sm:px-3.5 rounded-xl border bg-[var(--color-canvas)] text-[var(--color-ink)] transition-all shadow-2xs cursor-text",
           "focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 dark:focus-within:ring-sky-400/20 dark:focus-within:border-sky-400",
           validation.hasError || Boolean(externalError)
             ? "border-rose-500 focus-within:ring-rose-500/20 focus-within:border-rose-500 dark:border-rose-500"
@@ -454,10 +459,10 @@ export function CustomTimePicker({
             role="tablist"
             aria-label="Select AM or PM period"
             className={cn(
-              "relative p-0.5 rounded-lg bg-neutral-100 dark:bg-neutral-900 border border-neutral-200/80 dark:border-neutral-800 shadow-inner select-none transition-colors",
+              "relative p-0.5 border border-neutral-200/80 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 shadow-inner select-none transition-colors",
               toggleOrientation === "vertical"
-                ? "inline-flex flex-col gap-0.5"
-                : "inline-flex items-center gap-0.5"
+                ? "inline-flex flex-col gap-0.5 rounded-xl"
+                : "inline-flex items-center gap-0.5 h-7 sm:h-8 rounded-full"
             )}
           >
             <button
@@ -467,16 +472,22 @@ export function CustomTimePicker({
               disabled={disabled}
               onClick={() => handlePeriodChange("AM")}
               className={cn(
-                "relative px-1.5 xs:px-2 sm:px-2.5 py-0.5 sm:py-1 text-[10px] xs:text-[10.5px] sm:text-xs font-bold rounded-[6px] transition-all cursor-pointer select-none leading-none z-10 flex items-center justify-center",
+                "relative text-[10px] xs:text-[10.5px] sm:text-xs font-bold transition-all cursor-pointer select-none leading-none z-10 flex items-center justify-center",
+                toggleOrientation === "vertical"
+                  ? "w-full py-1 px-1.5 rounded-lg"
+                  : "h-full min-w-[28px] xs:min-w-[32px] sm:min-w-[36px] px-2 sm:px-2.5 rounded-full",
                 period === "AM"
-                  ? "text-sky-600 dark:text-sky-400 font-extrabold"
-                  : "text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-white font-medium"
+                  ? "text-white font-extrabold"
+                  : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-bold"
               )}
             >
               {period === "AM" && (
                 <motion.div
                   layoutId={`ampm-active-${timePickerId}`}
-                  className="absolute inset-0 bg-white dark:bg-neutral-800 rounded-[6px] shadow-xs border border-neutral-200/90 dark:border-neutral-700/80 -z-10"
+                  className={cn(
+                    "absolute inset-0 bg-sky-600 dark:bg-sky-500 shadow-2xs -z-10",
+                    toggleOrientation === "vertical" ? "rounded-lg" : "rounded-full"
+                  )}
                   transition={{ type: "spring", stiffness: 500, damping: 35 }}
                 />
               )}
@@ -490,16 +501,22 @@ export function CustomTimePicker({
               disabled={disabled}
               onClick={() => handlePeriodChange("PM")}
               className={cn(
-                "relative px-1.5 xs:px-2 sm:px-2.5 py-0.5 sm:py-1 text-[10px] xs:text-[10.5px] sm:text-xs font-bold rounded-[6px] transition-all cursor-pointer select-none leading-none z-10 flex items-center justify-center",
+                "relative text-[10px] xs:text-[10.5px] sm:text-xs font-bold transition-all cursor-pointer select-none leading-none z-10 flex items-center justify-center",
+                toggleOrientation === "vertical"
+                  ? "w-full py-1 px-1.5 rounded-lg"
+                  : "h-full min-w-[28px] xs:min-w-[32px] sm:min-w-[36px] px-2 sm:px-2.5 rounded-full",
                 period === "PM"
-                  ? "text-sky-600 dark:text-sky-400 font-extrabold"
-                  : "text-neutral-500 dark:text-neutral-400 hover:text-neutral-800 dark:hover:text-white font-medium"
+                  ? "text-white font-extrabold"
+                  : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-bold"
               )}
             >
               {period === "PM" && (
                 <motion.div
                   layoutId={`ampm-active-${timePickerId}`}
-                  className="absolute inset-0 bg-white dark:bg-neutral-800 rounded-[6px] shadow-xs border border-neutral-200/90 dark:border-neutral-700/80 -z-10"
+                  className={cn(
+                    "absolute inset-0 bg-sky-600 dark:bg-sky-500 shadow-2xs -z-10",
+                    toggleOrientation === "vertical" ? "rounded-lg" : "rounded-full"
+                  )}
                   transition={{ type: "spring", stiffness: 500, damping: 35 }}
                 />
               )}
