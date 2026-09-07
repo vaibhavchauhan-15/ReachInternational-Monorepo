@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser, protectDisabledRoute } from "@/lib/dal";
-import { roleHasPermission } from "@/lib/auth/rbac";
+import { roleHasPermission } from "@reachinternational/permissions";
 import {
   getFinanceDashboardMetrics,
   getFinanceInvoices,

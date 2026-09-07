@@ -33,6 +33,12 @@ const HOUR_LOG_PROJECTION = `
   location,
   remarks,
   idempotency_key,
+  conflict_flag,
+  conflict_reason,
+  conflict_status,
+  conflict_resolved_by,
+  conflict_resolved_at,
+  conflict_resolution_notes,
   created_at,
   machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number, hour_meter, status, manufacturer),
   client:clients!machine_hour_logs_client_id_fkey(id, code, company_name, address, city, state, phone),
@@ -206,12 +212,13 @@ export const getOperationsHubData = cache(async (user: User, tab: string = "logs
     clientsList,
     operatorsRes,
     hourLogsRes,
+    assignmentsRes,
   ] = await Promise.all([
     getMachines({ pageSize: 1000 }),
     getClients(undefined, true),
     supabase
       .from("users")
-      .select("id, full_name, email, phone, role, status")
+      .select("id, full_name, email, phone, role, status, shift_time")
       .eq("role", "operator")
       .eq("status", "active")
       .order("full_name"),
@@ -221,6 +228,26 @@ export const getOperationsHubData = cache(async (user: User, tab: string = "logs
       .order("log_date", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(500),
+    supabase
+      .from("operator_machine_assignments")
+      .select(`
+        id,
+        machine_id,
+        operator_id,
+        shift_start_time,
+        shift_end_time,
+        crosses_midnight,
+        is_active,
+        assigned_by,
+        assigned_at,
+        ended_at,
+        ended_by,
+        end_reason,
+        created_at,
+        updated_at
+      `)
+      .eq("is_active", true)
+      .order("assigned_at", { ascending: false }),
   ]);
 
   if (hourLogsRes.error) {
@@ -229,13 +256,41 @@ export const getOperationsHubData = cache(async (user: User, tab: string = "logs
 
   const operatorsList = (operatorsRes.data || []) as User[];
   const formattedLogs = formatHourLogsData(hourLogsRes.data || []);
-  const derivedAssignments = deriveAssignmentsFromMachines(machinesRes.machines, operatorsList);
+
+  // Use authoritative operator_machine_assignments if populated, with fallback to derived
+  let activeAssignmentsList: any[] = [];
+  if (assignmentsRes.data && assignmentsRes.data.length > 0) {
+    activeAssignmentsList = assignmentsRes.data.map((ass: any) => {
+      const m = machinesRes.machines.find((mach: any) => mach.id === ass.machine_id);
+      const op = operatorsList.find((u) => u.id === ass.operator_id);
+      const code = m?.machine_id || m?.machine_code || ass.machine_id;
+      return {
+        ...ass,
+        machine: m
+          ? {
+              id: m.id,
+              machine_id: code,
+              machine_code: code,
+              machine_name: m.model ? `${code} (${m.model})` : code,
+              model: m.model,
+              serial_number: m.serial_number,
+              hour_meter: m.hour_meter,
+              status: m.status,
+            }
+          : { id: ass.machine_id, machine_id: "Machine", machine_name: "Machine" },
+        operator: op || null,
+        status: ass.is_active ? "active" : "ended",
+      };
+    });
+  } else {
+    activeAssignmentsList = deriveAssignmentsFromMachines(machinesRes.machines, operatorsList);
+  }
 
   return {
     machines: machinesRes.machines,
     dbClients: clientsList,
     operators: operatorsList,
-    assignments: derivedAssignments,
+    assignments: activeAssignmentsList,
     hourLogs: formattedLogs,
     siteMovements: [],
     operatorPayouts: [],

@@ -45,7 +45,6 @@ const nextConfig: NextConfig = {
     },
     optimizePackageImports: [
       "lucide-react",
-      "@base-ui/react",
       "@supabase/supabase-js",
       "recharts",
     ],

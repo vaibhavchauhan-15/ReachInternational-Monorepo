@@ -95,6 +95,7 @@ export interface User {
   state_id?: number | null;
   aadhaar_number?: string | null;
   license_number?: string | null;
+  complete_profile?: "yes" | "no" | string | null;
   email: string;
   created_at: string;
   updated_at: string;
@@ -250,6 +251,7 @@ export interface Machine {
   current_supervisor?: Pick<User, "id" | "full_name" | "phone" | "email" | "shift_time"> | null;
   supervisors?: Array<Pick<User, "id" | "full_name" | "phone" | "email" | "shift_time">> | null;
   operators?: Array<Pick<User, "id" | "full_name" | "phone" | "email" | "shift_time">> | null;
+  active_assignments?: OperatorMachineAssignment[] | null;
   client?: Pick<
     CRMClient,
     | "id"
@@ -289,6 +291,26 @@ export interface Machine {
 export interface MachineWithEngineer extends Machine {
   engineer?: Pick<User, "id" | "full_name" | "phone" | "email"> | null;
   category?: MachineCategory | null;
+}
+
+export interface OperatorMachineAssignment {
+  id: string;
+  machine_id: string;
+  operator_id: string;
+  shift_start_time: string;
+  shift_end_time: string;
+  crosses_midnight: boolean;
+  is_active: boolean;
+  assigned_by: string;
+  assigned_at: string;
+  ended_at: string | null;
+  ended_by: string | null;
+  end_reason: "reassigned" | "removed" | "shift_changed" | "migrated" | null;
+  created_at: string;
+  updated_at: string;
+  operator?: Pick<User, "id" | "full_name" | "phone" | "email" | "shift_time"> | null;
+  assigner?: Pick<User, "id" | "full_name"> | null;
+  machine?: Pick<Machine, "id" | "machine_id" | "model" | "serial_number"> | null;
 }
 
 export interface MachineAssignment {
@@ -333,6 +355,12 @@ export interface MachineHourLog {
   breakdown_duration?: string | null;
   breakdown_hours?: number | null;
   idempotency_key?: string | null;
+  conflict_flag?: boolean | null;
+  conflict_reason?: string | null;
+  conflict_status?: "pending" | "acknowledged" | "adjusted" | null;
+  conflict_resolved_by?: string | null;
+  conflict_resolved_at?: string | null;
+  conflict_resolution_notes?: string | null;
   created_at: string;
   operator?: Pick<User, "id" | "full_name" | "phone" | "email"> | null;
   supervisor?: Pick<User, "id" | "full_name" | "phone" | "email"> | null;

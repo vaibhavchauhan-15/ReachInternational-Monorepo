@@ -12,7 +12,6 @@
     "build": "echo \"Mobile app build target ready\""
   },
   "dependencies": {
-    "@reachinternational/api-client": "workspace:*",
     "@reachinternational/design-tokens": "workspace:*",
     "@reachinternational/permissions": "workspace:*",
     "@reachinternational/types": "workspace:*",

@@ -70,11 +70,57 @@ async function hydrateMachinesPersonnel(machines: any[], supabase: any): Promise
     });
   }
 
+  // Hydrate active assignments from operator_machine_assignments
+  const machineIds = machines.map((m) => m.id).filter(Boolean);
+  const assignmentsByMachine = new Map<string, any[]>();
+
+  if (machineIds.length > 0) {
+    try {
+      const { data: assignmentsData } = await supabase
+        .from("operator_machine_assignments")
+        .select(`
+          id,
+          machine_id,
+          operator_id,
+          shift_start_time,
+          shift_end_time,
+          crosses_midnight,
+          is_active,
+          assigned_by,
+          assigned_at,
+          ended_at,
+          ended_by,
+          end_reason,
+          created_at,
+          updated_at
+        `)
+        .in("machine_id", machineIds)
+        .eq("is_active", true)
+        .order("shift_start_time", { ascending: true });
+
+      if (assignmentsData && assignmentsData.length > 0) {
+        assignmentsData.forEach((a: any) => {
+          const list = assignmentsByMachine.get(a.machine_id) || [];
+          list.push({
+            ...a,
+            operator: usersMap.get(a.operator_id) || null,
+          });
+          assignmentsByMachine.set(a.machine_id, list);
+        });
+      }
+    } catch {
+      // Graceful fallback if migration is running
+    }
+  }
+
   return machines.map((m) => {
+    const activeAssignments = assignmentsByMachine.get(m.id) || [];
     const supIds = Array.isArray(m.supervisor_ids) && m.supervisor_ids.length > 0
       ? m.supervisor_ids
       : m.current_supervisor_id ? [m.current_supervisor_id] : [];
-    const opIds = Array.isArray(m.operator_ids) && m.operator_ids.length > 0
+    const opIds = activeAssignments.length > 0
+      ? activeAssignments.map((a: any) => a.operator_id)
+      : Array.isArray(m.operator_ids) && m.operator_ids.length > 0
       ? m.operator_ids
       : m.current_operator_id ? [m.current_operator_id] : [];
 
@@ -90,6 +136,7 @@ async function hydrateMachinesPersonnel(machines: any[], supabase: any): Promise
       operator_ids: cleanOpIds,
       supervisors: supervisorsList,
       operators: operatorsList,
+      active_assignments: activeAssignments,
       current_supervisor: supervisorsList[0] || m.current_supervisor || null,
       current_operator: operatorsList[0] || m.current_operator || null,
     };

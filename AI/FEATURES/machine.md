@@ -18,14 +18,22 @@ Manages machine fleet registry, serial numbers, client assignments, supervisor a
 - `updateMachine()`: Updates machine details, master specs, or changes status (`available`, `rented`, `under_maintenance`, `breakdown`).
 - `deleteMachine()`: Permanently deletes a machine record.
 - `importMachinesFromExcel()`: Bulk imports machines from Excel file with validation and duplicate prevention.
+- `createAssignmentAction()`: Assigns operator to machine on a recurring daily shift window (`shift_start_time`, `shift_end_time`) with atomic max 3 capacity and GiST circular exclusion overlap enforcement.
+- `endAssignmentAction()`: Ends an active assignment with audit tracking and syncs `machines.operator_ids`.
+- `resolveHourLogConflictAction()`: Resolves a soft-flagged overtime assignment conflict (`acknowledge` or `adjust`).
 
 ## Form Fields & Technical Parameters (MachineModal, Machine Edit & Machine Detail Page)
 - **Equipment Master Specs**: `machine_id` (auto-generated e.g. `RI-MC-0001`), `model` (required), `serial_number` (required, unique), `manufacturer` (required), `year_of_mfg` (required), `hour_meter` (HMR).
 - **Assignments & Personnel (24h Multi-Shift Fleet Coverage)**:
+  - `public.operator_machine_assignments`: Authoritative multi-operator assignment roster with daily recurring shift windows (`shift_start_time`, `shift_end_time`, `crosses_midnight`, `is_active`, `assigned_by`, `assigned_at`, `ended_at`, `ended_by`, `end_reason`). Enforces max 3 active operators per machine via advisory transaction locks (`enforce_max_operators_per_machine`).
+  - `public.operator_shift_ranges`: Normalized 0–1440 circular minute line mapping unrolled across midnight with PostgreSQL GiST exclusion constraint (`EXCLUDE USING GIST (operator_id WITH =, minute_range WITH &&) WHERE (is_active)`) preventing double-booked operators across overlapping shifts.
   - `supervisor_ids UUID[]`: Array of assigned supervisors across operational shifts (with GIN index and automatic primary element sync to `current_supervisor_id`).
-  - `operator_ids UUID[]`: Array of assigned operators across operational shifts (with GIN index and automatic primary element sync to `current_operator_id`).
+  - `operator_ids UUID[]`: Mirrored array of active assigned operators trigger-synced from `operator_machine_assignments` for backward compatibility.
   - `MultiUserSelect`: Searchable multi-chip selector with shift timing metadata tags (e.g. `08:00 AM - 08:00 PM`), removable chips, and clear all.
   - `client_id`: Assigned client organization (when rented).
+- **Overtime Conflict Soft-Flagging & Resolution Queue**:
+  - `machine_hour_logs` tracks `conflict_flag`, `conflict_reason`, `conflict_status` ('pending' | 'acknowledged' | 'adjusted'), `conflict_resolved_by`, `conflict_resolved_at`, and `conflict_resolution_notes`.
+  - Non-blocking submission: When an operator logs overtime extending into another machine's shift window, the log is accepted and soft-flagged for supervisor review without halting operations.
 - **Operational Status**: `health_status` (`active`, `under_maintenance`, `breakdown`), `status` (`available`, `rented`).
 
 ## Machine Detail View (`/machines/[id]`)

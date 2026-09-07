@@ -17,7 +17,7 @@ import { AlertTriangle, HardHat, Info } from "lucide-react";
 import { motion } from "framer-motion";
 import type { User } from "@/lib/types/database";
 import type { MyWorkData, TaskItem } from "@/lib/queries/my-work";
-import { roleHasPermission, PERMISSIONS } from "@/lib/auth/rbac";
+import { roleHasPermission, PERMISSIONS } from "@reachinternational/permissions";
 
 interface MyWorkClientProps {
   user: User;

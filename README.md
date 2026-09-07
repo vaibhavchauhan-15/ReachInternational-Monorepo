@@ -115,8 +115,6 @@ ReachInternational-Monorepo/
 │   ├── validation/                   # @reachinternational/validation — Zod validation schemas
 │   ├── permissions/                  # @reachinternational/permissions — RBAC matrix & scoping rules
 │   ├── design-tokens/                # @reachinternational/design-tokens — Geist visual tokens & adapters
-│   ├── api-client/                   # @reachinternational/api-client — Shared API client contracts
-│   ├── config/                       # @reachinternational/config — Shared TypeScript/ESLint configs
 │   └── utils/                        # @reachinternational/utils — Platform-neutral date, INR currency & string helpers
 ├── supabase/migrations/              # Idempotent PostgreSQL schema migration scripts
 ├── pnpm-workspace.yaml               # pnpm workspace declaration
@@ -202,16 +200,18 @@ The core database is built on 7 central tables in Supabase PostgreSQL:
 
 1. `public.users`: System user accounts (email, phone, role, city, district, state, state_id references states(id), aadhaar_number, license_number, status).
 2. `public.machines`: Machine fleet master (machine_code, model, serial_number, manufacturer, year_of_manufacture, hour_meter, customer_name, status, health_status, current_operator_id).
-3. `public.machine_hour_logs`: Daily running hour logs (machine_id, client_id, operator_id, supervisor_id, log_date, start_time, end_time, start_meter, end_meter, running_hours, normal_working_hours, overtime_hours, is_breakdown, breakdown_start_time, breakdown_end_time, breakdown_duration, breakdown_hours, location, remarks, idempotency_key).
-4. `public.clients`: Registered clients & customer sites (client_code, client_name, contact_person, phone, email, address, city, state).
-5. `public.states`: Official Indian State and Union Territory directory with official smallint LGD codes (36 entities).
-6. `public.districts`: Official Indian Administrative Districts directory (784 districts mapped to `states(id)` with smallint LGD codes).
-7. `public.cities`: Statutory Cities, Municipal Corporations, City Municipal Councils, and Major Urban Centers (466 entities mapped to `districts(id)` with Census location codes).
-8. `public.towns`: Statutory Municipal Councils, Nagar Palika Parishads, Nagar Panchayats, Town Panchayats, Census Towns, and Sub-District/Tehsil/Taluka hubs (15,081 entities mapped to `districts(id)`).
-9. `public.villages`: Complete Census Revenue Village directory (640,787 villages mapped to `districts(id)` with 6-digit Census village codes).
-10. `public.master_location`: Unified high-speed location lookup and autocomplete master (15,331 records) indexed with composite B-Tree and `pg_trgm` GIN indexes (`search_text`).
-11. `public.idempotency_keys`: Replay attack protection & state mutation deduplication key ledger (idempotency_key, user_id, action_name, request_hash, status, response_payload, created_at, expires_at).
-12. `public.audit_logs`: Immutable, append-only security & compliance audit trail (id, user_id, action, entity_type, entity_id, metadata, ip_address, created_at).
+3. `public.machine_hour_logs`: Daily running hour logs (machine_id, client_id, operator_id, supervisor_id, log_date, start_time, end_time, start_meter, end_meter, running_hours, normal_working_hours, overtime_hours, is_breakdown, breakdown_start_time, breakdown_end_time, breakdown_duration, breakdown_hours, location, remarks, conflict_flag, conflict_reason, conflict_status, conflict_resolved_by, conflict_resolved_at, conflict_resolution_notes, idempotency_key).
+4. `public.operator_machine_assignments`: Authoritative multi-shift operator assignment roster with recurring daily shift windows (id, machine_id, operator_id, shift_start_time, shift_end_time, crosses_midnight, is_active, assigned_by, assigned_at, ended_at, ended_by, end_reason). Enforces max 3 distinct active operators per machine via advisory transaction locks.
+5. `public.operator_shift_ranges`: Normalized 0–1440 circular minute mapping unrolled across midnight with PostgreSQL GiST exclusion constraint (`EXCLUDE USING GIST (operator_id WITH =, minute_range WITH &&) WHERE (is_active)`) preventing double-booked operators across overlapping shifts.
+6. `public.clients`: Registered clients & customer sites (client_code, client_name, contact_person, phone, email, address, city, state).
+7. `public.states`: Official Indian State and Union Territory directory with official smallint LGD codes (36 entities).
+8. `public.districts`: Official Indian Administrative Districts directory (784 districts mapped to `states(id)` with smallint LGD codes).
+9. `public.cities`: Statutory Cities, Municipal Corporations, City Municipal Councils, and Major Urban Centers (466 entities mapped to `districts(id)` with Census location codes).
+10. `public.towns`: Statutory Municipal Councils, Nagar Palika Parishads, Nagar Panchayats, Town Panchayats, Census Towns, and Sub-District/Tehsil/Taluka hubs (15,081 entities mapped to `districts(id)`).
+11. `public.villages`: Complete Census Revenue Village directory (640,787 villages mapped to `districts(id)` with 6-digit Census village codes).
+12. `public.master_location`: Unified high-speed location lookup and autocomplete master (15,331 records) indexed with composite B-Tree and `pg_trgm` GIN indexes (`search_text`).
+13. `public.idempotency_keys`: Replay attack protection & state mutation deduplication key ledger (idempotency_key, user_id, action_name, request_hash, status, response_payload, created_at, expires_at).
+14. `public.audit_logs`: Immutable, append-only security & compliance audit trail (id, user_id, action, entity_type, entity_id, metadata, details, ip_address, created_at).
 
 ---
 

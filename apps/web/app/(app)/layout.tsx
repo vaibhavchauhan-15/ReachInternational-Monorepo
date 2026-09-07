@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { getCurrentUser } from "@/lib/dal";
+import { getCurrentUser, isProfileIncomplete } from "@/lib/dal";
 import { AppShellClient } from "@/components/layout/AppShellClient";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +23,13 @@ export default async function AppLayout({
 
   if (user.status === "pending") {
     redirect("/login?error=account_pending");
+  }
+
+  // Fast zero-latency profile completion check:
+  // If complete_profile === 'yes', skip immediately (0 CPU overhead).
+  // Only check completeness if complete_profile !== 'yes'.
+  if (user.complete_profile !== "yes" && isProfileIncomplete(user)) {
+    redirect("/onboarding");
   }
 
   const cookieStore = await cookies();

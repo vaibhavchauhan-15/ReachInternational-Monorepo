@@ -38,10 +38,8 @@ export { MultiUserSelect, type MultiUserSelectProps, type MultiUserSelectItem } 
 
 // 4. Date & Time Components
 export { CustomDatePicker, type CustomDatePickerProps } from "./CustomDatePicker";
-export { DatePicker, type DatePickerProps } from "./DatePicker";
 export { DateRangePicker, type DateRangePickerProps, type DateRange } from "./DateRangePicker";
 export { CustomTimePicker, TimeInput, type CustomTimePickerProps, type TimeInputProps } from "./CustomTimePicker";
-export { TimePicker, type TimePickerProps } from "./TimePicker";
 export { DateTimePicker, type DateTimePickerProps } from "./DateTimePicker";
 
 

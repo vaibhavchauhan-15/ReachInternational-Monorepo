@@ -51,3 +51,34 @@ export type UpdateMachineInput = z.infer<typeof UpdateMachineSchema>;
 export type MachineCategoryInput = z.infer<typeof MachineCategorySchema>;
 export type MachineModelInput = z.infer<typeof MachineModelSchema>;
 export type ManufacturerInput = z.infer<typeof ManufacturerSchema>;
+
+const TIME_REGEX = /^(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?(?:\s*(?:AM|PM))?$/i;
+
+export const CreateAssignmentSchema = z.object({
+  machineId: z.string().uuid("Invalid machine ID"),
+  operatorId: z.string().uuid("Invalid operator ID"),
+  shiftStartTime: z.string().trim().regex(TIME_REGEX, "Shift start time must be a valid time (e.g. 08:00 or 08:00 AM)"),
+  shiftEndTime: z.string().trim().regex(TIME_REGEX, "Shift end time must be a valid time (e.g. 16:00 or 04:00 PM)"),
+  notes: z.string().max(500, "Notes cannot exceed 500 characters").optional().nullable(),
+}).refine((data) => data.shiftStartTime !== data.shiftEndTime, {
+  message: "Shift start time and end time cannot be identical",
+  path: ["shiftEndTime"],
+});
+
+export const EndAssignmentSchema = z.object({
+  assignmentId: z.string().uuid("Invalid assignment ID"),
+  endReason: z.enum(["reassigned", "removed", "shift_changed", "migrated"]).default("removed"),
+  notes: z.string().max(500, "Notes cannot exceed 500 characters").optional().nullable(),
+});
+
+export const ResolveConflictSchema = z.object({
+  logId: z.string().uuid("Invalid log ID"),
+  action: z.enum(["acknowledge", "adjust"]),
+  adjustedEndTime: z.string().trim().regex(TIME_REGEX, "Adjusted end time must be a valid time").optional().nullable(),
+  notes: z.string().max(500, "Notes cannot exceed 500 characters").optional().nullable(),
+});
+
+export type CreateAssignmentInput = z.infer<typeof CreateAssignmentSchema>;
+export type EndAssignmentInput = z.infer<typeof EndAssignmentSchema>;
+export type ResolveConflictInput = z.infer<typeof ResolveConflictSchema>;
+

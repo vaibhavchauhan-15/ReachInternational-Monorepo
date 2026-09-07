@@ -11,7 +11,7 @@ import {
 } from "@reachinternational/validation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/dal";
-import { roleHasPermission } from "@/lib/auth/rbac";
+import { roleHasPermission } from "@reachinternational/permissions";
 import { logAudit } from "@/lib/audit";
 import {
   checkAndStoreIdempotencyKey,

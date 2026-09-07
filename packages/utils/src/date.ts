@@ -836,3 +836,77 @@ export function parseBreakdownString(rawString?: string | null): {
 
   return null;
 }
+
+/**
+ * Converts minutes from midnight (0..1439) to "HH:MM:SS" 24-hour time format.
+ */
+export function minutesTo24HourTime(minutes: number): string {
+  const normalized = ((minutes % 1440) + 1440) % 1440;
+  const h = Math.floor(normalized / 60);
+  const m = normalized % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`;
+}
+
+/**
+ * Parses user profile shift_time text (e.g. "08:00 AM - 08:00 PM") into structured 24-hour time strings.
+ */
+export function parseProfileShiftTime(rawString?: string | null): {
+  startTime: string;
+  endTime: string;
+  displayString: string;
+} | null {
+  if (!rawString) return null;
+  const clean = rawString.trim();
+  const parts = clean.split(/\s*[-–—]\s*/);
+  if (parts.length !== 2) return null;
+
+  const startMins = parseTimeToMinutes(parts[0]);
+  const endMins = parseTimeToMinutes(parts[1]);
+  if (startMins === null || endMins === null || startMins === endMins) return null;
+
+  const startTime = minutesTo24HourTime(startMins);
+  const endTime = minutesTo24HourTime(endMins);
+  const displayStart = formatTo12Hour(parts[0]) || parts[0];
+  const displayEnd = formatTo12Hour(parts[1]) || parts[1];
+
+  return {
+    startTime,
+    endTime,
+    displayString: `${displayStart} - ${displayEnd}`,
+  };
+}
+
+/**
+ * Evaluates whether two daily recurring time windows overlap, properly handling overnight transitions.
+ */
+export function isTimeWindowOverlapping(
+  startAStr: string,
+  endAStr: string,
+  startBStr: string,
+  endBStr: string
+): boolean {
+  const startA = parseTimeToMinutes(startAStr);
+  const endA = parseTimeToMinutes(endAStr);
+  const startB = parseTimeToMinutes(startBStr);
+  const endB = parseTimeToMinutes(endBStr);
+
+  if (startA === null || endA === null || startB === null || endB === null) return false;
+
+  const rangesA = endA > startA
+    ? [[startA, endA]]
+    : [[startA, 1440], [0, endA]];
+
+  const rangesB = endB > startB
+    ? [[startB, endB]]
+    : [[startB, 1440], [0, endB]];
+
+  for (const [sA, eA] of rangesA) {
+    for (const [sB, eB] of rangesB) {
+      if (Math.max(sA, sB) < Math.min(eA, eB)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}

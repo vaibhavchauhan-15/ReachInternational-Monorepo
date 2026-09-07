@@ -6,7 +6,7 @@ import { useTheme, CustomBottomTabBar } from '../../components/ui';
 import { DrawerProvider } from '../../lib/nav/DrawerContext';
 
 export default function AppLayout() {
-  const { session, isLoading, role } = useAuth();
+  const { session, isLoading, role, isProfileComplete } = useAuth();
   const { theme } = useTheme();
 
   if (isLoading) {
@@ -19,6 +19,10 @@ export default function AppLayout() {
 
   if (!session) {
     return <Redirect href="/(auth)/login" />;
+  }
+
+  if (!isProfileComplete) {
+    return <Redirect href="/(auth)/onboarding" />;
   }
 
   const normalizedRole = (role || '').toLowerCase();

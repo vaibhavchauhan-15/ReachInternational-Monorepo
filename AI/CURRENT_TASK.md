@@ -1,5 +1,107 @@
 # Current Task Context
 
+## Completed Task (2026-09-07) — Ponytail Audit: Monorepo Pruning & Over-Engineering Elimination (Packages, Dead Code, Unused Dependencies & Pass-through Abstractions)
+
+**Goal**:
+Prune dead code, unused packages, duplicate client implementations, and speculative abstractions across the monorepo identified during `/ponytail-audit`:
+1. Delete unused `@reachinternational/api-client` package with zero callers across web and mobile.
+2. Delete in-app runtime test runner `runUnitTestSuite` bundled into mobile client (`apps/mobile/lib/testing-suite.ts`).
+3. Delete mock in-memory offline queue engine and unmounted banner (`apps/mobile/lib/offline-sync.ts`, `apps/mobile/components/ui/OfflineSyncBanner.tsx`).
+4. Delete unused Supabase Realtime channel subscription and deduplication manager (`apps/mobile/lib/realtime.ts`).
+5. Delete unused structured telemetry logger and span tracer with zero callers (`apps/web/lib/telemetry.ts`).
+6. Delete unused multi-environment presets and startup validator (`apps/mobile/lib/environment.ts`).
+7. Eliminate redundant `OptimizedList` wrapper and unreferenced virtualization helper (`apps/mobile/components/ui/OptimizedList.tsx`, `apps/mobile/lib/performance.ts`).
+8. Delete duplicate orphaned Supabase server/browser client files (`apps/web/lib/server.ts`, `apps/web/lib/client.ts`, `apps/web/lib/supabase/browser.ts`).
+9. Delete unused mobile accessibility helper and back-handler hooks (`apps/mobile/lib/accessibility.ts`).
+10. Remove hand-rolled array/object helpers (`groupBy`, `sortBy`, `filterNil`, `omit`, `pick` in `packages/utils/src/object.ts`) in favor of native `Object.groupBy` and `toSorted`.
+11. Delete stubbed push notification registration returning mock token (`apps/mobile/lib/notifications.ts`).
+12. Delete empty placeholder package `@reachinternational/config` exporting a single string constant.
+13. Delete speculative pagination, date range, filter query, and idempotency schemas (`packages/validation/src/common.ts`).
+14. Delete dead `renderSafeTemplate` regex template substitution engine (`packages/utils/src/ssti.ts`), keeping `escapeHtml`.
+15. Remove pass-through alias wrappers `DatePicker` and `TimePicker` (`apps/web/components/ui/DatePicker.tsx`, `apps/web/components/ui/TimePicker.tsx`) in favor of direct `<CustomDatePicker>` and `<CustomTimePicker>`.
+16. Replace hand-rolled `validateData` and `formatZodError` wrappers with native Zod `schema.safeParse()` and `error.flatten()` (`packages/validation/src/helpers.ts`).
+17. Replace hand-rolled `AbortController` + `setTimeout` fetch wrapper with native `AbortSignal.timeout(ms)` in `apps/mobile/lib/security.ts`.
+18. Flatten 4-level deep directory nesting `components/animate-ui/components/radix/dialog.tsx` into canonical `components/ui/dialog.tsx`.
+19. Remove pass-through re-export barrel files (`apps/web/lib/auth/scope.ts`, `apps/web/lib/auth/rbac.ts`) in favor of importing `@reachinternational/permissions` directly.
+20. Standardize hand-rolled Indian currency denomination divisions for Cr / L / k using native `Intl.NumberFormat('en-IN', destructive/compact)` (`packages/utils/src/currency.ts`) and remove dead `calculateGST`.
+21. Inline single-caller server permission helper `currentUserHasPermission` into `apps/web/app/(app)/hr/page.tsx` and delete `apps/web/lib/auth/server-rbac.ts`.
+22. Remove CLI tool `"shadcn"` and unused UI library `"@base-ui/react"` from `apps/web/package.json`.
+23. Demote `@supabase/supabase-js` in workspace root `package.json` to `devDependencies` (retained for `supabase/verify_seed.mjs`). Retain `tw-animate-css` because `animate-in`, `fade-in`, and `zoom-in-95` classes are actively consumed across 25+ modal and dropdown components.
+
+**Changes & Quality Gates**:
+- **Pruned Dead Files & Packages**: 2 full packages removed (`packages/config`, `packages/api-client`), 17 dead files removed across `apps/web`, `apps/mobile`, and `packages/*`.
+- **Refactored Inlines & Barrel Cleanup**: Direct imports from `@reachinternational/permissions` across 6 web files, unified `dialog.tsx`, compact currency formatter with `Intl.NumberFormat`.
+- **Quality Gates**:
+  - `turbo run typecheck`: Passed with 0 compilation errors across all 7 workspace packages.
+  - `pnpm --filter @reachinternational/web build`: Passed with 38/38 Next.js routes compiled cleanly.
+  - `pnpm --filter @reachinternational/mobile build`: Passed cleanly.
+  - 157 node_modules packages removed, net reduction of ~1,450 lines of code.
+
+---
+
+## Completed Task (2026-09-07) — Operator–Machine Assignment, Shift Timings & Overtime Conflict Resolution Architecture (Web & Mobile) (`047_operator_machine_assignments_and_shift_overtime.sql`, `OperationsClient.tsx`, `operations.tsx`, `MobileAssignmentModal.tsx`, `MobileConflictResolutionModal.tsx`, `assignments.ts`, `database.ts`, `machine.ts`, `date.ts`, `endpoints/index.ts`, `test_operator_machine_assignments.mjs`)
+
+**Goal**:
+1. Implement authoritative operator–machine assignments with recurring daily shift windows (`shift_start_time` and `shift_end_time` as `TIME`), moving away from per-date assignment rows.
+2. Enforce maximum 3 active operators per machine with advisory concurrency transaction locks (`enforce_max_operators_per_machine`).
+3. Guarantee mathematically sound shift overlap prevention on a 1440-minute circular clock (`public.operator_shift_ranges`) with unrolled overnight ranges and PostgreSQL GiST exclusion constraint (`EXCLUDE USING GIST (operator_id WITH =, minute_range WITH &&) WHERE (is_active)`).
+4. Implement non-blocking overtime conflict soft-flagging: when an operator logs running hours with overtime extending into another active machine assignment, soft-flag with `conflict_flag = true` and `conflict_status = 'pending'`, allowing log submission while queuing for supervisor review.
+5. Provide a full supervisor review and resolution queue on Web (`OperationsClient.tsx`) and Mobile (`MobileConflictResolutionModal.tsx`) with "Acknowledge" (keep log as-is) and "Adjust" (trim end time) workflows.
+6. Multi-shift Equipment Roster Cards on Web and Mobile with capacity badges (`X/3`), daytime `☀️` and overnight `🌙` shift badges, operator contact shortcuts, and + Assign Shift slot actions.
+7. Multi-Shift Assignment Modals with operator profile shift auto-fill, mandatory supervisor shift selection when profile shift is null, `<CustomTimePicker>` / `<TimeInput>` integration, capacity warning, and backend conflict messaging.
+8. Trigger-mirror `machines.operator_ids` and `machines.current_operator_id` for 100% backward compatibility with existing queries.
+9. Cross-platform Web and Mobile synchronization with 3-tier responsiveness, min 44px touch targets, and 0 TypeScript errors.
+
+1. **Database Migration Hardening (`supabase/migrations/047_operator_machine_assignments_and_shift_overtime.sql`, `supabase/scripts/047_backfill_operator_assignments.sql`)**:
+   - `public.operator_machine_assignments`: Authoritative multi-shift assignment roster (`id`, `machine_id`, `operator_id`, `shift_start_time`, `shift_end_time`, `crosses_midnight`, `is_active`, `assigned_by`, `assigned_at`, `ended_at`, `ended_by`, `end_reason`).
+   - `shift_to_ranges(TIME, TIME)`: Converts times into 0–1440 circular minute ranges, splitting overnight shifts into `[start, 1440)` and `[0, end)`.
+   - `public.operator_shift_ranges`: Normalized ranges table with GiST exclusion constraint (`EXCLUDE USING GIST (operator_id WITH =, minute_range WITH &&) WHERE (is_active)`).
+   - Trigger `enforce_max_operators_per_machine`: Runs `BEFORE INSERT OR UPDATE` with `pg_advisory_xact_lock` counting `COUNT(DISTINCT operator_id)` to ensure max 3 distinct active operators per machine without penalizing split shifts.
+   - Trigger `sync_operator_shift_ranges`: Runs `AFTER INSERT OR UPDATE` to synchronize GiST ranges.
+   - Trigger `sync_machine_assigned_operators`: Runs `AFTER INSERT OR UPDATE OR DELETE` updating `machines.operator_ids` and `machines.current_operator_id`.
+   - Extended `public.machine_hour_logs` with `conflict_flag`, `conflict_reason`, `conflict_status`, `conflict_resolved_by`, `conflict_resolved_at`, and `conflict_resolution_notes`.
+   - Atomic RPCs: `assign_operator_machine_atomic`, `end_operator_machine_assignment_atomic`, `resolve_hour_log_conflict_atomic`.
+   - Updated `submit_operator_hour_log_atomic`:
+     - Overtime conflict detection re-uses `shift_to_ranges()` with PostgreSQL range overlap operator `&&` against `public.operator_shift_ranges`, seamlessly handling overnight shift windows across midnight.
+     - Corrected `audit_logs` insert to use canonical columns `(user_id, action, entity_type, entity_id, metadata, details, created_at)`.
+     - Preserves existing machine-timeline sequencing (`check_machine_hour_log_shift_overlap`) and idempotency-key ledger unique constraints.
+   - Standalone Backfill Script (`supabase/scripts/047_backfill_operator_assignments.sql`):
+     - Safe DRY-RUN report mode by default (`v_dry_run := true`) using `RAISE NOTICE`.
+     - Intelligently extracts operator profile shifts (`users.shift_time`) with fallback to staggered 8-hour windows (`08:00-16:00`, `16:00-00:00`, `00:00-08:00`).
+     - Detects and reports double-booking conflicts and capacity limits before live execution.
+2. **Shared Packages (`packages/*`)**:
+   - `packages/types/src/database.ts`: Added `OperatorMachineAssignment`, extended `Machine` with `active_assignments`, and extended `MachineHourLog` with conflict fields.
+   - `packages/validation/src/machine.ts`: Created canonical Zod schemas `CreateAssignmentSchema`, `EndAssignmentSchema`, `ResolveConflictSchema` and re-exported in `index.ts`.
+   - `packages/utils/src/date.ts`: Added `minutesTo24HourTime`, `parseProfileShiftTime`, `isTimeWindowOverlapping`.
+   - `packages/api-client/src/endpoints/index.ts`: Added typed assignment and conflict resolution endpoints to API contracts.
+3. **Web Server Actions & DAL (`apps/web/app/actions/assignments.ts`, `queries/machines.ts`, `queries/operators.ts`)**:
+   - Implemented `createAssignmentAction`, `endAssignmentAction`, `resolveHourLogConflictAction`, `getOperatorProfileShiftAction`, `getMachineActiveAssignmentsAction`.
+   - Added PostgREST error translation and resilient direct table fallbacks (`PGRST202` fallback guaranteeing continuous service).
+   - Enforced RBAC (`requireRole("admin", "super_admin", "manager", "service_manager", "supervisor")`).
+   - Integrated cache tag revalidation (`TAGS.machines`, `TAGS.dashboardKpis`, `TAGS.machineDetail`).
+   - Hydrated `active_assignments` in machine and operations hub queries.
+4. **Web Frontend Operations Hub (`apps/web/components/operations/OperationsClient.tsx`)**:
+   - Added Supervisor Top Tab navigation (`Daily Running Hours` and `Operator Machine Assignments`).
+   - Added Overtime Conflict Alert Banner at top of logs feed when `pendingConflicts.length > 0` with quick Review button.
+   - Multi-Shift Equipment Roster Cards displaying active shifts, capacity indicator `X/3`, daytime `☀️` and overnight `🌙` shift badges, operator contact, Reassign, End Shift, and + Assign Shift buttons.
+   - Upgraded `showAssignModal`: capacity warning if 3/3, profile shift auto-fill badge, `<CustomTimePicker>` start/end, overnight badge, and backend conflict alert banner.
+   - Added `showConflictModal` for supervisor overtime review ("Acknowledge" keep vs "Adjust" trim time).
+5. **Mobile React Native Parity (`apps/mobile/app/(app)/operations.tsx`, `MobileAssignmentModal.tsx`, `MobileConflictResolutionModal.tsx`)**:
+   - Created `MobileAssignmentModal.tsx`: Native shift assignment bottom sheet with capacity display, profile shift pre-fill, Start/End time `<TimeInput>` pickers, overnight indicator, and atomic submission.
+   - Created `MobileConflictResolutionModal.tsx`: Native overtime conflict review modal with Acknowledge/Adjust toggles and resolution submission.
+   - Updated `apps/mobile/app/(app)/operations.tsx`:
+     - Parallel fetching of `machine_hour_logs` (with conflict fields), `machines`, `operator_machine_assignments`, and active operators.
+     - Added Overtime Conflict Banner in logs feed + conflict badge on log cards.
+     - Replaced assignments tab with equipment shift cards with capacity pills (`X/3`), day/overnight badges, and "End Shift" / "+ Assign Shift" buttons.
+     - Mounted `MobileAssignmentModal` and `MobileConflictResolutionModal`.
+6. **Monorepo Quality Gate Verification**:
+   - `node supabase/tests/test_operator_machine_assignments.mjs`: Circular overlap math, time normalization, and fallback logic passed (100%).
+   - `pnpm typecheck` (`turbo run typecheck`): Passed with **0 errors across all 9 packages**.
+   - `pnpm --filter @reachinternational/web build`: Passed with all **38/38 routes compiled cleanly (Exit code 0)**.
+   - `README.md` updated with database schemas and operational modules.
+
+---
+
 ## Completed Task (2026-09-07) — Page Feedback: /signup — Header & Section Clutter Removal, Clock Icon Removal, and Mandatory Shift Start & End Time with Red Star (`signup/page.tsx`, `CustomTimePicker.tsx`, `auth.ts`, `actions/auth.ts`, `apps/mobile/app/(auth)/signup.tsx`)
 
 **Goal**:

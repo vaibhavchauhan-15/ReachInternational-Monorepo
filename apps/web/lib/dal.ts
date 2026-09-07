@@ -6,7 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { CACHE_TAGS } from "@/lib/cache";
 import type { User, UserRole } from "@/lib/types/database";
-import { roleHasPermission } from "@/lib/auth/rbac";
+import { roleHasPermission } from "@reachinternational/permissions";
 
 export const verifySession = cache(async () => {
   const supabase = await createSupabaseServerClient();
@@ -43,7 +43,7 @@ const getCachedUserRow = unstable_cache(
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase
       .from("users")
-      .select("id, full_name, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, address, shift_time, email, created_at, updated_at")
+      .select("id, full_name, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, address, shift_time, complete_profile, email, created_at, updated_at")
       .eq("id", userId)
       .single();
 
@@ -54,9 +54,37 @@ const getCachedUserRow = unstable_cache(
 
     return data;
   },
-  ["dal-user-row-v6"],
+  ["dal-user-row-v7"],
   { revalidate: 60, tags: [CACHE_TAGS.users] }
 );
+
+export function isProfileIncomplete(user: User): boolean {
+  if (user.complete_profile === "yes") return false;
+
+  const name = (user.full_name || "").trim();
+  if (!name || name.length < 2 || name === user.email) return true;
+
+  const phone = (user.phone || "").trim().replace(/\D/g, "");
+  if (!phone || phone.length < 10) return true;
+
+  if (!user.role) return true;
+
+  const shift = (user.shift_time || "").trim();
+  if (!shift) return true;
+
+  const city = (user.city || "").trim();
+  const district = (user.district || "").trim();
+  const state = (user.state || "").trim();
+  if (!city || !district || !state) return true;
+
+  const address = (user.address || "").trim();
+  if (!address) return true;
+
+  const aadhaar = (user.aadhaar_number || "").trim().replace(/\D/g, "");
+  if (!aadhaar || aadhaar.length !== 12) return true;
+
+  return false;
+}
 
 export const getCurrentUser = cache(async (): Promise<User | null> => {
   const session = await verifySession();

@@ -6,7 +6,6 @@
 export * from './date';
 export * from './currency';
 export * from './string';
-export * from './object';
 export * from './clipboard';
 export * from './ssti';
 export * from './sanitize';

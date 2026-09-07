@@ -7,6 +7,7 @@ const activeProtectedRoutes = [
   "/operations",
   "/clients",
   "/users",
+  "/onboarding",
 ];
 
 const deprecatedRoutes = [

@@ -1,10 +1,80 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: **Production Ready — Registration Clutter Removal, Clock Icon Removal & Mandatory Shift Timings (Web & Mobile)**
+- **Phase**: **Production Ready — Monorepo Architecture Pruning & Over-Engineering Elimination (Ponytail Audit)**
 - **Release Candidate**: `v2026.09.07` (Branch: `main`)
-- **Overall Health**: Production Ready (0 TypeScript Errors across 9 packages, 38/38 Routes Compiled, 0 Runtime Errors, 0 Warnings, 0 P0/P1/P2 Issues)
+- **Overall Health**: Production Ready (0 TypeScript Errors across 7 packages, 38/38 Routes Compiled, 0 Runtime Errors, 0 Warnings, 0 P0/P1/P2 Issues)
 - **Last Memory Update**: 2026-09-07
+- [x] **Monorepo Architecture Pruning & Over-Engineering Elimination — Ponytail Audit (`packages/*`, `apps/mobile/*`, `apps/web/*`) (2026-09-07)**:
+  - **1. Package Pruning**:
+    - Deleted empty placeholder package `@reachinternational/config` (exported only single string constant).
+    - Deleted unused `@reachinternational/api-client` package (contract endpoints had 0 callers across web and mobile).
+    - Reduced active monorepo packages from 9 to 7 (`@reachinternational/web`, `@reachinternational/mobile`, `@reachinternational/types`, `@reachinternational/utils`, `@reachinternational/design-tokens`, `@reachinternational/permissions`, `@reachinternational/validation`).
+  - **2. Shared Packages Cleanup (`packages/*`)**:
+    - `packages/utils/src/object.ts`: Deleted 48 lines of hand-rolled `groupBy`, `sortBy`, `filterNil`, `omit`, `pick` (superseded by standard `Object.groupBy` and `Array.prototype.toSorted`).
+    - `packages/utils/src/currency.ts`: Standardized `formatCompactCurrency` to native `Intl.NumberFormat('en-IN', { notation: 'compact' })` and deleted dead `calculateGST`.
+    - `packages/utils/src/ssti.ts`: Removed dead regex template substitution engine `renderSafeTemplate` while preserving active HTML sanitizer `escapeHtml`.
+    - `packages/validation/src/common.ts`: Deleted 31 lines of unused query schemas (`PaginationParamsSchema`, `DateRangeSchema`, `FilterParamsSchema`, `IdempotencySchema`).
+    - `packages/validation/src/helpers.ts`: Deleted 22 lines of unused `validateData` and `formatZodError` wrappers.
+  - **3. Mobile App Bloat & Mock Engine Removal (`apps/mobile`)**:
+    - Deleted in-app test runner `runUnitTestSuite` from client runtime (`apps/mobile/lib/testing-suite.ts` - 148 lines).
+    - Deleted mock offline queue engine with simulated `setTimeout` sync (`apps/mobile/lib/offline-sync.ts` - 136 lines) and unmounted `OfflineSyncBanner.tsx` (50 lines).
+    - Deleted unused Supabase Realtime channel subscription manager (`apps/mobile/lib/realtime.ts` - 116 lines).
+    - Deleted unused multi-environment manager (`apps/mobile/lib/environment.ts` - 92 lines).
+    - Deleted unused accessibility helper (`apps/mobile/lib/accessibility.ts` - 48 lines).
+    - Deleted unused push token registration stub (`apps/mobile/lib/notifications.ts` - 42 lines).
+    - Deleted redundant `OptimizedList.tsx` wrapper and unreferenced virtualization helper `performance.ts` (87 lines).
+  - **4. Web App Directory Flattening & Duplicate Clients (`apps/web`)**:
+    - Flattened 4-level deep `components/animate-ui/components/radix/dialog.tsx` into canonical `components/ui/dialog.tsx` and deleted `components/animate-ui/`.
+    - Deleted orphaned duplicate Supabase server/browser clients: `lib/server.ts`, `lib/client.ts`, `lib/supabase/browser.ts`.
+    - Deleted unused structured telemetry logger `lib/telemetry.ts`.
+    - Deleted pass-through alias wrappers `DatePicker.tsx` and `TimePicker.tsx`.
+    - Inlined `roleHasPermission` in `apps/web/app/(app)/hr/page.tsx` and removed single-caller helper `lib/auth/server-rbac.ts`.
+    - Inlined direct `@reachinternational/permissions` imports across 6 callers and deleted pass-through barrel files `lib/auth/scope.ts` and `lib/auth/rbac.ts`.
+    - Removed unused `cacheWithTag` from `lib/cache.ts` while preserving active `CACHE_TAGS`.
+  - **5. Dependency Pruning**:
+    - Removed `shadcn` CLI from runtime dependencies in `apps/web/package.json`.
+    - Removed unused `@base-ui/react` from `apps/web/package.json` and `next.config.ts`.
+    - Removed workspace dependency `@reachinternational/api-client` from `apps/web` and `apps/mobile`.
+    - Moved `@supabase/supabase-js` to devDependencies in root `package.json`.
+    - Pruned 157 transitive/direct packages from `node_modules` and saved ~1,450 lines of code.
+  - **6. Quality Gate Verification**:
+    - `pnpm typecheck`: Passed with **0 errors across all 7 workspace packages**.
+    - `pnpm --filter @reachinternational/web build`: Passed with all **38/38 routes compiled cleanly (Exit code 0)**.
+    - `pnpm --filter @reachinternational/mobile build`: Passed cleanly.
+- [x] **Operator–Machine Assignment, Shift Timings & Overtime Conflict Resolution Architecture (`047_operator_machine_assignments_and_shift_overtime.sql`, `OperationsClient.tsx`, `operations.tsx`, `MobileAssignmentModal.tsx`, `MobileConflictResolutionModal.tsx`, `assignments.ts`, `database.ts`, `machine.ts`, `date.ts`, `endpoints/index.ts`, `test_operator_machine_assignments.mjs`) (2026-09-07)**:
+  - **1. Database Migration & Exclusion Constraints (`047_operator_machine_assignments_and_shift_overtime.sql`, `047_backfill_operator_assignments.sql`)**:
+    - Created `public.operator_machine_assignments` for recurring daily shift windows (`shift_start_time`, `shift_end_time` `TIME`).
+    - Implemented `shift_to_ranges(TIME, TIME)` mapping times onto a 0–1440 circular minute line and unrolling overnight shifts into `[start, 1440)` and `[0, end)`.
+    - Created `public.operator_shift_ranges` with PostgreSQL GiST exclusion constraint (`EXCLUDE USING GIST (operator_id WITH =, minute_range WITH &&) WHERE (is_active)`).
+    - Trigger `enforce_max_operators_per_machine`: `BEFORE INSERT OR UPDATE` with `pg_advisory_xact_lock` counting `COUNT(DISTINCT operator_id)` guaranteeing max 3 distinct active operators per machine without penalizing split shifts.
+    - Trigger `sync_operator_shift_ranges`: `AFTER INSERT OR UPDATE` synchronizing GiST exclusion ranges.
+    - Trigger `sync_machine_assigned_operators`: `AFTER INSERT OR UPDATE OR DELETE` mirroring `operator_ids` and `current_operator_id` to `public.machines` for backward compatibility.
+    - Extended `public.machine_hour_logs` with `conflict_flag`, `conflict_reason`, `conflict_status`, `conflict_resolved_by`, `conflict_resolved_at`, and `conflict_resolution_notes`.
+    - Atomic RPCs: `assign_operator_machine_atomic`, `end_operator_machine_assignment_atomic`, `resolve_hour_log_conflict_atomic`.
+    - Extended `submit_operator_hour_log_atomic` to soft-flag overtime extending into another active machine assignment using `shift_to_ranges()` and range overlap `&&` without blocking log submission.
+    - Fixed `audit_logs` column mismatch in `submit_operator_hour_log_atomic` to use canonical `(user_id, action, entity_type, entity_id, metadata, details, created_at)`.
+    - Decoupled historical backfill into standalone script `supabase/scripts/047_backfill_operator_assignments.sql` with default DRY-RUN reporting mode (`v_dry_run := true`), profile shift parsing, double-booking conflict detection, and machine capacity guards.
+  - **2. Shared Packages (`packages/*`)**:
+    - `packages/types/src/database.ts`: Added `OperatorMachineAssignment`, `Machine.active_assignments`, and conflict fields to `MachineHourLog`.
+    - `packages/validation/src/machine.ts`: Created `CreateAssignmentSchema`, `EndAssignmentSchema`, `ResolveConflictSchema`.
+    - `packages/utils/src/date.ts`: Added `minutesTo24HourTime`, `parseProfileShiftTime`, `isTimeWindowOverlapping`.
+    - `packages/api-client/src/endpoints/index.ts`: Added assignment and conflict resolution API endpoints.
+  - **3. Web Server Actions & Data Access Layer (`apps/web/app/actions/assignments.ts`, `lib/queries/*`)**:
+    - Implemented `createAssignmentAction`, `endAssignmentAction`, `resolveHourLogConflictAction`, `getOperatorProfileShiftAction`, `getMachineActiveAssignmentsAction`.
+    - Added resilient direct table fallbacks (`PGRST202` handling) guaranteeing seamless operations before, during, and after migration rollout.
+    - Hydrated `active_assignments` in machine and operations hub queries with cache tag invalidation (`TAGS.machines`, `TAGS.dashboardKpis`, `TAGS.machineDetail`).
+  - **4. Web Frontend Operations Hub (`apps/web/components/operations/OperationsClient.tsx`)**:
+    - Multi-Shift Equipment Roster Cards with active shifts, capacity indicator `X/3`, daytime `☀️` and overnight `🌙` badges, operator contact, Reassign, End Shift, and + Assign Shift slot buttons.
+    - Upgraded Assignment Modal with profile shift auto-fill badge, mandatory supervisor shift selection when profile shift is null, `<CustomTimePicker>` integration, 3/3 capacity warning, and backend conflict alert banner.
+    - Added Supervisor Overtime Conflict Alert Banner and review modal ("Acknowledge" keep vs "Adjust" trim time).
+  - **5. Mobile React Native Parity (`apps/mobile/app/(app)/operations.tsx`, `MobileAssignmentModal.tsx`, `MobileConflictResolutionModal.tsx`)**:
+    - Synchronized multi-shift equipment cards with capacity pills (`X/3`), daytime/overnight badges, and 44px min touch buttons.
+    - Created native `MobileAssignmentModal.tsx` and `MobileConflictResolutionModal.tsx`.
+  - **6. Quality Gate Verification**:
+    - `node supabase/tests/test_operator_machine_assignments.mjs`: Passed (100%).
+    - `pnpm typecheck` (`turbo run typecheck`): Passed with **0 errors across all 9 packages**.
+    - `pnpm --filter @reachinternational/web build`: Passed with all **38/38 routes compiled cleanly (Exit code 0)**.
 - [x] **Page Feedback: /signup — Header & Section Clutter Removal, Clock Icon Removal, and Mandatory Shift Start & End Time with Red Star (`signup/page.tsx`, `CustomTimePicker.tsx`, `auth.ts`, `actions/auth.ts`, `apps/mobile/app/(auth)/signup.tsx`) (2026-09-07)**:
   - **1. Header & Section Clutter Removal (`apps/web/app/signup/page.tsx`)**:
     - Removed Employee Registration badge (`.inline-flex`) from the card header.

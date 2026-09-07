@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { roleHasPermission, PERMISSIONS } from "@/lib/auth/rbac";
+import { roleHasPermission, PERMISSIONS } from "@reachinternational/permissions";
 import { TAGS, CACHE_TIERS } from "@/lib/cache";
 import type { UserRole } from "@/lib/types/database";
 

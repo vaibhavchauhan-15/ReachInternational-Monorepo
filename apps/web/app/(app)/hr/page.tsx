@@ -1,5 +1,5 @@
 import { requirePermission, protectDisabledRoute } from "@/lib/dal";
-import { currentUserHasPermission } from "@/lib/auth/server-rbac";
+import { roleHasPermission } from "@reachinternational/permissions";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { 
   getEmployeeDirectory, 
@@ -21,8 +21,8 @@ export default async function HRPage({
 }) {
   const user = await requirePermission("employee.view");
   protectDisabledRoute(user.role);
-  const canViewSalary = await currentUserHasPermission("employee.salary.view");
-  const canCreateEmployee = await currentUserHasPermission("employee.create");
+  const canViewSalary = roleHasPermission(user.role, "employee.salary.view");
+  const canCreateEmployee = roleHasPermission(user.role, "employee.create");
   const { tab } = await searchParams;
   const supabase = createSupabaseAdminClient();
 

@@ -14,6 +14,8 @@ export interface AuthContextType {
   user: User | null;
   role: UserRole | null;
   isLoading: boolean;
+  isProfileComplete: boolean;
+  userProfile: any | null;
   can: (permission: PermissionCode) => boolean;
   canAny: (permissions: PermissionCode[]) => boolean;
   signOut: () => Promise<void>;
@@ -25,6 +27,8 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   role: null,
   isLoading: true,
+  isProfileComplete: true,
+  userProfile: null,
   can: () => false,
   canAny: () => false,
   signOut: async () => {},
@@ -35,11 +39,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole | null>(null);
+  const [isProfileComplete, setIsProfileComplete] = useState<boolean>(true);
+  const [userProfile, setUserProfile] = useState<any | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const syncUserProfile = async (currentSession: Session | null) => {
     if (!currentSession?.user) {
       setRole(null);
+      setIsProfileComplete(true);
+      setUserProfile(null);
       setIsLoading(false);
       return;
     }
@@ -47,7 +55,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('role, status')
+        .select('id, full_name, phone, role, status, complete_profile, shift_time, city, district, state, state_id, address, aadhaar_number, license_number')
         .eq('id', currentSession.user.id)
         .single();
 
@@ -55,19 +63,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Safe fallback: use session metadata if strictly present, otherwise null
         const metaRole = currentSession.user.user_metadata?.role as UserRole | undefined;
         setRole(metaRole || null);
+        setIsProfileComplete(true);
       } else if (data.status === 'inactive' || data.status === 'pending') {
         console.warn(`[useAuth] Account is ${data.status}. Revoking session.`);
         await supabase.auth.signOut();
         setSession(null);
         setUser(null);
         setRole(null);
+        setIsProfileComplete(true);
+        setUserProfile(null);
       } else {
         setRole(data.role as UserRole);
+        setUserProfile(data);
+
+        // Fast check: if complete_profile === 'yes', skip checking individual fields
+        if (data.complete_profile === 'yes') {
+          setIsProfileComplete(true);
+        } else {
+          // Check if any required field is missing
+          const hasName = Boolean(data.full_name && data.full_name.trim().length >= 2);
+          const hasPhone = Boolean(data.phone && data.phone.trim().replace(/\D/g, '').length >= 10);
+          const hasRole = Boolean(data.role);
+          const hasShift = Boolean(data.shift_time && data.shift_time.trim());
+          const hasLocation = Boolean(data.city && data.district && data.state);
+          const hasAddress = Boolean(data.address && data.address.trim());
+          const hasAadhaar = Boolean(data.aadhaar_number && data.aadhaar_number.replace(/\D/g, '').length === 12);
+
+          const complete = hasName && hasPhone && hasRole && hasShift && hasLocation && hasAddress && hasAadhaar;
+          setIsProfileComplete(complete);
+        }
       }
     } catch (err) {
       console.error('[useAuth] Error fetching user role from database:', err);
       const metaRole = currentSession.user.user_metadata?.role as UserRole | undefined;
       setRole(metaRole || null);
+      setIsProfileComplete(true);
     } finally {
       setIsLoading(false);
     }
@@ -119,6 +149,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         role,
         isLoading,
+        isProfileComplete,
+        userProfile,
         can,
         canAny,
         signOut,

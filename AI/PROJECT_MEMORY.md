@@ -9,8 +9,7 @@
 - **UI Library**: React 19.2 (Web), React Native / Expo (Mobile), Tailwind CSS v4, Base UI, Lucide Icons, Recharts
 - **Animations**: Framer Motion 12, TW Animate CSS
 - **Database & Auth**: Supabase PostgreSQL, Supabase SSR Auth, Row Level Security (RLS)
-- **Notification Services**: SendGrid Mail API, Twilio (SMS/WhatsApp), Upstash QStash (Scheduled Jobs/Queues)
-- **Shared Packages (`packages/*`)**: `@reachinternational/types`, `@reachinternational/validation`, `@reachinternational/permissions`, `@reachinternational/design-tokens`, `@reachinternational/api-client`, `@reachinternational/utils`, `@reachinternational/config`
+- **Shared Packages (`packages/*`)**: `@reachinternational/types`, `@reachinternational/validation`, `@reachinternational/permissions`, `@reachinternational/design-tokens`, `@reachinternational/utils`
 - **Validation & State**: Zod v4, Server Actions, React Server Components (RSC) + Data Access Layer (DAL), TanStack Query (Mobile)
 
 ## Key User Roles (RBAC)

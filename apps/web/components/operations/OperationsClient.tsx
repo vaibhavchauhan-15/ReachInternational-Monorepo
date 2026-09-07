@@ -15,8 +15,8 @@ import {
   AnimatedUserCheck,
   AnimatedX,
 } from "@/components/ui/animated-icons";
-import { Badge, Button, Select, useToast, TooltipWrapper, MachineSelect, ClientSelect, UserSelect, SearchableSelect } from "@/components/ui";
-import type { Machine, User, MachineAssignment, MachineHourLog, MachineWithEngineer, CRMClient } from "@/lib/types/database";
+import { Badge, Button, Select, useToast, TooltipWrapper, MachineSelect, ClientSelect, UserSelect, SearchableSelect, CustomTimePicker, Modal } from "@/components/ui";
+import type { Machine, User, MachineAssignment, OperatorMachineAssignment, MachineHourLog, MachineWithEngineer, CRMClient } from "@/lib/types/database";
 import { OperatorDashboard, type OperatorHourLog } from "@/components/dashboard/OperatorDashboard";
 import {
   assignOperatorToMachineAction,
@@ -25,16 +25,22 @@ import {
   recordOperatorPayoutAction,
   recordMachineSiteMovementAction,
 } from "@/app/actions/operators";
+import {
+  createAssignmentAction,
+  endAssignmentAction,
+  resolveHourLogConflictAction,
+  getOperatorProfileShiftAction,
+} from "@/app/actions/assignments";
 import { PrintableSupervisorLogsModal } from "./PrintableSupervisorLogsModal";
 import { MONTH_NAMES, getLogMonthNumber, formatCompactTiming } from "@/lib/utils/operator-logs-export";
-import { formatDate, formatExactTimestamp, formatTimeAgo } from "@reachinternational/utils";
-import { Printer, Clock } from "lucide-react";
+import { formatDate, formatExactTimestamp, formatTimeAgo, formatTo12Hour, parseTimeToMinutes } from "@reachinternational/utils";
+import { Printer, Clock, ShieldAlert, Check, UserPlus, AlertCircle, Sun, Moon, Users, Filter, ChevronDown, RefreshCw } from "lucide-react";
 
 export interface OperationsClientProps {
   machines: Machine[];
   dbClients?: CRMClient[];
   operators: User[];
-  assignments: MachineAssignment[];
+  assignments: (OperatorMachineAssignment | MachineAssignment | any)[];
   hourLogs: MachineHourLog[];
   siteMovements?: any[];
   operatorPayouts?: any[];
@@ -128,8 +134,26 @@ export function OperationsClient({
   // Form states: Assignment
   const [selectedMachineId, setSelectedMachineId] = useState(machines[0]?.id || "");
   const [selectedOperatorId, setSelectedOperatorId] = useState("");
+  const [shiftStartTime, setShiftStartTime] = useState("08:00 AM");
+  const [shiftEndTime, setShiftEndTime] = useState("04:00 PM");
+  const [hasProfileShift, setHasProfileShift] = useState<boolean | null>(null);
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
+  const [loadingProfileShift, setLoadingProfileShift] = useState(false);
   const [reassignReason, setReassignReason] = useState("");
   const [notes, setNotes] = useState("");
+
+  // Conflict Resolution States
+  const [selectedConflictLog, setSelectedConflictLog] = useState<MachineHourLog | null>(null);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  const [conflictAction, setConflictAction] = useState<"acknowledge" | "adjust">("acknowledge");
+  const [conflictAdjustedEndTime, setConflictAdjustedEndTime] = useState("");
+  const [conflictNotes, setConflictNotes] = useState("");
+  const [resolvingConflict, setResolvingConflict] = useState(false);
+
+  // Filter states: Assignments Tab
+  const [assignmentSearch, setAssignmentSearch] = useState("");
+  const [assignmentFilter, setAssignmentFilter] = useState<"all" | "assigned" | "unassigned" | "full">("all");
+  const [showAllAssignmentsAudit, setShowAllAssignmentsAudit] = useState(false);
 
   // Form states: Hire Operator
   const [hireName, setHireName] = useState("");
@@ -504,62 +528,187 @@ export function OperationsClient({
     return null;
   }, [currentSelectedMachine, operators, assignments]);
 
-  const handleOpenAssignModal = (targetMachineId?: string, targetOperatorId?: string) => {
-    if (targetMachineId) {
-      setSelectedMachineId(targetMachineId);
-    } else if (activeMachineId && machines.some((m) => m.id === activeMachineId)) {
-      setSelectedMachineId(activeMachineId);
-    } else if (!selectedMachineId && machines[0]?.id) {
-      setSelectedMachineId(machines[0].id);
-    }
+  const activeAssignmentsOnSelectedMachine = useMemo(() => {
+    if (!selectedMachineId) return [];
+    return assignments.filter(
+      (a: any) =>
+        (a.machine_id === selectedMachineId || a.machine?.id === selectedMachineId) &&
+        (a.status === "active" || a.is_active === true)
+    );
+  }, [selectedMachineId, assignments]);
 
+  const pendingConflicts = useMemo(() => {
+    return hourLogs.filter(
+      (l) => l.conflict_flag && (!l.conflict_status || l.conflict_status === "pending")
+    );
+  }, [hourLogs]);
+
+  const isOvernightShift = useMemo(() => {
+    if (!shiftStartTime || !shiftEndTime) return false;
+    const s = parseTimeToMinutes(shiftStartTime);
+    const e = parseTimeToMinutes(shiftEndTime);
+    if (s === null || e === null) return false;
+    return e <= s;
+  }, [shiftStartTime, shiftEndTime]);
+
+  const shiftDurationHours = useMemo(() => {
+    if (!shiftStartTime || !shiftEndTime) return null;
+    const s = parseTimeToMinutes(shiftStartTime);
+    const e = parseTimeToMinutes(shiftEndTime);
+    if (s === null || e === null) return null;
+    let diff = e - s;
+    if (diff <= 0) diff += 1440;
+    const h = Math.floor(diff / 60);
+    const m = diff % 60;
+    return `${h}h${m > 0 ? ` ${m}m` : ""}`;
+  }, [shiftStartTime, shiftEndTime]);
+
+  const handleOperatorSelect = async (opId: string) => {
+    setSelectedOperatorId(opId);
+    setAssignmentError(null);
+    if (!opId) {
+      setHasProfileShift(null);
+      return;
+    }
+    setLoadingProfileShift(true);
+    try {
+      const res = await getOperatorProfileShiftAction(opId);
+      if (res.profileShift) {
+        const parts = res.profileShift.displayString.split(" - ");
+        setShiftStartTime(parts[0] || "08:00 AM");
+        setShiftEndTime(parts[1] || "04:00 PM");
+        setHasProfileShift(true);
+      } else {
+        setShiftStartTime("");
+        setShiftEndTime("");
+        setHasProfileShift(false);
+      }
+    } catch {
+      setHasProfileShift(false);
+    } finally {
+      setLoadingProfileShift(false);
+    }
+  };
+
+  const handleOpenAssignModal = (targetMachineId?: string, targetOperatorId?: string) => {
+    const mId = targetMachineId || (activeMachineId && machines.some((m) => m.id === activeMachineId) ? activeMachineId : machines[0]?.id || "");
+    setSelectedMachineId(mId);
+    setAssignmentError(null);
     if (targetOperatorId) {
-      setSelectedOperatorId(targetOperatorId);
+      handleOperatorSelect(targetOperatorId);
     } else {
       setSelectedOperatorId("");
+      setShiftStartTime("08:00 AM");
+      setShiftEndTime("04:00 PM");
+      setHasProfileShift(null);
     }
-
     setShowAssignModal(true);
   };
 
   const handleAssignOperator = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAssignmentError(null);
     if (!selectedMachineId || !selectedOperatorId) {
       toast("error", "Please select both a target machine and an active operator.");
       return;
     }
+    if (!shiftStartTime || !shiftEndTime) {
+      setAssignmentError("Please specify both shift start time and end time.");
+      toast("error", "Shift start time and end time are required.");
+      return;
+    }
 
-    if (currentRegisteredOperator && selectedOperatorId === currentRegisteredOperator.id) {
-      toast("error", "This operator is already registered to the selected machine. Please choose a different operator.");
+    if (activeAssignmentsOnSelectedMachine.length >= 3) {
+      setAssignmentError("This machine has reached its maximum capacity of 3 active operators.");
+      toast("error", "Maximum capacity of 3 active operators reached.");
       return;
     }
 
     setSubmitting(true);
     try {
-      const res = await assignOperatorToMachineAction({
+      const res = await createAssignmentAction({
         machineId: selectedMachineId,
         operatorId: selectedOperatorId,
+        shiftStartTime,
+        shiftEndTime,
         notes,
       });
 
       if (res.success) {
-        toast(
-          "success",
-          currentRegisteredOperator
-            ? "Operator reassigned to equipment successfully."
-            : "Operator assigned to equipment successfully."
-        );
+        toast("success", "Operator assigned with shift window successfully.");
         setShowAssignModal(false);
         setNotes("");
         setSelectedOperatorId("");
+        setShiftStartTime("08:00 AM");
+        setShiftEndTime("04:00 PM");
+        setHasProfileShift(null);
         router.refresh();
       } else {
-        toast("error", `Error assigning operator: ${res.error || "Failed to assign operator"}`);
+        setAssignmentError(res.error || "Failed to assign operator");
+        toast("error", res.error || "Failed to assign operator");
       }
     } catch (err: any) {
-      toast("error", `Error assigning operator: ${err?.message || "Failed to assign operator"}`);
+      setAssignmentError(err?.message || "Failed to assign operator");
+      toast("error", err?.message || "Failed to assign operator");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleEndAssignment = async (assignmentId: string, opName: string, machName: string) => {
+    if (!window.confirm(`Are you sure you want to end the assignment of ${opName} on ${machName}?`)) {
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await endAssignmentAction({
+        assignmentId,
+        endReason: "removed",
+      });
+      if (res.success) {
+        toast("success", `Assignment ended for ${opName}.`);
+        router.refresh();
+      } else {
+        toast("error", res.error || "Failed to end assignment");
+      }
+    } catch (err: any) {
+      toast("error", err?.message || "Failed to end assignment");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleOpenConflictModal = (log: MachineHourLog) => {
+    setSelectedConflictLog(log);
+    setConflictAction("acknowledge");
+    setConflictAdjustedEndTime(log.end_time || "");
+    setConflictNotes("");
+    setShowConflictModal(true);
+  };
+
+  const handleResolveConflict = async () => {
+    if (!selectedConflictLog) return;
+    setResolvingConflict(true);
+    try {
+      const res = await resolveHourLogConflictAction({
+        logId: selectedConflictLog.id,
+        action: conflictAction,
+        adjustedEndTime: conflictAction === "adjust" ? conflictAdjustedEndTime : null,
+        notes: conflictNotes,
+      });
+      if (res.success) {
+        toast("success", `Overtime conflict ${conflictAction === "acknowledge" ? "acknowledged" : "adjusted"} successfully.`);
+        setShowConflictModal(false);
+        setSelectedConflictLog(null);
+        setConflictNotes("");
+        router.refresh();
+      } else {
+        toast("error", res.error || "Failed to resolve conflict");
+      }
+    } catch (err: any) {
+      toast("error", err?.message || "Failed to resolve conflict");
+    } finally {
+      setResolvingConflict(false);
     }
   };
 
@@ -714,17 +863,65 @@ export function OperationsClient({
     <div className="w-full space-y-6">
       {/* SUPERVISOR / MANAGEMENT HEADER */}
       {userRole !== "operator" && (
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-extrabold text-[var(--color-ink)]">
-              {currentTitle}
-            </h1>
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h1 className="text-xl font-extrabold text-[var(--color-ink)]">
+                {currentTitle}
+              </h1>
+              <p className="text-xs text-[var(--color-mute)] mt-0.5">
+                Manage recurring daily shifts, active operator rosters (up to 3 per machine), and resolve overtime shift overlaps.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="primary" onClick={() => handleOpenAssignModal()}>
+                <AnimatedUserCheck size={15} /> Assign Operator
+              </Button>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="primary" onClick={() => handleOpenAssignModal()}>
-              <AnimatedUserCheck size={15} /> Assign Operator
-            </Button>
+          {/* Supervisor Top Tab Bar */}
+          <div className="flex items-center gap-2 border-b border-[var(--color-hairline)] pb-2 overflow-x-auto custom-scrollbar">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("logs");
+                router.push("/operations?tab=logs");
+              }}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === "logs"
+                  ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
+                  : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas-elevated)]"
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Daily Running Hours</span>
+              {pendingConflicts.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                  {pendingConflicts.length} Alert{pendingConflicts.length > 1 ? "s" : ""}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("assignments");
+                router.push("/operations?tab=assignments");
+              }}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+                activeTab === "assignments"
+                  ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
+                  : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas-elevated)]"
+              }`}
+            >
+              <AnimatedStar size={14} />
+              <span>Operator Machine Assignments</span>
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                {assignments.filter((a: any) => a.status === "active" || a.is_active).length}
+              </span>
+            </button>
           </div>
         </div>
       )}
@@ -743,6 +940,59 @@ export function OperationsClient({
       {/* TAB 1: Daily Running Hour Logs (Supervisor Multi-View & Month-Wise Logs) */}
       {activeTab === "logs" && (
         <div className="space-y-3">
+          {/* OVERTIME CONFLICT ALERT BANNER */}
+          {pendingConflicts.length > 0 && (
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="p-2 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
+                    <ShieldAlert className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-extrabold text-[var(--color-ink)] flex items-center gap-2">
+                      <span>{pendingConflicts.length} Realized Overtime Shift Conflict{pendingConflicts.length > 1 ? "s" : ""}</span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                        Action Required
+                      </span>
+                    </h4>
+                    <p className="text-xs text-[var(--color-mute)] mt-0.5">
+                      Operator running hours exceeded their scheduled shift window and overlapped with another operator's assignment. Review and acknowledge or adjust.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                {pendingConflicts.slice(0, 6).map((log) => {
+                  const mName = (log.machine as any)?.machine_name || (log.machine as any)?.machine_code || "Equipment";
+                  const opName = (log.operator as any)?.full_name || (log.operator as any)?.name || "Operator";
+                  return (
+                    <div
+                      key={log.id}
+                      className="p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-amber-500/20 flex items-center justify-between gap-3 text-xs shadow-2xs"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-[var(--color-ink)] truncate">{mName}</div>
+                        <div className="text-[11px] text-[var(--color-mute)] truncate">{opName} • {log.log_date}</div>
+                        <div className="text-[10px] font-mono text-amber-600 dark:text-amber-400 truncate mt-0.5">
+                          {log.conflict_reason || "Shift overlap detected"}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleOpenConflictModal(log)}
+                        className="shrink-0 text-xs font-bold border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
+                      >
+                        Review
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {/* FILTER & EXPORT TOOLBAR */}
           <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 space-y-3 shadow-sm">
             <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
@@ -1604,75 +1854,394 @@ export function OperationsClient({
       )}
 
       {/* TAB 2: Operator Equipment Assignments */}
-      {activeTab === "assignments" && (
-        <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden shadow-sm">
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left text-xs min-w-[650px]">
-              <thead className="bg-[var(--color-canvas)] text-[var(--color-mute)] uppercase font-extrabold border-b border-[var(--color-hairline)]">
-                <tr>
-                  <th className="px-4 py-3">Machine</th>
-                  <th className="px-4 py-3">Current Operator</th>
-                  <th className="px-4 py-3">Operator Contact</th>
-                  <th className="px-4 py-3">Assigned Date</th>
-                  <th className="px-4 py-3">Assigned By</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--color-hairline)] font-medium text-[var(--color-ink)]">
-                {assignments.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-[var(--color-mute)]">
-                      No active operator assignments found.
-                    </td>
-                  </tr>
-                ) : (
-                  assignments.map((ass) => (
-                    <tr key={ass.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
-                      <td className="px-4 py-3">
-                        <div className="font-bold text-[var(--color-ink)]">
-                          {(ass.machine as any)?.machine_name}
+      {activeTab === "assignments" && (() => {
+        // Filter machines and their assignments
+        const activeAssList = assignments.filter((a: any) => a.status === "active" || a.is_active);
+        
+        const filteredMachines = machines.filter((m) => {
+          const machAss = activeAssList.filter((a: any) => a.machine_id === m.id || a.machine?.id === m.id);
+          
+          // Status filter
+          if (assignmentFilter === "assigned" && machAss.length === 0) return false;
+          if (assignmentFilter === "unassigned" && machAss.length > 0) return false;
+          if (assignmentFilter === "full" && machAss.length < 3) return false;
+
+          // Search query
+          if (!assignmentSearch.trim()) return true;
+          const q = assignmentSearch.toLowerCase().trim();
+          const code = (m.machine_id || m.machine_code || "").toLowerCase();
+          const model = (m.model || "").toLowerCase();
+          const serial = (m.serial_number || "").toLowerCase();
+          const hasOpMatch = machAss.some((a: any) => {
+            const opName = (a.operator?.full_name || a.operator?.name || "").toLowerCase();
+            return opName.includes(q);
+          });
+          return code.includes(q) || model.includes(q) || serial.includes(q) || hasOpMatch;
+        });
+
+        const totalActiveAssignmentsCount = activeAssList.length;
+        const totalMachinesCount = machines.length;
+        const fullyAssignedCount = machines.filter((m) => {
+          const machAss = activeAssList.filter((a: any) => a.machine_id === m.id || a.machine?.id === m.id);
+          return machAss.length >= 3;
+        }).length;
+        const unassignedCount = machines.filter((m) => {
+          const machAss = activeAssList.filter((a: any) => a.machine_id === m.id || a.machine?.id === m.id);
+          return machAss.length === 0;
+        }).length;
+
+        return (
+          <div className="space-y-4">
+            {/* KPI STATS STRIP */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="p-3 rounded-2xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] space-y-0.5 shadow-2xs">
+                <span className="text-[10px] font-extrabold uppercase text-[var(--color-mute)] block">Total Equipment</span>
+                <span className="text-lg font-extrabold font-mono text-[var(--color-ink)]">{totalMachinesCount}</span>
+              </div>
+              <div className="p-3 rounded-2xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] space-y-0.5 shadow-2xs">
+                <span className="text-[10px] font-extrabold uppercase text-[var(--color-mute)] block">Active Shift Operators</span>
+                <span className="text-lg font-extrabold font-mono text-sky-600 dark:text-sky-400">{totalActiveAssignmentsCount}</span>
+              </div>
+              <div className="p-3 rounded-2xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] space-y-0.5 shadow-2xs">
+                <span className="text-[10px] font-extrabold uppercase text-[var(--color-mute)] block">Full Capacity (3/3)</span>
+                <span className="text-lg font-extrabold font-mono text-emerald-600 dark:text-emerald-400">{fullyAssignedCount}</span>
+              </div>
+              <div className="p-3 rounded-2xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] space-y-0.5 shadow-2xs">
+                <span className="text-[10px] font-extrabold uppercase text-[var(--color-mute)] block">Unassigned (0/3)</span>
+                <span className="text-lg font-extrabold font-mono text-amber-600 dark:text-amber-400">{unassignedCount}</span>
+              </div>
+            </div>
+
+            {/* FILTER & SEARCH TOOLBAR */}
+            <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 space-y-3 shadow-sm">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                {/* Search Input */}
+                <div className="relative flex-1 max-w-md">
+                  <AnimatedSearch size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-mute)]" />
+                  <input
+                    type="text"
+                    value={assignmentSearch}
+                    onChange={(e) => setAssignmentSearch(e.target.value)}
+                    placeholder="Search machines, models, serial numbers, operators..."
+                    className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] focus:outline-none focus:ring-1 focus:ring-sky-500"
+                  />
+                  {assignmentSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setAssignmentSearch("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-mute)] hover:text-[var(--color-ink)] text-xs"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                {/* Status Filter Buttons */}
+                <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar p-1 bg-[var(--color-canvas)] rounded-xl border border-[var(--color-hairline)] shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setAssignmentFilter("all")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      assignmentFilter === "all"
+                        ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
+                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                    }`}
+                  >
+                    All ({totalMachinesCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAssignmentFilter("assigned")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      assignmentFilter === "assigned"
+                        ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
+                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                    }`}
+                  >
+                    Assigned ({totalMachinesCount - unassignedCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAssignmentFilter("full")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      assignmentFilter === "full"
+                        ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
+                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                    }`}
+                  >
+                    Full (3/3) ({fullyAssignedCount})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAssignmentFilter("unassigned")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      assignmentFilter === "unassigned"
+                        ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
+                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                    }`}
+                  >
+                    Unassigned ({unassignedCount})
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* EQUIPMENT SHIFT ROSTER CARDS */}
+            <div className="space-y-3">
+              {filteredMachines.length === 0 ? (
+                <div className="p-8 text-center rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-mute)] text-xs">
+                  No equipment matched your filter criteria.
+                </div>
+              ) : (
+                filteredMachines.map((m) => {
+                  const machAss = activeAssList.filter((a: any) => a.machine_id === m.id || a.machine?.id === m.id);
+                  const isFull = machAss.length >= 3;
+                  const machCode = m.machine_id || m.machine_code || "Machine";
+
+                  return (
+                    <div
+                      key={m.id}
+                      className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 space-y-3.5 shadow-2xs transition-all hover:border-[var(--color-hairline-strong)]"
+                    >
+                      {/* Machine Header Strip */}
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-[var(--color-hairline)]">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-sm text-[var(--color-ink)]">
+                              {machCode}
+                            </span>
+                            {m.model && (
+                              <span className="text-xs font-semibold text-[var(--color-mute)]">
+                                • {m.model}
+                              </span>
+                            )}
+                            {m.serial_number && (
+                              <span className="text-[11px] font-mono text-[var(--color-mute)]">
+                                (S/N: {m.serial_number})
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-[var(--color-mute)] flex items-center gap-3 mt-0.5">
+                            {m.hour_meter !== undefined && (
+                              <span>Meter: <strong className="font-mono text-[var(--color-ink)]">{m.hour_meter} hrs</strong></span>
+                            )}
+                            {m.status && (
+                              <span className="capitalize">Status: <strong className="text-[var(--color-ink)]">{m.status}</strong></span>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-[10px] text-[var(--color-mute)] font-mono">
-                          {(ass.machine as any)?.machine_code} (Serial: {(ass.machine as any)?.serial_number})
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 font-semibold">
-                        {(ass.operator as any)?.full_name || "Unassigned"}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--color-mute)]">
-                        {(ass.operator as any)?.phone || "N/A"}
-                      </td>
-                      <td className="px-4 py-3 font-mono">
-                        {new Date(ass.assigned_at).toLocaleDateString("en-GB")}
-                      </td>
-                      <td className="px-4 py-3">{(ass.assigner as any)?.full_name || "System"}</td>
-                      <td className="px-4 py-3">
-                        {ass.status === "active" ? (
-                          <Badge variant="success">Active</Badge>
-                        ) : (
-                          <Badge variant="inactive">Ended</Badge>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        {userRole !== "operator" && (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenAssignModal(ass.machine_id, ass.operator_id || undefined)}
-                            className="px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20 text-[11px] font-bold cursor-pointer"
+
+                        {/* Capacity Pill & Add Button */}
+                        <div className="flex items-center gap-2 self-stretch sm:self-auto justify-between sm:justify-end">
+                          <span
+                            className={`px-2.5 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 ${
+                              isFull
+                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                                : machAss.length > 0
+                                ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20"
+                                : "bg-[var(--color-canvas)] text-[var(--color-mute)] border-[var(--color-hairline)]"
+                            }`}
                           >
-                            Reassign
-                          </button>
+                            <span
+                              className={`w-2 h-2 rounded-full ${
+                                isFull ? "bg-emerald-500" : machAss.length > 0 ? "bg-sky-500" : "bg-zinc-400"
+                              }`}
+                            />
+                            {machAss.length} / 3 Operators
+                          </span>
+
+                          {!isFull && userRole !== "operator" && (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleOpenAssignModal(m.id)}
+                              className="text-xs font-bold h-8 px-3"
+                            >
+                              <AnimatedPlus size={14} className="text-sky-500" /> Assign Operator
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Shift Slots Grid (Up to 3 Slots) */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {/* Render active slots */}
+                        {machAss.map((ass: any, sIdx: number) => {
+                          const opObj = activeOperators.find((u) => u.id === ass.operator_id) || (ass.operator as any);
+                          const opName = opObj?.full_name || opObj?.name || "Assigned Operator";
+                          const isOvernight =
+                            ass.crosses_midnight ||
+                            (parseTimeToMinutes(ass.shift_end_time) ?? 0) <= (parseTimeToMinutes(ass.shift_start_time) ?? 0);
+
+                          return (
+                            <div
+                              key={ass.id || sIdx}
+                              className="p-3 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] flex flex-col justify-between gap-3 text-xs"
+                            >
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-mute)]">
+                                    Shift Slot #{sIdx + 1}
+                                  </span>
+                                  {isOvernight ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 font-mono">
+                                      <Moon className="w-3 h-3 text-indigo-500" />
+                                      {formatTo12Hour(ass.shift_start_time)} – {formatTo12Hour(ass.shift_end_time)}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-mono">
+                                      <Sun className="w-3 h-3 text-amber-500" />
+                                      {formatTo12Hour(ass.shift_start_time)} – {formatTo12Hour(ass.shift_end_time)}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div>
+                                  <div className="font-extrabold text-[var(--color-ink)] text-sm truncate">
+                                    {opName}
+                                  </div>
+                                  <div className="text-[11px] text-[var(--color-mute)] flex flex-wrap items-center gap-x-2 mt-0.5 font-mono">
+                                    {opObj?.phone && <span>📞 {opObj.phone}</span>}
+                                    <span>• Since {formatDate(ass.assigned_at)}</span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {userRole !== "operator" && (
+                                <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--color-hairline)]">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenAssignModal(m.id, ass.operator_id)}
+                                    className="px-2.5 py-1 rounded-lg text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 text-[11px] font-bold cursor-pointer transition-colors"
+                                  >
+                                    Reassign
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEndAssignment(ass.id, opName, machCode)}
+                                    className="px-2.5 py-1 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 text-[11px] font-bold cursor-pointer transition-colors"
+                                  >
+                                    End Shift
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {/* Render empty available slots */}
+                        {Array.from({ length: Math.max(0, 3 - machAss.length) }).map((_, emptyIdx) => {
+                          const slotNum = machAss.length + emptyIdx + 1;
+                          return (
+                            <button
+                              key={`empty-${emptyIdx}`}
+                              type="button"
+                              onClick={() => handleOpenAssignModal(m.id)}
+                              className="p-4 rounded-xl border border-dashed border-[var(--color-hairline-strong)] hover:border-sky-500 hover:bg-sky-500/5 transition-all text-left flex flex-col items-center justify-center gap-1.5 cursor-pointer min-h-[110px]"
+                            >
+                              <div className="w-7 h-7 rounded-full bg-[var(--color-canvas)] border border-[var(--color-hairline)] flex items-center justify-center text-[var(--color-mute)] group-hover:text-sky-500">
+                                <AnimatedPlus size={14} />
+                              </div>
+                              <span className="text-xs font-bold text-[var(--color-mute)] hover:text-sky-600">
+                                + Assign Shift #{slotNum}
+                              </span>
+                              <span className="text-[10px] text-[var(--color-mute)] opacity-70">
+                                Open Slot Available
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* AUDIT LOGS SECTION TOGGLE */}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowAllAssignmentsAudit(!showAllAssignmentsAudit)}
+                className="text-xs font-bold text-[var(--color-mute)] hover:text-[var(--color-ink)] flex items-center gap-1.5 cursor-pointer"
+              >
+                <ChevronDown className={`w-4 h-4 transition-transform ${showAllAssignmentsAudit ? "rotate-180" : ""}`} />
+                <span>{showAllAssignmentsAudit ? "Hide All Assignment History Logs" : "View Historical & Audit Logs"}</span>
+              </button>
+
+              {showAllAssignmentsAudit && (
+                <div className="mt-3 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden shadow-sm animate-in fade-in">
+                  <div className="overflow-x-auto custom-scrollbar">
+                    <table className="w-full text-left text-xs min-w-[650px]">
+                      <thead className="bg-[var(--color-canvas)] text-[var(--color-mute)] uppercase font-extrabold border-b border-[var(--color-hairline)]">
+                        <tr>
+                          <th className="px-4 py-3">Machine</th>
+                          <th className="px-4 py-3">Operator</th>
+                          <th className="px-4 py-3">Shift Window</th>
+                          <th className="px-4 py-3">Assigned Date</th>
+                          <th className="px-4 py-3">Ended Date</th>
+                          <th className="px-4 py-3">End Reason</th>
+                          <th className="px-4 py-3">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--color-hairline)] font-medium text-[var(--color-ink)]">
+                        {assignments.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="px-4 py-6 text-center text-[var(--color-mute)]">
+                              No assignment records recorded.
+                            </td>
+                          </tr>
+                        ) : (
+                          assignments.map((ass: any) => (
+                            <tr key={ass.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
+                              <td className="px-4 py-3">
+                                <div className="font-bold text-[var(--color-ink)]">
+                                  {(ass.machine as any)?.machine_name || ass.machine_id}
+                                </div>
+                                <div className="text-[10px] text-[var(--color-mute)] font-mono">
+                                  {(ass.machine as any)?.machine_code}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 font-semibold">
+                                {(ass.operator as any)?.full_name || "Operator"}
+                              </td>
+                              <td className="px-4 py-3 font-mono text-[11px]">
+                                {ass.shift_start_time ? (
+                                  <span>
+                                    {formatTo12Hour(ass.shift_start_time)} – {formatTo12Hour(ass.shift_end_time)}
+                                    {ass.crosses_midnight && " 🌙"}
+                                  </span>
+                                ) : "—"}
+                              </td>
+                              <td className="px-4 py-3 font-mono">
+                                {formatDate(ass.assigned_at)}
+                              </td>
+                              <td className="px-4 py-3 font-mono text-[var(--color-mute)]">
+                                {ass.ended_at ? formatDate(ass.ended_at) : "Active"}
+                              </td>
+                              <td className="px-4 py-3 capitalize text-[var(--color-mute)]">
+                                {ass.end_reason || "—"}
+                              </td>
+                              <td className="px-4 py-3">
+                                {ass.status === "active" || ass.is_active ? (
+                                  <Badge variant="success">Active</Badge>
+                                ) : (
+                                  <Badge variant="inactive">Ended</Badge>
+                                )}
+                              </td>
+                            </tr>
+                          ))
                         )}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* TAB 3: Site Movement & Loading / Unloading Logsheet */}
       {activeTab === "site-movement" && (
@@ -1808,176 +2377,220 @@ export function OperationsClient({
       )}
 
 
-      {/* MODAL: Assign / Reassign Machine Operator */}
+      {/* MODAL: Assign Machine Operator to Shift */}
       {showAssignModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
           <form
             onSubmit={handleAssignOperator}
-            className="bg-[var(--color-canvas-elevated)] p-6 rounded-2xl border border-[var(--color-hairline)] max-w-md w-full space-y-4 shadow-xl"
+            className="bg-[var(--color-canvas-elevated)] p-6 rounded-2xl border border-[var(--color-hairline)] max-w-lg w-full space-y-4 shadow-xl max-h-[90vh] overflow-y-auto custom-scrollbar"
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-extrabold text-[var(--color-ink)] flex items-center gap-2">
-                <AnimatedUserCheck size={18} className="text-sky-500 shrink-0" />
-                {currentRegisteredOperator ? "Reassign Machine Operator" : "Assign Machine Operator"}
-              </h3>
+              <div>
+                <h3 className="text-base font-extrabold text-[var(--color-ink)] flex items-center gap-2">
+                  <AnimatedUserCheck size={18} className="text-sky-500 shrink-0" />
+                  Assign Operator Shift Window
+                </h3>
+                <p className="text-xs text-[var(--color-mute)] mt-0.5">
+                  Assign an operator to recurring daily shift timings for this equipment.
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowAssignModal(false)}
-                className="p-1 rounded-lg text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas)] cursor-pointer transition-colors"
+                className="p-1.5 rounded-lg text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas)] cursor-pointer transition-colors"
                 aria-label="Close modal"
               >
                 <AnimatedX size={16} />
               </button>
             </div>
 
-            <div className="space-y-3.5">
+            {/* Error Banner if any */}
+            {assignmentError && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-400 text-xs flex items-start gap-2 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold">Assignment Conflict / Error</div>
+                  <div className="mt-0.5">{assignmentError}</div>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-4">
               {/* Select Machine */}
-              <MachineSelect
-                label="Select Target Machine"
-                required
-                value={selectedMachineId}
-                onChange={(mId) => {
-                  setSelectedMachineId(mId);
-                  setSelectedOperatorId("");
-                }}
-                machines={machines}
-              />
+              <div>
+                <MachineSelect
+                  label="Target Equipment *"
+                  required
+                  value={selectedMachineId}
+                  onChange={(mId) => {
+                    setSelectedMachineId(mId);
+                    setAssignmentError(null);
+                  }}
+                  machines={machines}
+                />
+              </div>
 
-              {/* Current Registered Operator Status */}
-              {currentRegisteredOperator ? (
-                <div className="p-3.5 rounded-xl bg-sky-500/5 dark:bg-sky-500/10 border border-sky-500/20 text-xs space-y-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 font-bold text-sky-700 dark:text-sky-300">
-                      <AnimatedUserCheck size={15} className="text-sky-600 dark:text-sky-400 shrink-0" />
-                      <span>Currently Registered Operator</span>
-                    </div>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      Assigned
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 pt-1 border-t border-sky-500/15">
-                    <div className="min-w-0 flex-1">
-                      <div className="font-extrabold text-[var(--color-ink)] text-sm truncate">
-                        {currentRegisteredOperator.full_name || currentRegisteredOperator.name || "Assigned Operator"}
-                      </div>
-                      <div className="text-[11px] text-[var(--color-mute)] flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 font-mono">
-                        {currentRegisteredOperator.phone && <span>📞 {currentRegisteredOperator.phone}</span>}
-                        {currentRegisteredOperator.email && <span className="truncate">✉️ {currentRegisteredOperator.email}</span>}
-                      </div>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      onClick={handleUnassignOperator}
-                      disabled={submitting}
-                      className="text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 border-rose-200 dark:border-rose-900 shrink-0 text-[11px] h-7 px-2.5"
-                      title="Unassign current operator from this machine"
-                    >
-                      Unassign
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-3.5 rounded-xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 text-xs space-y-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 font-bold text-amber-700 dark:text-amber-400">
-                      <AnimatedAlertTriangle size={15} className="text-amber-500 shrink-0" />
-                      <span>Current Assignment Status</span>
-                    </div>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                      Unassigned
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-[var(--color-mute)] pt-0.5">
-                    This equipment currently has no operator registered. Select an operator below to assign.
-                  </p>
-                </div>
-              )}
-
-              {/* Select Operator */}
-              <UserSelect
-                label={
-                  currentRegisteredOperator
-                    ? "Select Replacement / New Operator"
-                    : "Select Operator to Assign"
-                }
-                required
-                value={selectedOperatorId}
-                onChange={(opId) => setSelectedOperatorId(opId)}
-                users={activeOperators}
-                roleFilter={["operator"]}
-                placeholder={
-                  currentRegisteredOperator
-                    ? "Search or select other operator to reassign..."
-                    : "Search or select active operator..."
-                }
-              />
-
-              {/* Notice if same operator is picked */}
-              {selectedOperatorId && currentRegisteredOperator && selectedOperatorId === currentRegisteredOperator.id && (
-                <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-800 dark:text-sky-300 text-xs flex items-center gap-2">
-                  <span>ℹ️</span>
-                  <span>
-                    <strong>{currentRegisteredOperator.full_name}</strong> is already registered to this machine. Please select another operator.
+              {/* Machine Active Shift Roster & Capacity Status */}
+              <div className="p-3.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-[var(--color-ink)] flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-sky-500" />
+                    Machine Shift Roster Capacity
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border ${
+                    activeAssignmentsOnSelectedMachine.length >= 3
+                      ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+                      : activeAssignmentsOnSelectedMachine.length > 0
+                      ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                      : "bg-[var(--color-canvas-elevated)] text-[var(--color-mute)] border-[var(--color-hairline)]"
+                  }`}>
+                    {activeAssignmentsOnSelectedMachine.length} / 3 Operators Assigned
                   </span>
                 </div>
-              )}
 
-              {/* Assignment / Reassignment Summary Banner */}
-              {selectedOperatorId && (!currentRegisteredOperator || selectedOperatorId !== currentRegisteredOperator.id) && (() => {
-                const selectedOp = activeOperators.find((op) => op.id === selectedOperatorId) || operators.find((op) => op.id === selectedOperatorId);
-                return (
-                  <div className="p-2.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-xs space-y-1">
-                    <div className="font-bold text-[var(--color-ink)] flex items-center gap-1.5">
-                      <AnimatedUserCheck size={14} className="text-sky-500 shrink-0" />
-                      {currentRegisteredOperator ? "Reassignment Summary" : "New Assignment Summary"}
-                    </div>
-                    <div className="flex items-center gap-2 text-xs">
-                      <span className="font-semibold text-[var(--color-mute)] truncate">
-                        {currentRegisteredOperator?.full_name || "Unassigned"}
-                      </span>
-                      <span className="text-sky-500 font-bold shrink-0">➔</span>
-                      <span className="font-extrabold text-sky-600 dark:text-sky-400 truncate">
-                        {selectedOp?.full_name || "Selected Operator"}
-                      </span>
-                    </div>
+                {activeAssignmentsOnSelectedMachine.length === 0 ? (
+                  <p className="text-[11px] text-[var(--color-mute)] italic">
+                    No active operators currently assigned to this equipment.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5 pt-1">
+                    {activeAssignmentsOnSelectedMachine.map((ass: any, idx: number) => {
+                      const opObj = activeOperators.find((u) => u.id === ass.operator_id) || (ass.operator as any);
+                      const isOvernight = ass.crosses_midnight || (parseTimeToMinutes(ass.shift_end_time) ?? 0) <= (parseTimeToMinutes(ass.shift_start_time) ?? 0);
+                      return (
+                        <div
+                          key={ass.id || idx}
+                          className="flex items-center justify-between p-2 rounded-lg bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] text-xs"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <span className="font-bold text-[var(--color-ink)]">
+                              {opObj?.full_name || "Operator"}
+                            </span>
+                            <div className="text-[11px] text-[var(--color-mute)] flex items-center gap-1 mt-0.5">
+                              {isOvernight ? (
+                                <span className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-mono">
+                                  <Moon className="w-3 h-3" /> {formatTo12Hour(ass.shift_start_time)} – {formatTo12Hour(ass.shift_end_time)}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-mono">
+                                  <Sun className="w-3 h-3" /> {formatTo12Hour(ass.shift_start_time)} – {formatTo12Hour(ass.shift_end_time)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
+                            Active
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })()}
+                )}
 
-              {/* Reassignment Notice Banner if selected operator is assigned elsewhere */}
-              {(() => {
-                if (!selectedOperatorId || (currentRegisteredOperator && selectedOperatorId === currentRegisteredOperator.id)) {
-                  return null;
-                }
-                const selectedOp = activeOperators.find((op) => op.id === selectedOperatorId) || operators.find((op) => op.id === selectedOperatorId);
-                const activeAss = assignments.find((a) => a.operator_id === selectedOperatorId && a.status === "active");
-                const currentMach = activeAss
-                  ? machines.find((m) => m.id === activeAss.machine_id)
-                  : machines.find((m) => m.current_operator_id === selectedOperatorId);
+                {activeAssignmentsOnSelectedMachine.length >= 3 && (
+                  <div className="p-2.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-700 dark:text-rose-400 text-[11px] font-semibold flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Maximum capacity reached (3/3). End an existing assignment before adding another operator.</span>
+                  </div>
+                )}
+              </div>
 
-                if (currentMach && currentMach.id !== selectedMachineId) {
-                  return (
-                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-300 text-xs space-y-1">
-                      <div className="font-bold flex items-center gap-1.5">
-                        <AnimatedAlertTriangle size={14} className="text-amber-500 shrink-0" />
-                        Operator Transfer Notice
+              {/* Select Operator */}
+              <div>
+                <UserSelect
+                  label="Select Operator to Assign *"
+                  required
+                  value={selectedOperatorId}
+                  onChange={handleOperatorSelect}
+                  users={activeOperators}
+                  roleFilter={["operator"]}
+                  placeholder="Search and select active operator..."
+                />
+
+                {/* Profile Shift auto-fill status badge */}
+                {selectedOperatorId && (
+                  <div className="mt-1.5">
+                    {loadingProfileShift ? (
+                      <span className="text-[11px] text-[var(--color-mute)] flex items-center gap-1.5">
+                        <RefreshCw className="w-3 h-3 animate-spin" /> Checking profile shift timings...
+                      </span>
+                    ) : hasProfileShift === true ? (
+                      <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[11px] font-semibold flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+                        <span>Timings auto-filled from operator profile ({shiftStartTime} – {shiftEndTime}). You may customize below if needed.</span>
                       </div>
-                      <div>
-                        <strong>{selectedOp?.full_name || "Selected Operator"}</strong> is currently assigned to{" "}
-                        <strong>{formatMachineSelectLabel(currentMach)}</strong>. Assigning them here will transfer their assignment to this machine.
+                    ) : hasProfileShift === false ? (
+                      <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-300 text-[11px] font-semibold flex items-center gap-1.5">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0 text-amber-500" />
+                        <span>No default profile shift found for this operator. Please select shift start and end times below.</span>
                       </div>
-                    </div>
-                  );
-                }
-                return null;
-              })()}
+                    ) : null}
+                  </div>
+                )}
+              </div>
+
+              {/* Shift Timings: CustomTimePicker for Start and End */}
+              <div className="space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <CustomTimePicker
+                      label="Daily Shift Start Time *"
+                      required
+                      value={shiftStartTime}
+                      onChange={(v) => {
+                        setShiftStartTime(v);
+                        setAssignmentError(null);
+                      }}
+                      placeholder="08:00 AM"
+                    />
+                  </div>
+                  <div>
+                    <CustomTimePicker
+                      label="Daily Shift End Time *"
+                      required
+                      value={shiftEndTime}
+                      onChange={(v) => {
+                        setShiftEndTime(v);
+                        setAssignmentError(null);
+                      }}
+                      placeholder="04:00 PM"
+                    />
+                  </div>
+                </div>
+
+                {/* Duration & Overnight Helper Pill */}
+                {shiftStartTime && shiftEndTime && (
+                  <div className="flex items-center justify-between text-xs p-2 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)]">
+                    <span className="text-[var(--color-mute)]">Shift Duration: <strong className="text-[var(--color-ink)] font-mono">{shiftDurationHours || "—"}</strong></span>
+                    {isOvernightShift ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400">
+                        <Moon className="w-3 h-3" /> Crosses Midnight (Overnight)
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                        <Sun className="w-3 h-3" /> Standard Day Shift
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Assignment Notes */}
+              <div>
+                <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">
+                  Assignment Notes (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="e.g. Primary morning shift, client site operations"
+                  className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]"
+                />
+              </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--color-hairline)]">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--color-hairline)]">
               <Button
                 type="button"
                 variant="secondary"
@@ -1993,15 +2606,175 @@ export function OperationsClient({
                 size="sm"
                 loading={submitting}
                 disabled={
+                  submitting ||
                   !selectedMachineId ||
                   !selectedOperatorId ||
-                  (!!currentRegisteredOperator && selectedOperatorId === currentRegisteredOperator.id)
+                  !shiftStartTime ||
+                  !shiftEndTime ||
+                  activeAssignmentsOnSelectedMachine.length >= 3
                 }
               >
-                {currentRegisteredOperator ? "Confirm & Reassign Operator" : "Confirm & Assign Operator"}
+                Confirm & Assign Shift
               </Button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* MODAL: Review & Resolve Overtime Conflict */}
+      {showConflictModal && selectedConflictLog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
+          <div className="bg-[var(--color-canvas-elevated)] p-6 rounded-2xl border border-[var(--color-hairline)] max-w-md w-full space-y-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-extrabold text-[var(--color-ink)] flex items-center gap-2">
+                  <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0" />
+                  Resolve Overtime Conflict
+                </h3>
+                <p className="text-xs text-[var(--color-mute)] mt-0.5">
+                  Log Date: <strong className="text-[var(--color-ink)]">{selectedConflictLog.log_date}</strong>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowConflictModal(false)}
+                className="p-1.5 rounded-lg text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas)] cursor-pointer transition-colors"
+                aria-label="Close modal"
+              >
+                <AnimatedX size={16} />
+              </button>
+            </div>
+
+            {/* Conflict Summary Card */}
+            <div className="p-3.5 rounded-xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 text-xs space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-[10px] text-[var(--color-mute)] uppercase font-bold block">Equipment</span>
+                  <span className="font-bold text-[var(--color-ink)]">
+                    {(selectedConflictLog.machine as any)?.machine_name || (selectedConflictLog.machine as any)?.machine_code || "Equipment"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-[var(--color-mute)] uppercase font-bold block">Operator</span>
+                  <span className="font-bold text-[var(--color-ink)]">
+                    {(selectedConflictLog.operator as any)?.full_name || "Operator"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-amber-500/15 grid grid-cols-2 gap-2 font-mono">
+                <div>
+                  <span className="text-[10px] text-[var(--color-mute)] uppercase font-bold block">Recorded Times</span>
+                  <span className="font-bold text-[var(--color-ink)]">
+                    {formatCompactTiming(selectedConflictLog.start_time, selectedConflictLog.end_time)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-[var(--color-mute)] uppercase font-bold block">Hours (Run / OT)</span>
+                  <span className="font-bold text-sky-600 dark:text-sky-400">
+                    {selectedConflictLog.running_hours || 0} hrs / <span className="text-amber-600">{selectedConflictLog.overtime_hours || 0} OT</span>
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-amber-500/15 text-[11px] text-amber-800 dark:text-amber-300">
+                <strong>Conflict:</strong> {selectedConflictLog.conflict_reason || "Recorded hours exceeded shift window into next assignment."}
+              </div>
+            </div>
+
+            {/* Resolution Choice */}
+            <div className="space-y-3">
+              <label className="text-xs font-bold text-[var(--color-ink)] block">
+                Supervisor Action *
+              </label>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConflictAction("acknowledge")}
+                  className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                    conflictAction === "acknowledge"
+                      ? "bg-sky-500/10 border-sky-500 text-sky-800 dark:text-sky-300 font-bold"
+                      : "bg-[var(--color-canvas)] border-[var(--color-hairline)] text-[var(--color-mute)]"
+                  }`}
+                >
+                  <div className="text-xs flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-sky-500" /> Acknowledge
+                  </div>
+                  <div className="text-[10px] mt-1 font-normal opacity-80">
+                    Keep recorded hours as verified field overtime.
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setConflictAction("adjust")}
+                  className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                    conflictAction === "adjust"
+                      ? "bg-amber-500/10 border-amber-500 text-amber-800 dark:text-amber-300 font-bold"
+                      : "bg-[var(--color-canvas)] border-[var(--color-hairline)] text-[var(--color-mute)]"
+                  }`}
+                >
+                  <div className="text-xs flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-amber-500" /> Adjust Time
+                  </div>
+                  <div className="text-[10px] mt-1 font-normal opacity-80">
+                    Trim end time to eliminate shift overlap.
+                  </div>
+                </button>
+              </div>
+
+              {conflictAction === "adjust" && (
+                <div className="p-3 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-2 animate-in fade-in">
+                  <CustomTimePicker
+                    label="Adjusted End Time *"
+                    required
+                    value={conflictAdjustedEndTime}
+                    onChange={(v) => setConflictAdjustedEndTime(v)}
+                    placeholder="e.g. 04:00 PM"
+                  />
+                  <p className="text-[10px] text-[var(--color-mute)]">
+                    Adjusting end time will recompute running and overtime hours automatically.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">
+                  Supervisor Notes
+                </label>
+                <textarea
+                  value={conflictNotes}
+                  onChange={(e) => setConflictNotes(e.target.value)}
+                  placeholder="Provide brief reason for resolution..."
+                  rows={2}
+                  className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[var(--color-hairline)]">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowConflictModal(false)}
+                disabled={resolvingConflict}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                loading={resolvingConflict}
+                onClick={handleResolveConflict}
+                disabled={resolvingConflict || (conflictAction === "adjust" && !conflictAdjustedEndTime)}
+              >
+                Confirm Resolution
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

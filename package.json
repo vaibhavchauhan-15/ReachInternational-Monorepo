@@ -10,6 +10,7 @@
     "verify:seed": "node supabase/verify_seed.mjs"
   },
   "devDependencies": {
+    "@supabase/supabase-js": "^2.112.4",
     "@types/node": "^20.19.43",
     "turbo": "^2.10.11"
   },
@@ -20,8 +21,5 @@
     "postcss": ">=8.5.23",
     "uuid": ">=11.1.1"
   },
-  "packageManager": "pnpm@11.21.0",
-  "dependencies": {
-    "@supabase/supabase-js": "^2.112.4"
-  }
+  "packageManager": "pnpm@11.21.0"
 }
