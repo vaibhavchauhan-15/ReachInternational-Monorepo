@@ -210,6 +210,16 @@ export async function signup(
 
   const aadhaarNumber = ((formData.get("aadhaar_number") as string) || "").trim();
   const licenseNumber = ((formData.get("license_number") as string) || "").trim();
+  const shiftStartTimeRaw = ((formData.get("shift_start_time") as string) || "").trim();
+  const shiftEndTimeRaw = ((formData.get("shift_end_time") as string) || "").trim();
+  const shiftTimeRaw = ((formData.get("shift_time") as string) || "").trim();
+
+  const resolvedShiftTime =
+    shiftTimeRaw ||
+    (shiftStartTimeRaw && shiftEndTimeRaw
+      ? `${shiftStartTimeRaw} - ${shiftEndTimeRaw}`
+      : shiftStartTimeRaw || shiftEndTimeRaw || "");
+
   const password = (formData.get("password") as string) || "";
   const confirmPassword = (formData.get("confirm_password") as string) || "";
   const requestedRole = (formData.get("role") as string) || "operator";
@@ -235,6 +245,9 @@ export async function signup(
     email,
     phone,
     role,
+    shift_start_time: shiftStartTimeRaw,
+    shift_end_time: shiftEndTimeRaw,
+    shift_time: resolvedShiftTime,
     city,
     district,
     state: resolvedStateName,
@@ -250,6 +263,8 @@ export async function signup(
   if (!fullName) fieldErrors.full_name = "Full name is required.";
   if (!email) fieldErrors.email = "Email address is required.";
   if (!phone) fieldErrors.phone = "Mobile number is required.";
+  if (!shiftStartTimeRaw) fieldErrors.shift_start_time = "Shift start time is required.";
+  if (!shiftEndTimeRaw) fieldErrors.shift_end_time = "Shift end time is required.";
   if (!city) fieldErrors.city = "City/Town/Village is required.";
   if (!district) fieldErrors.district = "District is required.";
   if (!resolvedStateName) fieldErrors.state = "State is required.";
@@ -457,6 +472,9 @@ export async function signup(
         full_name: fullName,
         phone,
         role: role,
+        shift_time: resolvedShiftTime || null,
+        shift_start_time: shiftStartTimeRaw || null,
+        shift_end_time: shiftEndTimeRaw || null,
         city,
         district,
         state: resolvedStateName,
@@ -560,6 +578,7 @@ export async function signup(
       user_email: email, 
       phone, 
       role: role, 
+      shift_time: resolvedShiftTime || null,
       city, 
       district, 
       state: resolvedStateName, 

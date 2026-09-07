@@ -1,10 +1,64 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: **Production Ready — Operations Client Selection, Default All Machines & Client-Wise Log Filtering**
-- **Release Candidate**: `v2026.09.05` (Branch: `main`)
-- **Overall Health**: Production Ready (0 TypeScript Errors across 9 packages, 35/35 Routes Compiled, 0 Runtime Errors, 0 Warnings, 0 P0/P1/P2 Issues)
-- **Last Memory Update**: 2026-09-05
+- **Phase**: **Production Ready — Registration Clutter Removal, Clock Icon Removal & Mandatory Shift Timings (Web & Mobile)**
+- **Release Candidate**: `v2026.09.07` (Branch: `main`)
+- **Overall Health**: Production Ready (0 TypeScript Errors across 9 packages, 38/38 Routes Compiled, 0 Runtime Errors, 0 Warnings, 0 P0/P1/P2 Issues)
+- **Last Memory Update**: 2026-09-07
+- [x] **Page Feedback: /signup — Header & Section Clutter Removal, Clock Icon Removal, and Mandatory Shift Start & End Time with Red Star (`signup/page.tsx`, `CustomTimePicker.tsx`, `auth.ts`, `actions/auth.ts`, `apps/mobile/app/(auth)/signup.tsx`) (2026-09-07)**:
+  - **1. Header & Section Clutter Removal (`apps/web/app/signup/page.tsx`)**:
+    - Removed Employee Registration badge (`.inline-flex`) from the card header.
+    - Removed subtitle paragraph (`Fill in your details and shift timings...`) below `Create an account`, leaving a clean, high-impact header.
+    - Removed `"Personal details"` subtitle from Section 1 (Account & Role) header.
+    - Removed `"Verification documents"` subtitle from Section 3 (Work Location & Identity) header.
+    - Removed `"Access protection"` subtitle from Section 4 (Security Credentials) header.
+    - Removed unused `ShieldCheck` icon import.
+  - **2. Clock Icon Removal from CustomTimePicker (`apps/web/components/ui/CustomTimePicker.tsx`, `apps/web/app/signup/page.tsx`)**:
+    - Extended `CustomTimePickerProps` with `hideIcon?: boolean` and `showIcon?: boolean`.
+    - Conditionally rendered Lucide `<Clock>` icon in label: `{!hideIcon && showIcon && <Clock ... />}`.
+    - Added `hideIcon` to both Shift Start Time and Shift End Time pickers in `page.tsx`.
+  - **3. Mandatory Shift Start & End Time with Red Star (`apps/web/app/signup/page.tsx`, `CustomTimePicker.tsx`, `packages/validation/src/auth.ts`, `apps/web/app/actions/auth.ts`)**:
+    - Passed `required` to Shift Start Time and Shift End Time `<CustomTimePicker>`s, displaying the red star `<span className="text-rose-500 font-semibold ml-0.5 shrink-0">*</span>`.
+    - Added client-side validation in `handleSubmit` checking that `shift_start_time` and `shift_end_time` are not empty before submission.
+    - Enforced backend validation in Server Action `signup()` in `actions/auth.ts`, setting `fieldErrors.shift_start_time` and `fieldErrors.shift_end_time`.
+    - Updated `SignupSchema` in `packages/validation/src/auth.ts` requiring `shift_start_time` and `shift_end_time` (`min(1, "Shift ... time is required")`).
+  - **4. Cross-Platform Mobile App Synchronization (`apps/mobile/app/(auth)/signup.tsx`)**:
+    - Removed `Step X of 4` step indicator text from Section 1, Section 3, and Section 4 headers for clean section layout.
+    - Added `required` to Shift Start Time and Shift End Time `<TimeInput>` components (rendering red star `*`).
+    - Added validation in `handleSignup()` ensuring `shiftStartTime` and `shiftEndTime` are provided.
+  - **5. Monorepo Quality Gate Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: Passed with **0 errors**.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: Passed with **0 errors**.
+    - `pnpm -r exec tsc --noEmit`: Passed across all **9 workspace packages with 0 errors**.
+    - `pnpm --filter @reachinternational/web build`: Passed with all **38/38 routes compiled cleanly including `○ /signup` (Exit code 0)**.
+- [x] **Page Feedback: /signup — Clean, Structured & User-Friendly UI/UX with Shift Start & End Time Pickers (Web & Mobile) (`signup/page.tsx`, `apps/mobile/app/(auth)/signup.tsx`, `CustomTimePicker.tsx`, `actions/auth.ts`, `auth.ts`) (2026-09-07)**:
+  - **1. Web Registration Semantic 4-Section Architecture (`apps/web/app/signup/page.tsx`)**:
+    - Re-architected the form from an unbroken wall of 12 flat inputs into 4 purposeful, beautifully structured sections with hairline borders, elevated background tokens, and numbered pill badges:
+      - **Section 1: Account & Role**: Full Name, Work Email, Mobile Number, Role Selector.
+      - **Section 2: Work Shift Schedule**: Shift Start Time and End Time via canonical `<CustomTimePicker>`, with dynamic duration computation badge powered by `computeShiftTiming()` (`☀️ Standard · 12h 00m` or `🌙 Overnight · 12h 00m`) and explanatory helper text.
+      - **Section 3: Work Location & Identity**: City, District, State (responsive 3-column desktop layout) and 12-digit Aadhaar & Driving Licence inputs (2-column layout).
+      - **Section 4: Security Credentials**: Password and Confirm Password with minimum length indicator.
+    - Polished card header with employee registration badge, crisp typography, and subtitle.
+    - Corrected Note banner typo (`"Note: "` with proper space) and added Lucide `<Info>` icon with subtle border styling.
+    - Provided native hidden inputs `<input type="hidden" name="shift_start_time" />`, `<input type="hidden" name="shift_end_time" />`, and `<input type="hidden" name="shift_time" />` for robust `FormData` serialization.
+    - Optimized responsive viewport proportions for 1366×599 compact laptop screens and mobile touch devices.
+  - **2. Cross-Platform Mobile App Synchronization (`apps/mobile/app/(auth)/signup.tsx`)**:
+    - Synchronized identical 4-section architecture with numbered pill badges (`1. Account & Role`, `2. Work Shift Schedule`, `3. Work Location & Identity`, `4. Security Credentials`) wrapped in `styles.sectionContainer`.
+    - Integrated `computeShiftTiming()` for live shift duration badge display (`☀️ / 🌙 {durationFormatted}`).
+    - Updated Notice box with Lucide `Info` icon and matching typography.
+    - Preserved 44px touch targets and full keyboard avoiding container behavior.
+  - **3. Backend Server Actions & Data Access Layer (`apps/web/app/actions/auth.ts`)**:
+    - Extracted `shift_start_time`, `shift_end_time`, and `shift_time` from incoming `FormData`.
+    - Formatted canonical shift timing string (`"08:00 AM - 08:00 PM"`).
+    - Passed `shift_time`, `shift_start_time`, and `shift_end_time` into `options.data` during `supabase.auth.signUp()`, which database trigger `handle_new_user()` (migration 042) automatically inserts into `public.users.shift_time`.
+    - Preserved values in `fieldValues` on error and recorded `shift_time` in structured audit log metadata (`user.signup`).
+  - **4. Shared Schema Validation (`packages/validation/src/auth.ts`)**:
+    - Extended `SignupSchema` with optional `shift_time`, `shift_start_time`, and `shift_end_time` validation rules.
+  - **5. Monorepo Quality Gate Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: Passed with **0 errors**.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: Passed with **0 errors**.
+    - `pnpm -r exec tsc --noEmit`: Passed across all **9 workspace packages with 0 errors**.
+    - `pnpm --filter @reachinternational/web build`: Passed with all **38/38 routes compiled cleanly including `○ /signup` (Exit code 0)**.
 - [x] **Page Feedback: /operations?tab=logs — Client Selection Fix, Default 'All Machines' & Client-Wise Fleet and Log Filtering (`ClientSelect.tsx`, `OperationsClient.tsx`, `PrintableSupervisorLogsModal.tsx`, `supervisor-logs-export.ts`) (2026-09-05)**:
   - **1. Resilient Client Selection Architecture (`ClientSelect.tsx`, `OperationsClient.tsx`)**:
     - Resolved the issue where clicking a client left the trigger button showing `"Select Client..."` due to ID vs name mismatches.

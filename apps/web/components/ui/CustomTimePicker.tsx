@@ -21,6 +21,10 @@ export interface CustomTimePickerProps {
   isInvalid?: boolean;
   hideErrorMessage?: boolean;
   helperText?: string;
+  /** Whether to hide the clock icon in the label. Defaults to false. */
+  hideIcon?: boolean;
+  /** Whether to show the clock icon in the label. Defaults to true. */
+  showIcon?: boolean;
   /** Layout orientation for the AM/PM toggle. Defaults to "horizontal" for polished, legible tap targets. */
   toggleOrientation?: "horizontal" | "vertical";
 }
@@ -102,6 +106,8 @@ export function CustomTimePicker({
   hideErrorMessage = false,
   helperText,
   toggleOrientation = "horizontal",
+  hideIcon = false,
+  showIcon = true,
 }: CustomTimePickerProps) {
   // Parse initial state from value prop
   const parsed = useMemo(() => parseTimeString(value), [value]);
@@ -390,9 +396,9 @@ export function CustomTimePicker({
             "block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 flex items-center gap-1.5 min-w-0"
           }
         >
-          <Clock className={`h-3.5 w-3.5 ${iconColor} shrink-0`} />
+          {!hideIcon && showIcon && <Clock className={`h-3.5 w-3.5 ${iconColor} shrink-0`} />}
           <span className="truncate">{label}</span>
-          {required && <span className="text-rose-500 font-bold ml-0.5 shrink-0">*</span>}
+          {required && <span className="text-rose-500 font-semibold ml-0.5 shrink-0">*</span>}
         </label>
       )}
 

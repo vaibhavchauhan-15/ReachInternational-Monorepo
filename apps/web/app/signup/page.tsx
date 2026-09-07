@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { Info } from "lucide-react";
 import {
   AnimatedMail,
   AnimatedLock,
@@ -20,6 +21,7 @@ import {
   Input,
   Alert,
   SearchableSelect,
+  CustomTimePicker,
   ReachInternationalLogo,
   type SelectOption,
 } from "@/components/ui";
@@ -29,6 +31,7 @@ import {
   formatAadhaar,
   INDIAN_STATES,
   getStateById,
+  computeShiftTiming,
 } from "@reachinternational/utils";
 
 const signupRoleOptions: SelectOption[] = [
@@ -56,6 +59,8 @@ export default function SignupPage() {
     email: "",
     phone: "",
     role: "service_engineer",
+    shift_start_time: "08:00 AM",
+    shift_end_time: "08:00 PM",
     city: "",
     district: "",
     state: "",
@@ -67,6 +72,14 @@ export default function SignupPage() {
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const router = useRouter();
+
+  const shiftTimingSummary = useMemo(() => {
+    if (!formValues.shift_start_time || !formValues.shift_end_time) return null;
+    return computeShiftTiming({
+      startTime: formValues.shift_start_time,
+      endTime: formValues.shift_end_time,
+    });
+  }, [formValues.shift_start_time, formValues.shift_end_time]);
 
   const handleChange = (field: string, value: string) => {
     let formattedVal = value;
@@ -141,6 +154,12 @@ export default function SignupPage() {
 
     // Client-side pre-flight checks
     const errors: Record<string, string> = {};
+    if (!formValues.shift_start_time.trim()) {
+      errors.shift_start_time = "Shift start time is required.";
+    }
+    if (!formValues.shift_end_time.trim()) {
+      errors.shift_end_time = "Shift end time is required.";
+    }
     if (!formValues.state.trim() && !formValues.state_id) {
       errors.state = "State is required.";
     }
@@ -187,6 +206,8 @@ export default function SignupPage() {
           email: result.fieldValues?.email ?? prev.email,
           phone: result.fieldValues?.phone ?? prev.phone,
           role: result.fieldValues?.role ?? prev.role,
+          shift_start_time: result.fieldValues?.shift_start_time ?? prev.shift_start_time,
+          shift_end_time: result.fieldValues?.shift_end_time ?? prev.shift_end_time,
           city: result.fieldValues?.city ?? prev.city,
           district: result.fieldValues?.district ?? prev.district,
           state: result.fieldValues?.state ?? prev.state,
@@ -268,25 +289,25 @@ export default function SignupPage() {
           Right: Dedicated Registration Workspace (60% width on desktop)
           Clean floating card, responsive single-focus view on mobile
           ============================================================ */}
-      <div className="relative flex-1 lg:w-[60%] w-full min-h-screen lg:h-full flex flex-col justify-between items-center px-4 py-6 sm:px-6 sm:py-8 lg:p-8 xl:p-12 overflow-y-auto bg-[var(--color-canvas)]">
+      <div className="relative flex-1 lg:w-[60%] w-full min-h-screen lg:h-full flex flex-col justify-between items-center px-4 py-4 sm:px-6 sm:py-6 lg:px-8 lg:py-3.5 xl:px-10 xl:py-4 overflow-y-auto bg-[var(--color-canvas)]">
         {/* Top Spacer for balanced desktop vertical distribution */}
-        <div className="hidden lg:block w-full h-2 shrink-0" />
-        <div className="w-full flex items-center justify-center my-auto py-2">
+        <div className="hidden lg:block w-full h-1 shrink-0" />
+        <div className="w-full flex items-center justify-center my-auto py-1 sm:py-1.5">
           <motion.div
             initial={{ opacity: 0, y: 8, scale: 0.99 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-            className="w-full max-w-xl lg:max-w-2xl bg-[var(--color-canvas-elevated)] rounded-2xl border border-[var(--color-hairline)] p-4 sm:p-6 lg:p-6.5 shadow-2xl text-[var(--color-ink)] relative overflow-hidden"
+            className="w-full max-w-xl lg:max-w-2xl bg-[var(--color-canvas-elevated)] rounded-2xl border border-[var(--color-hairline)] p-4 sm:p-5 lg:p-5.5 shadow-2xl text-[var(--color-ink)] relative overflow-hidden"
           >
             {/* Mobile Only: Top Header Logo */}
-            <div className="flex lg:hidden flex-col items-center justify-center mb-3 sm:mb-4">
+            <div className="flex lg:hidden flex-col items-center justify-center mb-2.5 sm:mb-3">
               <Link href="/" className="flex items-center group focus:outline-none" aria-label="Reach International">
                 <ReachInternationalLogo variant="full" size={26} />
               </Link>
             </div>
 
             {/* Card Header — Clean title */}
-            <div className="mb-3.5 sm:mb-4">
+            <div className="mb-3 sm:mb-3.5">
               <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[var(--color-ink)]">
                 Create an account
               </h2>
@@ -294,230 +315,328 @@ export default function SignupPage() {
 
             {/* Global Error Banner */}
             {state.error && Object.keys(fieldErrors).length === 0 && (
-              <div className="mb-3.5">
+              <div className="mb-3">
                 <Alert variant="error">{state.error}</Alert>
               </div>
             )}
 
             {/* Global Success Banner */}
             {state.message && !state.error && (
-              <div className="mb-3.5">
+              <div className="mb-3">
                 <Alert variant="success">{state.message}</Alert>
               </div>
             )}
 
             {/* Registration Form */}
             <form onSubmit={handleSubmit} className="flex flex-col gap-2.5 sm:gap-3">
-              {/* Row 1: Full Name | Email */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
-                <Input
-                  id="signup-full-name"
-                  name="full_name"
-                  label="Full Name"
-                  type="text"
-                  value={formValues.full_name}
-                  onChange={(e) => handleChange("full_name", e.target.value)}
-                  placeholder="Rahul Sharma"
-                  required
-                  autoComplete="name"
-                  error={fieldErrors.full_name}
-                  icon={<AnimatedUser size={15} />}
-                />
+              {/* Hidden Inputs for Shift Timing */}
+              <input type="hidden" name="shift_start_time" value={formValues.shift_start_time} />
+              <input type="hidden" name="shift_end_time" value={formValues.shift_end_time} />
+              <input
+                type="hidden"
+                name="shift_time"
+                value={
+                  formValues.shift_start_time.trim() && formValues.shift_end_time.trim()
+                    ? `${formValues.shift_start_time.trim()} - ${formValues.shift_end_time.trim()}`
+                    : formValues.shift_start_time.trim() || formValues.shift_end_time.trim() || ""
+                }
+              />
 
-                <Input
-                  id="signup-email"
-                  name="email"
-                  label="Email address"
-                  type="email"
-                  value={formValues.email}
-                  onChange={(e) => handleChange("email", e.target.value)}
-                  placeholder="rahul@domain.com"
-                  required
-                  autoComplete="email"
-                  error={fieldErrors.email}
-                  icon={<AnimatedMail size={15} />}
-                />
-              </div>
+              {/* Section 1: Account Information & Role */}
+              <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 p-3 sm:p-3.5 space-y-2 sm:space-y-2.5">
+                <div className="flex items-center justify-between pb-1.5 border-b border-[var(--color-hairline)]">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span className="flex items-center justify-center w-5 h-5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold">1</span>
+                    <h3 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
+                      Account & Role
+                    </h3>
+                  </div>
+                </div>
 
-              {/* Row 2: Mobile Number | Role */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
-                <Input
-                  id="signup-phone"
-                  name="phone"
-                  label="Mobile Number"
-                  type="tel"
-                  value={formValues.phone}
-                  onChange={(e) => handleChange("phone", e.target.value)}
-                  placeholder="+91 98765 43210"
-                  required
-                  autoComplete="tel"
-                  error={fieldErrors.phone}
-                  icon={<AnimatedPhone size={15} />}
-                />
-
-                {/* Account Role Dropdown */}
-                <div className="flex flex-col gap-1 w-full">
-                  <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none">
-                    Role <span className="text-rose-500 font-semibold">*</span>
-                  </label>
-                  <input type="hidden" name="role" value={formValues.role} />
-                  <SearchableSelect
-                    options={signupRoleOptions}
-                    value={formValues.role}
-                    onChange={(val) => handleChange("role", val)}
-                    placeholder="Select role..."
-                    clearable={false}
-                    error={fieldErrors.role}
-                    className="w-full text-xs sm:text-[13px]"
+                {/* Row 1: Full Name | Email */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+                  <Input
+                    id="signup-full-name"
+                    name="full_name"
+                    label="Full Name"
+                    type="text"
+                    value={formValues.full_name}
+                    onChange={(e) => handleChange("full_name", e.target.value)}
+                    placeholder="Rahul Sharma"
+                    required
+                    autoComplete="name"
+                    error={fieldErrors.full_name}
+                    icon={<AnimatedUser size={15} />}
                   />
+
+                  <Input
+                    id="signup-email"
+                    name="email"
+                    label="Email Address"
+                    type="email"
+                    value={formValues.email}
+                    onChange={(e) => handleChange("email", e.target.value)}
+                    placeholder="rahul@domain.com"
+                    required
+                    autoComplete="email"
+                    error={fieldErrors.email}
+                    icon={<AnimatedMail size={15} />}
+                  />
+                </div>
+
+                {/* Row 2: Mobile Number | Role */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+                  <Input
+                    id="signup-phone"
+                    name="phone"
+                    label="Mobile Number"
+                    type="tel"
+                    value={formValues.phone}
+                    onChange={(e) => handleChange("phone", e.target.value)}
+                    placeholder="+91 98765 43210"
+                    required
+                    autoComplete="tel"
+                    error={fieldErrors.phone}
+                    icon={<AnimatedPhone size={15} />}
+                  />
+
+                  {/* Account Role Dropdown */}
+                  <div className="flex flex-col gap-1 w-full">
+                    <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none">
+                      Role Requested <span className="text-rose-500 font-semibold">*</span>
+                    </label>
+                    <input type="hidden" name="role" value={formValues.role} />
+                    <SearchableSelect
+                      options={signupRoleOptions}
+                      value={formValues.role}
+                      onChange={(val) => handleChange("role", val)}
+                      placeholder="Select role..."
+                      clearable={false}
+                      error={fieldErrors.role}
+                      className="w-full text-xs sm:text-[13px]"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Row 3: City/Town/Village | District | State (3-Column layout) */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
-                <Input
-                  id="signup-city"
-                  name="city"
-                  label="City/Town/Village"
-                  type="text"
-                  value={formValues.city}
-                  onChange={(e) => handleChange("city", e.target.value)}
-                  placeholder="Pune"
-                  required
-                  autoComplete="address-level2"
-                  error={fieldErrors.city}
-                  icon={<AnimatedMapPin size={15} />}
-                />
-
-                <Input
-                  id="signup-district"
-                  name="district"
-                  label="District"
-                  type="text"
-                  value={formValues.district}
-                  onChange={(e) => handleChange("district", e.target.value)}
-                  placeholder="Pune"
-                  required
-                  autoComplete="address-level2"
-                  error={fieldErrors.district}
-                  icon={<AnimatedMapPin size={15} />}
-                />
-
-                {/* State Dropdown Selector */}
-                <div className="flex flex-col gap-1 w-full" id="signup-state-container">
-                  <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none">
-                    State <span className="text-rose-500 font-semibold">*</span>
-                  </label>
-                  <input type="hidden" name="state" value={formValues.state} />
-                  <input type="hidden" name="state_id" value={formValues.state_id} />
-                  <SearchableSelect
-                    options={stateSelectOptions}
-                    value={formValues.state_id}
-                    onChange={(val, opt) => {
-                      setFormValues((prev) => ({
-                        ...prev,
-                        state_id: val,
-                        state: opt?.label || prev.state,
-                      }));
-                      if (fieldErrors.state) {
-                        setFieldErrors((prev) => {
-                          const copy = { ...prev };
-                          delete copy.state;
-                          return copy;
-                        });
-                      }
-                    }}
-                    placeholder="Select state..."
-                    clearable={false}
-                    error={fieldErrors.state}
-                    className="w-full text-xs sm:text-[13px]"
-                  />
-                </div>
-              </div>
-
-              {/* Row 4: Aadhaar Card Number | Driving Licence Number */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
-                <Input
-                  id="signup-aadhaar"
-                  name="aadhaar_number"
-                  label="Aadhaar Card Number"
-                  type="text"
-                  value={formValues.aadhaar_number}
-                  onChange={(e) => handleChange("aadhaar_number", e.target.value)}
-                  onBlur={() => handleBlur("aadhaar_number")}
-                  placeholder="12-digit Aadhaar Number"
-                  maxLength={14}
-                  required
-                  error={fieldErrors.aadhaar_number}
-                  icon={<AnimatedShieldCheck size={15} />}
-                />
-
-                <Input
-                  id="signup-license"
-                  name="license_number"
-                  label={
-                    <span>
-                      Driving Licence Number <span className="text-[11px] font-normal text-[var(--color-mute)]">(Optional)</span>
+              {/* Section 2: Work Shift Schedule */}
+              <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 p-3 sm:p-3.5 space-y-2 sm:space-y-2.5">
+                <div className="flex items-center justify-between pb-1.5 border-b border-[var(--color-hairline)]">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span className="flex items-center justify-center w-5 h-5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold">2</span>
+                    <h3 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
+                      Work Shift Schedule
+                    </h3>
+                  </div>
+                  {shiftTimingSummary?.isValid && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-semibold font-mono text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
+                      {shiftTimingSummary.isOvernight ? "🌙 Overnight" : "☀️ Standard"} · {shiftTimingSummary.durationFormatted}
                     </span>
-                  }
-                  type="text"
-                  value={formValues.license_number}
-                  onChange={(e) => handleChange("license_number", e.target.value)}
-                  onBlur={() => handleBlur("license_number")}
-                  placeholder="e.g. MH12 20110012345"
-                  maxLength={25}
-                  error={fieldErrors.license_number}
-                  icon={<AnimatedCreditCard size={15} />}
-                />
+                  )}
+                </div>
+
+                {/* Shift Start Time | Shift End Time */}
+                <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
+                  <CustomTimePicker
+                    label="Shift Start Time"
+                    value={formValues.shift_start_time}
+                    onChange={(val) => handleChange("shift_start_time", val)}
+                    placeholder="08:00 AM"
+                    required
+                    hideIcon
+                    error={fieldErrors.shift_start_time}
+                  />
+                  <CustomTimePicker
+                    label="Shift End Time"
+                    value={formValues.shift_end_time}
+                    onChange={(val) => handleChange("shift_end_time", val)}
+                    placeholder="08:00 PM"
+                    required
+                    hideIcon
+                    error={fieldErrors.shift_end_time}
+                  />
+                </div>
+                <p className="text-[11px] text-[var(--color-mute)] leading-normal">
+                  Assigned daily operational work hours. This schedule is recorded on your profile and daily duty logs.
+                </p>
               </div>
 
-              {/* Row 5: Password | Confirm Password */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
-                <Input
-                  id="signup-password"
-                  name="password"
-                  label="Password"
-                  type="password"
-                  value={formValues.password}
-                  onChange={(e) => handleChange("password", e.target.value)}
-                  placeholder="••••••••••••"
-                  required
-                  autoComplete="new-password"
-                  error={fieldErrors.password}
-                  icon={<AnimatedLock size={15} />}
-                />
+              {/* Section 3: Work Location & Identity */}
+              <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 p-3 sm:p-3.5 space-y-2 sm:space-y-2.5">
+                <div className="flex items-center justify-between pb-1.5 border-b border-[var(--color-hairline)]">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span className="flex items-center justify-center w-5 h-5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold">3</span>
+                    <h3 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
+                      Work Location & Identity
+                    </h3>
+                  </div>
+                </div>
 
-                <Input
-                  id="signup-confirm-password"
-                  name="confirm_password"
-                  label="Confirm Password"
-                  type="password"
-                  value={formValues.confirm_password}
-                  onChange={(e) => handleChange("confirm_password", e.target.value)}
-                  placeholder="••••••••••••"
-                  required
-                  autoComplete="new-password"
-                  error={fieldErrors.confirm_password}
-                  icon={<AnimatedLock size={15} />}
-                />
+                {/* City/Town/Village | District | State (3-Column layout) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
+                  <Input
+                    id="signup-city"
+                    name="city"
+                    label="City/Town/Village"
+                    type="text"
+                    value={formValues.city}
+                    onChange={(e) => handleChange("city", e.target.value)}
+                    placeholder="Pune"
+                    required
+                    autoComplete="address-level2"
+                    error={fieldErrors.city}
+                    icon={<AnimatedMapPin size={15} />}
+                  />
+
+                  <Input
+                    id="signup-district"
+                    name="district"
+                    label="District"
+                    type="text"
+                    value={formValues.district}
+                    onChange={(e) => handleChange("district", e.target.value)}
+                    placeholder="Pune"
+                    required
+                    autoComplete="address-level2"
+                    error={fieldErrors.district}
+                    icon={<AnimatedMapPin size={15} />}
+                  />
+
+                  {/* State Dropdown Selector */}
+                  <div className="flex flex-col gap-1 w-full" id="signup-state-container">
+                    <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none">
+                      State <span className="text-rose-500 font-semibold">*</span>
+                    </label>
+                    <input type="hidden" name="state" value={formValues.state} />
+                    <input type="hidden" name="state_id" value={formValues.state_id} />
+                    <SearchableSelect
+                      options={stateSelectOptions}
+                      value={formValues.state_id}
+                      onChange={(val, opt) => {
+                        setFormValues((prev) => ({
+                          ...prev,
+                          state_id: val,
+                          state: opt?.label || prev.state,
+                        }));
+                        if (fieldErrors.state) {
+                          setFieldErrors((prev) => {
+                            const copy = { ...prev };
+                            delete copy.state;
+                            return copy;
+                          });
+                        }
+                      }}
+                      placeholder="Select state..."
+                      clearable={false}
+                      error={fieldErrors.state}
+                      className="w-full text-xs sm:text-[13px]"
+                    />
+                  </div>
+                </div>
+
+                {/* Aadhaar Card Number | Driving Licence Number */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+                  <Input
+                    id="signup-aadhaar"
+                    name="aadhaar_number"
+                    label="Aadhaar Card Number"
+                    type="text"
+                    value={formValues.aadhaar_number}
+                    onChange={(e) => handleChange("aadhaar_number", e.target.value)}
+                    onBlur={() => handleBlur("aadhaar_number")}
+                    placeholder="12-digit Aadhaar Number"
+                    maxLength={14}
+                    required
+                    error={fieldErrors.aadhaar_number}
+                    icon={<AnimatedShieldCheck size={15} />}
+                  />
+
+                  <Input
+                    id="signup-license"
+                    name="license_number"
+                    label={
+                      <span>
+                        Driving Licence Number <span className="text-[11px] font-normal text-[var(--color-mute)]">(Optional)</span>
+                      </span>
+                    }
+                    type="text"
+                    value={formValues.license_number}
+                    onChange={(e) => handleChange("license_number", e.target.value)}
+                    onBlur={() => handleBlur("license_number")}
+                    placeholder="e.g. MH12 20110012345"
+                    maxLength={25}
+                    error={fieldErrors.license_number}
+                    icon={<AnimatedCreditCard size={15} />}
+                  />
+                </div>
+              </div>
+
+              {/* Section 4: Security Credentials */}
+              <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 p-3 sm:p-3.5 space-y-2 sm:space-y-2.5">
+                <div className="flex items-center justify-between pb-1.5 border-b border-[var(--color-hairline)]">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
+                    <span className="flex items-center justify-center w-5 h-5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold">4</span>
+                    <h3 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
+                      Security Credentials
+                    </h3>
+                  </div>
+                </div>
+
+                {/* Password | Confirm Password */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+                  <Input
+                    id="signup-password"
+                    name="password"
+                    label="Password"
+                    type="password"
+                    value={formValues.password}
+                    onChange={(e) => handleChange("password", e.target.value)}
+                    placeholder="••••••••••••"
+                    required
+                    autoComplete="new-password"
+                    error={fieldErrors.password}
+                    icon={<AnimatedLock size={15} />}
+                  />
+
+                  <Input
+                    id="signup-confirm-password"
+                    name="confirm_password"
+                    label="Confirm Password"
+                    type="password"
+                    value={formValues.confirm_password}
+                    onChange={(e) => handleChange("confirm_password", e.target.value)}
+                    placeholder="••••••••••••"
+                    required
+                    autoComplete="new-password"
+                    error={fieldErrors.confirm_password}
+                    icon={<AnimatedLock size={15} />}
+                  />
+                </div>
+                <p className="text-[11px] text-[var(--color-mute)]">
+                  Password must be at least 8 characters long. Make sure both passwords match.
+                </p>
               </div>
 
               {/* Note banner */}
-              <div className="rounded-lg bg-sky-500/10 border border-sky-500/20 py-2 px-3 text-[11px] sm:text-xs leading-relaxed text-sky-700 dark:text-sky-300">
-                <strong>Note:</strong> Account status will be &ldquo;pending&rdquo; until approved by an administrator.
+              <div className="flex items-start gap-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 p-2.5 sm:p-3 text-[11px] sm:text-xs leading-relaxed text-sky-800 dark:text-sky-200">
+                <Info className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="font-bold text-sky-900 dark:text-sky-100">Note: </strong>
+                  Account status will be &ldquo;pending&rdquo; until approved by an administrator.
+                </div>
               </div>
 
               {/* Submit CTA Button */}
-              <div className="pt-1">
+              <div className="pt-0.5">
                 <Button
                   type="submit"
                   variant="primary"
                   size="lg"
                   fullWidth
                   loading={pending}
-                  className="h-11 sm:h-11.5 rounded-lg font-semibold text-xs sm:text-sm shadow-xs justify-center"
+                  className="h-11 sm:h-11.5 rounded-xl font-semibold text-xs sm:text-sm shadow-xs justify-center"
                 >
-                  {pending ? "Requesting Platform Access..." : "Request Platform Access"}
+                  {pending ? "Submitting Registration Request..." : "Request Platform Access"}
                 </Button>
               </div>
             </form>

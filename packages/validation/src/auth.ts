@@ -198,6 +198,9 @@ export const SignupSchema = z.object({
   district: z.string().trim().min(2, "District is required").max(100, "District name cannot exceed 100 characters"),
   state: z.string().trim().min(2, "State is required").max(100, "State name cannot exceed 100 characters"),
   state_id: z.number().int().positive().optional().nullable(),
+  shift_time: z.string().trim().max(100, "Shift timing cannot exceed 100 characters").optional().nullable(),
+  shift_start_time: z.string().trim().min(1, "Shift start time is required").max(50),
+  shift_end_time: z.string().trim().min(1, "Shift end time is required").max(50),
   aadhaar_number: AadhaarRequiredFieldSchema,
   license_number: LicenseFieldSchema,
 });
