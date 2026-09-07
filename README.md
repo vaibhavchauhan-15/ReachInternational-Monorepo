@@ -44,7 +44,7 @@
 
 ### 2. 👥 User & Employee Management (`/users` & `/signup`)
 - **System Accounts Directory**: Unified management of system users and staff accounts with active status tracking.
-- **Mandatory Profile, Shift & Address Fields**: Strictly enforces Full Name, Email Address, 10-digit Mobile Phone Number, System Role, Shift Timing (`shift_time` e.g. Day Shift 08:00 AM - 08:00 PM), Street Address (`address`), Normalized Location (**City/Town/Village**, **District**, and **State / Union Territory** referencing canonical `public.states` with `state_id`), and Regulatory Identity Details (Aadhaar Card Number with mathematical Verhoeff checksum & masked `XXXX-XXXX-1294` PII formatting and Driving Licence Number) across user profiles, admin modals, and self-registration.
+- **Mandatory Profile, Shift & Address Fields**: Strictly enforces Full Name, Email Address, 10-digit Mobile Phone Number, System Role, Shift Timing (`shift_time` e.g. Day Shift 08:00 AM - 08:00 PM), Street / Site Base Address (`address`, e.g. "Plot No. 42, MIDC Industrial Area, Chakan"), Normalized Location (**City/Town/Village**, **District**, and **State / Union Territory** referencing canonical `public.states` with `state_id`), and Regulatory Identity Details (Aadhaar Card Number with mathematical Verhoeff checksum & masked `XXXX-XXXX-1294` PII formatting and Driving Licence Number) across user profiles, admin modals, and self-registration.
 - **Self-Service Profile Edits & Hierarchical Approval Workflow**: Users across all roles can edit their personal profile information (name, phone, shift schedule, address, Aadhaar, driving licence). Edits are routed through a strict multi-tier organizational approval workflow:
   - `super_admin`: Direct instant database update (no approval needed). Super Admin can approve changes for all roles.
   - `admin`: Request routed to `super_admin`. Admin can approve requests from all lower roles.
@@ -52,17 +52,24 @@
   - `supervisor`: Requests routed to `manager`. **Supervisor has 0 approval access**.
   - Field Staff (`operator`, `engineer`, `mechanic`): Requests routed to `manager`.
 - **Dedicated Profile Change Requests Section on `/users`**: Renders pending profile modification requests in a dedicated review section completely separate from new registration requests (`status = 'pending'`), displaying clear side-by-side diffs (Old Value vs Requested Value), individual Approve/Reject actions, and batch Accept All / Reject All actions.
-- **Self-Service Registration & Admin Access Governance**: Users request platform access via `/signup` choosing their functional role (`manager`, `service_manager`, `service_engineer`, `supervisor`, `store_manager`, `operator`, `mechanic`, `hr_manager`), their working shift timing via interactive time pickers (`shift_start_time` and `shift_end_time`, defaulting to 12h day shift 08:00 AM - 08:00 PM), and selecting their State/UT from a standardized dropdown linked to `public.states(id)`. The chosen role, shift timing, and `state_id` are preserved in `public.users` in `pending` status, displayed in the Admin Pending User Approvals panel with distinct role badges, and maintained without modification upon administrator approval.
+- **Self-Service Registration & Admin Access Governance**: Users request platform access via `/signup` choosing their functional role (`manager`, `service_manager`, `service_engineer`, `supervisor`, `store_manager`, `operator`, `mechanic`, `hr_manager`), their working shift timing via interactive time pickers (`shift_start_time` and `shift_end_time`, defaulting to 12h day shift 08:00 AM - 08:00 PM), their street base address (`address`), and selecting their State/UT from a standardized dropdown linked to `public.states(id)`. The chosen role, shift timing, street address, and `state_id` are preserved in `public.users` in `pending` status, displayed in the Admin Pending User Approvals panel with distinct role badges, and maintained without modification upon administrator approval. All complete registrations are automatically flagged for zero-latency dashboard access upon admin activation.
 - **Multi-Selection & Bulk Actions**: Select individual or all filtered user accounts with a master checkbox and floating bulk actions bar. Perform instant formatted Excel (`.xlsx`) or CSV (`.csv`) export downloads and high-concurrency Bulk Deletions with safety self-delete guards, super admin protection, optimistic UI removals, and audit logging.
 - **Account Actions**: Create new user accounts, edit employee profiles, activate/deactivate accounts, and delete user accounts with full structured audit logging.
 
-### 3. ⏱️ Operations Hub (`/operations`)
-- **Running Hours Logs (`tab=logs`)**:
+### 3. ⏱️ Operations Hub (`/operations`) & Assignment Audit Logs (`/operations/audit-logs`)
+- **Running Hours Logs (`/operations?tab=logs`)**:
   - **3 View Modes**: Machine View (group by equipment), Client View (group by client site), and Operator View (group by operator).
   - **A4 PDF Reports**: 1-click printable PDF report exports featuring official top-left company branding, centered titles (`MACHINE RUNNING HOURS REPORT`), and client location sub-headers (`CLIENT: SAINT GOBAIN | LOCATION: JHAJJAR, HARYANA`).
   - **Excel Exports**: Export formatted Excel spreadsheets capturing daily logs, HMR totals, operating hours, overtime, and breakdown durations.
-- **Operator Machine Assignments (`tab=assignments`)**:
-  - Reassign operators to machinery units and inspect historical operator assignment logs.
+- **Fleet Operator Machine Assignments (`/operations?tab=assignments`)**:
+  - **Accordion-Based Machine Cards**: Default-closed summary cards displaying machine ID, model, serial, meter hours, status badge, operator capacity pill (`X / 3 Operators`), quick-reference operator chips, and direct `+ Assign` button.
+  - **Expanded Slot Details & Actions**: Multi-shift slot view with shift time badges (☀️ morning / 🌙 night), assigned operator name, 1-click telephone calling (`tel:`), supervisor assigner attribution (`Assigned by: [Supervisor] • [Date]`), and 3 inline action triggers ("Change Operator", "End Shift", "Unassign").
+  - **Zero Inline Clutter**: The historical audit accordion table has been shifted off the primary assignments workspace to a dedicated page, linked cleanly via a footer navigation link (`View Full Assignment Audit Logs →`).
+- **Assignment & Shift Audit Logs (`/operations/audit-logs`)**:
+  - **Dedicated Audit Workspace**: Centralized historical audit logs tracking operator machine assignments, shift schedules, midnight-crossing status, assigner supervisors, ending reasons (`shift_changed`, `removed`, `manual`), and termination supervisors.
+  - **KPI Metrics Strip**: Real-time KPI summary cards displaying Total Shifts Recorded, Active On-Duty Shifts, Ended Shifts, and Overnight Coverage Shifts.
+  - **High-Density Table & Mobile Touch Cards**: High-density desktop table (`hidden sm:block`) paired with mobile-optimized touch cards (`block sm:hidden` with ≥44px touch targets).
+  - **Multi-Format Export & Print**: 1-click formatted CSV exports and print-ready reports with company branding.
 
 ### 4. 📝 Operator Daily Machine Logs & Log History (`/operations` for operators)
 - **Daily Machine Log Entry (`tab=entry`)**:
@@ -82,6 +89,11 @@
 - **Site Location & District**: Stores primary Office / Site Street Address, City, District, State, and Pincode across database constraints, validation schemas, and UI modals.
 - **Conditional Billing Address**: Supports dedicated separate billing addresses (Billing Address, City, District, State, Pincode) toggleable when billing differs from operational site locations.
 - **Client Lifecycle Management**: Register new clients, update client parameters, inspect machine fleet counts, soft delete clients with historical log preservation, and manage contact persons.
+
+### 6. 🚀 User Profile Onboarding & Fast Validation (`/onboarding`)
+- **Incomplete Profile Interception**: Detects users missing essential details (`full_name`, `phone`, `role`, `shift_time`, `address`, `city`, `district`, `state`, `aadhaar_number`) and routes them directly to `/onboarding`.
+- **Ultra-Fast Zero-Latency Bypass**: Employs a single `complete_profile = 'yes'` flag in `public.users`. Once completed, subsequent logins and requests verify in a single string comparison (`if (user.complete_profile === 'yes')`) with zero CPU overhead, completely skipping multi-field inspection.
+- **Unified UX**: Reuses the battle-tested 4-section architecture from `/signup` with pre-filled profile information, `<CustomTimePicker>` / `<TimeInput>` integration, live shift duration calculations, and Verhoeff Aadhaar validation across Web and Mobile.
 
 ### 7. 🎨 Centralized UI Design System (`apps/web/components/ui/`)
 - **Single Canonical UI Architecture**: One centralized reusable UI system across buttons, form controls, date & time pickers, search & filtering controls, enterprise tables, export controls, modals, and layouts.
@@ -198,7 +210,7 @@ ReachInternational-Monorepo/
 
 The core database is built on 7 central tables in Supabase PostgreSQL:
 
-1. `public.users`: System user accounts (email, phone, role, city, district, state, state_id references states(id), aadhaar_number, license_number, status).
+1. `public.users`: System user accounts (email, phone, role, city, district, state, state_id references states(id), aadhaar_number, license_number, address, shift_time, complete_profile ['yes', 'no'], status).
 2. `public.machines`: Machine fleet master (machine_code, model, serial_number, manufacturer, year_of_manufacture, hour_meter, customer_name, status, health_status, current_operator_id).
 3. `public.machine_hour_logs`: Daily running hour logs (machine_id, client_id, operator_id, supervisor_id, log_date, start_time, end_time, start_meter, end_meter, running_hours, normal_working_hours, overtime_hours, is_breakdown, breakdown_start_time, breakdown_end_time, breakdown_duration, breakdown_hours, location, remarks, conflict_flag, conflict_reason, conflict_status, conflict_resolved_by, conflict_resolved_at, conflict_resolution_notes, idempotency_key).
 4. `public.operator_machine_assignments`: Authoritative multi-shift operator assignment roster with recurring daily shift windows (id, machine_id, operator_id, shift_start_time, shift_end_time, crosses_midnight, is_active, assigned_by, assigned_at, ended_at, ended_by, end_reason). Enforces max 3 distinct active operators per machine via advisory transaction locks.

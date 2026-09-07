@@ -5,11 +5,6 @@ import {
   AnimatedBarChart3,
   AnimatedDownload,
   AnimatedSlidersHorizontal,
-  AnimatedWrench,
-  AnimatedPackage,
-  AnimatedShoppingBag,
-  AnimatedGauge,
-  AnimatedBuilding2,
 } from "@/components/ui/animated-icons";
 import type { User } from "@/lib/types/database";
 
@@ -21,11 +16,11 @@ export function ReportsClient({ user }: ReportsClientProps) {
   const [activeCategory, setActiveCategory] = useState<"operations" | "service" | "inventory" | "sales_purchase" | "management">("operations");
 
   const categories = [
-    { id: "operations", label: "Operations", icon: AnimatedGauge },
-    { id: "service", label: "Service", icon: AnimatedWrench },
-    { id: "inventory", label: "Inventory", icon: AnimatedPackage },
-    { id: "sales_purchase", label: "Sales & Purchase", icon: AnimatedShoppingBag },
-    { id: "management", label: "Management", icon: AnimatedBuilding2 },
+    { id: "operations", label: "Operations" },
+    { id: "service", label: "Service" },
+    { id: "inventory", label: "Inventory" },
+    { id: "sales_purchase", label: "Sales & Purchase" },
+    { id: "management", label: "Management" },
   ];
 
   return (
@@ -57,7 +52,6 @@ export function ReportsClient({ user }: ReportsClientProps) {
       {/* CATEGORY TABS (Item 18 Requirement!) */}
       <div className="flex items-center gap-2 border-b border-[var(--color-hairline)] pb-3 overflow-x-auto no-scrollbar">
         {categories.map((cat) => {
-          const Icon = cat.icon;
           return (
             <button
               key={cat.id}
@@ -69,7 +63,6 @@ export function ReportsClient({ user }: ReportsClientProps) {
                   : "text-[var(--color-body)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
               }`}
             >
-              <Icon size={16} />
               <span>{cat.label}</span>
             </button>
           );

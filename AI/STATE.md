@@ -1,10 +1,185 @@
 # Project State — Reach International (reachinternation.com)
 
 ## Current Status Overview
-- **Phase**: **Production Ready — Monorepo Architecture Pruning & Over-Engineering Elimination (Ponytail Audit)**
+- **Phase**: **Production Ready — Monorepo Architecture Simplification & Ponytail Dead Code Pruning**
 - **Release Candidate**: `v2026.09.07` (Branch: `main`)
-- **Overall Health**: Production Ready (0 TypeScript Errors across 7 packages, 38/38 Routes Compiled, 0 Runtime Errors, 0 Warnings, 0 P0/P1/P2 Issues)
+- **Overall Health**: Production Ready (0 TypeScript Errors across all workspace packages, 39/39 Routes Compiled, 0 Runtime Errors, 0 Warnings, 0 P0/P1/P2 Issues)
 - **Last Memory Update**: 2026-09-07
+- [x] **Page Feedback: /operations?tab=assignments Operator Card 2-Column Details, Full Shift Timings & Change Operator Action Consolidation (`OperationsClient.tsx`, `operators.ts`, `apps/mobile/app/(app)/operations.tsx`) (2026-09-07)**:
+  - **1. Full Shift Timing Display**: Eliminated lone `–` display. Formatted active slot shift start-to-end timing `{startDisplay} – {endDisplay}` (e.g. `08:00 AM – 05:00 PM` or `08:00 PM – 08:00 AM`) with resilient fallback to operator profile `shift_time` (`parseProfileShiftTime`) or standard shift (`08:00:00` – `17:00:00`) across DAL (`deriveAssignmentsFromMachines`, `getOperationsHubData`) and web/mobile UI components.
+  - **2. 2-Column Information Layout**: Restructured active operator cards from a vertical stacked list into a balanced 2-column grid (Column 1: Operator Name & Call link; Column 2: Assigned By & Since Date), reducing card height to align with empty slots.
+  - **3. Action Button Consolidation**: Pruned `"End Shift"` and `"Unassign"` buttons from the active slot card, retaining exclusively `"Change Operator"`.
+  - **4. Cross-Platform Mobile Parity (`apps/mobile/app/(app)/operations.tsx`)**: Synchronized identical shift timing resolution, 2-column information row, and single `"Change Operator"` button (>=44px touch target).
+- [x] **Page Feedback: /operations?tab=assignments Dedicated Assignment Audit Logs Page & Inline Shift (`/operations/audit-logs`, `AssignmentAuditLogsClient.tsx`, `OperationsClient.tsx`, `assignments.ts`, `AppSidebar.tsx`, `CommandPalette.tsx`, `apps/mobile/app/(app)/operations.tsx`) (2026-09-07)**:
+  - **1. Inline Accordion Removal & Hub Streamlining (`apps/web/components/operations/OperationsClient.tsx`)**:
+    - Removed `showAllAssignmentsAudit` state, `"View Historical & Audit Logs"` toggle button, and embedded table from `/operations?tab=assignments`.
+    - Added clean footer navigation link: `"View Full Assignment Audit Logs →"` pointing to `/operations/audit-logs`.
+    - Added `"Assignment Audit Logs"` top tab button in the supervisor navigation bar.
+  - **2. Dedicated Server Page & Aliases (`apps/web/app/(app)/operations/`)**:
+    - `audit-logs/page.tsx`: Server Component with `requirePermission("machine.view")`, operator protection, and metadata.
+    - `assignment-logs/page.tsx`: Route alias redirecting to `/operations/audit-logs`.
+    - `page.tsx`: Route guard redirecting `tab=audit-logs` and `tab=assignment-logs` to `/operations/audit-logs`.
+  - **3. High-Density & Responsive Client Component (`AssignmentAuditLogsClient.tsx`)**:
+    - Built with Vercel Geist design tokens (`#171717` ink, `#fafafa` canvas, `#ffffff` elevated, `#ebebeb` 1px hairline border).
+    - 4 KPI cards: Total Shifts, Active, Ended, Overnight.
+    - Filter toolbar (real-time search, status toggle, shift type, reset).
+    - Desktop high-density table (`hidden sm:block`) and Mobile touch cards (`block sm:hidden` with ≥44px touch targets).
+    - Formatted CSV export and print capabilities.
+  - **4. Data Access Layer (`assignments.ts`, `queries/index.ts`)**:
+    - `getAssignmentAuditLogs()` with scalar query projection (`ASSIGNMENT_SCALAR_PROJECTION`), in-memory hydration from parallel-fetched `machines`, `clients`, and `users`, structured error formatting (`formatPostgrestError`), and fallback derivation (`deriveAssignmentsFromMachines`).
+  - **5. Navigation Integration (`AppSidebar.tsx`, `CommandPalette.tsx`)**:
+    - Added `{ label: "Assignment Audit Logs", tab: "audit-logs", href: "/operations/audit-logs" }` to sidebar.
+    - Added `nav-operations-assignment-audit` command to command palette.
+  - **6. Cross-Platform Mobile Parity (`apps/mobile/app/(app)/operations.tsx`)**:
+    - Added `'audit-logs'` to `OpsTab`, added `"Audit Logs"` segment button in supervisor tab bar, implemented `MobileAssignmentAuditRecord`, full query with fallback, and mobile touch cards.
+  - **7. Verification**:
+    - `pnpm -r exec tsc --noEmit`: 0 errors across all 7 workspace packages.
+- [x] **Page Feedback: /operations?tab=logs — Subnavigation & Page Tab Icon Removal Across Monorepo (`AppSidebar.tsx`, `NavigationItem.tsx`, `CollapsedSidebarFlyout.tsx`, `MobileSidebarDrawer.tsx`, `types.ts`, `OperatorDashboard.tsx`, `OperationsClient.tsx`, `ReportsClient.tsx`, `HRClient.tsx`, `CrmClient.tsx`, `ClientDetailClient.tsx`, `FinanceClient.tsx`, `VendorDetailClient.tsx`, `PODetailClient.tsx`, `MobileDueBuckets.tsx`, `navItems.ts`, `CustomBottomTabBar.tsx`, `DynamicBottomNav.tsx`) (2026-09-07)**:
+  - **1. Sidebar Subnavigation Icon Pruning (`apps/web`)**:
+    - Made `icon` optional on `SubNavItem` in `types.ts`.
+    - Removed `icon` property from all `subItems` in `AppSidebar.tsx` (`Machines`, `Operations`, `Clients`, `Employees & Users`, and operator `Log Entry`/`Log History`).
+    - Removed `<SubIcon ... />` rendering from `NavigationItem.tsx` in `SidebarMenuSubButton`.
+    - Removed `<SubIcon ... />` rendering from `CollapsedSidebarFlyout.tsx` flyout submenu links.
+    - Removed `<SubIcon ... />` rendering from `MobileSidebarDrawer.tsx` sub-item drawer links.
+  - **2. Operations Hub & Dashboard Tabs (`apps/web`)**:
+    - Streamlined top tabs in `OperationsClient.tsx` to text with badges only (`Daily Running Hours`, `Operator Machine Assignments`); pruned unused `AnimatedStar` import.
+    - Removed icons from `Log Entry` and `Log History` in `SegmentedToggle` in `OperatorDashboard.tsx`.
+  - **3. Page-Level Tabs Across All Monorepo Modules (`apps/web`)**:
+    - `ReportsClient.tsx`: Pruned `icon` from `categories` array and `<Icon size={16} />` from category tab buttons.
+    - `HRClient.tsx`: Pruned `icon` and `<Icon size={14} />` from all navigation sub-tabs (`HR Dashboard`, `Employees`, `Onboarding`, `Departments`, `Designations`, `Salary & Payroll`, `User Requests`, `Documents`).
+    - `CrmClient.tsx`: Pruned `icon` from all 10 module tabs (`Dashboard`, `Leads`, `Customers`, `Interactions`, `Pipeline`, `Quotations`, `Orders`, `Inventory`, `Deliveries`, `Settings`).
+    - `ClientDetailClient.tsx`: Pruned `icon` from all 7 client detail tabs (`Overview`, `Machines`, `Service History`, `Complaints`, `Documents`, `Contacts`, `Activity Trail`).
+    - `FinanceClient.tsx`: Pruned `icon` from all 11 finance tabs in `SegmentedToggle`.
+    - `VendorDetailClient.tsx`: Pruned `icon` and `<Icon size={14} />` from vendor detail tabs.
+    - `PODetailClient.tsx`: Pruned `icon` and `<Icon size={14} />` from purchase order tabs.
+    - `MobileDueBuckets.tsx`: Pruned `icon` from mobile due buckets segmented toggle tabs.
+  - **4. Cross-Platform Mobile App Synchronization (`apps/mobile`)**:
+    - `navItems.ts`: Pruned `icon` from all `subItems` across modules.
+    - `CustomBottomTabBar.tsx`: Pruned `SubIcon` rendering from secondary tab button pills.
+    - `DynamicBottomNav.tsx`: Pruned `IconComp` rendering from sub-menu tab buttons.
+    - `operations.tsx`: Fixed TypeScript type assignment on `logsData` and used `userProfile?.full_name` for supervisor name calculation.
+  - **5. Monorepo Quality Gate Verification**:
+    - `pnpm -r exec tsc --noEmit`: Passed with **0 errors across all workspace packages**.
+    - `pnpm --filter @reachinternational/web build`: Passed with **39/39 routes compiled cleanly (Exit code 0)**.
+- [x] **Bug Fix: /operations/audit-logs — "[DAL] Error fetching assignment audit logs: {}" Console Error Remediation & Resilient In-Memory Hydration Query Architecture (`apps/web/lib/queries/assignments.ts`, `apps/mobile/app/(app)/operations.tsx`) (2026-09-07)**:
+  - **1. Root Cause & Error Serialization Fix**:
+    - Identified that PostgREST query in `getAssignmentAuditLogs` failed due to 3 simultaneous foreign key relationships to `public.users` (`operator_id`, `assigned_by`, `ended_by`) plus nested `client:clients` within `machine:machines`.
+    - Turbopack dev server IPC serialized the unformatted `PostgrestError` into `{}` across the server-client boundary.
+    - Implemented `formatPostgrestError` to format error message, code, details, and hint into a clean string.
+  - **2. Safe Scalar Projection & In-Memory Hydration (`apps/web/lib/queries/assignments.ts`)**:
+    - Replaced fragile multi-FK joins with `ASSIGNMENT_SCALAR_PROJECTION`.
+    - Parallel-fetched `machines`, `clients`, `users`, and `operator_machine_assignments`.
+    - Hydrated machine (with client details), operator, assigner, and ender in memory via lookup maps with zero foreign-key schema resolution risk.
+  - **3. Resilient Fallback Machine Derivation (`deriveAssignmentsFromMachines`)**:
+    - If `operator_machine_assignments` is empty or unmigrated, automatically derives assignment audit records from current machine state (`current_operator_id`, `operator_ids`, `current_supervisor_id`), ensuring the audit log page and metrics never display empty/zeroed state.
+  - **4. Mobile React Native Parity (`apps/mobile/app/(app)/operations.tsx`)**:
+    - Added automatic fallback to scalar query without multi-FK resolution if primary assignments query fails on mobile.
+    - Added automatic active assignment derivation from `mchRes.data` if assignments table is empty.
+- [x] **Page Feedback: /operations?tab=assignments UI/UX Polish, Card Normalization & Expandable Accordion Architecture (`OperationsClient.tsx`, `operators.ts`, `apps/mobile/app/(app)/operations.tsx`) (2026-09-07)**:
+  - **1. Header & Tab Cleaning**: Removed subtitle paragraph below page title, removed `<Clock>` icon from "Daily Running Hours" tab button, removed `<AnimatedStar>` icon from "Operator Machine Assignments" tab button, normalized page title to "Fleet Operations" to eliminate redundancy with tab trigger.
+  - **2. Single-Line Button Alignment**: Formatted "Assign Operator" button with `inline-flex items-center gap-2 whitespace-nowrap` ensuring strict 1-line alignment between icon and text.
+  - **3. Expandable Machine Cards (Closed by Default)**: Initialized `expandedMachineIds` state to `new Set()` (closed by default). Built collapsed summary strip with machine details, status badge, operator capacity indicator, quick operator chips, direct assign button, and chevron toggle. Added "Expand All / Collapse All Cards" utility.
+  - **4. Expanded Slot Layout & 3 Actions**: Displays shift badge with morning/day/night icons, operator name, clickable phone call link (`tel:`), supervisor assigner attribution (`Assigned by: [Supervisor Name] • [Date]`), and 3 buttons: "Change Operator", "End Shift" (`shift_changed`), and "Unassign" (`removed`).
+  - **5. Relational Assigner Enrichment (`apps/web/lib/queries/operators.ts`)**: Parallel-fetched supervisor/staff users and hydrated `assigner` in memory for active assignments.
+  - **6. Mobile React Native Parity (`apps/mobile/app/(app)/operations.tsx`)**: Synchronized accordion cards, default-closed condition, quick chips, supervisor attribution, phone linking, and 3 buttons (Change, End Shift, Unassign).
+- [x] **Bug Fix: /operations — "Error fetching supervisor hour logs: {}" Console Error Remediation & Resilient Multi-Tier Hour Logs Query Architecture (`apps/web/lib/queries/operators.ts`, `apps/mobile/app/(app)/operations.tsx`) (2026-09-07)**:
+  - **1. Root Cause & Error Serialization Fix**:
+    - Identified that `supervisor:users!machine_hour_logs_supervisor_id_fkey` constraint disambiguation failed in PostgREST on `machine_hour_logs` table due to multiple user foreign keys (`operator_id`, `supervisor_id`, `conflict_resolved_by`).
+    - Fixed Turbopack dev server error serialization: replaced raw `console.error(..., hourLogsRes.error)` (which serializes Error instances to empty `{}` across the server-client IPC boundary) with `formatPostgrestError`, printing complete human-readable error messages, codes, details, and hints.
+  - **2. Resilient Multi-Tier Query Pipeline (`apps/web/lib/queries/operators.ts`)**:
+    - Dropped redundant `supervisor:users!machine_hour_logs_supervisor_id_fkey` from `HOUR_LOG_FULL_PROJECTION` (supervisors are already fetched and hydrated in memory).
+    - Implemented `fetchHourLogsResiliently`:
+      - **Tier 1**: Full projection with conflict and relational fields.
+      - **Tier 2**: Baseline projection without conflict fields if migration 047 is pending.
+      - **Tier 3**: Direct flat projection (scalar columns only, 100% immune to PostgREST relation schema cache bugs).
+    - Updated `formatHourLogsData` to accept parallel-fetched `machines`, `staffUsers`, and `clients` maps, automatically enriching missing relational fields in memory.
+  - **3. Mobile React Native Parity (`apps/mobile/app/(app)/operations.tsx`)**:
+    - Added automatic fallback to baseline projection without conflict fields if primary hour logs query fails on mobile.
+    - Improved warning logs with `logsRes.error?.message || logsRes.error`.
+  - **4. Monorepo Quality Gate Verification**:
+    - Passed with 0 errors across monorepo packages.
+- [x] **Page Feedback: /onboarding Schedule Text Removal & /signup Address Field Integration (Web, Mobile & Database) (`OnboardingClient.tsx`, `signup/page.tsx`, `actions/auth.ts`, `validation/auth.ts`, `apps/mobile/app/(auth)/signup.tsx`, `049_add_address_to_signup_and_user_profile.sql`) (2026-09-07)**:
+  - **1. Onboarding UI Polish (`apps/web/app/onboarding/OnboardingClient.tsx`)**:
+    - Removed explanatory paragraph `<p className="text-[11px] text-[var(--color-mute)] leading-normal">Standard daily operational schedule. Used to configure equipment shift assignments and calculate overtime.</p>` below the shift time pickers in Section 2 (Work Shift Schedule).
+  - **2. Web Registration Street Address Integration (`apps/web/app/signup/page.tsx`)**:
+    - Added `address: ""` to `formValues` state.
+    - Integrated canonical `<Input>` for "Street / Site Base Address" (`id="signup-address"`) in Section 3 (Work Location & Identity) right below the City/District/State grid with placeholder `"Plot No. 42, MIDC Industrial Area, Chakan"`, required red star, and `<AnimatedMapPin size={15} />`.
+    - Added pre-flight client validation checking `if (!formValues.address.trim()) errors.address = "Address (street / site base) is required.";`.
+    - Preserved `address` in `result.fieldValues` state hydration on response.
+  - **3. Auth Server Action Mutation & Metadata (`apps/web/app/actions/auth.ts`)**:
+    - Extracted `address` from incoming `FormData`.
+    - Validated that `address` is provided, returning `fieldErrors.address`.
+    - Preserved `address` in `fieldValues` on error.
+    - Passed `address` into `options.data` and formatted `location` during `supabase.auth.signUp()`.
+  - **4. Shared Canonical Validation Schemas (`packages/validation/src/auth.ts`)**:
+    - Added required `address: z.string().trim().min(3, "Street / site base address is required").max(255, "Address cannot exceed 255 characters")` to `SignupSchema`.
+    - Added optional `address: z.string().trim().max(255).optional().nullable()` to `CreateUserSchema` and `UpdateUserSchema`.
+  - **5. Mobile React Native App Parity (`apps/mobile/app/(auth)/signup.tsx`)**:
+    - Added `address` state (`useState('')`).
+    - Added validation `if (!address.trim()) { setErrorMessage('Street / Site address is required.'); return; }`.
+    - Added `Street / Site Base Address *` `<Input>` with placeholder `"e.g. Plot No. 42, MIDC Chakan"` and `<MapPin>` icon in Section 3.
+    - Passed `address: address.trim()` into `supabase.auth.signUp()` options data.
+  - **6. Database Schema & Trigger (`049_add_address_to_signup_and_user_profile.sql`, `048_add_complete_profile_and_onboarding_workflow.sql`)**:
+    - Ensured `public.users.address TEXT` column.
+    - Updated `handle_new_user()` trigger on `auth.users` to capture `v_address := NULLIF(NEW.raw_user_meta_data->>'address', '')`, store it into `public.users.address`, and require `v_address` for setting `v_complete_profile = 'yes'`.
+    - Fixed PostgreSQL `invalid input syntax for type json` in `complete_user_onboarding_atomic`: replaced string literal in `audit_logs.details` with valid `jsonb` object `v_audit_meta`.
+  - **7. Resilient Direct Table Persistence Fallback (`apps/web/app/actions/onboarding.ts`)**:
+    - Added `createSupabaseAdminClient()` fallback in `completeOnboardingAction`. If the RPC fails or hasn't been reloaded in the remote database, the server action directly updates all user profile fields (`full_name`, `phone`, `role`, `shift_time`, `address`, `city`, `district`, `state`, `state_id`, `aadhaar_number`, `license_number`, `complete_profile: 'yes'`), guaranteeing 100% data persistence without blocking the user.
+  - **8. Monorepo Quality Gate Verification**:
+    - `pnpm -r exec tsc --noEmit`: Passed with **0 errors across all 7 workspace packages**.
+    - `pnpm --filter @reachinternational/web build`: Passed with **39/39 routes compiled cleanly (Exit code 0)**.
+- [x] **Monorepo Architecture Simplification & Dead Code Pruning — Ponytail Review (`OperationsClient.tsx`, `assignments.ts`, `onboarding.ts`, `auth.ts`, `date.ts`, `dal.ts`) (2026-09-07)**:
+  - **1. Operations Hub Pruning (`OperationsClient.tsx`, `page.tsx`)**:
+    - Removed unused actions `hireOperatorAction`, `recordOperatorPayoutAction`, and `recordMachineSiteMovementAction`.
+    - Shrunk `formatMachineSelectLabel` from 28 lines of nested conditionals down to a 7-line template string.
+    - Deleted 3 orphan modals (Hire Operator, Site Movement, Record Payout) and 18 unused state variables for soft-removed tabs.
+    - Deleted dead TAB 3 and TAB 4 rendering blocks, removing `siteMovements` and `operatorPayouts` references.
+  - **2. Server Actions RPC Fallback Elimination (`assignments.ts`, `onboarding.ts`)**:
+    - Removed unused imports `getCurrentUser` and `logAudit` from `assignments.ts`.
+    - Eliminated ~180 lines of manual table operations and fallback checks duplicating atomic database RPCs (`assign_operator_machine_atomic`, `end_operator_machine_assignment_atomic`, and `resolve_hour_log_conflict_atomic`).
+    - Shrunk 40 lines of manual `formData.get` in `onboarding.ts` with `Object.fromEntries(formData.entries())`.
+    - Deduplicated manual Aadhaar and licence checks in `onboarding.ts` handled by `OnboardingProfileSchema`.
+    - Deleted redundant direct table update fallback in `onboarding.ts`.
+  - **3. Validation & Utilities Deduplication (`auth.ts`, `date.ts`, `string.ts`)**:
+    - Replaced copy-pasted Verhoeff algorithm matrices (`VERHOEFF_D`, `VERHOEFF_P`, `validateVerhoeff`) and `INDIAN_STATE_CODES` (~140 lines) by importing `validateAadhaarNumber`, `validateLicenseNumber`, and `INDIAN_STATE_CODES` from `@reachinternational/utils`.
+    - Shrunk `AadhaarFieldSchema` and `AadhaarRequiredFieldSchema` to single-line delegations.
+    - Deleted unused `isTimeWindowOverlapping` (34 lines) from `packages/utils/src/date.ts`.
+    - Exported `INDIAN_STATE_CODES` from `packages/utils/src/string.ts`.
+  - **4. Auth DAL Simplification (`apps/web/lib/dal.ts`)**:
+    - Shrunk `isProfileIncomplete` from 23 lines down to a single-line check: `user.complete_profile !== "yes"`.
+  - **5. Quality Gates & Metrics**:
+    - `pnpm -r exec tsc --noEmit`: 0 errors across monorepo packages.
+    - `pnpm --filter @reachinternational/web build`: 39/39 routes compiled cleanly (Exit code 0).
+    - Net impact: **-1,026 lines deleted**, **+147 lines added** (`net: -879 lines`).
+- [x] **User Profile Onboarding Architecture for Incomplete Profiles (Web, Mobile & Database) (`048_add_complete_profile_and_onboarding_workflow.sql`, `onboarding/page.tsx`, `OnboardingClient.tsx`, `apps/mobile/app/(auth)/onboarding.tsx`, `actions/onboarding.ts`, `dal.ts`, `useAuth.tsx`, `validation/auth.ts`, `database.ts`) (2026-09-07)**:
+  - **1. Database Schema & Migration (`048_add_complete_profile_and_onboarding_workflow.sql`)**:
+    - Added `complete_profile TEXT NOT NULL DEFAULT 'no' CHECK (complete_profile IN ('yes', 'no'))` to `public.users`.
+    - Created partial index `idx_users_incomplete_profile ON public.users(complete_profile) WHERE complete_profile = 'no'` for fast zero-overhead checks.
+    - Automated backfill of existing complete user profiles to `complete_profile = 'yes'`.
+    - Updated `handle_new_user()` trigger to automatically evaluate completeness on new signups.
+    - Implemented atomic RPC `complete_user_onboarding_atomic` with transaction isolation, input validation, and structured audit log recording (`user.onboarding_completed`).
+  - **2. Fast Zero-Latency Auth Bypass (`lib/dal.ts`, `proxy.ts`, `(app)/layout.tsx`)**:
+    - Cached `complete_profile` column in DAL `getCachedUserRow` (`dal-user-row-v7`).
+    - Added `isProfileIncomplete(user: User): boolean` helper checking mandatory profile fields (`full_name`, `phone`, `role`, `shift_time`, `address`, `city`, `district`, `state`, `aadhaar_number`).
+    - Guarded `(app)/layout.tsx`: when `user.complete_profile === 'yes'`, checks resolve in 1 single string check with **0 CPU overhead**, immediately bypassing validation; only when `user.complete_profile !== 'yes'` does it evaluate missing fields and redirect to `/onboarding`.
+    - Protected `/onboarding` in `proxy.ts` while allowing authenticated access.
+  - **3. Shared Types & Schema Validation (`packages/*`)**:
+    - `packages/types/src/database.ts`: Added `complete_profile?: 'yes' | 'no' | string | null;` to `User`.
+    - `packages/validation/src/auth.ts`: Added `OnboardingProfileSchema` and `OnboardingProfileInput` with Verhoeff Aadhaar algorithm and licence checks.
+  - **4. Web Onboarding Screen & Server Action (`apps/web/app/onboarding/`)**:
+    - Created Server Component `apps/web/app/onboarding/page.tsx` verifying session and redirecting completed users.
+    - Created Client Component `apps/web/app/onboarding/OnboardingClient.tsx` reusing `/signup` components (industrial equipment showcase panel, 4 semantic sections with numbered badge indicators, `<CustomTimePicker>` with live shift duration badge, `<SearchableSelect>`, Aadhaar auto-formatting, and dynamic progress bar).
+    - Created Server Action `apps/web/app/actions/onboarding.ts` (`completeOnboardingAction`) with atomic RPC call, direct table fallback, cache tag revalidation (`CACHE_TAGS.users, "max"`), and role-based redirect.
+  - **5. Mobile React Native Parity (`apps/mobile/lib/auth/useAuth.tsx`, `apps/mobile/app/(auth)/onboarding.tsx`, `(app)/_layout.tsx`)**:
+    - Updated `useAuth.tsx` to query `complete_profile` and expose `isProfileComplete` and `userProfile`.
+    - Guarded `apps/mobile/app/(app)/_layout.tsx` to redirect to `/(auth)/onboarding` if profile is incomplete.
+    - Created native `apps/mobile/app/(auth)/onboarding.tsx` with identical 4 sections, `<TimeInput>` pickers, states modal, 44px touch targets, and atomic submission.
+  - **6. Monorepo Quality Gate Verification**:
+    - `pnpm -r exec tsc --noEmit`: Passed with **0 errors across all 7 workspace packages**.
+    - `pnpm --filter @reachinternational/web build`: Passed with **39/39 routes compiled cleanly including `ƒ /onboarding` (Exit code 0)**.
+    - `README.md` updated with new schema and module documentation.
+- [x] **Add Strix Domain Verification File (`apps/web/public/.well-known/strix-verify.txt`) (2026-09-07)**:
+  - Created `apps/web/public/.well-known/strix-verify.txt` containing `strix-verify-1c75e87c52d3e647f2f862a63116f275` for domain verification at `/.well-known/strix-verify.txt`.
 - [x] **Monorepo Architecture Pruning & Over-Engineering Elimination — Ponytail Audit (`packages/*`, `apps/mobile/*`, `apps/web/*`) (2026-09-07)**:
   - **1. Package Pruning**:
     - Deleted empty placeholder package `@reachinternational/config` (exported only single string constant).

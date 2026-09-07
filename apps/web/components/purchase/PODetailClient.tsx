@@ -68,19 +68,18 @@ export function PODetailClient({ user, poId }: PODetailClientProps) {
           </div>
         </div>
 
-        {/* Sub-Tabs Navigation (Item 13 Requirement!) */}
+        {/* Sub-Tabs Navigation */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar border-b border-[var(--color-hairline)]">
           {[
-            { id: "overview", label: "Overview", icon: AnimatedShoppingBag },
-            { id: "items", label: "📦 Items List", icon: AnimatedPackage },
-            { id: "vendor", label: "🏢 Vendor Profile", icon: AnimatedBuilding2 },
-            { id: "approval", label: "🔒 Approval Status", icon: AnimatedClock },
-            { id: "documents", label: "📄 Documents", icon: AnimatedFileText },
-            { id: "receipts", label: "🧾 Receipts & GRN", icon: AnimatedCheckCircle },
-            { id: "communication", label: "✉ Communication / Mail", icon: AnimatedMail },
-            { id: "activity", label: "📋 Activity Trail", icon: AnimatedActivity },
+            { id: "overview", label: "Overview" },
+            { id: "items", label: "Items List" },
+            { id: "vendor", label: "Vendor Profile" },
+            { id: "approval", label: "Approval Status" },
+            { id: "documents", label: "Documents" },
+            { id: "receipts", label: "Receipts & GRN" },
+            { id: "communication", label: "Communication / Mail" },
+            { id: "activity", label: "Activity Trail" },
           ].map((tab) => {
-            const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
@@ -92,7 +91,6 @@ export function PODetailClient({ user, poId }: PODetailClientProps) {
                     : "text-[var(--color-body)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
                 }`}
               >
-                <Icon size={14} />
                 <span>{tab.label}</span>
               </button>
             );

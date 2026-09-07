@@ -143,13 +143,11 @@ export function NavigationItem({
           <CollapsibleContent>
             <SidebarMenuSub>
               {item.subItems?.map((sub) => {
-                const SubIcon = sub.icon;
                 const isSubActive = isActive && currentTab === sub.tab;
                 return (
                   <SidebarMenuSubItem key={sub.tab}>
                     <Link href={`${item.href}?tab=${sub.tab}`} className="focus:outline-none">
                       <SidebarMenuSubButton active={isSubActive}>
-                        <SubIcon className={`h-3.5 w-3.5 shrink-0 ${isSubActive ? "text-sky-600 dark:text-sky-400 font-bold" : ""}`} />
                         <span className="truncate">{sub.label}</span>
                       </SidebarMenuSubButton>
                     </Link>

@@ -6,7 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { CACHE_TAGS } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import { OnboardingProfileSchema } from "@reachinternational/validation";
-import { validateAadhaarNumber, validateLicenseNumber, getStateById } from "@reachinternational/utils";
+import { getStateById } from "@reachinternational/utils";
 
 export interface OnboardingFormState {
   success?: boolean;
@@ -29,48 +29,41 @@ export async function completeOnboardingAction(
     };
   }
 
-  const full_name = ((formData.get("full_name") as string) || "").trim();
-  const phone = ((formData.get("phone") as string) || "").trim();
-  const role = ((formData.get("role") as string) || "").trim();
-  const shift_start_time = ((formData.get("shift_start_time") as string) || "").trim();
-  const shift_end_time = ((formData.get("shift_end_time") as string) || "").trim();
-  let shift_time = ((formData.get("shift_time") as string) || "").trim();
-  if (!shift_time && shift_start_time && shift_end_time) {
-    shift_time = `${shift_start_time} - ${shift_end_time}`;
-  }
+  const raw = Object.fromEntries(formData.entries()) as Record<string, string>;
+  const full_name = (raw.full_name || "").trim();
+  const phone = (raw.phone || "").trim();
+  const role = (raw.role || "").trim();
+  const shift_start_time = (raw.shift_start_time || "").trim();
+  const shift_end_time = (raw.shift_end_time || "").trim();
+  const shift_time = (raw.shift_time || "").trim() || (shift_start_time && shift_end_time ? `${shift_start_time} - ${shift_end_time}` : "");
 
-  const city = ((formData.get("city") as string) || "").trim();
-  const district = ((formData.get("district") as string) || "").trim();
-  const address = ((formData.get("address") as string) || "").trim();
-  let state = ((formData.get("state") as string) || "").trim();
-  const stateIdRaw = formData.get("state_id") as string;
-  let state_id: number | null = stateIdRaw && !isNaN(Number(stateIdRaw)) ? Number(stateIdRaw) : null;
+  const city = (raw.city || "").trim();
+  const district = (raw.district || "").trim();
+  const address = (raw.address || "").trim();
+  const stateIdRaw = raw.state_id;
+  const state_id = stateIdRaw && !isNaN(Number(stateIdRaw)) ? Number(stateIdRaw) : null;
+  const state = (raw.state || "").trim() || (state_id ? getStateById(state_id)?.name || "" : "");
 
-  if (state_id && !state) {
-    const matchedState = getStateById(state_id);
-    if (matchedState) state = matchedState.name;
-  }
-
-  const aadhaar_number = ((formData.get("aadhaar_number") as string) || "").trim();
-  const license_number = ((formData.get("license_number") as string) || "").trim();
+  const aadhaar_number = (raw.aadhaar_number || "").trim();
+  const license_number = (raw.license_number || "").trim();
 
   const fieldValues: Record<string, string> = {
+    ...raw,
     full_name,
     phone,
     role,
+    shift_time,
     shift_start_time,
     shift_end_time,
-    shift_time,
     city,
     district,
+    address,
     state,
     state_id: state_id ? String(state_id) : "",
-    address,
     aadhaar_number,
     license_number,
   };
 
-  // Schema validation via canonical Zod schema
   const validationResult = OnboardingProfileSchema.safeParse({
     full_name,
     phone,
@@ -87,34 +80,14 @@ export async function completeOnboardingAction(
     license_number: license_number || null,
   });
 
-  const fieldErrors: Record<string, string> = {};
-
   if (!validationResult.success) {
+    const fieldErrors: Record<string, string> = {};
     for (const issue of validationResult.error.issues) {
       const fieldName = issue.path[0] as string;
       if (!fieldErrors[fieldName]) {
         fieldErrors[fieldName] = issue.message;
       }
     }
-  }
-
-  // Deep Verhoeff Aadhaar algorithm check
-  if (aadhaar_number) {
-    const aadhaarCheck = validateAadhaarNumber(aadhaar_number);
-    if (!aadhaarCheck.isValid) {
-      fieldErrors.aadhaar_number = aadhaarCheck.error || "Invalid Aadhaar number";
-    }
-  }
-
-  // Driving licence format check if provided
-  if (license_number) {
-    const licCheck = validateLicenseNumber(license_number);
-    if (!licCheck.isValid) {
-      fieldErrors.license_number = licCheck.error || "Invalid driving licence format";
-    }
-  }
-
-  if (Object.keys(fieldErrors).length > 0) {
     return {
       error: "Please correct the highlighted fields before completing onboarding.",
       fieldErrors,
@@ -123,11 +96,9 @@ export async function completeOnboardingAction(
   }
 
   const cleanAadhaar = aadhaar_number.replace(/\D/g, "");
-  const adminClient = createSupabaseAdminClient();
 
   try {
-    // 1. Attempt atomic RPC invocation
-    const { data: rpcData, error: rpcError } = await supabase.rpc("complete_user_onboarding_atomic", {
+    const { error: rpcError } = await supabase.rpc("complete_user_onboarding_atomic", {
       p_user_id: user.id,
       p_full_name: full_name,
       p_phone: phone,
@@ -143,15 +114,14 @@ export async function completeOnboardingAction(
     });
 
     if (rpcError) {
-      // If RPC doesn't exist yet (migration rollout pending), execute resilient direct admin update
-      console.warn("[Onboarding Action] RPC error, using direct table update fallback:", rpcError.message);
-
+      console.warn("[Onboarding] complete_user_onboarding_atomic RPC returned error, attempting direct table update via admin client:", rpcError.message);
+      const adminClient = createSupabaseAdminClient();
       const { error: directError } = await adminClient
         .from("users")
         .update({
           full_name,
           phone,
-          role,
+          role: role || undefined,
           shift_time,
           address,
           city,
@@ -166,7 +136,7 @@ export async function completeOnboardingAction(
         .eq("id", user.id);
 
       if (directError) {
-        console.error("[Onboarding Action] Direct update failed:", directError);
+        console.error("[Onboarding] Direct table fallback failed:", directError);
         return {
           error: directError.message || "Failed to update user profile. Please try again.",
           fieldValues,
@@ -174,13 +144,11 @@ export async function completeOnboardingAction(
       }
     }
 
-    // Invalidate caches
     revalidateTag(CACHE_TAGS.users, "max");
     revalidatePath("/onboarding");
     revalidatePath("/machines");
     revalidatePath("/operations");
 
-    // Structured Audit Log
     try {
       await logAudit({
         user_id: user.id,
@@ -196,18 +164,15 @@ export async function completeOnboardingAction(
           state,
         },
       });
-    } catch (auditErr) {
-      console.warn("[Onboarding Action] Audit log failed non-fatally:", auditErr);
+    } catch {
+      // Non-fatal audit log catch
     }
-
-    const destination = role === "operator" ? "/operations?tab=entry" : "/machines";
 
     return {
       success: true,
-      redirectUrl: destination,
+      redirectUrl: role === "operator" ? "/operations?tab=entry" : "/machines",
     };
   } catch (err: any) {
-    console.error("[Onboarding Action] Unexpected error completing onboarding:", err);
     return {
       error: err?.message || "An unexpected error occurred. Please try again.",
       fieldValues,

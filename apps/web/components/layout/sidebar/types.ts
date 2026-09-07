@@ -3,7 +3,7 @@ import type { User, UserRole } from "@/lib/types/database";
 export interface SubNavItem {
   label: string;
   tab: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon?: React.ComponentType<{ className?: string }>;
   roles?: UserRole[];
 }
 

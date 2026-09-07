@@ -1155,12 +1155,10 @@ export function OperatorDashboard({
               {
                 id: "entry",
                 label: "Log Entry",
-                icon: <AnimatedGauge size={16} />,
               },
               {
                 id: "history",
                 label: "Log History",
-                icon: <AnimatedClock size={16} />,
                 count: recentLogs.length,
               },
             ]}

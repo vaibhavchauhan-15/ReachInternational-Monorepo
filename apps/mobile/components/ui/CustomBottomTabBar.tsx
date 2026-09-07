@@ -68,12 +68,6 @@ export const CustomBottomTabBar: React.FC<any> = () => {
                 },
               ]}
             >
-              {SubIcon && (
-                <SubIcon
-                  size={14}
-                  color={isSelected ? theme.colors.onPrimary : theme.colors.body}
-                />
-              )}
               <Text
                 style={[
                   styles.tabLabel,

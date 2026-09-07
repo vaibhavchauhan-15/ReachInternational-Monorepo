@@ -80,12 +80,6 @@ export const DynamicBottomNav: React.FC<DynamicBottomNavProps> = ({
                 },
               ]}
             >
-              {IconComp && (
-                <IconComp
-                  size={14}
-                  color={isSelected ? theme.colors.onPrimary : theme.colors.body}
-                />
-              )}
               <Text
                 style={[
                   styles.tabLabel,

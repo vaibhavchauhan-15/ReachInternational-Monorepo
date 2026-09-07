@@ -242,7 +242,6 @@ export function CollapsedSidebarFlyout({
           {/* Submenu Links */}
           <div className="relative z-20 p-2 space-y-1">
             {item.subItems?.map((sub) => {
-              const SubIcon = sub.icon;
               const isSubActive = isActiveParent && currentTab === sub.tab;
               return (
                 <Link
@@ -255,7 +254,6 @@ export function CollapsedSidebarFlyout({
                       : "text-[var(--color-body)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] font-medium"
                   }`}
                 >
-                  <SubIcon className={`h-4 w-4 shrink-0 ${isSubActive ? "text-sky-600 dark:text-sky-400 font-bold" : ""}`} />
                   <span className="truncate">{sub.label}</span>
                 </Link>
               );

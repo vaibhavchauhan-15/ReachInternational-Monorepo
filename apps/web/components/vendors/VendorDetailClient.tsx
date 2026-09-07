@@ -68,18 +68,17 @@ export function VendorDetailClient({ user, vendorId }: VendorDetailClientProps) 
           </div>
         </div>
 
-        {/* Sub-Tabs Navigation (Item 12 Requirement!) */}
+        {/* Sub-Tabs Navigation */}
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar border-b border-[var(--color-hairline)]">
           {[
-            { id: "overview", label: "Overview", icon: AnimatedBuilding2 },
-            { id: "contacts", label: "📞 Contacts", icon: AnimatedPhone },
-            { id: "products", label: "📦 Products / Parts", icon: AnimatedPackage },
-            { id: "purchase_orders", label: "📋 Purchase Orders (14)", icon: AnimatedShoppingBag },
-            { id: "documents", label: "📄 Documents (3)", icon: AnimatedFileText },
-            { id: "performance", label: "★ Performance (4.8)", icon: AnimatedStar },
-            { id: "activity", label: "📋 Activity Log", icon: AnimatedActivity },
+            { id: "overview", label: "Overview" },
+            { id: "contacts", label: "Contacts" },
+            { id: "products", label: "Products / Parts" },
+            { id: "purchase_orders", label: "Purchase Orders (14)" },
+            { id: "documents", label: "Documents (3)" },
+            { id: "performance", label: "Performance (4.8)" },
+            { id: "activity", label: "Activity Log" },
           ].map((tab) => {
-            const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
@@ -91,7 +90,6 @@ export function VendorDetailClient({ user, vendorId }: VendorDetailClientProps) 
                     : "text-[var(--color-body)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
                 }`}
               >
-                <Icon size={14} />
                 <span>{tab.label}</span>
               </button>
             );

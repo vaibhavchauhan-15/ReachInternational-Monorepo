@@ -78,13 +78,13 @@ export function ClientDetailClient({ user, clientId }: ClientDetailClientProps) 
             size="sm"
             responsive={false}
             items={[
-              { id: "overview", label: "Overview", icon: <AnimatedUsers size={14} /> },
-              { id: "machines", label: "Machines", icon: <AnimatedWrench size={14} />, count: 12 },
-              { id: "service", label: "Service History", icon: <AnimatedWrench size={14} /> },
-              { id: "complaints", label: "Complaints", icon: <AnimatedAlertTriangle size={14} />, count: 2 },
-              { id: "documents", label: "Documents", icon: <AnimatedFileText size={14} />, count: 5 },
-              { id: "contacts", label: "Contacts", icon: <AnimatedPhone size={14} /> },
-              { id: "activity", label: "Activity Trail", icon: <AnimatedActivity size={14} /> },
+              { id: "overview", label: "Overview" },
+              { id: "machines", label: "Machines", count: 12 },
+              { id: "service", label: "Service History" },
+              { id: "complaints", label: "Complaints", count: 2 },
+              { id: "documents", label: "Documents", count: 5 },
+              { id: "contacts", label: "Contacts" },
+              { id: "activity", label: "Activity Trail" },
             ]}
           />
         </div>

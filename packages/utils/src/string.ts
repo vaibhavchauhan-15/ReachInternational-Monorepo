@@ -265,7 +265,7 @@ export function maskAadhaar(aadhaar?: string | null): string {
 }
 
 // List of all 36 Indian State and Union Territory 2-letter RTO codes (MoRTH Sarathi)
-const INDIAN_STATE_CODES = new Set([
+export const INDIAN_STATE_CODES = new Set([
   "AN", "AP", "AR", "AS", "BR", "CG", "CH", "DD", "DH", "DL",
   "DN", "GA", "GJ", "HP", "HR", "JH", "JK", "KA", "KL", "LA",
   "LD", "MH", "ML", "MN", "MP", "MZ", "NL", "OD", "OR", "PB",

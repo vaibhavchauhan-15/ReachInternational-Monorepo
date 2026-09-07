@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Linking,
 } from 'react-native';
 import { Card, Badge, Input, Button, useTheme, MobileHeader } from '../../components/ui';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
@@ -16,7 +17,7 @@ import { MobileConflictResolutionModal } from '../../components/operations/Mobil
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { formatShiftTimingRange, formatTo12Hour, formatExactTimestamp, splitExactTimestamp, formatDate, parseBreakdownString } from '@reachinternational/utils';
+import { formatShiftTimingRange, formatTo12Hour, formatExactTimestamp, splitExactTimestamp, formatDate, parseBreakdownString, parseProfileShiftTime, parseTimeToMinutes } from '@reachinternational/utils';
 import {
   Clock,
   Gauge,
@@ -32,9 +33,13 @@ import {
   Users,
   ShieldAlert,
   Check,
+  ChevronDown,
+  ChevronUp,
+  Phone,
+  FileText,
 } from 'lucide-react-native';
 
-export type OpsTab = 'logs' | 'assignments' | 'entry' | 'history';
+export type OpsTab = 'logs' | 'assignments' | 'audit-logs' | 'entry' | 'history';
 
 export interface HourLogRecord {
   id: string;
@@ -71,6 +76,8 @@ export interface ActiveShiftAssignment {
   shift_end_time: string;
   crosses_midnight: boolean;
   assigned_at: string;
+  assigned_by?: string;
+  assigner?: { id: string; full_name: string; phone?: string } | null;
   operator?: { id: string; full_name: string; phone?: string } | null;
 }
 
@@ -85,18 +92,52 @@ export interface MachineWithAssignments {
   active_assignments: ActiveShiftAssignment[];
 }
 
+export interface MobileAssignmentAuditRecord {
+  id: string;
+  machine_id: string;
+  operator_id: string;
+  shift_start_time: string;
+  shift_end_time: string;
+  crosses_midnight: boolean;
+  assigned_at: string;
+  assigned_by?: string;
+  ended_at?: string | null;
+  ended_by?: string | null;
+  end_reason?: string | null;
+  is_active: boolean;
+  machine?: { machine_id: string; model?: string; serial_number?: string } | null;
+  operator?: { id: string; full_name: string; phone?: string } | null;
+  assigner?: { id: string; full_name: string } | null;
+  ender?: { id: string; full_name: string } | null;
+}
+
 export default function OperationsScreen() {
   const { theme } = useTheme();
-  const { role, user } = useAuth();
+  const { role, user, userProfile } = useAuth();
 
   const isOperator = (role || '').toLowerCase() === 'operator';
   const [activeTab, setActiveTab] = useState<OpsTab>(isOperator ? 'entry' : 'logs');
   const [logs, setLogs] = useState<HourLogRecord[]>([]);
   const [machinesList, setMachinesList] = useState<MachineWithAssignments[]>([]);
   const [activeOperators, setActiveOperators] = useState<{ id: string; full_name: string; phone?: string; shift_time?: string }[]>([]);
+  const [auditRecords, setAuditRecords] = useState<MobileAssignmentAuditRecord[]>([]);
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'assigned' | 'unassigned' | 'full'>('all');
+  const [auditFilter, setAuditFilter] = useState<'all' | 'active' | 'ended'>('all');
+  const [expandedMachineIds, setExpandedMachineIds] = useState<Set<string>>(() => new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  const toggleMachineExpanded = (machineId: string) => {
+    setExpandedMachineIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(machineId)) {
+        next.delete(machineId);
+      } else {
+        next.add(machineId);
+      }
+      return next;
+    });
+  };
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'breakdowns'>('all');
@@ -178,11 +219,18 @@ export default function OperationsScreen() {
             shift_end_time,
             crosses_midnight,
             assigned_at,
+            assigned_by,
+            ended_at,
+            ended_by,
+            end_reason,
             is_active,
-            operator:users!operator_machine_assignments_operator_id_fkey(id, full_name, phone)
+            machine:machines(id, machine_id, model, serial_number),
+            operator:users!operator_machine_assignments_operator_id_fkey(id, full_name, phone),
+            assigner:users!operator_machine_assignments_assigned_by_fkey(id, full_name),
+            ender:users!operator_machine_assignments_ended_by_fkey(id, full_name)
           `)
-          .eq('is_active', true)
-          .order('assigned_at', { ascending: false }),
+          .order('assigned_at', { ascending: false })
+          .limit(100),
         supabase
           .from('users')
           .select('id, full_name, phone, shift_time')
@@ -191,10 +239,50 @@ export default function OperationsScreen() {
           .order('full_name'),
       ]);
 
+      let logsData: any = logsRes.data;
       if (logsRes.error) {
-        console.warn('Error fetching logs:', logsRes.error);
-      } else if (logsRes.data) {
-        const formatted = logsRes.data.map((l: any) => ({
+        console.warn('Primary mobile logs query failed, trying baseline query:', logsRes.error?.message || logsRes.error);
+        let fallbackQuery = supabase
+          .from('machine_hour_logs')
+          .select(`
+            id,
+            machine_id,
+            log_date,
+            shift,
+            start_meter,
+            end_meter,
+            running_hours,
+            start_time,
+            end_time,
+            overtime_hours,
+            normal_working_hours,
+            location,
+            is_breakdown,
+            remarks,
+            operator_id,
+            client_id,
+            created_at,
+            machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number),
+            operator:users!machine_hour_logs_operator_id_fkey(id, full_name),
+            client:clients!machine_hour_logs_client_id_fkey(id, company_name)
+          `)
+          .order('log_date', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(100);
+
+        if (isOperator && user?.id) {
+          fallbackQuery = fallbackQuery.eq('operator_id', user.id);
+        }
+        const fbRes = await fallbackQuery;
+        if (fbRes.data) {
+          logsData = fbRes.data;
+        } else if (fbRes.error) {
+          console.warn('Baseline mobile logs query failed:', fbRes.error?.message || fbRes.error);
+        }
+      }
+
+      if (logsData) {
+        const formatted = logsData.map((l: any) => ({
           ...l,
           machine_code: l.machine?.machine_id || l.machine_id || 'Machine',
           client: l.client ? { name: l.client.company_name || l.client.client_name } : null,
@@ -207,7 +295,65 @@ export default function OperationsScreen() {
       }
 
       if (mchRes.data) {
-        const activeAssList = (assRes.data || []) as unknown as ActiveShiftAssignment[];
+        let allAssList = (assRes.data || []) as any[];
+        if (assRes.error) {
+          console.warn('Primary mobile assignments query failed:', assRes.error?.message || assRes.error);
+          // Fallback to scalar query without multi-FK resolution
+          const scalarAssRes = await supabase
+            .from('operator_machine_assignments')
+            .select(`
+              id,
+              machine_id,
+              operator_id,
+              shift_start_time,
+              shift_end_time,
+              crosses_midnight,
+              assigned_at,
+              assigned_by,
+              ended_at,
+              ended_by,
+              end_reason,
+              is_active
+            `)
+            .order('assigned_at', { ascending: false })
+            .limit(100);
+
+          if (scalarAssRes.data && scalarAssRes.data.length > 0) {
+            const mchMap = new Map((mchRes.data || []).map((m: any) => [m.id, m]));
+            const opsMap = new Map((opsRes.data || []).map((o: any) => [o.id, o]));
+            allAssList = scalarAssRes.data.map((a: any) => ({
+              ...a,
+              machine: mchMap.get(a.machine_id) || null,
+              operator: opsMap.get(a.operator_id) || null,
+            }));
+          }
+        }
+
+        // If still empty and machine has current_operator_id or current_supervisor_id, derive active assignments
+        if (allAssList.length === 0 && mchRes.data.some((m: any) => m.current_operator_id || m.current_supervisor_id)) {
+          allAssList = mchRes.data
+            .filter((m: any) => m.current_operator_id)
+            .map((m: any) => ({
+              id: `derived-${m.id}`,
+              machine_id: m.id,
+              operator_id: m.current_operator_id,
+              shift_start_time: '08:00',
+              shift_end_time: '17:00',
+              crosses_midnight: false,
+              assigned_at: m.created_at || new Date().toISOString(),
+              assigned_by: m.current_supervisor_id || '',
+              ended_at: null,
+              ended_by: null,
+              end_reason: null,
+              is_active: true,
+              machine: { id: m.id, machine_id: m.machine_id, model: m.model, serial_number: m.serial_number },
+              operator: (opsRes.data || []).find((o: any) => o.id === m.current_operator_id) || null,
+              assigner: m.supervisor || null,
+            }));
+        }
+
+        setAuditRecords(allAssList);
+        const activeAssList = allAssList.filter((a) => a.is_active) as unknown as ActiveShiftAssignment[];
         const machinesWithAss: MachineWithAssignments[] = mchRes.data.map((m: any) => ({
           ...m,
           active_assignments: activeAssList.filter((a) => a.machine_id === m.id),
@@ -222,29 +368,40 @@ export default function OperationsScreen() {
     }
   }, [isOperator, user?.id]);
 
-  const handleEndAssignment = async (assId: string, opName: string, machCode: string) => {
+  const handleEndAssignment = async (
+    assId: string,
+    opName: string,
+    machCode: string,
+    endReason: 'removed' | 'shift_changed' = 'removed'
+  ) => {
+    const actionLabel = endReason === 'shift_changed' ? 'End Shift' : 'Unassign';
+    const actionMessage =
+      endReason === 'shift_changed'
+        ? `Are you sure you want to end ${opName}'s active shift on ${machCode}?`
+        : `Are you sure you want to unassign ${opName} from ${machCode}?`;
+
     Alert.alert(
-      'End Shift Assignment',
-      `Are you sure you want to end ${opName}'s shift assignment on ${machCode}?`,
+      `${actionLabel} Assignment`,
+      actionMessage,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'End Shift',
+          text: actionLabel,
           style: 'destructive',
           onPress: async () => {
             try {
               const { error } = await supabase.rpc('end_operator_machine_assignment_atomic', {
                 p_assignment_id: assId,
                 p_ended_by: user?.id,
-                p_end_reason: 'removed',
+                p_end_reason: endReason,
               });
               if (error) {
-                Alert.alert('Error', error.message || 'Failed to end assignment.');
+                Alert.alert('Error', error.message || 'Failed to update assignment.');
               } else {
                 fetchOperationsData();
               }
             } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to end assignment.');
+              Alert.alert('Error', err?.message || 'Failed to update assignment.');
             }
           },
         },
@@ -380,7 +537,7 @@ export default function OperationsScreen() {
                   activeTab === 'logs' && { fontWeight: '700' },
                 ]}
               >
-                Running Hours
+                Hours
               </Text>
             </TouchableOpacity>
 
@@ -399,6 +556,24 @@ export default function OperationsScreen() {
                 ]}
               >
                 Assignments ({machinesList.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setActiveTab('audit-logs')}
+              style={[
+                styles.segmentBtn,
+                activeTab === 'audit-logs' && [styles.segmentActive, { backgroundColor: theme.colors.primary }],
+              ]}
+            >
+              <Text
+                style={[
+                  styles.segmentText,
+                  { color: activeTab === 'audit-logs' ? theme.colors.onPrimary : theme.colors.body },
+                  activeTab === 'audit-logs' && { fontWeight: '700' },
+                ]}
+              >
+                Audit Logs ({auditRecords.length})
               </Text>
             </TouchableOpacity>
           </View>
@@ -843,166 +1018,431 @@ export default function OperationsScreen() {
 
               return filtered.map((item) => {
                 const isFull = item.active_assignments.length >= 3;
+                const isExpanded = expandedMachineIds.has(item.id);
+
                 return (
                   <Card key={item.id} style={styles.card}>
-                    {/* Header Row */}
-                    <View style={styles.cardHeader}>
-                      <View style={styles.headerTitleWrap}>
-                        <Text style={[styles.codeText, { color: theme.colors.ink }]}>{item.machine_id}</Text>
-                        {item.model && (
-                          <Text style={[styles.serialText, { color: theme.colors.mute }]}>• {item.model}</Text>
+                    {/* Header Row — Clickable Accordion Header */}
+                    <TouchableOpacity
+                      onPress={() => toggleMachineExpanded(item.id)}
+                      activeOpacity={0.7}
+                      style={styles.cardHeader}
+                    >
+                      <View style={[styles.headerTitleWrap, { flex: 1 }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <Text style={[styles.codeText, { color: theme.colors.ink }]}>{item.machine_id}</Text>
+                          {item.model && (
+                            <Text style={[styles.serialText, { color: theme.colors.mute }]}>• {item.model}</Text>
+                          )}
+                        </View>
+                        {item.serial_number && (
+                          <Text style={[styles.metaText, { color: theme.colors.mute, marginTop: 2 }]}>
+                            S/N: {item.serial_number} {item.hour_meter !== undefined ? `• Meter: ${item.hour_meter}h` : ''}
+                          </Text>
+                        )}
+                        {/* Quick Operator Summary Chips when closed */}
+                        {item.active_assignments.length > 0 && !isExpanded && (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                            {item.active_assignments.map((ass, aIdx) => {
+                              const opFirstName = ass.operator?.full_name?.split(' ')[0] || 'Operator';
+                              return (
+                                <View
+                                  key={ass.id || aIdx}
+                                  style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 3,
+                                    paddingHorizontal: 6,
+                                    paddingVertical: 2,
+                                    borderRadius: radiusNumeric.sm,
+                                    backgroundColor: theme.colors.canvas,
+                                    borderColor: theme.colors.hairline,
+                                    borderWidth: 1,
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 9.5, fontWeight: '700', color: theme.colors.ink }}>
+                                    {ass.crosses_midnight ? '🌙' : '☀️'} {opFirstName}
+                                  </Text>
+                                </View>
+                              );
+                            })}
+                          </View>
                         )}
                       </View>
-                      <View
-                        style={{
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 4,
-                          paddingHorizontal: 8,
-                          paddingVertical: 3,
-                          borderRadius: radiusNumeric.sm,
-                          backgroundColor: isFull ? '#ecfdf5' : item.active_assignments.length > 0 ? '#e0f2fe' : theme.colors.canvas,
-                          borderColor: isFull ? '#a7f3d0' : item.active_assignments.length > 0 ? '#bae6fd' : theme.colors.hairline,
-                          borderWidth: 1,
-                        }}
-                      >
+
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <View
-                          style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: 3,
-                            backgroundColor: isFull ? '#059669' : item.active_assignments.length > 0 ? '#0284c7' : '#9ca3af',
-                          }}
-                        />
-                        <Text
-                          style={{
-                            fontSize: 10,
-                            fontWeight: '700',
-                            color: isFull ? '#047857' : item.active_assignments.length > 0 ? '#0369a1' : theme.colors.mute,
-                          }}
-                        >
-                          {item.active_assignments.length} / 3 Operators
-                        </Text>
-                      </View>
-                    </View>
-
-                    {item.serial_number && (
-                      <Text style={[styles.metaText, { color: theme.colors.mute, marginTop: -4 }]}>
-                        Serial: {item.serial_number} {item.hour_meter !== undefined ? `• Meter: ${item.hour_meter}h` : ''}
-                      </Text>
-                    )}
-
-                    {/* Active Shifts List */}
-                    <View style={{ gap: 8, marginTop: spacingNumeric.xs }}>
-                      {item.active_assignments.map((ass, aIdx) => {
-                        const isOvernight = ass.crosses_midnight;
-                        const opName = ass.operator?.full_name || 'Assigned Operator';
-                        return (
-                          <View
-                            key={ass.id || aIdx}
-                            style={[
-                              styles.specsWell,
-                              { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, padding: spacingNumeric.sm },
-                            ]}
-                          >
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <Text style={{ fontSize: 10, fontWeight: '800', color: theme.colors.mute, textTransform: 'uppercase' }}>
-                                Shift #{aIdx + 1}
-                              </Text>
-                              <View
-                                style={{
-                                  flexDirection: 'row',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                  backgroundColor: isOvernight ? '#eef2ff' : '#fffbeb',
-                                  borderColor: isOvernight ? '#c7d2fe' : '#fde68a',
-                                  borderWidth: 1,
-                                  paddingHorizontal: 6,
-                                  paddingVertical: 2,
-                                  borderRadius: 4,
-                                }}
-                              >
-                                {isOvernight ? (
-                                  <Moon size={10} color="#4f46e5" />
-                                ) : (
-                                  <Sun size={10} color="#d97706" />
-                                )}
-                                <Text
-                                  style={{
-                                    fontSize: 10,
-                                    fontFamily: 'GeistMono_700Bold',
-                                    color: isOvernight ? '#4338ca' : '#b45309',
-                                  }}
-                                >
-                                  {formatTo12Hour(ass.shift_start_time)} – {formatTo12Hour(ass.shift_end_time)}
-                                </Text>
-                              </View>
-                            </View>
-
-                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-                              <View style={{ flex: 1 }}>
-                                <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.ink }}>{opName}</Text>
-                                {ass.operator?.phone ? (
-                                  <Text style={{ fontSize: 10, color: theme.colors.mute, fontFamily: 'GeistMono_500Medium' }}>
-                                    📞 {ass.operator.phone}
-                                  </Text>
-                                ) : null}
-                              </View>
-
-                              {!isOperator && (
-                                <TouchableOpacity
-                                  onPress={() => handleEndAssignment(ass.id, opName, item.machine_id)}
-                                  style={{
-                                    paddingHorizontal: 12,
-                                    paddingVertical: 8,
-                                    borderRadius: radiusNumeric.sm,
-                                    backgroundColor: '#fee2e2',
-                                    borderColor: '#fca5a5',
-                                    borderWidth: 1,
-                                    minHeight: 44,
-                                    justifyContent: 'center',
-                                  }}
-                                >
-                                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#dc2626' }}>End Shift</Text>
-                                </TouchableOpacity>
-                              )}
-                            </View>
-                          </View>
-                        );
-                      })}
-
-                      {/* Add Operator Slot Button */}
-                      {!isFull && !isOperator && (
-                        <TouchableOpacity
-                          onPress={() => {
-                            setSelectedMachineForAssign({
-                              id: item.id,
-                              code: item.machine_id,
-                              model: item.model,
-                              count: item.active_assignments.length,
-                            });
-                            setAssignModalVisible(true);
-                          }}
                           style={{
                             flexDirection: 'row',
                             alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 6,
-                            paddingVertical: 12,
-                            borderRadius: radiusNumeric.md,
+                            gap: 4,
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: radiusNumeric.sm,
+                            backgroundColor: isFull ? '#ecfdf5' : item.active_assignments.length > 0 ? '#e0f2fe' : theme.colors.canvas,
+                            borderColor: isFull ? '#a7f3d0' : item.active_assignments.length > 0 ? '#bae6fd' : theme.colors.hairline,
                             borderWidth: 1,
-                            borderColor: theme.colors.link,
-                            borderStyle: 'dashed',
-                            backgroundColor: theme.colors.link + '08',
-                            minHeight: 44,
                           }}
                         >
-                          <Plus size={14} color={theme.colors.link} />
-                          <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.link }}>
-                            + Assign Shift #{item.active_assignments.length + 1}
+                          <View
+                            style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: 3,
+                              backgroundColor: isFull ? '#059669' : item.active_assignments.length > 0 ? '#0284c7' : '#9ca3af',
+                            }}
+                          />
+                          <Text
+                            style={{
+                              fontSize: 10,
+                              fontWeight: '700',
+                              color: isFull ? '#047857' : item.active_assignments.length > 0 ? '#0369a1' : theme.colors.mute,
+                            }}
+                          >
+                            {item.active_assignments.length} / 3
                           </Text>
-                        </TouchableOpacity>
+                        </View>
+
+                        {/* Chevron Indicator */}
+                        <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
+                          {isExpanded ? (
+                            <ChevronUp size={16} color={theme.colors.ink} />
+                          ) : (
+                            <ChevronDown size={16} color={theme.colors.mute} />
+                          )}
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Active Shifts List (Only when expanded — default closed) */}
+                    {isExpanded && (
+                      <View style={{ gap: 8, marginTop: spacingNumeric.sm, paddingTop: spacingNumeric.xs, borderTopWidth: 1, borderTopColor: theme.colors.hairline }}>
+                        {item.active_assignments.map((ass, aIdx) => {
+                          const op = operators.find((u) => u.id === ass.operator_id) || ass.operator;
+                          const opName = ass.operator?.full_name || op?.full_name || 'Assigned Operator';
+                          const opPhone = ass.operator?.phone || op?.phone;
+                          const supervisorName = ass.assigner?.full_name || (ass.assigned_by === user?.id ? userProfile?.full_name : null) || 'Supervisor';
+
+                          const parsedShift = op?.shift_time ? parseProfileShiftTime(op.shift_time) : null;
+                          const effectiveStart = ass.shift_start_time || parsedShift?.startTime || '08:00:00';
+                          const effectiveEnd = ass.shift_end_time || parsedShift?.endTime || '17:00:00';
+                          const startMins = parseTimeToMinutes(effectiveStart) ?? 480;
+                          const endMins = parseTimeToMinutes(effectiveEnd) ?? 1020;
+                          const isOvernight = ass.crosses_midnight ?? (endMins <= startMins);
+                          const startDisplay = formatTo12Hour(effectiveStart) || '08:00 AM';
+                          const endDisplay = formatTo12Hour(effectiveEnd) || '05:00 PM';
+
+                          return (
+                            <View
+                              key={ass.id || aIdx}
+                              style={[
+                                styles.specsWell,
+                                { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, padding: spacingNumeric.sm },
+                              ]}
+                            >
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <Text style={{ fontSize: 10, fontWeight: '800', color: theme.colors.mute, textTransform: 'uppercase' }}>
+                                  Shift Slot #{aIdx + 1}
+                                </Text>
+                                <View
+                                  style={{
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                    backgroundColor: isOvernight ? '#eef2ff' : '#fffbeb',
+                                    borderColor: isOvernight ? '#c7d2fe' : '#fde68a',
+                                    borderWidth: 1,
+                                    paddingHorizontal: 6,
+                                    paddingVertical: 2,
+                                    borderRadius: 4,
+                                  }}
+                                >
+                                  {isOvernight ? (
+                                    <Moon size={10} color="#4f46e5" />
+                                  ) : (
+                                    <Sun size={10} color="#d97706" />
+                                  )}
+                                  <Text
+                                    style={{
+                                      fontSize: 10,
+                                      fontFamily: 'GeistMono_700Bold',
+                                      color: isOvernight ? '#4338ca' : '#b45309',
+                                    }}
+                                  >
+                                    {startDisplay} – {endDisplay}
+                                  </Text>
+                                </View>
+                              </View>
+
+                              {/* 2-Column Operator & Assignment Details */}
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 8, gap: 12 }}>
+                                {/* Column 1: Operator Identity & Phone */}
+                                <View style={{ flex: 1, gap: 2 }}>
+                                  <Text style={{ fontSize: 9, fontWeight: '800', textTransform: 'uppercase', color: theme.colors.mute }}>OPERATOR</Text>
+                                  <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.ink }} numberOfLines={1}>{opName}</Text>
+                                  {opPhone ? (
+                                    <TouchableOpacity
+                                      onPress={() => Linking.openURL(`tel:${opPhone}`)}
+                                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
+                                    >
+                                      <Phone size={11} color={theme.colors.link} />
+                                      <Text style={{ fontSize: 11, color: theme.colors.link, fontFamily: 'GeistMono_600SemiBold' }}>
+                                        {opPhone}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  ) : (
+                                    <Text style={{ fontSize: 10, color: theme.colors.mute }}>No contact</Text>
+                                  )}
+                                </View>
+
+                                {/* Column 2: Assigned By & Date */}
+                                <View style={{ flex: 1, alignItems: 'flex-end', gap: 2 }}>
+                                  <Text style={{ fontSize: 9, fontWeight: '800', textTransform: 'uppercase', color: theme.colors.mute }}>ASSIGNED BY</Text>
+                                  <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.ink }} numberOfLines={1}>{supervisorName}</Text>
+                                  {ass.assigned_at ? (
+                                    <Text style={{ fontSize: 10, color: theme.colors.mute, fontFamily: 'GeistMono_600SemiBold' }}>
+                                      Since {formatDate(ass.assigned_at)}
+                                    </Text>
+                                  ) : null}
+                                </View>
+                              </View>
+
+                              {/* Action Button: Change Operator Only */}
+                              {!isOperator && (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.colors.hairline }}>
+                                  <TouchableOpacity
+                                    onPress={() => {
+                                      setSelectedMachineForAssign({
+                                        id: item.id,
+                                        code: item.machine_id,
+                                        model: item.model,
+                                        count: item.active_assignments.length,
+                                      });
+                                      setAssignModalVisible(true);
+                                    }}
+                                    style={{
+                                      paddingHorizontal: 12,
+                                      paddingVertical: 8,
+                                      borderRadius: radiusNumeric.sm,
+                                      backgroundColor: theme.colors.link + '15',
+                                      borderColor: theme.colors.link + '30',
+                                      borderWidth: 1,
+                                      minHeight: 44,
+                                      justifyContent: 'center',
+                                      alignItems: 'center',
+                                    }}
+                                  >
+                                    <Text style={{ fontSize: 11, fontWeight: '700', color: theme.colors.link }}>Change Operator</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })}
+
+                        {/* Add Operator Slot Button */}
+                        {!isFull && !isOperator && (
+                          <TouchableOpacity
+                            onPress={() => {
+                              setSelectedMachineForAssign({
+                                id: item.id,
+                                code: item.machine_id,
+                                model: item.model,
+                                count: item.active_assignments.length,
+                              });
+                              setAssignModalVisible(true);
+                            }}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 6,
+                              paddingVertical: 12,
+                              borderRadius: radiusNumeric.md,
+                              borderWidth: 1,
+                              borderColor: theme.colors.link,
+                              borderStyle: 'dashed',
+                              backgroundColor: theme.colors.link + '08',
+                              minHeight: 44,
+                            }}
+                          >
+                            <Plus size={14} color={theme.colors.link} />
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.link }}>
+                              + Assign Shift #{item.active_assignments.length + 1}
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
+                  </Card>
+                );
+              });
+            })()}
+          </ScrollView>
+        </>
+      )}
+
+      {/* Assignment Audit Logs Tab */}
+      {activeTab === 'audit-logs' && (
+        <>
+          {/* Search and Filters */}
+          <View style={[styles.searchFilterContainer, { backgroundColor: theme.colors.canvas, borderBottomColor: theme.colors.hairline }]}>
+            <Input
+              placeholder="Search machine, operator, supervisor, reason..."
+              value={search}
+              onChangeText={setSearch}
+              leftIcon={<Search size={16} color={theme.colors.mute} />}
+              containerStyle={styles.searchInput}
+            />
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+              {[
+                { key: 'all', label: `All (${auditRecords.length})` },
+                { key: 'active', label: `Active (${auditRecords.filter(a => a.is_active).length})` },
+                { key: 'ended', label: `Ended (${auditRecords.filter(a => !a.is_active).length})` },
+              ].map((f) => {
+                const isActive = auditFilter === f.key;
+                return (
+                  <TouchableOpacity
+                    key={f.key}
+                    onPress={() => setAuditFilter(f.key as any)}
+                    style={[
+                      styles.filterPill,
+                      {
+                        backgroundColor: isActive ? theme.colors.primary : theme.colors.canvasElevated,
+                        borderColor: isActive ? theme.colors.primary : theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.filterText, { color: isActive ? theme.colors.onPrimary : theme.colors.body }]}>
+                      {f.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          <ScrollView
+            contentContainerStyle={styles.feedContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
+          >
+            {(() => {
+              const q = search.toLowerCase().trim();
+              const filtered = auditRecords.filter((rec) => {
+                if (auditFilter === 'active' && !rec.is_active) return false;
+                if (auditFilter === 'ended' && rec.is_active) return false;
+
+                if (!q) return true;
+                const mCode = (rec.machine?.machine_id || '').toLowerCase();
+                const mModel = (rec.machine?.model || '').toLowerCase();
+                const opName = (rec.operator?.full_name || '').toLowerCase();
+                const assigner = (rec.assigner?.full_name || '').toLowerCase();
+                const reason = (rec.end_reason || '').toLowerCase();
+                return mCode.includes(q) || mModel.includes(q) || opName.includes(q) || assigner.includes(q) || reason.includes(q);
+              });
+
+              if (filtered.length === 0) {
+                return (
+                  <View style={[styles.emptyContainer, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+                    <FileText size={32} color={theme.colors.mute} />
+                    <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>No audit records found</Text>
+                    <Text style={[styles.emptySubtext, { color: theme.colors.mute }]}>
+                      No assignment history matches your current filters.
+                    </Text>
+                  </View>
+                );
+              }
+
+              return filtered.map((item) => {
+                const isOvernight = item.crosses_midnight ||
+                  (parseTimeToMinutes(item.shift_end_time) ?? 0) <= (parseTimeToMinutes(item.shift_start_time) ?? 0);
+
+                return (
+                  <Card key={item.id} style={styles.card}>
+                    {/* Header: Machine & Status Badge */}
+                    <View style={styles.cardHeader}>
+                      <View style={styles.headerTitleWrap}>
+                        <Text style={[styles.codeText, { color: theme.colors.ink }]}>
+                          {item.machine?.machine_id || 'Machine'}
+                        </Text>
+                        {item.machine?.model && (
+                          <Text style={[styles.modelText, { color: theme.colors.mute }]}>
+                            • {item.machine.model}
+                          </Text>
+                        )}
+                      </View>
+                      <Badge
+                        status={item.is_active ? 'operational' : 'inactive'}
+                        customLabel={item.is_active ? 'Active' : 'Ended'}
+                      />
+                    </View>
+
+                    {/* Operator Row */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 2 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <UserCheck size={14} color={theme.colors.link} />
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.ink }} numberOfLines={1}>
+                          {item.operator?.full_name || 'Operator'}
+                        </Text>
+                      </View>
+                      {item.operator?.phone && (
+                        <Text style={{ fontSize: 11, fontFamily: 'monospace', color: theme.colors.mute }}>
+                          {item.operator.phone}
+                        </Text>
                       )}
+                    </View>
+
+                    {/* Shift Window Pill */}
+                    <View style={[styles.specsWell, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          {isOvernight ? (
+                            <Moon size={13} color="#6366f1" />
+                          ) : (
+                            <Sun size={13} color="#f59e0b" />
+                          )}
+                          <Text style={{ fontSize: 11, fontWeight: '700', fontFamily: 'monospace', color: theme.colors.ink }}>
+                            {formatTo12Hour(item.shift_start_time)} – {formatTo12Hour(item.shift_end_time)}
+                          </Text>
+                          {isOvernight && (
+                            <Text style={{ fontSize: 10, fontWeight: '600', color: '#6366f1' }}>🌙 Overnight</Text>
+                          )}
+                        </View>
+                      </View>
+
+                      <View style={[styles.specsDivider, { backgroundColor: theme.colors.hairline }]} />
+
+                      {/* Timeline details */}
+                      <View style={{ gap: 2 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Assigned:</Text>
+                          <Text style={{ fontSize: 11, color: theme.colors.ink, fontFamily: 'monospace' }}>
+                            {formatDate(item.assigned_at)}
+                            {item.assigner?.full_name ? ` by ${item.assigner.full_name}` : ''}
+                          </Text>
+                        </View>
+
+                        {item.ended_at && (
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                            <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Ended:</Text>
+                            <Text style={{ fontSize: 11, color: theme.colors.mute, fontFamily: 'monospace' }}>
+                              {formatDate(item.ended_at)}
+                              {item.ender?.full_name ? ` by ${item.ender.full_name}` : ''}
+                            </Text>
+                          </View>
+                        )}
+
+                        {item.end_reason && (
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                            <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Reason:</Text>
+                            <Text style={{ fontSize: 11, color: theme.colors.body, textTransform: 'capitalize' }}>
+                              {item.end_reason.replace(/_/g, ' ')}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
                   </Card>
                 );

@@ -159,15 +159,11 @@ export function MobileDueBuckets({
           onChange={setActiveTab}
           layoutIdPrefix="mobile-due-buckets"
           fullWidth
-          items={tabs.map((tab) => {
-            const Icon = tab.icon;
-            return {
-              id: tab.id,
-              label: tab.label,
-              icon: <Icon className={`h-3.5 w-3.5 ${activeTab === tab.id ? tab.colorClass : "text-muted-foreground"}`} />,
-              count: tab.count,
-            };
-          })}
+          items={tabs.map((tab) => ({
+            id: tab.id,
+            label: tab.label,
+            count: tab.count,
+          }))}
         />
 
         {/* Dynamic Animated Content Container */}

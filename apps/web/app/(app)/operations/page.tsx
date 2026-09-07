@@ -15,6 +15,10 @@ export default async function OperationsPage(props: {
     redirect("/operations?tab=entry");
   }
 
+  if (user?.role !== "operator" && (tab === "audit-logs" || tab === "assignment-logs")) {
+    redirect("/operations/audit-logs");
+  }
+
   if (
     user?.role !== "operator" &&
     (tab === "entry" ||
@@ -36,8 +40,6 @@ export default async function OperationsPage(props: {
       operators={data.operators}
       assignments={data.assignments}
       hourLogs={data.hourLogs}
-      siteMovements={data.siteMovements}
-      operatorPayouts={data.operatorPayouts}
       userRole={user?.role}
       user={user!}
       assignedMachine={data.assignedMachine}

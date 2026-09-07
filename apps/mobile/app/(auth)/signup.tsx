@@ -63,6 +63,7 @@ export default function SignupScreen() {
   const [shiftEndTime, setShiftEndTime] = useState('08:00 PM');
   const [city, setCity] = useState('');
   const [district, setDistrict] = useState('');
+  const [address, setAddress] = useState('');
   const [stateVal, setStateVal] = useState('');
   const [stateId, setStateId] = useState<number | null>(null);
   const [stateModalVisible, setStateModalVisible] = useState(false);
@@ -116,6 +117,10 @@ export default function SignupScreen() {
     }
     if (!stateVal.trim() && !stateId) {
       setErrorMessage('State is required.');
+      return;
+    }
+    if (!address.trim()) {
+      setErrorMessage('Street / Site address is required.');
       return;
     }
     if (!shiftStartTime.trim()) {
@@ -176,11 +181,12 @@ export default function SignupScreen() {
             shift_time: finalShift,
             shift_start_time: shiftStartTime.trim() || null,
             shift_end_time: shiftEndTime.trim() || null,
+            address: address.trim(),
             city: city.trim(),
             district: district.trim(),
             state: stateVal.trim(),
             state_id: stateId,
-            location: `${city.trim()}, ${district.trim()}, ${stateVal.trim()}`,
+            location: `${address.trim() ? `${address.trim()}, ` : ''}${city.trim()}, ${district.trim()}, ${stateVal.trim()}`,
             aadhaar_number: cleanAadhaar,
             license_number: formattedLic,
           },
@@ -435,6 +441,14 @@ export default function SignupScreen() {
                 <ChevronDown size={16} color={theme.colors.mute} />
               </TouchableOpacity>
             </View>
+
+            <Input
+              label="Street / Site Base Address *"
+              placeholder="e.g. Plot No. 42, MIDC Chakan"
+              value={address}
+              onChangeText={setAddress}
+              leftIcon={<MapPin size={16} color={theme.colors.mute} />}
+            />
 
             <Input
               label="Aadhaar Card Number *"

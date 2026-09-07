@@ -65,6 +65,7 @@ export default function SignupPage() {
     district: "",
     state: "",
     state_id: "",
+    address: "",
     aadhaar_number: "",
     license_number: "",
     password: "",
@@ -163,6 +164,9 @@ export default function SignupPage() {
     if (!formValues.state.trim() && !formValues.state_id) {
       errors.state = "State is required.";
     }
+    if (!formValues.address.trim()) {
+      errors.address = "Address (street / site base) is required.";
+    }
     if (!formValues.aadhaar_number.trim()) {
       errors.aadhaar_number = "Aadhaar card number is required.";
     } else {
@@ -212,6 +216,7 @@ export default function SignupPage() {
           district: result.fieldValues?.district ?? prev.district,
           state: result.fieldValues?.state ?? prev.state,
           state_id: result.fieldValues?.state_id ?? prev.state_id,
+          address: result.fieldValues?.address ?? prev.address,
           aadhaar_number: result.fieldValues?.aadhaar_number ?? prev.aadhaar_number,
           license_number: result.fieldValues?.license_number ?? prev.license_number,
         }));
@@ -533,6 +538,20 @@ export default function SignupPage() {
                     />
                   </div>
                 </div>
+
+                {/* Street / Building Address */}
+                <Input
+                  id="signup-address"
+                  name="address"
+                  label="Street / Site Base Address"
+                  type="text"
+                  value={formValues.address}
+                  onChange={(e) => handleChange("address", e.target.value)}
+                  placeholder="Plot No. 42, MIDC Industrial Area, Chakan"
+                  required
+                  error={fieldErrors.address}
+                  icon={<AnimatedMapPin size={15} />}
+                />
 
                 {/* Aadhaar Card Number | Driving Licence Number */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">

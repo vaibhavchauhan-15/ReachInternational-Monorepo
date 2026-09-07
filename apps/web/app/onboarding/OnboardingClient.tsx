@@ -496,9 +496,6 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
                     error={fieldErrors.shift_end_time}
                   />
                 </div>
-                <p className="text-[11px] text-[var(--color-mute)] leading-normal">
-                  Standard daily operational schedule. Used to configure equipment shift assignments and calculate overtime.
-                </p>
               </div>
 
               {/* Section 3: Work Location & Address */}

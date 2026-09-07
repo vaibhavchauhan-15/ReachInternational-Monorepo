@@ -10,9 +10,9 @@ import {
   AnimatedFileText,
   AnimatedPlus,
   AnimatedBuilding2,
-  AnimatedStar,
   AnimatedSearch,
   AnimatedUserCheck,
+  AnimatedScrollText,
   AnimatedX,
 } from "@/components/ui/animated-icons";
 import { Badge, Button, Select, useToast, TooltipWrapper, MachineSelect, ClientSelect, UserSelect, SearchableSelect, CustomTimePicker, Modal } from "@/components/ui";
@@ -21,9 +21,6 @@ import { OperatorDashboard, type OperatorHourLog } from "@/components/dashboard/
 import {
   assignOperatorToMachineAction,
   requestOperatorAssignmentChangeAction,
-  hireOperatorAction,
-  recordOperatorPayoutAction,
-  recordMachineSiteMovementAction,
 } from "@/app/actions/operators";
 import {
   createAssignmentAction,
@@ -33,8 +30,8 @@ import {
 } from "@/app/actions/assignments";
 import { PrintableSupervisorLogsModal } from "./PrintableSupervisorLogsModal";
 import { MONTH_NAMES, getLogMonthNumber, formatCompactTiming } from "@/lib/utils/operator-logs-export";
-import { formatDate, formatExactTimestamp, formatTimeAgo, formatTo12Hour, parseTimeToMinutes } from "@reachinternational/utils";
-import { Printer, Clock, ShieldAlert, Check, UserPlus, AlertCircle, Sun, Moon, Users, Filter, ChevronDown, RefreshCw } from "lucide-react";
+import { formatDate, formatExactTimestamp, formatTimeAgo, formatTo12Hour, parseProfileShiftTime, parseTimeToMinutes } from "@reachinternational/utils";
+import { Printer, Clock, ShieldAlert, Check, UserPlus, AlertCircle, Sun, Moon, Users, Filter, ChevronDown, RefreshCw, Phone, UserCheck } from "lucide-react";
 
 export interface OperationsClientProps {
   machines: Machine[];
@@ -42,8 +39,6 @@ export interface OperationsClientProps {
   operators: User[];
   assignments: (OperatorMachineAssignment | MachineAssignment | any)[];
   hourLogs: MachineHourLog[];
-  siteMovements?: any[];
-  operatorPayouts?: any[];
   userRole?: string;
   user?: User;
   assignedMachine?: Machine | null;
@@ -63,22 +58,10 @@ export function formatMachineSelectLabel(m: {
 }): string {
   if (!m) return "Machine";
   const code = m.machine_id || m.machine_code || m.id || "Machine";
-  const mfr = m.manufacturer ? m.manufacturer.trim() : null;
-  const modelRaw = m.model ? m.model.trim() : null;
-  const model = mfr && modelRaw ? `${mfr} ${modelRaw}` : mfr || modelRaw;
-  const rawSerial = m.serial_number ? m.serial_number : null;
-  const serial = rawSerial && rawSerial !== code ? rawSerial : null;
-
-  if (model && serial) {
-    return `${code} (${model} — S/N: ${serial})`;
-  }
-  if (model) {
-    return `${code} (${model})`;
-  }
-  if (serial) {
-    return `${code} (S/N: ${serial})`;
-  }
-  return code;
+  const model = [m.manufacturer?.trim(), m.model?.trim()].filter(Boolean).join(" ");
+  const serial = m.serial_number && m.serial_number !== code ? `S/N: ${m.serial_number}` : null;
+  const details = [model, serial].filter(Boolean).join(" — ");
+  return details ? `${code} (${details})` : code;
 }
 
 export function OperationsClient({
@@ -87,8 +70,6 @@ export function OperationsClient({
   operators,
   assignments,
   hourLogs,
-  siteMovements = [],
-  operatorPayouts = [],
   userRole,
   user,
   assignedMachine,
@@ -126,9 +107,6 @@ export function OperationsClient({
   // Modals
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showReassignRequestModal, setShowReassignRequestModal] = useState(false);
-  const [showHireOperatorModal, setShowHireOperatorModal] = useState(false);
-  const [showSiteMovementModal, setShowSiteMovementModal] = useState(false);
-  const [showPayoutModal, setShowPayoutModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   // Form states: Assignment
@@ -153,31 +131,30 @@ export function OperationsClient({
   // Filter states: Assignments Tab
   const [assignmentSearch, setAssignmentSearch] = useState("");
   const [assignmentFilter, setAssignmentFilter] = useState<"all" | "assigned" | "unassigned" | "full">("all");
-  const [showAllAssignmentsAudit, setShowAllAssignmentsAudit] = useState(false);
 
-  // Form states: Hire Operator
-  const [hireName, setHireName] = useState("");
-  const [hirePhone, setHirePhone] = useState("");
-  const [hireEmail, setHireEmail] = useState("");
-  const [hireSalary, setHireSalary] = useState(35000);
+  // Collapsible Machine Cards: default is CLOSED condition (empty Set)
+  const [expandedMachineIds, setExpandedMachineIds] = useState<Set<string>>(() => new Set());
 
-  // Form states: Site Movement
-  const [moveMachineId, setMoveMachineId] = useState(machines[0]?.id || "");
-  const [moveClientName, setMoveClientName] = useState("");
-  const [moveSiteAddress, setMoveSiteAddress] = useState("");
-  const [moveType, setMoveType] = useState<"loading_dispatch" | "unloading_arrival" | "relocation">("loading_dispatch");
-  const [moveVehicleNo, setMoveVehicleNo] = useState("");
-  const [moveOperatorId, setMoveOperatorId] = useState(operators[0]?.id || "");
-  const [moveRemarks, setMoveRemarks] = useState("");
+  const toggleMachineExpanded = (machineId: string) => {
+    setExpandedMachineIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(machineId)) {
+        next.delete(machineId);
+      } else {
+        next.add(machineId);
+      }
+      return next;
+    });
+  };
 
-  // Form states: Payout
-  const [payoutOperatorId, setPayoutOperatorId] = useState(operators[0]?.id || "");
-  const [payoutMonth, setPayoutMonth] = useState(new Date().toISOString().substring(0, 7));
-  const [payoutRunningHours, setPayoutRunningHours] = useState(180);
-  const [payoutBaseSalary, setPayoutBaseSalary] = useState(35000);
-  const [payoutAllowance, setPayoutAllowance] = useState(2000);
-  const [payoutDeductions, setPayoutDeductions] = useState(0);
-  const [payoutNotes, setPayoutNotes] = useState("");
+  const handleToggleExpandAll = (allIds: string[]) => {
+    if (expandedMachineIds.size === allIds.length) {
+      setExpandedMachineIds(new Set());
+    } else {
+      setExpandedMachineIds(new Set(allIds));
+    }
+  };
+
 
   // Helper for current month value ("01" to "12")
   const getCurrentMonthValue = (): string => {
@@ -655,18 +632,24 @@ export function OperationsClient({
     }
   };
 
-  const handleEndAssignment = async (assignmentId: string, opName: string, machName: string) => {
-    if (!window.confirm(`Are you sure you want to end the assignment of ${opName} on ${machName}?`)) {
+  const handleEndAssignment = async (
+    assignmentId: string,
+    opName: string,
+    machName: string,
+    endReason: "removed" | "shift_changed" = "removed"
+  ) => {
+    const actionLabel = endReason === "shift_changed" ? "end the active shift for" : "unassign";
+    if (!window.confirm(`Are you sure you want to ${actionLabel} ${opName} from ${machName}?`)) {
       return;
     }
     setSubmitting(true);
     try {
       const res = await endAssignmentAction({
         assignmentId,
-        endReason: "removed",
+        endReason,
       });
       if (res.success) {
-        toast("success", `Assignment ended for ${opName}.`);
+        toast("success", endReason === "shift_changed" ? `Shift ended for ${opName}.` : `Operator ${opName} unassigned successfully.`);
         router.refresh();
       } else {
         toast("error", res.error || "Failed to end assignment");
@@ -762,91 +745,6 @@ export function OperationsClient({
     }
   };
 
-  const handleHireOperator = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!hireName || !hirePhone) {
-      toast("error", "Operator Name and Phone number are required");
-      return;
-    }
-    setSubmitting(true);
-    const res = await hireOperatorAction({
-      fullName: hireName,
-      phone: hirePhone,
-      email: hireEmail,
-      salary: Number(hireSalary),
-    });
-    setSubmitting(false);
-
-    if (res.success) {
-      toast("success", `Successfully hired operator ${hireName}`);
-      setShowHireOperatorModal(false);
-      setHireName("");
-      setHirePhone("");
-      setHireEmail("");
-      router.refresh();
-    } else {
-      toast("error", `Failed to hire operator: ${res.error}`);
-    }
-  };
-
-  const handleSiteMovementSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!moveMachineId || !moveClientName || !moveSiteAddress) {
-      toast("error", "Please fill in Machine, Client Name, and Site Address.");
-      return;
-    }
-    setSubmitting(true);
-    const res = await recordMachineSiteMovementAction({
-      machineId: moveMachineId,
-      clientName: moveClientName,
-      siteAddress: moveSiteAddress,
-      movementType: moveType,
-      transportVehicleNo: moveVehicleNo,
-      operatorId: moveOperatorId,
-      remarks: moveRemarks,
-    });
-    setSubmitting(false);
-
-    if (res.success) {
-      toast("success", `Site movement (${moveType.replace("_", " ")}) logged successfully!`);
-      setShowSiteMovementModal(false);
-      setMoveClientName("");
-      setMoveSiteAddress("");
-      setMoveVehicleNo("");
-      setMoveRemarks("");
-      router.refresh();
-    } else {
-      toast("error", `Failed to log site movement: ${res.error}`);
-    }
-  };
-
-  const handlePayoutSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!payoutOperatorId || !payoutMonth) {
-      toast("error", "Operator and Period Month are required.");
-      return;
-    }
-    setSubmitting(true);
-    const res = await recordOperatorPayoutAction({
-      operatorId: payoutOperatorId,
-      periodMonth: payoutMonth,
-      totalRunningHours: Number(payoutRunningHours),
-      baseSalary: Number(payoutBaseSalary),
-      allowance: Number(payoutAllowance),
-      deductions: Number(payoutDeductions),
-      notes: payoutNotes,
-    });
-    setSubmitting(false);
-
-    if (res.success) {
-      toast("success", "Operator salary payout recorded successfully!");
-      setShowPayoutModal(false);
-      setPayoutNotes("");
-      router.refresh();
-    } else {
-      toast("error", `Failed to record salary payout: ${res.error}`);
-    }
-  };
 
   const TAB_TITLES: Record<string, string> = {
     logs: "Daily Machine Running Hours",
@@ -867,16 +765,18 @@ export function OperationsClient({
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
               <h1 className="text-xl font-extrabold text-[var(--color-ink)]">
-                {currentTitle}
+                Fleet Operations
               </h1>
-              <p className="text-xs text-[var(--color-mute)] mt-0.5">
-                Manage recurring daily shifts, active operator rosters (up to 3 per machine), and resolve overtime shift overlaps.
-              </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="primary" onClick={() => handleOpenAssignModal()}>
-                <AnimatedUserCheck size={15} /> Assign Operator
+              <Button
+                variant="primary"
+                onClick={() => handleOpenAssignModal()}
+                className="h-9 px-3.5 font-bold inline-flex items-center gap-2 whitespace-nowrap cursor-pointer"
+              >
+                <AnimatedUserCheck size={16} className="shrink-0" />
+                <span>Assign Operator</span>
               </Button>
             </div>
           </div>
@@ -895,7 +795,6 @@ export function OperationsClient({
                   : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas-elevated)]"
               }`}
             >
-              <Clock className="w-3.5 h-3.5" />
               <span>Daily Running Hours</span>
               {pendingConflicts.length > 0 && (
                 <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
@@ -916,11 +815,19 @@ export function OperationsClient({
                   : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas-elevated)]"
               }`}
             >
-              <AnimatedStar size={14} />
               <span>Operator Machine Assignments</span>
               <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
                 {assignments.filter((a: any) => a.status === "active" || a.is_active).length}
               </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => router.push("/operations/audit-logs")}
+              className="px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas-elevated)] whitespace-nowrap"
+            >
+              <AnimatedScrollText size={14} />
+              <span>Assignment Audit Logs</span>
             </button>
           </div>
         </div>
@@ -1936,52 +1843,76 @@ export function OperationsClient({
                   )}
                 </div>
 
-                {/* Status Filter Buttons */}
-                <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar p-1 bg-[var(--color-canvas)] rounded-xl border border-[var(--color-hairline)] shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => setAssignmentFilter("all")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                      assignmentFilter === "all"
-                        ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
-                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-                    }`}
-                  >
-                    All ({totalMachinesCount})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAssignmentFilter("assigned")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                      assignmentFilter === "assigned"
-                        ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
-                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-                    }`}
-                  >
-                    Assigned ({totalMachinesCount - unassignedCount})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAssignmentFilter("full")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                      assignmentFilter === "full"
-                        ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
-                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-                    }`}
-                  >
-                    Full (3/3) ({fullyAssignedCount})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAssignmentFilter("unassigned")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                      assignmentFilter === "unassigned"
-                        ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
-                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-                    }`}
-                  >
-                    Unassigned ({unassignedCount})
-                  </button>
+                {/* Status Filter Buttons & Expand All */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar p-1 bg-[var(--color-canvas)] rounded-xl border border-[var(--color-hairline)] shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setAssignmentFilter("all")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        assignmentFilter === "all"
+                          ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
+                          : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                      }`}
+                    >
+                      All ({totalMachinesCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAssignmentFilter("assigned")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        assignmentFilter === "assigned"
+                          ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
+                          : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                      }`}
+                    >
+                      Assigned ({totalMachinesCount - unassignedCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAssignmentFilter("full")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        assignmentFilter === "full"
+                          ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
+                          : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                      }`}
+                    >
+                      Full (3/3) ({fullyAssignedCount})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAssignmentFilter("unassigned")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                        assignmentFilter === "unassigned"
+                          ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
+                          : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                      }`}
+                    >
+                      Unassigned ({unassignedCount})
+                    </button>
+                  </div>
+
+                  {/* Expand / Collapse All Cards Toggle */}
+                  {filteredMachines.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleExpandAll(filteredMachines.map((m) => m.id))}
+                      className="px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-canvas-elevated)] text-xs font-bold text-[var(--color-ink)] flex items-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-2xs"
+                    >
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                          expandedMachineIds.size === filteredMachines.length && filteredMachines.length > 0
+                            ? "rotate-180"
+                            : ""
+                        }`}
+                      />
+                      <span>
+                        {expandedMachineIds.size === filteredMachines.length && filteredMachines.length > 0
+                          ? "Collapse All Cards"
+                          : "Expand All Cards"}
+                      </span>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1997,17 +1928,30 @@ export function OperationsClient({
                   const machAss = activeAssList.filter((a: any) => a.machine_id === m.id || a.machine?.id === m.id);
                   const isFull = machAss.length >= 3;
                   const machCode = m.machine_id || m.machine_code || "Machine";
+                  const isExpanded = expandedMachineIds.has(m.id);
 
                   return (
                     <div
                       key={m.id}
-                      className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 space-y-3.5 shadow-2xs transition-all hover:border-[var(--color-hairline-strong)]"
+                      className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xs transition-all duration-200 hover:border-[var(--color-hairline-strong)] overflow-hidden"
                     >
-                      {/* Machine Header Strip */}
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-[var(--color-hairline)]">
-                        <div className="min-w-0">
+                      {/* Machine Header Strip — Clickable Accordion Header */}
+                      <div
+                        onClick={() => toggleMachineExpanded(m.id)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            toggleMachineExpanded(m.id);
+                          }
+                        }}
+                        className="p-3.5 sm:p-4 cursor-pointer select-none flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 transition-colors hover:bg-[var(--color-canvas)]/40"
+                      >
+                        {/* Machine Details & Quick Chips */}
+                        <div className="min-w-0 flex-1 space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-extrabold text-sm text-[var(--color-ink)]">
+                            <span className="font-extrabold text-sm text-[var(--color-ink)] font-mono">
                               {machCode}
                             </span>
                             {m.model && (
@@ -2021,20 +1965,47 @@ export function OperationsClient({
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-[var(--color-mute)] flex items-center gap-3 mt-0.5">
+
+                          <div className="text-[11px] text-[var(--color-mute)] flex flex-wrap items-center gap-x-3 gap-y-1">
                             {m.hour_meter !== undefined && (
                               <span>Meter: <strong className="font-mono text-[var(--color-ink)]">{m.hour_meter} hrs</strong></span>
                             )}
                             {m.status && (
                               <span className="capitalize">Status: <strong className="text-[var(--color-ink)]">{m.status}</strong></span>
                             )}
+                            {machAss.length > 0 && (
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[var(--color-hairline-strong)]">•</span>
+                                {machAss.map((ass: any, aIdx: number) => {
+                                  const opObj = activeOperators.find((u) => u.id === ass.operator_id) || (ass.operator as any);
+                                  const opFirstName = opObj?.full_name?.split(" ")[0] || opObj?.name?.split(" ")[0] || "Operator";
+                                  const parsedShift = opObj?.shift_time ? parseProfileShiftTime(opObj.shift_time) : null;
+                                  const effectiveStart = ass.shift_start_time || parsedShift?.startTime || "08:00:00";
+                                  const effectiveEnd = ass.shift_end_time || parsedShift?.endTime || "17:00:00";
+                                  const startM = parseTimeToMinutes(effectiveStart) ?? 480;
+                                  const endM = parseTimeToMinutes(effectiveEnd) ?? 1020;
+                                  const isOvernight = ass.crosses_midnight ?? (endM <= startM);
+                                  return (
+                                    <span
+                                      key={ass.id || aIdx}
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-ink)]"
+                                    >
+                                      {isOvernight ? "🌙" : "☀️"} {opFirstName}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         </div>
 
-                        {/* Capacity Pill & Add Button */}
-                        <div className="flex items-center gap-2 self-stretch sm:self-auto justify-between sm:justify-end">
+                        {/* Capacity Pill & Actions */}
+                        <div
+                          className="flex items-center gap-2 self-stretch sm:self-auto justify-between sm:justify-end shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <span
-                            className={`px-2.5 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 ${
+                            className={`px-2.5 py-1 rounded-full text-xs font-bold border flex items-center gap-1.5 shrink-0 ${
                               isFull
                                 ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
                                 : machAss.length > 0
@@ -2056,325 +2027,187 @@ export function OperationsClient({
                               variant="secondary"
                               size="sm"
                               onClick={() => handleOpenAssignModal(m.id)}
-                              className="text-xs font-bold h-8 px-3"
+                              className="text-xs font-bold h-8 px-2.5 inline-flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
                             >
-                              <AnimatedPlus size={14} className="text-sky-500" /> Assign Operator
+                              <AnimatedPlus size={13} className="text-sky-500 shrink-0" />
+                              <span>Assign Operator</span>
                             </Button>
                           )}
+
+                          {/* Accordion Toggle Chevron Button */}
+                          <button
+                            type="button"
+                            onClick={() => toggleMachineExpanded(m.id)}
+                            aria-label={isExpanded ? "Close machine card" : "Expand machine card"}
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer shrink-0"
+                          >
+                            <ChevronDown
+                              className={`w-4 h-4 transition-transform duration-200 ${
+                                isExpanded ? "rotate-180 text-[var(--color-ink)]" : ""
+                              }`}
+                            />
+                          </button>
                         </div>
                       </div>
 
-                      {/* Shift Slots Grid (Up to 3 Slots) */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {/* Render active slots */}
-                        {machAss.map((ass: any, sIdx: number) => {
-                          const opObj = activeOperators.find((u) => u.id === ass.operator_id) || (ass.operator as any);
-                          const opName = opObj?.full_name || opObj?.name || "Assigned Operator";
-                          const isOvernight =
-                            ass.crosses_midnight ||
-                            (parseTimeToMinutes(ass.shift_end_time) ?? 0) <= (parseTimeToMinutes(ass.shift_start_time) ?? 0);
+                      {/* Shift Slots Grid (Only when expanded - default closed) */}
+                      {isExpanded && (
+                        <div className="p-3.5 sm:p-4 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)]/30 space-y-3 animate-in fade-in duration-150">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {/* Render active slots */}
+                            {machAss.map((ass: any, sIdx: number) => {
+                              const opObj = activeOperators.find((u) => u.id === ass.operator_id) || (ass.operator as any);
+                              const opName = opObj?.full_name || opObj?.name || "Assigned Operator";
+                              const opPhone = opObj?.phone || (ass.operator as any)?.phone;
+                              const assignerName = ass.assigner?.full_name || (ass.assigned_by === user?.id ? user?.full_name : null) || "Supervisor";
 
-                          return (
-                            <div
-                              key={ass.id || sIdx}
-                              className="p-3 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] flex flex-col justify-between gap-3 text-xs"
-                            >
-                              <div className="space-y-2">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-mute)]">
-                                    Shift Slot #{sIdx + 1}
-                                  </span>
-                                  {isOvernight ? (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 font-mono">
-                                      <Moon className="w-3 h-3 text-indigo-500" />
-                                      {formatTo12Hour(ass.shift_start_time)} – {formatTo12Hour(ass.shift_end_time)}
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-mono">
-                                      <Sun className="w-3 h-3 text-amber-500" />
-                                      {formatTo12Hour(ass.shift_start_time)} – {formatTo12Hour(ass.shift_end_time)}
-                                    </span>
+                              const parsedOpShift = opObj?.shift_time ? parseProfileShiftTime(opObj.shift_time) : null;
+                              const effectiveStartTime = ass.shift_start_time || parsedOpShift?.startTime || "08:00:00";
+                              const effectiveEndTime = ass.shift_end_time || parsedOpShift?.endTime || "17:00:00";
+                              const startMins = parseTimeToMinutes(effectiveStartTime) ?? 480;
+                              const endMins = parseTimeToMinutes(effectiveEndTime) ?? 1020;
+                              const isOvernight = ass.crosses_midnight ?? (endMins <= startMins);
+                              const startDisplay = formatTo12Hour(effectiveStartTime) || "08:00 AM";
+                              const endDisplay = formatTo12Hour(effectiveEndTime) || "05:00 PM";
+
+                              return (
+                                <div
+                                  key={ass.id || sIdx}
+                                  className="p-3.5 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] flex flex-col justify-between gap-2.5 text-xs shadow-2xs hover:border-[var(--color-hairline-strong)] transition-all"
+                                >
+                                  <div className="space-y-2">
+                                    {/* Slot Header & Shift Timings */}
+                                    <div className="flex items-center justify-between gap-2 pb-2 border-b border-[var(--color-hairline)]">
+                                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-mute)]">
+                                        Shift Slot #{sIdx + 1}
+                                      </span>
+                                      {isOvernight ? (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 font-mono">
+                                          <Moon className="w-3 h-3 text-indigo-500 shrink-0" />
+                                          {startDisplay} – {endDisplay}
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-mono">
+                                          <Sun className="w-3 h-3 text-amber-500 shrink-0" />
+                                          {startDisplay} – {endDisplay}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* 2-Column Operator & Assignment Details */}
+                                    <div className="grid grid-cols-2 gap-3 py-1 items-start">
+                                      {/* Column 1: Operator Identity & Phone */}
+                                      <div className="space-y-1 min-w-0">
+                                        <div className="text-[10px] uppercase font-extrabold tracking-wider text-[var(--color-mute)]">
+                                          Operator
+                                        </div>
+                                        <div className="font-extrabold text-[var(--color-ink)] text-xs truncate flex items-center gap-1.5" title={opName}>
+                                          <UserCheck className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                                          <span className="truncate">{opName}</span>
+                                        </div>
+                                        <div className="text-[11px] font-mono text-[var(--color-mute)] flex items-center gap-1.5">
+                                          {opPhone ? (
+                                            <a
+                                              href={`tel:${opPhone}`}
+                                              className="inline-flex items-center gap-1 text-sky-600 dark:text-sky-400 hover:underline truncate"
+                                              title="Call operator"
+                                            >
+                                              <Phone className="w-3 h-3 text-sky-500 shrink-0" />
+                                              <span className="truncate">{opPhone}</span>
+                                            </a>
+                                          ) : (
+                                            <span className="text-[var(--color-mute)] opacity-75 text-[10px]">No contact</span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Column 2: Assignment Attribution & Date */}
+                                      <div className="space-y-1 min-w-0">
+                                        <div className="text-[10px] uppercase font-extrabold tracking-wider text-[var(--color-mute)]">
+                                          Assignment
+                                        </div>
+                                        <div className="text-[11px] text-[var(--color-ink)] truncate flex items-center gap-1">
+                                          <span className="text-[var(--color-mute)] text-[10px] shrink-0">By:</span>
+                                          <strong className="font-semibold text-[var(--color-ink)] truncate" title={assignerName}>
+                                            {assignerName}
+                                          </strong>
+                                        </div>
+                                        {ass.assigned_at && (
+                                          <div className="text-[10px] text-[var(--color-mute)] font-mono truncate">
+                                            Since {formatDate(ass.assigned_at)}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Action Button: Change Operator Only */}
+                                  {userRole !== "operator" && (
+                                    <div className="flex items-center justify-end pt-2 border-t border-[var(--color-hairline)]">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenAssignModal(m.id, ass.operator_id)}
+                                        className="px-3 py-1.5 rounded-lg text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 border border-sky-500/20 text-[11px] font-bold cursor-pointer transition-colors whitespace-nowrap inline-flex items-center gap-1.5 shadow-2xs"
+                                        title="Change operator or update shift"
+                                      >
+                                        Change Operator
+                                      </button>
+                                    </div>
                                   )}
                                 </div>
+                              );
+                            })}
 
-                                <div>
-                                  <div className="font-extrabold text-[var(--color-ink)] text-sm truncate">
-                                    {opName}
+                            {/* Render empty available slots */}
+                            {Array.from({ length: Math.max(0, 3 - machAss.length) }).map((_, emptyIdx) => {
+                              const slotNum = machAss.length + emptyIdx + 1;
+                              return (
+                                <button
+                                  key={`empty-${emptyIdx}`}
+                                  type="button"
+                                  onClick={() => handleOpenAssignModal(m.id)}
+                                  className="p-4 rounded-xl border border-dashed border-[var(--color-hairline-strong)] hover:border-sky-500 hover:bg-sky-500/5 transition-all text-left flex flex-col items-center justify-center gap-1.5 cursor-pointer min-h-[130px] group"
+                                >
+                                  <div className="w-8 h-8 rounded-full bg-[var(--color-canvas)] border border-[var(--color-hairline)] flex items-center justify-center text-[var(--color-mute)] group-hover:text-sky-500 group-hover:border-sky-500/40 transition-colors">
+                                    <AnimatedPlus size={15} />
                                   </div>
-                                  <div className="text-[11px] text-[var(--color-mute)] flex flex-wrap items-center gap-x-2 mt-0.5 font-mono">
-                                    {opObj?.phone && <span>📞 {opObj.phone}</span>}
-                                    <span>• Since {formatDate(ass.assigned_at)}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {userRole !== "operator" && (
-                                <div className="flex items-center justify-end gap-2 pt-2 border-t border-[var(--color-hairline)]">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenAssignModal(m.id, ass.operator_id)}
-                                    className="px-2.5 py-1 rounded-lg text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 text-[11px] font-bold cursor-pointer transition-colors"
-                                  >
-                                    Reassign
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleEndAssignment(ass.id, opName, machCode)}
-                                    className="px-2.5 py-1 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 text-[11px] font-bold cursor-pointer transition-colors"
-                                  >
-                                    End Shift
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-
-                        {/* Render empty available slots */}
-                        {Array.from({ length: Math.max(0, 3 - machAss.length) }).map((_, emptyIdx) => {
-                          const slotNum = machAss.length + emptyIdx + 1;
-                          return (
-                            <button
-                              key={`empty-${emptyIdx}`}
-                              type="button"
-                              onClick={() => handleOpenAssignModal(m.id)}
-                              className="p-4 rounded-xl border border-dashed border-[var(--color-hairline-strong)] hover:border-sky-500 hover:bg-sky-500/5 transition-all text-left flex flex-col items-center justify-center gap-1.5 cursor-pointer min-h-[110px]"
-                            >
-                              <div className="w-7 h-7 rounded-full bg-[var(--color-canvas)] border border-[var(--color-hairline)] flex items-center justify-center text-[var(--color-mute)] group-hover:text-sky-500">
-                                <AnimatedPlus size={14} />
-                              </div>
-                              <span className="text-xs font-bold text-[var(--color-mute)] hover:text-sky-600">
-                                + Assign Shift #{slotNum}
-                              </span>
-                              <span className="text-[10px] text-[var(--color-mute)] opacity-70">
-                                Open Slot Available
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
+                                  <span className="text-xs font-bold text-[var(--color-mute)] group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors">
+                                    + Assign Shift #{slotNum}
+                                  </span>
+                                  <span className="text-[10px] text-[var(--color-mute)] opacity-70">
+                                    Open Slot Available
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })
               )}
             </div>
 
-            {/* AUDIT LOGS SECTION TOGGLE */}
-            <div className="pt-2">
+            {/* LINK TO DEDICATED AUDIT LOGS PAGE */}
+            <div className="pt-3 pb-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-[var(--color-hairline)] text-xs">
+              <span className="text-[var(--color-mute)]">
+                Looking for full shift assignment history, closures, and supervisor audit logs?
+              </span>
               <button
                 type="button"
-                onClick={() => setShowAllAssignmentsAudit(!showAllAssignmentsAudit)}
-                className="text-xs font-bold text-[var(--color-mute)] hover:text-[var(--color-ink)] flex items-center gap-1.5 cursor-pointer"
+                onClick={() => router.push("/operations/audit-logs")}
+                className="font-bold text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
               >
-                <ChevronDown className={`w-4 h-4 transition-transform ${showAllAssignmentsAudit ? "rotate-180" : ""}`} />
-                <span>{showAllAssignmentsAudit ? "Hide All Assignment History Logs" : "View Historical & Audit Logs"}</span>
+                <AnimatedScrollText size={14} />
+                <span>View Full Assignment Audit Logs →</span>
               </button>
-
-              {showAllAssignmentsAudit && (
-                <div className="mt-3 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden shadow-sm animate-in fade-in">
-                  <div className="overflow-x-auto custom-scrollbar">
-                    <table className="w-full text-left text-xs min-w-[650px]">
-                      <thead className="bg-[var(--color-canvas)] text-[var(--color-mute)] uppercase font-extrabold border-b border-[var(--color-hairline)]">
-                        <tr>
-                          <th className="px-4 py-3">Machine</th>
-                          <th className="px-4 py-3">Operator</th>
-                          <th className="px-4 py-3">Shift Window</th>
-                          <th className="px-4 py-3">Assigned Date</th>
-                          <th className="px-4 py-3">Ended Date</th>
-                          <th className="px-4 py-3">End Reason</th>
-                          <th className="px-4 py-3">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[var(--color-hairline)] font-medium text-[var(--color-ink)]">
-                        {assignments.length === 0 ? (
-                          <tr>
-                            <td colSpan={7} className="px-4 py-6 text-center text-[var(--color-mute)]">
-                              No assignment records recorded.
-                            </td>
-                          </tr>
-                        ) : (
-                          assignments.map((ass: any) => (
-                            <tr key={ass.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
-                              <td className="px-4 py-3">
-                                <div className="font-bold text-[var(--color-ink)]">
-                                  {(ass.machine as any)?.machine_name || ass.machine_id}
-                                </div>
-                                <div className="text-[10px] text-[var(--color-mute)] font-mono">
-                                  {(ass.machine as any)?.machine_code}
-                                </div>
-                              </td>
-                              <td className="px-4 py-3 font-semibold">
-                                {(ass.operator as any)?.full_name || "Operator"}
-                              </td>
-                              <td className="px-4 py-3 font-mono text-[11px]">
-                                {ass.shift_start_time ? (
-                                  <span>
-                                    {formatTo12Hour(ass.shift_start_time)} – {formatTo12Hour(ass.shift_end_time)}
-                                    {ass.crosses_midnight && " 🌙"}
-                                  </span>
-                                ) : "—"}
-                              </td>
-                              <td className="px-4 py-3 font-mono">
-                                {formatDate(ass.assigned_at)}
-                              </td>
-                              <td className="px-4 py-3 font-mono text-[var(--color-mute)]">
-                                {ass.ended_at ? formatDate(ass.ended_at) : "Active"}
-                              </td>
-                              <td className="px-4 py-3 capitalize text-[var(--color-mute)]">
-                                {ass.end_reason || "—"}
-                              </td>
-                              <td className="px-4 py-3">
-                                {ass.status === "active" || ass.is_active ? (
-                                  <Badge variant="success">Active</Badge>
-                                ) : (
-                                  <Badge variant="inactive">Ended</Badge>
-                                )}
-                              </td>
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         );
       })()}
 
-      {/* TAB 3: Site Movement & Loading / Unloading Logsheet */}
-      {activeTab === "site-movement" && (
-        <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden shadow-sm">
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left text-xs min-w-[700px]">
-              <thead className="bg-[var(--color-canvas)] text-[var(--color-mute)] uppercase font-extrabold border-b border-[var(--color-hairline)]">
-                <tr>
-                  <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3">Machine</th>
-                  <th className="px-4 py-3">Client Name</th>
-                  <th className="px-4 py-3">Site Location</th>
-                  <th className="px-4 py-3">Movement Type</th>
-                  <th className="px-4 py-3">Transport Vehicle</th>
-                  <th className="px-4 py-3">Assigned Operator</th>
-                  <th className="px-4 py-3">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--color-hairline)] font-medium text-[var(--color-ink)]">
-                {siteMovements.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-[var(--color-mute)]">
-                      No machine loading/unloading movements recorded yet.
-                    </td>
-                  </tr>
-                ) : (
-                  siteMovements.map((move: any) => (
-                    <tr key={move.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
-                      <td className="px-4 py-3 font-mono">
-                        {new Date(move.movement_date || move.created_at).toLocaleDateString("en-GB")}
-                      </td>
-                      <td className="px-4 py-3 font-bold">
-                        {move.machine?.machine_name || "Machine"}
-                        <div className="text-[10px] text-[var(--color-mute)] font-mono">{move.machine?.machine_code}</div>
-                      </td>
-                      <td className="px-4 py-3 font-semibold">{move.client_name}</td>
-                      <td className="px-4 py-3 text-[var(--color-mute)]">{move.site_address}</td>
-                      <td className="px-4 py-3">
-                        <Badge variant={move.movement_type === "loading_dispatch" ? "warning" : "info"}>
-                          {move.movement_type === "loading_dispatch"
-                            ? "Loading / Dispatch"
-                            : move.movement_type === "unloading_arrival"
-                            ? "Unloading / Site Arrival"
-                            : "Site Relocation"}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3 font-mono text-[var(--color-mute)]">{move.transport_vehicle_no || "N/A"}</td>
-                      <td className="px-4 py-3 font-medium">{move.operator?.full_name || "Unassigned"}</td>
-                      <td className="px-4 py-3">
-                        <Badge variant="success">{move.status}</Badge>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
-      {/* TAB 4: Operator Roster & Salary Management */}
-      {activeTab === "operators" && (
-        <div className="space-y-4">
-
-          {/* Operators Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {operators
-              .filter((op) => op.role === "operator" || op.role === "mechanic")
-              .map((op) => (
-                <div key={op.id} className="p-4 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-3 shadow-xs">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold flex items-center justify-center text-sm">
-                        {op.full_name.substring(0, 2).toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="font-bold text-sm text-[var(--color-ink)]">{op.full_name}</div>
-                        <div className="text-[11px] text-[var(--color-mute)]">{op.phone || "No Phone"}</div>
-                      </div>
-                    </div>
-                    <Badge variant="success">Active Operator</Badge>
-                  </div>
-
-                  <div className="text-xs text-[var(--color-mute)] border-t border-[var(--color-hairline)] pt-2.5 flex justify-between items-center">
-                    <span>Email: {op.email}</span>
-                    <span className="font-bold text-emerald-600 dark:text-emerald-400">₹35,000 / mo</span>
-                  </div>
-                </div>
-              ))}
-          </div>
-
-          {/* Payout History Ledger */}
-          {operatorPayouts.length > 0 && (
-            <div className="mt-6 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden shadow-sm">
-              <div className="p-3 bg-[var(--color-canvas)] font-extrabold text-xs text-[var(--color-ink)] border-b border-[var(--color-hairline)]">
-                Operator Salary Payout History Log
-              </div>
-              <table className="w-full text-left text-xs">
-                <thead className="bg-[var(--color-canvas)] text-[var(--color-mute)] uppercase font-extrabold border-b border-[var(--color-hairline)]">
-                  <tr>
-                    <th className="px-4 py-2.5">Period</th>
-                    <th className="px-4 py-2.5">Operator</th>
-                    <th className="px-4 py-2.5">Running Hours</th>
-                    <th className="px-4 py-2.5">Base Salary</th>
-                    <th className="px-4 py-2.5">Allowance</th>
-                    <th className="px-4 py-2.5">Deductions</th>
-                    <th className="px-4 py-2.5">Net Payout</th>
-                    <th className="px-4 py-2.5">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--color-hairline)] font-medium text-[var(--color-ink)]">
-                  {operatorPayouts.map((pay: any) => (
-                    <tr key={pay.id}>
-                      <td className="px-4 py-2.5 font-bold font-mono">{pay.period_month}</td>
-                      <td className="px-4 py-2.5 font-semibold">{pay.operator?.full_name || "Operator"}</td>
-                      <td className="px-4 py-2.5 font-mono">{pay.total_running_hours} hrs</td>
-                      <td className="px-4 py-2.5 font-mono">₹{pay.base_salary?.toLocaleString()}</td>
-                      <td className="px-4 py-2.5 font-mono text-emerald-600">+₹{pay.allowance?.toLocaleString()}</td>
-                      <td className="px-4 py-2.5 font-mono text-rose-500">-₹{pay.deductions?.toLocaleString()}</td>
-                      <td className="px-4 py-2.5 font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                        ₹{pay.net_payout?.toLocaleString()}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <Badge variant="success">{pay.payment_status}</Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
 
 
       {/* MODAL: Assign Machine Operator to Shift */}
@@ -2778,286 +2611,6 @@ export function OperationsClient({
         </div>
       )}
 
-      {/* MODAL: Hire New Operator */}
-      {showHireOperatorModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleHireOperator} className="bg-[var(--color-canvas-elevated)] p-6 rounded-2xl border border-[var(--color-hairline)] max-w-md w-full space-y-4 shadow-xl">
-            <h3 className="text-base font-extrabold text-[var(--color-ink)] flex items-center gap-2">
-              <AnimatedPlus size={18} className="text-emerald-500" /> Onboard & Hire Machine Operator
-            </h3>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">Operator Full Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={hireName}
-                  onChange={(e) => setHireName(e.target.value)}
-                  placeholder="e.g. Ramesh Kumar"
-                  className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">Mobile Phone Number *</label>
-                <input
-                  type="text"
-                  required
-                  value={hirePhone}
-                  onChange={(e) => setHirePhone(e.target.value)}
-                  placeholder="+91 98765 43210"
-                  className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">Monthly Operator Salary (₹) *</label>
-                <input
-                  type="number"
-                  required
-                  value={hireSalary}
-                  onChange={(e) => setHireSalary(Number(e.target.value))}
-                  placeholder="35000"
-                  className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">Email Address (Optional)</label>
-                <input
-                  type="email"
-                  value={hireEmail}
-                  onChange={(e) => setHireEmail(e.target.value)}
-                  placeholder="ramesh@reachinternation.co.in"
-                  className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-[var(--color-hairline)]">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowHireOperatorModal(false)}
-                disabled={submitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                size="sm"
-                loading={submitting}
-                className="bg-emerald-600 hover:bg-emerald-700"
-              >
-                Hire & Register Operator
-              </Button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* MODAL: Log Machine Site Movement */}
-      {showSiteMovementModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <form onSubmit={handleSiteMovementSubmit} className="bg-[var(--color-canvas-elevated)] p-6 rounded-2xl border border-[var(--color-hairline)] max-w-md w-full space-y-4 shadow-xl">
-            <h3 className="text-base font-extrabold text-[var(--color-ink)] flex items-center gap-2">
-              <AnimatedMapPin size={18} className="text-indigo-500" /> Log Machine Loading / Unloading at Site
-            </h3>
-
-            <div className="space-y-3">
-              <MachineSelect
-                label="Select Machine"
-                required
-                value={moveMachineId}
-                onChange={(mId) => setMoveMachineId(mId)}
-                machines={machines}
-              />
-
-              <SearchableSelect
-                label="Movement Type"
-                required
-                value={moveType}
-                onChange={(val) => setMoveType(val as any)}
-                options={[
-                  { value: "loading_dispatch", label: "Loading & Yard Dispatch" },
-                  { value: "unloading_arrival", label: "Unloading & Arrival at Client Site" },
-                  { value: "relocation", label: "Site-to-Site Relocation" },
-                ]}
-              />
-
-              <div>
-                <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">Rental Client Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={moveClientName}
-                  onChange={(e) => setMoveClientName(e.target.value)}
-                  placeholder="e.g. L&T Construction Ltd"
-                  className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">Site Address & Location *</label>
-                <input
-                  type="text"
-                  required
-                  value={moveSiteAddress}
-                  onChange={(e) => setMoveSiteAddress(e.target.value)}
-                  placeholder="e.g. Metro Rail Site Sector 62, Noida"
-                  className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)]"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">Transport Trailer / Vehicle No</label>
-                <input
-                  type="text"
-                  value={moveVehicleNo}
-                  onChange={(e) => setMoveVehicleNo(e.target.value)}
-                  placeholder="e.g. HR-55-AB-1234"
-                  className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] font-mono"
-                />
-              </div>
-
-              <UserSelect
-                label="Assigned Operator on Site"
-                value={moveOperatorId}
-                onChange={(opId) => setMoveOperatorId(opId)}
-                users={activeOperators}
-                roleFilter={["operator"]}
-                clearable
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-[var(--color-hairline)]">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowSiteMovementModal(false)}
-                disabled={submitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                size="sm"
-                loading={submitting}
-                className="bg-indigo-600 hover:bg-indigo-700"
-              >
-                Record Site Movement
-              </Button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* MODAL: Record Operator Salary Payout */}
-      {showPayoutModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <form onSubmit={handlePayoutSubmit} className="bg-[var(--color-canvas-elevated)] p-6 rounded-2xl border border-[var(--color-hairline)] max-w-md w-full space-y-4 shadow-xl">
-            <h3 className="text-base font-extrabold text-[var(--color-ink)] flex items-center gap-2">
-              <AnimatedFileText size={18} className="text-amber-500" /> Record Operator Salary Payout
-            </h3>
-
-            <div className="space-y-3">
-              <UserSelect
-                label="Select Operator"
-                required
-                value={payoutOperatorId}
-                onChange={(opId) => setPayoutOperatorId(opId)}
-                users={activeOperators}
-                roleFilter={["operator"]}
-              />
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">Period Month *</label>
-                  <input
-                    type="month"
-                    required
-                    value={payoutMonth}
-                    onChange={(e) => setPayoutMonth(e.target.value)}
-                    className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">Total Running Hrs</label>
-                  <input
-                    type="number"
-                    value={payoutRunningHours}
-                    onChange={(e) => setPayoutRunningHours(Number(e.target.value))}
-                    className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">Base Salary (₹)</label>
-                  <input
-                    type="number"
-                    value={payoutBaseSalary}
-                    onChange={(e) => setPayoutBaseSalary(Number(e.target.value))}
-                    className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">Allowance (₹)</label>
-                  <input
-                    type="number"
-                    value={payoutAllowance}
-                    onChange={(e) => setPayoutAllowance(Number(e.target.value))}
-                    className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-[var(--color-mute)] block mb-1">Deductions (₹)</label>
-                  <input
-                    type="number"
-                    value={payoutDeductions}
-                    onChange={(e) => setPayoutDeductions(Number(e.target.value))}
-                    className="w-full text-xs p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="p-3 bg-[var(--color-canvas)] rounded-xl border border-[var(--color-hairline)] flex justify-between items-center text-xs">
-                <span className="font-bold text-[var(--color-mute)]">Calculated Net Payout:</span>
-                <span className="font-extrabold text-sm text-emerald-600 dark:text-emerald-400 font-mono">
-                  ₹{(payoutBaseSalary + payoutAllowance - payoutDeductions).toLocaleString()}
-                </span>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2 border-t border-[var(--color-hairline)]">
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowPayoutModal(false)}
-                disabled={submitting}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="primary"
-                size="sm"
-                loading={submitting}
-                className="bg-amber-600 hover:bg-amber-700"
-              >
-                Record Salary Payout
-              </Button>
-            </div>
-          </form>
-        </div>
-      )}
     </div>
   );
 }

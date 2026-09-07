@@ -208,6 +208,7 @@ export async function signup(
     }
   }
 
+  const address = ((formData.get("address") as string) || "").trim();
   const aadhaarNumber = ((formData.get("aadhaar_number") as string) || "").trim();
   const licenseNumber = ((formData.get("license_number") as string) || "").trim();
   const shiftStartTimeRaw = ((formData.get("shift_start_time") as string) || "").trim();
@@ -248,6 +249,7 @@ export async function signup(
     shift_start_time: shiftStartTimeRaw,
     shift_end_time: shiftEndTimeRaw,
     shift_time: resolvedShiftTime,
+    address,
     city,
     district,
     state: resolvedStateName,
@@ -265,6 +267,7 @@ export async function signup(
   if (!phone) fieldErrors.phone = "Mobile number is required.";
   if (!shiftStartTimeRaw) fieldErrors.shift_start_time = "Shift start time is required.";
   if (!shiftEndTimeRaw) fieldErrors.shift_end_time = "Shift end time is required.";
+  if (!address) fieldErrors.address = "Street / site base address is required.";
   if (!city) fieldErrors.city = "City/Town/Village is required.";
   if (!district) fieldErrors.district = "District is required.";
   if (!resolvedStateName) fieldErrors.state = "State is required.";
@@ -475,11 +478,12 @@ export async function signup(
         shift_time: resolvedShiftTime || null,
         shift_start_time: shiftStartTimeRaw || null,
         shift_end_time: shiftEndTimeRaw || null,
+        address: address || null,
         city,
         district,
         state: resolvedStateName,
         state_id: resolvedStateId,
-        location: `${city}, ${district}, ${resolvedStateName}`,
+        location: `${address ? `${address}, ` : ""}${city}, ${district}, ${resolvedStateName}`,
         aadhaar_number: cleanAadhaar,
         license_number: formattedLicense,
       },

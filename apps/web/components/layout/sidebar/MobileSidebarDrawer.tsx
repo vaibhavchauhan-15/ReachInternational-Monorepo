@@ -119,7 +119,6 @@ export function MobileSidebarDrawer({ user, items, isOpen, onClose }: MobileSide
                     {item.subItems && item.subItems.length > 0 && (
                       <div className="pl-6 space-y-0.5 border-l-2 border-[var(--color-hairline)] ml-4">
                         {item.subItems.map((sub) => {
-                          const SubIcon = sub.icon;
                           return (
                             <Link
                               key={sub.tab}
@@ -127,7 +126,6 @@ export function MobileSidebarDrawer({ user, items, isOpen, onClose }: MobileSide
                               onClick={onClose}
                               className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
                             >
-                              <SubIcon className="h-3.5 w-3.5 shrink-0" />
                               <span className="truncate">{sub.label}</span>
                             </Link>
                           );

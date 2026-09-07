@@ -10,3 +10,4 @@ export * from "./categories";
 export * from "./dashboard";
 export * from "./reports";
 export * from "./locations";
+export * from "./assignments";

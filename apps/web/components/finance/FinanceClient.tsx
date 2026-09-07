@@ -392,17 +392,17 @@ export function FinanceClient({
           size="sm"
           responsive={false}
           items={[
-            { id: "dashboard", label: "Dashboard", icon: <PieChart className="h-4 w-4" /> },
-            { id: "sales-review", label: "Sales & Rental", icon: <FileText className="h-4 w-4" /> },
-            { id: "invoices", label: "Invoices", icon: <FileCheck className="h-4 w-4" /> },
-            { id: "payments", label: "Ledger", icon: <CreditCard className="h-4 w-4" /> },
-            { id: "receivables", label: "Receivables", icon: <Clock className="h-4 w-4" /> },
-            { id: "payables", label: "Payables", icon: <Building2 className="h-4 w-4" /> },
-            { id: "po-match", label: "3-Way Match", icon: <ShieldCheck className="h-4 w-4" /> },
-            { id: "expenses", label: "Expenses", icon: <TrendingDown className="h-4 w-4" /> },
-            { id: "payroll", label: "Payroll", icon: <Users className="h-4 w-4" /> },
-            { id: "reports", label: "Reports", icon: <TrendingUp className="h-4 w-4" /> },
-            { id: "settings", label: "Settings", icon: <Sliders className="h-4 w-4" /> },
+            { id: "dashboard", label: "Dashboard" },
+            { id: "sales-review", label: "Sales & Rental" },
+            { id: "invoices", label: "Invoices" },
+            { id: "payments", label: "Ledger" },
+            { id: "receivables", label: "Receivables" },
+            { id: "payables", label: "Payables" },
+            { id: "po-match", label: "3-Way Match" },
+            { id: "expenses", label: "Expenses" },
+            { id: "payroll", label: "Payroll" },
+            { id: "reports", label: "Reports" },
+            { id: "settings", label: "Settings" },
           ]}
         />
       </div>

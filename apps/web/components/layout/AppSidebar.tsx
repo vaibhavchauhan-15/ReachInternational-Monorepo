@@ -42,9 +42,9 @@ export const mainNavItems: NavItem[] = [
       "supervisor", "mechanic", "store_manager"
     ],
     subItems: [
-      { label: "Machine Directory", tab: "inventory", icon: AnimatedWrench },
-      // { label: "Service Logs", tab: "services", icon: AnimatedClipboardList }, // Soft-removed per user request
-      // { label: "Breakdown Complaints", tab: "complaints", icon: AnimatedAlertTriangle }, // Soft-removed per user request
+      { label: "Machine Directory", tab: "inventory" },
+      // { label: "Service Logs", tab: "services" }, // Soft-removed per user request
+      // { label: "Breakdown Complaints", tab: "complaints" }, // Soft-removed per user request
     ],
   },
   {
@@ -53,10 +53,11 @@ export const mainNavItems: NavItem[] = [
     icon: AnimatedGauge,
     roles: ["super_admin", "admin", "manager", "service_manager", "supervisor", "operator"],
     subItems: [
-      { label: "Running Hours", tab: "logs", icon: AnimatedGauge },
-      { label: "Operator Machine Assignments", tab: "assignments", icon: AnimatedStar },
-      // { label: "Site Movement / Loading-Unloading", tab: "site-movement", icon: AnimatedPackage }, // Soft-removed per user request
-      // { label: "Operator Roster & Salary", tab: "operators", icon: AnimatedUsers }, // Soft-removed per user request
+      { label: "Running Hours", tab: "logs" },
+      { label: "Operator Machine Assignments", tab: "assignments" },
+      { label: "Assignment Audit Logs", tab: "audit-logs" },
+      // { label: "Site Movement / Loading-Unloading", tab: "site-movement" }, // Soft-removed per user request
+      // { label: "Operator Roster & Salary", tab: "operators" }, // Soft-removed per user request
     ],
   },
   {
@@ -65,7 +66,7 @@ export const mainNavItems: NavItem[] = [
     icon: AnimatedBuilding2,
     roles: ["super_admin", "admin", "manager", "service_manager"],
     subItems: [
-      { label: "Client Directory", tab: "all", icon: AnimatedBuilding2 },
+      { label: "Client Directory", tab: "all" },
     ],
   },
   {
@@ -74,7 +75,7 @@ export const mainNavItems: NavItem[] = [
     icon: AnimatedUsers,
     roles: ["super_admin", "admin", "manager", "service_manager", "hr_manager"],
     subItems: [
-      { label: "All Employee Accounts", tab: "all", icon: AnimatedUsers },
+      { label: "All Employee Accounts", tab: "all" },
     ],
   },
 ];
@@ -93,18 +94,19 @@ export function AppSidebar({ user, collapsed, onToggleCollapse }: AppSidebarProp
               return {
                 ...item,
                 subItems: [
-                  { label: "Log Entry", tab: "entry", icon: AnimatedGauge },
-                  { label: "Log History", tab: "history", icon: AnimatedClock },
+                  { label: "Log Entry", tab: "entry" },
+                  { label: "Log History", tab: "history" },
                 ],
               };
             }
             return {
               ...item,
               subItems: [
-                { label: "Running Hours", tab: "logs", icon: AnimatedGauge },
-                { label: "Operator Machine Assignments", tab: "assignments", icon: AnimatedStar },
-                // { label: "Site Movement / Loading-Unloading", tab: "site-movement", icon: AnimatedPackage }, // Soft-removed per user request
-                // { label: "Operator Roster & Salary", tab: "operators", icon: AnimatedUsers }, // Soft-removed per user request
+                { label: "Running Hours", tab: "logs" },
+                { label: "Operator Machine Assignments", tab: "assignments" },
+                { label: "Assignment Audit Logs", tab: "audit-logs" },
+                // { label: "Site Movement / Loading-Unloading", tab: "site-movement" }, // Soft-removed per user request
+                // { label: "Operator Roster & Salary", tab: "operators" }, // Soft-removed per user request
               ],
             };
           }

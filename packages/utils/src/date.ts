@@ -875,38 +875,3 @@ export function parseProfileShiftTime(rawString?: string | null): {
     displayString: `${displayStart} - ${displayEnd}`,
   };
 }
-
-/**
- * Evaluates whether two daily recurring time windows overlap, properly handling overnight transitions.
- */
-export function isTimeWindowOverlapping(
-  startAStr: string,
-  endAStr: string,
-  startBStr: string,
-  endBStr: string
-): boolean {
-  const startA = parseTimeToMinutes(startAStr);
-  const endA = parseTimeToMinutes(endAStr);
-  const startB = parseTimeToMinutes(startBStr);
-  const endB = parseTimeToMinutes(endBStr);
-
-  if (startA === null || endA === null || startB === null || endB === null) return false;
-
-  const rangesA = endA > startA
-    ? [[startA, endA]]
-    : [[startA, 1440], [0, endA]];
-
-  const rangesB = endB > startB
-    ? [[startB, endB]]
-    : [[startB, 1440], [0, endB]];
-
-  for (const [sA, eA] of rangesA) {
-    for (const [sB, eB] of rangesB) {
-      if (Math.max(sA, sB) < Math.min(eA, eB)) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}

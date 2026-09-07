@@ -471,16 +471,16 @@ export function CrmClient({
           size="sm"
           responsive={false}
           items={[
-            { id: "dashboard", label: "Dashboard", icon: <AnimatedDashboard size={14} /> },
-            { id: "leads", label: "Leads", icon: <AnimatedClipboardList size={14} />, count: leads.length },
-            { id: "customers", label: "Customers", icon: <AnimatedUsers size={14} />, count: customers.length },
-            { id: "interactions", label: "Interactions", icon: <AnimatedBell size={14} />, count: interactions.length },
-            { id: "opportunities", label: "Pipeline", icon: <AnimatedStar size={14} />, count: opportunities.length },
-            { id: "quotations", label: "Quotations", icon: <AnimatedFileText size={14} />, count: quotations.length },
-            { id: "orders", label: "Orders", icon: <AnimatedShoppingBag size={14} />, count: orders.length },
-            { id: "machine-sales", label: "Inventory", icon: <AnimatedWrench size={14} />, count: initialAvailableMachines.length },
-            { id: "deliveries", label: "Deliveries", icon: <AnimatedPackage size={14} />, count: deliveries.length },
-            { id: "settings", label: "Settings", icon: <AnimatedSettings size={14} /> },
+            { id: "dashboard", label: "Dashboard" },
+            { id: "leads", label: "Leads", count: leads.length },
+            { id: "customers", label: "Customers", count: customers.length },
+            { id: "interactions", label: "Interactions", count: interactions.length },
+            { id: "opportunities", label: "Pipeline", count: opportunities.length },
+            { id: "quotations", label: "Quotations", count: quotations.length },
+            { id: "orders", label: "Orders", count: orders.length },
+            { id: "machine-sales", label: "Inventory", count: initialAvailableMachines.length },
+            { id: "deliveries", label: "Deliveries", count: deliveries.length },
+            { id: "settings", label: "Settings" },
           ]}
         />
       </div>

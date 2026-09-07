@@ -4,14 +4,16 @@
 Manages machine fleet registry, serial numbers, client assignments, supervisor and operator assignments, operational health status, and hour meter running logs.
 
 ## File Map
-- **Pages**: `app/(app)/machines/page.tsx`, `app/(app)/machines/[id]/page.tsx`, `app/(app)/machines/[id]/edit/page.tsx`
-- **Components**: `components/machines/MachineListClient.tsx`, `components/machines/MachineModal.tsx`, `components/machines/MachineImportModal.tsx`, `components/machines/MobileMachineCard.tsx`, `components/machines/MachineRow.tsx`
-- **Actions**: `app/actions/machines.ts`, `app/actions/machine-import.ts`
-- **Queries**: `lib/queries/machines.ts`
+- **Pages**: `app/(app)/machines/page.tsx`, `app/(app)/machines/[id]/page.tsx`, `app/(app)/machines/[id]/edit/page.tsx`, `app/(app)/operations/audit-logs/page.tsx`
+- **Components**: `components/machines/MachineListClient.tsx`, `components/machines/MachineModal.tsx`, `components/machines/MachineImportModal.tsx`, `components/machines/MobileMachineCard.tsx`, `components/machines/MachineRow.tsx`, `components/operations/AssignmentAuditLogsClient.tsx`
+- **Actions**: `app/actions/machines.ts`, `app/actions/machine-import.ts`, `app/actions/assignments.ts`
+- **Queries**: `lib/queries/machines.ts`, `lib/queries/operators.ts`, `lib/queries/assignments.ts`
 
 ## Key Functions & Workflows
 - `getMachines()`: Fetches paginated/filtered list of machines with client, operator, and supervisor profile relations.
 - `getMachineById()`: Fetches machine details by ID with specifications and assigned client details.
+- `getOperationsHubData()`: High-performance, tab-aware operations hub data loader with resilient multi-tier hour logs querying (`fetchHourLogsResiliently`) and in-memory relation enrichment.
+- `getAssignmentAuditLogs()`: Resilient assignment audit history query with pure scalar projections, in-memory hydration for machines/clients/staff, structured error formatting, and automatic derivation from machine state.
 - `getMachineHourMeterLogs()`: Fetches daily operator hour meter logs with start/end readings, operating hours, overtime, client, and operator profile.
 - `getMachineActiveRental()`: Fetches active rental contract and client company details for machines with status `rented`.
 - `createMachine()`: Adds new machine to registry with specifications, logs audit event.

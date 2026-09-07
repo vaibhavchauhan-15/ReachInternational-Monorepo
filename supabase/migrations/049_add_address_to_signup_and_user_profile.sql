@@ -1,38 +1,15 @@
 -- ==============================================================================
--- Migration 048: Add Complete Profile Column & Onboarding Workflow
--- 1. Adds complete_profile column to public.users with 'yes'/'no' check constraint.
--- 2. Creates a partial index on incomplete profiles (complete_profile = 'no') for ultra-fast lookup.
--- 3. Backfills existing users with full profiles to complete_profile = 'yes'.
--- 4. Updates handle_new_user() trigger function to set complete_profile based on registration completeness.
--- 5. Implements atomic RPC complete_user_onboarding_atomic for 1-step profile completion and audit logging.
+-- Migration 049: Add Address To Signup & User Profile Completeness Evaluation
+-- 1. Ensures address column exists on public.users.
+-- 2. Updates handle_new_user() trigger to capture address from registration metadata
+--    and evaluate address presence for complete_profile = 'yes' determination.
+-- 3. Synchronizes trigger on auth.users.
 -- ==============================================================================
 
--- 1. Add complete_profile column with default 'no'
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS complete_profile TEXT NOT NULL DEFAULT 'no';
+-- 1. Ensure address column exists on public.users
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS address TEXT;
 
--- Add check constraint enforcing 'yes' or 'no'
-ALTER TABLE public.users DROP CONSTRAINT IF EXISTS users_complete_profile_check;
-ALTER TABLE public.users ADD CONSTRAINT users_complete_profile_check CHECK (complete_profile IN ('yes', 'no'));
-
--- 2. Partial index on incomplete profiles
-CREATE INDEX IF NOT EXISTS idx_users_incomplete_profile 
-  ON public.users(complete_profile) 
-  WHERE complete_profile = 'no';
-
--- 3. Backfill existing user records that have all necessary profile details
-UPDATE public.users
-SET complete_profile = 'yes'
-WHERE btrim(COALESCE(full_name, '')) <> ''
-  AND full_name <> email
-  AND btrim(COALESCE(phone, '')) <> ''
-  AND role IS NOT NULL
-  AND btrim(COALESCE(shift_time, '')) <> ''
-  AND btrim(COALESCE(city, '')) <> ''
-  AND btrim(COALESCE(district, '')) <> ''
-  AND btrim(COALESCE(state, '')) <> ''
-  AND btrim(COALESCE(aadhaar_number, '')) <> '';
-
--- 4. Update handle_new_user() trigger function
+-- 2. Update handle_new_user() trigger function
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -59,13 +36,14 @@ BEGIN
   v_address := NULLIF(NEW.raw_user_meta_data->>'address', '');
   v_shift_time := NULLIF(NEW.raw_user_meta_data->>'shift_time', '');
 
-  -- Check if profile is complete upon registration
+  -- Check if profile is complete upon registration (including mandatory address)
   IF btrim(v_full_name) <> '' 
      AND v_full_name <> NEW.email
      AND btrim(v_phone) <> ''
      AND btrim(v_city) <> ''
      AND btrim(v_district) <> ''
      AND btrim(v_state) <> ''
+     AND v_address IS NOT NULL AND btrim(v_address) <> ''
      AND v_shift_time IS NOT NULL AND btrim(v_shift_time) <> ''
      AND v_aadhaar IS NOT NULL AND btrim(v_aadhaar) <> '' THEN
     v_complete_profile := 'yes';
@@ -123,15 +101,15 @@ BEGIN
     updated_at = NOW();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
--- Re-attach trigger
+-- 3. Ensure trigger is attached to auth.users
 DROP TRIGGER IF EXISTS trigger_on_auth_user_created ON auth.users;
 CREATE TRIGGER trigger_on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- 5. Atomic RPC: complete_user_onboarding_atomic
+-- 4. Atomic RPC: complete_user_onboarding_atomic with valid JSONB audit details
 CREATE OR REPLACE FUNCTION public.complete_user_onboarding_atomic(
   p_user_id UUID,
   p_full_name TEXT,
@@ -157,6 +135,7 @@ DECLARE
   v_clean_phone TEXT;
   v_clean_name TEXT;
   v_updated_user RECORD;
+  v_audit_meta JSONB;
 BEGIN
   v_caller_id := auth.uid();
   IF v_caller_id IS NULL THEN
@@ -214,7 +193,18 @@ BEGIN
     RAISE EXCEPTION 'User profile not found.' USING ERRCODE = 'P0002';
   END IF;
 
-  -- Structured audit log
+  v_audit_meta := jsonb_build_object(
+    'complete_profile', 'yes',
+    'role', v_updated_user.role,
+    'shift_time', v_updated_user.shift_time,
+    'state', v_updated_user.state,
+    'address', v_updated_user.address,
+    'city', v_updated_user.city,
+    'district', v_updated_user.district,
+    'aadhaar_number', v_updated_user.aadhaar_number
+  );
+
+  -- Structured audit log (passing valid JSONB to metadata and details)
   INSERT INTO public.audit_logs (
     user_id,
     action,
@@ -228,17 +218,8 @@ BEGIN
     'user.onboarding_completed',
     'users',
     p_user_id,
-    jsonb_build_object(
-      'complete_profile', 'yes',
-      'role', v_updated_user.role,
-      'shift_time', v_updated_user.shift_time,
-      'state', v_updated_user.state,
-      'address', v_updated_user.address
-    ),
-    jsonb_build_object(
-      'message', 'User completed required profile details on onboarding screen',
-      'complete_profile', 'yes'
-    ),
+    v_audit_meta,
+    v_audit_meta,
     NOW()
   );
 

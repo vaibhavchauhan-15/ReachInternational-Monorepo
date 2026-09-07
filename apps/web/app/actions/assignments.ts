@@ -1,11 +1,10 @@
 "use server";
 
 import { revalidateTag } from "next/cache";
-import { getCurrentUser, requireRole } from "@/lib/dal";
+import { requireRole } from "@/lib/dal";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { TAGS } from "@/lib/cache";
-import { logAudit } from "@/lib/audit";
 import {
   CreateAssignmentSchema,
   EndAssignmentSchema,
@@ -95,118 +94,6 @@ export async function createAssignmentAction(payload: {
     );
 
     if (rpcError) {
-      if (rpcError.code === "PGRST202" || rpcError.message?.includes("Could not find the function")) {
-        // Resilient Fallback: Direct table operations if RPC not yet deployed
-        try {
-          const { count: activeCount } = await supabase
-            .from("operator_machine_assignments")
-            .select("id", { count: "exact", head: true })
-            .eq("machine_id", parsed.data.machineId)
-            .eq("is_active", true);
-
-          if ((activeCount ?? 0) >= 3) {
-            return {
-              success: false,
-              code: "MAX_OPERATORS_REACHED",
-              error: "This machine already has the maximum capacity of 3 active operators assigned.",
-            };
-          }
-
-          const { data: newAss, error: insertErr } = await supabase
-            .from("operator_machine_assignments")
-            .insert({
-              machine_id: parsed.data.machineId,
-              operator_id: parsed.data.operatorId,
-              shift_start_time: start24,
-              shift_end_time: end24,
-              is_active: true,
-              assigned_by: caller.id,
-              assigned_at: new Date().toISOString(),
-            })
-            .select()
-            .single();
-
-          if (insertErr) {
-            if (insertErr.code === "23P01" || insertErr.message?.includes("exclusion")) {
-              return {
-                success: false,
-                code: "SHIFT_OVERLAP_CONFLICT",
-                error: "This operator already has an active assignment with an overlapping shift window.",
-              };
-            }
-            if (insertErr.code === "42P01") {
-              const { data: mach } = await supabase
-                .from("machines")
-                .select("operator_ids")
-                .eq("id", parsed.data.machineId)
-                .single();
-              const existingIds: string[] = mach?.operator_ids || [];
-              if (existingIds.length >= 3 && !existingIds.includes(parsed.data.operatorId)) {
-                return {
-                  success: false,
-                  code: "MAX_OPERATORS_REACHED",
-                  error: "This machine already has the maximum capacity of 3 active operators assigned.",
-                };
-              }
-              const updatedIds = Array.from(new Set([...existingIds, parsed.data.operatorId]));
-              await supabase
-                .from("machines")
-                .update({
-                  operator_ids: updatedIds,
-                  current_operator_id: updatedIds[0] || null,
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", parsed.data.machineId);
-            } else {
-              return { success: false, error: insertErr.message || "Failed to assign operator." };
-            }
-          } else {
-            const { data: activeOnMach } = await supabase
-              .from("operator_machine_assignments")
-              .select("operator_id")
-              .eq("machine_id", parsed.data.machineId)
-              .eq("is_active", true)
-              .order("assigned_at", { ascending: true });
-            const opIds = (activeOnMach || []).map((a) => a.operator_id);
-            await supabase
-              .from("machines")
-              .update({
-                operator_ids: opIds,
-                current_operator_id: opIds[0] || null,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", parsed.data.machineId);
-          }
-
-          await logAudit({
-            user_id: caller.id,
-            action: "machine.operator_shift_assigned",
-            entity_type: "operator_machine_assignment",
-            entity_id: newAss?.id || parsed.data.machineId,
-            metadata: {
-              machineId: parsed.data.machineId,
-              operatorId: parsed.data.operatorId,
-              shiftStart: start24,
-              shiftEnd: end24,
-            },
-          });
-
-          revalidateTag(TAGS.machines, "max");
-          revalidateTag(TAGS.machinesMeta, "max");
-          revalidateTag(TAGS.dashboardKpis, "max");
-          revalidateTag(TAGS.machineDetail(parsed.data.machineId), "max");
-
-          return {
-            success: true,
-            data: newAss as OperatorMachineAssignment,
-          };
-        } catch (fallbackErr: unknown) {
-          const fbMsg = fallbackErr instanceof Error ? fallbackErr.message : "Failed to assign operator.";
-          return { success: false, error: fbMsg };
-        }
-      }
-
-      // Check for known Postgres exclusion or check constraint errors
       if (rpcError.message?.includes("MAX_OPERATORS_REACHED") || rpcError.code === "P0001") {
         return {
           success: false,
@@ -291,52 +178,6 @@ export async function endAssignmentAction(payload: {
     );
 
     if (rpcError) {
-      if (rpcError.code === "PGRST202" || rpcError.message?.includes("Could not find the function")) {
-        try {
-          const { data: endingAss } = await supabase
-            .from("operator_machine_assignments")
-            .select("machine_id, operator_id")
-            .eq("id", parsed.data.assignmentId)
-            .single();
-
-          await supabase
-            .from("operator_machine_assignments")
-            .update({
-              is_active: false,
-              ended_at: new Date().toISOString(),
-              ended_by: caller.id,
-              end_reason: parsed.data.endReason || "removed",
-            })
-            .eq("id", parsed.data.assignmentId);
-
-          if (endingAss?.machine_id) {
-            const { data: activeOnMach } = await supabase
-              .from("operator_machine_assignments")
-              .select("operator_id")
-              .eq("machine_id", endingAss.machine_id)
-              .eq("is_active", true)
-              .order("assigned_at", { ascending: true });
-            const opIds = (activeOnMach || []).map((a) => a.operator_id);
-            await supabase
-              .from("machines")
-              .update({
-                operator_ids: opIds,
-                current_operator_id: opIds[0] || null,
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", endingAss.machine_id);
-
-            revalidateTag(TAGS.machineDetail(endingAss.machine_id), "max");
-          }
-
-          revalidateTag(TAGS.machines, "max");
-          revalidateTag(TAGS.dashboardKpis, "max");
-          return { success: true, data: { success: true } };
-        } catch (fallbackErr: unknown) {
-          const fbMsg = fallbackErr instanceof Error ? fallbackErr.message : "Failed to end assignment.";
-          return { success: false, error: fbMsg };
-        }
-      }
       return { success: false, error: rpcError.message || "Failed to end assignment." };
     }
 
@@ -407,30 +248,6 @@ export async function resolveHourLogConflictAction(payload: {
     );
 
     if (rpcError) {
-      if (rpcError.code === "PGRST202" || rpcError.message?.includes("Could not find the function")) {
-        try {
-          const updatePayload: Record<string, unknown> = {
-            conflict_status: parsed.data.action === "acknowledge" ? "acknowledged" : "adjusted",
-            conflict_resolved_by: caller.id,
-            conflict_resolved_at: new Date().toISOString(),
-            conflict_resolution_notes: parsed.data.notes || null,
-          };
-          if (parsed.data.action === "adjust" && normalizedAdjustedEnd) {
-            updatePayload.end_time = normalizedAdjustedEnd;
-          }
-          await supabase
-            .from("machine_hour_logs")
-            .update(updatePayload)
-            .eq("id", parsed.data.logId);
-
-          revalidateTag(TAGS.machines, "max");
-          revalidateTag(TAGS.dashboardKpis, "max");
-          return { success: true, data: { success: true } };
-        } catch (fbErr: unknown) {
-          const fbMsg = fbErr instanceof Error ? fbErr.message : "Failed to resolve conflict.";
-          return { success: false, error: fbMsg };
-        }
-      }
       return { success: false, error: rpcError.message || "Failed to resolve conflict." };
     }
 

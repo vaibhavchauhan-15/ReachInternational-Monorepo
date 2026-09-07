@@ -59,31 +59,7 @@ const getCachedUserRow = unstable_cache(
 );
 
 export function isProfileIncomplete(user: User): boolean {
-  if (user.complete_profile === "yes") return false;
-
-  const name = (user.full_name || "").trim();
-  if (!name || name.length < 2 || name === user.email) return true;
-
-  const phone = (user.phone || "").trim().replace(/\D/g, "");
-  if (!phone || phone.length < 10) return true;
-
-  if (!user.role) return true;
-
-  const shift = (user.shift_time || "").trim();
-  if (!shift) return true;
-
-  const city = (user.city || "").trim();
-  const district = (user.district || "").trim();
-  const state = (user.state || "").trim();
-  if (!city || !district || !state) return true;
-
-  const address = (user.address || "").trim();
-  if (!address) return true;
-
-  const aadhaar = (user.aadhaar_number || "").trim().replace(/\D/g, "");
-  if (!aadhaar || aadhaar.length !== 12) return true;
-
-  return false;
+  return user.complete_profile !== "yes";
 }
 
 export const getCurrentUser = cache(async (): Promise<User | null> => {

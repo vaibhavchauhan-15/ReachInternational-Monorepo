@@ -480,16 +480,15 @@ export function HRClient({
       {/* Navigation Sub-Tabs Bar */}
       <div className="flex items-center gap-1 border-b border-[var(--color-hairline)] overflow-x-auto pb-1 text-xs font-bold">
         {[
-          { id: "dashboard", label: "HR Dashboard", icon: AnimatedGauge },
-          { id: "employees", label: `Employees (${employees.length})`, icon: AnimatedUsers },
-          { id: "onboarding", label: `Onboarding (${metrics.pending_onboarding})`, icon: AnimatedClipboardList },
-          { id: "departments", label: `Departments (${departments.length})`, icon: AnimatedBuilding2 },
-          { id: "designations", label: `Designations (${designations.length})`, icon: AnimatedStar },
-          ...(canViewSalary ? [{ id: "payroll", label: "Salary & Payroll", icon: AnimatedFileText }] : []),
-          { id: "user_requests", label: `User Requests (${userRequests.filter((r) => r.status === "pending").length})`, icon: AnimatedSettings },
-          { id: "documents", label: `Documents (${documents.length})`, icon: AnimatedFileText },
+          { id: "dashboard", label: "HR Dashboard" },
+          { id: "employees", label: `Employees (${employees.length})` },
+          { id: "onboarding", label: `Onboarding (${metrics.pending_onboarding})` },
+          { id: "departments", label: `Departments (${departments.length})` },
+          { id: "designations", label: `Designations (${designations.length})` },
+          ...(canViewSalary ? [{ id: "payroll", label: "Salary & Payroll" }] : []),
+          { id: "user_requests", label: `User Requests (${userRequests.filter((r) => r.status === "pending").length})` },
+          { id: "documents", label: `Documents (${documents.length})` },
         ].map((tab) => {
-          const Icon = tab.icon;
           const isActive = activeTab === tab.id;
           return (
             <button
@@ -501,7 +500,6 @@ export function HRClient({
                   : "text-[var(--color-mute)] hover:bg-[var(--color-hairline-soft-surface)] hover:text-[var(--color-ink)]"
               }`}
             >
-              <Icon size={14} />
               {tab.label}
             </button>
           );

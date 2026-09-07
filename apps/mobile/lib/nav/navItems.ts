@@ -32,7 +32,7 @@ export const mobileNavItems: MobileNavItem[] = [
       'supervisor', 'mechanic', 'store_manager'
     ],
     subItems: [
-      { label: 'Directory', tab: 'inventory', icon: Wrench },
+      { label: 'Directory', tab: 'inventory' },
     ],
   },
   {
@@ -41,8 +41,8 @@ export const mobileNavItems: MobileNavItem[] = [
     icon: Gauge,
     roles: ['super_admin', 'admin', 'manager', 'service_manager', 'supervisor', 'operator'],
     subItems: [
-      { label: 'Running Hours', tab: 'logs', icon: Gauge },
-      { label: 'Assignments', tab: 'assignments', icon: Star },
+      { label: 'Running Hours', tab: 'logs' },
+      { label: 'Assignments', tab: 'assignments' },
     ],
   },
   {
@@ -51,7 +51,7 @@ export const mobileNavItems: MobileNavItem[] = [
     icon: Building2,
     roles: ['super_admin', 'admin', 'manager', 'service_manager'],
     subItems: [
-      { label: 'Client Directory', tab: 'all', icon: Building2 },
+      { label: 'Client Directory', tab: 'all' },
     ],
   },
   {
@@ -60,7 +60,7 @@ export const mobileNavItems: MobileNavItem[] = [
     icon: Users,
     roles: ['super_admin', 'admin', 'manager', 'service_manager', 'hr_manager'],
     subItems: [
-      { label: 'All Accounts', tab: 'all', icon: Users },
+      { label: 'All Accounts', tab: 'all' },
     ],
   },
 ];
@@ -76,16 +76,16 @@ export function getVisibleMobileNavItems(role?: string): MobileNavItem[] {
           return {
             ...item,
             subItems: [
-              { label: 'Daily Entry', tab: 'entry', icon: Gauge },
-              { label: 'Log History', tab: 'history', icon: Clock },
+              { label: 'Daily Entry', tab: 'entry' },
+              { label: 'Log History', tab: 'history' },
             ],
           };
         }
         return {
           ...item,
           subItems: [
-            { label: 'Running Hours', tab: 'logs', icon: Gauge },
-            { label: 'Assignments', tab: 'assignments', icon: Star },
+            { label: 'Running Hours', tab: 'logs' },
+            { label: 'Assignments', tab: 'assignments' },
           ],
         };
       }
