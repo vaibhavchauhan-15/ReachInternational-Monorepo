@@ -328,7 +328,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         bkdDecimalHours = breakdownStats.durationDecimalHours;
       }
 
-      let remarksPayload = remarks.trim();
+      let remarksPayload = isBreakdown ? remarks.trim() : '';
       if (isBreakdown && bkdDurationFormatted) {
         remarksPayload = `[Breakdown Duration: ${bkdDurationFormatted}] ${remarksPayload}`.trim();
       }
@@ -736,6 +736,8 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               value={overtimeHours}
               onChangeText={setOvertimeHours}
               keyboardType="numeric"
+              containerStyle={{ maxWidth: 140 }}
+              style={{ textAlign: 'center', fontWeight: '700', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}
             />
 
             {/* Breakdown Toggle */}
@@ -749,7 +751,10 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               </View>
               <Switch
                 value={isBreakdown}
-                onValueChange={setIsBreakdown}
+                onValueChange={(val) => {
+                  setIsBreakdown(val);
+                  if (!val) setRemarks('');
+                }}
                 trackColor={{ false: theme.colors.hairline, true: theme.colors.error }}
               />
             </View>
@@ -758,19 +763,29 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               <View style={{
                 gap: 8,
                 marginVertical: 4,
-                padding: 10,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: theme.colors.error + '40',
-                backgroundColor: theme.colors.error + '08'
+                paddingTop: 8,
+                borderTopWidth: 1,
+                borderTopColor: theme.colors.error + '30',
               }}>
-                {breakdownStats?.isValid ? (
-                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: theme.colors.error, fontFamily: 'monospace' }}>
-                      {breakdownStats.durationFormatted}
+                {/* Top Left Total Duration Badge */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start' }}>
+                  <View style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 5,
+                    paddingHorizontal: 8,
+                    paddingVertical: 3,
+                    borderRadius: 6,
+                    backgroundColor: theme.colors.error + '18',
+                    borderWidth: 1,
+                    borderColor: theme.colors.error + '35',
+                  }}>
+                    <Clock size={11} color={theme.colors.error} />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: theme.colors.error, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                      Total: {breakdownStats?.isValid ? (breakdownStats.hours > 0 ? `${breakdownStats.durationFormatted} (${breakdownStats.totalMinutes} min)` : breakdownStats.durationFormatted) : '0 min'}
                     </Text>
                   </View>
-                ) : null}
+                </View>
 
                 <View style={styles.rowInputs}>
                   <View style={{ flex: 1 }}>
@@ -806,13 +821,15 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               </View>
             )}
 
-            <Input
-              label="Operational Remarks"
-              placeholder="e.g. Normal shift operation at site"
-              value={remarks}
-              onChangeText={setRemarks}
-              multiline
-            />
+            {isBreakdown && (
+              <Input
+                label="Remarks (Optional)"
+                placeholder="Add any important observation, defect, or breakdown reason..."
+                value={remarks}
+                onChangeText={setRemarks}
+                multiline
+              />
+            )}
           </ScrollView>
 
           {/* Footer Actions */}

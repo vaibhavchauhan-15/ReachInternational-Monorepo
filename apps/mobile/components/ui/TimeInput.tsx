@@ -28,6 +28,8 @@ export interface TimeInputProps {
   isInvalid?: boolean;
   hideErrorMessage?: boolean;
   helperText?: string;
+  /** Layout arrangement of the AM/PM toggle relative to time picker box. Defaults to "stacked" for mobile optimization. */
+  toggleLayout?: 'stacked' | 'side-by-side';
 }
 
 /**
@@ -103,6 +105,7 @@ export const TimeInput: React.FC<TimeInputProps> = ({
   isInvalid = false,
   hideErrorMessage = false,
   helperText,
+  toggleLayout = 'side-by-side',
 }) => {
   const { theme } = useTheme();
 
@@ -310,62 +313,70 @@ export const TimeInput: React.FC<TimeInputProps> = ({
         </Text>
       )}
 
-      {/* Unified Cohesive Time Picker Shell */}
+      {/* Time Picker Controls: Time Box and Separate AM/PM Toggle */}
       <View
         style={[
-          styles.unifiedShell,
-          {
-            backgroundColor: theme.colors.canvasElevated,
-            borderColor: containerBorderColor,
-          },
+          toggleLayout === 'side-by-side' ? styles.sideBySideRow : styles.stackedCol,
         ]}
       >
-        {/* Left: Digital Time Inputs */}
-        <View style={styles.digitalCluster}>
-          <TextInput
-            ref={hourInputRef}
-            keyboardType="number-pad"
-            maxLength={3}
-            value={hour}
-            onChangeText={(val) => {
-              handleHourChange(val);
-              const digits = val.replace(/\D/g, '');
-              if (digits.length === 2) {
-                const num = parseInt(digits, 10);
-                if (!isNaN(num) && num >= 1 && num <= 12) {
-                  minuteInputRef.current?.focus();
+        {/* 1. Time Picker Shell: Digits Only */}
+        <View
+          style={[
+            styles.timeBoxShell,
+            toggleLayout === 'side-by-side' && { flex: 1 },
+            {
+              backgroundColor: theme.colors.canvasElevated,
+              borderColor: containerBorderColor,
+            },
+          ]}
+        >
+          <View style={styles.digitalCluster}>
+            <TextInput
+              ref={hourInputRef}
+              keyboardType="number-pad"
+              maxLength={3}
+              value={hour}
+              onChangeText={(val) => {
+                handleHourChange(val);
+                const digits = val.replace(/\D/g, '');
+                if (digits.length === 2) {
+                  const num = parseInt(digits, 10);
+                  if (!isNaN(num) && num >= 1 && num <= 12) {
+                    minuteInputRef.current?.focus();
+                  }
                 }
-              }
-            }}
-            onBlur={handleHourBlur}
-            placeholder="08"
-            placeholderTextColor={theme.colors.faint}
-            editable={!disabled}
-            selectTextOnFocus
-            style={[styles.digitInput, { color: theme.colors.ink }]}
-          />
+              }}
+              onBlur={handleHourBlur}
+              placeholder="08"
+              placeholderTextColor={theme.colors.faint}
+              editable={!disabled}
+              selectTextOnFocus
+              style={[styles.digitInput, { color: theme.colors.ink }]}
+            />
 
-          <Text style={[styles.colonText, { color: theme.colors.mute }]}>:</Text>
+            <Text style={[styles.colonText, { color: theme.colors.mute }]}>:</Text>
 
-          <TextInput
-            ref={minuteInputRef}
-            keyboardType="number-pad"
-            maxLength={3}
-            value={minute}
-            onChangeText={handleMinuteChange}
-            onBlur={handleMinuteBlur}
-            placeholder="00"
-            placeholderTextColor={theme.colors.faint}
-            editable={!disabled}
-            selectTextOnFocus
-            style={[styles.digitInput, { color: theme.colors.ink }]}
-          />
+            <TextInput
+              ref={minuteInputRef}
+              keyboardType="number-pad"
+              maxLength={3}
+              value={minute}
+              onChangeText={handleMinuteChange}
+              onBlur={handleMinuteBlur}
+              placeholder="00"
+              placeholderTextColor={theme.colors.faint}
+              editable={!disabled}
+              selectTextOnFocus
+              style={[styles.digitInput, { color: theme.colors.ink }]}
+            />
+          </View>
         </View>
 
-        {/* Right: Horizontal AM / PM Segmented Switcher */}
+        {/* 2. Separate AM/PM Segmented Switcher Layout */}
         <View
           style={[
             styles.periodContainer,
+            toggleLayout === 'side-by-side' ? styles.periodContainerSide : styles.periodContainerStacked,
             {
               borderColor: theme.colors.hairline,
               backgroundColor: theme.colors.canvas,
@@ -458,54 +469,76 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  unifiedShell: {
+  stackedCol: {
+    flexDirection: 'column',
+    width: '100%',
+    gap: 6,
+  },
+  sideBySideRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    height: 44,
-    paddingHorizontal: 12,
+    width: '100%',
+    gap: 4,
+  },
+  timeBoxShell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 42,
+    paddingHorizontal: 4,
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
   },
   digitalCluster: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 2,
   },
   digitInput: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     textAlign: 'center',
     width: 32,
-    height: 36,
+    height: 38,
     padding: 0,
     fontVariant: ['tabular-nums'],
   },
   colonText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
     paddingHorizontal: 2,
     opacity: 0.7,
   },
   periodContainer: {
     flexDirection: 'row',
-    height: 34,
     borderWidth: 1,
-    borderRadius: 17,
+    borderRadius: radiusNumeric.sm,
     padding: 2,
     gap: 2,
     alignItems: 'center',
   },
+  periodContainerStacked: {
+    width: '100%',
+    height: 38,
+  },
+  periodContainerSide: {
+    height: 42,
+    minWidth: 88,
+  },
   periodBtn: {
+    flex: 1,
     height: '100%',
-    minWidth: 32,
-    paddingHorizontal: 8,
-    borderRadius: 15,
+    minHeight: 34,
+    minWidth: 40,
+    paddingHorizontal: 9,
+    borderRadius: 4,
     justifyContent: 'center',
     alignItems: 'center',
   },
   periodText: {
     fontSize: 11,
+    fontWeight: '700',
   },
   errorText: {
     fontSize: 11,

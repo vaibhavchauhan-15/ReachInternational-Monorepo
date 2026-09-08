@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
 import type { User, Machine } from "@/lib/types/database";
 import type { OperatorHourLog } from "@/components/dashboard/OperatorDashboard";
-import { formatDate, formatExactTimestamp, formatTo12Hour, parseBreakdownString } from "@reachinternational/utils";
+import { formatDate, formatExactTimestamp, formatTo12Hour, parseBreakdownString, getISTDateString } from "@reachinternational/utils";
 
 // Time string parser (e.g. "08:00 AM", "05:30 PM", "17:00") -> total minutes from midnight
 function parseTimeToMinutes(timeStr?: string): number | null {
@@ -53,7 +53,23 @@ export const MONTH_NAMES = [
   { value: "10", label: "October", short: "Oct" },
   { value: "11", label: "November", short: "Nov" },
   { value: "12", label: "December", short: "Dec" },
+  { value: "custom", label: "Custom Range", short: "Custom" },
 ];
+
+// Returns current 2-digit month string ("01" to "12") pinned to IST
+export function getCurrentMonthNumber(): string {
+  try {
+    const istDate = getISTDateString();
+    const parts = istDate.split("-");
+    if (parts.length >= 2 && parts[1]) {
+      return parts[1];
+    }
+  } catch (e) {
+    // fallback below
+  }
+  const m = new Date().getMonth() + 1;
+  return m < 10 ? `0${m}` : `${m}`;
+}
 
 // Extract 2-digit month string ("01" to "12") from log date
 export function getLogMonthNumber(logDateStr: string): string {
@@ -87,7 +103,9 @@ export function formatExportDateTimeSlug(dateObj: Date = new Date()): { displayD
 // Build standardized machine export filename format: Machineserialnumber-Exportdateandtime (e.g. REACH-2026-001-22-08-2026-16-00.pdf / .xlsx)
 export function buildMachineExportFileName(
   serialNumberOrCode: string,
-  extension: "xlsx" | "pdf"
+  extension: "xlsx" | "pdf",
+  customStartDate?: string,
+  customEndDate?: string
 ): string {
   const rawSerial = (serialNumberOrCode || "").trim() || "Machine";
   const words = rawSerial.split(/[^a-zA-Z0-9]+/).filter(Boolean);
@@ -96,14 +114,21 @@ export function buildMachineExportFileName(
       ? words.join("-")
       : "Machine";
 
+  let rangeSlug = "";
+  if (customStartDate && customEndDate) {
+    rangeSlug = `-${formatDate(customStartDate).replace(/\s+/g, "")}-to-${formatDate(customEndDate).replace(/\s+/g, "")}`;
+  }
+
   const { slugDateTime } = formatExportDateTimeSlug();
-  return `${serialSlug}-${slugDateTime}.${extension}`;
+  return `${serialSlug}${rangeSlug}-${slugDateTime}.${extension}`;
 }
 
 export function buildExportFileName(
   operatorName: string,
   selectedMonthValue: string,
-  extension: "xlsx" | "pdf"
+  extension: "xlsx" | "pdf",
+  customStartDate?: string,
+  customEndDate?: string
 ): string {
   const rawName = (operatorName || "").trim() || "Operator";
   const nameWords = rawName.split(/[^a-zA-Z0-9]+/).filter(Boolean);
@@ -112,8 +137,12 @@ export function buildExportFileName(
       ? nameWords.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join("-")
       : "Operator";
 
-  let monthSlug = "";
-  if (
+  let periodSlug = "";
+  if (selectedMonthValue === "custom") {
+    const s = customStartDate ? formatDate(customStartDate).replace(/\s+/g, "") : "Start";
+    const e = customEndDate ? formatDate(customEndDate).replace(/\s+/g, "") : "End";
+    periodSlug = `Custom-${s}-to-${e}`;
+  } else if (
     selectedMonthValue &&
     selectedMonthValue.toLowerCase() !== "all" &&
     selectedMonthValue.toLowerCase() !== "all months"
@@ -125,10 +154,10 @@ export function buildExportFileName(
         m.label.toLowerCase() === selectedMonthValue.toLowerCase()
     );
     if (monthObj && monthObj.value !== "all") {
-      monthSlug = monthObj.label;
+      periodSlug = monthObj.label;
     } else if (!monthObj) {
       const monthWords = selectedMonthValue.split(/[^a-zA-Z0-9]+/).filter(Boolean);
-      monthSlug =
+      periodSlug =
         monthWords.length > 0
           ? monthWords.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join("-")
           : selectedMonthValue;
@@ -136,8 +165,8 @@ export function buildExportFileName(
   }
 
   const { slugDateTime } = formatExportDateTimeSlug();
-  if (monthSlug) {
-    return `${operatorSlug}-${monthSlug}-${slugDateTime}.${extension}`;
+  if (periodSlug) {
+    return `${operatorSlug}-${periodSlug}-${slugDateTime}.${extension}`;
   }
   return `${operatorSlug}-${slugDateTime}.${extension}`;
 }
@@ -146,25 +175,44 @@ export function exportOperatorLogsToExcel(
   logs: OperatorHourLog[],
   user: User,
   assignedMachine?: Machine | null,
-  selectedMonthValue: string = "all"
+  selectedMonthValue: string = "all",
+  customStartDate?: string,
+  customEndDate?: string
 ) {
-  // Filter logs month-wise if specific month selected
-  const targetLogs =
-    selectedMonthValue === "all"
-      ? logs
-      : logs.filter((log) => getLogMonthNumber(log.log_date) === selectedMonthValue);
+  // Filter logs month-wise or by custom date range
+  const targetLogs = logs.filter((log) => {
+    if (selectedMonthValue === "custom") {
+      if (!customStartDate && !customEndDate) return true;
+      const logDate = log.log_date?.split("T")[0] || "";
+      if (customStartDate && logDate < customStartDate) return false;
+      if (customEndDate && logDate > customEndDate) return false;
+      return true;
+    }
+    if (selectedMonthValue === "all") return true;
+    return getLogMonthNumber(log.log_date) === selectedMonthValue;
+  });
 
   const operatorName = user.full_name || "Operator";
   const operatorEmail = user.email || "—";
   const operatorPhone = user.phone || "—";
   const { displayDateTime } = formatExportDateTimeSlug();
 
-  let selectedMonthLabel = "All Months";
-  if (selectedMonthValue !== "all") {
+  let periodInfoLabel = "Month: All Months";
+  if (selectedMonthValue === "custom") {
+    if (customStartDate && customEndDate) {
+      periodInfoLabel = `Date Range: ${formatDate(customStartDate)} to ${formatDate(customEndDate)}`;
+    } else if (customStartDate) {
+      periodInfoLabel = `Date Range: From ${formatDate(customStartDate)}`;
+    } else if (customEndDate) {
+      periodInfoLabel = `Date Range: Up to ${formatDate(customEndDate)}`;
+    } else {
+      periodInfoLabel = "Date Range: Custom";
+    }
+  } else if (selectedMonthValue !== "all") {
     const mObj = MONTH_NAMES.find(
       (m) => m.value === selectedMonthValue || m.short.toLowerCase() === selectedMonthValue.toLowerCase()
     );
-    if (mObj) selectedMonthLabel = mObj.label;
+    periodInfoLabel = `Month: ${mObj ? mObj.label : selectedMonthValue}`;
   }
 
   // Top Header Details
@@ -174,7 +222,7 @@ export function exportOperatorLogsToExcel(
     `Email: ${operatorEmail}`,
     `Number: ${operatorPhone}`,
     `Export Date: ${displayDateTime}`,
-    `Month: ${selectedMonthLabel}`,
+    periodInfoLabel,
   ];
   const blankRow = [""];
 
@@ -305,7 +353,7 @@ export function exportOperatorLogsToExcel(
   XLSX.utils.book_append_sheet(workbook, worksheet, "Daily Machine Logs");
 
   // File name formatting strictly following format: operator-name-month-export-date-and-time.xlsx
-  const fileName = buildExportFileName(operatorName, selectedMonthValue, "xlsx");
+  const fileName = buildExportFileName(operatorName, selectedMonthValue, "xlsx", customStartDate, customEndDate);
 
   XLSX.writeFile(workbook, fileName);
 }

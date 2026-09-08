@@ -20,6 +20,10 @@ export interface CustomDatePickerProps {
   onChange: (dateStr: string) => void;
   maxDaysOld?: number; // Number of days in past allowed (default: 7)
   allowFutureDays?: number; // Number of days in future allowed (default: 0, set to 1 for shift end dates)
+  allowAnyPast?: boolean; // When true, does not restrict past dates (useful for reports)
+  allowAnyFuture?: boolean; // When true, does not restrict future dates
+  showWindowBadge?: boolean; // Controls visibility of "Allowed: 7d window" badge
+  showRelativeBadge?: boolean; // Controls visibility of relative badges like "Today", "Locked (>7d)"
   mode?: "input" | "inline"; // Preserved for backwards compatibility
   label?: React.ReactNode;
   labelClassName?: string;
@@ -72,6 +76,10 @@ export function CustomDatePicker({
   onChange,
   maxDaysOld = 7,
   allowFutureDays = 0,
+  allowAnyPast = false,
+  allowAnyFuture = false,
+  showWindowBadge = true,
+  showRelativeBadge = true,
   label,
   labelClassName = "block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)]",
   required = false,
@@ -92,19 +100,21 @@ export function CustomDatePicker({
 
   const todayStr = useMemo(() => formatToYMD(today), [today]);
 
-  // Minimum allowed date at midnight (today - maxDaysOld)
+  // Minimum allowed date at midnight (today - maxDaysOld, or unbound when allowAnyPast)
   const minDate = useMemo(() => {
+    if (allowAnyPast) return new Date(1990, 0, 1);
     const d = new Date(today);
     d.setDate(d.getDate() - maxDaysOld);
     return d;
-  }, [today, maxDaysOld]);
+  }, [today, maxDaysOld, allowAnyPast]);
 
-  // Maximum allowed future date at midnight (today + allowFutureDays)
+  // Maximum allowed future date at midnight (today + allowFutureDays, or unbound when allowAnyFuture)
   const maxFutureDate = useMemo(() => {
+    if (allowAnyFuture) return new Date(2050, 11, 31);
     const d = new Date(today);
     d.setDate(d.getDate() + allowFutureDays);
     return d;
-  }, [today, allowFutureDays]);
+  }, [today, allowFutureDays, allowAnyFuture]);
 
   // Month currently in view on calendar
   const [viewDate, setViewDate] = useState<Date>(() => {
@@ -152,7 +162,7 @@ export function CustomDatePicker({
 
   // Relative status of currently selected date
   const relativeBadge = useMemo(() => {
-    if (!value) return null;
+    if (!showRelativeBadge || !value) return null;
     const target = parseYMD(value);
     const diffTime = today.getTime() - target.getTime();
     const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
@@ -175,6 +185,9 @@ export function CustomDatePicker({
         colorClass: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20",
       };
     }
+    if (allowAnyPast) {
+      return null;
+    }
     if (diffDays > 1 && diffDays <= maxDaysOld) {
       return {
         label: `${diffDays}d ago`,
@@ -191,18 +204,20 @@ export function CustomDatePicker({
       label: "Future",
       colorClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20",
     };
-  }, [value, today, maxDaysOld]);
+  }, [value, today, maxDaysOld, showRelativeBadge, allowAnyPast]);
 
   // Month navigation handlers
   const canGoPrevMonth = useMemo(() => {
+    if (allowAnyPast) return true;
     const prevMonthEnd = new Date(viewDate.getFullYear(), viewDate.getMonth(), 0);
     return prevMonthEnd >= minDate;
-  }, [viewDate, minDate]);
+  }, [viewDate, minDate, allowAnyPast]);
 
   const canGoNextMonth = useMemo(() => {
+    if (allowAnyFuture) return true;
     const nextMonthStart = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 1);
     return nextMonthStart <= maxFutureDate;
-  }, [viewDate, maxFutureDate]);
+  }, [viewDate, maxFutureDate, allowAnyFuture]);
 
   const handlePrevMonth = () => {
     if (!canGoPrevMonth) return;
@@ -240,7 +255,7 @@ export function CustomDatePicker({
       const d = new Date(year, month - 1, dayNum);
       const dStr = formatToYMD(d);
       const diffDays = Math.round((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-      const isSelectable = diffDays >= -allowFutureDays && diffDays <= maxDaysOld;
+      const isSelectable = (allowAnyFuture || diffDays >= -allowFutureDays) && (allowAnyPast || diffDays <= maxDaysOld);
 
       days.push({
         date: d,
@@ -259,7 +274,7 @@ export function CustomDatePicker({
       const d = new Date(year, month, i);
       const dStr = formatToYMD(d);
       const diffDays = Math.round((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-      const isSelectable = diffDays >= -allowFutureDays && diffDays <= maxDaysOld;
+      const isSelectable = (allowAnyFuture || diffDays >= -allowFutureDays) && (allowAnyPast || diffDays <= maxDaysOld);
 
       days.push({
         date: d,
@@ -280,7 +295,7 @@ export function CustomDatePicker({
       const d = new Date(year, month + 1, i);
       const dStr = formatToYMD(d);
       const diffDays = Math.round((today.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-      const isSelectable = diffDays >= -allowFutureDays && diffDays <= maxDaysOld;
+      const isSelectable = (allowAnyFuture || diffDays >= -allowFutureDays) && (allowAnyPast || diffDays <= maxDaysOld);
 
       days.push({
         date: d,
@@ -295,7 +310,7 @@ export function CustomDatePicker({
     }
 
     return days;
-  }, [viewDate, value, today, todayStr, maxDaysOld, allowFutureDays]);
+  }, [viewDate, value, today, todayStr, maxDaysOld, allowFutureDays, allowAnyPast, allowAnyFuture]);
 
   const handleSelectDate = (dateStr: string) => {
     onChange(dateStr);
@@ -324,9 +339,11 @@ export function CustomDatePicker({
               {label}
               {required && <span className="text-rose-500 ml-0.5">*</span>}
             </label>
-            <span className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold tracking-tight shrink-0">
-              <span className="hidden xs:inline">Allowed: </span>7d window
-            </span>
+            {showWindowBadge && (
+              <span className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold tracking-tight shrink-0">
+                <span className="hidden xs:inline">Allowed: </span>7d window
+              </span>
+            )}
           </div>
         )}
 

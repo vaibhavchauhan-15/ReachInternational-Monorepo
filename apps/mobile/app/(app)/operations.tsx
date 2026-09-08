@@ -17,7 +17,7 @@ import { MobileConflictResolutionModal } from '../../components/operations/Mobil
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { formatShiftTimingRange, formatTo12Hour, formatExactTimestamp, splitExactTimestamp, formatDate, parseBreakdownString, parseProfileShiftTime, parseTimeToMinutes } from '@reachinternational/utils';
+import { formatShiftTimingRange, formatCompactTiming, formatTo12Hour, formatExactTimestamp, splitExactTimestamp, formatDate, parseBreakdownString, parseProfileShiftTime, parseTimeToMinutes } from '@reachinternational/utils';
 import {
   Clock,
   Gauge,
@@ -140,7 +140,7 @@ export default function OperationsScreen() {
   };
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'breakdowns'>('all');
+  const [statusFilter, setStatusFilter] = useState<'month' | 'all' | 'breakdowns'>('month');
 
   // Modal State: Log Entry
   const [meterModalVisible, setMeterModalVisible] = useState(false);
@@ -446,7 +446,13 @@ export default function OperationsScreen() {
       (log.location && log.location.toLowerCase().includes(q));
 
     let matchesStatus = true;
-    if (statusFilter === 'breakdowns') matchesStatus = log.is_breakdown === true;
+    if (statusFilter === 'month') {
+      const now = new Date();
+      const logDate = new Date(log.log_date);
+      matchesStatus = !isNaN(logDate.getTime()) && logDate.getFullYear() === now.getFullYear() && logDate.getMonth() === now.getMonth();
+    } else if (statusFilter === 'breakdowns') {
+      matchesStatus = log.is_breakdown === true;
+    }
 
     return matchesSearch && matchesStatus;
   });
@@ -651,6 +657,7 @@ export default function OperationsScreen() {
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
               {[
+                { key: 'month', label: 'This Month' },
                 { key: 'all', label: `All Logs (${logs.length})` },
                 { key: 'breakdowns', label: 'Breakdowns' },
               ].map((f) => {
@@ -768,7 +775,7 @@ export default function OperationsScreen() {
 
                       <View style={styles.badgeColumn}>
                         {log.is_breakdown ? (
-                          <View style={[styles.breakdownBadge, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error, alignItems: 'flex-end', paddingHorizontal: 6, paddingVertical: 2 }]}>
+                          <View style={[styles.breakdownBadge, { backgroundColor: 'transparent', borderWidth: 0, alignItems: 'flex-end', paddingHorizontal: 0, paddingVertical: 0 }]}>
                             {(() => {
                               const bkdParsed = parseBreakdownString((log as any).breakdown_duration || log.remarks);
                               const bkdStart = (log as any).breakdown_start_time || bkdParsed?.startTime;
@@ -777,7 +784,7 @@ export default function OperationsScreen() {
                               return bkdStart && bkdEnd ? (
                                 <>
                                   <Text style={{ fontSize: 9.5, fontFamily: 'GeistMono_700Bold', color: theme.colors.error }}>
-                                    {bkdStart} - {bkdEnd}
+                                    {formatCompactTiming(bkdStart, bkdEnd)}
                                   </Text>
                                   <Text style={{ fontSize: 8.5, fontFamily: 'GeistMono_700Bold', color: theme.colors.error, opacity: 0.85 }}>
                                     ({bkdDur})
@@ -876,7 +883,7 @@ export default function OperationsScreen() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                           <Clock size={11} color={theme.colors.mute} />
                           <Text style={{ fontSize: 11, fontFamily: 'GeistMono_700Bold', color: theme.colors.ink }}>
-                            {formatShiftTimingRange(log.start_time, log.end_time)}
+                            {formatCompactTiming(log.start_time, log.end_time)}
                           </Text>
                         </View>
                         <Text style={{ fontSize: 11, fontFamily: 'GeistMono_700Bold', color: theme.colors.link }}>

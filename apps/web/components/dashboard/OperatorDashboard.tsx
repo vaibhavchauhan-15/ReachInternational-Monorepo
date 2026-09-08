@@ -31,9 +31,7 @@ import {
   FileCheck2,
   AlertOctagon,
   ArrowRight,
-  Check,
   Printer,
-  Download,
   Building2,
   MapPin,
   Gauge,
@@ -59,7 +57,7 @@ import {
   splitExactTimestamp,
   formatTimeAgo,
   formatTo12Hour,
-  formatShiftTimingRange,
+  formatCompactTiming,
   parseProfileShiftTime,
   computeShiftTiming,
   computeBreakdownDuration,
@@ -72,7 +70,6 @@ import {
   getISTDateString,
 } from "@reachinternational/utils";
 import { PrintableOperatorLogsModal } from "./PrintableOperatorLogsModal";
-import { exportOperatorLogsToExcel } from "@/lib/utils/operator-logs-export";
 import { handleClipboardPaste } from "@/lib/security/clipboard";
 import { HmrSchema, RemarksSchema } from "@reachinternational/validation";
 
@@ -248,20 +245,11 @@ export function OperatorDashboard({
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
 
   const handleExportPdfClick = () => {
-    if (filteredLogs.length === 0) {
-      toast("error", "No Logs Available", "There are no machine logs matching current filters to export.");
+    if (recentLogs.length === 0) {
+      toast("error", "No Logs Available", "There are no machine logs to export.");
       return;
     }
     setShowPrintModal(true);
-  };
-
-  const handleExportExcelClick = () => {
-    if (filteredLogs.length === 0) {
-      toast("error", "No Logs Available", "There are no machine logs matching current filters to export.");
-      return;
-    }
-    exportOperatorLogsToExcel(filteredLogs, user, selectedMachine, "all");
-    toast("success", "Export Successful", "Operator shift log report downloaded as Excel (.xlsx)");
   };
 
   // Machine Selection (Pre-filled with assigned machine, fallback to first machine if available)
@@ -993,7 +981,7 @@ export function OperatorDashboard({
       const bkdEnd = isBreakdown && breakdownStats?.isValid ? breakdownEndTime : undefined;
 
       // Build breakdown details string
-      let finalRemarks = remarks.trim();
+      let finalRemarks = isBreakdown ? remarks.trim() : "";
       if (isBreakdown && bkdDurationStr) {
         const bkdDetails = `[Breakdown Duration: ${bkdDurationStr}]`;
         if (!finalRemarks.includes("[Breakdown Duration:")) {
@@ -1428,11 +1416,7 @@ export function OperatorDashboard({
                   {/* Log Date */}
                   <div className="col-span-2 sm:col-span-1 xl:col-span-1 order-1 min-w-0">
                     <CustomDatePicker
-                      label={
-                        <span>
-                          Log Date <span className="text-rose-500 font-bold ml-0.5">*</span>
-                        </span>
-                      }
+                      label="Log Date"
                       required
                       value={selectedLogDate}
                       onChange={(val) => setSelectedLogDate(val)}
@@ -1489,7 +1473,7 @@ export function OperatorDashboard({
                         })
                       }
                       placeholder="e.g. 0.0"
-                      className="w-full px-2.5 sm:px-3.5 py-1.5 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs sm:text-sm font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 min-h-[38px] sm:min-h-[42px] h-9 sm:h-[42px]"
+                      className="w-24 xs:w-28 sm:w-32 max-w-[130px] px-2.5 sm:px-3.5 py-1.5 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs sm:text-sm font-mono font-bold text-center text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 min-h-[38px] sm:min-h-[42px] h-9.5 sm:h-[42px]"
                     />
                   </div>
                 </div>
@@ -1544,7 +1528,10 @@ export function OperatorDashboard({
               <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 <button
                   type="button"
-                  onClick={() => setIsBreakdown(false)}
+                  onClick={() => {
+                    setIsBreakdown(false);
+                    setRemarks("");
+                  }}
                   className={`py-2 sm:py-2.5 px-2.5 sm:px-4 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 sm:gap-2 cursor-pointer min-h-[38px] sm:min-h-[42px] ${
                     !isBreakdown
                       ? "border-emerald-500 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 ring-2 ring-emerald-500/20 shadow-2xs"
@@ -1569,19 +1556,20 @@ export function OperatorDashboard({
 
               {/* Progressive Disclosure Breakdown Details Container */}
               {isBreakdown && (
-                <div className="p-3 sm:p-4 rounded-xl border border-rose-500/30 bg-rose-500/5 animate-in fade-in slide-in-from-top-2 duration-200 space-y-2.5 sm:space-y-3">
-                  {/* Top Right Calculated Duration Only */}
-                  {breakdownStats?.isValid && (
-                    <div className="flex items-center justify-end min-w-0">
-                      <span className="text-[11px] sm:text-xs font-mono font-bold text-rose-600 dark:text-rose-400">
-                        {breakdownStats.durationFormatted}
+                <div className="pt-2.5 sm:pt-3 border-t border-rose-500/25 space-y-2 sm:space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-200">
+                  {/* Top Left Total Breakdown Duration Badge */}
+                  <div className="flex items-center justify-start">
+                    <div className="flex items-center gap-1.5 text-[11px] sm:text-xs font-mono font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2.5 py-1 rounded-lg border border-rose-500/25 shadow-2xs">
+                      <Clock size={12} className="shrink-0 text-rose-500" />
+                      <span>
+                        Total: {breakdownStats?.isValid ? (breakdownStats.hours > 0 ? `${breakdownStats.durationFormatted} (${breakdownStats.totalMinutes} min)` : breakdownStats.durationFormatted) : "0 min"}
                       </span>
                     </div>
-                  )}
+                  </div>
 
-                  {/* Breakdown Start & End Time Pickers (Single row on mobile) */}
-                  <div className="grid grid-cols-2 gap-2 sm:gap-3.5 items-start">
-                    <div className="min-w-0">
+                  {/* Breakdown Timing Grid (Col 1 & Col 2 aligned with Section B) */}
+                  <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-3.5 items-start">
+                    <div className="col-span-1 min-w-0">
                       <CustomTimePicker
                         label={<><span className="hidden sm:inline">Breakdown </span>Start Time</>}
                         required
@@ -1590,7 +1578,7 @@ export function OperatorDashboard({
                         iconColor="text-amber-500"
                       />
                     </div>
-                    <div className="min-w-0">
+                    <div className="col-span-1 min-w-0">
                       <CustomTimePicker
                         label={<><span className="hidden sm:inline">Breakdown </span>End Time</>}
                         required
@@ -1620,18 +1608,20 @@ export function OperatorDashboard({
             {/* ============================================ */}
             {/* SECTION D: REMARKS / OBSERVATIONS            */}
             {/* ============================================ */}
-            <div className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/40 space-y-2">
-              <label className="block text-xs font-bold text-[var(--color-ink)]">
-                Remarks / Observations (Optional)
-              </label>
-              <textarea
-                rows={2}
-                value={remarks}
-                onChange={(e) => setRemarks(e.target.value)}
-                placeholder="Add any important observation, fuel refill note, minor defect, or site remark..."
-                className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-medium text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
-              />
-            </div>
+            {isBreakdown && (
+              <div className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/40 space-y-2 animate-in fade-in duration-150">
+                <label className="block text-xs font-bold text-[var(--color-ink)]">
+                  Remarks (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={remarks}
+                  onChange={(e) => setRemarks(e.target.value)}
+                  placeholder="Add any important observation, fuel refill note, minor defect, or site remark..."
+                  className="w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-medium text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                />
+              </div>
+            )}
 
             {/* ============================================ */}
             {/* SUBMISSION FOOTER ACTIONS & DRAFT STATUS    */}
@@ -1640,7 +1630,7 @@ export function OperatorDashboard({
               <div className="flex items-center gap-2 text-[11px] sm:text-xs text-[var(--color-mute)]">
                 {lastSavedTime ? (
                   <span className="flex items-center gap-1.5 font-medium">
-                    <Check className="h-3.5 w-3.5 text-emerald-500" /> Draft saved at {lastSavedTime}
+                    Draft saved at {lastSavedTime}
                   </span>
                 ) : (
                   <span className="font-medium">Form automatically saves draft locally</span>
@@ -1692,22 +1682,12 @@ export function OperatorDashboard({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={handleExportExcelClick}
-                className="px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
-                title="Export filtered machine logs to Excel (.xlsx)"
-              >
-                <Download className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                <span className="hidden sm:inline">Export Excel</span>
-              </button>
-
-              <button
-                type="button"
                 onClick={handleExportPdfClick}
                 className="px-3 py-2 rounded-xl border border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300 hover:bg-sky-500/20 text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
-                title="Print or Save PDF report with Company and Operator details"
+                title="Export or Print machine logs to PDF or Excel (.xlsx)"
               >
                 <Printer className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
-                <span className="hidden sm:inline">PDF / Print</span>
+                <span className="hidden sm:inline">Export / Print</span>
               </button>
             </div>
           </div>
@@ -1849,10 +1829,10 @@ export function OperatorDashboard({
                           </div>
                         </div>
                         {isBkd ? (
-                          <div className="px-2 py-0.5 rounded-lg text-[10px] font-extrabold bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 flex flex-col items-end shrink-0">
+                          <div className="text-[10px] font-extrabold text-rose-600 dark:text-rose-400 flex flex-col items-end shrink-0">
                             {bkdStartTime && bkdEndTime ? (
                               <>
-                                <span className="font-mono">{bkdStartTime} - {bkdEndTime}</span>
+                                <span className="font-mono">{formatCompactTiming(bkdStartTime, bkdEndTime)}</span>
                                 <span className="font-mono text-[9px] opacity-90">({bkdDurationOnly || "Breakdown"})</span>
                               </>
                             ) : (
@@ -1892,14 +1872,14 @@ export function OperatorDashboard({
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="text-[var(--color-mute)] font-medium">Shift Timings:</span>
                           <span className="font-mono font-bold text-[var(--color-ink)]">
-                            {formatShiftTimingRange(log.start_time, log.end_time)}
+                            {formatCompactTiming(log.start_time, log.end_time)}
                           </span>
                         </div>
 
                         <div className="flex items-center justify-between text-[11px]">
-                          <span className="text-[var(--color-mute)] font-medium">Working Time (excl. OT):</span>
+                          <span className="text-[var(--color-mute)] font-medium">Working Time:</span>
                           <span className="font-mono font-bold text-sky-600 dark:text-sky-400">
-                            {normalHrs} hrs (1h break)
+                            {normalHrs} hrs working
                           </span>
                         </div>
 
@@ -1966,16 +1946,16 @@ export function OperatorDashboard({
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="border-b border-[var(--color-hairline)] text-[var(--color-mute)] font-mono text-[10px] font-extrabold tracking-wider uppercase bg-[var(--color-canvas)]/40">
-                      <th className="p-3.5 rounded-l-lg whitespace-nowrap">Shift Date</th>
-                      <th className="p-3.5 whitespace-nowrap font-mono">Entry Timestamp</th>
-                      <th className="p-3.5 whitespace-nowrap font-mono">Serial</th>
-                      <th className="p-3.5 whitespace-nowrap font-mono">Model</th>
-                      <th className="p-3.5 whitespace-nowrap font-mono">Hour Meter (hrs)</th>
-                      <th className="p-3.5 whitespace-nowrap font-mono">Timings / Working Time</th>
-                      <th className="p-3.5 whitespace-nowrap font-mono">Overtime</th>
-                      <th className="p-3.5 whitespace-nowrap font-mono">Breakdown</th>
-                      <th className="p-3.5">Remarks</th>
-                      <th className="p-3.5 text-right rounded-r-lg">Action</th>
+                      <th className="p-3.5 text-center rounded-l-lg whitespace-nowrap">Shift Date</th>
+                      <th className="p-3.5 text-center whitespace-nowrap font-mono">Entry Timestamp</th>
+                      <th className="p-3.5 text-center whitespace-nowrap font-mono">Serial</th>
+                      <th className="p-3.5 text-center whitespace-nowrap font-mono">Model</th>
+                      <th className="p-3.5 text-center whitespace-nowrap font-mono">Hour Meter (hrs)</th>
+                      <th className="p-3.5 text-center whitespace-nowrap font-mono">Timings / Working Time</th>
+                      <th className="p-3.5 text-center whitespace-nowrap font-mono">Overtime</th>
+                      <th className="p-3.5 text-center whitespace-nowrap font-mono">Breakdown</th>
+                      <th className="p-3.5 text-center">Remarks</th>
+                      <th className="p-3.5 text-center rounded-r-lg">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--color-hairline)]">
@@ -2008,30 +1988,30 @@ export function OperatorDashboard({
 
                       return (
                         <tr key={log.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors">
-                          <td className="p-3.5 font-semibold text-[var(--color-ink)] whitespace-nowrap font-mono text-[11px]">
+                          <td className="p-3.5 font-semibold text-[var(--color-ink)] whitespace-nowrap font-mono text-[11px] text-center">
                             {formatDate(log.log_date)}
                           </td>
-                          <td className="p-3.5 whitespace-nowrap font-mono">
+                          <td className="p-3.5 whitespace-nowrap font-mono text-center">
                             {splitTs ? (
-                              <div className="flex flex-col">
+                              <div className="flex flex-col items-center">
                                 <span className="font-bold text-[var(--color-ink)] text-[11px]">{splitTs.time}</span>
                                 <span className="text-[10px] text-[var(--color-mute)] font-medium">{splitTs.date}</span>
                               </div>
                             ) : log.created_at ? (
-                              <div className="flex flex-col">
+                              <div className="flex flex-col items-center">
                                 <span className="font-bold text-[var(--color-ink)] text-[11px]">{formatExactTimestamp(log.created_at, true)}</span>
                               </div>
                             ) : (
                               <span className="text-[var(--color-mute)] italic text-[10px]">—</span>
                             )}
                           </td>
-                          <td className="p-3.5 font-mono font-bold text-sky-600 dark:text-sky-400 whitespace-nowrap text-[11px]">
+                          <td className="p-3.5 font-mono font-bold text-sky-600 dark:text-sky-400 whitespace-nowrap text-[11px] text-center">
                             {mSerial}
                           </td>
-                          <td className="p-3.5 text-[var(--color-ink)] font-medium whitespace-nowrap text-xs">
+                          <td className="p-3.5 text-[var(--color-ink)] font-medium whitespace-nowrap text-xs text-center">
                             {mModel}
                           </td>
-                          <td className="p-3.5 font-mono whitespace-nowrap">
+                          <td className="p-3.5 font-mono whitespace-nowrap text-center">
                             <div className="font-bold text-[var(--color-ink)] text-[11px]">
                               {log.start_meter ?? 0} → {log.end_meter ?? 0}
                             </div>
@@ -2039,25 +2019,24 @@ export function OperatorDashboard({
                               (+{log.running_hours ?? Math.max(0, (log.end_meter ?? 0) - (log.start_meter ?? 0))}h)
                             </div>
                           </td>
-                          <td className="p-3.5 whitespace-nowrap">
+                          <td className="p-3.5 whitespace-nowrap text-center">
                             <div className="font-medium text-[var(--color-ink)] font-mono text-[11px]">
-                              {formatShiftTimingRange(log.start_time, log.end_time)}
+                              {formatCompactTiming(log.start_time, log.end_time)}
                             </div>
-                            <div className="text-[10px] font-bold text-sky-600 dark:text-sky-400 font-mono flex items-center gap-1 mt-0.5">
+                            <div className="text-[10px] font-bold text-sky-600 dark:text-sky-400 font-mono flex items-center justify-center gap-1 mt-0.5">
                               <span>{normalHrs} hrs working</span>
-                              <span className="text-[var(--color-mute)] font-normal text-[9.5px]">(excl. OT)</span>
                             </div>
                           </td>
-                          <td className="p-3.5 font-bold text-amber-600 dark:text-amber-400 whitespace-nowrap font-mono text-xs">
+                          <td className="p-3.5 font-bold text-amber-600 dark:text-amber-400 whitespace-nowrap font-mono text-xs text-center">
                             {log.overtime_hours ? `${log.overtime_hours} hrs` : "0 hrs"}
                           </td>
-                          <td className="p-3.5 whitespace-nowrap">
+                          <td className="p-3.5 whitespace-nowrap text-center">
                             {isBkd ? (
-                              <div className="inline-flex flex-col px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400">
+                              <div className="inline-flex flex-col items-center text-rose-600 dark:text-rose-400">
                                 {bkdStartTime && bkdEndTime ? (
                                   <>
                                     <span className="font-mono text-[11px] font-bold leading-tight">
-                                      {bkdStartTime} - {bkdEndTime}
+                                      {formatCompactTiming(bkdStartTime, bkdEndTime)}
                                     </span>
                                     <span className="font-mono text-[10px] font-semibold opacity-90 text-center">
                                       ({bkdDurationOnly || "Breakdown"})
@@ -2070,26 +2049,26 @@ export function OperatorDashboard({
                                 )}
                               </div>
                             ) : (
-                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[var(--color-canvas)] text-[var(--color-ink)] border border-[var(--color-hairline)] inline-flex items-center gap-1 font-mono">
+                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-[var(--color-canvas)] text-[var(--color-ink)] border border-[var(--color-hairline)] inline-flex items-center justify-center gap-1 font-mono">
                                 0
                               </span>
                             )}
                           </td>
-                          <td className="p-3.5 max-w-xs truncate text-[var(--color-mute)]" title={displayRemarks}>
+                          <td className="p-3.5 max-w-xs truncate text-[var(--color-mute)] text-center" title={displayRemarks}>
                             {displayRemarks}
                           </td>
-                          <td className="p-3.5 text-right whitespace-nowrap">
+                          <td className="p-3.5 text-center whitespace-nowrap">
                             {canEdit ? (
                               <button
                                 type="button"
                                 onClick={() => handleOpenEditLog(log)}
-                                className="px-2.5 py-1 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ml-auto shadow-2xs"
+                                className="px-2.5 py-1 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 text-xs font-bold transition-all inline-flex items-center gap-1 cursor-pointer mx-auto shadow-2xs"
                                 title={isToday ? "Edit today's saved log entry" : "Edit log entry (within 7-day window)"}
                               >
                                 <Edit className="h-3 w-3" /> Edit
                               </button>
                             ) : (
-                              <span className="text-[10px] text-[var(--color-mute)] font-bold flex items-center justify-end gap-1" title="Log entry locked (older than 7 days)">
+                              <span className="text-[10px] text-[var(--color-mute)] font-bold inline-flex items-center justify-center gap-1" title="Log entry locked (older than 7 days)">
                                 <Lock className="h-3 w-3" /> Locked
                               </span>
                             )}
@@ -2308,10 +2287,10 @@ export function OperatorDashboard({
           )}
 
           {/* 4. REMARKS (IF ANY) */}
-          {remarks.trim() && (
+          {isBreakdown && remarks.trim() && (
             <div className="bg-[var(--color-canvas)] p-2.5 rounded-xl border border-[var(--color-hairline)]">
               <span className="text-[10px] text-[var(--color-mute)] font-mono font-bold uppercase tracking-wider block mb-1">
-                Remarks / Operational Notes
+                Remarks
               </span>
               <p className="text-[var(--color-ink)] font-medium italic bg-[var(--color-canvas-elevated)] p-2 rounded-lg border border-[var(--color-hairline)] leading-relaxed">
                 "{remarks}"
@@ -2400,11 +2379,7 @@ export function OperatorDashboard({
                 </div>
 
                 <CustomDatePicker
-                  label={
-                    <span>
-                      Log Date <span className="text-rose-500 font-bold ml-0.5">*</span>
-                    </span>
-                  }
+                  label="Log Date"
                   required
                   value={editLogDate}
                   onChange={(val) => setEditLogDate(val)}
@@ -2456,7 +2431,7 @@ export function OperatorDashboard({
                   value={editOvertime}
                   onChange={(e) => setEditOvertime(e.target.value)}
                   placeholder="0.0"
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500"
+                  className="w-24 xs:w-28 sm:w-32 max-w-[130px] px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-center text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 min-h-[38px] sm:min-h-[42px] h-9.5 sm:h-[42px]"
                 />
               </div>
 
@@ -2465,7 +2440,10 @@ export function OperatorDashboard({
                 <div className="grid grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={() => setEditBreakdown(false)}
+                    onClick={() => {
+                      setEditBreakdown(false);
+                      setEditRemarks("");
+                    }}
                     className={`py-2 px-3 rounded-lg border text-xs font-bold transition-all cursor-pointer ${
                       !editBreakdown
                         ? "border-emerald-500 bg-emerald-500/10 text-emerald-600"
@@ -2489,18 +2467,20 @@ export function OperatorDashboard({
               </div>
 
               {editBreakdown && (
-                <div className="p-3 sm:p-3.5 rounded-xl border border-rose-500/30 bg-rose-500/5 space-y-2.5 sm:space-y-3">
-                  {/* Top Right Calculated Duration Only */}
-                  {editBreakdownStats?.isValid && (
-                    <div className="flex items-center justify-end min-w-0">
-                      <span className="text-[11px] sm:text-xs font-mono font-bold text-rose-600 dark:text-rose-400">
-                        {editBreakdownStats.durationFormatted}
+                <div className="pt-2.5 sm:pt-3 border-t border-rose-500/25 space-y-2 sm:space-y-2.5">
+                  {/* Top Left Total Breakdown Duration Badge */}
+                  <div className="flex items-center justify-start">
+                    <div className="flex items-center gap-1.5 text-[11px] sm:text-xs font-mono font-bold text-rose-600 dark:text-rose-400 bg-rose-500/10 px-2.5 py-1 rounded-lg border border-rose-500/25 shadow-2xs">
+                      <Clock size={12} className="shrink-0 text-rose-500" />
+                      <span>
+                        Total: {editBreakdownStats?.isValid ? (editBreakdownStats.hours > 0 ? `${editBreakdownStats.durationFormatted} (${editBreakdownStats.totalMinutes} min)` : editBreakdownStats.durationFormatted) : "0 min"}
                       </span>
                     </div>
-                  )}
+                  </div>
 
-                  <div className="grid grid-cols-2 gap-2 sm:gap-3.5 items-start">
-                    <div className="min-w-0">
+                  {/* Breakdown Timing Grid (Matching Shift Timing 4-Column Layout) */}
+                  <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-3.5 items-start">
+                    <div className="col-span-1 min-w-0">
                       <CustomTimePicker
                         label="Start Time"
                         required
@@ -2509,7 +2489,7 @@ export function OperatorDashboard({
                         iconColor="text-amber-500"
                       />
                     </div>
-                    <div className="min-w-0">
+                    <div className="col-span-1 min-w-0">
                       <CustomTimePicker
                         label="End Time"
                         required
@@ -2530,15 +2510,17 @@ export function OperatorDashboard({
                 </div>
               )}
 
-              <div>
-                <label className="block font-bold text-[var(--color-ink)] mb-1">Remarks</label>
-                <textarea
-                  rows={2}
-                  value={editRemarks}
-                  onChange={(e) => setEditRemarks(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-medium text-[var(--color-ink)]"
-                />
-              </div>
+              {editBreakdown && (
+                <div>
+                  <label className="block font-bold text-[var(--color-ink)] mb-1">Remarks (Optional)</label>
+                  <textarea
+                    rows={2}
+                    value={editRemarks}
+                    onChange={(e) => setEditRemarks(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-medium text-[var(--color-ink)]"
+                  />
+                </div>
+              )}
             </form>
 
             {/* Sticky Action Footer */}
@@ -2572,7 +2554,7 @@ export function OperatorDashboard({
       <PrintableOperatorLogsModal
         open={showPrintModal}
         onClose={() => setShowPrintModal(false)}
-        logs={filteredLogs}
+        logs={recentLogs}
         user={user}
         assignedMachine={assignedMachine}
       />

@@ -5,13 +5,15 @@ import { createPortal } from "react-dom";
 import { Modal } from "@/components/ui";
 import type { User, Machine } from "@/lib/types/database";
 import type { OperatorHourLog } from "./OperatorDashboard";
-import { formatDate, formatExactTimestamp, splitExactTimestamp, formatTo12Hour, parseBreakdownString } from "@reachinternational/utils";
+import { formatDate, formatExactTimestamp, splitExactTimestamp, formatTo12Hour, parseBreakdownString, getISTDateString } from "@reachinternational/utils";
 import {
   exportOperatorLogsToExcel,
   MONTH_NAMES,
   getLogMonthNumber,
+  getCurrentMonthNumber,
   buildExportFileName,
 } from "@/lib/utils/operator-logs-export";
+import { CustomDatePicker } from "@/components/ui/CustomDatePicker";
 import { Printer, FileSpreadsheet, Calendar } from "lucide-react";
 
 interface PrintableOperatorLogsModalProps {
@@ -54,6 +56,8 @@ interface ReportContentProps {
   user: User;
   assignedMachine?: Machine | null;
   selectedMonth: string;
+  customStartDate?: string;
+  customEndDate?: string;
   totalOpHours: number;
   totalOtHours: number;
   totalBreakdowns: number;
@@ -64,6 +68,8 @@ function OperatorLogsReportContent({
   user,
   assignedMachine,
   selectedMonth,
+  customStartDate,
+  customEndDate,
   totalOpHours,
   totalOtHours,
   totalBreakdowns,
@@ -72,10 +78,20 @@ function OperatorLogsReportContent({
   const operatorEmail = user.email || "—";
   const operatorPhone = user.phone || "—";
 
-  let monthLabel = "All Months";
-  if (selectedMonth !== "all") {
+  let periodLabel = "All Months";
+  if (selectedMonth === "custom") {
+    if (customStartDate && customEndDate) {
+      periodLabel = `${formatDate(customStartDate)} to ${formatDate(customEndDate)}`;
+    } else if (customStartDate) {
+      periodLabel = `From ${formatDate(customStartDate)}`;
+    } else if (customEndDate) {
+      periodLabel = `Up to ${formatDate(customEndDate)}`;
+    } else {
+      periodLabel = "Custom Range";
+    }
+  } else if (selectedMonth !== "all") {
     const mObj = MONTH_NAMES.find((m) => m.value === selectedMonth);
-    if (mObj) monthLabel = mObj.label;
+    if (mObj) periodLabel = mObj.label;
   }
 
   return (
@@ -109,9 +125,11 @@ function OperatorLogsReportContent({
         <div className="flex flex-wrap items-center justify-center sm:justify-between gap-x-4 sm:gap-x-5 gap-y-1 text-[9.5px] sm:text-[10px] text-neutral-800 font-medium leading-tight pt-1 border-t border-neutral-200">
           <div><strong>Operator:</strong> {operatorName}</div>
           <div><strong>Number:</strong> {operatorPhone}</div>
-          {selectedMonth !== "all" && (
-            <div><strong>Month:</strong> {monthLabel}</div>
-          )}
+          {selectedMonth === "custom" ? (
+            <div><strong>Date Range:</strong> {periodLabel}</div>
+          ) : selectedMonth !== "all" ? (
+            <div><strong>Month:</strong> {periodLabel}</div>
+          ) : null}
           {assignedMachine && (
             <div><strong>Machine:</strong> {assignedMachine.machine_name} ({assignedMachine.machine_code})</div>
           )}
@@ -222,7 +240,7 @@ function OperatorLogsReportContent({
                       {isBkd ? (
                         bkdStartTime && bkdEndTime ? (
                           <div className="text-rose-700 font-mono text-center">
-                            <div className="font-extrabold text-[8px] leading-tight">{bkdStartTime} - {bkdEndTime}</div>
+                            <div className="font-extrabold text-[8px] leading-tight">{formatCompactTiming(bkdStartTime, bkdEndTime)}</div>
                             <div className="text-[7px] font-bold text-rose-700/90">({bkdDurationOnly || "Breakdown"})</div>
                           </div>
                         ) : (
@@ -245,7 +263,7 @@ function OperatorLogsReportContent({
             ) : (
               <tr className="bg-white">
                 <td colSpan={10} className="p-2 border border-neutral-300 text-center text-neutral-500 font-medium">
-                  No daily machine log entries recorded for the selected month.
+                  No daily machine log entries recorded for the selected {selectedMonth === "custom" ? "date range" : "month"}.
                 </td>
               </tr>
             )}
@@ -330,17 +348,39 @@ export function PrintableOperatorLogsModal({
   assignedMachine,
 }: PrintableOperatorLogsModalProps) {
   const [mounted, setMounted] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState<string>("all");
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => getCurrentMonthNumber());
+  const [customStartDate, setCustomStartDate] = useState<string>(() => {
+    try {
+      const today = getISTDateString();
+      return today.slice(0, 7) + "-01";
+    } catch (e) {
+      return "";
+    }
+  });
+  const [customEndDate, setCustomEndDate] = useState<string>(() => {
+    try {
+      return getISTDateString();
+    } catch (e) {
+      return "";
+    }
+  });
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Filter logs month-wise
-  const filteredLogs =
-    selectedMonth === "all"
-      ? logs
-      : logs.filter((log) => getLogMonthNumber(log.log_date) === selectedMonth);
+  // Filter logs month-wise or by custom date range
+  const filteredLogs = logs.filter((log) => {
+    if (selectedMonth === "custom") {
+      if (!customStartDate && !customEndDate) return true;
+      const logDate = log.log_date?.split("T")[0] || "";
+      if (customStartDate && logDate < customStartDate) return false;
+      if (customEndDate && logDate > customEndDate) return false;
+      return true;
+    }
+    if (selectedMonth === "all") return true;
+    return getLogMonthNumber(log.log_date) === selectedMonth;
+  });
 
   // Aggregate KPI Metrics for filtered logs
   let totalOpHours = 0;
@@ -357,7 +397,13 @@ export function PrintableOperatorLogsModal({
   });
 
   const handlePrint = () => {
-    const pdfFileName = buildExportFileName(user.full_name || "Operator", selectedMonth, "pdf");
+    const pdfFileName = buildExportFileName(
+      user.full_name || "Operator",
+      selectedMonth,
+      "pdf",
+      customStartDate,
+      customEndDate
+    );
     const originalTitle = document.title;
     document.title = pdfFileName.replace(/\.pdf$/, "");
     window.print();
@@ -367,7 +413,14 @@ export function PrintableOperatorLogsModal({
   };
 
   const handleExportExcel = () => {
-    exportOperatorLogsToExcel(logs, user, assignedMachine, selectedMonth);
+    exportOperatorLogsToExcel(
+      logs,
+      user,
+      assignedMachine,
+      selectedMonth,
+      customStartDate,
+      customEndDate
+    );
   };
 
   const reportProps: ReportContentProps = {
@@ -375,6 +428,8 @@ export function PrintableOperatorLogsModal({
     user,
     assignedMachine,
     selectedMonth,
+    customStartDate,
+    customEndDate,
     totalOpHours,
     totalOtHours,
     totalBreakdowns,
@@ -470,7 +525,7 @@ export function PrintableOperatorLogsModal({
         title={
           <div className="flex items-center justify-between w-full pr-6">
             <span className="text-base font-extrabold text-[var(--color-ink)]">
-              Daily Machine Logs PDF Report
+              Daily Machine Logs Report
             </span>
           </div>
         }
@@ -501,27 +556,65 @@ export function PrintableOperatorLogsModal({
       >
         <div className="space-y-4 max-w-full">
           {/* Month Selector Strip */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-2.5 sm:p-4 max-w-[210mm] mx-auto w-full rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] no-print">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--color-ink)] shrink-0">
-              <Calendar className="h-4 w-4 text-sky-500" />
-              <span>Select Export Month:</span>
+          <div className="flex flex-col gap-2.5 p-2.5 sm:p-4 max-w-[210mm] mx-auto w-full rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] no-print">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--color-ink)] shrink-0">
+                <Calendar className="h-4 w-4 text-sky-500" />
+                <span>Select Export Period:</span>
+              </div>
+              <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar flex-nowrap w-full sm:w-auto p-1 bg-[var(--color-canvas-elevated)] rounded-lg border border-[var(--color-hairline)]">
+                {MONTH_NAMES.map((m) => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => setSelectedMonth(m.value)}
+                    className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      selectedMonth === m.value
+                        ? "bg-sky-600 text-white shadow-2xs"
+                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
+                    }`}
+                  >
+                    {m.short}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar flex-nowrap w-full sm:w-auto p-1 bg-[var(--color-canvas-elevated)] rounded-lg border border-[var(--color-hairline)]">
-              {MONTH_NAMES.map((m) => (
-                <button
-                  key={m.value}
-                  type="button"
-                  onClick={() => setSelectedMonth(m.value)}
-                  className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
-                    selectedMonth === m.value
-                      ? "bg-sky-600 text-white shadow-2xs"
-                      : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-                  }`}
-                >
-                  {m.short}
-                </button>
-              ))}
-            </div>
+
+            {/* Collapsible Custom Date Range Picker */}
+            {selectedMonth === "custom" && (
+              <div className="pt-2.5 border-t border-[var(--color-hairline)] grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-[var(--color-ink)] mb-1">
+                    Start Date
+                  </label>
+                  <CustomDatePicker
+                    value={customStartDate}
+                    onChange={(val) => setCustomStartDate(val)}
+                    allowAnyPast
+                    allowAnyFuture
+                    showWindowBadge={false}
+                    showRelativeBadge={false}
+                    placeholder="Select start date"
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[var(--color-ink)] mb-1">
+                    End Date
+                  </label>
+                  <CustomDatePicker
+                    value={customEndDate}
+                    onChange={(val) => setCustomEndDate(val)}
+                    allowAnyPast
+                    allowAnyFuture
+                    showWindowBadge={false}
+                    showRelativeBadge={false}
+                    placeholder="Select end date"
+                    className="w-full"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div id="printable-operator-logs-document-preview" className="max-w-full overflow-x-auto custom-scrollbar">

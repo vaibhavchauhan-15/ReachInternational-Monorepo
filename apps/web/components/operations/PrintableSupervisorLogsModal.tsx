@@ -4,15 +4,17 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Modal } from "@/components/ui";
 import type { User, MachineHourLog } from "@/lib/types/database";
-import { formatDate, formatTo12Hour } from "@reachinternational/utils";
+import { formatDate, formatTo12Hour, getISTDateString } from "@reachinternational/utils";
 import {
   MONTH_NAMES,
   getLogMonthNumber,
+  getCurrentMonthNumber,
   formatExportDateTimeSlug,
   buildExportFileName,
   buildMachineExportFileName,
 } from "@/lib/utils/operator-logs-export";
 import { exportSupervisorRunningLogsToExcel } from "@/lib/utils/supervisor-logs-export";
+import { CustomDatePicker } from "@/components/ui/CustomDatePicker";
 import { Printer, FileSpreadsheet, Calendar } from "lucide-react";
 
 interface PrintableSupervisorLogsModalProps {
@@ -26,6 +28,8 @@ interface PrintableSupervisorLogsModalProps {
   selectedSite?: string;
   selectedClientMachineId?: string;
   machines?: any[];
+  customStartDate?: string;
+  customEndDate?: string;
 }
 
 interface SupervisorReportContentProps {
@@ -34,6 +38,8 @@ interface SupervisorReportContentProps {
   viewMode: "all" | "machine" | "client" | "operator";
   selectedEntityId: string;
   selectedMonth: string;
+  customStartDate?: string;
+  customEndDate?: string;
   totalRunningHours: number;
   totalOtHours: number;
   totalBreakdowns: number;
@@ -55,6 +61,8 @@ function SupervisorLogsReportContent({
   viewMode,
   selectedEntityId,
   selectedMonth,
+  customStartDate,
+  customEndDate,
   totalRunningHours,
   totalOtHours,
   totalBreakdowns,
@@ -66,10 +74,20 @@ function SupervisorLogsReportContent({
   const supervisorPhone = user.phone || "—";
   const { displayDateTime } = formatExportDateTimeSlug();
 
-  let monthLabel = "All Months";
-  if (selectedMonth !== "all") {
+  let periodLabel = "All Months";
+  if (selectedMonth === "custom") {
+    if (customStartDate && customEndDate) {
+      periodLabel = `${formatDate(customStartDate)} to ${formatDate(customEndDate)}`;
+    } else if (customStartDate) {
+      periodLabel = `From ${formatDate(customStartDate)}`;
+    } else if (customEndDate) {
+      periodLabel = `Up to ${formatDate(customEndDate)}`;
+    } else {
+      periodLabel = "Custom Range";
+    }
+  } else if (selectedMonth !== "all") {
     const mObj = MONTH_NAMES.find((m) => m.value === selectedMonth);
-    if (mObj) monthLabel = mObj.label;
+    if (mObj) periodLabel = mObj.label;
   }
 
   const firstLogOp = logs[0]?.operator as any;
@@ -178,7 +196,7 @@ function SupervisorLogsReportContent({
               <div><strong>Supervisor:</strong> {supervisorName}</div>
               <div><strong>Supervisor Number:</strong> {supervisorPhone}</div>
               {selectedMonth !== "all" && (
-                <div><strong>Month:</strong> {monthLabel}</div>
+                <div><strong>{selectedMonth === "custom" ? "Date Range" : "Month"}:</strong> {periodLabel}</div>
               )}
               <div><strong>Export Date:</strong> {displayDateTime}</div>
             </>
@@ -193,7 +211,7 @@ function SupervisorLogsReportContent({
               {viewMode === "client" && selectedEntityId !== "all" ? (
                 <>
                   {selectedMonth !== "all" && (
-                    <div><strong>Month:</strong> {monthLabel}</div>
+                    <div><strong>{selectedMonth === "custom" ? "Date Range" : "Month"}:</strong> {periodLabel}</div>
                   )}
                   <div><strong>Export Date:</strong> {displayDateTime}</div>
                 </>
@@ -204,14 +222,14 @@ function SupervisorLogsReportContent({
                   <div><strong>Serial No.:</strong> {selectedMachineObj?.serial_number || (logs[0]?.machine as any)?.serial_number || "—"}</div>
                   <div><strong>Total Run:</strong> {Math.round(totalRunningHours * 10) / 10} hrs</div>
                   {selectedMonth !== "all" && (
-                    <div><strong>Month:</strong> {monthLabel}</div>
+                    <div><strong>{selectedMonth === "custom" ? "Date Range" : "Month"}:</strong> {periodLabel}</div>
                   )}
                   <div><strong>Export Date:</strong> {displayDateTime}</div>
                 </>
               ) : (
                 <>
                   <div><strong>Scope:</strong> {scopeLabel}</div>
-                  <div><strong>Month:</strong> {monthLabel}</div>
+                  <div><strong>{selectedMonth === "custom" ? "Date Range" : "Month"}:</strong> {periodLabel}</div>
                   <div><strong>Export Date:</strong> {displayDateTime}</div>
                 </>
               )}
@@ -538,22 +556,61 @@ export function PrintableSupervisorLogsModal({
   selectedSite = "all",
   selectedClientMachineId = "all",
   machines = [],
+  customStartDate: initialCustomStartDate,
+  customEndDate: initialCustomEndDate,
 }: PrintableSupervisorLogsModalProps) {
   const [mounted, setMounted] = useState(false);
-  const [activeMonth, setActiveMonth] = useState<string>(selectedMonthValue || "all");
+  const [activeMonth, setActiveMonth] = useState<string>(
+    () => selectedMonthValue || getCurrentMonthNumber()
+  );
+  const [customStartDate, setCustomStartDate] = useState<string>(() => {
+    if (initialCustomStartDate) return initialCustomStartDate;
+    try {
+      const today = getISTDateString();
+      return today.slice(0, 7) + "-01";
+    } catch (e) {
+      return "";
+    }
+  });
+  const [customEndDate, setCustomEndDate] = useState<string>(() => {
+    if (initialCustomEndDate) return initialCustomEndDate;
+    try {
+      return getISTDateString();
+    } catch (e) {
+      return "";
+    }
+  });
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
   useEffect(() => {
-    setActiveMonth(selectedMonthValue || "all");
+    if (selectedMonthValue) {
+      setActiveMonth(selectedMonthValue);
+    }
   }, [selectedMonthValue]);
 
-  // Apply Month & Entity Filters
-  let filteredLogs = activeMonth === "all"
-    ? logs
-    : logs.filter((log) => getLogMonthNumber(log.log_date) === activeMonth);
+  useEffect(() => {
+    if (initialCustomStartDate) setCustomStartDate(initialCustomStartDate);
+  }, [initialCustomStartDate]);
+
+  useEffect(() => {
+    if (initialCustomEndDate) setCustomEndDate(initialCustomEndDate);
+  }, [initialCustomEndDate]);
+
+  // Apply Month, Custom Date Range & Entity Filters
+  let filteredLogs = logs.filter((log) => {
+    if (activeMonth === "custom") {
+      if (!customStartDate && !customEndDate) return true;
+      const logDate = log.log_date?.split("T")[0] || "";
+      if (customStartDate && logDate < customStartDate) return false;
+      if (customEndDate && logDate > customEndDate) return false;
+      return true;
+    }
+    if (activeMonth === "all") return true;
+    return getLogMonthNumber(log.log_date) === activeMonth;
+  });
 
   if (viewMode === "machine" && selectedEntityId !== "all") {
     filteredLogs = filteredLogs.filter((log) => log.machine_id === selectedEntityId);
@@ -616,7 +673,7 @@ export function PrintableSupervisorLogsModal({
     if (viewMode === "operator") {
       const firstOpObj = filteredLogs[0]?.operator as any;
       const opName = firstOpObj?.full_name || "Operator";
-      pdfFileName = buildExportFileName(opName, activeMonth, "pdf");
+      pdfFileName = buildExportFileName(opName, activeMonth, "pdf", customStartDate, customEndDate);
     } else if (viewMode === "machine") {
       const selectedMachineObj =
         machines?.find((m) => m.id === selectedEntityId) ||
@@ -627,7 +684,7 @@ export function PrintableSupervisorLogsModal({
         (filteredLogs[0]?.machine as any)?.serial_number ||
         (filteredLogs[0]?.machine as any)?.machine_code ||
         "Machine";
-      pdfFileName = buildMachineExportFileName(mSerial, "pdf");
+      pdfFileName = buildMachineExportFileName(mSerial, "pdf", customStartDate, customEndDate);
     } else if (viewMode === "client" && selectedClientMachineId && selectedClientMachineId !== "all") {
       const clientMachine =
         machines?.find((m) => m.id === selectedClientMachineId) ||
@@ -636,14 +693,20 @@ export function PrintableSupervisorLogsModal({
         (clientMachine as any)?.serial_number ||
         (clientMachine as any)?.machine_code ||
         "Machine";
-      pdfFileName = buildMachineExportFileName(mSerial, "pdf");
+      pdfFileName = buildMachineExportFileName(mSerial, "pdf", customStartDate, customEndDate);
     } else if (viewMode === "client") {
       const { slugDateTime } = formatExportDateTimeSlug();
       const clientSlug = (selectedEntityId || "Client").split(/[^a-zA-Z0-9]+/).filter(Boolean).join("-") || "Client";
-      pdfFileName = `${clientSlug}-${slugDateTime}.pdf`;
+      const rangeSlug = activeMonth === "custom" && customStartDate && customEndDate
+        ? `-${formatDate(customStartDate).replace(/\s+/g, "")}-to-${formatDate(customEndDate).replace(/\s+/g, "")}`
+        : "";
+      pdfFileName = `${clientSlug}${rangeSlug}-${slugDateTime}.pdf`;
     } else {
       const { slugDateTime } = formatExportDateTimeSlug();
-      pdfFileName = `Supervisor-Running-Logs-${viewMode}-${slugDateTime}.pdf`;
+      const rangeSlug = activeMonth === "custom" && customStartDate && customEndDate
+        ? `-${formatDate(customStartDate).replace(/\s+/g, "")}-to-${formatDate(customEndDate).replace(/\s+/g, "")}`
+        : "";
+      pdfFileName = `Supervisor-Running-Logs-${viewMode}${rangeSlug}-${slugDateTime}.pdf`;
     }
 
     document.title = pdfFileName.replace(/\.pdf$/, "");
@@ -663,6 +726,8 @@ export function PrintableSupervisorLogsModal({
       selectedSite,
       selectedClientMachineId,
       machines,
+      customStartDate,
+      customEndDate,
     });
   };
 
@@ -672,6 +737,8 @@ export function PrintableSupervisorLogsModal({
     viewMode,
     selectedEntityId,
     selectedMonth: activeMonth,
+    customStartDate,
+    customEndDate,
     totalRunningHours,
     totalOtHours,
     totalBreakdowns,
@@ -798,27 +865,65 @@ export function PrintableSupervisorLogsModal({
       >
         <div className="space-y-4 max-w-full">
           {/* Month Selector Strip */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 p-2.5 sm:p-4 max-w-[210mm] mx-auto w-full rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] no-print">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--color-ink)] shrink-0">
-              <Calendar className="h-4 w-4 text-sky-500" />
-              <span>Select Month Filter:</span>
+          <div className="flex flex-col gap-2.5 p-2.5 sm:p-4 max-w-[210mm] mx-auto w-full rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] no-print">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--color-ink)] shrink-0">
+                <Calendar className="h-4 w-4 text-sky-500" />
+                <span>Select Period Filter:</span>
+              </div>
+              <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar flex-nowrap w-full sm:w-auto p-1 bg-[var(--color-canvas-elevated)] rounded-lg border border-[var(--color-hairline)]">
+                {MONTH_NAMES.map((m) => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => setActiveMonth(m.value)}
+                    className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      activeMonth === m.value
+                        ? "bg-sky-600 text-white shadow-2xs"
+                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
+                    }`}
+                  >
+                    {m.short}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar flex-nowrap w-full sm:w-auto p-1 bg-[var(--color-canvas-elevated)] rounded-lg border border-[var(--color-hairline)]">
-              {MONTH_NAMES.map((m) => (
-                <button
-                  key={m.value}
-                  type="button"
-                  onClick={() => setActiveMonth(m.value)}
-                  className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
-                    activeMonth === m.value
-                      ? "bg-sky-600 text-white shadow-2xs"
-                      : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-                  }`}
-                >
-                  {m.short}
-                </button>
-              ))}
-            </div>
+
+            {/* Collapsible Custom Date Range Picker */}
+            {activeMonth === "custom" && (
+              <div className="pt-2.5 border-t border-[var(--color-hairline)] grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-bold text-[var(--color-ink)] mb-1">
+                    Start Date
+                  </label>
+                  <CustomDatePicker
+                    value={customStartDate}
+                    onChange={(val) => setCustomStartDate(val)}
+                    allowAnyPast
+                    allowAnyFuture
+                    showWindowBadge={false}
+                    showRelativeBadge={false}
+                    placeholder="Select start date"
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[var(--color-ink)] mb-1">
+                    End Date
+                  </label>
+                  <CustomDatePicker
+                    value={customEndDate}
+                    onChange={(val) => setCustomEndDate(val)}
+                    allowAnyPast
+                    allowAnyFuture
+                    showWindowBadge={false}
+                    showRelativeBadge={false}
+                    placeholder="Select end date"
+                    className="w-full"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           <div id="printable-supervisor-logs-document-preview" className="max-w-full overflow-x-auto custom-scrollbar">

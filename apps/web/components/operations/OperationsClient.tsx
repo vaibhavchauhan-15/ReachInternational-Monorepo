@@ -30,7 +30,8 @@ import {
 } from "@/app/actions/assignments";
 import { PrintableSupervisorLogsModal } from "./PrintableSupervisorLogsModal";
 import { MONTH_NAMES, getLogMonthNumber, formatCompactTiming } from "@/lib/utils/operator-logs-export";
-import { formatDate, formatExactTimestamp, formatTimeAgo, formatTo12Hour, parseProfileShiftTime, parseTimeToMinutes } from "@reachinternational/utils";
+import { formatDate, formatExactTimestamp, formatTimeAgo, formatTo12Hour, parseProfileShiftTime, parseTimeToMinutes, getISTDateString } from "@reachinternational/utils";
+import { CustomDatePicker } from "@/components/ui/CustomDatePicker";
 import { Printer, Clock, ShieldAlert, Check, UserPlus, AlertCircle, Sun, Moon, Users, Filter, ChevronDown, RefreshCw, Phone, UserCheck } from "lucide-react";
 
 export interface OperationsClientProps {
@@ -170,6 +171,21 @@ export function OperationsClient({
   const [logsSelectedClientMachineId, setLogsSelectedClientMachineId] = useState<string>("all");
   const [logsSelectedOperatorId, setLogsSelectedOperatorId] = useState<string>("");
   const [logsSelectedMonth, setLogsSelectedMonth] = useState<string>(getCurrentMonthValue());
+  const [logsCustomStartDate, setLogsCustomStartDate] = useState<string>(() => {
+    try {
+      const today = getISTDateString();
+      return today.slice(0, 7) + "-01";
+    } catch (e) {
+      return "";
+    }
+  });
+  const [logsCustomEndDate, setLogsCustomEndDate] = useState<string>(() => {
+    try {
+      return getISTDateString();
+    } catch (e) {
+      return "";
+    }
+  });
   const [showSupervisorPrintModal, setShowSupervisorPrintModal] = useState(false);
 
   // Derived ordered machines list (ordered by most recent activity in logs)
@@ -391,8 +407,16 @@ export function OperationsClient({
   // Filtered running hour logs
   let filteredHourLogs = hourLogs;
 
-  // 1. Month filter
-  if (logsSelectedMonth !== "all") {
+  // 1. Month / Date Range filter
+  if (logsSelectedMonth === "custom") {
+    filteredHourLogs = filteredHourLogs.filter((log) => {
+      if (!logsCustomStartDate && !logsCustomEndDate) return true;
+      const logDate = log.log_date?.split("T")[0] || "";
+      if (logsCustomStartDate && logDate < logsCustomStartDate) return false;
+      if (logsCustomEndDate && logDate > logsCustomEndDate) return false;
+      return true;
+    });
+  } else if (logsSelectedMonth !== "all") {
     filteredHourLogs = filteredHourLogs.filter(
       (log) => getLogMonthNumber(log.log_date) === logsSelectedMonth
     );
@@ -964,7 +988,7 @@ export function OperationsClient({
                   onClick={() => setShowSupervisorPrintModal(true)}
                   className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Printer className="h-4 w-4" /> Export/Print
+                  <Printer className="h-4 w-4" /> Export / Print
                 </button>
               </div>
             </div>
@@ -1057,6 +1081,42 @@ export function OperationsClient({
                       value: m.value,
                       label: m.label,
                     }))}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Custom Date Range Pickers (Collapsible when logsSelectedMonth === 'custom') */}
+            {logsSelectedMonth === "custom" && (
+              <div className="pt-2 border-t border-[var(--color-hairline)] grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-[var(--color-ink)] mb-1">
+                    Start Date
+                  </label>
+                  <CustomDatePicker
+                    value={logsCustomStartDate}
+                    onChange={(val) => setLogsCustomStartDate(val)}
+                    allowAnyPast
+                    allowAnyFuture
+                    showWindowBadge={false}
+                    showRelativeBadge={false}
+                    placeholder="Select start date"
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-[var(--color-ink)] mb-1">
+                    End Date
+                  </label>
+                  <CustomDatePicker
+                    value={logsCustomEndDate}
+                    onChange={(val) => setLogsCustomEndDate(val)}
+                    allowAnyPast
+                    allowAnyFuture
+                    showWindowBadge={false}
+                    showRelativeBadge={false}
+                    placeholder="Select end date"
+                    className="w-full"
                   />
                 </div>
               </div>
@@ -1756,6 +1816,8 @@ export function OperationsClient({
             selectedSite={effectiveSelectedSite}
             selectedClientMachineId={effectiveSelectedClientMachineId}
             machines={machines}
+            customStartDate={logsCustomStartDate}
+            customEndDate={logsCustomEndDate}
           />
         </div>
       )}

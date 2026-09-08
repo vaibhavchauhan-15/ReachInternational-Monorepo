@@ -19,6 +19,8 @@ export interface ExportSupervisorLogsOptions {
   selectedSite?: string;
   selectedClientMachineId?: string;
   machines?: any[];
+  customStartDate?: string;
+  customEndDate?: string;
 }
 
 export function exportSupervisorRunningLogsToExcel({
@@ -30,11 +32,21 @@ export function exportSupervisorRunningLogsToExcel({
   selectedSite = "all",
   selectedClientMachineId = "all",
   machines = [],
+  customStartDate,
+  customEndDate,
 }: ExportSupervisorLogsOptions) {
-  // 1. Month-wise filtering
-  let filtered = selectedMonthValue === "all"
-    ? logs
-    : logs.filter((log) => getLogMonthNumber(log.log_date) === selectedMonthValue);
+  // 1. Month-wise or Custom Date Range filtering
+  let filtered = logs.filter((log) => {
+    if (selectedMonthValue === "custom") {
+      if (!customStartDate && !customEndDate) return true;
+      const logDate = log.log_date?.split("T")[0] || "";
+      if (customStartDate && logDate < customStartDate) return false;
+      if (customEndDate && logDate > customEndDate) return false;
+      return true;
+    }
+    if (selectedMonthValue === "all") return true;
+    return getLogMonthNumber(log.log_date) === selectedMonthValue;
+  });
 
   // 2. Entity filtering (by machine, client, or operator)
   if (viewMode === "machine" && selectedEntityId !== "all") {
@@ -78,10 +90,20 @@ export function exportSupervisorRunningLogsToExcel({
 
   const { displayDateTime, slugDateTime } = formatExportDateTimeSlug();
 
-  let monthLabel = "All Months";
-  if (selectedMonthValue !== "all") {
+  let monthLabel = "Month: All Months";
+  if (selectedMonthValue === "custom") {
+    if (customStartDate && customEndDate) {
+      monthLabel = `Date Range: ${formatDate(customStartDate)} to ${formatDate(customEndDate)}`;
+    } else if (customStartDate) {
+      monthLabel = `Date Range: From ${formatDate(customStartDate)}`;
+    } else if (customEndDate) {
+      monthLabel = `Date Range: Up to ${formatDate(customEndDate)}`;
+    } else {
+      monthLabel = "Date Range: Custom";
+    }
+  } else if (selectedMonthValue !== "all") {
     const mObj = MONTH_NAMES.find((m) => m.value === selectedMonthValue);
-    if (mObj) monthLabel = mObj.label;
+    monthLabel = `Month: ${mObj ? mObj.label : selectedMonthValue}`;
   }
 
   const firstOpObj = filtered[0]?.operator as any;

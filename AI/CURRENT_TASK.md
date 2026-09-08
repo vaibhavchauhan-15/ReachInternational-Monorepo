@@ -1,5 +1,244 @@
 # Current Task Context
 
+## Completed Task (2026-09-08) — Page Feedback: /operations?tab=history — Add "Custom" Date Range Option, Default Current Month Selection & Synchronize across Web & Mobile (`apps/web/components/dashboard/PrintableOperatorLogsModal.tsx`, `apps/web/components/operations/PrintableSupervisorLogsModal.tsx`, `apps/web/components/operations/OperationsClient.tsx`, `apps/web/components/dashboard/OperatorDashboard.tsx`, `apps/web/lib/utils/operator-logs-export.ts`, `apps/web/lib/utils/supervisor-logs-export.ts`, `apps/web/components/ui/CustomDatePicker.tsx`, `apps/mobile/app/(app)/operations.tsx`)
+
+**Goal**:
+Fulfill both feedback items on `/operations?tab=history` (Viewport: 1366×599):
+1. **Add Custom Date Range Option**: Allow users to select any start and end date range; dynamically update report preview, Excel export (`.xlsx`), and PDF print layout (`window.print()`).
+2. **Default to Current Month**: By default, select the current month pinned to IST (`getCurrentMonthNumber()`) across web modals and mobile feeds rather than displaying all historical records.
+3. **Omni-Channel Synchronization**: Synchronize these changes across all export/PDF/print touchpoints on web and mobile.
+4. **Responsive Optimization**: Ensure layouts are optimized for both mobile (touch-friendly, min 44px targets) and desktop (compact 2-col side-by-side pickers to preserve vertical preview space in short viewports like 1366×599).
+
+1. **Reusable Date Picker & Export Utilities (`apps/web/components/ui/CustomDatePicker.tsx`, `apps/web/lib/utils/operator-logs-export.ts`, `apps/web/lib/utils/supervisor-logs-export.ts`)**:
+   - Added `allowAnyPast`, `allowAnyFuture`, `showWindowBadge`, and `showRelativeBadge` props to `CustomDatePicker` to enable arbitrary historical date selection without triggering shift lockdown messages.
+   - Added `getCurrentMonthNumber()` pinned to IST date string.
+   - Added `{ value: "custom", label: "Custom Range", short: "Custom" }` to `MONTH_NAMES`.
+   - Updated `exportOperatorLogsToExcel`, `exportSupervisorRunningLogsToExcel`, `buildExportFileName`, and `buildMachineExportFileName` with `customStartDate` and `customEndDate` support, dynamic headers (`Date Range: DD-MM-YYYY to DD-MM-YYYY`), and slugified filenames.
+
+2. **Operator Logs Modal & Dashboard (`apps/web/components/dashboard/PrintableOperatorLogsModal.tsx`, `apps/web/components/dashboard/OperatorDashboard.tsx`)**:
+   - Initialized `selectedMonth` to `getCurrentMonthNumber()`.
+   - Added `customStartDate` and `customEndDate` states (1st of month and today IST).
+   - Rendered collapsible 2-column responsive `<CustomDatePicker>` inputs when `selectedMonth === "custom"`.
+   - Cascaded range filters through preview table, KPI summary strip, `handlePrint`, and `handleExportExcel`.
+   - Updated `OperatorDashboard.tsx` to pass `logs={recentLogs}` to `PrintableOperatorLogsModal`.
+
+3. **Supervisor Logs Modal & Operations Hub (`apps/web/components/operations/PrintableSupervisorLogsModal.tsx`, `apps/web/components/operations/OperationsClient.tsx`)**:
+   - Initialized `activeMonth` to `selectedMonthValue || getCurrentMonthNumber()`.
+   - Added custom date range pickers in both modal and toolbar, and passed ranges to PDF print and Excel export.
+
+4. **Cross-Platform Mobile App Synchronization (`apps/mobile/app/(app)/operations.tsx`)**:
+   - Defaulted `statusFilter` to `'month'` (This Month).
+   - Added `'This Month'` filter pill to the horizontal filter strip.
+   - Filtered logs feed by current month when active.
+
+5. **Automated Verification & Quality Gates**:
+   - Monorepo-wide typecheck (`pnpm -r exec tsc --noEmit`): **0 errors across all workspace packages**.
+   - Comprehensive operator QA matrix (`test_operator_complete_matrix.mjs`): **75 passed, 0 failed (100%)**.
+
+---
+
+## Previous Completed Task (2026-09-08) — Page Feedback: /operations?tab=history — Remove Breakdown Outer Red Background, Compact Timing Format, Remove "(excl. OT)" & Center Table Column Titles across Web & Mobile (`apps/web/components/dashboard/OperatorDashboard.tsx`, `apps/web/components/dashboard/PrintableOperatorLogsModal.tsx`, `apps/mobile/app/(app)/operations.tsx`)
+
+**Goal**:
+Fulfill all 5 page feedback items on `/operations?tab=history` (Viewport: 1366×599):
+1. `<OperationsClient> <OperatorDashboard> inline flex`: Remove outer red background (`bg-rose-500/10 border border-rose-500/20`), keep only red text (`text-rose-600 dark:text-rose-400`).
+2. `<OperationsClient> <OperatorDashboard> "12:30 PM - 03:00 PM"`: Reduce timing space to compact format like `12:30PM-03:00PM`.
+3. `<OperationsClient> <OperatorDashboard> font medium`: Reduce shift timing space to compact format like `12:30PM-03:00PM`.
+4. `<OperationsClient> <OperatorDashboard> "(excl. OT)"`: Remove `(excl. OT)` from shift timings / working time display.
+5. `<OperationsClient> <OperatorDashboard> th`: All column titles should be centered in the middle (`text-center`).
+6. Mandatory Web-to-Mobile change synchronization (`apps/mobile/app/(app)/operations.tsx`): Update mobile breakdown badge (remove red background, use compact timing) and mobile shift timing format.
+
+1. **Desktop & Mobile History Table in Operator Dashboard (`apps/web/components/dashboard/OperatorDashboard.tsx`)**:
+   - **Column Titles Centered**: Added `text-center` across all 10 table headers (`th` elements: Shift Date, Entry Timestamp, Serial, Model, Hour Meter, Timings / Working Time, Overtime, Breakdown, Remarks, Action). Centered all body cells (`td`) with `text-center`, `items-center`, `justify-center`, and `mx-auto` for action buttons.
+   - **Breakdown Red Background Removed**: Stripped `px-2.5 py-1 rounded-lg bg-rose-500/10 border border-rose-500/20`, retaining pure red text (`text-rose-600 dark:text-rose-400`). Synchronized on mobile card view.
+   - **Compact Timing Format (`12:30PM-03:00PM`)**: Applied `formatCompactTiming` across both breakdown timings and shift timings in desktop table and mobile card views, eliminating internal whitespace.
+   - **"(excl. OT)" Removed**: Removed `(excl. OT)` from Timings / Working Time in desktop table and mobile card views.
+   - **Unused Import Cleaned**: Pruned `formatShiftTimingRange` import in favor of `formatCompactTiming`.
+
+2. **Print / Export Modal Synchronization (`apps/web/components/dashboard/PrintableOperatorLogsModal.tsx`)**:
+   - Updated breakdown range display from `{bkdStartTime} - {bkdEndTime}` to `{formatCompactTiming(bkdStartTime, bkdEndTime)}`.
+
+3. **Cross-Platform Mobile App Synchronization (`apps/mobile/app/(app)/operations.tsx`)**:
+   - Removed outer red background and border from mobile breakdown badge (`backgroundColor: 'transparent', borderWidth: 0, paddingHorizontal: 0, paddingVertical: 0`).
+   - Formatted breakdown timing with `formatCompactTiming(bkdStart, bkdEnd)`.
+   - Formatted shift timings with `formatCompactTiming(log.start_time, log.end_time)`.
+
+4. **Automated Verification & Quality Gates**:
+   - Monorepo-wide typecheck (`pnpm -r exec tsc --noEmit`): **0 errors across all workspace packages**.
+   - Shift timing test suite (`test_shift_timing_and_lunch_inclusion.mjs`): **31 passed, 0 failed (100%)**.
+   - Comprehensive operator QA matrix (`test_operator_complete_matrix.mjs`): **75 passed, 0 failed (100%)**.
+
+---
+
+## Previous Completed Task (2026-09-08) — Page Feedback: /operations?tab=history — Change Button Name to "Export / Print" & Standalone "Export Excel" Removal Confirmation (`apps/web/components/dashboard/OperatorDashboard.tsx`, `apps/web/components/operations/OperationsClient.tsx`, `apps/web/components/dashboard/PrintableOperatorLogsModal.tsx`)
+
+**Goal**:
+Fulfill user feedback on `/operations?tab=history` (Viewport: 1366×599):
+1. Rename button `<OperationsClient> <OperatorDashboard> "PDF / Print"` to `"Export / Print"`.
+2. Confirm removal of the redundant standalone `<button> "Export Excel"` from the history section toolbar, as the Excel download (`Export Excel (.xlsx)`) is already accessible directly within the "Export / Print" modal (`PrintableOperatorLogsModal`).
+3. Standardize button text and spacing across both `<OperatorDashboard>` (`Export / Print`) and `<OperationsClient>` (`Export / Print`).
+4. Update modal title in `PrintableOperatorLogsModal.tsx` from "Daily Machine Logs PDF Report" to "Daily Machine Logs Report" to reflect both PDF and Excel export modalities.
+
+1. **Web Dashboard History Toolbar (`apps/web/components/dashboard/OperatorDashboard.tsx`)**:
+   - Renamed `<button>` text to `<span className="hidden sm:inline">Export / Print</span>`.
+   - Updated button tooltip title: `title="Export or Print machine logs to PDF or Excel (.xlsx)"`.
+   - Verified that standalone "Export Excel" button is completely absent from the history toolbar, eliminating duplication with the modal.
+
+2. **Operations Hub & Printable Modal Alignment (`apps/web/components/operations/OperationsClient.tsx`, `PrintableOperatorLogsModal.tsx`)**:
+   - In `OperationsClient.tsx`, standardized button text to `<Printer className="h-4 w-4" /> Export / Print`.
+   - In `PrintableOperatorLogsModal.tsx`, refined modal title to `Daily Machine Logs Report`, accommodating both Excel and PDF outputs.
+
+3. **Automated Verification & Quality Gates**:
+   - Monorepo-wide typecheck (`pnpm -r exec tsc --noEmit`): **0 errors across all workspace packages**.
+   - Comprehensive operator QA matrix (`test_operator_complete_matrix.mjs`): **75 passed, 0 failed (100%)**.
+
+---
+
+## Previous Completed Task (2026-09-08) — Page Feedback: /operations?tab=entry — Remove Duplicate "Export Excel" Button, Strip Breakdown Outer Padding & Relocate Total Min Badge to Top Left (`apps/web/components/dashboard/OperatorDashboard.tsx`, `apps/mobile/components/work/MeterLogModal.tsx`)
+
+**Goal**:
+Fulfill user feedback on `/operations?tab=entry` (Viewport: 412×915):
+1. Remove the standalone "Export Excel" button from the Logs History section toolbar since Excel export is already integrated inside the print / export modal (`PrintableOperatorLogsModal`).
+2. Rename the remaining PDF / Print button to "Print / Export" with updated tooltip and prune unused `handleExportExcelClick`, `exportOperatorLogsToExcel`, and `Download` imports.
+3. Remove nested outer padding from the Section C Breakdown Details container (`p-3 sm:p-4 rounded-xl border border-rose-500/30 bg-rose-500/5` -> `pt-2.5 sm:pt-3 border-t border-rose-500/25 space-y-2 sm:space-y-2.5`), recovering 24px of horizontal space on mobile phones.
+4. Remove the bottom Duration (hrs) box from the grid (`col-span-2 > w-24`), preventing vertical pushing of the form on mobile.
+5. Place a compact, high-contrast Total duration badge at the top left above the start/end time pickers (`Total: 55min` or `Total: 1h:30min (90 min)`).
+6. Maintain 4-column responsive alignment on desktop and side-by-side row on mobile for Breakdown Start Time and Breakdown End Time.
+7. Apply identical layout enhancements to the Edit Log Modal.
+8. Maintain mandatory Web-to-Mobile change synchronization by updating `apps/mobile/components/work/MeterLogModal.tsx` (remove outer padding, remove bottom duration row, add top-left Total duration badge).
+
+1. **Web Dashboard History Toolbar & Breakdown Refactoring (`apps/web/components/dashboard/OperatorDashboard.tsx`)**:
+   - Pruned standalone "Export Excel" button from the history header and updated the remaining modal button to "Print / Export".
+   - Converted Section C Breakdown details from a nested card to a borderless top-rule strip (`pt-2.5 sm:pt-3 border-t border-rose-500/25`), removing outer padding and granting the time inputs full width.
+   - Removed the bottom Duration (hrs) box from the grid.
+   - Placed the Total duration badge at the top left above the pickers.
+   - Mirrored the exact layout in the Edit Log Modal.
+
+2. **Cross-Platform Mobile Parity (`apps/mobile/components/work/MeterLogModal.tsx`)**:
+   - In accordance with the mandatory Web-to-Mobile change synchronization rule, updated `MeterLogModal`: stripped outer container padding, removed the bottom duration row, and placed the Total duration badge at the top left above Breakdown Start/End inputs.
+
+3. **Automated Verification & Quality Gates**:
+   - Monorepo-wide typecheck (`pnpm -r exec tsc --noEmit`): **0 errors across all 7 workspace packages**.
+   - Shift timing & lunch inclusion suite (`test_shift_timing_and_lunch_inclusion.mjs`): **31 passed, 0 failed (100%)**.
+   - Comprehensive operator QA matrix (`test_operator_complete_matrix.mjs`): **75 passed, 0 failed (100%)**.
+   - Live route compilation verified: `/operations?tab=entry` returned **HTTP 200 OK**.
+
+---
+
+## Completed Task (2026-09-08) — Page Feedback: /operations?tab=entry — Machine Breakdown Section Sizing, Thin Duration Box & 4-Column Responsive Layout Alignment (`apps/web/components/dashboard/OperatorDashboard.tsx`, `apps/web/components/ui/CustomTimePicker.tsx`, `apps/mobile/components/ui/TimeInput.tsx`, `apps/mobile/components/work/MeterLogModal.tsx`)
+
+**Goal**:
+Fulfill user feedback on `/operations?tab=entry` ("same for this too" on the Breakdown container `.rounded-xl > .space-y-3 > .p-3 > .p-3`):
+1. Align the Breakdown Section (Section C) with the 4-column responsive grid (`grid grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-3.5 items-start`), matching Section B (Shift Timing).
+2. Integrate Breakdown Duration into the grid as a clean, thin 2-digit box (`w-24 xs:w-28 sm:w-32 max-w-[130px]` centered font-mono bold badge `min-h-[38px] sm:min-h-[42px]`) instead of floating as a lone top-right badge.
+3. Further refine `CustomTimePicker` with `max-w-[115px] sm:max-w-[135px]` time box and `min-w-[34px] xs:min-w-[38px] sm:min-w-[44px]` AM/PM toggle buttons for a balanced 50/50 ratio within the 200px 4-column grid slots.
+4. Apply the identical responsive layout to the Edit Log Modal breakdown section.
+5. Synchronize all changes to the Mobile App (`apps/mobile/components/ui/TimeInput.tsx` and `apps/mobile/components/work/MeterLogModal.tsx`) with a thin Overtime input and aligned Duration badge.
+
+1. **Web Dashboard Breakdown Grid & Thin Duration (`apps/web/components/dashboard/OperatorDashboard.tsx`)**:
+   - Upgraded Section C Breakdown container from 2-column unaligned grid to `grid grid-cols-2 xl:grid-cols-4 gap-2 sm:gap-3.5 items-start`.
+   - Placed Breakdown Start Time (Col 1) and Breakdown End Time (Col 2) in columns matching Section B.
+   - Replaced floating top-right duration badge with a thin 2-digit Duration box (Col 3: `w-24 xs:w-28 sm:w-32 max-w-[130px]` centered font-mono bold badge `min-h-[38px] sm:min-h-[42px] h-9.5 sm:h-[42px]`).
+   - Applied identical 4-column responsive layout and thin duration box in the Edit Log Modal.
+
+2. **CustomTimePicker Ergonomic Refinement (`apps/web/components/ui/CustomTimePicker.tsx`)**:
+   - Refined time box shell max-width cap to `max-w-[115px] sm:max-w-[135px]`.
+   - Increased AM/PM toggle button minimum widths to `min-w-[34px] xs:min-w-[38px] sm:min-w-[44px]` with `px-2 xs:px-2.5 sm:px-3 text-xs`.
+   - Creates a balanced, high-contrast, tactile hit area fitting neatly within ~200px column slots.
+
+3. **Cross-Platform Mobile Parity (`apps/mobile/components/ui/TimeInput.tsx`, `apps/mobile/components/work/MeterLogModal.tsx`)**:
+   - Synchronized `TimeInput` period container to `minWidth: 88` and `periodBtn` to `minWidth: 40`, `paddingHorizontal: 9`.
+   - Updated `MeterLogModal` with thin Overtime input (`containerStyle={{ maxWidth: 140 }}`) and an aligned Duration badge.
+
+4. **Automated Verification & Quality Gates**:
+   - Monorepo-wide typecheck (`pnpm -r exec tsc --noEmit`): **0 errors across all 7 workspace packages**.
+   - Shift timing & lunch inclusion suite (`test_shift_timing_and_lunch_inclusion.mjs`): **31 passed, 0 failed (100%)**.
+   - Live route compilation verified: Next.js middleware and `/operations?tab=entry` responding normally.
+
+---
+
+**Goal**:
+Fulfill all 5 items of user feedback on `/operations?tab=entry`:
+1. Make the Overtime (hrs) input box thin since it only accepts a 2-digit input (`w-24 xs:w-28 sm:w-32 max-w-[130px]`, centered text).
+2. Reduce slightly the width of the Start Time and End Time picker input boxes (`max-w-[125px] sm:max-w-[150px]`).
+3. Increase slightly the width of the AM/PM toggle buttons (`min-w-[32px] xs:min-w-[36px] sm:min-w-[42px] px-2 xs:px-2.5 sm:px-3 text-xs`).
+4. Ensure the design is balanced, responsive, and tactile across both mobile and desktop viewports.
+5. Maintain mandatory Web-to-Mobile change synchronization by updating mobile `TimeInput.tsx` toggle widths.
+
+1. **Overtime Input Optimization (`apps/web/components/dashboard/OperatorDashboard.tsx`)**:
+   - Replaced full-width stretch (`w-full`) on the Overtime (hrs) input with a compact, thin width: `w-24 xs:w-28 sm:w-32 max-w-[130px]`.
+   - Centered the 2-digit text (`text-center font-mono font-bold`) and maintained standard field height (`min-h-[38px] sm:min-h-[42px] h-9.5 sm:h-[42px]`).
+   - Applied identical compact styling to the Edit Log Modal overtime field.
+
+2. **Time Picker & AM/PM Width Rebalancing (`apps/web/components/ui/CustomTimePicker.tsx`)**:
+   - Time Picker Box: Capped width to `max-w-[125px] sm:max-w-[150px]`, preventing it from stretching excessively on desktop while remaining spacious for `HH : MM`.
+   - AM/PM Toggle: Increased button widths to `min-w-[32px] xs:min-w-[36px] sm:min-w-[42px] px-2 xs:px-2.5 sm:px-3`, providing a larger, more tactile hit area.
+
+3. **Cross-Platform Mobile Parity (`apps/mobile/components/ui/TimeInput.tsx`)**:
+   - Synchronized `periodContainerSide` to `minWidth: 84` and `periodBtn` to `minWidth: 38`, `paddingHorizontal: 8`.
+
+4. **Automated Verification & Quality Gates**:
+   - Monorepo-wide typecheck (`pnpm -r exec tsc --noEmit`): **0 errors across all 7 workspace packages**.
+   - Shift timing & lunch inclusion suite (`test_shift_timing_and_lunch_inclusion.mjs`): **31 passed, 0 failed (100%)**.
+   - Route compilation check (`/operations?tab=entry`): **HTTP 200 OK**.
+
+---
+
+**Goal**:
+Fulfill all 4 items of page feedback on `/operations?tab=entry`:
+1. Change label `"Remarks / Observations (Optional)"` to `"Remarks (Optional)"`.
+2. Show the Remarks container exclusively when machine breakdown is active (`isBreakdown && ...`).
+3. Remove the duplicate red star in the `CustomDatePicker` for Log Date.
+4. Remove the `<Check>` icon from the draft saved text in the submission footer.
+5. Synchronize all changes to the Mobile App (`apps/mobile/components/work/MeterLogModal.tsx`) in strict compliance with the Web-to-Mobile synchronization protocol.
+
+1. **Web Dashboard Updates (`apps/web/components/dashboard/OperatorDashboard.tsx`)**:
+   - **Remarks Label & Progressive Disclosure**: Wrapped Section D Remarks container in `{isBreakdown && ...}` with smooth fade-in animations (`animate-in fade-in duration-150`). Changed label to `"Remarks (Optional)"`. Switching to "Normal" operation automatically clears any lingering remarks (`setRemarks("")`). Updated submit payload logic to enforce `finalRemarks = isBreakdown ? remarks.trim() : ""`.
+   - **CustomDatePicker Duplicate Star Fix**: Removed manual `<span className="text-rose-500 font-bold ml-0.5">*</span>` from `label` prop (`label="Log Date"`). `CustomDatePicker` automatically appends its own required asterisk when `required={true}`, eliminating the double star on both the main log entry form and edit log modal.
+   - **Check Icon Pruning**: Removed `<Check className="h-3.5 w-3.5 text-emerald-500" />` from the footer draft status row and pruned unused `Check` from `lucide-react` imports.
+   - **Confirmation & Edit Modals**: Synchronized confirmation modal to only show remarks when `isBreakdown` is true. Updated edit log modal to display `"Remarks (Optional)"` conditionally on `editBreakdown`.
+
+2. **Cross-Platform Mobile Parity (`apps/mobile/components/work/MeterLogModal.tsx`)**:
+   - Conditioned `Input` for remarks on `isBreakdown && ...`.
+   - Updated label to `"Remarks (Optional)"`.
+   - Updated breakdown toggle switch to reset remarks on false.
+   - Ensured `remarksPayload` is empty string when `!isBreakdown`.
+
+3. **Automated Verification & Quality Gates**:
+   - Monorepo-wide typecheck (`pnpm -r exec tsc --noEmit`): **0 errors across all 7 workspace packages**.
+   - Operator test suite (`test_shift_timing_and_lunch_inclusion.mjs`): **31 passed, 0 failed (100%)**.
+   - Complete operator matrix suite (`test_operator_complete_matrix.mjs`): **75 passed, 0 failed (100%)**.
+
+---
+
+## Completed Task (2026-09-08) — Page Feedback: /operations?tab=entry — Separate AM/PM Toggle Shifted to the Right of Time Picker & Multi-Phone Mobile Optimization across Web & Mobile (`apps/web/components/ui/CustomTimePicker.tsx`, `apps/mobile/components/ui/TimeInput.tsx`)
+
+**Goal**:
+Fulfill user feedback on `/operations?tab=entry`:
+1. Remove the AM/PM toggle from inside the time picker box.
+2. Shift the separate AM/PM toggle button layout to the **right** of the Start Time and End Time pickers (`toggleLayout="side-by-side"`).
+3. Optimize both the time picker box and the right-aligned AM/PM toggle for mobile across various phone screen sizes (320px–430px+).
+4. Strictly enforce mandatory Web-to-Mobile change synchronization by implementing identical side-by-side separation and mobile optimization in the React Native mobile app (`apps/mobile/components/ui/TimeInput.tsx`).
+
+1. **Web Component Architecture (`apps/web/components/ui/CustomTimePicker.tsx`)**:
+   - **Time Picker Box**: Dedicated digital time input shell containing exclusively hours and minutes (`06 : 00`). Centered, spacious typography (`font-mono`, `text-xs xs:text-sm sm:text-base font-bold`), minimum 38px–42px height, full-shell click-to-focus ergonomics, and clean Vercel Geist borders and focus rings with `flex-1 min-w-0`.
+   - **Separate AM/PM Toggle (Right-Aligned)**: Placed directly to the right of the time picker box (`flex items-center gap-1 sm:gap-1.5 w-full`), default `toggleLayout="side-by-side"`.
+   - **Multi-Phone Mobile Optimization**: Sized with responsive padding (`px-1.5 xs:px-2 sm:px-2.5`) and min-width buttons (`min-w-[28px] xs:min-w-[30px] sm:min-w-[36px]`) with smooth Framer Motion spring active transitions (`motion.div layoutId`, `bg-sky-600 dark:bg-sky-500 text-white font-extrabold shadow-2xs`). Fits cleanly in 2-column mobile form grids on all phone viewports without horizontal wrapping or text clipping.
+
+2. **Mobile React Native Parity (`apps/mobile/components/ui/TimeInput.tsx`)**:
+   - Synchronized identical architecture in React Native: separated AM/PM toggle from `unifiedShell` and placed to the right.
+   - Built `timeBoxShell` (`flex: 1`, 42px height, centered 15px bold tabular digits).
+   - Built `periodContainerSide` (42px height, minWidth 72px, two `flex: 1` buttons with >=44px effective touch targets).
+   - Defaulted `toggleLayout='side-by-side'`.
+
+3. **Automated Verification & Quality Gates**:
+   - Monorepo-wide typecheck (`pnpm -r exec tsc --noEmit`): **0 errors across all 7 workspace packages**.
+   - Operator test suite (`test_shift_timing_and_lunch_inclusion.mjs`): **31 passed, 0 failed (100%)**.
+   - Complete operator matrix (`test_operator_complete_matrix.mjs`): **75 passed, 0 failed, 0 active bugs (100%)**.
+   - Next.js server route compilation (`/operations?tab=entry`): **HTTP 200 OK**.
+
+---
+
 ## Completed Task (2026-09-08) — Database Migration 051: Fix Undefined Type `public.user_role` in `handle_new_user()` Trigger (`supabase/migrations/051_include_lunch_in_shift_and_add_user_shift_times.sql`)
 
 **Goal**:

@@ -25,8 +25,10 @@ export interface CustomTimePickerProps {
   hideIcon?: boolean;
   /** Whether to show the clock icon in the label. Defaults to true. */
   showIcon?: boolean;
-  /** Layout orientation for the AM/PM toggle. Defaults to "horizontal" for polished, legible tap targets. */
+  /** Layout orientation for the AM/PM toggle buttons. Defaults to "horizontal". */
   toggleOrientation?: "horizontal" | "vertical";
+  /** Layout placement for the AM/PM toggle relative to time picker box. Defaults to "stacked" for mobile optimization. */
+  toggleLayout?: "stacked" | "side-by-side";
 }
 
 export type TimeInputProps = CustomTimePickerProps;
@@ -106,6 +108,7 @@ export function CustomTimePicker({
   hideErrorMessage = false,
   helperText,
   toggleOrientation = "horizontal",
+  toggleLayout = "side-by-side",
   hideIcon = false,
   showIcon = true,
 }: CustomTimePickerProps) {
@@ -402,133 +405,136 @@ export function CustomTimePicker({
         </label>
       )}
 
-      {/* Unified Cohesive Time Picker Shell */}
+      {/* Time Picker Controls Container: Separates Time Box and AM/PM Toggle */}
       <div
-        ref={containerRef}
-        onClick={handleContainerClick}
         className={cn(
-          "group relative flex items-center justify-between w-full min-h-[38px] sm:min-h-[42px] h-9.5 sm:h-[42px] px-2.5 sm:px-3.5 rounded-xl border bg-[var(--color-canvas)] text-[var(--color-ink)] transition-all shadow-2xs cursor-text",
-          "focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 dark:focus-within:ring-sky-400/20 dark:focus-within:border-sky-400",
-          validation.hasError || Boolean(externalError)
-            ? "border-rose-500 focus-within:ring-rose-500/20 focus-within:border-rose-500 dark:border-rose-500"
-            : "border-[var(--color-hairline)] hover:border-neutral-300 dark:hover:border-neutral-700",
-          disabled && "opacity-50 pointer-events-none bg-neutral-100 dark:bg-neutral-900 cursor-not-allowed"
+          "w-full",
+          toggleLayout === "stacked"
+            ? "flex flex-col gap-1.5"
+            : "flex items-center gap-1 sm:gap-1.5"
         )}
       >
-        {/* Left: Digital Time Input Cluster */}
-        <div className="time-cluster-area flex items-center gap-0.5 sm:gap-1 min-w-0">
-          {/* Hours Input */}
-          <input
-            ref={hourInputRef}
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={3}
-            value={hour}
-            onChange={handleHourChange}
-            onKeyDown={handleHourKeyDown}
-            onBlur={handleHourBlur}
-            onFocus={(e) => e.target.select()}
-            disabled={disabled}
-            placeholder="08"
-            aria-label="Hours (1-12)"
-            className="w-7 xs:w-7.5 sm:w-8 h-7 sm:h-8 p-0 text-center font-mono text-xs sm:text-sm font-bold rounded-lg bg-transparent hover:bg-neutral-200/50 dark:hover:bg-neutral-800/70 focus:bg-neutral-200/60 dark:focus:bg-neutral-800 text-[var(--color-ink)] focus:outline-none transition-colors select-all"
-          />
+        {/* 1. Time Picker Box: Digital Time Input Cluster Only (Balanced width) */}
+        <div
+          ref={containerRef}
+          onClick={handleContainerClick}
+          className={cn(
+            "group relative flex items-center justify-center min-h-[38px] sm:min-h-[42px] h-9.5 sm:h-[42px] px-1.5 xs:px-2 sm:px-2.5 rounded-xl border bg-[var(--color-canvas)] text-[var(--color-ink)] transition-all shadow-2xs cursor-text",
+            toggleLayout === "stacked" ? "w-full" : "flex-1 min-w-0 max-w-[115px] sm:max-w-[135px]",
+            "focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 dark:focus-within:ring-sky-400/20 dark:focus-within:border-sky-400",
+            validation.hasError || Boolean(externalError)
+              ? "border-rose-500 focus-within:ring-rose-500/20 focus-within:border-rose-500 dark:border-rose-500"
+              : "border-[var(--color-hairline)] hover:border-neutral-300 dark:hover:border-neutral-700",
+            disabled && "opacity-50 pointer-events-none bg-neutral-100 dark:bg-neutral-900 cursor-not-allowed"
+          )}
+        >
+          <div className="time-cluster-area flex items-center justify-center gap-0.5 sm:gap-1 min-w-0">
+            {/* Hours Input */}
+            <input
+              ref={hourInputRef}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={3}
+              value={hour}
+              onChange={handleHourChange}
+              onKeyDown={handleHourKeyDown}
+              onBlur={handleHourBlur}
+              onFocus={(e) => e.target.select()}
+              disabled={disabled}
+              placeholder="08"
+              aria-label="Hours (1-12)"
+              className="w-7 xs:w-7.5 sm:w-8 h-7 sm:h-8 p-0 text-center font-mono text-xs xs:text-sm sm:text-base font-bold rounded-lg bg-transparent hover:bg-neutral-200/50 dark:hover:bg-neutral-800/70 focus:bg-neutral-200/60 dark:focus:bg-neutral-800 text-[var(--color-ink)] focus:outline-none transition-colors select-all"
+            />
 
-          {/* Colon Separator */}
-          <span className="font-mono text-xs sm:text-sm font-bold text-[var(--color-mute)] select-none px-0.25 opacity-70 shrink-0">
-            :
-          </span>
+            {/* Colon Separator */}
+            <span className="font-mono text-xs xs:text-sm sm:text-base font-bold text-[var(--color-mute)] select-none px-0.25 opacity-70 shrink-0">
+              :
+            </span>
 
-          {/* Minutes Input */}
-          <input
-            ref={minuteInputRef}
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={3}
-            value={minute}
-            onChange={handleMinuteChange}
-            onKeyDown={handleMinuteKeyDown}
-            onBlur={handleMinuteBlur}
-            onFocus={(e) => e.target.select()}
-            disabled={disabled}
-            placeholder="00"
-            aria-label="Minutes (0-60, optional)"
-            className="w-7 xs:w-7.5 sm:w-8 h-7 sm:h-8 p-0 text-center font-mono text-xs sm:text-sm font-bold rounded-lg bg-transparent hover:bg-neutral-200/50 dark:hover:bg-neutral-800/70 focus:bg-neutral-200/60 dark:focus:bg-neutral-800 text-[var(--color-ink)] focus:outline-none transition-colors select-all"
-          />
+            {/* Minutes Input */}
+            <input
+              ref={minuteInputRef}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={3}
+              value={minute}
+              onChange={handleMinuteChange}
+              onKeyDown={handleMinuteKeyDown}
+              onBlur={handleMinuteBlur}
+              onFocus={(e) => e.target.select()}
+              disabled={disabled}
+              placeholder="00"
+              aria-label="Minutes (0-60, optional)"
+              className="w-7 xs:w-7.5 sm:w-8 h-7 sm:h-8 p-0 text-center font-mono text-xs xs:text-sm sm:text-base font-bold rounded-lg bg-transparent hover:bg-neutral-200/50 dark:hover:bg-neutral-800/70 focus:bg-neutral-200/60 dark:focus:bg-neutral-800 text-[var(--color-ink)] focus:outline-none transition-colors select-all"
+            />
+          </div>
         </div>
 
-        {/* Right: Sleek Polished AM/PM Segmented Toggle */}
-        <div className="shrink-0 ml-1 sm:ml-2">
-          <div
-            role="tablist"
-            aria-label="Select AM or PM period"
+        {/* 2. Separate AM/PM Segmented Toggle Layout (Generous touch width) */}
+        <div
+          role="radiogroup"
+          aria-label="Select AM or PM period"
+          className={cn(
+            "relative p-0.5 border border-neutral-200/80 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 shadow-inner select-none transition-colors shrink-0",
+            toggleLayout === "stacked"
+              ? "grid grid-cols-2 gap-1 w-full h-8.5 sm:h-9.5 rounded-xl"
+              : "inline-flex items-center gap-0.5 h-9.5 sm:h-[42px] rounded-xl",
+            disabled && "opacity-50 pointer-events-none cursor-not-allowed"
+          )}
+        >
+          <button
+            type="button"
+            role="radio"
+            aria-checked={period === "AM"}
+            disabled={disabled}
+            onClick={() => handlePeriodChange("AM")}
             className={cn(
-              "relative p-0.5 border border-neutral-200/80 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 shadow-inner select-none transition-colors",
-              toggleOrientation === "vertical"
-                ? "inline-flex flex-col gap-0.5 rounded-xl"
-                : "inline-flex items-center gap-0.5 h-7 sm:h-8 rounded-full"
+              "relative font-bold transition-all cursor-pointer select-none leading-none z-10 flex items-center justify-center",
+              toggleLayout === "stacked"
+                ? "h-full w-full rounded-lg text-xs font-bold min-h-[30px] sm:min-h-[32px]"
+                : "h-full min-w-[34px] xs:min-w-[38px] sm:min-w-[44px] px-2 xs:px-2.5 sm:px-3 rounded-lg text-xs sm:text-xs",
+              period === "AM"
+                ? "text-white font-extrabold"
+                : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-bold"
             )}
           >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={period === "AM"}
-              disabled={disabled}
-              onClick={() => handlePeriodChange("AM")}
-              className={cn(
-                "relative text-[10px] xs:text-[10.5px] sm:text-xs font-bold transition-all cursor-pointer select-none leading-none z-10 flex items-center justify-center",
-                toggleOrientation === "vertical"
-                  ? "w-full py-1 px-1.5 rounded-lg"
-                  : "h-full min-w-[28px] xs:min-w-[32px] sm:min-w-[36px] px-2 sm:px-2.5 rounded-full",
-                period === "AM"
-                  ? "text-white font-extrabold"
-                  : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-bold"
-              )}
-            >
-              {period === "AM" && (
-                <motion.div
-                  layoutId={`ampm-active-${timePickerId}`}
-                  className={cn(
-                    "absolute inset-0 bg-sky-600 dark:bg-sky-500 shadow-2xs -z-10",
-                    toggleOrientation === "vertical" ? "rounded-lg" : "rounded-full"
-                  )}
-                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                />
-              )}
-              AM
-            </button>
+            {period === "AM" && (
+              <motion.div
+                layoutId={`ampm-active-${timePickerId}`}
+                className="absolute inset-0 bg-sky-600 dark:bg-sky-500 rounded-lg shadow-2xs -z-10"
+                transition={{ type: "spring", stiffness: 500, damping: 35 }}
+              />
+            )}
+            AM
+          </button>
 
-            <button
-              type="button"
-              role="tab"
-              aria-selected={period === "PM"}
-              disabled={disabled}
-              onClick={() => handlePeriodChange("PM")}
-              className={cn(
-                "relative text-[10px] xs:text-[10.5px] sm:text-xs font-bold transition-all cursor-pointer select-none leading-none z-10 flex items-center justify-center",
-                toggleOrientation === "vertical"
-                  ? "w-full py-1 px-1.5 rounded-lg"
-                  : "h-full min-w-[28px] xs:min-w-[32px] sm:min-w-[36px] px-2 sm:px-2.5 rounded-full",
-                period === "PM"
-                  ? "text-white font-extrabold"
-                  : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-bold"
-              )}
-            >
-              {period === "PM" && (
-                <motion.div
-                  layoutId={`ampm-active-${timePickerId}`}
-                  className={cn(
-                    "absolute inset-0 bg-sky-600 dark:bg-sky-500 shadow-2xs -z-10",
-                    toggleOrientation === "vertical" ? "rounded-lg" : "rounded-full"
-                  )}
-                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                />
-              )}
-              PM
-            </button>
-          </div>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={period === "PM"}
+            disabled={disabled}
+            onClick={() => handlePeriodChange("PM")}
+            className={cn(
+              "relative font-bold transition-all cursor-pointer select-none leading-none z-10 flex items-center justify-center",
+              toggleLayout === "stacked"
+                ? "h-full w-full rounded-lg text-xs font-bold min-h-[30px] sm:min-h-[32px]"
+                : "h-full min-w-[34px] xs:min-w-[38px] sm:min-w-[44px] px-2 xs:px-2.5 sm:px-3 rounded-lg text-xs sm:text-xs",
+              period === "PM"
+                ? "text-white font-extrabold"
+                : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-bold"
+            )}
+          >
+            {period === "PM" && (
+              <motion.div
+                layoutId={`ampm-active-${timePickerId}`}
+                className="absolute inset-0 bg-sky-600 dark:bg-sky-500 rounded-lg shadow-2xs -z-10"
+                transition={{ type: "spring", stiffness: 500, damping: 35 }}
+              />
+            )}
+            PM
+          </button>
         </div>
       </div>
 
