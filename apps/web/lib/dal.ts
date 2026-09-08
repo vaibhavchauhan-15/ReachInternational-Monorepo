@@ -43,7 +43,7 @@ const getCachedUserRow = unstable_cache(
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase
       .from("users")
-      .select("id, full_name, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, address, shift_time, complete_profile, email, created_at, updated_at")
+      .select("id, full_name, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, address, shift_time, shift_start_time, shift_end_time, complete_profile, email, created_at, updated_at")
       .eq("id", userId)
       .single();
 
@@ -54,7 +54,7 @@ const getCachedUserRow = unstable_cache(
 
     return data;
   },
-  ["dal-user-row-v7"],
+  ["dal-user-row-v8"],
   { revalidate: 60, tags: [CACHE_TAGS.users] }
 );
 

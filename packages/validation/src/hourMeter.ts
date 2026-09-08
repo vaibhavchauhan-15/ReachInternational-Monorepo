@@ -6,8 +6,8 @@ export const CreateHourLogSchema = z.object({
   end_date: z.string().max(50, "End date string cannot exceed 50 characters").optional().nullable(),
   start_datetime: z.string().max(100, "Start datetime cannot exceed 100 characters").optional().nullable(),
   end_datetime: z.string().max(100, "End datetime cannot exceed 100 characters").optional().nullable(),
-  start_meter: z.number().min(0, "Start meter reading must be non-negative"),
-  end_meter: z.number().min(0, "End meter reading must be non-negative"),
+  start_meter: z.number({ required_error: "Start meter reading is required", invalid_type_error: "Start meter reading must be a valid number" }).min(0, "Start meter reading must be non-negative"),
+  end_meter: z.number({ required_error: "End meter reading is required", invalid_type_error: "End meter reading must be a valid number" }).min(0, "End meter reading must be non-negative"),
   location: z.string().max(255, "Location cannot exceed 255 characters").optional().nullable(),
   remarks: z.string().max(500, "Remarks cannot exceed 500 characters").optional().nullable(),
   shift: z.string().max(50, "Shift cannot exceed 50 characters").optional().nullable(),
@@ -27,13 +27,33 @@ export const CreateHourLogSchema = z.object({
   path: ["end_meter"],
 }).refine((data) => {
   if (!data.end_datetime) return true;
-  const endMs = new Date(data.end_datetime).getTime();
+  let endMs: number;
+  const str = data.end_datetime.trim();
+  if (!str.includes('+') && !str.endsWith('Z') && !str.match(/-\d{2}:\d{2}$/)) {
+    const cleanStr = str.replace(' ', 'T');
+    endMs = new Date(`${cleanStr}+05:30`).getTime();
+  } else {
+    endMs = new Date(str).getTime();
+  }
   if (isNaN(endMs)) return true;
   // Allow 60 seconds grace period for network latency and clock skew
   return endMs <= Date.now() + 60 * 1000;
 }, {
   message: "Cannot log before shift end.",
   path: ["end_datetime"],
+}).refine((data) => {
+  if (data.is_breakdown && typeof data.breakdown_hours === "number" && data.breakdown_hours > 0 && data.start_datetime && data.end_datetime) {
+    const sMs = new Date(data.start_datetime).getTime();
+    const eMs = new Date(data.end_datetime).getTime();
+    if (!isNaN(sMs) && !isNaN(eMs) && eMs > sMs) {
+      const shiftDurationHours = (eMs - sMs) / (1000 * 60 * 60);
+      return data.breakdown_hours <= shiftDurationHours;
+    }
+  }
+  return true;
+}, {
+  message: "Breakdown duration cannot exceed total shift duration.",
+  path: ["breakdown_hours"],
 });
 
 export type CreateHourLogInput = z.infer<typeof CreateHourLogSchema>;

@@ -557,6 +557,12 @@ DECLARE
   v_log_end_time TIME;
   v_ot_start_time TIME;
   v_ot_ranges int4range[];
+  v_log_date DATE;
+  v_end_date DATE;
+  v_start_datetime TIMESTAMPTZ;
+  v_end_datetime TIMESTAMPTZ;
+  v_start_time TIME;
+  v_end_time TIME;
 BEGIN
   -- 1. Meter Regression Guard
   IF p_end_meter < p_start_meter THEN
@@ -564,8 +570,39 @@ BEGIN
       USING ERRCODE = '23514';
   END IF;
 
-  -- 2. Future Shift End Guard
-  IF p_end_datetime IS NOT NULL AND p_end_datetime > (NOW() + INTERVAL '1 minute') THEN
+  -- 1b. Timezone-Pinned Datetime Normalization & Overnight Shift Derivation (Asia/Kolkata)
+  v_log_date := COALESCE(p_log_date, (NOW() AT TIME ZONE 'Asia/Kolkata')::date);
+  v_end_date := p_end_date;
+  v_start_datetime := p_start_datetime;
+  v_end_datetime := p_end_datetime;
+  v_start_time := NULLIF(TRIM(p_start_time), '')::TIME;
+  v_end_time := NULLIF(TRIM(p_end_time), '')::TIME;
+
+  -- Auto-derive end_date if overnight shift and end_date is null
+  IF v_end_date IS NULL AND v_start_time IS NOT NULL AND v_end_time IS NOT NULL THEN
+    IF v_end_time <= v_start_time THEN
+      -- Overnight shift detected (e.g. 10:00 PM to 06:00 AM)
+      v_end_date := (v_log_date + INTERVAL '1 day')::date;
+    ELSE
+      v_end_date := v_log_date;
+    END IF;
+  ELSIF v_end_date IS NULL THEN
+    v_end_date := v_log_date;
+  END IF;
+
+  -- Derive start_datetime from log_date + start_time in Asia/Kolkata if missing
+  IF v_start_datetime IS NULL AND v_start_time IS NOT NULL THEN
+    v_start_datetime := ((v_log_date::text || ' ' || v_start_time::text)::timestamp AT TIME ZONE 'Asia/Kolkata');
+  END IF;
+
+  -- Derive end_datetime from end_date + end_time in Asia/Kolkata if missing
+  IF v_end_datetime IS NULL AND v_end_time IS NOT NULL THEN
+    v_end_datetime := ((v_end_date::text || ' ' || v_end_time::text)::timestamp AT TIME ZONE 'Asia/Kolkata');
+  END IF;
+
+  -- 2. Future Shift End Guard: Operator cannot enter logs before shift end
+  -- Allows 1-minute grace margin for server/client clock skew
+  IF v_end_datetime IS NOT NULL AND v_end_datetime > (NOW() + INTERVAL '1 minute') THEN
     RAISE EXCEPTION 'Cannot log before shift end.'
       USING ERRCODE = '23514';
   END IF;
@@ -580,17 +617,24 @@ BEGIN
   v_resolved_client_id := p_client_id;
   v_resolved_location := p_location;
 
-  IF v_resolved_client_id IS NULL OR v_resolved_location IS NULL THEN
-    SELECT client_id, COALESCE(v_resolved_location, customer_address, city, '')
-    INTO v_resolved_client_id, v_resolved_location
+  IF v_resolved_client_id IS NULL THEN
+    SELECT client_id
+    INTO v_resolved_client_id
     FROM public.machines
     WHERE id = p_machine_id;
   END IF;
 
+  IF v_resolved_location IS NULL AND v_resolved_client_id IS NOT NULL THEN
+    SELECT COALESCE(address, city, '')
+    INTO v_resolved_location
+    FROM public.clients
+    WHERE id = v_resolved_client_id;
+  END IF;
+
   -- 5. Soft Overtime Conflict Detection:
   -- If overtime > 0, check if this operator's overtime tail crosses another active assignment on a different machine
-  IF COALESCE(p_overtime_hours, 0) > 0 AND p_end_time IS NOT NULL THEN
-    v_log_end_time := NULLIF(TRIM(p_end_time), '')::TIME;
+  IF COALESCE(p_overtime_hours, 0) > 0 AND v_end_time IS NOT NULL THEN
+    v_log_end_time := v_end_time;
     v_ot_start_time := (v_log_end_time - (p_overtime_hours || ' hours')::interval)::TIME;
 
     IF v_ot_start_time <> v_log_end_time THEN
@@ -655,14 +699,14 @@ BEGIN
     p_machine_id,
     p_operator_id,
     v_resolved_client_id,
-    p_log_date,
-    p_end_date,
-    p_start_datetime,
-    p_end_datetime,
+    v_log_date,
+    v_end_date,
+    v_start_datetime,
+    v_end_datetime,
     p_start_meter,
     p_end_meter,
-    NULLIF(TRIM(p_start_time), '')::TIME,
-    NULLIF(TRIM(p_end_time), '')::TIME,
+    v_start_time,
+    v_end_time,
     COALESCE(p_overtime_hours, 0),
     COALESCE(p_normal_working_hours, 0),
     COALESCE(p_is_breakdown, false),

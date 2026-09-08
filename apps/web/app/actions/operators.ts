@@ -22,6 +22,8 @@ import {
   formatTo12Hour,
   parseDateTimeToDate,
   addDaysToDateStr,
+  getISTDateString,
+  isShiftEndInFuture,
 } from "@reachinternational/utils";
 
 function isValidUuid(id?: string | null): boolean {
@@ -271,8 +273,19 @@ export async function submitOperatorHourLogAction(payload: {
   const currentIdempotencyKey = idempotency.idempotencyKey;
   const currentExecutionToken = idempotency.executionToken;
 
-  const startMtr = payload.startMeter ?? 0;
-  const endMtr = payload.endMeter ?? startMtr;
+  // BUG-OP-01: Strict Start & End Meter Validation Guard
+  if (payload.startMeter === undefined || payload.startMeter === null || isNaN(payload.startMeter) || payload.startMeter < 0) {
+    await failIdempotencyKey(currentIdempotencyKey);
+    return { success: false, error: "Starting hour meter reading is required and must be non-negative." };
+  }
+
+  if (payload.endMeter === undefined || payload.endMeter === null || isNaN(payload.endMeter) || payload.endMeter < 0) {
+    await failIdempotencyKey(currentIdempotencyKey);
+    return { success: false, error: "Ending hour meter reading is required and must be non-negative." };
+  }
+
+  const startMtr = payload.startMeter;
+  const endMtr = payload.endMeter;
 
   if (endMtr < startMtr) {
     await failIdempotencyKey(currentIdempotencyKey);
@@ -281,7 +294,7 @@ export async function submitOperatorHourLogAction(payload: {
 
   const supabase = createSupabaseAdminClient();
   const effectiveCondition = payload.isBreakdown ? "breakdown" : (payload.machineCondition || "good");
-  const todayDate = new Date().toISOString().split("T")[0];
+  const todayDate = getISTDateString();
   const effectiveStartDate = payload.startDate || payload.logDate || todayDate;
 
   // Resolve target operator: supervisors & admins can log on behalf of an operator, otherwise defaults to current user
@@ -328,7 +341,7 @@ export async function submitOperatorHourLogAction(payload: {
   }
 
   // Future Shift End Guard: Operator cannot enter logs before shift end
-  if (timing.endDateTime.getTime() > Date.now() + 60 * 1000) {
+  if (isShiftEndInFuture(timing.endDateTime, 1)) {
     await failIdempotencyKey(currentIdempotencyKey);
     return { success: false, error: "Cannot log before shift end." };
   }
@@ -366,6 +379,15 @@ export async function submitOperatorHourLogAction(payload: {
       effectiveBreakdownHours = bkdStats.durationDecimalHours;
       effectiveBreakdownStartTime = formatTo12Hour(payload.breakdownStartTime) || payload.breakdownStartTime;
       effectiveBreakdownEndTime = formatTo12Hour(payload.breakdownEndTime) || payload.breakdownEndTime;
+
+      // BUG-OP-03: Breakdown Duration Bounds Guard (cannot exceed total shift duration)
+      if (effectiveBreakdownHours > timing.durationHours) {
+        await failIdempotencyKey(currentIdempotencyKey);
+        return {
+          success: false,
+          error: `Breakdown duration (${effectiveBreakdownHours}h) cannot exceed total shift duration (${timing.durationHours}h).`,
+        };
+      }
     } else {
       await failIdempotencyKey(currentIdempotencyKey);
       return { success: false, error: "Please enter both start time and end time for the machine breakdown." };
@@ -382,30 +404,53 @@ export async function submitOperatorHourLogAction(payload: {
   }
 
   // Machine, Site, and Client Linking resolution:
-  // If clientId or location is missing in payload, resolve from the machine's assigned client & deployment details
   let targetClientId = payload.clientId || null;
   let targetLocation = payload.location?.trim() || null;
 
-  if (!targetClientId || !targetLocation) {
-    try {
-      const { data: mData } = await supabase
-        .from("machines")
-        .select("client_id, city, state, customer_address")
-        .eq("id", payload.machineId)
+  // BUG-OP-08 & BUG-OP-05: Check machine status and client deployment alignment
+  try {
+    const { data: mData } = await supabase
+      .from("machines")
+      .select("status, client_id")
+      .eq("id", payload.machineId)
+      .single();
+
+    if (mData) {
+      if (["maintenance", "decommissioned", "inactive"].includes(mData.status)) {
+        await failIdempotencyKey(currentIdempotencyKey);
+        return {
+          success: false,
+          error: "Cannot record machine log for equipment currently in maintenance or decommissioned status.",
+        };
+      }
+
+      if (mData.client_id && payload.clientId && payload.clientId !== mData.client_id) {
+        await failIdempotencyKey(currentIdempotencyKey);
+        return {
+          success: false,
+          error: "Client does not match assigned machine deployment.",
+        };
+      }
+
+      if (mData.client_id && !targetClientId) {
+        targetClientId = mData.client_id;
+      }
+    }
+
+    if (!targetLocation && targetClientId) {
+      const { data: cData } = await supabase
+        .from("clients")
+        .select("address, city, state")
+        .eq("id", targetClientId)
         .single();
 
-      if (mData) {
-        if (!targetClientId && mData.client_id) {
-          targetClientId = mData.client_id;
-        }
-        if (!targetLocation) {
-          const parts = [mData.customer_address, mData.city, mData.state].filter(Boolean);
-          if (parts.length > 0) targetLocation = parts.join(", ");
-        }
+      if (cData) {
+        const parts = [cData.address, cData.city, cData.state].filter(Boolean);
+        if (parts.length > 0) targetLocation = parts.join(", ");
       }
-    } catch {
-      // Non-blocking metadata resolution fallback
     }
+  } catch {
+    // Non-blocking metadata resolution fallback
   }
 
   let rpcSucceeded = false;
@@ -443,18 +488,26 @@ export async function submitOperatorHourLogAction(payload: {
       rpcSucceeded = true;
       resultData = rpcResult;
     } else if (rpcError) {
-      // Check if this is a genuine user validation error (e.g. meter regression or shift overlap trigger)
+      // Check if this is a genuine user validation error (e.g. meter regression, shift overlap trigger, future shift end, breakdown bounds, or unauthorized operator)
       if (
         rpcError.message?.includes("cannot be less than start meter reading") ||
         rpcError.message?.includes("Shift end timestamp") ||
-        rpcError.message?.includes("overlap")
+        rpcError.message?.includes("overlap") ||
+        rpcError.message?.includes("Cannot log before shift end") ||
+        rpcError.message?.includes("Breakdown duration") ||
+        rpcError.message?.includes("maintenance or decommissioned") ||
+        rpcError.message?.includes("Unauthorized operator") ||
+        rpcError.message?.includes("Client ID does not match") ||
+        rpcError.code === "23514" ||
+        rpcError.code === "42501" ||
+        rpcError.code === "23503"
       ) {
         console.warn("RPC validation error in submit_operator_hour_log_atomic:", rpcError);
         await failIdempotencyKey(currentIdempotencyKey);
         return { success: false, error: formatOperatorDatabaseError(rpcError) };
       }
 
-      // For known RPC defects (such as machines_status_check check constraint bug 23514 or PGRST203 function overload):
+      // For known RPC defects (such as PGRST203 function overload or unmigrated column mismatch):
       // Log warning and seamlessly execute resilient transactional fallback
       console.warn("RPC submit_operator_hour_log_atomic failed, executing resilient fallback:", rpcError.message);
     }
@@ -661,7 +714,7 @@ export async function updateOperatorHourLogAction(payload: {
   }
 
   // Future Shift End Guard: Operator cannot enter logs before shift end
-  if (timing.endDateTime.getTime() > Date.now() + 60 * 1000) {
+  if (isShiftEndInFuture(timing.endDateTime, 1)) {
     return { success: false, error: "Cannot log before shift end." };
   }
 

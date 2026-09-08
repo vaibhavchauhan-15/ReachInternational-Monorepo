@@ -23,6 +23,7 @@ Manages machine fleet registry, serial numbers, client assignments, supervisor a
 - `createAssignmentAction()`: Assigns operator to machine on a recurring daily shift window (`shift_start_time`, `shift_end_time`) with atomic max 3 capacity and GiST circular exclusion overlap enforcement.
 - `endAssignmentAction()`: Ends an active assignment with audit tracking and syncs `machines.operator_ids`.
 - `resolveHourLogConflictAction()`: Resolves a soft-flagged overtime assignment conflict (`acknowledge` or `adjust`).
+- `submitOperatorHourLogAction()` / `submit_operator_hour_log_atomic` (Migration 052): Atomic, audited operational hour logging with meter regression check, caller identity verification (`auth.uid() = p_operator_id`), client-machine deployment validation, machine status guards (rejecting `maintenance` and `decommissioned`), future shift end guards, and breakdown bounds checking (`breakdown_hours <= shift_duration`). Fully synchronized across Web and React Native mobile app.
 
 ## Form Fields & Technical Parameters (MachineModal, Machine Edit & Machine Detail Page)
 - **Equipment Master Specs**: `machine_id` (auto-generated e.g. `RI-MC-0001`), `model` (required), `serial_number` (required, unique), `manufacturer` (required), `year_of_mfg` (required), `hour_meter` (HMR).

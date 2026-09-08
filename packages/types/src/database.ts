@@ -89,6 +89,8 @@ export interface User {
   location?: string | null;
   address?: string | null;
   shift_time?: string | null;
+  shift_start_time?: string | null;
+  shift_end_time?: string | null;
   city?: string | null;
   district?: string | null;
   state?: string | null;

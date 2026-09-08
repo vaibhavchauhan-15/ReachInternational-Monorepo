@@ -123,6 +123,8 @@ export async function completeOnboardingAction(
           phone,
           role: role || undefined,
           shift_time,
+          shift_start_time: shift_start_time || null,
+          shift_end_time: shift_end_time || null,
           address,
           city,
           district,

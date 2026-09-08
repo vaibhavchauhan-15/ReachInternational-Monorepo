@@ -60,6 +60,7 @@ import {
   formatTimeAgo,
   formatTo12Hour,
   formatShiftTimingRange,
+  parseProfileShiftTime,
   computeShiftTiming,
   computeBreakdownDuration,
   parseBreakdownString,
@@ -68,6 +69,7 @@ import {
   addDaysToDateStr,
   findLatestMachineLogTimeline,
   checkIntervalOverlap,
+  getISTDateString,
 } from "@reachinternational/utils";
 import { PrintableOperatorLogsModal } from "./PrintableOperatorLogsModal";
 import { exportOperatorLogsToExcel } from "@/lib/utils/operator-logs-export";
@@ -165,7 +167,7 @@ export function OperatorDashboard({
 
   const isLogFromToday = (dateStr?: string) => {
     if (!dateStr) return false;
-    const todayStr = new Date().toISOString().split("T")[0];
+    const todayStr = getISTDateString();
     if (dateStr.startsWith(todayStr)) return true;
     const d = new Date(dateStr);
     const today = new Date();
@@ -403,14 +405,61 @@ export function OperatorDashboard({
   );
 
   // Daily Machine Log Form State
-  const [selectedLogDate, setSelectedLogDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [selectedLogDate, setSelectedLogDate] = useState<string>(() => getISTDateString());
   const [machineName, setMachineName] = useState<string>(selectedMachine?.machine_name || "");
   const [machineNo, setMachineNo] = useState<string>(selectedMachine?.machine_code || "");
   const [model, setModel] = useState<string>(selectedMachine?.model || "");
   const [startMeter, setStartMeter] = useState<string>(String(initialMeter));
   const [endMeter, setEndMeter] = useState<string>(String(initialMeter));
-  const [startTime, setStartTime] = useState<string>("06:00 AM");
-  const [endTime, setEndTime] = useState<string>("02:00 PM");
+
+  // Helper to resolve operator default shift timings from user profile in Supabase
+  const defaultShiftTimes = useMemo(() => {
+    let sTime = "";
+    let eTime = "";
+
+    // 1. Direct shift_start_time and shift_end_time on user object in Supabase
+    if (user?.shift_start_time) {
+      sTime = formatTo12Hour(user.shift_start_time);
+    }
+    if (user?.shift_end_time) {
+      eTime = formatTo12Hour(user.shift_end_time);
+    }
+
+    // 2. Parse from user.shift_time text in Supabase if not directly set
+    if ((!sTime || !eTime) && user?.shift_time) {
+      const parsed = parseProfileShiftTime(user.shift_time);
+      if (parsed) {
+        if (!sTime) sTime = formatTo12Hour(parsed.startTime);
+        if (!eTime) eTime = formatTo12Hour(parsed.endTime);
+      }
+    }
+
+    // 3. Fall back to assigned machine shift timings if assigned
+    if ((!sTime || !eTime) && assignedMachine) {
+      const assStart = (assignedMachine as any).shift_start_time;
+      const assEnd = (assignedMachine as any).shift_end_time;
+      if (assStart && !sTime) sTime = formatTo12Hour(assStart);
+      if (assEnd && !eTime) eTime = formatTo12Hour(assEnd);
+    }
+
+    return {
+      startTime: sTime || "06:00 AM",
+      endTime: eTime || "02:00 PM",
+      hasCustomDefault: Boolean(sTime || eTime),
+    };
+  }, [user?.shift_start_time, user?.shift_end_time, user?.shift_time, assignedMachine]);
+
+  const [startTime, setStartTime] = useState<string>(() => defaultShiftTimes.startTime);
+  const [endTime, setEndTime] = useState<string>(() => defaultShiftTimes.endTime);
+
+  // Keep shift timing in sync with user profile from Supabase
+  useEffect(() => {
+    if (defaultShiftTimes.hasCustomDefault) {
+      setStartTime(defaultShiftTimes.startTime);
+      setEndTime(defaultShiftTimes.endTime);
+    }
+  }, [defaultShiftTimes.startTime, defaultShiftTimes.endTime, defaultShiftTimes.hasCustomDefault]);
+
   const [overtimeHours, setOvertimeHours] = useState<string>("0");
   const [isManualOvertime, setIsManualOvertime] = useState<boolean>(false);
   const [isBreakdown, setIsBreakdown] = useState<boolean>(false);
@@ -433,7 +482,7 @@ export function OperatorDashboard({
   const [editingLog, setEditingLog] = useState<OperatorHourLog | null>(null);
   const [editStartMeter, setEditStartMeter] = useState<string>("0");
   const [editEndMeter, setEditEndMeter] = useState<string>("0");
-  const [editLogDate, setEditLogDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [editLogDate, setEditLogDate] = useState<string>(() => getISTDateString());
   const [editStartTime, setEditStartTime] = useState<string>("");
   const [editEndTime, setEditEndTime] = useState<string>("");
   const [editOvertime, setEditOvertime] = useState<string>("0");
@@ -511,6 +560,7 @@ export function OperatorDashboard({
 
   // Real-time meter running hours & meter validation calculation
   const meterRunningHours = useMemo(() => {
+    if (!startMeter.trim() || !endMeter.trim()) return 0;
     const s = parseFloat(startMeter);
     const e = parseFloat(endMeter);
     if (isNaN(s) || isNaN(e)) return 0;
@@ -519,9 +569,21 @@ export function OperatorDashboard({
   }, [startMeter, endMeter]);
 
   const meterValidationWarning = useMemo(() => {
+    if (!startMeter.trim()) {
+      return "Start meter reading is required.";
+    }
     const s = parseFloat(startMeter);
+    if (isNaN(s) || s < 0) {
+      return "Please enter a valid non-negative starting meter reading.";
+    }
+    if (!endMeter.trim()) {
+      return "End meter reading is required.";
+    }
     const e = parseFloat(endMeter);
-    if (!isNaN(s) && !isNaN(e) && e < s) {
+    if (isNaN(e) || e < 0) {
+      return "Please enter a valid non-negative ending meter reading.";
+    }
+    if (e < s) {
       return "End meter cannot be less than start meter.";
     }
     return null;
@@ -699,8 +761,16 @@ export function OperatorDashboard({
         if (parsed.clientLocation && parsed.clientLocation.trim() !== "") setClientLocation(parsed.clientLocation);
         if (parsed.startMeter !== undefined) setStartMeter(parsed.startMeter);
         if (parsed.endMeter !== undefined) setEndMeter(parsed.endMeter);
-        if (parsed.startTime) setStartTime(parsed.startTime);
-        if (parsed.endTime) setEndTime(parsed.endTime);
+        if (parsed.startTime) {
+          if (!defaultShiftTimes.hasCustomDefault || (parsed.startTime !== "06:00 AM" && parsed.startTime !== "08:00 AM")) {
+            setStartTime(parsed.startTime);
+          }
+        }
+        if (parsed.endTime) {
+          if (!defaultShiftTimes.hasCustomDefault || (parsed.endTime !== "02:00 PM" && parsed.endTime !== "08:00 PM")) {
+            setEndTime(parsed.endTime);
+          }
+        }
         if (parsed.overtimeHours !== undefined) {
           setOvertimeHours(parsed.overtimeHours);
           setIsManualOvertime(true);
@@ -811,10 +881,12 @@ export function OperatorDashboard({
     let completed = 0;
     if (selectedMachineId) completed++;
     if (operatingStats.isValid && !shiftOverlapWarning && !sequencingValidation?.isInvalid && !meterValidationWarning) completed++;
+    
+    const isBreakdownValid = !isBreakdown || (!!breakdownStats?.isValid && operatingStats.isValid && breakdownStats.durationDecimalHours <= operatingStats.durationHours);
     if (!isBreakdown) {
       completed++;
     } else {
-      if (breakdownStats?.isValid) {
+      if (breakdownStats?.isValid && operatingStats.isValid && breakdownStats.durationDecimalHours <= operatingStats.durationHours) {
         completed++;
       }
     }
@@ -827,11 +899,12 @@ export function OperatorDashboard({
       !sequencingValidation?.isInvalid &&
       !meterValidationWarning &&
       !!selectedMachineId &&
-      (!isBreakdown || !!breakdownStats?.isValid);
+      isBreakdownValid;
     return { completed, total: 4, isReady };
   }, [
     selectedMachineId,
     operatingStats.isValid,
+    operatingStats.durationHours,
     shiftOverlapWarning,
     sequencingValidation,
     meterValidationWarning,
@@ -873,6 +946,14 @@ export function OperatorDashboard({
         toast("error", "Invalid Breakdown Time", breakdownStats?.errorMessage || "Please enter valid breakdown start and end times.");
         return;
       }
+      if (operatingStats.isValid && breakdownStats.durationDecimalHours > operatingStats.durationHours) {
+        toast(
+          "error",
+          "Invalid Breakdown Duration",
+          `Breakdown duration (${breakdownStats.durationDecimalHours}h) cannot exceed total shift duration (${operatingStats.durationHours}h).`
+        );
+        return;
+      }
     }
 
     setShowConfirmModal(true);
@@ -885,9 +966,26 @@ export function OperatorDashboard({
     setMessage(null);
 
     try {
+      if (!startMeter.trim() || isNaN(parseFloat(startMeter)) || parseFloat(startMeter) < 0) {
+        toast("error", "Invalid Meter Reading", "Starting hour meter reading is required and must be non-negative.");
+        setSubmitting(false);
+        return;
+      }
+      if (!endMeter.trim() || isNaN(parseFloat(endMeter)) || parseFloat(endMeter) < 0) {
+        toast("error", "Invalid Meter Reading", "Ending hour meter reading is required and must be non-negative.");
+        setSubmitting(false);
+        return;
+      }
+
       const overtimeNum = parseFloat(overtimeHours) || 0;
-      const startMtrNum = parseFloat(startMeter) || 0;
-      const endMtrNum = parseFloat(endMeter) || startMtrNum;
+      const startMtrNum = parseFloat(startMeter);
+      const endMtrNum = parseFloat(endMeter);
+
+      if (endMtrNum < startMtrNum) {
+        toast("error", "Invalid Meter Reading", "Ending hour meter reading cannot be less than starting hour meter reading.");
+        setSubmitting(false);
+        return;
+      }
 
       const bkdDurationStr = isBreakdown && breakdownStats?.isValid ? breakdownStats.fullBreakdownString : undefined;
       const bkdDecimalHours = isBreakdown && breakdownStats?.isValid ? breakdownStats.durationDecimalHours : 0;
@@ -1504,12 +1602,17 @@ export function OperatorDashboard({
                   </div>
 
                   {/* Only show error in this place if any occurs */}
-                  {breakdownStats && !breakdownStats.isValid && (
+                  {breakdownStats && !breakdownStats.isValid ? (
                     <div className="p-2 sm:p-2.5 rounded-lg border bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11px] sm:text-xs font-bold flex items-center gap-2">
                       <AnimatedAlertTriangle size={14} className="shrink-0 text-amber-500" />
                       <span>{breakdownStats.errorMessage || "Please verify breakdown start and end times."}</span>
                     </div>
-                  )}
+                  ) : isBreakdown && breakdownStats?.isValid && operatingStats.isValid && breakdownStats.durationDecimalHours > operatingStats.durationHours ? (
+                    <div className="p-2 sm:p-2.5 rounded-lg border bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300 text-[11px] sm:text-xs font-bold flex items-center gap-2">
+                      <AnimatedAlertTriangle size={14} className="shrink-0 text-rose-500" />
+                      <span>{`Breakdown duration (${breakdownStats.durationDecimalHours}h) cannot exceed total shift duration (${operatingStats.durationHours}h).`}</span>
+                    </div>
+                  ) : null}
                 </div>
               )}
             </div>

@@ -1,5 +1,185 @@
 # Current Task Context
 
+## Completed Task (2026-09-08) — Database Migration 051: Fix Undefined Type `public.user_role` in `handle_new_user()` Trigger (`supabase/migrations/051_include_lunch_in_shift_and_add_user_shift_times.sql`)
+
+**Goal**:
+Resolve PostgreSQL execution error in Migration 051:
+`ERROR: 42704: type "public.user_role" does not exist at LINE 57: v_role public.user_role;`
+
+1. **Root Cause**:
+   - `public.users.role` in the ReachInternational schema is of type `TEXT` constrained by a check constraint (`CHECK (role IN (...))`), created in migration 001. No custom enum named `public.user_role` exists in the database.
+   - In Migration 051, `v_role` inside `handle_new_user()` was declared as `v_role public.user_role;`, which threw error 42704 when executed in Supabase SQL editor.
+
+2. **Remediation**:
+   - In `supabase/migrations/051_include_lunch_in_shift_and_add_user_shift_times.sql`, updated `v_role` variable declaration to `v_role TEXT;` (matching migrations `001`, `027`, `035`, `048`, `049`).
+   - Re-attached trigger `on_auth_user_created ON auth.users` executing `public.handle_new_user()`.
+
+3. **Verification**:
+   - Ran `node supabase/tests/test_shift_timing_and_lunch_inclusion.mjs`: 31 passed, 0 failed.
+   - Ran `node supabase/tests/test_future_shift_validation.mjs`: 14 passed, 0 failed.
+   - Ran monorepo strict typecheck `pnpm -r exec tsc --noEmit`: 0 errors across all workspace packages.
+
+---
+
+## Completed Task (2026-09-08) — Complete Resolution of All Operator QA Bugs (BUG-OP-01 to BUG-OP-08) across Database, Server Actions, Web & Mobile (`packages/validation/src/hourMeter.ts`, `apps/web/app/actions/operators.ts`, `apps/web/components/dashboard/OperatorDashboard.tsx`, `apps/web/components/ui/MachineSelect.tsx`, `apps/mobile/components/work/MeterLogModal.tsx`, `supabase/migrations/052_fix_operator_qa_bugs_and_security_hardening.sql`, `supabase/tests/test_operator_complete_matrix.mjs`)
+
+**Goal**:
+Eliminate all bugs, discrepancies, and security vulnerabilities identified in the comprehensive Operator QA Test Plan:
+1. Fix **BUG-OP-01**: Blank start meter handling across Web and Mobile.
+2. Address **BUG-OP-02**: Clarify and verify lunch inclusion (0.0h break deduction, 8.0h normal working hours).
+3. Fix **BUG-OP-03**: Prevent breakdown duration from exceeding total shift duration.
+4. Fix **BUG-OP-05**: Prevent machine-client mismatch.
+5. Fix **BUG-OP-06**: Achieve mobile parity with atomic RPC submission (`submit_operator_hour_log_atomic`), sync `current_operator_id`, and log structured audit records.
+6. Fix **BUG-OP-07**: Enforce `auth.uid() = p_operator_id` authorization check in `submit_operator_hour_log_atomic`.
+7. Fix **BUG-OP-08**: Guard against logging hours on machines in `maintenance`, `decommissioned`, or `inactive` status.
+
+1. **Shared Validation Layer (`packages/validation/src/hourMeter.ts`)**:
+   - Added user-friendly `required_error` and `invalid_type_error` messages to `start_meter` and `end_meter`.
+   - Added `.refine` rule verifying `breakdown_hours <= shiftDurationHours` when `is_breakdown` is true.
+
+2. **Server Action & Backend Layer (`apps/web/app/actions/operators.ts`)**:
+   - Enforced strict non-negative finite check on `startMeter` and `endMeter`.
+   - Added pre-submission machine status check rejecting machines in `maintenance`, `decommissioned`, or `inactive`.
+   - Verified that `payload.clientId` matches `machines.client_id`.
+   - Validated that `effectiveBreakdownHours <= timing.durationHours`.
+   - Handled all database security & business error codes (`23514`, `42501`, `23503`).
+
+3. **Web Frontend Dashboard (`apps/web/components/dashboard/OperatorDashboard.tsx`, `MachineSelect.tsx`)**:
+   - Enhanced `meterValidationWarning` to detect blank/empty strings and negative values in real time.
+   - Updated `completionStatus` and `handleOpenSubmitModal` to block submissions when breakdown duration exceeds shift duration.
+   - Added reactive inline error banners for breakdown time violations.
+   - Added visual status chips in `MachineSelect.tsx` for machines under maintenance or decommissioned.
+
+4. **Mobile React Native Parity (`apps/mobile/components/work/MeterLogModal.tsx`)**:
+   - Added pre-flight check rejecting blank or negative start and end meters.
+   - Added pre-flight check blocking breakdown durations exceeding shift duration.
+   - Migrated submission from raw table insert to `submit_operator_hour_log_atomic` RPC with resilient fallback.
+   - Ensured `machines.current_operator_id`, `machines.health_status`, and audit logs are synchronized in lockstep.
+
+5. **Automated Verification & Quality Gates**:
+   - `supabase/tests/test_operator_complete_matrix.mjs`: **75/75 assertions PASSED, 0 FAILED, 0 ACTIVE BUGS**.
+   - `pnpm typecheck`: **7/7 packages successful with 0 errors**.
+
+---
+
+## Previous Completed Task (2026-09-08) — Comprehensive Operator QA Test Suite (OP-01 to OP-40), Boundary Matrix Verification & Multi-Tier Bug Discovery (`supabase/tests/test_operator_complete_matrix.mjs`, `AI/OPERATOR_QA_BUG_REPORT.json`, `walkthrough.md`)
+
+**Goal**:
+Execute a complete, rigorous quality assurance test plan focusing exclusively on the **Operator role**:
+1. Implement an automated end-to-end test runner in `supabase/tests/test_operator_complete_matrix.mjs` covering **OP-01 through OP-40**.
+2. Cover all 14 scenarios in the **Critical Shift Matrix** (including normal shifts, 30m/1h/2h short shifts, exact handovers, overnight shifts, midnight boundaries, and future shift rejections).
+3. Cover all 9 scenarios in the **Critical Date Matrix** (Today, Yesterday, 7 days ago, 8 days ago lockdown, future date rejection, month-end rollovers, year-end rollovers, leap year Feb 28/29 rollovers).
+4. Cover all 8 scenarios in the **Critical Meter Matrix** (valid progression, 0-hour edge case, meter rollback rejection, new machine 0 commissioning, decimal values, negative readings rejection, large values).
+5. Verify multi-tier invariants: UI -> API -> Server Action -> Database Constraints & Triggers -> Concurrency Locks -> History retrieval.
+6. Generate a comprehensive Bug & Error Report cataloging all discovered issues and edge cases in the standard QA bug report format.
+
+1. **Automated Multi-Tier Test Suite (`supabase/tests/test_operator_complete_matrix.mjs`)**:
+   - Built 15 comprehensive suites with 70 automated assertions spanning all 40 OP test codes.
+   - Tested live database operations against Supabase using transaction-safe prefixes and automatic post-test cleanup (`finally` block).
+   - Executed concurrent submissions via `Promise.all` verifying PostgreSQL advisory transaction locks (`pg_advisory_xact_lock`).
+   - Verified 100% pass rate on test assertions (70/70 PASSED, 0 FAILED).
+
+2. **Bugs & Discrepancies Discovered & Documented**:
+   - **BUG-OP-01 (Medium)**: In `OperatorDashboard.tsx`, blank `startMeter` silently defaults to 0 via `parseFloat(startMeter) || 0`, which can calculate massive false running hours (e.g. 1010 hours instead of 10 hours).
+   - **BUG-OP-02 (Low / Spec Clarification)**: Automatic 1-hour lunch break deduction is currently `0.0` (as updated in migration 051) whereas user test plan specifies a 1-hour automatic break deduction.
+   - **BUG-OP-03 (Medium)**: Breakdown duration is allowed to exceed total shift duration without validation (e.g. 6.0h breakdown on a 4.0h shift).
+   - **BUG-OP-05 (High)**: If a user or API caller passes a `clientId` that does not match the machine's assigned `client_id`, the database RPC `submit_operator_hour_log_atomic` creates the log with the mismatched client without verification.
+   - **BUG-OP-06 (High)**: Mobile React Native app (`apps/mobile/components/work/MeterLogModal.tsx`) directly executes table inserts on `machine_hour_logs` instead of calling `submit_operator_hour_log_atomic`, omitting `current_operator_id` updates on the `machines` table and skipping `audit_logs` entries.
+   - **BUG-OP-07 (High / Security)**: `submit_operator_hour_log_atomic` is a `SECURITY DEFINER` function and accepts arbitrary `p_operator_id` without verifying whether `auth.uid() = p_operator_id` or verifying supervisor/admin roles.
+
+---
+
+
+
+**Goal**:
+Fulfill all 3 user feedback items on `/operations?tab=entry`:
+1. `<OperatorDashboard> <CustomTimePicker>`: Shift start time must default to the Supabase start time of that user by default.
+2. `<OperatorDashboard> <CustomTimePicker>`: Shift end time must default to the Supabase end time of that user by default.
+3. `<OperatorDashboard>`: Remove the `-1` hour lunch break deduction from shift time calculations across frontend, backend, and database (e.g. 6:00 AM to 2:00 PM must calculate and display 8.0 hours).
+4. Synchronize all changes with the Mobile React Native App (`apps/mobile/components/work/MeterLogModal.tsx`).
+5. Add automated tests and verify zero TypeScript compilation errors across all workspace packages.
+
+1. **Database Migration & User Shift Time Schema (`supabase/migrations/051_include_lunch_in_shift_and_add_user_shift_times.sql`)**:
+   - Added `shift_start_time TIME` and `shift_end_time TIME` columns to `public.users`.
+   - Backfilled existing users from `shift_time` text (e.g. `'08:00 AM - 08:00 PM'` -> `08:00:00`, `20:00:00`).
+   - Updated `handle_new_user()` trigger on `auth.users` to parse and store `shift_start_time` and `shift_end_time`.
+   - Updated `auto_calculate_machine_hour_log_overtime()` trigger function on `public.machine_hour_logs` to eliminate lunch deduction (`v_break_hours := 0.0`), start overtime after 8.0 hours (`v_duration_hours > 8.0`), and set `normal_working_hours := v_duration_hours - v_overtime_hours`.
+   - Recalculated `normal_working_hours` for existing rows in `public.machine_hour_logs`.
+
+2. **Shared Monorepo Packages (`packages/types`, `packages/utils`)**:
+   - `packages/types/src/database.ts`: Added `shift_start_time?: string | null;` and `shift_end_time?: string | null;` to the `User` interface.
+   - `packages/utils/src/date.ts`:
+     - Updated `computeShiftTiming`: set `breakHours = 0.0` (zero lunch deduction). Set auto-overtime threshold to 8.0 hours (`Math.max(0, Math.round((durationHours - 8.0) * 10) / 10)`). Normal working hours calculated as `Math.max(0, Math.round((durationHours - overtimeHours) * 10) / 10)`. All early returns now supply `breakHours: 0.0`.
+     - Hardened `parseTimeToMinutes` regex to support optional seconds (`:SS`, e.g. `06:00:00`, `14:00:00`) for both 12-hour and 24-hour SQL `TIME` strings.
+
+3. **Data Access Layer & Server Actions (`apps/web`)**:
+   - `apps/web/lib/dal.ts`: Added `shift_start_time, shift_end_time` to `getCachedUserRow` selection and bumped cache version to `dal-user-row-v8`.
+   - `apps/web/lib/queries/operators.ts`: Selected `shift_start_time, shift_end_time` in user query and parallel-fetched operator active machine assignment.
+   - `apps/web/app/actions/onboarding.ts`: Persisted `shift_start_time` and `shift_end_time` into `public.users` in direct fallback update.
+
+4. **Web Frontend UI & State Hydration (`apps/web/components/dashboard/OperatorDashboard.tsx`)**:
+   - Derived `defaultShiftTimes` prioritizing user's Supabase `shift_start_time`/`shift_end_time`, falling back to `parseProfileShiftTime(user.shift_time)`, active machine assignment, and standard default (`06:00 AM` / `02:00 PM`).
+   - Initialized `startTime` and `endTime` from `defaultShiftTimes` and synchronized via `useEffect`.
+   - Guarded draft `localStorage` restoration so stale static defaults (`"06:00 AM"` / `"02:00 PM"`) do not overwrite customized Supabase user shifts.
+   - Updated Section B Shift Timing Header badge and Confirmation Modal to display full 8.0h (`8h 00m (8.0h work)`) with 0 lunch deduction.
+
+5. **Cross-Platform Mobile App Synchronization (`apps/mobile/components/work/MeterLogModal.tsx`)**:
+   - Added `fetchCurrentUserShift()` on modal mount to fetch the operator's Supabase shift schedule (`shift_start_time`, `shift_end_time`, `shift_time`).
+   - Populated initial `startTime` and `endTime` with the operator's schedule.
+   - Leveraged updated `computeShiftTiming` to compute full 8.0h duration with zero lunch deduction and pass 8.0h `normal_working_hours`.
+
+6. **Quality Gate Verification & Automated Tests**:
+   - `supabase/tests/test_shift_timing_and_lunch_inclusion.mjs`: **31 passed, 0 failed (100%)**.
+   - `supabase/tests/test_future_shift_validation.mjs`: **14 passed, 0 failed (100%)**.
+   - `pnpm -r exec tsc --noEmit`: **0 errors across all 7 workspace packages**.
+
+---
+
+## Completed Task (2026-09-08) — Bug Fix: Shift End Timing Validation False Positive on Overnight Shifts, IST Timezone Invariance & Database Overhaul (`packages/utils/src/date.ts`, `packages/validation/src/hourMeter.ts`, `apps/web/app/actions/operators.ts`, `apps/web/components/dashboard/OperatorDashboard.tsx`, `apps/mobile/components/work/MeterLogModal.tsx`, `apps/mobile/app/(app)/operations.tsx`, `supabase/migrations/047_operator_machine_assignments_and_shift_overtime.sql`, `supabase/migrations/050_fix_shift_end_future_validation_and_overnight_derivation.sql`, `supabase/tests/test_future_shift_validation.mjs`)
+
+**Goal**:
+Address user report where an operator could not submit an overnight shift log:
+- Shift Start: 7 Sept 10:00 PM
+- Shift End: 8 Sept 06:00 AM (auto-selected overnight)
+- Submission Attempt: 8 Sept 06:10 AM IST (10 minutes after shift ended)
+- Error displayed: `"Cannot log before shift end"`
+1. Determine if this was a real bug or user error.
+2. Fix root cause across all layers: shared packages (`packages/utils`, `packages/validation`), Web (`apps/web`), Mobile (`apps/mobile`), Backend actions (`operators.ts`), and PostgreSQL database (`submit_operator_hour_log_atomic` RPC and overlap trigger).
+3. Add automated tests covering all scenarios and verify zero TypeScript compilation errors.
+
+1. **Bug Confirmation & Root Cause**:
+   - Confirmed as a real multi-layer bug:
+     - In `packages/utils/src/date.ts`, `parseDateTimeToDate` previously constructed Date objects using `new Date(year, month - 1, day, hours, minutes)`. On cloud hosting (Vercel) running with `process.env.TZ = 'UTC'`, 06:00 AM was parsed as 06:00 AM UTC (`11:30 AM IST`), falsely marking the shift as 5 hours in the future at 06:10 AM IST.
+     - In PostgreSQL, `submit_operator_hour_log_atomic` lacked timezone-pinned auto-derivation for `v_end_date` (+1 day) and crashed on `SELECT customer_address FROM public.machines` (code 42703).
+     - In `apps/web/app/actions/operators.ts`, `submitOperatorHourLogAction` lacked RPC error mapping for `"Cannot log before shift end"` (code 23514) and attempted fallback table insert.
+
+2. **Timezone Invariance & Date Helpers (`packages/utils/src/date.ts`, `packages/validation/src/hourMeter.ts`)**:
+   - Upgraded `parseDateTimeToDate` to format both `YYYY-MM-DD` and `DD-MM-YYYY` formats with 12h/24h times directly into an explicit `+05:30` (`Asia/Kolkata`) ISO string (`${year}-${mm}-${dd}T${hh}:${mi}:00.000+05:30`).
+   - Exported `getISTDateString(dateInput?)` returning `YYYY-MM-DD` in Indian Standard Time, preventing premature date rollback during night shifts.
+   - Standardized `addDaysToDateStr` and `formatResolvedRange` to use UTC date arithmetic.
+   - Updated `computeShiftTiming` to default to `getISTDateString()` as start date.
+   - Updated `isShiftEndInFuture` with 1-minute safety tolerance.
+   - Updated `CreateHourLogSchema` refine rule to parse `end_datetime` with timezone awareness.
+
+3. **Database Migration & Atomic RPC Overhaul (`supabase/migrations/`)**:
+   - Updated `047_operator_machine_assignments_and_shift_overtime.sql` and created `050_fix_shift_end_future_validation_and_overnight_derivation.sql`:
+     - `submit_operator_hour_log_atomic`: auto-derives `v_end_date := v_log_date + INTERVAL '1 day'` when `end_time <= start_time`, derives `v_start_datetime` and `v_end_datetime` in `Asia/Kolkata` (`((...)::timestamp AT TIME ZONE 'Asia/Kolkata')`), enforces `v_end_datetime > NOW() + INTERVAL '1 minute'`, fixes client address resolution from `public.clients`, and inserts fully-resolved timestamps.
+     - `check_machine_hour_log_shift_overlap`: auto-derives `NEW.end_date` for overnight shifts and enforces future shift end guard.
+
+4. **Backend Server Actions & Web Dashboard (`apps/web`)**:
+   - `apps/web/app/actions/operators.ts`: Fixed machine/client location resolution (select `client_id` and query `address, city, state` from `clients`), added `rpcError.code === "23514"` and `Cannot log before shift end` to user validation error check, used `getISTDateString()` for `todayDate`, and used `isShiftEndInFuture(timing.endDateTime, 1)`.
+   - `apps/web/components/dashboard/OperatorDashboard.tsx`: Replaced raw `toISOString().split("T")[0]` with `getISTDateString()`.
+
+5. **Cross-Platform Mobile App Synchronization (`apps/mobile`)**:
+   - `apps/mobile/components/work/MeterLogModal.tsx`: Imported and used `getISTDateString()` for date initialization and history ranges.
+   - `apps/mobile/app/(app)/operations.tsx`: Synchronized operator shift types and populated `activeOperators`.
+
+6. **Quality Gate Verification**:
+   - `supabase/tests/test_future_shift_validation.mjs`: 13 automated unit, integration, and database RPC tests: **13 passed, 0 failed (100%)**.
+   - `pnpm -r exec tsc --noEmit`: **0 errors across all 7 workspace packages**.
+
+---
+
 ## Completed Task (2026-09-07) — Page Feedback: /operations?tab=assignments Operator Card 2-Column Details, Full Shift Timings & Change Operator Action Consolidation (`OperationsClient.tsx`, `operators.ts`, `apps/mobile/app/(app)/operations.tsx`)
 
 **Goal**:

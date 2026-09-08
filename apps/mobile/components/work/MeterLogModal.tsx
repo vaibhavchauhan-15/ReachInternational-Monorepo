@@ -21,7 +21,9 @@ import {
   computeBreakdownDuration,
   findLatestMachineLogTimeline,
   formatTo12Hour,
+  parseProfileShiftTime,
   formatDate,
+  getISTDateString,
 } from '@reachinternational/utils';
 
 export interface MeterLogModalProps {
@@ -46,7 +48,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
 }) => {
   const { theme } = useTheme();
 
-  const [logDate, setLogDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [logDate, setLogDate] = useState(() => getISTDateString());
   const [startMeter, setStartMeter] = useState('0');
   const [endMeter, setEndMeter] = useState('0');
   const [startTime, setStartTime] = useState('06:00 AM');
@@ -71,7 +73,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     for (let i = 0; i <= 7; i++) {
       const d = new Date(now);
       d.setDate(d.getDate() - i);
-      const str = d.toISOString().split('T')[0];
+      const str = getISTDateString(d);
       const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
       const dayNum = d.getDate();
       const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
@@ -138,8 +140,36 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     return null;
   }, [latestTimeline, shiftStats.isValid, shiftStats.startDateTime, startTime, logDate]);
 
+  const fetchCurrentUserShift = async () => {
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData?.user?.id) return;
+      const { data: uData } = await supabase
+        .from('users')
+        .select('shift_start_time, shift_end_time, shift_time')
+        .eq('id', authData.user.id)
+        .single();
+      if (uData) {
+        let s = uData.shift_start_time ? formatTo12Hour(uData.shift_start_time) : '';
+        let e = uData.shift_end_time ? formatTo12Hour(uData.shift_end_time) : '';
+        if ((!s || !e) && uData.shift_time) {
+          const parsed = parseProfileShiftTime(uData.shift_time);
+          if (parsed) {
+            if (!s) s = formatTo12Hour(parsed.startTime);
+            if (!e) e = formatTo12Hour(parsed.endTime);
+          }
+        }
+        if (s) setStartTime(s);
+        if (e) setEndTime(e);
+      }
+    } catch {
+      // Non-blocking fallback to defaults
+    }
+  };
+
   useEffect(() => {
     if (visible) {
+      fetchCurrentUserShift();
       fetchClients();
       setError('');
       setSuccess('');
@@ -234,6 +264,26 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   const runningHours = Math.max(0, endVal - startVal);
 
   const handleSubmit = async () => {
+    if (!startMeter.trim()) {
+      setError('Start meter reading is required.');
+      return;
+    }
+    const startVal = parseFloat(startMeter);
+    if (isNaN(startVal) || startVal < 0) {
+      setError('Start meter reading must be a valid non-negative number.');
+      return;
+    }
+
+    if (!endMeter.trim()) {
+      setError('End meter reading is required.');
+      return;
+    }
+    const endVal = parseFloat(endMeter);
+    if (isNaN(endVal) || endVal < 0) {
+      setError('End meter reading must be a valid non-negative number.');
+      return;
+    }
+
     if (endVal < startVal) {
       setError('End meter reading cannot be less than start meter.');
       return;
@@ -249,9 +299,15 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       return;
     }
 
-    if (isBreakdown && !breakdownStats?.isValid) {
-      setError(breakdownStats?.errorMessage || 'Please enter valid breakdown start and end times.');
-      return;
+    if (isBreakdown) {
+      if (!breakdownStats?.isValid) {
+        setError(breakdownStats?.errorMessage || 'Please enter valid breakdown start and end times.');
+        return;
+      }
+      if (shiftStats.isValid && breakdownStats.durationDecimalHours > shiftStats.durationHours) {
+        setError(`Breakdown duration (${breakdownStats.durationDecimalHours}h) cannot exceed total shift duration (${shiftStats.durationHours}h).`);
+        return;
+      }
     }
 
     setError('');
@@ -279,53 +335,122 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
 
       const idempotencyKey = `ihl_m_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-      const payload: any = {
-        machine_id: machineId || null,
-        client_id: selectedClientId || null,
-        location: location.trim() || null,
-        start_meter: startVal,
-        end_meter: endVal,
-        running_hours: runningHours,
-        start_time: startTime.trim(),
-        end_time: endTime.trim(),
-        overtime_hours: shiftStats.overtimeHours,
-        normal_working_hours: shiftStats.normalWorkingHours,
-        is_breakdown: isBreakdown,
-        breakdown_start_time: bkdStart || null,
-        breakdown_end_time: bkdEnd || null,
-        breakdown_duration: bkdDurationFormatted || null,
-        breakdown_hours: bkdDecimalHours,
-        shift: null,
-        machine_condition: isBreakdown ? 'breakdown' : 'good',
-        remarks: remarksPayload || null,
-        operator_id: userId || null,
-        idempotency_key: idempotencyKey,
-        log_date: shiftStats.resolvedStartDate,
-        end_date: shiftStats.resolvedEndDate,
-        start_datetime: shiftStats.startDateTime?.toISOString(),
-        end_datetime: shiftStats.endDateTime?.toISOString(),
-      };
+      // 1. Try atomic PostgreSQL RPC execution first (syncs machines.current_operator_id, health_status, and audit_logs in 1 transaction)
+      let rpcSucceeded = false;
+      try {
+        const { data: rpcRes, error: rpcErr } = await supabase.rpc('submit_operator_hour_log_atomic', {
+          p_machine_id: machineId,
+          p_operator_id: userId,
+          p_client_id: selectedClientId || null,
+          p_log_date: shiftStats.resolvedStartDate,
+          p_end_date: shiftStats.resolvedEndDate,
+          p_start_datetime: shiftStats.startDateTime?.toISOString() || null,
+          p_end_datetime: shiftStats.endDateTime?.toISOString() || null,
+          p_start_meter: startVal,
+          p_end_meter: endVal,
+          p_start_time: startTime.trim(),
+          p_end_time: endTime.trim(),
+          p_overtime_hours: shiftStats.overtimeHours,
+          p_normal_working_hours: shiftStats.normalWorkingHours,
+          p_is_breakdown: isBreakdown,
+          p_breakdown_start_time: bkdStart || null,
+          p_breakdown_end_time: bkdEnd || null,
+          p_breakdown_duration: bkdDurationFormatted || null,
+          p_breakdown_hours: bkdDecimalHours,
+          p_shift: null,
+          p_machine_condition: isBreakdown ? 'breakdown' : 'good',
+          p_location: location.trim() || null,
+          p_remarks: remarksPayload || null,
+          p_idempotency_key: idempotencyKey,
+        });
 
-      const { error: insertErr } = await supabase
-        .from('machine_hour_logs')
-        .insert([payload]);
-
-      if (insertErr) throw insertErr;
-
-      // Update machine hour_meter, operator & health status
-      if (machineId && endVal > 0) {
-        const mUpdate: Record<string, any> = {
-          hour_meter: endVal,
-          health_status: isBreakdown ? 'breakdown' : 'active',
-          updated_at: new Date().toISOString(),
-        };
-        if (userId) {
-          mUpdate.current_operator_id = userId;
+        if (!rpcErr && rpcRes && (rpcRes as any).success) {
+          rpcSucceeded = true;
+        } else if (rpcErr) {
+          if (
+            rpcErr.message?.includes('cannot be less than start meter') ||
+            rpcErr.message?.includes('Shift end timestamp') ||
+            rpcErr.message?.includes('overlap') ||
+            rpcErr.message?.includes('Cannot log before shift end') ||
+            rpcErr.message?.includes('Breakdown duration') ||
+            rpcErr.message?.includes('maintenance or decommissioned') ||
+            rpcErr.message?.includes('Unauthorized operator') ||
+            rpcErr.message?.includes('Client ID does not match') ||
+            rpcErr.code === '23514' ||
+            rpcErr.code === '42501' ||
+            rpcErr.code === '23503'
+          ) {
+            throw rpcErr;
+          }
         }
-        await supabase
-          .from('machines')
-          .update(mUpdate)
-          .eq('id', machineId);
+      } catch (rpcCatchErr: any) {
+        if (
+          rpcCatchErr.message?.includes('cannot be less than start meter') ||
+          rpcCatchErr.message?.includes('Shift end timestamp') ||
+          rpcCatchErr.message?.includes('overlap') ||
+          rpcCatchErr.message?.includes('Cannot log before shift end') ||
+          rpcCatchErr.message?.includes('Breakdown duration') ||
+          rpcCatchErr.message?.includes('maintenance or decommissioned') ||
+          rpcCatchErr.message?.includes('Unauthorized operator') ||
+          rpcCatchErr.message?.includes('Client ID does not match') ||
+          rpcCatchErr.code === '23514' ||
+          rpcCatchErr.code === '42501' ||
+          rpcCatchErr.code === '23503'
+        ) {
+          throw rpcCatchErr;
+        }
+      }
+
+      // 2. Resilient Fallback Path (if RPC is not yet migrated on remote environment)
+      if (!rpcSucceeded) {
+        const payload: any = {
+          machine_id: machineId || null,
+          client_id: selectedClientId || null,
+          location: location.trim() || null,
+          start_meter: startVal,
+          end_meter: endVal,
+          running_hours: runningHours,
+          start_time: startTime.trim(),
+          end_time: endTime.trim(),
+          overtime_hours: shiftStats.overtimeHours,
+          normal_working_hours: shiftStats.normalWorkingHours,
+          is_breakdown: isBreakdown,
+          breakdown_start_time: bkdStart || null,
+          breakdown_end_time: bkdEnd || null,
+          breakdown_duration: bkdDurationFormatted || null,
+          breakdown_hours: bkdDecimalHours,
+          shift: null,
+          machine_condition: isBreakdown ? 'breakdown' : 'good',
+          remarks: remarksPayload || null,
+          operator_id: userId || null,
+          idempotency_key: idempotencyKey,
+          log_date: shiftStats.resolvedStartDate,
+          end_date: shiftStats.resolvedEndDate,
+          start_datetime: shiftStats.startDateTime?.toISOString(),
+          end_datetime: shiftStats.endDateTime?.toISOString(),
+        };
+
+        const { error: insertErr } = await supabase
+          .from('machine_hour_logs')
+          .insert([payload]);
+
+        if (insertErr) throw insertErr;
+
+        // Update machine hour_meter, current_operator_id & health status
+        if (machineId && endVal > 0) {
+          const mUpdate: Record<string, any> = {
+            hour_meter: endVal,
+            health_status: isBreakdown ? 'breakdown' : 'active',
+            updated_at: new Date().toISOString(),
+          };
+          if (userId) {
+            mUpdate.current_operator_id = userId;
+          }
+          await supabase
+            .from('machines')
+            .update(mUpdate)
+            .eq('id', machineId);
+        }
       }
 
       setSuccess('Daily machine log recorded successfully!');
@@ -340,6 +465,12 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
           errMsg = "Invalid machine status value. Machine rental status must be 'available' or 'rented'.";
         } else if (errMsg.includes('chk_machine_hour_logs_meter_range') || errMsg.includes('cannot be less than start meter')) {
           errMsg = "Ending hour meter reading cannot be less than starting hour meter reading.";
+        } else if (errMsg.includes('Breakdown duration') || errMsg.includes('cannot exceed total shift duration')) {
+          errMsg = err.message;
+        } else if (errMsg.includes('maintenance or decommissioned')) {
+          errMsg = "Cannot record operational hours for equipment currently in maintenance or decommissioned status.";
+        } else if (errMsg.includes('Cannot log before shift end')) {
+          errMsg = "Cannot log before shift end.";
         } else {
           errMsg = "Database validation failed. Please verify meter readings and timings.";
         }
@@ -347,6 +478,10 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         errMsg = "Shift end time must be strictly after the start time.";
       } else if (errMsg.includes('overlap') || errMsg.includes('overlapping')) {
         errMsg = "Shift time overlaps with an existing log for this machine.";
+      } else if (errMsg.includes('Unauthorized operator') || errMsg.includes('42501')) {
+        errMsg = "Unauthorized: You cannot submit logs on behalf of another operator.";
+      } else if (errMsg.includes('Client ID does not match') || errMsg.includes('23503')) {
+        errMsg = "Client does not match assigned machine deployment.";
       }
       setError(errMsg);
     } finally {

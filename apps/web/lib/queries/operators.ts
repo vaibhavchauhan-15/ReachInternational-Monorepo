@@ -365,11 +365,18 @@ export const getOperationsHubData = cache(async (user: User, tab: string = "logs
 
   // 1. Operator Entry Tab: Only fetch operator assignment + recent logs
   if (user.role === "operator" || tab === "entry" || tab === "history") {
-    const [assignedMachineRes, rawRecentLogs, clientsList, allMachinesRes] = await Promise.all([
+    const [assignedMachineRes, activeAssignmentRes, rawRecentLogs, clientsList, allMachinesRes] = await Promise.all([
       supabase
         .from("machines")
         .select("id, machine_id, model, serial_number, hour_meter, status, manufacturer, client_id, current_operator_id, operator_ids, current_supervisor_id, supervisor_ids, client:clients(id, code, company_name, address, city, state, phone)")
         .or(`current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}}`)
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("operator_machine_assignments")
+        .select("id, machine_id, shift_start_time, shift_end_time, is_active")
+        .eq("operator_id", user.id)
+        .eq("is_active", true)
         .limit(1)
         .maybeSingle(),
       fetchHourLogsResiliently(supabase, { operatorId: user.id, limit: 100 }),
@@ -381,11 +388,14 @@ export const getOperationsHubData = cache(async (user: User, tab: string = "logs
       ? (() => {
           const m = assignedMachineRes.data as any;
           const code = m.machine_id || m.id;
+          const activeAssignment = activeAssignmentRes.data;
           return {
             ...m,
             machine_id: code,
             machine_code: code,
             machine_name: m.model ? `${code} (${m.model})` : code,
+            shift_start_time: activeAssignment?.shift_start_time || null,
+            shift_end_time: activeAssignment?.shift_end_time || null,
           };
         })()
       : null;
@@ -401,7 +411,7 @@ export const getOperationsHubData = cache(async (user: User, tab: string = "logs
       machines: allMachinesRes.machines,
       dbClients: clientsList,
       operators: [],
-      assignments: [],
+      assignments: activeAssignmentRes.data ? [activeAssignmentRes.data] : [],
       hourLogs: formattedLogs,
       siteMovements: [],
       operatorPayouts: [],
@@ -423,7 +433,7 @@ export const getOperationsHubData = cache(async (user: User, tab: string = "logs
     getClients(undefined, true),
     supabase
       .from("users")
-      .select("id, full_name, email, phone, role, status, shift_time")
+      .select("id, full_name, email, phone, role, status, shift_time, shift_start_time, shift_end_time")
       .in("role", ["operator", "supervisor", "manager", "admin", "super_admin", "service_manager"])
       .eq("status", "active")
       .order("full_name"),

@@ -2,114 +2,13 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
-import { z } from '../../apps/web/node_modules/zod/index.js';
-
-function parseTimeToMinutes(timeStr) {
-  const match = (timeStr || '').trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
-  if (!match) return null;
-  let hours = parseInt(match[1], 10);
-  const minutes = parseInt(match[2], 10);
-  const meridiem = (match[3] || '').toUpperCase();
-  if (meridiem === 'PM' && hours < 12) hours += 12;
-  if (meridiem === 'AM' && hours === 12) hours = 0;
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
-  return hours * 60 + minutes;
-}
-
-function isShiftEndInFuture(endDateTime, graceMinutes = 0) {
-  if (!endDateTime) return false;
-  const endDate = new Date(endDateTime);
-  if (Number.isNaN(endDate.getTime())) return false;
-  const now = new Date();
-  const graceMs = Math.max(0, graceMinutes) * 60 * 1000;
-  return endDate.getTime() > (now.getTime() + graceMs);
-}
-
-function computeShiftTiming({
-  logDate,
-  startTime,
-  endTime,
-  disallowFutureEnd = false,
-  currentTimestamp,
-}) {
-  const defaultRes = {
-    startDateTime: null,
-    endDateTime: null,
-    totalShiftHours: null,
-    isValid: false,
-    errorMessage: undefined,
-    isFutureEnd: false,
-  };
-
-  if (!logDate || !startTime || !endTime) return defaultRes;
-
-  const startMinutes = parseTimeToMinutes(startTime);
-  const endMinutes = parseTimeToMinutes(endTime);
-
-  if (startMinutes === null || endMinutes === null) {
-    return { ...defaultRes, errorMessage: 'Invalid time format' };
-  }
-
-  const startDate = new Date(`${logDate}T00:00:00`);
-  if (Number.isNaN(startDate.getTime())) {
-    return { ...defaultRes, errorMessage: 'Invalid date format' };
-  }
-
-  const startDateTime = new Date(startDate.getTime() + startMinutes * 60 * 1000);
-  let endDateTime;
-
-  if (endMinutes >= startMinutes) {
-    endDateTime = new Date(startDate.getTime() + endMinutes * 60 * 1000);
-  } else {
-    // Overnight shift: ends the following day
-    endDateTime = new Date(startDate.getTime() + (24 * 60 + endMinutes) * 60 * 1000);
-  }
-
-  const diffMs = endDateTime.getTime() - startDateTime.getTime();
-  const totalShiftHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
-
-  const nowMs = typeof currentTimestamp === 'number' ? currentTimestamp : Date.now();
-  const isFutureEnd = endDateTime.getTime() > nowMs;
-
-  if (disallowFutureEnd && isFutureEnd) {
-    return {
-      startDateTime: startDateTime.toISOString(),
-      endDateTime: endDateTime.toISOString(),
-      totalShiftHours,
-      isValid: false,
-      errorMessage: 'Cannot log before shift end.',
-      isFutureEnd: true,
-    };
-  }
-
-  return {
-    startDateTime: startDateTime.toISOString(),
-    endDateTime: endDateTime.toISOString(),
-    totalShiftHours,
-    isValid: true,
-    isFutureEnd,
-  };
-}
-
-const CreateHourLogSchema = z.object({
-  machine_id: z.string().min(1),
-  log_date: z.string().min(1),
-  start_meter: z.number().nonnegative(),
-  end_meter: z.number().nonnegative(),
-  end_datetime: z.string().datetime().optional().nullable(),
-}).refine(
-  (data) => {
-    if (!data.end_datetime) return true;
-    const endMs = new Date(data.end_datetime).getTime();
-    if (Number.isNaN(endMs)) return true;
-    const nowMs = Date.now();
-    return endMs <= nowMs + 60 * 1000;
-  },
-  {
-    message: 'Cannot log before shift end.',
-    path: ['end_datetime'],
-  }
-);
+import {
+  computeShiftTiming,
+  isShiftEndInFuture,
+  parseDateTimeToDate,
+  getISTDateString,
+} from '../../packages/utils/src/date.ts';
+import { CreateHourLogSchema } from '../../packages/validation/src/hourMeter.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -162,103 +61,138 @@ async function runTestSuite() {
   }
 
   // -------------------------------------------------------------
-  // TEST 1: computeShiftTiming - Future Shift End Validation
+  // TEST SUITE 1: User Reported Scenario (Night Shift Handover at 06:10 AM)
   // -------------------------------------------------------------
-  console.log('\n--- SUITE 1: computeShiftTiming & Utilities ---');
+  console.log('\n--- SUITE 1: User Overnight Shift Scenario (7 Sept 10:00 PM -> 8 Sept 06:00 AM) ---');
 
-  const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  // Operator finished night shift at 06:00 AM IST on 8 Sept 2026 and submits at 06:10 AM IST (10 min later)
+  const submitTimeEpoch = new Date('2026-09-08T06:10:00+05:30').getTime(); // 2026-09-08T00:40:00.000Z
 
-  // Create a time 2 hours in the future
-  const futureHour = (now.getHours() + 2) % 24;
-  const futurePeriod = futureHour >= 12 ? 'PM' : 'AM';
-  const futureH12 = futureHour % 12 === 0 ? 12 : futureHour % 12;
-  const futureTimeStr = `${String(futureH12).padStart(2, '0')}:00 ${futurePeriod}`;
-
-  // Past time 2 hours ago
-  const pastHour = (now.getHours() - 2 + 24) % 24;
-  const pastPeriod = pastHour >= 12 ? 'PM' : 'AM';
-  const pastH12 = pastHour % 12 === 0 ? 12 : pastHour % 12;
-  const pastTimeStr = `${String(pastH12).padStart(2, '0')}:00 ${pastPeriod}`;
-
-  // Even earlier past time 4 hours ago
-  const earlierHour = (now.getHours() - 4 + 24) % 24;
-  const earlierPeriod = earlierHour >= 12 ? 'PM' : 'AM';
-  const earlierH12 = earlierHour % 12 === 0 ? 12 : earlierHour % 12;
-  const earlierTimeStr = `${String(earlierH12).padStart(2, '0')}:00 ${earlierPeriod}`;
-
-  const futureResult = computeShiftTiming({
-    logDate: todayStr,
-    startTime: '06:00 AM',
-    endTime: futureTimeStr,
+  const nightShiftResult = computeShiftTiming({
+    startDate: '2026-09-07',
+    startTime: '10:00 PM',
+    endDate: '2026-09-08',
+    endTime: '06:00 AM',
     disallowFutureEnd: true,
+    currentTimestamp: submitTimeEpoch,
   });
 
   assert(
-    futureResult.isValid === false && futureResult.isFutureEnd === true,
-    'computeShiftTiming rejects future end time when disallowFutureEnd=true',
-    JSON.stringify(futureResult)
+    nightShiftResult.isValid === true && nightShiftResult.isFutureEnd === false,
+    'Night shift ending at 06:00 AM is VALID when entered at 06:10 AM IST',
+    JSON.stringify(nightShiftResult)
   );
 
   assert(
-    futureResult.errorMessage === 'Cannot log before shift end.',
-    'computeShiftTiming returns short error message: "Cannot log before shift end."',
-    `Received: ${futureResult.errorMessage}`
+    nightShiftResult.errorMessage === null,
+    'Night shift does NOT produce "Cannot log before shift end" at 06:10 AM',
+    `Received errorMessage: ${nightShiftResult.errorMessage}`
   );
 
-  // Overnight shift starting today (e.g. 10:00 PM) and ending tomorrow (06:00 AM)
-  const overnightFutureResult = computeShiftTiming({
-    logDate: todayStr,
+  assert(
+    isShiftEndInFuture(nightShiftResult.endDateTime, 1) === false,
+    'isShiftEndInFuture returns false for completed night shift at 06:10 AM'
+  );
+
+  // Auto-overnight shift calculation without passing explicit endDate
+  const autoOvernightResult = computeShiftTiming({
+    startDate: '2026-09-07',
     startTime: '10:00 PM',
     endTime: '06:00 AM',
     disallowFutureEnd: true,
+    currentTimestamp: submitTimeEpoch,
   });
 
   assert(
-    overnightFutureResult.isValid === false && overnightFutureResult.isFutureEnd === true,
-    'computeShiftTiming detects and rejects overnight shifts ending tomorrow',
-    JSON.stringify(overnightFutureResult)
+    autoOvernightResult.resolvedEndDate === '2026-09-08' && autoOvernightResult.isOvernight === true,
+    'computeShiftTiming automatically derives correct next-day endDate (2026-09-08)',
+    `Derived: ${autoOvernightResult.resolvedEndDate}`
   );
 
-  // Past shift yesterday
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  assert(
+    autoOvernightResult.isValid === true && autoOvernightResult.isFutureEnd === false,
+    'Auto-derived overnight shift allows submission at 06:10 AM IST'
+  );
 
-  const pastResult = computeShiftTiming({
-    logDate: yesterdayStr,
-    startTime: '06:00 AM',
-    endTime: '02:00 PM',
+  // Attempt to enter prematurely before shift end (e.g. at 05:50 AM IST)
+  const prematureSubmitTimeEpoch = new Date('2026-09-08T05:50:00+05:30').getTime();
+  const prematureResult = computeShiftTiming({
+    startDate: '2026-09-07',
+    startTime: '10:00 PM',
+    endTime: '06:00 AM',
     disallowFutureEnd: true,
+    currentTimestamp: prematureSubmitTimeEpoch,
   });
 
   assert(
-    pastResult.isValid === true && pastResult.isFutureEnd === false,
-    'computeShiftTiming allows completed shift from yesterday',
-    JSON.stringify(pastResult)
+    prematureResult.isValid === false && prematureResult.isFutureEnd === true,
+    'Premature entry at 05:50 AM for 06:00 AM shift end is correctly REJECTED',
+    JSON.stringify(prematureResult)
   );
 
   assert(
-    isShiftEndInFuture(futureResult.endDateTime) === true,
-    'isShiftEndInFuture correctly identifies future datetime'
+    prematureResult.errorMessage === 'Cannot log before shift end.',
+    'Premature entry returns exact error: "Cannot log before shift end."',
+    `Received: ${prematureResult.errorMessage}`
+  );
+
+  // -------------------------------------------------------------
+  // TEST SUITE 2: Cloud / Vercel Server Simulation (TZ=UTC Environment)
+  // -------------------------------------------------------------
+  console.log('\n--- SUITE 2: Timezone Invariance (TZ=UTC Vercel Server Simulation) ---');
+
+  const prevTZ = process.env.TZ;
+  process.env.TZ = 'UTC';
+
+  const utcServerResult = computeShiftTiming({
+    startDate: '2026-09-07',
+    startTime: '10:00 PM',
+    endDate: '2026-09-08',
+    endTime: '06:00 AM',
+    disallowFutureEnd: true,
+    currentTimestamp: submitTimeEpoch,
+  });
+
+  assert(
+    utcServerResult.isValid === true && utcServerResult.isFutureEnd === false,
+    'On Vercel (TZ=UTC), shift is VALID at 06:10 AM IST (eliminating 5.5h false positive)',
+    JSON.stringify(utcServerResult)
   );
 
   assert(
-    isShiftEndInFuture(pastResult.endDateTime) === false,
-    'isShiftEndInFuture correctly identifies past datetime'
+    utcServerResult.endDateTime?.toISOString() === '2026-09-08T00:30:00.000Z',
+    'endDateTime is deterministically parsed as 2026-09-08T00:30:00.000Z (06:00 AM IST)',
+    `Received: ${utcServerResult.endDateTime?.toISOString()}`
   );
 
-  // -------------------------------------------------------------
-  // TEST 2: Zod Validation Schema - CreateHourLogSchema
-  // -------------------------------------------------------------
-  console.log('\n--- SUITE 2: CreateHourLogSchema Validation ---');
+  process.env.TZ = prevTZ;
 
+  // -------------------------------------------------------------
+  // TEST SUITE 3: CreateHourLogSchema Validation
+  // -------------------------------------------------------------
+  console.log('\n--- SUITE 3: CreateHourLogSchema Validation ---');
+
+  const validShiftEndPayload = {
+    machine_id: 'test-machine',
+    log_date: '2026-09-07',
+    end_date: '2026-09-08',
+    start_meter: 100,
+    end_meter: 108,
+    end_datetime: nightShiftResult.endDateTime?.toISOString(), // 2026-09-08T00:30:00.000Z
+  };
+
+  const parsedValid = CreateHourLogSchema.safeParse(validShiftEndPayload);
+  assert(
+    parsedValid.success === true,
+    'CreateHourLogSchema ACCEPTS completed night shift end_datetime',
+    JSON.stringify(parsedValid)
+  );
+
+  // Future datetime 3 hours from now
   const futureIso = new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString();
-  const pastIso = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
-
   const invalidFuturePayload = {
     machine_id: 'test-machine',
-    log_date: todayStr,
+    log_date: getISTDateString(),
     start_meter: 100,
     end_meter: 108,
     end_datetime: futureIso,
@@ -267,7 +201,7 @@ async function runTestSuite() {
   const parsedFuture = CreateHourLogSchema.safeParse(invalidFuturePayload);
   assert(
     parsedFuture.success === false,
-    'CreateHourLogSchema rejects future end_datetime',
+    'CreateHourLogSchema REJECTS future end_datetime',
     JSON.stringify(parsedFuture)
   );
 
@@ -278,25 +212,10 @@ async function runTestSuite() {
     `Received: ${errorMsg}`
   );
 
-  const validPastPayload = {
-    machine_id: 'test-machine',
-    log_date: yesterdayStr,
-    start_meter: 100,
-    end_meter: 108,
-    end_datetime: pastIso,
-  };
-
-  const parsedPast = CreateHourLogSchema.safeParse(validPastPayload);
-  assert(
-    parsedPast.success === true,
-    'CreateHourLogSchema accepts past end_datetime',
-    JSON.stringify(parsedPast)
-  );
-
   // -------------------------------------------------------------
-  // TEST 3: Database & RPC / Trigger Future Shift Rejection
+  // TEST SUITE 4: Supabase Database Future End Guard & Atomic RPC
   // -------------------------------------------------------------
-  console.log('\n--- SUITE 3: Supabase Database Future End Guard ---');
+  console.log('\n--- SUITE 4: Supabase Database Future End Guard & Atomic RPC ---');
 
   const { data: machines } = await supabase.from('machines').select('id, hour_meter').limit(1);
   const { data: users } = await supabase.from('users').select('id').limit(1);
@@ -306,18 +225,18 @@ async function runTestSuite() {
     const testUser = users[0];
 
     const futureEndTimestamp = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
-    const futureStartTimestamp = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+    const pastStartTimestamp = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
 
-    // Direct insert test with future end_datetime (Trigger trg_check_machine_hour_log_shift_overlap or RPC guard)
+    // 1. Direct Table Insert Future Shift End Check
     const { data: dbData, error: dbError } = await supabase.from('machine_hour_logs').insert({
       machine_id: testMachine.id,
       operator_id: testUser.id,
-      log_date: todayStr,
+      log_date: getISTDateString(),
       start_meter: testMachine.hour_meter || 100,
       end_meter: (testMachine.hour_meter || 100) + 8,
       start_time: '06:00:00',
       end_time: '18:00:00',
-      start_datetime: futureStartTimestamp,
+      start_datetime: pastStartTimestamp,
       end_datetime: futureEndTimestamp,
       machine_condition: 'good',
     }).select();
@@ -329,11 +248,29 @@ async function runTestSuite() {
         `Error: ${dbError.message}`
       );
     } else {
-      console.log('ℹ️ Direct insert executed (migration 046 not yet applied on remote or bypassed). Cleaning up test log...');
+      console.log('ℹ️ Direct insert executed (remote trigger check bypassed or clean). Cleaning up test log...');
       if (dbData && dbData.length > 0) {
         await supabase.from('machine_hour_logs').delete().eq('id', dbData[0].id);
       }
     }
+
+    // 2. Canonical submit_operator_hour_log_atomic RPC Future Shift End Check
+    const { data: rpcData, error: rpcError } = await supabase.rpc('submit_operator_hour_log_atomic', {
+      p_machine_id: testMachine.id,
+      p_operator_id: testUser.id,
+      p_start_meter: testMachine.hour_meter || 100,
+      p_end_meter: (testMachine.hour_meter || 100) + 2,
+      p_start_time: '08:00:00',
+      p_end_time: '18:00:00',
+      p_start_datetime: pastStartTimestamp,
+      p_end_datetime: futureEndTimestamp,
+    });
+
+    assert(
+      rpcError !== null && (rpcError.message.includes('Cannot log before shift end') || rpcError.code === '23514'),
+      'Database RPC submit_operator_hour_log_atomic blocks future shift end with code 23514',
+      `Result: ${JSON.stringify(rpcError || rpcData)}`
+    );
   }
 
   console.log('\n=================================================================');

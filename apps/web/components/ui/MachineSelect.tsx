@@ -292,6 +292,17 @@ export function MachineSelect({
                             {m.machine_code}
                           </span>
                         )}
+                        {m.status && ["maintenance", "decommissioned", "inactive"].includes(m.status) && (
+                          <span
+                            className={`text-[9px] font-semibold px-1.5 py-0.5 rounded shrink-0 uppercase tracking-wider ${
+                              m.status === "maintenance"
+                                ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                                : "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/20"
+                            }`}
+                          >
+                            {m.status.replace("_", " ")}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 text-[10px] text-[var(--color-mute)] font-mono truncate mt-0.5">
                         {m.serial_number && <span>S/N: {m.serial_number}</span>}

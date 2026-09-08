@@ -278,17 +278,49 @@ export interface ShiftTimingComputation {
 }
 
 /**
- * Adds days to a YYYY-MM-DD date string.
+ * Returns a YYYY-MM-DD date string in Indian Standard Time (Asia/Kolkata - UTC+5:30).
+ * Eliminates premature calendar day rollback between 12:00 AM and 05:29 AM IST caused by UTC ISO conversion.
+ */
+export function getISTDateString(dateInput?: Date | string | number | null): string {
+  const d = dateInput ? new Date(dateInput) : new Date();
+  if (isNaN(d.getTime())) {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date());
+  }
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(d);
+}
+
+/**
+ * Adds days to a date string (supporting both YYYY-MM-DD and DD-MM-YYYY).
+ * Uses UTC arithmetic to avoid DST or local midnight boundary errors and returns YYYY-MM-DD.
  */
 export function addDaysToDateStr(dateStr: string, days: number): string {
-  const parts = dateStr.split('T')[0].split('-').map(Number);
+  if (!dateStr) return dateStr;
+  const cleanDate = dateStr.trim().split('T')[0];
+  const parts = cleanDate.split(/[/-]/).map(Number);
   if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) return dateStr;
-  const d = new Date(parts[0], parts[1] - 1, parts[2]);
-  d.setDate(d.getDate() + days);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+
+  let year: number;
+  let month: number;
+  let day: number;
+
+  if (parts[0] >= 1000) {
+    year = parts[0];
+    month = parts[1];
+    day = parts[2];
+  } else if (parts[2] >= 1000) {
+    day = parts[0];
+    month = parts[1];
+    year = parts[2];
+  } else {
+    return dateStr;
+  }
+
+  const d = new Date(Date.UTC(year, month - 1, day));
+  d.setUTCDate(d.getUTCDate() + days);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dNum = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${dNum}`;
 }
 
 /**
@@ -297,7 +329,7 @@ export function addDaysToDateStr(dateStr: string, days: number): string {
 export function parseTimeToMinutes(timeStr?: string | null): number | null {
   if (!timeStr) return null;
   const str = timeStr.trim().toUpperCase();
-  const match = str.match(/^(\d{1,3}):(\d{1,3})\s*(AM|PM)?$/i);
+  const match = str.match(/^(\d{1,3}):(\d{1,3})(?::\d{1,2})?\s*(AM|PM)?$/i);
   if (!match) return null;
 
   let hours = parseInt(match[1], 10);
@@ -312,27 +344,57 @@ export function parseTimeToMinutes(timeStr?: string | null): number | null {
 }
 
 /**
- * Parses date string (YYYY-MM-DD) and 12/24-hour time string (e.g. "08:00 PM") into a local Date object.
+ * Parses date string (YYYY-MM-DD or DD-MM-YYYY) and 12/24-hour time string (e.g. "08:00 PM")
+ * into a Date object strictly calibrated to Indian Standard Time (Asia/Kolkata - UTC+05:30).
+ * This ensures deterministic UTC timestamps across all runtime environments (Vercel server, browser, mobile, Node).
  */
 export function parseDateTimeToDate(dateStr?: string | null, timeStr?: string | null): Date | null {
   if (!dateStr || !timeStr) return null;
-  const dParts = dateStr.split('T')[0].split('-').map(Number);
-  if (dParts.length < 3 || isNaN(dParts[0]) || isNaN(dParts[1]) || isNaN(dParts[2])) return null;
+  const cleanDate = dateStr.trim().split('T')[0];
+  const parts = cleanDate.split(/[/-]/).map(Number);
+  if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) return null;
+
+  let year: number;
+  let month: number;
+  let day: number;
+
+  if (parts[0] >= 1000) {
+    year = parts[0];
+    month = parts[1];
+    day = parts[2];
+  } else if (parts[2] >= 1000) {
+    day = parts[0];
+    month = parts[1];
+    year = parts[2];
+  } else {
+    return null;
+  }
 
   const tTrimmed = timeStr.trim().toUpperCase();
-  const match = tTrimmed.match(/^(\d{1,3}):(\d{1,3})(?::\d{2})?\s*(AM|PM)?$/i);
+  const match = tTrimmed.match(/^(\d{1,3}):(\d{1,3})(?::(\d{1,3}))?\s*(AM|PM)?$/i);
   if (!match) return null;
 
   let hours = parseInt(match[1], 10);
   const minutes = parseInt(match[2], 10);
-  const period = match[3];
+  const seconds = match[3] ? parseInt(match[3], 10) : 0;
+  const period = match[4];
 
   if (period) {
     if (period === 'PM' && hours < 12) hours += 12;
     if (period === 'AM' && hours === 12) hours = 0;
   }
 
-  return new Date(dParts[0], dParts[1] - 1, dParts[2], hours, minutes, 0, 0);
+  const yStr = String(year).padStart(4, '0');
+  const mStr = String(month).padStart(2, '0');
+  const dStr = String(day).padStart(2, '0');
+  const hStr = String(hours).padStart(2, '0');
+  const minStr = String(minutes).padStart(2, '0');
+  const secStr = String(seconds).padStart(2, '0');
+
+  // Indian Standard Time (Asia/Kolkata) is strictly UTC+05:30
+  const isoWithOffset = `${yStr}-${mStr}-${dStr}T${hStr}:${minStr}:${secStr}+05:30`;
+  const d = new Date(isoWithOffset);
+  return isNaN(d.getTime()) ? null : d;
 }
 
 /**
@@ -346,12 +408,27 @@ export function formatResolvedRange(
   endTimeStr: string
 ): string {
   const formatShortDate = (dStr: string) => {
-    const parts = dStr.split('T')[0].split('-').map(Number);
+    const clean = dStr.trim().split('T')[0];
+    const parts = clean.split(/[/-]/).map(Number);
     if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
-      const d = new Date(parts[0], parts[1] - 1, parts[2]);
-      const day = d.getDate();
-      const month = d.toLocaleDateString('en-US', { month: 'short' });
-      return `${day} ${month}`;
+      let year: number;
+      let month: number;
+      let day: number;
+      if (parts[0] >= 1000) {
+        year = parts[0];
+        month = parts[1];
+        day = parts[2];
+      } else if (parts[2] >= 1000) {
+        day = parts[0];
+        month = parts[1];
+        year = parts[2];
+      } else {
+        return formatDate(dStr);
+      }
+      const d = new Date(Date.UTC(year, month - 1, day));
+      const dayVal = d.getUTCDate();
+      const monthVal = d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+      return `${dayVal} ${monthVal}`;
     }
     return formatDate(dStr);
   };
@@ -380,7 +457,7 @@ export function computeShiftTiming(params: {
   currentTimestamp?: number;
 }): ShiftTimingComputation {
   const { startDate, logDate, startTime, endDate, endTime, manualOvertime } = params;
-  const effectiveStartDate = startDate || logDate || new Date().toISOString().split('T')[0];
+  const effectiveStartDate = startDate || logDate || getISTDateString();
 
   if (!startTime || !endTime) {
     return {
@@ -395,7 +472,7 @@ export function computeShiftTiming(params: {
       isOvernight: false,
       overtimeHours: 0,
       normalWorkingHours: 0,
-      breakHours: 1.0,
+      breakHours: 0.0,
       isValid: false,
       errorMessage: 'Start time and end time are required.',
     };
@@ -417,7 +494,7 @@ export function computeShiftTiming(params: {
       isOvernight: false,
       overtimeHours: 0,
       normalWorkingHours: 0,
-      breakHours: 1.0,
+      breakHours: 0.0,
       isValid: false,
       errorMessage: 'Invalid time format.',
     };
@@ -438,7 +515,7 @@ export function computeShiftTiming(params: {
       isOvernight: false,
       overtimeHours: 0,
       normalWorkingHours: 0,
-      breakHours: 1.0,
+      breakHours: 0.0,
       isValid: false,
       errorMessage: 'Start time and end time cannot be identical.',
     };
@@ -479,7 +556,7 @@ export function computeShiftTiming(params: {
       isOvernight,
       overtimeHours: 0,
       normalWorkingHours: 0,
-      breakHours: 1.0,
+      breakHours: 0.0,
       isValid: false,
       errorMessage: 'Invalid date or time format.',
     };
@@ -499,7 +576,7 @@ export function computeShiftTiming(params: {
       isOvernight,
       overtimeHours: 0,
       normalWorkingHours: 0,
-      breakHours: 1.0,
+      breakHours: 0.0,
       isValid: false,
       errorMessage: 'End time must be after start time.',
     };
@@ -511,10 +588,10 @@ export function computeShiftTiming(params: {
   const durationFormatted = `${hours}h ${String(mins).padStart(2, '0')}m`;
   const durationHours = Math.round((diffMinutes / 60) * 10) / 10;
 
-  const breakHours = 1.0;
-  const autoOvertime = Math.max(0, Math.round((durationHours - (8.0 + breakHours)) * 10) / 10);
+  const breakHours = 0.0;
+  const autoOvertime = Math.max(0, Math.round((durationHours - 8.0) * 10) / 10);
   const overtimeHours = manualOvertime !== undefined && !isNaN(manualOvertime) ? manualOvertime : autoOvertime;
-  const normalWorkingHours = Math.max(0, Math.round((durationHours - overtimeHours - breakHours) * 10) / 10);
+  const normalWorkingHours = Math.max(0, Math.round((durationHours - overtimeHours) * 10) / 10);
 
   if (diffMinutes > 24 * 60) {
     return {
@@ -580,13 +657,27 @@ export function computeShiftTiming(params: {
 /**
  * Validates whether a shift end datetime is in the future.
  * Optionally allows a small grace period (in minutes) for network lag / clock skew.
+ * Supports Date object or timestamp string (with automatic IST fallback if no offset specified).
  */
 export function isShiftEndInFuture(
-  endDateTime: Date | null | undefined,
+  endDateTime: Date | string | null | undefined,
   graceMinutes: number = 0
 ): boolean {
   if (!endDateTime) return false;
-  return endDateTime.getTime() > Date.now() + graceMinutes * 60 * 1000;
+  let endMs: number;
+  if (typeof endDateTime === 'string') {
+    const str = endDateTime.trim();
+    if (!str.includes('+') && !str.endsWith('Z') && !str.match(/-\d{2}:\d{2}$/)) {
+      const cleanStr = str.replace(' ', 'T');
+      endMs = new Date(`${cleanStr}+05:30`).getTime();
+    } else {
+      endMs = new Date(str).getTime();
+    }
+  } else {
+    endMs = endDateTime.getTime();
+  }
+  if (isNaN(endMs)) return false;
+  return endMs > Date.now() + graceMinutes * 60 * 1000;
 }
 
 /**

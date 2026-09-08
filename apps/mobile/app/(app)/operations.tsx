@@ -78,7 +78,7 @@ export interface ActiveShiftAssignment {
   assigned_at: string;
   assigned_by?: string;
   assigner?: { id: string; full_name: string; phone?: string } | null;
-  operator?: { id: string; full_name: string; phone?: string } | null;
+  operator?: { id: string; full_name: string; phone?: string; shift_time?: string | null } | null;
 }
 
 export interface MachineWithAssignments {
@@ -106,7 +106,7 @@ export interface MobileAssignmentAuditRecord {
   end_reason?: string | null;
   is_active: boolean;
   machine?: { machine_id: string; model?: string; serial_number?: string } | null;
-  operator?: { id: string; full_name: string; phone?: string } | null;
+  operator?: { id: string; full_name: string; phone?: string; shift_time?: string | null } | null;
   assigner?: { id: string; full_name: string } | null;
   ender?: { id: string; full_name: string } | null;
 }
@@ -358,6 +358,9 @@ export default function OperationsScreen() {
           ...m,
           active_assignments: activeAssList.filter((a) => a.machine_id === m.id),
         }));
+        if (opsRes.data) {
+          setActiveOperators(opsRes.data);
+        }
         setMachinesList(machinesWithAss);
       }
     } catch (err) {
@@ -1118,7 +1121,7 @@ export default function OperationsScreen() {
                     {isExpanded && (
                       <View style={{ gap: 8, marginTop: spacingNumeric.sm, paddingTop: spacingNumeric.xs, borderTopWidth: 1, borderTopColor: theme.colors.hairline }}>
                         {item.active_assignments.map((ass, aIdx) => {
-                          const op = operators.find((u) => u.id === ass.operator_id) || ass.operator;
+                          const op = activeOperators.find((u: any) => u.id === ass.operator_id) || ass.operator;
                           const opName = ass.operator?.full_name || op?.full_name || 'Assigned Operator';
                           const opPhone = ass.operator?.phone || op?.phone;
                           const supervisorName = ass.assigner?.full_name || (ass.assigned_by === user?.id ? userProfile?.full_name : null) || 'Supervisor';
