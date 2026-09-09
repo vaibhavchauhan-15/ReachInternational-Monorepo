@@ -170,7 +170,7 @@ async function runTestSuite() {
     // Clean up any existing active assignments on targetMachine for clean test run
     await supabase
       .from('operator_machine_assignments')
-      .update({ is_active: false, ended_at: new Date().toISOString(), end_reason: 'test_reset' })
+      .update({ is_active: false, ended_at: new Date().toISOString(), end_reason: 'removed' })
       .eq('machine_id', targetMachine.id)
       .eq('is_active', true);
 
@@ -234,7 +234,7 @@ async function runTestSuite() {
         p_notes: '4th Operator Overflow Attempt',
       });
 
-      const isCapacityBlocked = ass4Err?.message?.includes('MAX_OPERATORS_REACHED') || ass4?.error?.includes('MAX_OPERATORS_REACHED');
+      const isCapacityBlocked = ass4?.code === 'MAX_OPERATORS_REACHED' || ass4Err?.message?.includes('MAX_OPERATORS_REACHED') || ass4?.error?.includes('maximum capacity');
       assert(isCapacityBlocked, 'Test 4: 4th operator blocked by MAX_OPERATORS_REACHED limit');
     }
 
@@ -249,7 +249,7 @@ async function runTestSuite() {
         p_notes: 'Overlapping shift on machine 2',
       });
 
-      const isExclusionBlocked = assExclErr?.code === '23P01' || assExclErr?.message?.includes('23P01') || assExclErr?.message?.includes('exclusion');
+      const isExclusionBlocked = assExcl?.code === 'SHIFT_OVERLAP_CONFLICT' || assExclErr?.code === '23P01' || assExclErr?.message?.includes('23P01') || assExclErr?.message?.includes('exclusion') || assExcl?.error?.includes('already assigned');
       assert(isExclusionBlocked, 'Test 5: Operator overlapping shift on another machine blocked by GiST exclusion');
     }
 
@@ -258,7 +258,7 @@ async function runTestSuite() {
       const { data: endRes, error: endErr } = await supabase.rpc('end_operator_machine_assignment_atomic', {
         p_assignment_id: ass3.assignment_id,
         p_ended_by: testAdminId,
-        p_end_reason: 'completed',
+        p_end_reason: 'removed',
       });
 
       assert(!endErr && endRes?.success, 'Test 6: End assignment via atomic RPC succeeds', endErr?.message);
@@ -280,7 +280,7 @@ async function runTestSuite() {
     if (createdAssignmentIds.length > 0) {
       await supabase
         .from('operator_machine_assignments')
-        .update({ is_active: false, ended_at: new Date().toISOString(), end_reason: 'test_teardown' })
+        .update({ is_active: false, ended_at: new Date().toISOString(), end_reason: 'removed' })
         .in('id', createdAssignmentIds);
       console.log(`\n🧹 Cleaned up ${createdAssignmentIds.length} test assignment records.`);
     }
