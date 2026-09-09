@@ -1,0 +1,13 @@
+{
+  "source_path": "docs/phases.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "ReachInternational — AI Agent Execution Plan: Web + Mobile Monorepo Migration and Development",
+  "summary": "Technical specification and executable engineering roadmap detailing the transformation of ReachInternational into a Turborepo monorepo with Next.js web app, React Native/Expo mobile app, and shared packages across 15 sequential implementation phases.",
+  "scope": ["monorepo architecture", "shared packages", "Expo mobile app", "Next.js web app", "RBAC parity", "offline sync", "15 phases"],
+  "cross_refs": ["prd.md", "docs/current-architecture.md", "docs/current-database.md"],
+  "locked": false,
+  "precedence": null,
+  "notes": "Authoritative monorepo implementation specification."
+}

@@ -1,0 +1,13 @@
+{
+  "source_path": "docs/current-security.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "ReachInternational — Current Security & Compliance Audit",
+  "summary": "Security audit examining enterprise authentication, Row Level Security across all tables, RBAC matrices, Content Security Policy headers, and centralized audit trail enforcement.",
+  "scope": ["security baseline", "RLS compliance", "RBAC matrix", "CSP headers", "audit logging", "credential protection"],
+  "cross_refs": ["docs/current-architecture.md", "docs/current-database.md"],
+  "locked": false,
+  "precedence": null,
+  "notes": "Security and compliance audit document."
+}

@@ -1,0 +1,13 @@
+{
+  "source_path": "docs/current-dependencies.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "ReachInternational — Current Dependencies & Package Audit",
+  "summary": "Dependency audit documenting core packages (Next.js, React 19, Supabase JS/SSR, Tailwind CSS v4, Radix UI, Framer Motion, Recharts, SendGrid, Twilio, QStash) and node/pnpm versions.",
+  "scope": ["dependency baseline", "Next.js", "Supabase", "React 19", "Twilio", "SendGrid", "Tailwind CSS v4"],
+  "cross_refs": ["docs/current-architecture.md"],
+  "locked": false,
+  "precedence": null,
+  "notes": "Dependency audit document."
+}

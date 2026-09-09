@@ -1,0 +1,13 @@
+{
+  "source_path": "docs/current-architecture.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "ReachInternational — Current Architecture Audit",
+  "summary": "Baseline architecture audit of the existing enterprise application, covering file structure, 25 Next.js App Router routes, 18 Server Actions, DAL layer, UI components, and Supabase integration points.",
+  "scope": ["architecture baseline", "Next.js App Router", "Server Actions", "DAL", "UI primitives", "directory structure"],
+  "cross_refs": ["docs/phases.md", "docs/current-database.md"],
+  "locked": false,
+  "precedence": null,
+  "notes": "Architectural baseline audit document."
+}

@@ -1,0 +1,13 @@
+{
+  "source_path": "prd.md",
+  "type": "PRD",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "ReachInternational — Machine Service Tracking & Automated Alert System",
+  "summary": "Phase 1 product requirements document for internal enterprise application replacing manual Excel tracking with centralized machine service tracking, automated WhatsApp/SMS/Email notifications via QStash, engineer field workflows, and complete audit logging.",
+  "scope": ["machine service tracking", "automated alerts", "WhatsApp notifications", "engineer field completion", "audit logging", "Excel import/export"],
+  "cross_refs": ["docs/phases.md"],
+  "locked": false,
+  "precedence": null,
+  "notes": "Original core Phase 1 PRD."
+}

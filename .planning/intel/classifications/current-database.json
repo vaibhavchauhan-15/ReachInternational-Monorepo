@@ -1,0 +1,13 @@
+{
+  "source_path": "docs/current-database.md",
+  "type": "DOC",
+  "confidence": "high",
+  "manifest_override": false,
+  "title": "ReachInternational — Current Database Schema & Storage Audit",
+  "summary": "Database audit detailing Supabase PostgreSQL 15+, 35+ migrations, RLS policies, table inventory across 25 modules, Delhi Branch single-branch model, and verification scripts.",
+  "scope": ["database baseline", "PostgreSQL", "migrations inventory", "RLS policies", "table inventory", "seeding"],
+  "cross_refs": ["docs/phases.md", "docs/current-architecture.md"],
+  "locked": false,
+  "precedence": null,
+  "notes": "Database schema audit document."
+}
