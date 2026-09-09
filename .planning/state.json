@@ -71,18 +71,18 @@
     {
       "number": "14",
       "name": "Mobile Offline Sync & Network Resilience",
-      "status": "in_progress"
+      "status": "complete"
     },
     {
       "number": "15",
       "name": "Production Release & Deployment Verification",
-      "status": "pending"
+      "status": "complete"
     }
   ],
   "next": {
-    "command": "/gsd-progress --next",
-    "label": "Advance to the next step",
-    "reason": "Phase 14 of 3 · 0% · executing"
+    "command": "/gsd-new-milestone",
+    "label": "Start a new milestone",
+    "reason": "All phases complete — start a new milestone"
   },
-  "updated_at": "2026-09-09T06:21:55.786Z"
+  "updated_at": "2026-09-09T10:40:16.932Z"
 }
