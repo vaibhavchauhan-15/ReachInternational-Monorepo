@@ -4,6 +4,7 @@ import { Tabs, Redirect } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { useTheme, CustomBottomTabBar } from '../../components/ui';
 import { DrawerProvider } from '../../lib/nav/DrawerContext';
+import { OfflineBanner } from '../../components/offline/OfflineBanner';
 
 export default function AppLayout() {
   const { session, isLoading, role, isProfileComplete } = useAuth();
@@ -34,6 +35,7 @@ export default function AppLayout() {
 
   return (
     <DrawerProvider>
+      <OfflineBanner />
       <Tabs
         tabBar={(props) => <CustomBottomTabBar {...props} />}
         screenOptions={{

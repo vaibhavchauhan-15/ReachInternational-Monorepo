@@ -25,6 +25,8 @@ import {
   formatDate,
   getISTDateString,
 } from '@reachinternational/utils';
+import { useNetworkStatus } from '../../lib/offline/useNetworkStatus';
+import { offlineQueueManager } from '../../lib/offline/OfflineQueueManager';
 
 export interface MeterLogModalProps {
   visible: boolean;
@@ -47,6 +49,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   onSubmit,
 }) => {
   const { theme } = useTheme();
+  const { isOffline } = useNetworkStatus();
 
   const [logDate, setLogDate] = useState(() => getISTDateString());
   const [startMeter, setStartMeter] = useState('0');
@@ -313,6 +316,8 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     setError('');
     setIsSubmitting(true);
 
+    let logPayload: Record<string, any> | null = null;
+
     try {
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData?.user?.id;
@@ -331,6 +336,59 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       let remarksPayload = isBreakdown ? remarks.trim() : '';
       if (isBreakdown && bkdDurationFormatted) {
         remarksPayload = `[Breakdown Duration: ${bkdDurationFormatted}] ${remarksPayload}`.trim();
+      }
+
+      logPayload = {
+        machine_id: machineId || null,
+        machine_code: machineCode || 'Equipment',
+        model: model || '',
+        serial_number: serialNumber || '',
+        client_id: selectedClientId || null,
+        location: location.trim() || null,
+        start_meter: startVal,
+        end_meter: endVal,
+        running_hours: runningHours,
+        start_time: startTime.trim(),
+        end_time: endTime.trim(),
+        overtime_hours: shiftStats.overtimeHours,
+        normal_working_hours: shiftStats.normalWorkingHours,
+        is_breakdown: isBreakdown,
+        breakdown_start_time: bkdStart || null,
+        breakdown_end_time: bkdEnd || null,
+        breakdown_duration: bkdDurationFormatted || null,
+        breakdown_hours: bkdDecimalHours,
+        shift: null,
+        machine_condition: isBreakdown ? 'breakdown' : 'good',
+        remarks: remarksPayload || null,
+        operator_id: userId || null,
+        log_date: shiftStats.resolvedStartDate,
+        end_date: shiftStats.resolvedEndDate,
+        start_datetime: shiftStats.startDateTime?.toISOString(),
+        end_datetime: shiftStats.endDateTime?.toISOString(),
+      };
+
+      if (isOffline) {
+        const queuedItem = await offlineQueueManager.enqueue('SUBMIT_HOUR_LOG', logPayload);
+        setSuccess('Working Offline: Shift log queued locally for auto-sync!');
+        setTimeout(() => {
+          if (onSubmit) {
+            onSubmit({
+              ...logPayload,
+              id: queuedItem.id,
+              machine_code: machineCode || 'M-OFFLINE',
+              is_offline_draft: true,
+              sync_status: 'pending',
+              queued_item: queuedItem,
+              machine: {
+                machine_id: machineCode || 'M-OFFLINE',
+                model: model || '',
+                serial_number: serialNumber || '',
+              },
+            });
+          }
+          onClose();
+        }, 800);
+        return;
       }
 
       const idempotencyKey = `ihl_m_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -460,6 +518,42 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       }, 1000);
     } catch (err: any) {
       let errMsg = err?.message || 'Failed to submit meter log.';
+
+      const isNetworkErr =
+        errMsg.toLowerCase().includes('network') ||
+        errMsg.toLowerCase().includes('fetch') ||
+        errMsg.toLowerCase().includes('timeout') ||
+        errMsg.toLowerCase().includes('connection') ||
+        err?.name === 'TypeError';
+
+      if (isNetworkErr && logPayload) {
+        try {
+          const queuedItem = await offlineQueueManager.enqueue('SUBMIT_HOUR_LOG', logPayload);
+          setSuccess('Connection lost: Shift log saved to offline queue!');
+          setTimeout(() => {
+            if (onSubmit) {
+              onSubmit({
+                ...logPayload,
+                id: queuedItem.id,
+                machine_code: machineCode || 'M-OFFLINE',
+                is_offline_draft: true,
+                sync_status: 'pending',
+                queued_item: queuedItem,
+                machine: {
+                  machine_id: machineCode || 'M-OFFLINE',
+                  model: model || '',
+                  serial_number: serialNumber || '',
+                },
+              });
+            }
+            onClose();
+          }, 800);
+          return;
+        } catch (queueErr) {
+          console.warn('[MeterLogModal] Fallback enqueue failed:', queueErr);
+        }
+      }
+
       if (errMsg.includes('violates check constraint') || errMsg.includes('23514')) {
         if (errMsg.includes('machines_status_check')) {
           errMsg = "Invalid machine status value. Machine rental status must be 'available' or 'rented'.";

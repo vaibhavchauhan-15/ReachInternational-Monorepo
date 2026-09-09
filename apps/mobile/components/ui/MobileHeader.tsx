@@ -4,9 +4,10 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { useTheme } from './ThemeProvider';
 import { Badge } from './Badge';
-import { Sun, Moon, Menu } from 'lucide-react-native';
+import { Sun, Moon, Menu, WifiOff } from 'lucide-react-native';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { useDrawer } from '../../lib/nav/DrawerContext';
+import { useNetworkStatus } from '../../lib/offline/useNetworkStatus';
 
 export interface MobileHeaderProps {
   title?: string;
@@ -27,6 +28,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   const { role } = useAuth();
   const { theme, isDark, setMode } = useTheme();
   const { openDrawer } = useDrawer();
+  const { isOffline } = useNetworkStatus();
   const router = useRouter();
 
   const handleMenuPress = onPressMenu || openDrawer;
@@ -63,15 +65,24 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
                 Reach International
               </Text>
               <View style={styles.syncRow}>
-                <View style={[styles.syncDot, { backgroundColor: theme.colors.success }]} />
-                <Text style={[styles.syncText, { color: theme.colors.mute }]}>Live Fleet Sync</Text>
+                <View style={[styles.syncDot, { backgroundColor: isOffline ? theme.colors.warning : theme.colors.success }]} />
+                <Text style={[styles.syncText, { color: theme.colors.mute }]}>
+                  {isOffline ? 'Offline' : 'Live Fleet Sync'}
+                </Text>
               </View>
             </View>
           </TouchableOpacity>
         </View>
 
-        {/* Right Action Icons: Theme Toggle, Role Pill */}
+        {/* Right Action Icons: Offline Pill, Theme Toggle, Role Pill */}
         <View style={styles.actionsRow}>
+          {isOffline && (
+            <View style={[styles.offlinePill, { backgroundColor: isDark ? '#451a03' : '#fffbeb', borderColor: isDark ? '#78350f' : '#fef3c7' }]}>
+              <WifiOff size={11} color={isDark ? '#fbbf24' : '#d97706'} />
+              <Text style={[styles.offlinePillText, { color: isDark ? '#fbbf24' : '#b45309' }]}>Offline</Text>
+            </View>
+          )}
+
           <TouchableOpacity
             onPress={toggleTheme}
             style={[styles.iconBtn, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
@@ -205,5 +216,18 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
     lineHeight: 16,
+  },
+  offlinePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radiusNumeric.full,
+    borderWidth: 1,
+  },
+  offlinePillText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

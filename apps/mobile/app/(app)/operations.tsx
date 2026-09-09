@@ -17,7 +17,12 @@ import { MobileConflictResolutionModal } from '../../components/operations/Mobil
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { formatShiftTimingRange, formatCompactTiming, formatTo12Hour, formatExactTimestamp, splitExactTimestamp, formatDate, parseBreakdownString, parseProfileShiftTime, parseTimeToMinutes } from '@reachinternational/utils';
+import { formatShiftTimingRange, formatCompactTiming, formatTo12Hour, formatExactTimestamp, splitExactTimestamp, formatDate, parseBreakdownString, parseProfileShiftTime, parseTimeToMinutes, getISTDateString } from '@reachinternational/utils';
+import { useOfflineQueue } from '../../lib/offline/useOfflineQueue';
+import { offlineQueueManager } from '../../lib/offline/OfflineQueueManager';
+import { SyncStatusBadge } from '../../components/offline/SyncStatusBadge';
+import { OfflineCollisionModal } from '../../components/offline/OfflineCollisionModal';
+import { QueuedMutation, MutationStatus } from '../../lib/offline/types';
 import {
   Clock,
   Gauge,
@@ -37,6 +42,7 @@ import {
   ChevronUp,
   Phone,
   FileText,
+  RefreshCw,
 } from 'lucide-react-native';
 
 export type OpsTab = 'logs' | 'assignments' | 'entry' | 'history';
@@ -63,6 +69,9 @@ export interface HourLogRecord {
   conflict_flag?: boolean;
   conflict_reason?: string;
   conflict_status?: string;
+  is_offline_draft?: boolean;
+  sync_status?: MutationStatus;
+  queued_item?: QueuedMutation;
   machine?: { machine_id: string; model?: string; serial_number?: string } | null;
   operator?: { full_name: string } | null;
   client?: { name: string } | null;
@@ -94,7 +103,7 @@ export interface MachineWithAssignments {
 
 
 export default function OperationsScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { role, user, userProfile } = useAuth();
 
   const isOperator = (role || '').toLowerCase() === 'operator';
@@ -134,9 +143,14 @@ export default function OperationsScreen() {
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [selectedMachineForAssign, setSelectedMachineForAssign] = useState<{ id: string; code: string; model?: string; count: number }>({ id: '', code: '', count: 0 });
 
-  // Modal State: Conflict Resolution
+  // Modal State: Conflict Resolution (Supervisor OT)
   const [conflictModalVisible, setConflictModalVisible] = useState(false);
   const [selectedLogForConflict, setSelectedLogForConflict] = useState<HourLogRecord | null>(null);
+
+  // Offline Resilience: Queue & Collision Modal State (D-02, D-05)
+  const { queue: offlineQueue, syncNow: syncOfflineQueue } = useOfflineQueue();
+  const [collisionModalVisible, setCollisionModalVisible] = useState(false);
+  const [selectedQueuedMutation, setSelectedQueuedMutation] = useState<QueuedMutation | null>(null);
 
   const fetchLogs = useCallback(
     async (pageToFetch = 1, currentFilter = statusFilter, searchTerm = debouncedSearch) => {
@@ -513,7 +527,50 @@ export default function OperationsScreen() {
     return '1h 30m';
   };
 
-  const filteredLogs = logs;
+  const queuedLogRecords: HourLogRecord[] = useMemo(() => {
+    return offlineQueue
+      .filter((item) => item.status !== 'synced')
+      .map((item) => {
+        const p = (item.payload || {}) as Record<string, any>;
+        return {
+          id: item.id,
+          machine_id: p.machine_id ? String(p.machine_id) : undefined,
+          machine_code: String(p.machine_code || 'Equipment'),
+          log_date: String(p.log_date || new Date(item.created_at).toISOString().split('T')[0]),
+          shift: p.shift ? String(p.shift) : undefined,
+          start_meter: Number(p.start_meter ?? 0),
+          end_meter: Number(p.end_meter ?? 0),
+          running_hours: Number(p.running_hours ?? 0),
+          start_time: p.start_time ? String(p.start_time) : undefined,
+          end_time: p.end_time ? String(p.end_time) : undefined,
+          overtime_hours: p.overtime_hours != null ? Number(p.overtime_hours) : undefined,
+          normal_working_hours: p.normal_working_hours != null ? Number(p.normal_working_hours) : undefined,
+          location: p.location ? String(p.location) : undefined,
+          is_breakdown: Boolean(p.is_breakdown),
+          remarks: p.remarks ? String(p.remarks) : undefined,
+          operator_id: p.operator_id ? String(p.operator_id) : undefined,
+          client_id: p.client_id ? String(p.client_id) : undefined,
+          created_at: item.created_at,
+          is_offline_draft: true,
+          sync_status: item.status,
+          queued_item: item,
+          machine: {
+            machine_id: String(p.machine_code || 'Equipment'),
+            model: String(p.model || 'Field Equipment'),
+            serial_number: String(p.serial_number || ''),
+          },
+          operator: {
+            full_name: userProfile?.full_name || 'Operator (You)',
+          },
+        };
+      });
+  }, [offlineQueue, userProfile]);
+
+  const filteredLogs = useMemo(() => {
+    const queueIds = new Set(queuedLogRecords.map((q) => q.id));
+    const serverLogs = logs.filter((l) => !queueIds.has(l.id));
+    return [...queuedLogRecords, ...serverLogs];
+  }, [queuedLogRecords, logs]);
 
   const openLogEntryModal = (mId?: string, mCode?: string, modelName?: string, serial?: string) => {
     setSelectedMachineForLog({
@@ -815,6 +872,7 @@ export default function OperationsScreen() {
                       </View>
 
                       <View style={styles.badgeColumn}>
+                        <SyncStatusBadge status={log.is_offline_draft && log.sync_status ? log.sync_status : 'synced'} />
                         {log.is_breakdown ? (
                           <View style={[styles.breakdownBadge, { backgroundColor: 'transparent', borderWidth: 0, alignItems: 'flex-end', paddingHorizontal: 0, paddingVertical: 0 }]}>
                             {(() => {
@@ -983,6 +1041,63 @@ export default function OperationsScreen() {
                         </>
                       )}
                     </View>
+
+                    {/* Offline Log Actions: Retry Sync or Edit & Resubmit */}
+                    {log.is_offline_draft && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+                        {log.sync_status === 'conflict' && (
+                          <TouchableOpacity
+                            onPress={() => {
+                              if (log.queued_item) {
+                                setSelectedQueuedMutation(log.queued_item);
+                                setCollisionModalVisible(true);
+                              }
+                            }}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 5,
+                              backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+                              borderColor: isDark ? '#991b1b' : '#fee2e2',
+                              borderWidth: 1,
+                              paddingHorizontal: 12,
+                              paddingVertical: 7,
+                              borderRadius: radiusNumeric.sm,
+                              minHeight: 44,
+                            }}
+                          >
+                            <AlertTriangle size={13} color={isDark ? '#f87171' : '#dc2626'} />
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#f87171' : '#dc2626' }}>
+                              Edit & Resubmit →
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                        {log.sync_status === 'failed' && (
+                          <TouchableOpacity
+                            onPress={() => {
+                              syncOfflineQueue().catch(console.warn);
+                            }}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 5,
+                              backgroundColor: isDark ? '#450a0a' : '#fef2f2',
+                              borderColor: isDark ? '#991b1b' : '#fee2e2',
+                              borderWidth: 1,
+                              paddingHorizontal: 12,
+                              paddingVertical: 7,
+                              borderRadius: radiusNumeric.sm,
+                              minHeight: 44,
+                            }}
+                          >
+                            <RefreshCw size={13} color={isDark ? '#f87171' : '#dc2626'} />
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#f87171' : '#dc2626' }}>
+                              Retry Sync
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
                   </Card>
                 );
               })
@@ -1409,7 +1524,12 @@ export default function OperationsScreen() {
         machineCode={selectedMachineForLog.code}
         model={selectedMachineForLog.model}
         serialNumber={selectedMachineForLog.serial}
-        onSubmit={fetchOperationsData}
+        onSubmit={(optimisticLog) => {
+          if (optimisticLog) {
+            setLogs((prev) => [optimisticLog, ...prev]);
+          }
+          fetchOperationsData();
+        }}
       />
 
       {/* Mobile Operator Assignment Modal */}
@@ -1435,6 +1555,17 @@ export default function OperationsScreen() {
         log={selectedLogForConflict}
         currentUserId={user?.id || ''}
         onSuccess={fetchOperationsData}
+      />
+
+      {/* Offline Collision Resolution Modal (D-05) */}
+      <OfflineCollisionModal
+        visible={collisionModalVisible}
+        onClose={() => {
+          setCollisionModalVisible(false);
+          setSelectedQueuedMutation(null);
+        }}
+        queuedMutation={selectedQueuedMutation}
+        onResubmitSuccess={fetchOperationsData}
       />
     </View>
   );
