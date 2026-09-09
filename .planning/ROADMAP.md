@@ -19,39 +19,48 @@ Transform ReachInternational from an Excel-dependent operation into an enterpris
 - [x] **Phase 11: Monorepo-Wide Canonical Pagination** — Integrated `<Pagination />` across all desktop tables and mobile card views (>20 rows).
 - [x] **Phase 12: Mobile Application Foundation & Auth** — Expo 54 / React Native 0.81 setup, Supabase auth with `expo-secure-store`.
 - [x] **Phase 13: Mobile Operations & Operator Parity** — Field operator shift hour logging, breakdown tracking, and web parity.
-- [ ] **Phase 14: Mobile Offline Sync & Network Resilience** — Offline mutation queue with background sync and retry mechanics.
+- [x] **Phase 14: Mobile Offline Sync & Network Resilience** — Offline mutation queue with background sync and retry mechanics. (completed 2026-09-09)
 - [ ] **Phase 15: Production Release & Deployment Verification** — EAS production builds (Android/iOS), Vercel production deployment.
 
 ## Phase Details
 
 ### Phase 11: Monorepo-Wide Canonical Pagination
+
 **Goal**: Integrate canonical `<Pagination />` across all data tables and tab views across the monorepo.
 **Depends on**: Phase 7, Phase 8
 **Requirements**: DATA-01, DATA-02
 **Success Criteria**:
+
   1. All tables with >20 records render `<Pagination />` with proper page slicing.
   2. Server-side range pagination wired on high-volume directories (`/users`, `/operations`, `/clients`, `/audit`).
   3. Zero TypeScript compilation errors across all workspace packages.
+
 **Status**: Complete (2026-09-09)
 
 ### Phase 14: Mobile Offline Sync & Network Resilience
+
 **Goal**: Provide offline-first shift hour logging and inspection submissions for field technicians in low-connectivity yards.
 **Depends on**: Phase 12, Phase 13
 **Requirements**: MOB-03
 **Success Criteria**:
+
   1. Operator can save shift logs locally when device has no cellular or Wi-Fi signal.
   2. Application detects network reconnection and auto-synchronizes pending mutations.
   3. Conflict resolution guards against duplicate submissions using idempotency keys.
-**Status**: Active
+
+**Status**: Complete (2026-09-09)
 
 ### Phase 15: Production Release & Deployment Verification
+
 **Goal**: Final release candidate verification, automated seed auditing, and EAS packaging.
 **Depends on**: Phase 14
 **Requirements**: AUTH-01, MOB-01
 **Success Criteria**:
+
   1. Zero errors across all test suites (`supabase/tests/*.mjs`).
   2. Android APK/AAB and iOS IPA generated cleanly via Expo EAS.
   3. Production environment variables locked and security audit verified.
+
 **Status**: Planned
 
 ## Progress
@@ -71,7 +80,7 @@ Transform ReachInternational from an Excel-dependent operation into an enterpris
 | 11. Canonical Pagination | Complete | 2026-09-09 |
 | 12. Mobile Foundation & Auth | Complete | 2026-09-06 |
 | 13. Mobile Operations Parity | Complete | 2026-09-08 |
-| 14. Mobile Offline Sync | In Progress | - |
+| 14. Mobile Offline Sync | Complete   | 2026-09-09 |
 | 15. Production Release | Planned | - |
 
 ---

@@ -49,7 +49,7 @@
 
 - [x] **MOB-01**: React Native / Expo 54 application sharing business packages with web application.
 - [x] **MOB-02**: Field operator daily shift logging with native touch time pickers and breakdown toggles.
-- [ ] **MOB-03**: Complete offline submission queue with automatic background sync when connectivity resumes.
+- [x] **MOB-03**: Complete offline submission queue with automatic background sync when connectivity resumes.
 - [ ] **MOB-04**: Push notifications for immediate breakdown assignments.
 
 ### High-Density Data Tables & Pagination
@@ -84,7 +84,8 @@
 | OPS-01 – OPS-04 | `apps/web/app/(app)/operations`, `apps/mobile/app/(app)/operations.tsx` | Complete |
 | AUDIT-01 – AUDIT-03| `apps/web/app/(app)/audit`, `apps/web/lib/audit.ts` | Complete |
 | MOB-01 – MOB-02 | `apps/mobile/app/(app)` | Complete |
-| MOB-03 – MOB-04 | `apps/mobile/lib/sync` | Active |
+| MOB-03 | `apps/mobile/lib/offline` | Complete |
+| MOB-04 | `apps/mobile/lib/sync` | Active |
 | DATA-01 – DATA-02 | `apps/web/components/ui/Table.tsx`, `apps/web/lib/queries/*` | Complete |
 
 ---
