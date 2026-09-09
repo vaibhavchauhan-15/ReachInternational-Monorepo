@@ -18,6 +18,7 @@ import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens
 import { formatTinyRelativeTime } from '@reachinternational/utils';
 import {
   Users,
+  User,
   UserCheck,
   ShieldCheck,
   ShieldAlert,
@@ -64,6 +65,11 @@ function formatRoleName(role: string): string {
   }
 }
 
+function truncateText(str?: string | null, maxChars: number = 15): string {
+  if (!str) return '';
+  return str.length > maxChars ? `${str.slice(0, maxChars)}…` : str;
+}
+
 export default function UsersScreen() {
   const { theme } = useTheme();
   const { role } = useAuth();
@@ -75,6 +81,11 @@ export default function UsersScreen() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isPaginating, setIsPaginating] = useState(false);
+  const [totalUsersCount, setTotalUsersCount] = useState(0);
+  const PAGE_SIZE = 20;
 
   // Modals
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
@@ -87,17 +98,94 @@ export default function UsersScreen() {
   const [isBulkApprovingProfile, setIsBulkApprovingProfile] = useState(false);
   const [isBulkRejectingProfile, setIsBulkRejectingProfile] = useState(false);
 
-  const fetchUsers = useCallback(async () => {
+  const fetchUsers = useCallback(async (isLoadMore = false, currentPage = 1) => {
+    if (!isLoadMore) {
+      setIsLoading(true);
+    } else {
+      setIsPaginating(true);
+    }
     try {
-      const { data, error } = await supabase
+      const from = (currentPage - 1) * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
+      let query = supabase
         .from('users')
-        .select('id, full_name, email, phone, role, status, city, district, state, state_id, shift_time, address, aadhaar_number, license_number, created_at')
+        .select('id, full_name, email, phone, role, status, city, district, state, state_id, shift_time, address, aadhaar_number, license_number, supervisor_id, supervisor_ids, working_location_id, created_at', { count: 'exact' })
         .order('created_at', { ascending: false });
+
+      if (roleFilter !== 'all') {
+        if (roleFilter === 'engineers') query = query.in('role', ['engineer', 'service_engineer']);
+        else if (roleFilter === 'managers') query = query.in('role', ['manager', 'branch_manager', 'admin', 'super_admin']);
+        else if (roleFilter === 'operators') query = query.eq('role', 'operator');
+        else if (roleFilter === 'mechanics') query = query.eq('role', 'mechanic');
+        else if (roleFilter === 'supervisors') query = query.eq('role', 'supervisor');
+        else if (roleFilter === 'active') query = query.eq('status', 'active');
+        else if (roleFilter === 'pending') query = query.eq('status', 'pending');
+      }
+
+      if (search) {
+        const s = search.replace(/[,()"\\]/g, "");
+        query = query.or(`full_name.ilike.%${s}%,email.ilike.%${s}%,phone.ilike.%${s}%,city.ilike.%${s}%,district.ilike.%${s}%,state.ilike.%${s}%,aadhaar_number.ilike.%${s}%,license_number.ilike.%${s}%`);
+      }
+
+      const { data, count, error } = await query.range(from, to);
+      if (count !== null) setTotalUsersCount(count);
 
       if (error) {
         console.warn('Error fetching users:', error);
       } else if (data) {
-        setUsers(data as any);
+        const userMap = new Map((data as any[]).map((u) => [u.id, u]));
+
+        // Fetch working locations to hydrate working_location
+        let workingLocMap = new Map<string, any>();
+        try {
+          const { data: locs } = await supabase.from('working_locations').select('id, name, type, city, state');
+          if (locs) {
+            workingLocMap = new Map(locs.map((l: any) => [l.id, l]));
+          }
+        } catch {
+          // ignore if table not accessible
+        }
+
+        const hydrated = (data as any[]).map((u) => {
+          const supIds: string[] = Array.isArray(u.supervisor_ids) && u.supervisor_ids.length > 0
+            ? u.supervisor_ids
+            : u.supervisor_id
+            ? [u.supervisor_id]
+            : [];
+          const supervisorsList = supIds
+            .map((id) => userMap.get(id))
+            .filter(Boolean)
+            .map((s) => ({
+              id: s.id,
+              full_name: s.full_name || '',
+              email: s.email || null,
+            }));
+          const primarySup = (u.supervisor_id && userMap.has(u.supervisor_id))
+            ? {
+                id: u.supervisor_id,
+                full_name: userMap.get(u.supervisor_id)?.full_name || '',
+                email: userMap.get(u.supervisor_id)?.email || null,
+              }
+            : supervisorsList[0] || null;
+
+          return {
+            ...u,
+            supervisor_id: primarySup?.id || null,
+            supervisor_ids: supIds,
+            supervisor: primarySup,
+            supervisors: supervisorsList,
+            working_location: u.working_location_id && workingLocMap.has(u.working_location_id)
+              ? workingLocMap.get(u.working_location_id)
+              : null,
+          };
+        });
+        if (isLoadMore) {
+          setUsers((prev) => [...prev, ...(hydrated as any)]);
+        } else {
+          setUsers(hydrated as any);
+        }
+        setHasMore((hydrated?.length || 0) === PAGE_SIZE);
       }
 
       // Fetch pending profile change requests
@@ -129,17 +217,27 @@ export default function UsersScreen() {
     } finally {
       setIsLoading(false);
       setRefreshing(false);
+      setIsPaginating(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+    setPage(1);
+    fetchUsers(false, 1);
+  }, [fetchUsers, search, roleFilter, statusFilter]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchUsers();
+    setPage(1);
+    fetchUsers(false, 1);
   }, [fetchUsers]);
+
+  const handleLoadMore = useCallback(() => {
+    if (!hasMore || isPaginating) return;
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchUsers(true, nextPage);
+  }, [page, hasMore, isPaginating, fetchUsers]);
 
   const handleApproveProfileReq = async (reqId: string, reqData: any, userId: string) => {
     setApprovingProfileId(reqId);
@@ -167,7 +265,7 @@ export default function UsersScreen() {
       if (reqErr) throw reqErr;
 
       Alert.alert('Approved', 'Profile changes have been approved and applied.');
-      fetchUsers();
+      fetchUsers(false, 1);
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to approve profile changes.');
     } finally {
@@ -188,7 +286,7 @@ export default function UsersScreen() {
 
       if (error) throw error;
       Alert.alert('Rejected', 'Profile change request has been declined.');
-      fetchUsers();
+      fetchUsers(false, 1);
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to reject profile changes.');
     } finally {
@@ -218,7 +316,7 @@ export default function UsersScreen() {
           .eq('id', pr.id);
       }
       Alert.alert('Success', `Approved all ${profileRequests.length} profile requests.`);
-      fetchUsers();
+      fetchUsers(false, 1);
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to bulk approve profile requests.');
     } finally {
@@ -240,7 +338,7 @@ export default function UsersScreen() {
         .in('id', reqIds);
 
       Alert.alert('Success', `Rejected all ${profileRequests.length} profile requests.`);
-      fetchUsers();
+      fetchUsers(false, 1);
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to bulk reject profile requests.');
     } finally {
@@ -260,7 +358,7 @@ export default function UsersScreen() {
         .update({ status: 'active' })
         .eq('id', userId);
       if (error) throw error;
-      fetchUsers();
+      fetchUsers(false, 1);
     } catch (e) {
       setUsers(prevUsers);
       console.warn('Error approving user:', e);
@@ -279,7 +377,7 @@ export default function UsersScreen() {
         .update({ status: 'inactive' })
         .eq('id', userId);
       if (error) throw error;
-      fetchUsers();
+      fetchUsers(false, 1);
     } catch (e) {
       setUsers(prevUsers);
       console.warn('Error rejecting user:', e);
@@ -305,7 +403,7 @@ export default function UsersScreen() {
         .update({ status: 'active' })
         .in('id', pendingIds);
       if (error) throw error;
-      fetchUsers();
+      fetchUsers(false, 1);
     } catch (e) {
       setUsers(prevUsers);
       console.warn('Error bulk approving users:', e);
@@ -326,7 +424,7 @@ export default function UsersScreen() {
         .update({ status: 'inactive' })
         .in('id', pendingIds);
       if (error) throw error;
-      fetchUsers();
+      fetchUsers(false, 1);
     } catch (e) {
       setUsers(prevUsers);
       console.warn('Error bulk rejecting users:', e);
@@ -356,10 +454,10 @@ export default function UsersScreen() {
   };
 
   const handleSelectAll = () => {
-    if (selectedIds.length === filteredUsers.length) {
+    if (selectedIds.length === users.length) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(filteredUsers.map((u) => u.id));
+      setSelectedIds(users.map((u) => u.id));
     }
   };
 
@@ -388,7 +486,7 @@ export default function UsersScreen() {
               if (error) throw error;
               setSelectedIds([]);
               setIsSelectMode(false);
-              fetchUsers();
+              fetchUsers(false, 1);
             } catch (err: any) {
               setUsers(prevUsers);
               Alert.alert('Error', err?.message || 'Failed to delete selected users.');
@@ -401,35 +499,7 @@ export default function UsersScreen() {
     );
   };
 
-  const filteredUsers = users.filter((u) => {
-    const q = search.toLowerCase().trim();
-    const qNoSpaces = q.replace(/\s+/g, '');
-    const matchesSearch =
-      !q ||
-      u.full_name?.toLowerCase().includes(q) ||
-      u.email?.toLowerCase().includes(q) ||
-      (u.phone && u.phone.toLowerCase().includes(q)) ||
-      (u.city && u.city.toLowerCase().includes(q)) ||
-      (u.state && u.state.toLowerCase().includes(q)) ||
-      (u.district && u.district.toLowerCase().includes(q)) ||
-      (u.aadhaar_number && u.aadhaar_number.replace(/\s+/g, '').includes(qNoSpaces)) ||
-      u.role?.toLowerCase().includes(q);
 
-    const matchesRole =
-      roleFilter === 'all' ||
-      (roleFilter === 'engineers' && (u.role === 'service_engineer' || u.role === 'engineer')) ||
-      (roleFilter === 'managers' && (u.role.includes('manager') || u.role === 'admin' || u.role === 'super_admin')) ||
-      (roleFilter === 'operators' && u.role === 'operator') ||
-      (roleFilter === 'supervisors' && u.role === 'supervisor') ||
-      (roleFilter === 'mechanics' && u.role === 'mechanic') ||
-      (roleFilter === 'active' && u.status === 'active') ||
-      (roleFilter === 'pending' && u.status === 'pending') ||
-      (roleFilter === 'inactive' && u.status === 'inactive');
-
-    const matchesStatus = statusFilter === 'all' || u.status === statusFilter;
-
-    return matchesSearch && matchesRole && matchesStatus;
-  });
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
@@ -491,7 +561,7 @@ export default function UsersScreen() {
         {/* Role & Status Filter Strip */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
           {[
-            { key: 'all', label: `All Users (${users.length})` },
+            { key: 'all', label: `All Users (${totalUsersCount})` },
             { key: 'active', label: `Active (${activeCount})` },
             { key: 'pending', label: `Pending (${pendingUsers.length})` },
             { key: 'engineers', label: `Engineers (${engineerCount})` },
@@ -784,7 +854,7 @@ export default function UsersScreen() {
             <ActivityIndicator size="large" color={theme.colors.link} />
             <Text style={[styles.loadingText, { color: theme.colors.mute }]}>Loading user accounts...</Text>
           </View>
-        ) : filteredUsers.length === 0 ? (
+        ) : users.length === 0 ? (
           <View style={[styles.emptyContainer, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
             <Users size={32} color={theme.colors.mute} />
             <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>No user accounts found</Text>
@@ -793,7 +863,7 @@ export default function UsersScreen() {
             </Text>
           </View>
         ) : (
-          filteredUsers.map((u) => {
+          users.map((u) => {
             const isSelected = selectedIds.includes(u.id);
             return (
               <TouchableOpacity
@@ -839,8 +909,12 @@ export default function UsersScreen() {
                         </View>
                       )}
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.userName, { color: theme.colors.ink }]}>{u.full_name}</Text>
-                        <Text style={[styles.userEmail, { color: theme.colors.mute }]}>{u.email}</Text>
+                        <Text style={[styles.userName, { color: theme.colors.ink }]} numberOfLines={1}>
+                          {truncateText(u.full_name, 15)}
+                        </Text>
+                        <Text style={[styles.userEmail, { color: theme.colors.mute }]} numberOfLines={1}>
+                          {truncateText(u.email, 20)}
+                        </Text>
                       </View>
                     </View>
 
@@ -867,6 +941,26 @@ export default function UsersScreen() {
                         <MapPin size={11} color={theme.colors.mute} />
                         <Text style={[styles.metaText, { color: theme.colors.body }]}>
                           {[u.city, u.district, u.state].filter(Boolean).join(', ')}
+                        </Text>
+                      </View>
+                    )}
+
+                    {((u.supervisors && u.supervisors.length > 0) || u.supervisor?.full_name) && (
+                      <View style={[styles.metaItem, { marginTop: 4 }]}>
+                        <User size={11} color={theme.colors.link} />
+                        <Text style={[styles.metaText, { color: theme.colors.body }]} numberOfLines={1}>
+                          Sup: {u.supervisors && u.supervisors.length > 0
+                            ? u.supervisors.map((s: any) => truncateText(s.full_name, 15)).join(', ')
+                            : truncateText(u.supervisor?.full_name, 15)}
+                        </Text>
+                      </View>
+                    )}
+
+                    {u.working_location?.name && (
+                      <View style={[styles.metaItem, { marginTop: 4 }]}>
+                        <MapPin size={11} color={theme.colors.link} />
+                        <Text style={[styles.metaText, { color: theme.colors.body }]}>
+                          Base: {u.working_location.name}
                         </Text>
                       </View>
                     )}
@@ -903,7 +997,7 @@ export default function UsersScreen() {
               activeOpacity={0.7}
             >
               <Text style={{ color: '#ffffff', fontSize: 12, fontWeight: '600' }}>
-                {selectedIds.length === filteredUsers.length ? 'Deselect' : 'All'}
+                {selectedIds.length === users.length ? 'Deselect' : 'All'}
               </Text>
             </TouchableOpacity>
 
