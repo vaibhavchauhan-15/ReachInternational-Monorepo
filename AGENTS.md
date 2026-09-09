@@ -36,8 +36,10 @@ Read these memory and rule files in order:
    - `AI/RULES/SEO-METADATA-DISCOVERABILITY.md`
    - `AI/RULES/OBSERVABILITY-MONITORING-LOGGING.md`
    - `AI/RULES/DEPLOYMENT-DEVOPS-RELEASE.md`
+   - `AI/RULES/MULTI-AGENT-ENGINEERING-TEAM.md`
 6. **Cross-Platform UI & Agent Rules (`.agents/rules/`)**:
    - `.agents/rules/mandatory_rules_reading_and_enforcement.md`
+   - `.agents/rules/multi_agent_engineering_team.md`
    - `.agents/rules/responsive_cross_platform_design.md`
    - `.agents/rules/global_responsive_design.md`
    - `.agents/rules/web_mobile_ui_consistency.md`

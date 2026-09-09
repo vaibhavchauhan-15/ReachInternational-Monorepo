@@ -45,6 +45,26 @@ export interface UserRecord {
   state_id?: number | null;
   aadhaar_number?: string | null;
   license_number?: string | null;
+  supervisor_id?: string | null;
+  supervisor_ids?: string[] | null;
+  supervisor?: {
+    id: string;
+    full_name: string;
+    email?: string | null;
+  } | null;
+  supervisors?: Array<{
+    id: string;
+    full_name: string;
+    email?: string | null;
+    phone?: string | null;
+  }>;
+  working_location_id?: string | null;
+  working_location?: {
+    id: string;
+    name: string;
+    type?: string;
+    city?: string | null;
+  } | null;
   created_at?: string;
 }
 
@@ -274,6 +294,31 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                 <Text style={[styles.infoLabel, { color: theme.colors.mute }]}>Role Code:</Text>
                 <Text style={[styles.infoValue, { color: theme.colors.ink }]}>{user.role}</Text>
               </View>
+
+              {((user.supervisors && user.supervisors.length > 0) || user.supervisor?.full_name) && (
+                <View style={styles.infoRow}>
+                  <User size={14} color={theme.colors.mute} />
+                  <Text style={[styles.infoLabel, { color: theme.colors.mute }]}>
+                    {user.supervisors && user.supervisors.length > 1 ? 'Supervisors:' : 'Supervisor:'}
+                  </Text>
+                  <Text style={[styles.infoValue, { color: theme.colors.ink, flex: 1, flexWrap: 'wrap' }]}>
+                    {user.supervisors && user.supervisors.length > 0
+                      ? user.supervisors.map((s) => s.full_name).join(', ')
+                      : user.supervisor?.full_name}
+                  </Text>
+                </View>
+              )}
+
+              {user.working_location?.name && (
+                <View style={styles.infoRow}>
+                  <MapPin size={14} color={theme.colors.mute} />
+                  <Text style={[styles.infoLabel, { color: theme.colors.mute }]}>Working Base:</Text>
+                  <Text style={[styles.infoValue, { color: theme.colors.ink }]}>
+                    {user.working_location.name}
+                    {user.working_location.city ? ` (${user.working_location.city})` : ''}
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* Management Actions */}

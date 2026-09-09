@@ -39,7 +39,7 @@ import {
   FileText,
 } from 'lucide-react-native';
 
-export type OpsTab = 'logs' | 'assignments' | 'audit-logs' | 'entry' | 'history';
+export type OpsTab = 'logs' | 'assignments' | 'entry' | 'history';
 
 export interface HourLogRecord {
   id: string;
@@ -92,24 +92,6 @@ export interface MachineWithAssignments {
   active_assignments: ActiveShiftAssignment[];
 }
 
-export interface MobileAssignmentAuditRecord {
-  id: string;
-  machine_id: string;
-  operator_id: string;
-  shift_start_time: string;
-  shift_end_time: string;
-  crosses_midnight: boolean;
-  assigned_at: string;
-  assigned_by?: string;
-  ended_at?: string | null;
-  ended_by?: string | null;
-  end_reason?: string | null;
-  is_active: boolean;
-  machine?: { machine_id: string; model?: string; serial_number?: string } | null;
-  operator?: { id: string; full_name: string; phone?: string; shift_time?: string | null } | null;
-  assigner?: { id: string; full_name: string } | null;
-  ender?: { id: string; full_name: string } | null;
-}
 
 export default function OperationsScreen() {
   const { theme } = useTheme();
@@ -120,9 +102,7 @@ export default function OperationsScreen() {
   const [logs, setLogs] = useState<HourLogRecord[]>([]);
   const [machinesList, setMachinesList] = useState<MachineWithAssignments[]>([]);
   const [activeOperators, setActiveOperators] = useState<{ id: string; full_name: string; phone?: string; shift_time?: string }[]>([]);
-  const [auditRecords, setAuditRecords] = useState<MobileAssignmentAuditRecord[]>([]);
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'assigned' | 'unassigned' | 'full'>('all');
-  const [auditFilter, setAuditFilter] = useState<'all' | 'active' | 'ended'>('all');
   const [expandedMachineIds, setExpandedMachineIds] = useState<Set<string>>(() => new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -140,7 +120,11 @@ export default function OperationsScreen() {
   };
 
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'month' | 'all' | 'breakdowns'>('month');
+  const [logsPage, setLogsPage] = useState(1);
+  const [totalLogsCount, setTotalLogsCount] = useState(0);
+  const [logsLoading, setLogsLoading] = useState(false);
 
   // Modal State: Log Entry
   const [meterModalVisible, setMeterModalVisible] = useState(false);
@@ -154,48 +138,171 @@ export default function OperationsScreen() {
   const [conflictModalVisible, setConflictModalVisible] = useState(false);
   const [selectedLogForConflict, setSelectedLogForConflict] = useState<HourLogRecord | null>(null);
 
+  const fetchLogs = useCallback(
+    async (pageToFetch = 1, currentFilter = statusFilter, searchTerm = debouncedSearch) => {
+      try {
+        setLogsLoading(true);
+
+        let query = supabase
+          .from('machine_hour_logs')
+          .select(
+            `
+            id,
+            machine_id,
+            log_date,
+            shift,
+            start_meter,
+            end_meter,
+            running_hours,
+            start_time,
+            end_time,
+            overtime_hours,
+            normal_working_hours,
+            location,
+            is_breakdown,
+            remarks,
+            operator_id,
+            client_id,
+            created_at,
+            conflict_flag,
+            conflict_reason,
+            conflict_status,
+            machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number),
+            operator:users!machine_hour_logs_operator_id_fkey(id, full_name),
+            client:clients!machine_hour_logs_client_id_fkey(id, company_name)
+          `,
+            { count: 'exact' }
+          )
+          .order('log_date', { ascending: false })
+          .order('created_at', { ascending: false })
+          .range((pageToFetch - 1) * 10, pageToFetch * 10 - 1);
+
+        if (isOperator && user?.id) {
+          query = query.eq('operator_id', user.id);
+        }
+
+        if (currentFilter === 'breakdowns') {
+          query = query.eq('is_breakdown', true);
+        } else if (currentFilter === 'month') {
+          const now = new Date();
+          const y = now.getFullYear();
+          const m = String(now.getMonth() + 1).padStart(2, '0');
+          const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+          query = query.gte('log_date', `${y}-${m}-01`).lte('log_date', `${y}-${m}-${String(lastDay).padStart(2, '0')}`);
+        }
+
+        const cleanSearch = searchTerm.replace(/[,()"]/g, ' ').trim();
+        if (cleanSearch) {
+          const [mRes, opRes] = await Promise.all([
+            supabase
+              .from('machines')
+              .select('id')
+              .or(`machine_id.ilike.%${cleanSearch}%,model.ilike.%${cleanSearch}%,serial_number.ilike.%${cleanSearch}%`)
+              .limit(20),
+            supabase
+              .from('users')
+              .select('id')
+              .ilike('full_name', `%${cleanSearch}%`)
+              .limit(20),
+          ]);
+          const mIds = (mRes.data || []).map((m: any) => m.id);
+          const oIds = (opRes.data || []).map((o: any) => o.id);
+
+          const orClauses = [
+            `remarks.ilike.%${cleanSearch}%`,
+            `location.ilike.%${cleanSearch}%`,
+          ];
+          if (mIds.length > 0) orClauses.push(`machine_id.in.(${mIds.join(',')})`);
+          if (oIds.length > 0) orClauses.push(`operator_id.in.(${oIds.join(',')})`);
+          query = query.or(orClauses.join(','));
+        }
+
+        const logsRes = await query;
+        let logsData = logsRes.data;
+        let count = logsRes.count;
+
+        if (logsRes.error) {
+          console.warn('Primary mobile logs query failed, trying baseline query:', logsRes.error?.message || logsRes.error);
+          let fallbackQuery = supabase
+            .from('machine_hour_logs')
+            .select(
+              `
+              id,
+              machine_id,
+              log_date,
+              shift,
+              start_meter,
+              end_meter,
+              running_hours,
+              start_time,
+              end_time,
+              overtime_hours,
+              normal_working_hours,
+              location,
+              is_breakdown,
+              remarks,
+              operator_id,
+              client_id,
+              created_at,
+              conflict_flag,
+              conflict_reason,
+              conflict_status,
+              machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number),
+              operator:users!machine_hour_logs_operator_id_fkey(id, full_name),
+              client:clients!machine_hour_logs_client_id_fkey(id, company_name)
+            `,
+              { count: 'exact' }
+            )
+            .order('log_date', { ascending: false })
+            .order('created_at', { ascending: false })
+            .range((pageToFetch - 1) * 10, pageToFetch * 10 - 1);
+
+          if (isOperator && user?.id) {
+            fallbackQuery = fallbackQuery.eq('operator_id', user.id);
+          }
+          if (currentFilter === 'breakdowns') {
+            fallbackQuery = fallbackQuery.eq('is_breakdown', true);
+          } else if (currentFilter === 'month') {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+            fallbackQuery = fallbackQuery.gte('log_date', `${y}-${m}-01`).lte('log_date', `${y}-${m}-${String(lastDay).padStart(2, '0')}`);
+          }
+
+          const fbRes = await fallbackQuery;
+          if (fbRes.data) {
+            logsData = fbRes.data;
+            count = fbRes.count;
+          }
+        }
+
+        if (logsData) {
+          const formatted = logsData.map((l: any) => ({
+            ...l,
+            machine_code: l.machine?.machine_id || l.machine_id || 'Machine',
+            client: l.client ? { name: l.client.company_name || l.client.client_name } : null,
+          }));
+          setLogs(formatted as any);
+          if (count !== null && count !== undefined) {
+            setTotalLogsCount(count);
+          }
+          setLogsPage(pageToFetch);
+        }
+      } catch (err) {
+        console.error('Error fetching mobile logs page:', err);
+      } finally {
+        setLogsLoading(false);
+      }
+    },
+    [isOperator, user?.id]
+  );
+
   const fetchOperationsData = useCallback(async () => {
     try {
       setIsLoading(true);
 
-      // 1. Fetch Hour Logs
-      let query = supabase
-        .from('machine_hour_logs')
-        .select(`
-          id,
-          machine_id,
-          log_date,
-          shift,
-          start_meter,
-          end_meter,
-          running_hours,
-          start_time,
-          end_time,
-          overtime_hours,
-          normal_working_hours,
-          location,
-          is_breakdown,
-          remarks,
-          operator_id,
-          client_id,
-          created_at,
-          conflict_flag,
-          conflict_reason,
-          conflict_status,
-          machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number),
-          operator:users!machine_hour_logs_operator_id_fkey(id, full_name),
-          client:clients!machine_hour_logs_client_id_fkey(id, company_name)
-        `)
-        .order('log_date', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (isOperator && user?.id) {
-        query = query.eq('operator_id', user.id);
-      }
-
-      const [logsRes, mchRes, assRes, opsRes] = await Promise.all([
-        query,
+      const [mchRes, assRes, opsRes] = await Promise.all([
         supabase
           .from('machines')
           .select(`
@@ -238,57 +345,6 @@ export default function OperationsScreen() {
           .eq('status', 'active')
           .order('full_name'),
       ]);
-
-      let logsData: any = logsRes.data;
-      if (logsRes.error) {
-        console.warn('Primary mobile logs query failed, trying baseline query:', logsRes.error?.message || logsRes.error);
-        let fallbackQuery = supabase
-          .from('machine_hour_logs')
-          .select(`
-            id,
-            machine_id,
-            log_date,
-            shift,
-            start_meter,
-            end_meter,
-            running_hours,
-            start_time,
-            end_time,
-            overtime_hours,
-            normal_working_hours,
-            location,
-            is_breakdown,
-            remarks,
-            operator_id,
-            client_id,
-            created_at,
-            machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number),
-            operator:users!machine_hour_logs_operator_id_fkey(id, full_name),
-            client:clients!machine_hour_logs_client_id_fkey(id, company_name)
-          `)
-          .order('log_date', { ascending: false })
-          .order('created_at', { ascending: false })
-          .limit(100);
-
-        if (isOperator && user?.id) {
-          fallbackQuery = fallbackQuery.eq('operator_id', user.id);
-        }
-        const fbRes = await fallbackQuery;
-        if (fbRes.data) {
-          logsData = fbRes.data;
-        } else if (fbRes.error) {
-          console.warn('Baseline mobile logs query failed:', fbRes.error?.message || fbRes.error);
-        }
-      }
-
-      if (logsData) {
-        const formatted = logsData.map((l: any) => ({
-          ...l,
-          machine_code: l.machine?.machine_id || l.machine_id || 'Machine',
-          client: l.client ? { name: l.client.company_name || l.client.client_name } : null,
-        }));
-        setLogs(formatted as any);
-      }
 
       if (opsRes.data) {
         setActiveOperators(opsRes.data as any);
@@ -351,8 +407,6 @@ export default function OperationsScreen() {
               assigner: m.supervisor || null,
             }));
         }
-
-        setAuditRecords(allAssList);
         const activeAssList = allAssList.filter((a) => a.is_active) as unknown as ActiveShiftAssignment[];
         const machinesWithAss: MachineWithAssignments[] = mchRes.data.map((m: any) => ({
           ...m,
@@ -416,14 +470,39 @@ export default function OperationsScreen() {
     return logs.filter((l) => l.conflict_flag && (!l.conflict_status || l.conflict_status === 'pending'));
   }, [logs]);
 
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // When filters or search change, reset to page 1 and fetch
+  useEffect(() => {
+    setLogsPage(1);
+    fetchLogs(1, statusFilter, debouncedSearch);
+  }, [debouncedSearch, statusFilter, fetchLogs]);
+
   useEffect(() => {
     fetchOperationsData();
   }, [fetchOperationsData]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchOperationsData();
-  }, [fetchOperationsData]);
+    Promise.all([
+      fetchOperationsData(),
+      fetchLogs(logsPage, statusFilter, debouncedSearch),
+    ]).finally(() => setRefreshing(false));
+  }, [fetchOperationsData, fetchLogs, logsPage, statusFilter, debouncedSearch]);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1) return;
+    const maxPages = Math.max(1, Math.ceil(totalLogsCount / 10));
+    if (newPage > maxPages) return;
+    setLogsPage(newPage);
+    fetchLogs(newPage, statusFilter, debouncedSearch);
+  };
 
   const parseBreakdownText = (log: HourLogRecord): string | null => {
     if (!log.is_breakdown) return null;
@@ -434,28 +513,7 @@ export default function OperationsScreen() {
     return '1h 30m';
   };
 
-  const filteredLogs = logs.filter((log) => {
-    const q = search.toLowerCase().trim();
-    const matchesSearch =
-      !q ||
-      log.machine_code.toLowerCase().includes(q) ||
-      (log.machine?.model && log.machine.model.toLowerCase().includes(q)) ||
-      (log.machine?.serial_number && log.machine.serial_number.toLowerCase().includes(q)) ||
-      (log.operator?.full_name && log.operator.full_name.toLowerCase().includes(q)) ||
-      (log.client?.name && log.client.name.toLowerCase().includes(q)) ||
-      (log.location && log.location.toLowerCase().includes(q));
-
-    let matchesStatus = true;
-    if (statusFilter === 'month') {
-      const now = new Date();
-      const logDate = new Date(log.log_date);
-      matchesStatus = !isNaN(logDate.getTime()) && logDate.getFullYear() === now.getFullYear() && logDate.getMonth() === now.getMonth();
-    } else if (statusFilter === 'breakdowns') {
-      matchesStatus = log.is_breakdown === true;
-    }
-
-    return matchesSearch && matchesStatus;
-  });
+  const filteredLogs = logs;
 
   const openLogEntryModal = (mId?: string, mCode?: string, modelName?: string, serial?: string) => {
     setSelectedMachineForLog({
@@ -568,23 +626,6 @@ export default function OperationsScreen() {
               </Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => setActiveTab('audit-logs')}
-              style={[
-                styles.segmentBtn,
-                activeTab === 'audit-logs' && [styles.segmentActive, { backgroundColor: theme.colors.primary }],
-              ]}
-            >
-              <Text
-                style={[
-                  styles.segmentText,
-                  { color: activeTab === 'audit-logs' ? theme.colors.onPrimary : theme.colors.body },
-                  activeTab === 'audit-logs' && { fontWeight: '700' },
-                ]}
-              >
-                Audit Logs ({auditRecords.length})
-              </Text>
-            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -658,7 +699,7 @@ export default function OperationsScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
               {[
                 { key: 'month', label: 'This Month' },
-                { key: 'all', label: `All Logs (${logs.length})` },
+                { key: 'all', label: `All Logs (${totalLogsCount})` },
                 { key: 'breakdowns', label: 'Breakdowns' },
               ].map((f) => {
                 const isActive = statusFilter === f.key;
@@ -742,7 +783,7 @@ export default function OperationsScreen() {
               </View>
             )}
 
-            {isLoading ? (
+            {isLoading || logsLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={theme.colors.link} />
                 <Text style={[styles.loadingText, { color: theme.colors.mute }]}>Loading running hours logs...</Text>
@@ -945,6 +986,73 @@ export default function OperationsScreen() {
                   </Card>
                 );
               })
+            )}
+
+            {/* Native Touch Pagination Bar (≥44px touch targets) */}
+            {totalLogsCount > 0 && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingVertical: spacingNumeric.sm,
+                  paddingHorizontal: spacingNumeric.xs,
+                  marginTop: spacingNumeric.xs,
+                  borderTopWidth: 1,
+                  borderTopColor: theme.colors.hairline,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={() => handlePageChange(logsPage - 1)}
+                  disabled={logsPage <= 1 || logsLoading}
+                  style={{
+                    minHeight: 44,
+                    minWidth: 80,
+                    paddingHorizontal: 14,
+                    borderRadius: radiusNumeric.md,
+                    borderWidth: 1,
+                    borderColor: theme.colors.hairline,
+                    backgroundColor: theme.colors.canvasElevated,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    opacity: logsPage <= 1 || logsLoading ? 0.35 : 1,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.ink }}>
+                    Previous
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.ink, fontFamily: 'GeistMono_700Bold' }}>
+                    Page {logsPage} of {Math.max(1, Math.ceil(totalLogsCount / 10))}
+                  </Text>
+                  <Text style={{ fontSize: 10, color: theme.colors.mute }}>
+                    {totalLogsCount} total log{totalLogsCount === 1 ? '' : 's'}
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => handlePageChange(logsPage + 1)}
+                  disabled={logsPage >= Math.ceil(totalLogsCount / 10) || logsLoading}
+                  style={{
+                    minHeight: 44,
+                    minWidth: 80,
+                    paddingHorizontal: 14,
+                    borderRadius: radiusNumeric.md,
+                    borderWidth: 1,
+                    borderColor: theme.colors.hairline,
+                    backgroundColor: theme.colors.canvasElevated,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    opacity: logsPage >= Math.ceil(totalLogsCount / 10) || logsLoading ? 0.35 : 1,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.ink }}>
+                    Next
+                  </Text>
+                </TouchableOpacity>
+              </View>
             )}
           </ScrollView>
         </>
@@ -1292,175 +1400,6 @@ export default function OperationsScreen() {
         </>
       )}
 
-      {/* Assignment Audit Logs Tab */}
-      {activeTab === 'audit-logs' && (
-        <>
-          {/* Search and Filters */}
-          <View style={[styles.searchFilterContainer, { backgroundColor: theme.colors.canvas, borderBottomColor: theme.colors.hairline }]}>
-            <Input
-              placeholder="Search machine, operator, supervisor, reason..."
-              value={search}
-              onChangeText={setSearch}
-              leftIcon={<Search size={16} color={theme.colors.mute} />}
-              containerStyle={styles.searchInput}
-            />
-
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-              {[
-                { key: 'all', label: `All (${auditRecords.length})` },
-                { key: 'active', label: `Active (${auditRecords.filter(a => a.is_active).length})` },
-                { key: 'ended', label: `Ended (${auditRecords.filter(a => !a.is_active).length})` },
-              ].map((f) => {
-                const isActive = auditFilter === f.key;
-                return (
-                  <TouchableOpacity
-                    key={f.key}
-                    onPress={() => setAuditFilter(f.key as any)}
-                    style={[
-                      styles.filterPill,
-                      {
-                        backgroundColor: isActive ? theme.colors.primary : theme.colors.canvasElevated,
-                        borderColor: isActive ? theme.colors.primary : theme.colors.hairline,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.filterText, { color: isActive ? theme.colors.onPrimary : theme.colors.body }]}>
-                      {f.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-
-          <ScrollView
-            contentContainerStyle={styles.feedContent}
-            showsVerticalScrollIndicator={false}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
-          >
-            {(() => {
-              const q = search.toLowerCase().trim();
-              const filtered = auditRecords.filter((rec) => {
-                if (auditFilter === 'active' && !rec.is_active) return false;
-                if (auditFilter === 'ended' && rec.is_active) return false;
-
-                if (!q) return true;
-                const mCode = (rec.machine?.machine_id || '').toLowerCase();
-                const mModel = (rec.machine?.model || '').toLowerCase();
-                const opName = (rec.operator?.full_name || '').toLowerCase();
-                const assigner = (rec.assigner?.full_name || '').toLowerCase();
-                const reason = (rec.end_reason || '').toLowerCase();
-                return mCode.includes(q) || mModel.includes(q) || opName.includes(q) || assigner.includes(q) || reason.includes(q);
-              });
-
-              if (filtered.length === 0) {
-                return (
-                  <View style={[styles.emptyContainer, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                    <FileText size={32} color={theme.colors.mute} />
-                    <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>No audit records found</Text>
-                    <Text style={[styles.emptySubtext, { color: theme.colors.mute }]}>
-                      No assignment history matches your current filters.
-                    </Text>
-                  </View>
-                );
-              }
-
-              return filtered.map((item) => {
-                const isOvernight = item.crosses_midnight ||
-                  (parseTimeToMinutes(item.shift_end_time) ?? 0) <= (parseTimeToMinutes(item.shift_start_time) ?? 0);
-
-                return (
-                  <Card key={item.id} style={styles.card}>
-                    {/* Header: Machine & Status Badge */}
-                    <View style={styles.cardHeader}>
-                      <View style={styles.headerTitleWrap}>
-                        <Text style={[styles.codeText, { color: theme.colors.ink }]}>
-                          {item.machine?.machine_id || 'Machine'}
-                        </Text>
-                        {item.machine?.model && (
-                          <Text style={[styles.modelText, { color: theme.colors.mute }]}>
-                            • {item.machine.model}
-                          </Text>
-                        )}
-                      </View>
-                      <Badge
-                        status={item.is_active ? 'operational' : 'inactive'}
-                        customLabel={item.is_active ? 'Active' : 'Ended'}
-                      />
-                    </View>
-
-                    {/* Operator Row */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 2 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                        <UserCheck size={14} color={theme.colors.link} />
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.ink }} numberOfLines={1}>
-                          {item.operator?.full_name || 'Operator'}
-                        </Text>
-                      </View>
-                      {item.operator?.phone && (
-                        <Text style={{ fontSize: 11, fontFamily: 'monospace', color: theme.colors.mute }}>
-                          {item.operator.phone}
-                        </Text>
-                      )}
-                    </View>
-
-                    {/* Shift Window Pill */}
-                    <View style={[styles.specsWell, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          {isOvernight ? (
-                            <Moon size={13} color="#6366f1" />
-                          ) : (
-                            <Sun size={13} color="#f59e0b" />
-                          )}
-                          <Text style={{ fontSize: 11, fontWeight: '700', fontFamily: 'monospace', color: theme.colors.ink }}>
-                            {formatTo12Hour(item.shift_start_time)} – {formatTo12Hour(item.shift_end_time)}
-                          </Text>
-                          {isOvernight && (
-                            <Text style={{ fontSize: 10, fontWeight: '600', color: '#6366f1' }}>🌙 Overnight</Text>
-                          )}
-                        </View>
-                      </View>
-
-                      <View style={[styles.specsDivider, { backgroundColor: theme.colors.hairline }]} />
-
-                      {/* Timeline details */}
-                      <View style={{ gap: 2 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Assigned:</Text>
-                          <Text style={{ fontSize: 11, color: theme.colors.ink, fontFamily: 'monospace' }}>
-                            {formatDate(item.assigned_at)}
-                            {item.assigner?.full_name ? ` by ${item.assigner.full_name}` : ''}
-                          </Text>
-                        </View>
-
-                        {item.ended_at && (
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                            <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Ended:</Text>
-                            <Text style={{ fontSize: 11, color: theme.colors.mute, fontFamily: 'monospace' }}>
-                              {formatDate(item.ended_at)}
-                              {item.ender?.full_name ? ` by ${item.ender.full_name}` : ''}
-                            </Text>
-                          </View>
-                        )}
-
-                        {item.end_reason && (
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                            <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Reason:</Text>
-                            <Text style={{ fontSize: 11, color: theme.colors.body, textTransform: 'capitalize' }}>
-                              {item.end_reason.replace(/_/g, ' ')}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  </Card>
-                );
-              });
-            })()}
-          </ScrollView>
-        </>
-      )}
 
       {/* Meter Log Modal */}
       <MeterLogModal

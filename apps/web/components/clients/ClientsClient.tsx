@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useTransition, useEffect, useCallback } from "react";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   AnimatedUsers,
   AnimatedSearch,
@@ -20,63 +21,80 @@ import { motion, AnimatePresence } from "framer-motion";
 import type { CRMClient, User } from "@/lib/types/database";
 import { ClientModal } from "./ClientModal";
 import { softDeleteClientAction } from "@/app/actions/clients";
-import { Button, PageHeader } from "@/components/ui";
+import { Button, PageHeader, Pagination } from "@/components/ui";
 
 interface ClientsClientProps {
   user: User;
   initialClients: CRMClient[];
+  total: number;
+  page: number;
+  pageSize: number;
+  metrics: {
+    total: number;
+    active: number;
+    inactive: number;
+    cities: number;
+  };
 }
 
-export function ClientsClient({ user, initialClients }: ClientsClientProps) {
-  const [clients, setClients] = useState<CRMClient[]>(initialClients);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+export function ClientsClient({ user, initialClients, total, page, pageSize, metrics }: ClientsClientProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [isPending, startTransition] = useTransition();
+
+  // Initialize state from URL
+  const initialSearch = searchParams.get("search") || "";
+  const initialStatus = (searchParams.get("status") as "all" | "active" | "inactive") || "all";
+
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">(initialStatus);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<CRMClient | null>(null);
-
   const [deletingClient, setDeletingClient] = useState<CRMClient | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const canManageClients = ["super_admin", "admin", "manager", "service_manager"].includes(user.role);
 
-  // Filtered clients list
-  const filteredClients = useMemo(() => {
-    return clients.filter((client) => {
-      const q = searchQuery.toLowerCase().trim();
-      const clientCompany = (client.company_name || client.client_name || "").toLowerCase();
-      const clientCode = (client.code || "").toLowerCase();
-      const matchesSearch =
-        !q ||
-        clientCompany.includes(q) ||
-        clientCode.includes(q) ||
-        (client.contact_person ? client.contact_person.toLowerCase().includes(q) : false) ||
-        (client.phone ? client.phone.toLowerCase().includes(q) : false) ||
-        (client.gstin ? client.gstin.toLowerCase().includes(q) : false) ||
-        (client.pan_number ? client.pan_number.toLowerCase().includes(q) : false) ||
-        (client.city ? client.city.toLowerCase().includes(q) : false) ||
-        (client.district ? client.district.toLowerCase().includes(q) : false) ||
-        (client.state ? client.state.toLowerCase().includes(q) : false) ||
-        (client.address ? client.address.toLowerCase().includes(q) : false) ||
-        (client.billing_address ? client.billing_address.toLowerCase().includes(q) : false) ||
-        (client.billing_city ? client.billing_city.toLowerCase().includes(q) : false);
+  // Sync state to URL with debounce for search
+  const updateFilters = useCallback(
+    (updates: { page?: number; search?: string; status?: "all" | "active" | "inactive" }) => {
+      const current = new URLSearchParams(Array.from(searchParams.entries()));
 
-      const matchesStatus = statusFilter === "all" || client.status === statusFilter;
+      if (updates.page !== undefined) current.set("page", updates.page.toString());
+      if (updates.search !== undefined) {
+        if (updates.search) current.set("search", updates.search);
+        else current.delete("search");
+        if (updates.page === undefined) current.set("page", "1"); // reset page on search change
+      }
+      if (updates.status !== undefined) {
+        if (updates.status !== "all") current.set("status", updates.status);
+        else current.delete("status");
+        if (updates.page === undefined) current.set("page", "1"); // reset page on status change
+      }
 
-      return matchesSearch && matchesStatus;
-    });
-  }, [clients, searchQuery, statusFilter]);
+      startTransition(() => {
+        router.push(`${pathname}?${current.toString()}`);
+      });
+    },
+    [pathname, router, searchParams]
+  );
 
-  // Metrics summary
-  const metrics = useMemo(() => {
-    const total = clients.length;
-    const active = clients.filter((c) => c.status === "active").length;
-    const inactive = clients.filter((c) => c.status === "inactive").length;
-    const cities = new Set(clients.map((c) => c.city).filter(Boolean)).size;
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchQuery !== (searchParams.get("search") || "")) {
+        updateFilters({ search: searchQuery });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, searchParams, updateFilters]);
 
-    return { total, active, inactive, cities };
-  }, [clients]);
+  function handleStatusChange(newStatus: "all" | "active" | "inactive") {
+    setStatusFilter(newStatus);
+    updateFilters({ status: newStatus });
+  }
 
   function handleOpenAddModal() {
     setEditingClient(null);
@@ -98,16 +116,14 @@ export function ClientsClient({ user, initialClients }: ClientsClientProps) {
     if (res.error) {
       setToastMessage({ type: "error", text: res.error });
     } else {
-      setClients((prev) =>
-        prev.map((c) => (c.id === deletingClient.id ? { ...c, status: "inactive", deleted_at: new Date().toISOString() } : c))
-      );
       setToastMessage({ type: "success", text: `Client "${deletingClient.company_name || deletingClient.client_name}" soft-deleted successfully.` });
       setDeletingClient(null);
+      // Let Server Action revalidation update the data
     }
   }
 
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 transition-opacity duration-200 ${isPending ? "opacity-60 pointer-events-none" : "opacity-100"}`}>
       {/* Toast Notice */}
       <AnimatePresence>
         {toastMessage && (
@@ -214,18 +230,18 @@ export function ClientsClient({ user, initialClients }: ClientsClientProps) {
         <div className="flex items-center gap-1 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)] p-1">
           <button
             type="button"
-            onClick={() => setStatusFilter("all")}
+            onClick={() => handleStatusChange("all")}
             className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
               statusFilter === "all"
                 ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-xs"
                 : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
             }`}
           >
-            All ({clients.length})
+            All ({metrics.total})
           </button>
           <button
             type="button"
-            onClick={() => setStatusFilter("active")}
+            onClick={() => handleStatusChange("active")}
             className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
               statusFilter === "active"
                 ? "bg-emerald-600 text-white shadow-xs"
@@ -236,7 +252,7 @@ export function ClientsClient({ user, initialClients }: ClientsClientProps) {
           </button>
           <button
             type="button"
-            onClick={() => setStatusFilter("inactive")}
+            onClick={() => handleStatusChange("inactive")}
             className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer ${
               statusFilter === "inactive"
                 ? "bg-amber-600 text-white shadow-xs"
@@ -263,7 +279,7 @@ export function ClientsClient({ user, initialClients }: ClientsClientProps) {
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-hairline)]">
-            {filteredClients.length === 0 ? (
+            {initialClients.length === 0 ? (
               <tr>
                 <td colSpan={canManageClients ? 7 : 6} className="py-12 text-center text-[var(--color-mute)]">
                   <Building2 className="mx-auto h-8 w-8 text-[var(--color-mute)]/60 mb-2" />
@@ -272,7 +288,7 @@ export function ClientsClient({ user, initialClients }: ClientsClientProps) {
                 </td>
               </tr>
             ) : (
-              filteredClients.map((client) => (
+              initialClients.map((client) => (
                 <tr key={client.id} className="hover:bg-[var(--color-hairline-soft-surface)]/60 transition-colors">
                   <td className="py-2.5 px-4 font-mono font-bold text-sky-600 dark:text-sky-400 whitespace-nowrap">
                     {client.code}
@@ -367,18 +383,29 @@ export function ClientsClient({ user, initialClients }: ClientsClientProps) {
             )}
           </tbody>
         </table>
+        
+        {total > pageSize && (
+          <div className="px-4 py-2 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)]">
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={(newPage) => updateFilters({ page: newPage })}
+            />
+          </div>
+        )}
       </div>
 
       {/* Mobile Touch Cards View */}
       <div className="block sm:hidden space-y-3">
-        {filteredClients.length === 0 ? (
+        {initialClients.length === 0 ? (
           <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-8 text-center text-[var(--color-mute)]">
             <Building2 className="mx-auto h-8 w-8 text-[var(--color-mute)]/60 mb-2" />
             <p className="font-semibold text-[var(--color-ink)]">No clients found</p>
             <p className="text-xs">Try adjusting your search query.</p>
           </div>
         ) : (
-          filteredClients.map((client) => (
+          initialClients.map((client) => (
             <div
               key={client.id}
               className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 shadow-xs space-y-2.5"
@@ -465,6 +492,17 @@ export function ClientsClient({ user, initialClients }: ClientsClientProps) {
           ))
         )}
       </div>
+      
+      {total > pageSize && (
+        <div className="block sm:hidden px-1 pt-2">
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPageChange={(newPage) => updateFilters({ page: newPage })}
+          />
+        </div>
+      )}
 
       {/* Add / Edit Client Modal */}
       <ClientModal

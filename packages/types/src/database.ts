@@ -98,7 +98,43 @@ export interface User {
   aadhaar_number?: string | null;
   license_number?: string | null;
   complete_profile?: "yes" | "no" | string | null;
+  supervisor_id?: string | null;
+  supervisor_ids?: string[] | null;
+  supervisor?: {
+    id: string;
+    full_name: string;
+    email?: string | null;
+    phone?: string | null;
+  } | null;
+  supervisors?: Array<{
+    id: string;
+    full_name: string;
+    email?: string | null;
+    phone?: string | null;
+  }>;
+  working_location_id?: string | null;
+  working_location?: {
+    id: string;
+    name: string;
+    type?: string;
+    city?: string | null;
+    state?: string | null;
+    address?: string | null;
+  } | null;
   email: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkingLocation {
+  id: string;
+  name: string;
+  type: "yard" | "workshop" | "office" | "warehouse" | "site" | string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  pincode?: string | null;
+  status: "active" | "inactive";
   created_at: string;
   updated_at: string;
 }
@@ -736,7 +772,16 @@ export interface AuditLog {
   action: string;
   entity_type: string | null;
   entity_id: string | null;
+  category?: string | null;
+  severity?: string | null;
   metadata: Record<string, unknown> | null;
+  details?: Record<string, unknown> | null;
+  before_state?: Record<string, unknown> | null;
+  after_state?: Record<string, unknown> | null;
+  actor_name?: string | null;
+  actor_role?: string | null;
+  entity_name?: string | null;
+  ip_address?: string | null;
   created_at: string;
 }
 

@@ -48,7 +48,8 @@ export function AppHeader({ user }: AppHeaderProps) {
     if (pathname.startsWith("/operations")) return "Operations & Operator Logs";
     if (pathname.startsWith("/notifications")) return "Notifications Hub";
     if (pathname.startsWith("/users")) return "User Management";
-    if (pathname.startsWith("/audit-logs")) return "Audit Security Logs";
+    if (pathname.startsWith("/audit-logs")) return "Audit Logs";
+    if (pathname.startsWith("/audit")) return "Audit Logs";
     if (pathname.startsWith("/settings")) return "Platform Settings";
     return "REACH INTERNATIONAL";
   };

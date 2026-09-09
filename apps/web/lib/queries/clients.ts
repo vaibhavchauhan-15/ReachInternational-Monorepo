@@ -90,4 +90,105 @@ export const getClientOptions = unstable_cache(
   { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.clients] }
 );
 
+export interface PaginatedClientsResult {
+  clients: CRMClient[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+export const getPaginatedClients = cache(
+  async ({
+    page = 1,
+    pageSize = 10,
+    search = "",
+    statusFilter = "all",
+  }: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    statusFilter?: "all" | "active" | "inactive";
+  }): Promise<PaginatedClientsResult> => {
+    const supabase = createSupabaseAdminClient();
+    const limit = Math.min(Math.max(1, pageSize), 100);
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    let query = supabase.from("clients").select(CLIENT_SELECT_COLUMNS, { count: "exact" });
+
+    if (statusFilter !== "all") {
+      query = query.eq("status", statusFilter);
+    }
+    
+    // Default to excluding soft deleted unless searching for everything?
+    // Let's exclude soft-deleted items unless specifically asking for inactive, or maybe they are fetched?
+    // Wait, the previous client-side logic showed "SOFT DELETED" clients in the list.
+    // The previous getClients(undefined, true) fetched them all if `includeDeleted` was true.
+    // The page route calls `getClients(undefined, true)`. So deleted ones are included.
+    // If status is "active", they shouldn't be soft deleted.
+    // If status is "inactive", it includes soft-deleted.
+
+    if (search) {
+      const q = `%${search}%`;
+      query = query.or(
+        `company_name.ilike.${q},code.ilike.${q},contact_person.ilike.${q},phone.ilike.${q},gstin.ilike.${q},pan_number.ilike.${q},city.ilike.${q},district.ilike.${q},state.ilike.${q},address.ilike.${q},billing_address.ilike.${q},billing_city.ilike.${q}`
+      );
+    }
+
+    query = query.order("company_name", { ascending: true });
+
+    const { data, count, error } = await query.range(from, to);
+
+    if (error) {
+      console.error("Error fetching paginated clients:", error.message || error);
+      return { clients: [], total: 0, page, pageSize: limit, totalPages: 0 };
+    }
+
+    const clients = ((data as CRMClient[]) ?? []).map((client) => ({
+      ...client,
+      client_name: client.company_name,
+      machine_count: client.machine_count ?? 0,
+      open_complaints: client.open_complaints ?? 0,
+      status: client.status ?? "active",
+    }));
+
+    return {
+      clients,
+      total: count ?? 0,
+      page,
+      pageSize: limit,
+      totalPages: Math.ceil((count ?? 0) / limit),
+    };
+  }
+);
+
+export const getClientMetrics = unstable_cache(
+  async () => {
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase.from("clients").select("status, city, deleted_at");
+
+    if (error) {
+      console.error("Error fetching client metrics:", error.message || error);
+      return { total: 0, active: 0, inactive: 0, cities: 0 };
+    }
+
+    // To match previous logic, we count total clients including soft-deleted if they were shown.
+    const validData = data || [];
+    const total = validData.length;
+    
+    // In previous logic: active = status === "active"
+    // inactive = status === "inactive"
+    // Let's replicate exact client logic
+    const active = validData.filter((c: any) => c.status === "active" && !c.deleted_at).length;
+    // Anyone not active is inactive effectively, but previously it strictly checked === "inactive". Soft deletes change status to inactive.
+    const inactive = validData.filter((c: any) => c.status === "inactive" || c.deleted_at).length;
+    const cities = new Set(validData.map((c: any) => c.city).filter(Boolean)).size;
+
+    return { total, active, inactive, cities };
+  },
+  ["clients-metrics-v1"],
+  { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.clients] }
+);
+
 

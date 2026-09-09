@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AnimatedClock,
@@ -14,8 +14,9 @@ import {
   AnimatedUserCheck,
   AnimatedScrollText,
   AnimatedX,
+  AnimatedRotateCw,
 } from "@/components/ui/animated-icons";
-import { Badge, Button, Select, useToast, TooltipWrapper, MachineSelect, ClientSelect, UserSelect, SearchableSelect, CustomTimePicker, Modal } from "@/components/ui";
+import { Badge, Button, Select, useToast, TooltipWrapper, MachineSelect, ClientSelect, UserSelect, SearchableSelect, CustomTimePicker, Modal, Pagination } from "@/components/ui";
 import type { Machine, User, MachineAssignment, OperatorMachineAssignment, MachineHourLog, MachineWithEngineer, CRMClient } from "@/lib/types/database";
 import { OperatorDashboard, type OperatorHourLog } from "@/components/dashboard/OperatorDashboard";
 import {
@@ -32,7 +33,7 @@ import { PrintableSupervisorLogsModal } from "./PrintableSupervisorLogsModal";
 import { MONTH_NAMES, getLogMonthNumber, formatCompactTiming } from "@/lib/utils/operator-logs-export";
 import { formatDate, formatExactTimestamp, formatTimeAgo, formatTo12Hour, parseProfileShiftTime, parseTimeToMinutes, getISTDateString } from "@reachinternational/utils";
 import { CustomDatePicker } from "@/components/ui/CustomDatePicker";
-import { Printer, Clock, ShieldAlert, Check, UserPlus, AlertCircle, Sun, Moon, Users, Filter, ChevronDown, RefreshCw, Phone, UserCheck } from "lucide-react";
+import { Printer, Clock, ShieldAlert, Check, UserPlus, AlertCircle, Sun, Moon, Users, Filter, ChevronDown, RefreshCw, Phone, UserCheck, Search, X } from "lucide-react";
 
 export interface OperationsClientProps {
   machines: Machine[];
@@ -46,6 +47,24 @@ export interface OperationsClientProps {
   recentLogs?: OperatorHourLog[];
   allMachines?: MachineWithEngineer[];
   initialTab?: string;
+  totalLogsCount?: number;
+  currentPage?: number;
+  logsPageSize?: number;
+  logsSummary?: {
+    totalRunHours: number;
+    totalOtHours: number;
+    totalBreakdowns: number;
+    loggedDaysCount: number;
+  };
+  initialViewMode?: "machine" | "client" | "operator";
+  initialMachineId?: string;
+  initialClientId?: string;
+  initialOperatorId?: string;
+  initialMonth?: string;
+  initialCustomStart?: string;
+  initialCustomEnd?: string;
+  initialSearch?: string;
+  initialSort?: "date-desc" | "date-asc";
 }
 
 export function formatMachineSelectLabel(m: {
@@ -77,11 +96,25 @@ export function OperationsClient({
   recentLogs = [],
   allMachines = [],
   initialTab,
+  totalLogsCount,
+  currentPage = 1,
+  logsPageSize = 10,
+  logsSummary,
+  initialViewMode,
+  initialMachineId,
+  initialClientId,
+  initialOperatorId,
+  initialMonth,
+  initialCustomStart,
+  initialCustomEnd,
+  initialSearch,
+  initialSort,
 }: OperationsClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const { toast } = useToast();
+  const [isPending, startTransition] = useTransition();
 
   const validTabs = userRole === "operator"
     ? ["entry", "history"]
@@ -132,6 +165,8 @@ export function OperationsClient({
   // Filter states: Assignments Tab
   const [assignmentSearch, setAssignmentSearch] = useState("");
   const [assignmentFilter, setAssignmentFilter] = useState<"all" | "assigned" | "unassigned" | "full">("all");
+  const [assignmentsPage, setAssignmentsPage] = useState(1);
+  const [assignmentsPageSize, setAssignmentsPageSize] = useState(20);
 
   // Collapsible Machine Cards: default is CLOSED condition (empty Set)
   const [expandedMachineIds, setExpandedMachineIds] = useState<Set<string>>(() => new Set());
@@ -164,14 +199,25 @@ export function OperationsClient({
   };
 
   // Supervisor Running Hours Log Filtering & View Mode State
-  const [logsViewMode, setLogsViewMode] = useState<"machine" | "client" | "operator">("machine");
-  const [logsSelectedMachineId, setLogsSelectedMachineId] = useState<string>("");
-  const [logsSelectedClientId, setLogsSelectedClientId] = useState<string>("");
+  const [logsViewMode, setLogsViewMode] = useState<"machine" | "client" | "operator">(
+    initialViewMode || "machine"
+  );
+  const [logsSelectedMachineId, setLogsSelectedMachineId] = useState<string>(
+    initialMachineId || ""
+  );
+  const [logsSelectedClientId, setLogsSelectedClientId] = useState<string>(
+    initialClientId || ""
+  );
   const [logsSelectedSite, setLogsSelectedSite] = useState<string>("all");
   const [logsSelectedClientMachineId, setLogsSelectedClientMachineId] = useState<string>("all");
-  const [logsSelectedOperatorId, setLogsSelectedOperatorId] = useState<string>("");
-  const [logsSelectedMonth, setLogsSelectedMonth] = useState<string>(getCurrentMonthValue());
+  const [logsSelectedOperatorId, setLogsSelectedOperatorId] = useState<string>(
+    initialOperatorId || ""
+  );
+  const [logsSelectedMonth, setLogsSelectedMonth] = useState<string>(
+    initialMonth !== undefined ? initialMonth : getCurrentMonthValue()
+  );
   const [logsCustomStartDate, setLogsCustomStartDate] = useState<string>(() => {
+    if (initialCustomStart) return initialCustomStart;
     try {
       const today = getISTDateString();
       return today.slice(0, 7) + "-01";
@@ -180,13 +226,55 @@ export function OperationsClient({
     }
   });
   const [logsCustomEndDate, setLogsCustomEndDate] = useState<string>(() => {
+    if (initialCustomEnd) return initialCustomEnd;
     try {
       return getISTDateString();
     } catch (e) {
       return "";
     }
   });
+  const [searchInput, setSearchInput] = useState<string>(initialSearch || "");
   const [showSupervisorPrintModal, setShowSupervisorPrintModal] = useState(false);
+
+  // URL-driven query param synchronizer
+  const handleFilterChange = (updates: Record<string, string | number | undefined>) => {
+    const current = new URLSearchParams(Array.from(searchParams.entries()));
+
+    if (!current.has("tab")) {
+      current.set("tab", "logs");
+    }
+
+    Object.entries(updates).forEach(([key, val]) => {
+      if (val === undefined || val === "" || (key !== "tab" && val === "all")) {
+        current.delete(key);
+      } else {
+        current.set(key, String(val));
+      }
+    });
+
+    // Reset pagination when modifying filters, unless page was explicitly passed
+    if (!("page" in updates)) {
+      current.delete("page");
+    }
+
+    startTransition(() => {
+      router.push(`/operations?${current.toString()}`);
+    });
+  };
+
+  const handlePageChange = (newPage: number) => {
+    handleFilterChange({ page: newPage });
+  };
+
+  // Debounced search effect (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (searchInput !== (initialSearch || "")) {
+        handleFilterChange({ search: searchInput || undefined, page: 1 });
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   // Derived ordered machines list (ordered by most recent activity in logs)
   const logMachineIdsInOrder = Array.from(new Set(hourLogs.map((l) => l.machine_id).filter(Boolean)));
@@ -404,87 +492,29 @@ export function OperationsClient({
   const clientAddress = activeDbClient?.address || "—";
   const clientFleetCount = clientMachines.length;
 
-  // Filtered running hour logs
-  let filteredHourLogs = hourLogs;
+  // On server-paginated logs tab, hourLogs is the paged slice from server
+  const filteredHourLogs = hourLogs;
 
-  // 1. Month / Date Range filter
-  if (logsSelectedMonth === "custom") {
-    filteredHourLogs = filteredHourLogs.filter((log) => {
-      if (!logsCustomStartDate && !logsCustomEndDate) return true;
-      const logDate = log.log_date?.split("T")[0] || "";
-      if (logsCustomStartDate && logDate < logsCustomStartDate) return false;
-      if (logsCustomEndDate && logDate > logsCustomEndDate) return false;
-      return true;
-    });
-  } else if (logsSelectedMonth !== "all") {
-    filteredHourLogs = filteredHourLogs.filter(
-      (log) => getLogMonthNumber(log.log_date) === logsSelectedMonth
-    );
-  }
-
-  // 2. View Mode & Entity filter
-  if (logsViewMode === "machine") {
-    filteredHourLogs = filteredHourLogs.filter(
-      (log) => log.machine_id === activeMachineId
-    );
-  } else if (logsViewMode === "client") {
-    filteredHourLogs = filteredHourLogs.filter((log) => {
-      // Check if log belongs to the selected client
-      const matchesClientId =
-        Boolean(activeClientId) &&
-        (log.client_id === activeClientId || (log as any)?.client?.id === activeClientId);
-
-      const logClientName =
-        (log as any)?.client?.client_name ||
-        (log as any)?.client?.company_name ||
-        (log.machine as any)?.customer_name ||
-        "";
-      const matchesClientName =
-        Boolean(activeClientName) &&
-        logClientName.toLowerCase().trim() === activeClientName.toLowerCase().trim();
-
-      const isClientMachine = clientMachines.some((m) => m.id === log.machine_id);
-
-      const matchesClient = matchesClientId || matchesClientName || isClientMachine;
-      if (!matchesClient) return false;
-
-      // Optional Site Location filter
-      if (effectiveSelectedSite && effectiveSelectedSite !== "all") {
-        const mObj = log.machine as any;
-        const siteStr = log.location || (mObj?.customer_address ? `${mObj.customer_address}${mObj.city ? `, ${mObj.city}` : ""}` : mObj?.city || "");
-        if (!siteStr.toLowerCase().includes(effectiveSelectedSite.toLowerCase())) return false;
-      }
-
-      // Optional Client Machine filter (defaults to "all" to show all client logs)
-      if (effectiveSelectedClientMachineId && effectiveSelectedClientMachineId !== "all") {
-        if (log.machine_id !== effectiveSelectedClientMachineId) return false;
-      }
-
-      return true;
-    });
-  } else if (logsViewMode === "operator") {
-    filteredHourLogs = filteredHourLogs.filter(
-      (log) => log.operator_id === activeOperatorId
-    );
-  }
-
-  // Aggregate metrics calculation for filtered logs
-  let totalFilteredRunHours = 0;
-  let totalFilteredOtHours = 0;
-  let totalFilteredBreakdowns = 0;
-
+  // Aggregate metrics calculation for filtered logs (from server-provided logsSummary with fallback)
+  let localRun = 0;
+  let localOt = 0;
+  let localBkd = 0;
   filteredHourLogs.forEach((log) => {
     const startMtr = log.start_meter ?? 0;
     const endMtr = log.end_meter ?? startMtr;
     const run = log.running_hours ?? Math.max(0, Math.round((endMtr - startMtr) * 10) / 10);
-    const ot = log.overtime_hours || 0;
-    totalFilteredRunHours += run;
-    totalFilteredOtHours += ot;
-    if (log.is_breakdown) totalFilteredBreakdowns++;
+    localRun += run;
+    localOt += log.overtime_hours || 0;
+    if (log.is_breakdown) localBkd++;
   });
 
+  const totalFilteredRunHours = logsSummary ? logsSummary.totalRunHours : Math.round(localRun * 10) / 10;
+  const totalFilteredOtHours = logsSummary ? logsSummary.totalOtHours : Math.round(localOt * 10) / 10;
+  const totalFilteredBreakdowns = logsSummary ? logsSummary.totalBreakdowns : localBkd;
+  const loggedDaysCount = logsSummary ? logsSummary.loggedDaysCount : new Set(filteredHourLogs.map((l) => l.log_date)).size;
+  const totalMatchingLogs = totalLogsCount ?? hourLogs.length;
+
   const selectedMonthLabel = MONTH_NAMES.find((m) => m.value === logsSelectedMonth)?.label || "August";
-  const loggedDaysCount = new Set(filteredHourLogs.map((l) => l.log_date)).size;
   const displayWorkingDays = loggedDaysCount > 0 ? loggedDaysCount : 26;
 
   const currentSelectedMachine = useMemo(
@@ -845,14 +875,6 @@ export function OperationsClient({
               </span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => router.push("/operations/audit-logs")}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas-elevated)] whitespace-nowrap"
-            >
-              <AnimatedScrollText size={14} />
-              <span>Assignment Audit Logs</span>
-            </button>
           </div>
         </div>
       )}
@@ -933,9 +955,9 @@ export function OperationsClient({
                   type="button"
                   onClick={() => {
                     setLogsViewMode("machine");
-                    if (!logsSelectedMachineId || logsSelectedMachineId === "all") {
-                      setLogsSelectedMachineId(orderedMachines[0]?.id || "");
-                    }
+                    const targetMachine = logsSelectedMachineId && logsSelectedMachineId !== "all" ? logsSelectedMachineId : (orderedMachines[0]?.id || "");
+                    setLogsSelectedMachineId(targetMachine);
+                    handleFilterChange({ view: "machine", machine: targetMachine, client: undefined, operator: undefined, page: 1 });
                   }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                     logsViewMode === "machine"
@@ -949,11 +971,9 @@ export function OperationsClient({
                   type="button"
                   onClick={() => {
                     setLogsViewMode("client");
-                    if (!logsSelectedClientId || logsSelectedClientId === "all") {
-                      if (activeClientId) {
-                        setLogsSelectedClientId(activeClientId);
-                      }
-                    }
+                    const targetClient = logsSelectedClientId && logsSelectedClientId !== "all" ? logsSelectedClientId : (activeClientId || "");
+                    setLogsSelectedClientId(targetClient);
+                    handleFilterChange({ view: "client", client: targetClient, machine: undefined, operator: undefined, page: 1 });
                   }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                     logsViewMode === "client"
@@ -967,9 +987,9 @@ export function OperationsClient({
                   type="button"
                   onClick={() => {
                     setLogsViewMode("operator");
-                    if (!logsSelectedOperatorId || logsSelectedOperatorId === "all") {
-                      setLogsSelectedOperatorId(orderedOperators[0]?.id || "");
-                    }
+                    const targetOperator = logsSelectedOperatorId && logsSelectedOperatorId !== "all" ? logsSelectedOperatorId : (orderedOperators[0]?.id || "");
+                    setLogsSelectedOperatorId(targetOperator);
+                    handleFilterChange({ view: "operator", operator: targetOperator, machine: undefined, client: undefined, page: 1 });
                   }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                     logsViewMode === "operator"
@@ -981,8 +1001,39 @@ export function OperationsClient({
                 </button>
               </div>
 
-              {/* Right: Export CTA Buttons */}
+              {/* Middle: Debounced Global Search Input */}
+              <div className="relative flex-1 min-w-[220px] max-w-lg">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--color-mute)] pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Search machine, operator, remarks, location..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  className="w-full pl-9 pr-8 py-1.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-xs text-[var(--color-ink)] placeholder:text-[var(--color-mute)] focus:outline-hidden focus:border-sky-500 transition-colors"
+                />
+                {searchInput && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchInput("");
+                      handleFilterChange({ search: undefined, page: 1 });
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-[var(--color-canvas-subtle)] text-[var(--color-mute)] hover:text-[var(--color-ink)] cursor-pointer"
+                    title="Clear search"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Right: Export CTA Buttons & isPending loader */}
               <div className="flex items-center gap-2 shrink-0">
+                {isPending && (
+                  <div className="flex items-center gap-1.5 text-xs text-sky-600 dark:text-sky-400 font-medium mr-1">
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <span className="hidden md:inline">Loading...</span>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={() => setShowSupervisorPrintModal(true)}
@@ -1005,6 +1056,7 @@ export function OperationsClient({
                       setLogsSelectedClientId(nextId);
                       setLogsSelectedSite("all");
                       setLogsSelectedClientMachineId("all");
+                      handleFilterChange({ client: nextId, machine: undefined, page: 1 });
                     }}
                     clients={allClientsList}
                     placeholder="Select Client..."
@@ -1031,7 +1083,11 @@ export function OperationsClient({
                   <MachineSelect
                     label="Select Machine"
                     value={effectiveSelectedClientMachineId}
-                    onChange={(mId) => setLogsSelectedClientMachineId(mId || "all")}
+                    onChange={(mId) => {
+                      const next = mId || "all";
+                      setLogsSelectedClientMachineId(next);
+                      handleFilterChange({ machine: next === "all" ? undefined : next, page: 1 });
+                    }}
                     machines={clientMachines}
                     allowAll={true}
                     allLabel="All Machines"
@@ -1042,7 +1098,14 @@ export function OperationsClient({
                   <SearchableSelect
                     label="Select Month"
                     value={logsSelectedMonth}
-                    onChange={(val) => setLogsSelectedMonth(val)}
+                    onChange={(val) => {
+                      setLogsSelectedMonth(val);
+                      if (val === "custom") {
+                        handleFilterChange({ month: val, start: logsCustomStartDate, end: logsCustomEndDate, page: 1 });
+                      } else {
+                        handleFilterChange({ month: val, start: undefined, end: undefined, page: 1 });
+                      }
+                    }}
                     options={MONTH_NAMES.map((m) => ({
                       value: m.value,
                       label: m.label,
@@ -1057,7 +1120,10 @@ export function OperationsClient({
                     <MachineSelect
                       label="Select Machine"
                       value={activeMachineId}
-                      onChange={(mId) => setLogsSelectedMachineId(mId)}
+                      onChange={(mId) => {
+                        setLogsSelectedMachineId(mId);
+                        handleFilterChange({ machine: mId, page: 1 });
+                      }}
                       machines={orderedMachines}
                     />
                   )}
@@ -1066,7 +1132,10 @@ export function OperationsClient({
                     <UserSelect
                       label="Select Operator"
                       value={activeOperatorId}
-                      onChange={(opId) => setLogsSelectedOperatorId(opId)}
+                      onChange={(opId) => {
+                        setLogsSelectedOperatorId(opId);
+                        handleFilterChange({ operator: opId, page: 1 });
+                      }}
                       users={orderedOperators}
                     />
                   )}
@@ -1076,7 +1145,14 @@ export function OperationsClient({
                   <SearchableSelect
                     label="Select Month"
                     value={logsSelectedMonth}
-                    onChange={(val) => setLogsSelectedMonth(val)}
+                    onChange={(val) => {
+                      setLogsSelectedMonth(val);
+                      if (val === "custom") {
+                        handleFilterChange({ month: val, start: logsCustomStartDate, end: logsCustomEndDate, page: 1 });
+                      } else {
+                        handleFilterChange({ month: val, start: undefined, end: undefined, page: 1 });
+                      }
+                    }}
                     options={MONTH_NAMES.map((m) => ({
                       value: m.value,
                       label: m.label,
@@ -1095,7 +1171,12 @@ export function OperationsClient({
                   </label>
                   <CustomDatePicker
                     value={logsCustomStartDate}
-                    onChange={(val) => setLogsCustomStartDate(val)}
+                    onChange={(val) => {
+                      setLogsCustomStartDate(val);
+                      if (val && logsCustomEndDate) {
+                        handleFilterChange({ month: "custom", start: val, end: logsCustomEndDate, page: 1 });
+                      }
+                    }}
                     allowAnyPast
                     allowAnyFuture
                     showWindowBadge={false}
@@ -1110,7 +1191,12 @@ export function OperationsClient({
                   </label>
                   <CustomDatePicker
                     value={logsCustomEndDate}
-                    onChange={(val) => setLogsCustomEndDate(val)}
+                    onChange={(val) => {
+                      setLogsCustomEndDate(val);
+                      if (logsCustomStartDate && val) {
+                        handleFilterChange({ month: "custom", start: logsCustomStartDate, end: val, page: 1 });
+                      }
+                    }}
                     allowAnyPast
                     allowAnyFuture
                     showWindowBadge={false}
@@ -1146,7 +1232,7 @@ export function OperationsClient({
                 <div className="p-2.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-0.5">
                   <span className="text-[10px] font-extrabold uppercase text-[var(--color-mute)] block">Matching Logs</span>
                   <span className="text-base font-extrabold font-mono text-[var(--color-ink)]">
-                    {filteredHourLogs.length} Records
+                    {totalMatchingLogs} Records
                   </span>
                 </div>
               </div>
@@ -1283,7 +1369,7 @@ export function OperationsClient({
                 <div className="p-2.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-0.5">
                   <span className="text-[10px] font-extrabold uppercase text-[var(--color-mute)] block">Matching Logs</span>
                   <span className="text-base font-extrabold font-mono text-[var(--color-ink)]">
-                    {filteredHourLogs.length} Records
+                    {totalMatchingLogs} Records
                   </span>
                 </div>
               </div>
@@ -1291,7 +1377,7 @@ export function OperationsClient({
           )}
 
           {/* DESKTOP DATA TABLE (hidden sm:block) */}
-          <div className="hidden sm:block rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden shadow-sm">
+          <div className={`hidden sm:block rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden shadow-sm transition-opacity duration-200 ${isPending ? "opacity-50 pointer-events-none" : ""}`}>
             <div className="overflow-x-auto custom-scrollbar">
               <table className="w-full text-left text-xs min-w-[850px]">
                 <thead className="bg-[var(--color-canvas)] text-[var(--color-mute)] uppercase font-extrabold border-b border-[var(--color-hairline)]">
@@ -1455,7 +1541,9 @@ export function OperationsClient({
 
                       return (
                         <tr key={log.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
-                          <td className="px-3 py-3 text-center font-bold text-xs text-[var(--color-mute)] font-mono">{idx + 1}</td>
+                          <td className="px-3 py-3 text-center font-bold text-xs text-[var(--color-mute)] font-mono">
+                            {((currentPage || 1) - 1) * (logsPageSize || 10) + idx + 1}
+                          </td>
                           <td className="px-4 py-3 font-mono whitespace-nowrap">
                             <div className="font-semibold text-[var(--color-ink)] text-xs">{formatDate(log.log_date)}</div>
                             {log.created_at ? (
@@ -1604,10 +1692,20 @@ export function OperationsClient({
                 </tbody>
               </table>
             </div>
+            {totalMatchingLogs > 0 && (
+              <div className="px-4 py-2 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)]">
+                <Pagination
+                  page={currentPage || 1}
+                  pageSize={logsPageSize || 10}
+                  total={totalMatchingLogs}
+                  onPageChange={handlePageChange}
+                />
+              </div>
+            )}
           </div>
 
           {/* MOBILE TOUCH CARDS (block sm:hidden) */}
-          <div className="block sm:hidden space-y-3">
+          <div className={`block sm:hidden space-y-3 transition-opacity duration-200 ${isPending ? "opacity-50 pointer-events-none" : ""}`}>
             {filteredHourLogs.length === 0 ? (
               <div className="p-6 text-center text-xs text-[var(--color-mute)] rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
                 No daily running hour logs found matching active filters.
@@ -1796,6 +1894,16 @@ export function OperationsClient({
                 );
               })
             )}
+            {totalMatchingLogs > 0 && (
+              <div className="p-3 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
+                <Pagination
+                  page={currentPage || 1}
+                  pageSize={logsPageSize || 10}
+                  total={totalMatchingLogs}
+                  onPageChange={handlePageChange}
+                />
+              </div>
+            )}
           </div>
 
           {/* PRINTABLE SUPERVISOR LOGS MODAL */}
@@ -1848,6 +1956,9 @@ export function OperationsClient({
           return code.includes(q) || model.includes(q) || serial.includes(q) || hasOpMatch;
         });
 
+        const assignmentsStartIndex = (assignmentsPage - 1) * assignmentsPageSize;
+        const paginatedMachines = filteredMachines.slice(assignmentsStartIndex, assignmentsStartIndex + assignmentsPageSize);
+
         const totalActiveAssignmentsCount = activeAssList.length;
         const totalMachinesCount = machines.length;
         const fullyAssignedCount = machines.filter((m) => {
@@ -1890,14 +2001,20 @@ export function OperationsClient({
                   <input
                     type="text"
                     value={assignmentSearch}
-                    onChange={(e) => setAssignmentSearch(e.target.value)}
+                    onChange={(e) => {
+                      setAssignmentSearch(e.target.value);
+                      setAssignmentsPage(1);
+                    }}
                     placeholder="Search machines, models, serial numbers, operators..."
                     className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] focus:outline-none focus:ring-1 focus:ring-sky-500"
                   />
                   {assignmentSearch && (
                     <button
                       type="button"
-                      onClick={() => setAssignmentSearch("")}
+                      onClick={() => {
+                        setAssignmentSearch("");
+                        setAssignmentsPage(1);
+                      }}
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-mute)] hover:text-[var(--color-ink)] text-xs"
                     >
                       ×
@@ -1910,7 +2027,10 @@ export function OperationsClient({
                   <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar p-1 bg-[var(--color-canvas)] rounded-xl border border-[var(--color-hairline)] shrink-0">
                     <button
                       type="button"
-                      onClick={() => setAssignmentFilter("all")}
+                      onClick={() => {
+                        setAssignmentFilter("all");
+                        setAssignmentsPage(1);
+                      }}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                         assignmentFilter === "all"
                           ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
@@ -1921,7 +2041,10 @@ export function OperationsClient({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setAssignmentFilter("assigned")}
+                      onClick={() => {
+                        setAssignmentFilter("assigned");
+                        setAssignmentsPage(1);
+                      }}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                         assignmentFilter === "assigned"
                           ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
@@ -1932,7 +2055,10 @@ export function OperationsClient({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setAssignmentFilter("full")}
+                      onClick={() => {
+                        setAssignmentFilter("full");
+                        setAssignmentsPage(1);
+                      }}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                         assignmentFilter === "full"
                           ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
@@ -1943,7 +2069,10 @@ export function OperationsClient({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setAssignmentFilter("unassigned")}
+                      onClick={() => {
+                        setAssignmentFilter("unassigned");
+                        setAssignmentsPage(1);
+                      }}
                       className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
                         assignmentFilter === "unassigned"
                           ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
@@ -1986,7 +2115,7 @@ export function OperationsClient({
                   No equipment matched your filter criteria.
                 </div>
               ) : (
-                filteredMachines.map((m) => {
+                paginatedMachines.map((m) => {
                   const machAss = activeAssList.filter((a: any) => a.machine_id === m.id || a.machine?.id === m.id);
                   const isFull = machAss.length >= 3;
                   const machCode = m.machine_id || m.machine_code || "Machine";
@@ -2251,20 +2380,22 @@ export function OperationsClient({
               )}
             </div>
 
-            {/* LINK TO DEDICATED AUDIT LOGS PAGE */}
-            <div className="pt-3 pb-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-t border-[var(--color-hairline)] text-xs">
-              <span className="text-[var(--color-mute)]">
-                Looking for full shift assignment history, closures, and supervisor audit logs?
-              </span>
-              <button
-                type="button"
-                onClick={() => router.push("/operations/audit-logs")}
-                className="font-bold text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
-              >
-                <AnimatedScrollText size={14} />
-                <span>View Full Assignment Audit Logs →</span>
-              </button>
-            </div>
+            {/* Pagination Controls */}
+            {filteredMachines.length > 0 && (
+              <div className="pt-2">
+                <Pagination
+                  page={assignmentsPage}
+                  pageSize={assignmentsPageSize}
+                  total={filteredMachines.length}
+                  onPageChange={setAssignmentsPage}
+                  pageSizeOptions={[10, 20, 50]}
+                  onPageSizeChange={(newSize) => {
+                    setAssignmentsPageSize(newSize);
+                    setAssignmentsPage(1);
+                  }}
+                />
+              </div>
+            )}
           </div>
         );
       })()}

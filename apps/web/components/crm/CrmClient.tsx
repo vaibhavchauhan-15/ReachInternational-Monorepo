@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   AnimatedUsers,
@@ -44,7 +44,7 @@ import type {
   LeadStatus,
   OpportunityStage,
 } from "@/lib/types/database";
-import { TooltipWrapper, SegmentedToggle } from "@/components/ui";
+import { TooltipWrapper, SegmentedToggle, Pagination } from "@/components/ui";
 import {
   createSalesLeadAction,
   updateSalesLeadAction,
@@ -106,6 +106,67 @@ export function CrmClient({
   const [orders, setOrders] = useState<SalesOrder[]>(initialOrders);
   const [reservations, setReservations] = useState<SalesMachineReservation[]>(initialReservations);
   const [deliveries, setDeliveries] = useState<SalesDeliveryCoordination[]>(initialDeliveries);
+
+  // Pagination states
+  const [leadsPage, setLeadsPage] = useState(1);
+  const [leadsPageSize, setLeadsPageSize] = useState(20);
+  const [customersPage, setCustomersPage] = useState(1);
+  const [customersPageSize, setCustomersPageSize] = useState(20);
+  const [quotationsPage, setQuotationsPage] = useState(1);
+  const [quotationsPageSize, setQuotationsPageSize] = useState(20);
+  const [ordersPage, setOrdersPage] = useState(1);
+  const [ordersPageSize, setOrdersPageSize] = useState(20);
+
+  // Filtered and sliced datasets
+  const filteredLeads = useMemo(() => {
+    if (!searchQuery.trim()) return leads;
+    const q = searchQuery.toLowerCase();
+    return leads.filter(
+      (l) =>
+        l.lead_name?.toLowerCase().includes(q) ||
+        l.company_name?.toLowerCase().includes(q) ||
+        l.contact_person?.toLowerCase().includes(q) ||
+        l.lead_number?.toLowerCase().includes(q)
+    );
+  }, [leads, searchQuery]);
+
+  const paginatedLeads = useMemo(() => {
+    const start = (leadsPage - 1) * leadsPageSize;
+    return filteredLeads.slice(start, start + leadsPageSize);
+  }, [filteredLeads, leadsPage, leadsPageSize]);
+
+  const filteredCustomers = useMemo(() => {
+    if (!searchQuery.trim()) return customers;
+    const q = searchQuery.toLowerCase();
+    return customers.filter(
+      (c) =>
+        c.company_name?.toLowerCase().includes(q) ||
+        c.customer_code?.toLowerCase().includes(q) ||
+        c.contact_person?.toLowerCase().includes(q) ||
+        c.city?.toLowerCase().includes(q)
+    );
+  }, [customers, searchQuery]);
+
+  const paginatedCustomers = useMemo(() => {
+    const start = (customersPage - 1) * customersPageSize;
+    return filteredCustomers.slice(start, start + customersPageSize);
+  }, [filteredCustomers, customersPage, customersPageSize]);
+
+  const paginatedQuotations = useMemo(() => {
+    const start = (quotationsPage - 1) * quotationsPageSize;
+    return quotations.slice(start, start + quotationsPageSize);
+  }, [quotations, quotationsPage, quotationsPageSize]);
+
+  const paginatedOrders = useMemo(() => {
+    const start = (ordersPage - 1) * ordersPageSize;
+    return orders.slice(start, start + ordersPageSize);
+  }, [orders, ordersPage, ordersPageSize]);
+
+  // Reset pages on search
+  useEffect(() => {
+    setLeadsPage(1);
+    setCustomersPage(1);
+  }, [searchQuery]);
 
   // Modal Control States
   const [showLeadModal, setShowLeadModal] = useState(false);
@@ -609,40 +670,64 @@ export function CrmClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-hairline)]">
-                  {leads.map((lead) => (
-                    <tr key={lead.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors">
-                      <td className="py-3 px-4 font-mono font-extrabold text-blue-600 dark:text-blue-400">{lead.lead_number}</td>
-                      <td className="py-3 px-4">
-                        <p className="font-extrabold text-[var(--color-ink)]">{lead.company_name}</p>
-                        <p className="text-[11px] text-[var(--color-mute)]">{lead.contact_person} ({lead.phone})</p>
-                      </td>
-                      <td className="py-3 px-4 font-semibold text-[var(--color-ink)]">
-                        {lead.machine_model || "Standard Unit"} ({lead.expected_quantity} pcs)
-                      </td>
-                      <td className="py-3 px-4 text-[var(--color-mute)]">{lead.expected_purchase_date || "N/A"}</td>
-                      <td className="py-3 px-4 text-[var(--color-mute)]">{lead.lead_source}</td>
-                      <td className="py-3 px-4">
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-500/10 text-blue-600 border border-blue-500/20">
-                          {lead.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right space-x-2">
-                        {lead.status !== "Qualified" && lead.status !== "Won" && (
-                          <button
-                            type="button"
-                            onClick={() => handleConvertLead(lead.id)}
-                            className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 font-bold text-[11px]"
-                          >
-                            Convert Lead
-                          </button>
-                        )}
+                  {paginatedLeads.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-xs text-[var(--color-mute)]">
+                        No leads found matching your criteria.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    paginatedLeads.map((lead) => (
+                      <tr key={lead.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors">
+                        <td className="py-3 px-4 font-mono font-extrabold text-blue-600 dark:text-blue-400">{lead.lead_number}</td>
+                        <td className="py-3 px-4">
+                          <p className="font-extrabold text-[var(--color-ink)]">{lead.company_name}</p>
+                          <p className="text-[11px] text-[var(--color-mute)]">{lead.contact_person} ({lead.phone})</p>
+                        </td>
+                        <td className="py-3 px-4 font-semibold text-[var(--color-ink)]">
+                          {lead.machine_model || "Standard Unit"} ({lead.expected_quantity} pcs)
+                        </td>
+                        <td className="py-3 px-4 text-[var(--color-mute)]">{lead.expected_purchase_date || "N/A"}</td>
+                        <td className="py-3 px-4 text-[var(--color-mute)]">{lead.lead_source}</td>
+                        <td className="py-3 px-4">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-500/10 text-blue-600 border border-blue-500/20">
+                            {lead.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right space-x-2">
+                          {lead.status !== "Qualified" && lead.status !== "Won" && (
+                            <button
+                              type="button"
+                              onClick={() => handleConvertLead(lead.id)}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 font-bold text-[11px]"
+                            >
+                              Convert Lead
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
+
+          {filteredLeads.length > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={leadsPage}
+                pageSize={leadsPageSize}
+                total={filteredLeads.length}
+                onPageChange={setLeadsPage}
+                pageSizeOptions={[10, 20, 50, 100]}
+                onPageSizeChange={(newSize) => {
+                  setLeadsPageSize(newSize);
+                  setLeadsPage(1);
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -670,43 +755,65 @@ export function CrmClient({
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {customers.map((c) => (
-              <div key={c.id} className="p-5 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-3 shadow-xs">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <span className="text-[10px] font-mono font-extrabold text-[var(--color-mute)] uppercase">{c.customer_code}</span>
-                    <h4 className="text-base font-extrabold text-[var(--color-ink)] mt-0.5">{c.company_name}</h4>
-                    <p className="text-xs text-[var(--color-mute)]">{c.city}, {c.state}</p>
-                  </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${c.status === "active" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-rose-500/10 text-rose-600 border border-rose-500/20"}`}>
-                    {c.status}
-                  </span>
-                </div>
-
-                <div className="text-xs space-y-1 text-[var(--color-body)] border-t border-[var(--color-hairline)] pt-3">
-                  <p><span className="font-semibold text-[var(--color-ink)]">Contact:</span> {c.contact_person} ({c.phone})</p>
-                  {c.gstin && <p><span className="font-semibold text-[var(--color-ink)]">GSTIN:</span> {c.gstin}</p>}
-                </div>
-
-                <div className="flex items-center justify-between pt-2 border-t border-[var(--color-hairline)]">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedCustomer(c)}
-                    className="px-3 py-1 rounded-lg bg-blue-500/10 text-blue-600 font-bold text-xs hover:bg-blue-500/20"
-                  >
-                    View History
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleArchiveCustomer(c.id)}
-                    className="px-3 py-1 rounded-lg bg-rose-500/10 text-rose-600 font-bold text-xs hover:bg-rose-500/20"
-                  >
-                    Archive
-                  </button>
-                </div>
+            {paginatedCustomers.length === 0 ? (
+              <div className="col-span-full p-8 text-center text-xs text-[var(--color-mute)] border border-[var(--color-hairline)] rounded-2xl bg-[var(--color-canvas-elevated)]">
+                No customer records found matching your search.
               </div>
-            ))}
+            ) : (
+              paginatedCustomers.map((c) => (
+                <div key={c.id} className="p-5 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-3 shadow-xs">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="text-[10px] font-mono font-extrabold text-[var(--color-mute)] uppercase">{c.customer_code}</span>
+                      <h4 className="text-base font-extrabold text-[var(--color-ink)] mt-0.5">{c.company_name}</h4>
+                      <p className="text-xs text-[var(--color-mute)]">{c.city}, {c.state}</p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${c.status === "active" ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/20" : "bg-rose-500/10 text-rose-600 border border-rose-500/20"}`}>
+                      {c.status}
+                    </span>
+                  </div>
+
+                  <div className="text-xs space-y-1 text-[var(--color-body)] border-t border-[var(--color-hairline)] pt-3">
+                    <p><span className="font-semibold text-[var(--color-ink)]">Contact:</span> {c.contact_person} ({c.phone})</p>
+                    {c.gstin && <p><span className="font-semibold text-[var(--color-ink)]">GSTIN:</span> {c.gstin}</p>}
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2 border-t border-[var(--color-hairline)]">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCustomer(c)}
+                      className="px-3 py-1 rounded-lg bg-blue-500/10 text-blue-600 font-bold text-xs hover:bg-blue-500/20"
+                    >
+                      View History
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleArchiveCustomer(c.id)}
+                      className="px-3 py-1 rounded-lg bg-rose-500/10 text-rose-600 font-bold text-xs hover:bg-rose-500/20"
+                    >
+                      Archive
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
+
+          {filteredCustomers.length > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={customersPage}
+                pageSize={customersPageSize}
+                total={filteredCustomers.length}
+                onPageChange={setCustomersPage}
+                pageSizeOptions={[10, 20, 50, 100]}
+                onPageSizeChange={(newSize) => {
+                  setCustomersPageSize(newSize);
+                  setCustomersPage(1);
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -739,43 +846,67 @@ export function CrmClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-hairline)]">
-                  {quotations.map((q) => (
-                    <tr key={q.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors">
-                      <td className="py-3 px-4">
-                        <span className="font-mono font-extrabold text-purple-600 dark:text-purple-400">{q.quotation_number}</span>
-                        <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-500/10 text-purple-600">V{q.revision_number}</span>
-                      </td>
-                      <td className="py-3 px-4 font-extrabold text-[var(--color-ink)]">{q.customer_name}</td>
-                      <td className="py-3 px-4 font-semibold text-[var(--color-ink)]">{q.machine_model} ({q.quantity} pcs)</td>
-                      <td className="py-3 px-4 font-extrabold text-amber-600">{q.discount_percent}%</td>
-                      <td className="py-3 px-4 font-black text-emerald-600">₹{q.grand_total.toLocaleString("en-IN")}</td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${q.discount_approval_status === "auto_approved" ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>
-                          {q.discount_approval_status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right space-x-2">
-                        <button
-                          type="button"
-                          onClick={() => setShowRevisionModal(q)}
-                          className="px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 font-bold text-[11px]"
-                        >
-                          Revise (V{q.revision_number + 1})
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleCreateOrder(q)}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px]"
-                        >
-                          Create Order
-                        </button>
+                  {paginatedQuotations.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-xs text-[var(--color-mute)]">
+                        No sales quotations created yet.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    paginatedQuotations.map((q) => (
+                      <tr key={q.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors">
+                        <td className="py-3 px-4">
+                          <span className="font-mono font-extrabold text-purple-600 dark:text-purple-400">{q.quotation_number}</span>
+                          <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-500/10 text-purple-600">V{q.revision_number}</span>
+                        </td>
+                        <td className="py-3 px-4 font-extrabold text-[var(--color-ink)]">{q.customer_name}</td>
+                        <td className="py-3 px-4 font-semibold text-[var(--color-ink)]">{q.machine_model} ({q.quantity} pcs)</td>
+                        <td className="py-3 px-4 font-extrabold text-amber-600">{q.discount_percent}%</td>
+                        <td className="py-3 px-4 font-black text-emerald-600">₹{q.grand_total.toLocaleString("en-IN")}</td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${q.discount_approval_status === "auto_approved" ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}>
+                            {q.discount_approval_status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right space-x-2">
+                          <button
+                            type="button"
+                            onClick={() => setShowRevisionModal(q)}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 font-bold text-[11px]"
+                          >
+                            Revise (V{q.revision_number + 1})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCreateOrder(q)}
+                            className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px]"
+                          >
+                            Create Order
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
+
+          {quotations.length > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={quotationsPage}
+                pageSize={quotationsPageSize}
+                total={quotations.length}
+                onPageChange={setQuotationsPage}
+                pageSizeOptions={[10, 20, 50, 100]}
+                onPageSizeChange={(newSize) => {
+                  setQuotationsPageSize(newSize);
+                  setQuotationsPage(1);
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -797,50 +928,74 @@ export function CrmClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-hairline)]">
-                  {orders.map((o) => (
-                    <tr key={o.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors">
-                      <td className="py-3 px-4 font-mono font-extrabold text-blue-600">{o.order_number}</td>
-                      <td className="py-3 px-4 font-extrabold text-[var(--color-ink)]">{o.customer_name}</td>
-                      <td className="py-3 px-4 font-semibold text-[var(--color-ink)]">{o.machine_model}</td>
-                      <td className="py-3 px-4 font-black text-emerald-600">₹{o.total_amount.toLocaleString("en-IN")}</td>
-                      <td className="py-3 px-4 font-bold">
-                        {o.machine_reserved ? (
-                          <span className="text-emerald-600 flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> Reserved</span>
-                        ) : (
-                          <span className="text-amber-600">Not Reserved</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-500/10 text-blue-600">
-                          {o.status}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right space-x-2">
-                        {!o.machine_reserved && (
-                          <button
-                            type="button"
-                            onClick={() => setShowReservationModal(o)}
-                            className="px-2.5 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 font-bold text-[11px]"
-                          >
-                            Reserve Machine
-                          </button>
-                        )}
-                        {o.status !== "delivery_requested" && o.status !== "delivered" && (
-                          <button
-                            type="button"
-                            onClick={() => setShowDeliveryModal(o)}
-                            className="px-2.5 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 font-bold text-[11px]"
-                          >
-                            Request Delivery
-                          </button>
-                        )}
+                  {paginatedOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="py-8 text-center text-xs text-[var(--color-mute)]">
+                        No sales orders registered yet.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    paginatedOrders.map((o) => (
+                      <tr key={o.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors">
+                        <td className="py-3 px-4 font-mono font-extrabold text-blue-600">{o.order_number}</td>
+                        <td className="py-3 px-4 font-extrabold text-[var(--color-ink)]">{o.customer_name}</td>
+                        <td className="py-3 px-4 font-semibold text-[var(--color-ink)]">{o.machine_model}</td>
+                        <td className="py-3 px-4 font-black text-emerald-600">₹{o.total_amount.toLocaleString("en-IN")}</td>
+                        <td className="py-3 px-4 font-bold">
+                          {o.machine_reserved ? (
+                            <span className="text-emerald-600 flex items-center gap-1"><CheckCircle2 className="h-3.5 w-3.5" /> Reserved</span>
+                          ) : (
+                            <span className="text-amber-600">Not Reserved</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-500/10 text-blue-600">
+                            {o.status}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right space-x-2">
+                          {!o.machine_reserved && (
+                            <button
+                              type="button"
+                              onClick={() => setShowReservationModal(o)}
+                              className="px-2.5 py-1 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 font-bold text-[11px]"
+                            >
+                              Reserve Machine
+                            </button>
+                          )}
+                          {o.status !== "delivery_requested" && o.status !== "delivered" && (
+                            <button
+                              type="button"
+                              onClick={() => setShowDeliveryModal(o)}
+                              className="px-2.5 py-1 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 font-bold text-[11px]"
+                            >
+                              Request Delivery
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
+
+          {orders.length > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={ordersPage}
+                pageSize={ordersPageSize}
+                total={orders.length}
+                onPageChange={setOrdersPage}
+                pageSizeOptions={[10, 20, 50, 100]}
+                onPageSizeChange={(newSize) => {
+                  setOrdersPageSize(newSize);
+                  setOrdersPage(1);
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
 

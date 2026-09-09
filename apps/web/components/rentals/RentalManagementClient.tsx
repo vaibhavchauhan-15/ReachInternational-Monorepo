@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   Truck,
   FileText,
@@ -19,6 +19,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { Pagination } from "@/components/ui";
 
 import {
   createRentalCustomerAction,
@@ -74,6 +75,15 @@ export function RentalManagementClient({
     setErrorMessage("");
     setSuccessMessage("");
   };
+
+  // Pagination
+  const [agreementsPage, setAgreementsPage] = useState(1);
+  const [agreementsPageSize, setAgreementsPageSize] = useState(20);
+
+  const paginatedAgreements = useMemo(() => {
+    const start = (agreementsPage - 1) * agreementsPageSize;
+    return initialAgreements.slice(start, start + agreementsPageSize);
+  }, [initialAgreements, agreementsPage, agreementsPageSize]);
 
   return (
     <div className="w-full space-y-6">
@@ -331,7 +341,7 @@ export function RentalManagementClient({
                     </td>
                   </tr>
                 ) : (
-                  initialAgreements.map((agreement) => (
+                  paginatedAgreements.map((agreement) => (
                     <tr key={agreement.id} className="hover:bg-[var(--color-canvas)]">
                       <td className="p-3 font-semibold text-[var(--color-ink)]">{agreement.contract_number}</td>
                       <td className="p-3 font-medium text-[var(--color-ink)]">
@@ -372,6 +382,22 @@ export function RentalManagementClient({
               </tbody>
             </table>
           </div>
+
+          {initialAgreements.length > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={agreementsPage}
+                pageSize={agreementsPageSize}
+                total={initialAgreements.length}
+                onPageChange={setAgreementsPage}
+                pageSizeOptions={[10, 20, 50, 100]}
+                onPageSizeChange={(newSize) => {
+                  setAgreementsPageSize(newSize);
+                  setAgreementsPage(1);
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
 

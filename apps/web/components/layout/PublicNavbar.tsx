@@ -66,7 +66,7 @@ export const appNavItems: NavItem[] = [
   { href: "/machines", label: "Machines", icon: AnimatedWrench },
   { href: "/notifications", label: "Notifications", icon: AnimatedBell, roles: ["super_admin", "admin", "manager", "service_engineer", "engineer"] },
   { href: "/users", label: "Users", icon: AnimatedUsers, roles: ["super_admin", "admin", "manager", "hr_manager"] },
-  { href: "/audit-logs", label: "Audit Logs", icon: AnimatedFileText, roles: ["super_admin", "admin"] },
+  { href: "/audit", label: "Audit Logs", icon: AnimatedFileText, roles: ["super_admin", "admin"] },
   { href: "/settings", label: "Settings", icon: AnimatedSettings, roles: ["super_admin"] },
 ];
 
@@ -186,12 +186,12 @@ const UserMenu = memo(function UserMenu({ user }: { user: User }) {
                     User Management
                   </Link>
                   <Link
-                    href="/audit-logs"
+                    href="/audit"
                     onClick={() => setUserMenuOpen(false)}
                     className="flex items-center gap-2.5 px-3 py-2 rounded-[var(--radius-sm)] text-xs font-semibold text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
                   >
                     <AnimatedFileText size={16} className="text-purple-500" />
-                    Audit Security Logs
+                    Audit Logs
                   </Link>
                 </div>
               )}

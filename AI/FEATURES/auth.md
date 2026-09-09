@@ -11,6 +11,6 @@ Handles user authentication, session management, onboarding registration, passwo
 
 ## Key Functions & Workflows
 - `login(formData)`: Authenticates user credentials via Supabase Auth.
-- `signup(formData)`: Registers new user and sets default role in `profiles` table.
+- `signup(formData)`: Registers new user and sets role in `users` table. Allows every user to select a working location / site / office from the active working locations list (`getWorkingLocationsAction` on web, `get_active_working_locations_public` RPC on mobile), persisting `working_location_id` via Postgres trigger `handle_new_user()`. When role is supervised (`operator`, `service_engineer`, `mechanic`), also requires selecting a supervisor from active supervisors (`getSupervisorsAction` on web, `get_active_supervisors_public` RPC on mobile).
 - `logout()`: Clears authentication session cookies.
 - `verifySession()`: DAL utility that validates user session on Server Components.

@@ -103,3 +103,19 @@ export function isManagerOrAbove(role?: string | null): boolean {
   );
 }
 
+/**
+ * Checks whether a given role requires a supervisor to be selected/assigned:
+ * - operator
+ * - service_engineer / engineer
+ * - mechanic
+ */
+export function isSupervisedRole(role?: string | null): boolean {
+  if (!role) return false;
+  return (
+    role === "operator" ||
+    role === "service_engineer" ||
+    role === "engineer" ||
+    role === "mechanic"
+  );
+}
+

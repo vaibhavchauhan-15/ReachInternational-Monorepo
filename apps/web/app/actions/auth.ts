@@ -5,6 +5,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { validateAadhaarNumber, validateLicenseNumber, getStateById, getStateByName } from "@reachinternational/utils";
+import { isSupervisedRole } from "@reachinternational/permissions";
 
 export interface AuthFormState {
   error?: string;
@@ -214,6 +215,8 @@ export async function signup(
   const shiftStartTimeRaw = ((formData.get("shift_start_time") as string) || "").trim();
   const shiftEndTimeRaw = ((formData.get("shift_end_time") as string) || "").trim();
   const shiftTimeRaw = ((formData.get("shift_time") as string) || "").trim();
+  const supervisorIdRaw = ((formData.get("supervisor_id") as string) || "").trim();
+  const workingLocationIdRaw = ((formData.get("working_location_id") as string) || "").trim();
 
   const resolvedShiftTime =
     shiftTimeRaw ||
@@ -246,6 +249,8 @@ export async function signup(
     email,
     phone,
     role,
+    supervisor_id: supervisorIdRaw,
+    working_location_id: workingLocationIdRaw,
     shift_start_time: shiftStartTimeRaw,
     shift_end_time: shiftEndTimeRaw,
     shift_time: resolvedShiftTime,
@@ -267,6 +272,9 @@ export async function signup(
   if (!phone) fieldErrors.phone = "Mobile number is required.";
   if (!shiftStartTimeRaw) fieldErrors.shift_start_time = "Shift start time is required.";
   if (!shiftEndTimeRaw) fieldErrors.shift_end_time = "Shift end time is required.";
+  if (isSupervisedRole(role) && !supervisorIdRaw) {
+    fieldErrors.supervisor_id = "Please select your supervisor.";
+  }
   if (!address) fieldErrors.address = "Street / site base address is required.";
   if (!city) fieldErrors.city = "City/Town/Village is required.";
   if (!district) fieldErrors.district = "District is required.";
@@ -486,6 +494,8 @@ export async function signup(
         location: `${address ? `${address}, ` : ""}${city}, ${district}, ${resolvedStateName}`,
         aadhaar_number: cleanAadhaar,
         license_number: formattedLicense,
+        supervisor_id: supervisorIdRaw || null,
+        working_location_id: workingLocationIdRaw || null,
       },
       emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/login`,
     },
@@ -595,3 +605,66 @@ export async function signup(
 
   return { message: "Signup successful! Your account is pending approval. You will be notified once an administrator approves your account." };
 }
+
+/**
+ * Public/authenticated server action to fetch all active supervisors for selection dropdowns.
+ * Uses admin client to bypass anon RLS safely and only projects non-sensitive identity fields.
+ */
+export async function getSupervisorsAction(): Promise<
+  Array<{ value: string; label: string; description?: string }>
+> {
+  try {
+    const adminSupabase = createSupabaseAdminClient();
+    const { data, error } = await adminSupabase
+      .from("users")
+      .select("id, full_name, email")
+      .eq("role", "supervisor")
+      .eq("status", "active")
+      .order("full_name", { ascending: true });
+
+    if (error || !data) {
+      console.error("Error fetching supervisors list:", error);
+      return [];
+    }
+
+    return data.map((s) => ({
+      value: s.id,
+      label: s.full_name,
+      description: s.email || undefined,
+    }));
+  } catch (err) {
+    console.error("Exception in getSupervisorsAction:", err);
+    return [];
+  }
+}
+
+/**
+ * Public/authenticated server action to fetch all active working locations for selection dropdowns.
+ * Uses admin client to bypass anon RLS safely and only projects non-sensitive fields.
+ */
+export async function getWorkingLocationsAction(): Promise<
+  Array<{ value: string; label: string; description?: string }>
+> {
+  try {
+    const adminSupabase = createSupabaseAdminClient();
+    const { data, error } = await adminSupabase
+      .from("working_locations")
+      .select("id, name, type, city, state")
+      .eq("status", "active")
+      .order("name", { ascending: true });
+
+    if (error || !data) {
+      console.error("Error fetching working locations list:", error);
+      return [];
+    }
+
+    return data.map((loc) => ({
+      value: loc.id,
+      label: loc.name,
+      description: [loc.type ? loc.type.toUpperCase() : null, loc.city, loc.state].filter(Boolean).join(" • "),
+    }));
+  } catch (err) {
+    console.error("Exception in getWorkingLocationsAction:", err);
+    return [];
+  }
+}

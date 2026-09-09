@@ -87,6 +87,8 @@ export function exportUsersToExcel(users: User[], filenamePrefix: string = "User
     "Email Address",
     "Mobile Number",
     "Role",
+    "Supervisor",
+    "Working Location",
     "Status",
     "City",
     "District",
@@ -112,6 +114,8 @@ export function exportUsersToExcel(users: User[], filenamePrefix: string = "User
       u.email || "—",
       u.phone || "—",
       formatRoleName(u.role),
+      u.supervisor?.full_name || "—",
+      u.working_location?.name || "—",
       formatStatus(u.status),
       u.city || u.location || "—",
       u.district || "—",
@@ -129,6 +133,8 @@ export function exportUsersToExcel(users: User[], filenamePrefix: string = "User
     `Active: ${activeCount}`,
     `Pending: ${pendingCount}`,
     `Inactive: ${inactiveCount}`,
+    "",
+    "",
     "",
     "",
     "",
@@ -157,6 +163,8 @@ export function exportUsersToExcel(users: User[], filenamePrefix: string = "User
     { wch: 30 }, // Email Address
     { wch: 18 }, // Mobile Number
     { wch: 20 }, // Role
+    { wch: 22 }, // Supervisor
+    { wch: 24 }, // Working Location
     { wch: 18 }, // Status
     { wch: 18 }, // City
     { wch: 18 }, // District
@@ -182,6 +190,8 @@ export function exportUsersToCSV(users: User[], filenamePrefix: string = "Users-
     "Email Address",
     "Mobile Number",
     "Role",
+    "Supervisor",
+    "Working Location",
     "Status",
     "City",
     "District",
@@ -203,6 +213,8 @@ export function exportUsersToCSV(users: User[], filenamePrefix: string = "Users-
     u.email || "",
     u.phone || "",
     formatRoleName(u.role),
+    u.supervisor?.full_name || "",
+    u.working_location?.name || "",
     formatStatus(u.status),
     u.city || u.location || "",
     u.district || "",

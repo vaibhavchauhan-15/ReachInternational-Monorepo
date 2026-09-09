@@ -44,5 +44,30 @@ Manages user accounts, profile details, company branch assignments, and Role-Bas
 - `currentUserHasPermission(permission)`: Checks active user permission.
 - `updateUserRole(userId, role)`: Changes user permission tier across all canonical system roles (Super Admin can assign any role including Super Admin; Admin cannot modify Super Admin roles).
 - `toggleUserStatus(userId)`: Toggles user status between `active` and `inactive` via `createSupabaseAdminClient()`.
+- **Multi-Supervisor Assignment & Clean UI (`056_add_user_supervisor_ids.sql`)**:
+  - Supervised roles (`operator`, `service_engineer`, `engineer`, `mechanic`) support multiple assigned supervisors via `supervisor_ids UUID[]` with GIN indexing, while preserving `supervisor_id` as the primary supervisor via bidirectional DB triggers (`sync_user_supervisor_array`).
+  - The desktop users table (`/users?tab=all`) column 4 renders clean, compact supervisor badges/chips (`#fafafa` canvas background, `#ebebeb` border, max 15-char truncation with full-name tooltip; "Unassigned" if empty; `—` for non-supervised roles). Clicking a supervisor chip opens the user detail sheet.
+  - Supervisor assignment is managed directly within the 3-dot action menu portal dropdown as a scrollable multi-select checkbox list with min 44px touch targets and "No Supervisor" clearing option.
+  - `UserDetailSheet` and mobile `UserDetailModal` display all assigned supervisors with email tags.
+  - Name and email in table rows and cards are truncated cleanly at 15 and 20 characters respectively with hover tooltips and detail sheet access.
+  - Mirrored in mobile app with touchable cards, bottom sheet modal selectors, and details view.
+- **Table Interaction & Action Column Refinement**:
+  - Entire user rows in `UserRow.tsx` and pending user cards in `users-client.tsx` are whole-item clickable to open `UserDetailSheet` with keyboard navigation and event propagation prevention on checkboxes and action menus.
+  - Standalone Eye icon button removed from table rows.
+  - Actions table header text removed (`<span className="sr-only">Actions</span>`) with compact column width, cleanly showcasing the 3-dot menu button in every row.
+- **Working Location / Site / Office Selection (All Users)**:
+  - Table `public.working_locations` stores all operational bases (`id`, `name`, `type`, `address`, `city`, `state`, `pincode`, `status`).
+  - Users have a `working_location_id` referencing `working_locations(id)`.
+  - The desktop users table (`/users`) renders a dedicated `Working Location` column showing the site name and city with map pin icon or `—`.
+  - `MobileUserCard` renders a Working Base badge with `MapPin` icon.
+  - `UserDetailSheet` and mobile `UserDetailModal` display the working location under Location & Base details.
+  - `UserCreateModal` and `UserEditModal` render a dynamic `<SearchableSelect>` for Working Location in Section 4 across all roles, with hidden inputs submitting `working_location_id`.
+  - Public RPC `get_active_working_locations_public()` allows unauthenticated and authenticated users to list active locations securely.
+  - Excel and CSV exports include the Working Location column.
 - `auth_user_has_branch_access(target_branch_id)`: Postgres RLS function enforcing branch scoping (Super Admin & Admin bypass branch locks).
 - `prevent_audit_log_modification()`: Postgres trigger preventing any physical UPDATE or DELETE on `public.audit_logs`, guaranteeing immutable audit trails.
+- **Server-Side Pagination & Performance Optimization (`/users?tab=all`)**:
+  - `getUserList()` enforces 10 users per page (`pageSize = 10`), parallelizes supervisor and working location relations lookup with `Promise.all()`, and executes exact count range queries.
+  - `getUserListAggregatesCached()` runs cached parallel aggregate queries (`TAGS.users`, tier `CLASS_C_OPERATIONAL`) for `totalUsers`, `activeUsers`, `engineerCount`, and unique `states`.
+  - Next.js searchParams passthrough in `app/(app)/users/page.tsx` supports URL bookmarking, deep linking, and zero client-side filter computation.
+  - `<UsersPageClient>` uses `useTransition` for smooth `isPending` state handling, renders standard `<Pagination>` on both desktop table and mobile cards, connects metrics cards to global aggregates, and exports complete filtered datasets via `exportUsersFilteredAction`.

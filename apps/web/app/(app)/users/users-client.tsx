@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useDeferredValue, useEffect, useRef } from "react";
+import { useState, useCallback, useMemo, useDeferredValue, useEffect, useRef, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AnimatedShieldAlert,
@@ -29,8 +29,10 @@ import {
   TooltipWrapper,
   ExportButton,
 } from "@/components/ui";
+import { Pagination } from "@/components/ui/Table";
 import { motion, AnimatePresence } from "framer-motion";
 import { AnimatedCounter } from "@/components/ui/Motion";
+import { exportUsersFilteredAction } from "@/app/actions/users";
 import {
   approveUser,
   rejectUser,
@@ -38,12 +40,14 @@ import {
   resetUserPassword,
   toggleUserStatus,
   updateUserRole,
+  updateUserSupervisor,
   deleteUser,
   bulkDeleteUsers,
   bulkApproveUsers,
   bulkRejectUsers,
   editUser,
 } from "@/app/actions/users";
+import { getSupervisorsAction, getWorkingLocationsAction } from "@/app/actions/auth";
 import {
   approveProfileChangeRequest,
   rejectProfileChangeRequest,
@@ -357,12 +361,23 @@ function CustomFilterSelector({
   );
 }
 
+export interface UserListAggregates {
+  totalUsers: number;
+  activeUsers: number;
+  engineerCount: number;
+  states: Array<{ id: string; label: string }>;
+}
+
 interface UsersPageClientProps {
   users: User[];
   pendingUsers: User[];
   profileChangeRequests?: ProfileChangeRequest[];
   currentUser: User;
   isSuperAdmin: boolean;
+  totalPages: number;
+  totalCount: number;
+  currentPage: number;
+  aggregates?: UserListAggregates;
 }
 
 export function UsersPageClient({
@@ -371,10 +386,15 @@ export function UsersPageClient({
   profileChangeRequests = [],
   currentUser,
   isSuperAdmin,
+  totalPages,
+  totalCount,
+  currentPage,
+  aggregates,
 }: UsersPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const [isPending, startTransition] = useTransition();
 
   // Optimistic local state synchronized with server props
   const [usersList, setUsersList] = useState<User[]>(users);
@@ -393,7 +413,7 @@ export function UsersPageClient({
     setProfileRequestsList(profileChangeRequests);
   }, [profileChangeRequests]);
 
-  const [loading, setLoading] = useState<{ type: "approve" | "reject" | "create" | "reset" | "toggle" | "role" | "delete" | "edit"; id: string } | null>(null);
+  const [loading, setLoading] = useState<{ type: "approve" | "reject" | "create" | "reset" | "toggle" | "role" | "supervisor" | "delete" | "edit"; id: string } | null>(null);
   const [profileLoading, setProfileLoading] = useState<{ type: "approve" | "reject"; id: string } | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -418,6 +438,43 @@ export function UsersPageClient({
     password: string;
   } | null>(null);
 
+  // Supervisor state for assignment
+  const [availableSupervisors, setAvailableSupervisors] = useState<Array<{ value: string; label: string; description?: string }>>([]);
+  const [availableWorkingLocations, setAvailableWorkingLocations] = useState<Array<{ value: string; label: string; description?: string }>>([]);
+
+  useEffect(() => {
+    getSupervisorsAction().then((res) => {
+      if (Array.isArray(res)) {
+        setAvailableSupervisors(res);
+      }
+    }).catch(() => {});
+
+    getWorkingLocationsAction().then((res) => {
+      if (Array.isArray(res)) {
+        setAvailableWorkingLocations(res);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const supervisorOptions = useMemo(() => {
+    const map = new Map<string, { value: string; label: string; description?: string }>();
+    usersList
+      .filter((u) => u.role === "supervisor" && u.status === "active")
+      .forEach((s) => {
+        map.set(s.id, {
+          value: s.id,
+          label: s.full_name,
+          description: s.email || undefined,
+        });
+      });
+    availableSupervisors.forEach((s) => {
+      if (!map.has(s.value)) {
+        map.set(s.value, s);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [usersList, availableSupervisors]);
+
   // Multi-Selection State
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
@@ -433,15 +490,50 @@ export function UsersPageClient({
   const [isBulkRejectingProfile, setIsBulkRejectingProfile] = useState(false);
 
   // Search and Filter State
-  const [searchTerm, setSearchTerm] = useState("");
-  const deferredSearch = useDeferredValue(searchTerm);
-  const [roleFilter, setRoleFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [stateFilter, setStateFilter] = useState<string>("all");
-  const [kycFilter, setKycFilter] = useState<string>("all");
-  const [dateRangeFilter, setDateRangeFilter] = useState<string>("all");
-  const [sortBy, setSortBy] = useState<string>("newest");
+  const [searchTerm, setSearchTerm] = useState(searchParams?.get("search") || "");
   const [viewMode, setViewMode] = useState<"auto" | "cards" | "table">("auto");
+  
+  const roleFilter = searchParams?.get("role") || "all";
+  const statusFilter = searchParams?.get("status") || "all";
+  const stateFilter = searchParams?.get("state") || "all";
+  const kycFilter = searchParams?.get("kyc") || "all";
+  const dateRangeFilter = searchParams?.get("dateRange") || "all";
+  const sortBy = searchParams?.get("sort") || "newest";
+
+  const updateFilter = useCallback((key: string, value: string) => {
+    const params = new URLSearchParams(searchParams?.toString() || "");
+    if (value && value !== "all" && value !== "") params.set(key, value);
+    else params.delete(key);
+    params.set("page", "1");
+    startTransition(() => {
+      router.push(`?${params.toString()}`, { scroll: false });
+    });
+  }, [searchParams, router]);
+
+  const handlePageChange = useCallback((newPage: number) => {
+    const params = new URLSearchParams(searchParams?.toString() || "");
+    params.set("page", String(newPage));
+    startTransition(() => {
+      router.push(`?${params.toString()}`, { scroll: false });
+    });
+  }, [searchParams, router]);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      const currentSearch = searchParams?.get("search") || "";
+      if (searchTerm !== currentSearch) {
+        updateFilter("search", searchTerm);
+      }
+    }, 300);
+    return () => clearTimeout(handler);
+  }, [searchTerm, searchParams, updateFilter]);
+
+  const setRoleFilter = (val: string) => updateFilter("role", val);
+  const setStatusFilter = (val: string) => updateFilter("status", val);
+  const setStateFilter = (val: string) => updateFilter("state", val);
+  const setKycFilter = (val: string) => updateFilter("kyc", val);
+  const setDateRangeFilter = (val: string) => updateFilter("dateRange", val);
+  const setSortBy = (val: string) => updateFilter("sort", val);
 
   // Handlers for User Actions with Instant Optimistic Updates
   const handleApprove = useCallback(
@@ -807,6 +899,75 @@ export function UsersPageClient({
     [usersList, router, toast]
   );
 
+  const handleUpdateSupervisor = useCallback(
+    async (userId: string, supervisorIdsInput: string[] | string | null) => {
+      const prevUsers = usersList;
+      const rawIds = Array.isArray(supervisorIdsInput)
+        ? supervisorIdsInput
+        : supervisorIdsInput
+        ? [supervisorIdsInput]
+        : [];
+      const cleanSupervisorIds = rawIds.filter(Boolean);
+
+      const matchedSupervisors = cleanSupervisorIds
+        .map((id) => supervisorOptions.find((s) => s.value === id))
+        .filter(Boolean)
+        .map((s) => ({
+          id: s!.value,
+          full_name: s!.label,
+          email: s!.description || undefined,
+        }));
+
+      const primarySupervisor = matchedSupervisors[0] || null;
+
+      // Optimistic UI update: update local user immediately
+      setUsersList((prev) =>
+        prev.map((u) =>
+          u.id === userId
+            ? {
+                ...u,
+                supervisor_id: primarySupervisor ? primarySupervisor.id : null,
+                supervisor_ids: cleanSupervisorIds,
+                supervisor: primarySupervisor,
+                supervisors: matchedSupervisors,
+              }
+            : u
+        )
+      );
+
+      setSelectedSheetUser((prev) =>
+        prev && prev.id === userId
+          ? {
+              ...prev,
+              supervisor_id: primarySupervisor ? primarySupervisor.id : null,
+              supervisor_ids: cleanSupervisorIds,
+              supervisor: primarySupervisor,
+              supervisors: matchedSupervisors,
+            }
+          : prev
+      );
+
+      setLoading({ type: "supervisor", id: userId });
+
+      try {
+        const result = await updateUserSupervisor(userId, cleanSupervisorIds);
+        setLoading(null);
+        if (result.error) {
+          setUsersList(prevUsers);
+          toast("error", result.error);
+        } else {
+          toast("success", result.message || "Supervisor assignment updated.");
+          router.refresh();
+        }
+      } catch (err: any) {
+        setLoading(null);
+        setUsersList(prevUsers);
+        toast("error", err?.message || "Failed to update supervisor assignment.");
+      }
+    },
+    [usersList, supervisorOptions, router, toast]
+  );
+
   const handleDeleteUserConfirm = useCallback(async () => {
     if (!deletingUserId) return;
     const targetId = deletingUserId;
@@ -854,160 +1015,46 @@ export function UsersPageClient({
     [router, showEditModal, toast]
   );
 
-  // Extract unique normalized states from usersList
+  // Extract unique normalized states (prioritize global aggregates, fallback to usersList)
   const stateOptions = useMemo(() => {
-    const statesMap = new Map<string, { id: string; label: string }>();
-
-    usersList.forEach((u) => {
-      if (u.state && u.state.trim()) {
-        const cleanState = u.state.trim();
-        const key = u.state_id ? String(u.state_id) : cleanState.toLowerCase();
-        if (!statesMap.has(key)) {
-          statesMap.set(key, {
-            id: key,
-            label: cleanState,
-          });
-        }
-      }
-    });
-
-    const sortedStates = Array.from(statesMap.values()).sort((a, b) =>
-      a.label.localeCompare(b.label)
-    );
+    const baseStates =
+      aggregates?.states && aggregates.states.length > 0
+        ? aggregates.states
+        : (() => {
+            const statesMap = new Map<string, { id: string; label: string }>();
+            usersList.forEach((u) => {
+              if (u.state && u.state.trim()) {
+                const cleanState = u.state.trim();
+                const key = u.state_id ? String(u.state_id) : cleanState.toLowerCase();
+                if (!statesMap.has(key)) {
+                  statesMap.set(key, {
+                    id: key,
+                    label: cleanState,
+                  });
+                }
+              }
+            });
+            return Array.from(statesMap.values()).sort((a, b) =>
+              a.label.localeCompare(b.label)
+            );
+          })();
 
     return [
       { id: "all", label: "All States", dotColor: "" },
-      ...sortedStates.map((st) => ({
+      ...baseStates.map((st) => ({
         id: st.id,
         label: st.label,
         dotColor: "bg-indigo-500",
       })),
     ];
-  }, [usersList]);
+  }, [aggregates?.states, usersList]);
 
   // Filter and Sort Users List
-  const filteredUsers = useMemo(() => {
-    const query = deferredSearch.toLowerCase().trim();
-    const queryNoSpaces = query.replace(/\s+/g, "");
+  const filteredUsers = usersList;
 
-    const result = usersList.filter((u) => {
-      // 1. Comprehensive Search Filter
-      if (query) {
-        const matchesName = u.full_name?.toLowerCase().includes(query);
-        const matchesEmail = u.email?.toLowerCase().includes(query);
-        const matchesPhone = u.phone ? u.phone.toLowerCase().includes(query) : false;
-        const matchesCity = u.city ? u.city.toLowerCase().includes(query) : false;
-        const matchesDistrict = u.district ? u.district.toLowerCase().includes(query) : false;
-        const matchesState = u.state ? u.state.toLowerCase().includes(query) : false;
-        const matchesLocation = u.location ? u.location.toLowerCase().includes(query) : false;
-        const matchesRole = u.role?.toLowerCase().includes(query);
-        const matchesAadhaar = u.aadhaar_number
-          ? u.aadhaar_number.replace(/\s+/g, "").includes(queryNoSpaces)
-          : false;
-        const matchesLicense = u.license_number
-          ? u.license_number.toLowerCase().includes(query)
-          : false;
-
-        if (
-          !matchesName &&
-          !matchesEmail &&
-          !matchesPhone &&
-          !matchesCity &&
-          !matchesDistrict &&
-          !matchesState &&
-          !matchesLocation &&
-          !matchesRole &&
-          !matchesAadhaar &&
-          !matchesLicense
-        ) {
-          return false;
-        }
-      }
-
-      // 2. Role Filter
-      if (roleFilter !== "all") {
-        if (roleFilter === "engineer" || roleFilter === "service_engineer") {
-          if (u.role !== "engineer" && u.role !== "service_engineer") return false;
-        } else if (u.role !== roleFilter) {
-          return false;
-        }
-      }
-
-      // 3. Status Filter
-      if (statusFilter !== "all" && u.status !== statusFilter) {
-        return false;
-      }
-
-      // 4. State Filter
-      if (stateFilter !== "all") {
-        const matchesStateId = u.state_id !== undefined && u.state_id !== null && String(u.state_id) === stateFilter;
-        const matchesStateName = (u.state || "").toLowerCase() === stateFilter.toLowerCase();
-        if (!matchesStateId && !matchesStateName) {
-          return false;
-        }
-      }
-
-      // 5. KYC / Verification Filter
-      if (kycFilter !== "all") {
-        const hasAadhaar = Boolean(u.aadhaar_number && u.aadhaar_number.trim().length > 0);
-        const hasLicense = Boolean(u.license_number && u.license_number.trim().length > 0);
-        if (kycFilter === "fully_verified" && (!hasAadhaar || !hasLicense)) return false;
-        if (kycFilter === "aadhaar_only" && !hasAadhaar) return false;
-        if (kycFilter === "license_only" && !hasLicense) return false;
-        if (kycFilter === "pending_kyc" && hasAadhaar && hasLicense) return false;
-      }
-
-      // 6. Joined Date Range Filter
-      if (dateRangeFilter !== "all") {
-        if (!u.created_at) return false;
-        const userDate = new Date(u.created_at).getTime();
-        if (isNaN(userDate)) return false;
-        const now = Date.now();
-        const oneDayMs = 24 * 60 * 60 * 1000;
-
-        if (dateRangeFilter === "today") {
-          const startOfToday = new Date().setHours(0, 0, 0, 0);
-          if (userDate < startOfToday) return false;
-        } else if (dateRangeFilter === "7days") {
-          if (now - userDate > 7 * oneDayMs) return false;
-        } else if (dateRangeFilter === "30days") {
-          if (now - userDate > 30 * oneDayMs) return false;
-        } else if (dateRangeFilter === "90days") {
-          if (now - userDate > 90 * oneDayMs) return false;
-        } else if (dateRangeFilter === "this_year") {
-          const startOfYear = new Date(new Date().getFullYear(), 0, 1).getTime();
-          if (userDate < startOfYear) return false;
-        }
-      }
-
-      return true;
-    });
-
-    // 7. High-Performance Sorting
-    result.sort((a, b) => {
-      if (sortBy === "newest") {
-        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-      }
-      if (sortBy === "oldest") {
-        return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
-      }
-      if (sortBy === "name_asc") {
-        return (a.full_name || "").localeCompare(b.full_name || "");
-      }
-      if (sortBy === "name_desc") {
-        return (b.full_name || "").localeCompare(a.full_name || "");
-      }
-      if (sortBy === "role_asc") {
-        return (a.role || "").localeCompare(b.role || "");
-      }
-      return 0;
-    });
-
-    return result;
-  }, [usersList, deferredSearch, roleFilter, statusFilter, stateFilter, kycFilter, dateRangeFilter, sortBy]);
-
-  const activeCount = usersList.filter((u) => u.status === "active").length;
-  const engineerCount = usersList.filter((u) => u.role === "engineer" || u.role === "service_engineer").length;
+  const totalUsersCount = aggregates?.totalUsers ?? totalCount ?? usersList.length;
+  const activeCount = aggregates?.activeUsers ?? usersList.filter((u) => u.status === "active").length;
+  const engineerCount = aggregates?.engineerCount ?? usersList.filter((u) => u.role === "engineer" || u.role === "service_engineer").length;
 
   const activeFilterCount =
     (roleFilter !== "all" ? 1 : 0) +
@@ -1020,13 +1067,10 @@ export function UsersPageClient({
 
   const resetFilters = useCallback(() => {
     setSearchTerm("");
-    setRoleFilter("all");
-    setStatusFilter("all");
-    setStateFilter("all");
-    setKycFilter("all");
-    setDateRangeFilter("all");
-    setSortBy("newest");
-  }, []);
+    startTransition(() => {
+      router.push("?", { scroll: false });
+    });
+  }, [router]);
 
   // Multi-selection computed states
   const allFilteredSelected = useMemo(() => {
@@ -1057,29 +1101,73 @@ export function UsersPageClient({
     setSelectedUserIds([]);
   }, []);
 
-  const handleExportSelectedExcel = useCallback(() => {
-    const targetUsers = selectedUserIds.length > 0
-      ? usersList.filter((u) => selectedUserIds.includes(u.id))
-      : filteredUsers;
-    if (targetUsers.length === 0) {
-      toast("warning", "No users available to export.");
+  const handleExportSelectedExcel = useCallback(async () => {
+    if (selectedUserIds.length > 0) {
+      const targetUsers = usersList.filter((u) => selectedUserIds.includes(u.id));
+      if (targetUsers.length === 0) {
+        toast("warning", "No users available to export.");
+        return;
+      }
+      exportUsersToExcel(targetUsers, "Selected-Users");
+      toast("success", `Exported ${targetUsers.length} user${targetUsers.length > 1 ? "s" : ""} to Excel (.xlsx)`);
       return;
     }
-    exportUsersToExcel(targetUsers, selectedUserIds.length > 0 ? "Selected-Users" : "Users-Directory");
-    toast("success", `Exported ${targetUsers.length} user${targetUsers.length > 1 ? "s" : ""} to Excel (.xlsx)`);
-  }, [selectedUserIds, usersList, filteredUsers, toast]);
 
-  const handleExportSelectedCSV = useCallback(() => {
-    const targetUsers = selectedUserIds.length > 0
-      ? usersList.filter((u) => selectedUserIds.includes(u.id))
-      : filteredUsers;
-    if (targetUsers.length === 0) {
-      toast("warning", "No users available to export.");
+    try {
+      toast("info", "Preparing export of matching users...");
+      const fullList = await exportUsersFilteredAction({
+        search: searchTerm || undefined,
+        role: roleFilter !== "all" ? roleFilter : undefined,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        kyc: kycFilter !== "all" ? kycFilter : undefined,
+        state: stateFilter !== "all" ? stateFilter : undefined,
+        dateRange: dateRangeFilter !== "all" ? dateRangeFilter : undefined,
+        sort: sortBy,
+      });
+      if (!fullList || fullList.length === 0) {
+        toast("warning", "No users available to export.");
+        return;
+      }
+      exportUsersToExcel(fullList, "Users-Directory");
+      toast("success", `Exported ${fullList.length} user${fullList.length > 1 ? "s" : ""} to Excel (.xlsx)`);
+    } catch (err: any) {
+      toast("error", "Failed to export users: " + (err?.message || "Unknown error"));
+    }
+  }, [selectedUserIds, usersList, searchTerm, roleFilter, statusFilter, kycFilter, stateFilter, dateRangeFilter, sortBy, toast]);
+
+  const handleExportSelectedCSV = useCallback(async () => {
+    if (selectedUserIds.length > 0) {
+      const targetUsers = usersList.filter((u) => selectedUserIds.includes(u.id));
+      if (targetUsers.length === 0) {
+        toast("warning", "No users available to export.");
+        return;
+      }
+      exportUsersToCSV(targetUsers, "Selected-Users");
+      toast("success", `Exported ${targetUsers.length} user${targetUsers.length > 1 ? "s" : ""} to CSV (.csv)`);
       return;
     }
-    exportUsersToCSV(targetUsers, selectedUserIds.length > 0 ? "Selected-Users" : "Users-Directory");
-    toast("success", `Exported ${targetUsers.length} user${targetUsers.length > 1 ? "s" : ""} to CSV (.csv)`);
-  }, [selectedUserIds, usersList, filteredUsers, toast]);
+
+    try {
+      toast("info", "Preparing export of matching users...");
+      const fullList = await exportUsersFilteredAction({
+        search: searchTerm || undefined,
+        role: roleFilter !== "all" ? roleFilter : undefined,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        kyc: kycFilter !== "all" ? kycFilter : undefined,
+        state: stateFilter !== "all" ? stateFilter : undefined,
+        dateRange: dateRangeFilter !== "all" ? dateRangeFilter : undefined,
+        sort: sortBy,
+      });
+      if (!fullList || fullList.length === 0) {
+        toast("warning", "No users available to export.");
+        return;
+      }
+      exportUsersToCSV(fullList, "Users-Directory");
+      toast("success", `Exported ${fullList.length} user${fullList.length > 1 ? "s" : ""} to CSV (.csv)`);
+    } catch (err: any) {
+      toast("error", "Failed to export users: " + (err?.message || "Unknown error"));
+    }
+  }, [selectedUserIds, usersList, searchTerm, roleFilter, statusFilter, kycFilter, stateFilter, dateRangeFilter, sortBy, toast]);
 
   const handleBulkDeleteConfirm = useCallback(async () => {
     if (selectedUserIds.length === 0) return;
@@ -1162,7 +1250,7 @@ export function UsersPageClient({
             <AnimatedUsers size={16} className="text-[var(--color-ink)]" />
           </div>
           <div className="text-2xl font-extrabold text-[var(--color-ink)] mt-1">
-            <AnimatedCounter value={usersList.length} />
+            <AnimatedCounter value={totalUsersCount} />
           </div>
         </motion.div>
 
@@ -1340,7 +1428,8 @@ export function UsersPageClient({
                     damping: 28,
                     layout: { duration: 0.25, ease: "easeOut" },
                   }}
-                  className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs hover:border-amber-500/40 hover:shadow-md dark:hover:shadow-amber-950/25 transition-all duration-200 group overflow-hidden border-l-[3px] border-l-amber-500 dark:border-l-amber-400"
+                  onClick={() => setSelectedSheetUser(pUser)}
+                  className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs hover:border-amber-500/40 hover:shadow-md dark:hover:shadow-amber-950/25 transition-all duration-200 group overflow-hidden border-l-[3px] border-l-amber-500 dark:border-l-amber-400 cursor-pointer"
                 >
                   {/* Top Hairline Sheen on Hover */}
                   <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-amber-500/50 dark:via-amber-400/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
@@ -1395,7 +1484,10 @@ export function UsersPageClient({
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex items-center gap-2 flex-shrink-0 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-[var(--color-hairline)] w-full sm:w-auto justify-end mt-1 sm:mt-0">
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-2 flex-shrink-0 pt-2.5 sm:pt-0 border-t sm:border-t-0 border-[var(--color-hairline)] w-full sm:w-auto justify-end mt-1 sm:mt-0"
+                  >
                     <Button
                       variant="success-sm"
                       onClick={() => handleApprove(pUser.id)}
@@ -1659,129 +1751,171 @@ export function UsersPageClient({
       </FilterToolbar>
 
       {/* Content View: Mobile Cards Stack vs Desktop Table */}
-      {/* Mobile / Responsive Cards View */}
-      <div
-        className={
-          viewMode === "cards"
-            ? "block"
-            : viewMode === "table"
-            ? "hidden"
-            : "block md:hidden"
-        }
-      >
-        {filteredUsers.length === 0 ? (
-          <div className="py-12 px-4 text-center rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
-            <p className="text-sm font-semibold text-[var(--color-ink)]">No users found</p>
-            <p className="text-xs text-[var(--color-mute)] mt-1">
-              Try adjusting your search terms or clearing filters.
-            </p>
-            {activeFilterCount > 0 && (
-              <Button
-                variant="ghost-sm"
-                onClick={resetFilters}
-                className="mt-3 h-8 px-3.5 text-xs font-medium rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs cursor-pointer active:scale-[0.98] transition-all"
-              >
-                Reset Filters
-              </Button>
-            )}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <AnimatePresence mode="popLayout">
-              {filteredUsers.map((u) => (
-                <MobileUserCard
-                  key={u.id}
-                  user={u}
-                  currentUser={currentUser}
-                  loadingId={loading}
-                  selectable={true}
-                  isSelected={selectedUserIds.includes(u.id)}
-                  onToggleSelect={handleToggleSelect}
-                  onOpenSheet={(targetUser) => setSelectedSheetUser(targetUser)}
-                  onResetPassword={handleResetPassword}
-                  onToggleStatus={handleToggleStatus}
-                />
-              ))}
-            </AnimatePresence>
+      <div className={`relative transition-opacity duration-200 ${isPending ? "opacity-60 pointer-events-none" : ""}`}>
+        {isPending && (
+          <div className="absolute -top-3 inset-x-0 z-20 flex justify-center">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] text-[var(--color-mute)] shadow-sm">
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-link)] animate-ping" />
+              Loading users...
+            </span>
           </div>
         )}
-      </div>
 
-      {/* Desktop Table View */}
-      <div
-        className={
-          viewMode === "cards"
-            ? "hidden"
-            : viewMode === "table"
-            ? "block"
-            : "hidden md:block"
-        }
-      >
-        <Card padding="none" className="overflow-hidden border border-[var(--color-hairline)] shadow-xs rounded-[var(--radius-md)]">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-[var(--color-canvas)] border-b border-[var(--color-hairline)] text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
-                <tr>
-                  <th className="py-3 px-3 w-10 text-center">
-                    <input
-                      type="checkbox"
-                      checked={allFilteredSelected && filteredUsers.length > 0}
-                      ref={(el) => {
-                        if (el) {
-                          el.indeterminate = someFilteredSelected;
-                        }
-                      }}
-                      onChange={handleSelectAllFiltered}
-                      aria-label="Select all filtered users"
-                      className="h-4 w-4 rounded-[4px] border-[var(--color-hairline)] text-[var(--color-ink)] focus:ring-[var(--color-link)] cursor-pointer transition-all accent-[var(--color-ink)]"
+        {/* Mobile / Responsive Cards View */}
+        <div
+          className={
+            viewMode === "cards"
+              ? "block"
+              : viewMode === "table"
+              ? "hidden"
+              : "block md:hidden"
+          }
+        >
+          {filteredUsers.length === 0 ? (
+            <div className="py-12 px-4 text-center rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
+              <p className="text-sm font-semibold text-[var(--color-ink)]">No users found</p>
+              <p className="text-xs text-[var(--color-mute)] mt-1">
+                Try adjusting your search terms or clearing filters.
+              </p>
+              {activeFilterCount > 0 && (
+                <Button
+                  variant="ghost-sm"
+                  onClick={resetFilters}
+                  className="mt-3 h-8 px-3.5 text-xs font-medium rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs cursor-pointer active:scale-[0.98] transition-all"
+                >
+                  Reset Filters
+                </Button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <AnimatePresence mode="popLayout">
+                  {filteredUsers.map((u) => (
+                    <MobileUserCard
+                      key={u.id}
+                      user={u}
+                      currentUser={currentUser}
+                      loadingId={loading}
+                      selectable={true}
+                      isSelected={selectedUserIds.includes(u.id)}
+                      onToggleSelect={handleToggleSelect}
+                      onOpenSheet={(targetUser) => setSelectedSheetUser(targetUser)}
+                      onResetPassword={handleResetPassword}
+                      onToggleStatus={handleToggleStatus}
                     />
-                  </th>
-                  <th className="py-3 px-4 w-[21%] whitespace-nowrap">
-                    User Account
-                  </th>
-                  <th className="py-3 px-4 w-[24%] whitespace-nowrap">
-                    Contact Info
-                  </th>
-                  <th className="py-3 px-4 w-[18%] whitespace-nowrap">
-                    Role & Access Level
-                  </th>
-                  <th className="py-3 px-4 w-[13%] whitespace-nowrap">
-                    City
-                  </th>
-                  <th className="py-3 px-4 w-[10%] whitespace-nowrap">
-                    Status
-                  </th>
-                  <th className="py-3 px-4 w-[11%] whitespace-nowrap">
-                    Joined Date
-                  </th>
-                  <th className="py-3 px-4 w-[84px] whitespace-nowrap text-right">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
-                {filteredUsers.map((userItem) => (
-                  <UserRow
-                    key={userItem.id}
-                    user={userItem}
-                    currentUser={currentUser}
-                    isSuperAdmin={isSuperAdmin}
-                    loadingId={loading}
-                    selectable={true}
-                    isSelected={selectedUserIds.includes(userItem.id)}
-                    onToggleSelect={handleToggleSelect}
-                    onViewDetails={(u) => setSelectedSheetUser(u)}
-                    onResetPassword={handleResetPassword}
-                    onToggleStatus={handleToggleStatus}
-                    onEdit={setShowEditModal}
-                    onUpdateRole={handleUpdateRole}
-                    onDelete={(id) => setDeletingUserId(id)}
+                  ))}
+                </AnimatePresence>
+              </div>
+              {totalCount > 0 && (
+                <div className="pt-2">
+                  <Pagination
+                    page={currentPage}
+                    pageSize={10}
+                    total={totalCount}
+                    onPageChange={handlePageChange}
                   />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Desktop Table View */}
+        <div
+          className={
+            viewMode === "cards"
+              ? "hidden"
+              : viewMode === "table"
+              ? "block"
+              : "hidden md:block"
+          }
+        >
+          <Card padding="none" className="overflow-hidden border border-[var(--color-hairline)] shadow-xs rounded-[var(--radius-md)]">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-[var(--color-canvas)] border-b border-[var(--color-hairline)] text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
+                  <tr>
+                    <th className="py-3 px-3 w-10 text-center">
+                      <input
+                        type="checkbox"
+                        checked={allFilteredSelected && filteredUsers.length > 0}
+                        ref={(el) => {
+                          if (el) {
+                            el.indeterminate = someFilteredSelected;
+                          }
+                        }}
+                        onChange={handleSelectAllFiltered}
+                        aria-label="Select all filtered users"
+                        className="h-4 w-4 rounded-[4px] border-[var(--color-hairline)] text-[var(--color-ink)] focus:ring-[var(--color-link)] cursor-pointer transition-all accent-[var(--color-ink)]"
+                      />
+                    </th>
+                    <th className="py-3 px-4 w-[16%] whitespace-nowrap">
+                      Name
+                    </th>
+                    <th className="py-3 px-4 w-[16%] whitespace-nowrap">
+                      Contact Info
+                    </th>
+                    <th className="py-3 px-4 w-[13%] whitespace-nowrap">
+                      Role
+                    </th>
+                    <th className="py-3 px-4 w-[13%] whitespace-nowrap">
+                      Supervisor
+                    </th>
+                    <th className="py-3 px-4 w-[14%] whitespace-nowrap">
+                      Working Location
+                    </th>
+                    <th className="py-3 px-4 w-[9%] whitespace-nowrap">
+                      City
+                    </th>
+                    <th className="py-3 px-4 w-[8%] whitespace-nowrap">
+                      Status
+                    </th>
+                    <th className="py-3 px-4 w-[9%] whitespace-nowrap">
+                      Joined Date
+                    </th>
+                    <th className="py-3 px-3 w-10 whitespace-nowrap text-right">
+                      <span className="sr-only">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
+                  {filteredUsers.map((userItem) => (
+                    <UserRow
+                      key={userItem.id}
+                      user={userItem}
+                      currentUser={currentUser}
+                      isSuperAdmin={isSuperAdmin}
+                      loadingId={loading}
+                      selectable={true}
+                      isSelected={selectedUserIds.includes(userItem.id)}
+                      supervisors={supervisorOptions}
+                      onToggleSelect={handleToggleSelect}
+                      onViewDetails={(u) => setSelectedSheetUser(u)}
+                      onResetPassword={handleResetPassword}
+                      onToggleStatus={handleToggleStatus}
+                      onEdit={setShowEditModal}
+                      onUpdateRole={handleUpdateRole}
+                      onUpdateSupervisor={handleUpdateSupervisor}
+                      onDelete={(id) => setDeletingUserId(id)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {totalCount > 0 && (
+              <div className="px-4 bg-[var(--color-canvas)] border-t border-[var(--color-hairline)]">
+                <Pagination
+                  page={currentPage}
+                  pageSize={10}
+                  total={totalCount}
+                  onPageChange={handlePageChange}
+                  className="border-t-0"
+                />
+              </div>
+            )}
+          </Card>
+        </div>
       </div>
 
       {/* Mobile User Detail Sheet Drawer */}
@@ -1790,11 +1924,13 @@ export function UsersPageClient({
         currentUser={currentUser}
         isSuperAdmin={isSuperAdmin}
         loadingId={loading}
+        supervisors={supervisorOptions}
         onClose={() => setSelectedSheetUser(null)}
         onResetPassword={handleResetPassword}
         onToggleStatus={handleToggleStatus}
         onEdit={setShowEditModal}
         onUpdateRole={handleUpdateRole}
+        onUpdateSupervisor={handleUpdateSupervisor}
         onDelete={(id) => setDeletingUserId(id)}
       />
 
@@ -1806,6 +1942,8 @@ export function UsersPageClient({
           isSuperAdmin={isSuperAdmin}
           loading={loading?.type === "create"}
           onSubmit={handleCreateUser}
+          supervisors={supervisorOptions}
+          workingLocations={availableWorkingLocations}
         />
       )}
 
@@ -1935,6 +2073,8 @@ export function UsersPageClient({
           onClose={() => setShowEditModal(null)}
           loading={loading?.type === "edit"}
           onSubmit={handleEditUser}
+          supervisors={supervisorOptions}
+          workingLocations={availableWorkingLocations}
         />
       )}
 

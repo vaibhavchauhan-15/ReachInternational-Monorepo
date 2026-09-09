@@ -7,6 +7,7 @@ import {
   AnimatedPhone,
   AnimatedMapPin,
   AnimatedChevronRight,
+  AnimatedUser,
 } from "@/components/ui/animated-icons";
 import type { User } from "@/lib/types/database";
 
@@ -162,6 +163,11 @@ function getStatusIndicator(status: string) {
   }
 }
 
+function truncateText(str: string | null | undefined, max: number): string {
+  if (!str) return "";
+  return str.length > max ? str.slice(0, max) + "…" : str;
+}
+
 export const MobileUserCard = memo(function MobileUserCard({
   user,
   currentUser,
@@ -247,8 +253,8 @@ export const MobileUserCard = memo(function MobileUserCard({
           </div>
 
           <div className="flex flex-col min-w-0 flex-1">
-            <h3 className="text-xs font-bold text-[var(--color-ink)] truncate leading-tight group-hover:text-[var(--color-link)] transition-colors">
-              {user.full_name}
+            <h3 className="text-xs font-bold text-[var(--color-ink)] truncate leading-tight group-hover:text-[var(--color-link)] transition-colors" title={user.full_name}>
+              {truncateText(user.full_name, 15)}
             </h3>
             {user.location && (
               <span className="text-[11px] text-[var(--color-mute)] truncate mt-0.5">
@@ -274,7 +280,7 @@ export const MobileUserCard = memo(function MobileUserCard({
             <>
               <div className="flex items-center gap-1.5 font-mono text-[11px] truncate">
                 <AnimatedMail size={12} className="flex-shrink-0 text-[var(--color-ink)] opacity-60" />
-                <span className="truncate">{user.email}</span>
+                <span className="truncate" title={user.email}>{truncateText(user.email, 20)}</span>
               </div>
               {user.phone && (
                 <div className="flex items-center gap-1.5 font-mono text-[11px] truncate">
@@ -292,6 +298,24 @@ export const MobileUserCard = memo(function MobileUserCard({
             <div className="flex items-center gap-1.5 text-[11px] truncate">
               <AnimatedMapPin size={12} className="flex-shrink-0 text-[var(--color-ink)] opacity-60" />
               <span className="truncate">{user.city || user.location}</span>
+            </div>
+          )}
+          {((user.supervisors && user.supervisors.length > 0) || user.supervisor?.full_name) && (
+            <div className="flex items-center gap-1.5 text-[11px] truncate">
+              <AnimatedUser size={12} className="flex-shrink-0 text-[var(--color-link)] opacity-70" />
+              <span className="text-[var(--color-mute)]">Sup:</span>
+              <span className="text-[var(--color-ink)] font-medium truncate">
+                {user.supervisors && user.supervisors.length > 0
+                  ? user.supervisors.map((s) => truncateText(s.full_name, 15)).join(", ")
+                  : truncateText(user.supervisor?.full_name, 15)}
+              </span>
+            </div>
+          )}
+          {user.working_location?.name && (
+            <div className="flex items-center gap-1.5 text-[11px] truncate">
+              <AnimatedMapPin size={12} className="flex-shrink-0 text-[var(--color-link)] opacity-70" />
+              <span className="text-[var(--color-mute)]">Base:</span>
+              <span className="text-[var(--color-ink)] font-medium truncate">{user.working_location.name}</span>
             </div>
           )}
         </div>

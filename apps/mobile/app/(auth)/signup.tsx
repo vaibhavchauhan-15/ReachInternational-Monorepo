@@ -22,6 +22,7 @@ import {
   getStateByName,
   computeShiftTiming,
 } from '@reachinternational/utils';
+import { isSupervisedRole } from '@reachinternational/permissions';
 import {
   User,
   Mail,
@@ -37,6 +38,7 @@ import {
   ArrowLeft,
   Info,
   Clock,
+  Search,
 } from 'lucide-react-native';
 
 const SIGNUP_ROLES = [
@@ -73,12 +75,53 @@ export default function SignupScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // Supervisor Selection State
+  const [supervisors, setSupervisors] = useState<Array<{ id: string; full_name: string; email?: string }>>([]);
+  const [selectedSupervisorId, setSelectedSupervisorId] = useState('');
+  const [supervisorModalVisible, setSupervisorModalVisible] = useState(false);
+  const [supervisorSearch, setSupervisorSearch] = useState('');
+
+  // Working Location Selection State
+  const [workingLocations, setWorkingLocations] = useState<Array<{ id: string; name: string; type: string; city?: string }>>([]);
+  const [selectedWorkingLocationId, setSelectedWorkingLocationId] = useState('');
+  const [workingLocationModalVisible, setWorkingLocationModalVisible] = useState(false);
+  const [workingLocationSearch, setWorkingLocationSearch] = useState('');
+
+  React.useEffect(() => {
+    async function loadSupervisors() {
+      try {
+        const { data, error } = await supabase.rpc('get_active_supervisors_public');
+        if (!error && data) {
+          setSupervisors(data as Array<{ id: string; full_name: string; email?: string }>);
+        }
+      } catch (err) {
+        console.warn('Failed to load active supervisors for mobile signup:', err);
+      }
+    }
+
+    async function loadWorkingLocations() {
+      try {
+        const { data, error } = await supabase.rpc('get_active_working_locations_public');
+        if (!error && data) {
+          setWorkingLocations(data as Array<{ id: string; name: string; type: string; city?: string }>);
+        }
+      } catch (err) {
+        console.warn('Failed to load active working locations for mobile signup:', err);
+      }
+    }
+
+    loadSupervisors();
+    loadWorkingLocations();
+  }, []);
+
   const [isLoading, setIsLoading] = useState(false);
   const isSubmittingRef = useRef(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
   const selectedRoleObj = SIGNUP_ROLES.find((r) => r.value === selectedRole) || SIGNUP_ROLES[0];
+  const selectedSupervisor = supervisors.find((s) => s.id === selectedSupervisorId);
+  const selectedWorkingLocation = workingLocations.find((l) => l.id === selectedWorkingLocationId);
 
   const shiftSummary = React.useMemo(() => {
     if (!shiftStartTime || !shiftEndTime) return null;
@@ -161,6 +204,11 @@ export default function SignupScreen() {
       formattedLic = licRes.formatted || licenseNumber.trim().toUpperCase();
     }
 
+    if (isSupervisedRole(selectedRole) && supervisors.length > 0 && !selectedSupervisorId) {
+      setErrorMessage('Please select your designated supervisor.');
+      return;
+    }
+
     const finalShift =
       shiftStartTime.trim() && shiftEndTime.trim()
         ? `${shiftStartTime.trim()} - ${shiftEndTime.trim()}`
@@ -178,6 +226,8 @@ export default function SignupScreen() {
             full_name: fullName.trim(),
             phone: cleanPhone,
             role: selectedRole,
+            supervisor_id: isSupervisedRole(selectedRole) ? selectedSupervisorId || null : null,
+            working_location_id: selectedWorkingLocationId || null,
             shift_time: finalShift,
             shift_start_time: shiftStartTime.trim() || null,
             shift_end_time: shiftEndTime.trim() || null,
@@ -335,6 +385,80 @@ export default function SignupScreen() {
                 </View>
                 <ChevronDown size={16} color={theme.colors.mute} />
               </TouchableOpacity>
+            </View>
+
+            {/* Conditional Supervisor Selector Trigger */}
+            {isSupervisedRole(selectedRole) && (
+              <View style={styles.inputGroup}>
+                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
+                  Designated Supervisor *
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setSupervisorModalVisible(true)}
+                  activeOpacity={0.8}
+                  style={[
+                    styles.selectTrigger,
+                    {
+                      backgroundColor: theme.colors.canvasElevated,
+                      borderColor: selectedSupervisorId ? theme.colors.ink : theme.colors.hairline,
+                    },
+                  ]}
+                >
+                  <View style={styles.roleSelectedLeft}>
+                    <User size={16} color={theme.colors.link} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.roleSelectTitle, { color: selectedSupervisor ? theme.colors.ink : theme.colors.mute }]}>
+                        {selectedSupervisor ? selectedSupervisor.full_name : 'Select your supervisor...'}
+                      </Text>
+                      {selectedSupervisor?.email && (
+                        <Text style={[styles.roleSelectDesc, { color: theme.colors.mute }]} numberOfLines={1}>
+                          {selectedSupervisor.email}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  <ChevronDown size={16} color={theme.colors.mute} />
+                </TouchableOpacity>
+                <Text style={{ fontSize: 11, color: theme.colors.mute, marginTop: 4 }}>
+                  Supervisors coordinate machine allocations, daily shifts, and technical escalations.
+                </Text>
+              </View>
+            )}
+
+            {/* Working Location Trigger Card for ALL roles */}
+            <View style={styles.inputGroup}>
+              <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
+                Working Location / Base
+              </Text>
+              <TouchableOpacity
+                onPress={() => setWorkingLocationModalVisible(true)}
+                activeOpacity={0.8}
+                style={[
+                  styles.selectTrigger,
+                  {
+                    backgroundColor: theme.colors.canvasElevated,
+                    borderColor: selectedWorkingLocationId ? theme.colors.ink : theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.roleSelectedLeft}>
+                  <MapPin size={16} color={theme.colors.link} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.roleSelectTitle, { color: selectedWorkingLocation ? theme.colors.ink : theme.colors.mute }]}>
+                      {selectedWorkingLocation ? selectedWorkingLocation.name : 'Select working base / site...'}
+                    </Text>
+                    {selectedWorkingLocation && (
+                      <Text style={[styles.roleSelectDesc, { color: theme.colors.mute }]} numberOfLines={1}>
+                        {[selectedWorkingLocation.type?.toUpperCase(), selectedWorkingLocation.city].filter(Boolean).join(' • ')}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+                <ChevronDown size={16} color={theme.colors.mute} />
+              </TouchableOpacity>
+              <Text style={{ fontSize: 11, color: theme.colors.mute, marginTop: 4 }}>
+                Designate your primary yard, workshop, regional office, or site depot.
+              </Text>
             </View>
           </View>
 
@@ -626,6 +750,143 @@ export default function SignupScreen() {
                   </TouchableOpacity>
                 );
               })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Supervisor Picker Bottom Sheet Modal */}
+      <Modal visible={supervisorModalVisible} animationType="slide" transparent onRequestClose={() => setSupervisorModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
+              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select Designated Supervisor</Text>
+              <TouchableOpacity onPress={() => setSupervisorModalVisible(false)} style={styles.modalCloseBtn}>
+                <X size={18} color={theme.colors.ink} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ paddingHorizontal: spacingNumeric.md, paddingVertical: spacingNumeric.xs }}>
+              <Input
+                placeholder="Search supervisor by name or email..."
+                value={supervisorSearch}
+                onChangeText={setSupervisorSearch}
+                leftIcon={<User size={15} color={theme.colors.mute} />}
+              />
+            </View>
+
+            <ScrollView style={styles.roleListScroll} showsVerticalScrollIndicator={false}>
+              {supervisors
+                .filter((s) => {
+                  const q = supervisorSearch.toLowerCase().trim();
+                  if (!q) return true;
+                  return (
+                    s.full_name.toLowerCase().includes(q) ||
+                    (s.email && s.email.toLowerCase().includes(q))
+                  );
+                })
+                .map((s) => {
+                  const isSelected = selectedSupervisorId === s.id;
+                  return (
+                    <TouchableOpacity
+                      key={s.id}
+                      onPress={() => {
+                        setSelectedSupervisorId(s.id);
+                        setSupervisorModalVisible(false);
+                        setSupervisorSearch('');
+                      }}
+                      style={[
+                        styles.roleItemRow,
+                        { borderBottomColor: theme.colors.hairline },
+                        isSelected && { backgroundColor: theme.colors.link + '12' },
+                      ]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.roleItemTitle, { color: isSelected ? theme.colors.link : theme.colors.ink, fontWeight: isSelected ? '700' : '600' }]}>
+                          {s.full_name}
+                        </Text>
+                        {s.email && (
+                          <Text style={[styles.roleItemDesc, { color: theme.colors.mute }]}>{s.email}</Text>
+                        )}
+                      </View>
+                      {isSelected && <Check size={18} color={theme.colors.link} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              {supervisors.length === 0 && (
+                <View style={{ padding: spacingNumeric.md, alignItems: 'center' }}>
+                  <Text style={{ color: theme.colors.mute, fontSize: 13 }}>No active supervisors found</Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Working Location Picker Bottom Sheet Modal */}
+      <Modal visible={workingLocationModalVisible} animationType="slide" transparent onRequestClose={() => setWorkingLocationModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
+              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select Working Location</Text>
+              <TouchableOpacity onPress={() => setWorkingLocationModalVisible(false)} style={styles.modalCloseBtn}>
+                <X size={18} color={theme.colors.ink} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ paddingHorizontal: spacingNumeric.md, paddingVertical: spacingNumeric.xs }}>
+              <Input
+                placeholder="Search working location by name or city..."
+                value={workingLocationSearch}
+                onChangeText={setWorkingLocationSearch}
+                leftIcon={<Search size={15} color={theme.colors.mute} />}
+              />
+            </View>
+
+            <ScrollView style={styles.roleListScroll} showsVerticalScrollIndicator={false}>
+              {workingLocations
+                .filter((l) => {
+                  const q = workingLocationSearch.toLowerCase().trim();
+                  if (!q) return true;
+                  return (
+                    l.name.toLowerCase().includes(q) ||
+                    (l.city && l.city.toLowerCase().includes(q)) ||
+                    (l.type && l.type.toLowerCase().includes(q))
+                  );
+                })
+                .map((l) => {
+                  const isSelected = selectedWorkingLocationId === l.id;
+                  return (
+                    <TouchableOpacity
+                      key={l.id}
+                      onPress={() => {
+                        setSelectedWorkingLocationId(l.id);
+                        setWorkingLocationModalVisible(false);
+                        setWorkingLocationSearch('');
+                      }}
+                      style={[
+                        styles.roleItemRow,
+                        { borderBottomColor: theme.colors.hairline },
+                        isSelected && { backgroundColor: theme.colors.link + '12' },
+                      ]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.roleItemTitle, { color: isSelected ? theme.colors.link : theme.colors.ink, fontWeight: isSelected ? '700' : '600' }]}>
+                          {l.name}
+                        </Text>
+                        <Text style={[styles.roleItemDesc, { color: theme.colors.mute }]}>
+                          {[l.type?.toUpperCase(), l.city].filter(Boolean).join(' • ')}
+                        </Text>
+                      </View>
+                      {isSelected && <Check size={18} color={theme.colors.link} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              {workingLocations.length === 0 && (
+                <View style={{ padding: spacingNumeric.md, alignItems: 'center' }}>
+                  <Text style={{ color: theme.colors.mute, fontSize: 13 }}>No active working locations found</Text>
+                </View>
+              )}
             </ScrollView>
           </View>
         </View>

@@ -10,6 +10,7 @@ import {
   AnimatedTrash2,
   AnimatedMail,
   AnimatedPhone,
+  AnimatedUser,
   AnimatedUserCheck,
   AnimatedUserX,
   AnimatedCalendarClock,
@@ -24,6 +25,7 @@ import {
 import { Shield, ShieldAlert, ShieldCheck, Copy, Check } from "lucide-react";
 import { Button, Badge, Select, Dialog, DialogContent, TooltipWrapper, useToast } from "@/components/ui";
 import { formatDate, formatDateTime, formatTimeAgo, maskAadhaar, formatLicenseNumber } from "@reachinternational/utils";
+import { isSupervisedRole } from "@reachinternational/permissions";
 import type { User, UserRole } from "@/lib/types/database";
 
 const roleOptions = [
@@ -44,11 +46,13 @@ interface UserDetailSheetProps {
   currentUser: User;
   isSuperAdmin: boolean;
   loadingId: { type: string; id: string } | null;
+  supervisors?: Array<{ value: string; label: string; description?: string }>;
   onClose: () => void;
   onResetPassword: (userId: string) => void;
   onToggleStatus: (userId: string) => void;
   onEdit: (user: User) => void;
   onUpdateRole: (userId: string, newRole: UserRole) => void;
+  onUpdateSupervisor?: (userId: string, supervisorIds: string[] | string | null) => void;
   onDelete: (userId: string) => void;
 }
 
@@ -119,11 +123,13 @@ export function UserDetailSheet({
   currentUser,
   isSuperAdmin,
   loadingId,
+  supervisors = [],
   onClose,
   onResetPassword,
   onToggleStatus,
   onEdit,
   onUpdateRole,
+  onUpdateSupervisor,
   onDelete,
 }: UserDetailSheetProps) {
   const { toast } = useToast();
@@ -161,33 +167,45 @@ export function UserDetailSheet({
   const showContact = canViewContactInfo();
   const showManage = canManageUser();
 
+  const assignedSupervisors = user
+    ? (user.supervisors && user.supervisors.length > 0
+        ? user.supervisors
+        : user.supervisor
+        ? [user.supervisor]
+        : [])
+    : [];
   return (
     <Dialog open={!!user} onOpenChange={(open) => { if (!open) onClose(); }}>
       {user && (
         <DialogContent
           from="bottom"
           showCloseButton={false}
-          className="max-w-lg bg-[var(--color-canvas-elevated)] rounded-t-[var(--radius-lg)] sm:rounded-[var(--radius-lg)] border border-[var(--color-hairline)] shadow-2xl overflow-hidden max-h-[90vh] p-0"
+          className="w-full max-w-md sm:max-w-lg bg-[var(--color-canvas-elevated)] rounded-t-2xl sm:rounded-2xl border border-[var(--color-hairline)] shadow-2xl overflow-hidden max-h-[92vh] sm:max-h-[85vh] p-0 flex flex-col"
         >
+          {/* Mobile Drag Notch Handle */}
+          <div className="pt-2.5 pb-0.5 flex justify-center sm:hidden bg-[var(--color-canvas)]">
+            <div className="h-1 w-10 rounded-full bg-[var(--color-hairline)]" />
+          </div>
+
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-[var(--color-hairline)] bg-[var(--color-canvas)]">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] border border-[var(--color-hairline)] shadow-xs">
+          <div className="flex items-center justify-between p-3.5 sm:p-4 border-b border-[var(--color-hairline)] bg-[var(--color-canvas)] shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] border border-[var(--color-hairline)] shadow-xs">
                 {getRoleIcon(user.role)}
               </div>
-              <div>
-                <h3 className="text-base font-bold text-[var(--color-ink)] leading-snug">
+              <div className="min-w-0">
+                <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)] leading-snug truncate" title={user.full_name}>
                   {user.full_name}
                 </h3>
                 <div className="flex items-center gap-2 mt-1">
                   {getRoleBadge(user.role)}
                   {user.status === "active" ? (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800/80 shadow-xs">
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800/80 shadow-xs">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                       Active
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 shadow-xs capitalize">
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 shadow-xs capitalize">
                       <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
                       {user.status}
                     </span>
@@ -198,14 +216,15 @@ export function UserDetailSheet({
 
             <button
               onClick={onClose}
-              className="p-2 rounded-full hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-full hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-pointer shrink-0"
+              aria-label="Close dialog"
             >
               <AnimatedX size={18} />
             </button>
           </div>
 
           {/* Scrollable Sheet Content */}
-          <div className="p-4 space-y-4 overflow-y-auto max-h-[68vh]">
+          <div className="p-3.5 sm:p-4 space-y-3.5 sm:space-y-4 overflow-y-auto overscroll-contain flex-1">
             {/* Quick Contact Buttons */}
             {showContact && (
               <div className="grid grid-cols-2 gap-3">
@@ -355,6 +374,38 @@ export function UserDetailSheet({
                 </div>
               )}
 
+              {/* Assigned Supervisor(s) */}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1.5 shrink-0">
+                  <AnimatedUser size={14} className="text-teal-500" />
+                  {assignedSupervisors.length > 1 ? "Assigned Supervisors" : "Assigned Supervisor"}
+                </span>
+                {assignedSupervisors.length > 0 ? (
+                  <span className="font-semibold text-[var(--color-ink)] text-right truncate max-w-[240px]" title={assignedSupervisors.map((s) => s.full_name).join(", ")}>
+                    {assignedSupervisors.map((s) => s.full_name).join(", ")}
+                  </span>
+                ) : (
+                  <span className="font-semibold text-[var(--color-mute)] font-mono">—</span>
+                )}
+              </div>
+
+              {/* Working Location / Operating Base */}
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1.5">
+                  <AnimatedBuilding2 size={14} className="text-blue-500" /> Working Location / Base
+                </span>
+                <span className="font-semibold text-[var(--color-ink)] text-right">
+                  {user.working_location?.name ? (
+                    <span>
+                      {user.working_location.name}
+                      {user.working_location.city ? ` (${user.working_location.city})` : ""}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </span>
+              </div>
+
               {/* Aadhaar Number */}
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[var(--color-mute)] font-medium flex items-center gap-1.5">
@@ -469,18 +520,45 @@ export function UserDetailSheet({
                   </div>
                 )}
 
+                {/* Assign Supervisor Selector */}
+                {isSupervisedRole(user.role) && onUpdateSupervisor && (currentUser.role === "admin" || currentUser.role === "super_admin") && (
+                  <div className="p-3 rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-1.5">
+                    <label className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
+                      <AnimatedUser size={15} className="text-[var(--color-link)]" />
+                      Assign Supervisor
+                    </label>
+                    <Select
+                      value={user.supervisor_id || (user.supervisor_ids && user.supervisor_ids[0]) || ""}
+                      options={[
+                        { value: "", label: "No Supervisor (Unassigned)" },
+                        ...supervisors.map((s) => ({
+                          value: s.value,
+                          label: s.label,
+                        })),
+                      ]}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        onUpdateSupervisor(user.id, val ? [val] : []);
+                      }}
+                      disabled={isLoading}
+                      className="w-full text-xs font-medium"
+                    />
+                  </div>
+                )}
+
                 {/* Action Buttons Grid */}
-                <div className="grid grid-cols-1 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button
                     onClick={() => {
                       onEdit(user);
                       onClose();
                     }}
                     disabled={isLoading}
-                    className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer"
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer min-h-[40px]"
                   >
                     <span className="flex items-center gap-2">
-                      <AnimatedEdit size={15} className="text-[var(--color-link)]" /> Edit Account Info
+                      <AnimatedEdit size={15} className="text-[var(--color-link)] shrink-0" />
+                      <span className="truncate">Edit Account Info</span>
                     </span>
                   </button>
 
@@ -490,10 +568,11 @@ export function UserDetailSheet({
                       onClose();
                     }}
                     disabled={isLoading}
-                    className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer"
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer min-h-[40px]"
                   >
                     <span className="flex items-center gap-2">
-                      <AnimatedKey size={15} className="text-amber-500" /> Reset Security Password
+                      <AnimatedKey size={15} className="text-amber-500 shrink-0" />
+                      <span className="truncate">Reset Password</span>
                     </span>
                   </button>
 
@@ -504,33 +583,36 @@ export function UserDetailSheet({
                         onClose();
                       }}
                       disabled={isLoading}
-                      className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer"
+                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.98] transition-all cursor-pointer min-h-[40px]"
                     >
                       <span className="flex items-center gap-2">
                         {user.status === "active" ? (
                           <>
-                            <AnimatedUserX size={15} className="text-amber-600" /> Deactivate Account
+                            <AnimatedUserX size={15} className="text-amber-600 shrink-0" />
+                            <span className="truncate">Deactivate Account</span>
                           </>
                         ) : (
                           <>
-                            <AnimatedUserCheck size={15} className="text-emerald-600" /> Activate Account
+                            <AnimatedUserCheck size={15} className="text-emerald-600 shrink-0" />
+                            <span className="truncate">Activate Account</span>
                           </>
                         )}
                       </span>
                     </button>
                   )}
 
-                  {user.id !== currentUser.id && (
+                  {isSuperAdmin && user.id !== currentUser.id && (
                     <button
                       onClick={() => {
                         onDelete(user.id);
                         onClose();
                       }}
                       disabled={isLoading}
-                      className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-sm border border-red-200 dark:border-red-900/40 bg-red-50/30 text-xs font-medium text-red-600 hover:bg-red-50 active:scale-[0.98] transition-all cursor-pointer"
+                      className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg border border-red-200 dark:border-red-900/40 bg-red-50/30 text-xs font-medium text-red-600 hover:bg-red-50 active:scale-[0.98] transition-all cursor-pointer min-h-[40px]"
                     >
                       <span className="flex items-center gap-2">
-                        <AnimatedTrash2 size={15} className="text-red-600" /> Delete User Account
+                        <AnimatedTrash2 size={15} className="text-red-600 shrink-0" />
+                        <span className="truncate">Delete Account</span>
                       </span>
                     </button>
                   )}
@@ -540,9 +622,9 @@ export function UserDetailSheet({
           </div>
 
           {/* Footer */}
-          <div className="p-4 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)]">
-            <Button variant="secondary" onClick={onClose} className="w-full h-9 rounded-sm text-xs font-medium justify-center cursor-pointer active:scale-[0.98] transition-all">
-              Close Sheet
+          <div className="p-3.5 sm:p-4 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)] shrink-0">
+            <Button variant="secondary" onClick={onClose} className="w-full h-9 rounded-lg text-xs font-semibold justify-center cursor-pointer active:scale-[0.98] transition-all">
+              Close
             </Button>
           </div>
         </DialogContent>

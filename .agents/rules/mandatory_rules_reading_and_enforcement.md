@@ -17,12 +17,15 @@ Before undertaking ANY action, planning, analysis, code creation, bug fixing, re
    - `TESTING-QA.md`
    - `UI-UX.md`
    - `VALIDATION-ERROR-RESILIENCE.md`
+   - `MULTI-AGENT-ENGINEERING-TEAM.md`
 
 2. **Cross-Platform UI & Agent System Rules**:
    `C:\Users\vaibh\PROGRAMMING\PROJECTS\ReachInternational-Monorepo\.agents\rules`
-   - `responsive_cross_platform_design.md`
-   - `web_mobile_ui_consistency.md`
    - `mandatory_rules_reading_and_enforcement.md`
+   - `multi_agent_engineering_team.md`
+   - `responsive_cross_platform_design.md`
+   - `global_responsive_design.md`
+   - `web_mobile_ui_consistency.md`
 
 ---
 

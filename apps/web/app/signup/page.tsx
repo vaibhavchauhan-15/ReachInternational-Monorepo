@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -15,7 +15,8 @@ import {
   AnimatedShieldCheck,
   AnimatedCreditCard,
 } from "@/components/ui/animated-icons";
-import { signup, type AuthFormState } from "@/app/actions/auth";
+import { signup, getSupervisorsAction, getWorkingLocationsAction, type AuthFormState } from "@/app/actions/auth";
+import { isSupervisedRole } from "@reachinternational/permissions";
 import {
   Button,
   Input,
@@ -59,6 +60,8 @@ export default function SignupPage() {
     email: "",
     phone: "",
     role: "service_engineer",
+    supervisor_id: "",
+    working_location_id: "",
     shift_start_time: "08:00 AM",
     shift_end_time: "08:00 PM",
     city: "",
@@ -72,7 +75,60 @@ export default function SignupPage() {
     confirm_password: "",
   });
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [supervisorOptions, setSupervisorOptions] = useState<SelectOption[]>([]);
+  const [loadingSupervisors, setLoadingSupervisors] = useState(false);
+  const [workingLocationOptions, setWorkingLocationOptions] = useState<SelectOption[]>([]);
+  const [loadingWorkingLocations, setLoadingWorkingLocations] = useState(false);
   const router = useRouter();
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadSupervisors() {
+      setLoadingSupervisors(true);
+      try {
+        const sups = await getSupervisorsAction();
+        if (isMounted && sups && sups.length > 0) {
+          setSupervisorOptions(
+            sups.map((s) => ({
+              value: s.value,
+              label: s.label,
+              description: s.description,
+            }))
+          );
+        }
+      } catch (err) {
+        console.error("Failed to load supervisors in signup page:", err);
+      } finally {
+        if (isMounted) setLoadingSupervisors(false);
+      }
+    }
+
+    async function loadWorkingLocations() {
+      setLoadingWorkingLocations(true);
+      try {
+        const locs = await getWorkingLocationsAction();
+        if (isMounted && locs && locs.length > 0) {
+          setWorkingLocationOptions(
+            locs.map((l) => ({
+              value: l.value,
+              label: l.label,
+              description: l.description,
+            }))
+          );
+        }
+      } catch (err) {
+        console.error("Failed to load working locations in signup page:", err);
+      } finally {
+        if (isMounted) setLoadingWorkingLocations(false);
+      }
+    }
+
+    loadSupervisors();
+    loadWorkingLocations();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const shiftTimingSummary = useMemo(() => {
     if (!formValues.shift_start_time || !formValues.shift_end_time) return null;
@@ -155,6 +211,9 @@ export default function SignupPage() {
 
     // Client-side pre-flight checks
     const errors: Record<string, string> = {};
+    if (isSupervisedRole(formValues.role) && !formValues.supervisor_id.trim()) {
+      errors.supervisor_id = "Please select your supervisor.";
+    }
     if (!formValues.shift_start_time.trim()) {
       errors.shift_start_time = "Shift start time is required.";
     }
@@ -210,6 +269,7 @@ export default function SignupPage() {
           email: result.fieldValues?.email ?? prev.email,
           phone: result.fieldValues?.phone ?? prev.phone,
           role: result.fieldValues?.role ?? prev.role,
+          supervisor_id: result.fieldValues?.supervisor_id ?? prev.supervisor_id,
           shift_start_time: result.fieldValues?.shift_start_time ?? prev.shift_start_time,
           shift_end_time: result.fieldValues?.shift_end_time ?? prev.shift_end_time,
           city: result.fieldValues?.city ?? prev.city,
@@ -414,13 +474,76 @@ export default function SignupPage() {
                     <SearchableSelect
                       options={signupRoleOptions}
                       value={formValues.role}
-                      onChange={(val) => handleChange("role", val)}
+                      onChange={(val) => {
+                        handleChange("role", val);
+                        if (!isSupervisedRole(val)) {
+                          handleChange("supervisor_id", "");
+                        }
+                      }}
                       placeholder="Select role..."
                       clearable={false}
                       error={fieldErrors.role}
                       className="w-full text-xs sm:text-[13px]"
                     />
                   </div>
+                </div>
+
+                {/* Row 3: Conditional Supervisor Selector when Role is Operator, Service Engineer, or Mechanic */}
+                {isSupervisedRole(formValues.role) && (
+                  <div className="flex flex-col gap-1 w-full pt-1 border-t border-[var(--color-hairline)]/60">
+                    <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none flex items-center justify-between">
+                      <span>
+                        Supervisor <span className="text-rose-500 font-semibold">*</span>
+                      </span>
+                      <span className="text-[11px] text-[var(--color-mute)] font-normal">
+                        Select supervisor who oversees your work
+                      </span>
+                    </label>
+                    <input type="hidden" name="supervisor_id" value={formValues.supervisor_id} />
+                    <SearchableSelect
+                      options={supervisorOptions}
+                      value={formValues.supervisor_id}
+                      onChange={(val) => handleChange("supervisor_id", val)}
+                      placeholder={
+                        loadingSupervisors
+                          ? "Loading supervisors..."
+                          : supervisorOptions.length === 0
+                          ? "No active supervisors found"
+                          : "Search or scroll to select supervisor..."
+                      }
+                      clearable={true}
+                      error={fieldErrors.supervisor_id}
+                      className="w-full text-xs sm:text-[13px]"
+                    />
+                  </div>
+                )}
+
+                {/* Row 4: Working Location Selector for All Users */}
+                <div className="flex flex-col gap-1 w-full pt-1 border-t border-[var(--color-hairline)]/60">
+                  <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none flex items-center justify-between">
+                    <span>
+                      Working Location / Site <span className="text-[11px] text-[var(--color-mute)] font-normal">(Yard / Office / Site)</span>
+                    </span>
+                    <span className="text-[11px] text-[var(--color-mute)] font-normal">
+                      Select your operational base
+                    </span>
+                  </label>
+                  <input type="hidden" name="working_location_id" value={formValues.working_location_id} />
+                  <SearchableSelect
+                    options={workingLocationOptions}
+                    value={formValues.working_location_id}
+                    onChange={(val) => handleChange("working_location_id", val)}
+                    placeholder={
+                      loadingWorkingLocations
+                        ? "Loading working locations..."
+                        : workingLocationOptions.length === 0
+                        ? "No working locations available"
+                        : "Search or scroll to select working location..."
+                    }
+                    clearable={true}
+                    error={fieldErrors.working_location_id}
+                    className="w-full text-xs sm:text-[13px]"
+                  />
                 </div>
               </div>
 

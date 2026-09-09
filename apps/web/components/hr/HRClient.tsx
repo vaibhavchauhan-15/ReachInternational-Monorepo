@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   AnimatedUsers,
   AnimatedUserPlus,
@@ -45,7 +45,7 @@ import {
   uploadEmployeeDocumentAction
 } from "@/app/actions/hr";
 
-import { Select } from "@/components/ui";
+import { Select, Pagination } from "@/components/ui";
 
 export interface HRClientProps {
   employees: Employee[];
@@ -163,6 +163,56 @@ export function HRClient({
       return matchesSearch && matchesStatus && matchesDept && matchesBranch;
     });
   }, [employees, search, statusFilter, departmentFilter, branchFilter]);
+
+  // Pagination states per tab (default 20 rows/page)
+  const [employeesPage, setEmployeesPage] = useState(1);
+  const [employeesPageSize, setEmployeesPageSize] = useState(20);
+  const [deptPage, setDeptPage] = useState(1);
+  const [deptPageSize, setDeptPageSize] = useState(20);
+  const [desigPage, setDesigPage] = useState(1);
+  const [desigPageSize, setDesigPageSize] = useState(20);
+  const [payrollPage, setPayrollPage] = useState(1);
+  const [payrollPageSize, setPayrollPageSize] = useState(20);
+  const [userRequestsPage, setUserRequestsPage] = useState(1);
+  const [userRequestsPageSize, setUserRequestsPageSize] = useState(20);
+  const [documentsPage, setDocumentsPage] = useState(1);
+  const [documentsPageSize, setDocumentsPageSize] = useState(20);
+
+  // Reset employees page when filters change
+  useEffect(() => {
+    setEmployeesPage(1);
+  }, [search, statusFilter, departmentFilter, branchFilter]);
+
+  // Sliced paginated datasets
+  const paginatedEmployees = useMemo(() => {
+    const start = (employeesPage - 1) * employeesPageSize;
+    return filteredEmployees.slice(start, start + employeesPageSize);
+  }, [filteredEmployees, employeesPage, employeesPageSize]);
+
+  const paginatedDepartments = useMemo(() => {
+    const start = (deptPage - 1) * deptPageSize;
+    return departments.slice(start, start + deptPageSize);
+  }, [departments, deptPage, deptPageSize]);
+
+  const paginatedDesignations = useMemo(() => {
+    const start = (desigPage - 1) * desigPageSize;
+    return designations.slice(start, start + desigPageSize);
+  }, [designations, desigPage, desigPageSize]);
+
+  const paginatedSalaryHistory = useMemo(() => {
+    const start = (payrollPage - 1) * payrollPageSize;
+    return salaryHistory.slice(start, start + payrollPageSize);
+  }, [salaryHistory, payrollPage, payrollPageSize]);
+
+  const paginatedUserRequests = useMemo(() => {
+    const start = (userRequestsPage - 1) * userRequestsPageSize;
+    return userRequests.slice(start, start + userRequestsPageSize);
+  }, [userRequests, userRequestsPage, userRequestsPageSize]);
+
+  const paginatedDocuments = useMemo(() => {
+    const start = (documentsPage - 1) * documentsPageSize;
+    return documents.slice(start, start + documentsPageSize);
+  }, [documents, documentsPage, documentsPageSize]);
 
   // Handle Create Employee / Onboarding
   const handleCreateEmployee = async (e: React.FormEvent) => {
@@ -691,7 +741,7 @@ export function HRClient({
                     </td>
                   </tr>
                 ) : (
-                  filteredEmployees.map((emp) => (
+                  paginatedEmployees.map((emp) => (
                     <tr key={emp.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
                       <td className="px-4 py-3">
                         <p className="font-mono font-bold text-sky-600 dark:text-sky-400">{emp.employee_code}</p>
@@ -778,6 +828,22 @@ export function HRClient({
               </tbody>
             </table>
           </div>
+
+          {filteredEmployees.length > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={employeesPage}
+                pageSize={employeesPageSize}
+                total={filteredEmployees.length}
+                onPageChange={setEmployeesPage}
+                pageSizeOptions={[10, 20, 50, 100]}
+                onPageSizeChange={(newSize) => {
+                  setEmployeesPageSize(newSize);
+                  setEmployeesPage(1);
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
       )}
@@ -878,7 +944,7 @@ export function HRClient({
               </button>
             </div>
             <div className="space-y-2 text-xs">
-              {departments.map((d) => (
+              {paginatedDepartments.map((d) => (
                 <div key={d.id} className="flex justify-between items-center p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]">
                   <div>
                     <p className="font-bold text-[var(--color-ink)]">{d.name} <span className="text-[10px] font-mono text-sky-600">({d.code})</span></p>
@@ -890,6 +956,21 @@ export function HRClient({
                 </div>
               ))}
             </div>
+            {departments.length > 0 && (
+              <div className="pt-2">
+                <Pagination
+                  page={deptPage}
+                  pageSize={deptPageSize}
+                  total={departments.length}
+                  onPageChange={setDeptPage}
+                  pageSizeOptions={[10, 20, 50]}
+                  onPageSizeChange={(newSize) => {
+                    setDeptPageSize(newSize);
+                    setDeptPage(1);
+                  }}
+                />
+              </div>
+            )}
           </div>
 
           {/* Designations */}
@@ -907,7 +988,7 @@ export function HRClient({
               </button>
             </div>
             <div className="space-y-2 text-xs">
-              {designations.map((d) => (
+              {paginatedDesignations.map((d) => (
                 <div key={d.id} className="flex justify-between items-center p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]">
                   <div>
                     <p className="font-bold text-[var(--color-ink)]">{d.title} <span className="text-[10px] font-mono text-purple-600">({d.code})</span></p>
@@ -919,6 +1000,21 @@ export function HRClient({
                 </div>
               ))}
             </div>
+            {designations.length > 0 && (
+              <div className="pt-2">
+                <Pagination
+                  page={desigPage}
+                  pageSize={desigPageSize}
+                  total={designations.length}
+                  onPageChange={setDesigPage}
+                  pageSizeOptions={[10, 20, 50]}
+                  onPageSizeChange={(newSize) => {
+                    setDesigPageSize(newSize);
+                    setDesigPage(1);
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -957,7 +1053,7 @@ export function HRClient({
                     </td>
                   </tr>
                 ) : (
-                  salaryHistory.map((s) => (
+                  paginatedSalaryHistory.map((s) => (
                     <tr key={s.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
                       <td className="px-4 py-3 font-mono font-bold text-sky-600">{s.effective_date}</td>
                       <td className="px-4 py-3 font-bold">{employees.find((e) => e.id === s.employee_id)?.full_name || "Employee"}</td>
@@ -972,6 +1068,22 @@ export function HRClient({
               </tbody>
             </table>
           </div>
+
+          {salaryHistory.length > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={payrollPage}
+                pageSize={payrollPageSize}
+                total={salaryHistory.length}
+                onPageChange={setPayrollPage}
+                pageSizeOptions={[10, 20, 50, 100]}
+                onPageSizeChange={(newSize) => {
+                  setPayrollPageSize(newSize);
+                  setPayrollPage(1);
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -1009,7 +1121,7 @@ export function HRClient({
                     </td>
                   </tr>
                 ) : (
-                  userRequests.map((r) => (
+                  paginatedUserRequests.map((r) => (
                     <tr key={r.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
                       <td className="px-4 py-3 font-mono text-[11px]">{new Date(r.created_at).toLocaleDateString("en-IN")}</td>
                       <td className="px-4 py-3 font-bold">{r.employee?.full_name || "Employee"} ({r.employee?.employee_code})</td>
@@ -1034,6 +1146,22 @@ export function HRClient({
               </tbody>
             </table>
           </div>
+
+          {userRequests.length > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={userRequestsPage}
+                pageSize={userRequestsPageSize}
+                total={userRequests.length}
+                onPageChange={setUserRequestsPage}
+                pageSizeOptions={[10, 20, 50, 100]}
+                onPageSizeChange={(newSize) => {
+                  setUserRequestsPageSize(newSize);
+                  setUserRequestsPage(1);
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -1069,7 +1197,7 @@ export function HRClient({
                     </td>
                   </tr>
                 ) : (
-                  documents.map((d) => (
+                  paginatedDocuments.map((d) => (
                     <tr key={d.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
                       <td className="px-4 py-3 font-bold text-sky-600">{d.file_name}</td>
                       <td className="px-4 py-3 font-semibold uppercase text-[10px]">{d.document_type.replace("_", " ")}</td>
@@ -1086,6 +1214,22 @@ export function HRClient({
               </tbody>
             </table>
           </div>
+
+          {documents.length > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={documentsPage}
+                pageSize={documentsPageSize}
+                total={documents.length}
+                onPageChange={setDocumentsPage}
+                pageSizeOptions={[10, 20, 50, 100]}
+                onPageSizeChange={(newSize) => {
+                  setDocumentsPageSize(newSize);
+                  setDocumentsPage(1);
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
 

@@ -11,6 +11,7 @@ import {
   AnimatedAlertTriangle,
   AnimatedGauge,
   AnimatedBuilding2,
+  AnimatedScrollText,
 } from "@/components/ui/animated-icons";
 import type { User } from "@/lib/types/database";
 import { CommandPalette } from "@/components/ui/CommandPalette";
@@ -55,7 +56,6 @@ export const mainNavItems: NavItem[] = [
     subItems: [
       { label: "Running Hours", tab: "logs" },
       { label: "Operator Machine Assignments", tab: "assignments" },
-      { label: "Assignment Audit Logs", tab: "audit-logs" },
       // { label: "Site Movement / Loading-Unloading", tab: "site-movement" }, // Soft-removed per user request
       // { label: "Operator Roster & Salary", tab: "operators" }, // Soft-removed per user request
     ],
@@ -76,6 +76,15 @@ export const mainNavItems: NavItem[] = [
     roles: ["super_admin", "admin", "manager", "service_manager", "hr_manager"],
     subItems: [
       { label: "All Employee Accounts", tab: "all" },
+    ],
+  },
+  {
+    href: "/audit",
+    label: "Audit Logs",
+    icon: AnimatedScrollText,
+    roles: [
+      "super_admin", "admin", "manager", "service_manager", "supervisor",
+      "service_engineer", "engineer", "mechanic", "store_manager", "hr_manager"
     ],
   },
 ];
@@ -104,7 +113,6 @@ export function AppSidebar({ user, collapsed, onToggleCollapse }: AppSidebarProp
               subItems: [
                 { label: "Running Hours", tab: "logs" },
                 { label: "Operator Machine Assignments", tab: "assignments" },
-                { label: "Assignment Audit Logs", tab: "audit-logs" },
                 // { label: "Site Movement / Loading-Unloading", tab: "site-movement" }, // Soft-removed per user request
                 // { label: "Operator Roster & Salary", tab: "operators" }, // Soft-removed per user request
               ],

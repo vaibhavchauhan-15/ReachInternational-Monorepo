@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { FilterToolbar } from "@/components/ui/FilterToolbar";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { EnterpriseTable, ColumnDef } from "@/components/ui/EnterpriseTable";
+import { Pagination } from "@/components/ui";
 import { TooltipWrapper } from "@/components/ui/tooltip";
 import { formatDisplayDate } from "@reachinternational/utils";
 import {
@@ -105,6 +106,20 @@ export function TasksClient({ user, initialTasks, stats, users }: TasksClientPro
       return true;
     });
   }, [tasks, viewScope, statusFilter, priorityFilter, assigneeFilter, searchQuery, user.id]);
+
+  // Pagination
+  const [tasksPage, setTasksPage] = useState(1);
+  const [tasksPageSize, setTasksPageSize] = useState(20);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setTasksPage(1);
+  }, [viewScope, statusFilter, priorityFilter, assigneeFilter, searchQuery]);
+
+  const paginatedTasks = useMemo(() => {
+    const start = (tasksPage - 1) * tasksPageSize;
+    return filteredTasks.slice(start, start + tasksPageSize);
+  }, [filteredTasks, tasksPage, tasksPageSize]);
 
   const handleOpenDetail = (task: Task) => {
     setSelectedTaskForDetail(task);
@@ -511,7 +526,7 @@ export function TasksClient({ user, initialTasks, stats, users }: TasksClientPro
           {/* Desktop Enterprise Data Table */}
           <div className="hidden sm:block">
             <EnterpriseTable
-              data={filteredTasks}
+              data={paginatedTasks}
               columns={columns}
               onRowClick={(task) => handleOpenDetail(task)}
               emptyMessage="No tasks found"
@@ -521,12 +536,12 @@ export function TasksClient({ user, initialTasks, stats, users }: TasksClientPro
 
           {/* Mobile Touch Card View */}
           <div className="block sm:hidden space-y-3">
-            {filteredTasks.length === 0 ? (
+            {paginatedTasks.length === 0 ? (
               <Card className="p-6 text-center text-xs text-[var(--color-mute)]">
                 No tasks match your active filters.
               </Card>
             ) : (
-              filteredTasks.map((task) => {
+              paginatedTasks.map((task) => {
                 const assignees = task.assignees || [];
                 const isOverdue = task.due_date < new Date().toISOString().split("T")[0] && task.status !== "completed";
                 const hasAttachments = (task.attachments || []).length > 0;
@@ -621,6 +636,22 @@ export function TasksClient({ user, initialTasks, stats, users }: TasksClientPro
               })
             )}
           </div>
+
+          {filteredTasks.length > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={tasksPage}
+                pageSize={tasksPageSize}
+                total={filteredTasks.length}
+                onPageChange={setTasksPage}
+                pageSizeOptions={[10, 20, 50, 100]}
+                onPageSizeChange={(newSize) => {
+                  setTasksPageSize(newSize);
+                  setTasksPage(1);
+                }}
+              />
+            </div>
+          )}
         </>
       )}
 

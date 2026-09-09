@@ -78,6 +78,8 @@ export default function ClientsScreen() {
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<StatusFilter>('all');
   const [refreshing, setRefreshing] = useState(false);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
 
   // Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -110,6 +112,16 @@ export default function ClientsScreen() {
     }, 800);
   };
 
+  const handleSearchChange = (text: string) => {
+    setSearch(text);
+    setPage(1);
+  };
+
+  const handleFilterChange = (filter: StatusFilter) => {
+    setActiveFilter(filter);
+    setPage(1);
+  };
+
   const filteredClients = clients.filter((c) => {
     const q = search.toLowerCase().trim();
     const matchesSearch =
@@ -130,6 +142,10 @@ export default function ClientsScreen() {
     const matchesStatus = activeFilter === 'all' || c.status === activeFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const totalFiltered = filteredClients.length;
+  const totalPages = Math.ceil(totalFiltered / pageSize);
+  const paginatedClients = filteredClients.slice((page - 1) * pageSize, page * pageSize);
 
   const handleOpenAdd = () => {
     setEditingClient(null);
@@ -285,7 +301,7 @@ export default function ClientsScreen() {
           <View style={styles.searchContainer}>
             <Input
               value={search}
-              onChangeText={setSearch}
+              onChangeText={handleSearchChange}
               placeholder="Search clients, GST, PAN, city..."
               leftIcon={<Search size={16} color={theme.colors.mute} />}
             />
@@ -309,7 +325,7 @@ export default function ClientsScreen() {
                     borderColor: theme.colors.hairline,
                   },
                 ]}
-                onPress={() => setActiveFilter(filter)}
+                onPress={() => handleFilterChange(filter)}
               >
                 <Text
                   style={[
@@ -326,13 +342,13 @@ export default function ClientsScreen() {
 
         {/* Client Cards List */}
         <View style={styles.listContainer}>
-          {filteredClients.length === 0 ? (
+          {paginatedClients.length === 0 ? (
             <Card style={styles.emptyCard}>
               <Building2 size={32} color={theme.colors.mute} style={{ marginBottom: 8 }} />
               <Text style={[styles.emptyText, { color: theme.colors.mute }]}>No client records found.</Text>
             </Card>
           ) : (
-            filteredClients.map((item) => (
+            paginatedClients.map((item) => (
               <Card key={item.id} style={styles.clientCard}>
                 <View style={styles.cardHeader}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
@@ -402,6 +418,39 @@ export default function ClientsScreen() {
             ))
           )}
         </View>
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <View style={styles.paginationRow}>
+            <TouchableOpacity
+              style={[
+                styles.pageBtn,
+                { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
+                page === 1 && { opacity: 0.5 },
+              ]}
+              disabled={page === 1}
+              onPress={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              <Text style={[styles.pageBtnText, { color: theme.colors.ink }]}>Previous</Text>
+            </TouchableOpacity>
+
+            <Text style={[styles.pageIndicator, { color: theme.colors.ink }]}>
+              Page {page} of {totalPages}
+            </Text>
+
+            <TouchableOpacity
+              style={[
+                styles.pageBtn,
+                { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
+                page === totalPages && { opacity: 0.5 },
+              ]}
+              disabled={page === totalPages}
+              onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >
+              <Text style={[styles.pageBtnText, { color: theme.colors.ink }]}>Next</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
 
       {/* Add / Edit Client Modal */}
@@ -679,4 +728,8 @@ const styles = StyleSheet.create({
   switchWrapper: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   switchLabel: { fontSize: 11, fontWeight: '600' },
   modalFooter: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 8 },
+  paginationRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingHorizontal: 4 },
+  pageBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6, borderWidth: 1 },
+  pageBtnText: { fontSize: 12, fontWeight: '600' },
+  pageIndicator: { fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
 });

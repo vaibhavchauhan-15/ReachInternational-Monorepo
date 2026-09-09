@@ -1,20 +1,29 @@
 import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/dal";
-import { getAllUsersCached, getPendingProfileChangeRequests } from "@/lib/queries/users";
+import {
+  getUserList,
+  getPendingUsersCached,
+  getPendingProfileChangeRequests,
+  getUserListAggregatesCached,
+} from "@/lib/queries/users";
 import { UsersPageClient } from "./users-client";
 import { UsersSkeleton } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
-export default async function UsersPage() {
+interface PageProps {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export default async function UsersPage({ searchParams }: PageProps) {
   return (
     <Suspense fallback={<UsersSkeleton />}>
-      <UsersPageContent />
+      <UsersPageContent searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function UsersPageContent() {
+async function UsersPageContent({ searchParams }: PageProps) {
   const currentUser = await getCurrentUser();
   if (!currentUser) return null;
 
@@ -35,19 +44,35 @@ async function UsersPageContent() {
     );
   }
 
-  const [allUsers, profileChangeRequests] = await Promise.all([
-    getAllUsersCached(),
+  const params = await searchParams;
+  const page = typeof params?.page === "string" ? parseInt(params.page, 10) : 1;
+  const search = typeof params?.search === "string" ? params.search : undefined;
+  const role = typeof params?.role === "string" ? params.role : "all";
+  const status = typeof params?.status === "string" ? params.status : "all";
+  const kyc = typeof params?.kyc === "string" ? params.kyc : "all";
+  const state = typeof params?.state === "string" ? params.state : "all";
+  const dateRange = typeof params?.dateRange === "string" ? params.dateRange : "all";
+  const sort = typeof params?.sort === "string" ? params.sort : "newest";
+
+  const [{ users, totalPages, total }, pendingUsers, profileChangeRequests, aggregates] = await Promise.all([
+    getUserList({ search, role, status, kyc, state, dateRange, sort, page, pageSize: 10 }),
+    getPendingUsersCached(),
     getPendingProfileChangeRequests(currentUser.role),
+    getUserListAggregatesCached(),
   ]);
-  const pendingUsers = allUsers.filter((u) => u.status === "pending");
 
   return (
     <UsersPageClient
-      users={allUsers}
+      users={users}
       pendingUsers={pendingUsers}
       profileChangeRequests={profileChangeRequests}
       currentUser={currentUser}
       isSuperAdmin={isSuperAdmin}
+      totalPages={totalPages}
+      totalCount={total}
+      currentPage={page}
+      aggregates={aggregates}
     />
   );
-}
+}
+

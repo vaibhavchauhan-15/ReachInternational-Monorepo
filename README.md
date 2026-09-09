@@ -53,10 +53,11 @@
   - Field Staff (`operator`, `engineer`, `mechanic`): Requests routed to `manager`.
 - **Dedicated Profile Change Requests Section on `/users`**: Renders pending profile modification requests in a dedicated review section completely separate from new registration requests (`status = 'pending'`), displaying clear side-by-side diffs (Old Value vs Requested Value), individual Approve/Reject actions, and batch Accept All / Reject All actions.
 - **Self-Service Registration & Admin Access Governance**: Users request platform access via `/signup` choosing their functional role (`manager`, `service_manager`, `service_engineer`, `supervisor`, `store_manager`, `operator`, `mechanic`, `hr_manager`), their working shift timing via interactive time pickers (`shift_start_time` and `shift_end_time`, defaulting to 12h day shift 08:00 AM - 08:00 PM), their street base address (`address`), and selecting their State/UT from a standardized dropdown linked to `public.states(id)`. The chosen role, shift timing, street address, and `state_id` are preserved in `public.users` in `pending` status, displayed in the Admin Pending User Approvals panel with distinct role badges, and maintained without modification upon administrator approval. All complete registrations are automatically flagged for zero-latency dashboard access upon admin activation.
+- **Dynamic Supervisor Selection for Supervised Roles**: When registering or creating/editing a user account with a supervised role (`operator`, `service_engineer`, `mechanic`), the system dynamically renders a searchable and scrollable Supervisor selector. On `/signup` (both Web and Mobile), supervised personnel choose from active supervisors loaded via `get_active_supervisors_public()` RPC. In `/users`, the desktop table features a dedicated `Supervisor` column, and admin modals (`UserCreateModal`, `UserEditModal`) provide direct supervisor assignment and updates with full export support.
 - **Multi-Selection & Bulk Actions**: Select individual or all filtered user accounts with a master checkbox and floating bulk actions bar. Perform instant formatted Excel (`.xlsx`) or CSV (`.csv`) export downloads and high-concurrency Bulk Deletions with safety self-delete guards, super admin protection, optimistic UI removals, and audit logging.
 - **Account Actions**: Create new user accounts, edit employee profiles, activate/deactivate accounts, and delete user accounts with full structured audit logging.
 
-### 3. ⏱️ Operations Hub (`/operations`) & Assignment Audit Logs (`/operations/audit-logs`)
+### 3. ⏱️ Operations Hub (`/operations`)
 - **Running Hours Logs (`/operations?tab=logs`)**:
   - **3 View Modes**: Machine View (group by equipment), Client View (group by client site), and Operator View (group by operator).
   - **A4 PDF Reports**: 1-click printable PDF report exports featuring official top-left company branding, centered titles (`MACHINE RUNNING HOURS REPORT`), and client location sub-headers (`CLIENT: SAINT GOBAIN | LOCATION: JHAJJAR, HARYANA`).
@@ -64,14 +65,31 @@
 - **Fleet Operator Machine Assignments (`/operations?tab=assignments`)**:
   - **Accordion-Based Machine Cards**: Default-closed summary cards displaying machine ID, model, serial, meter hours, status badge, operator capacity pill (`X / 3 Operators`), quick-reference operator chips, and direct `+ Assign` button.
   - **Expanded Slot Details & Actions**: Multi-shift slot view with shift time badges (☀️ morning / 🌙 night), assigned operator name, 1-click telephone calling (`tel:`), supervisor assigner attribution (`Assigned by: [Supervisor] • [Date]`), and 3 inline action triggers ("Change Operator", "End Shift", "Unassign").
-  - **Zero Inline Clutter**: The historical audit accordion table has been shifted off the primary assignments workspace to a dedicated page, linked cleanly via a footer navigation link (`View Full Assignment Audit Logs →`).
-- **Assignment & Shift Audit Logs (`/operations/audit-logs`)**:
-  - **Dedicated Audit Workspace**: Centralized historical audit logs tracking operator machine assignments, shift schedules, midnight-crossing status, assigner supervisors, ending reasons (`shift_changed`, `removed`, `manual`), and termination supervisors.
-  - **KPI Metrics Strip**: Real-time KPI summary cards displaying Total Shifts Recorded, Active On-Duty Shifts, Ended Shifts, and Overnight Coverage Shifts.
-  - **High-Density Table & Mobile Touch Cards**: High-density desktop table (`hidden sm:block`) paired with mobile-optimized touch cards (`block sm:hidden` with ≥44px touch targets).
-  - **Multi-Format Export & Print**: 1-click formatted CSV exports and print-ready reports with company branding.
+  - **Clean, Uncluttered Interface**: All assignment history and activity audits are consolidated into the standalone first-class `/audit` module accessible directly from the primary navigation sidebar.
 
-### 4. 📝 Operator Daily Machine Logs & Log History (`/operations` for operators)
+### 4. 🛡️ Centralized Audit Logs Module (`/audit`)
+- **First-Class Sidebar Navigation**: Promoted from nested operations tabs to a dedicated, top-level sidebar route (`/audit`) accessible to authorized staff (`super_admin`, `admin`, `manager`, `service_manager`, `supervisor`, `engineer`, etc.).
+- **Comprehensive Cross-Domain Event Taxonomy**:
+  - **Machines**: Added, updated, deleted, status changed, hour meters updated, assigned to client, removed from client.
+  - **Assignments**: Operator assigned/changed/unassigned (with assigner and ender attribution), supervisor assigned/changed/unassigned.
+  - **Rentals**: Dispatched, rented, extended, inspected, returned, damage reported.
+  - **Employees & Users**: Created, edited, approved, rejected, role updated, activated, deactivated, deleted, password reset.
+  - **Authentication**: Sign-in, sign-out, failed logins, session expirations.
+  - **Operations**: Hour logs created, updated, deleted, shifts started/ended, breakdowns logged.
+  - **Security**: Unauthorized actions blocked, RLS violations, role modifications.
+- **Real-Time Interactive KPI Strip**: Instant overview of Total Logged Events, Machine & Assignment Operations, Employee & Auth Events, and Security/Alerts with 1-click quick-filtering.
+- **High-Performance Filter Toolbar**: Instant search across action, actor name, entity ID/name; category selector; severity pills (`info`, `warning`, `critical`); date range presets (`all`, `today`, `7days`, `30days`, `custom`); role filter; and 1-click CSV export.
+- **Detail Slide-Over Drawer & Dedicated Route (`/audit/[id]`)**:
+  - Actor metadata (name, role, email, client IP address).
+  - Target entity linkage with direct navigation to machines or employee profiles.
+  - Visual State Mutation Diff (Side-by-side Before vs After field comparison with color-coded additions, deletions, and modifications).
+  - Raw event payload viewer with 1-click JSON copy.
+- **Optimized Database Schema & Storage (Migration 053)**:
+  - Add `category`, `severity`, `before_state`, `after_state`, `actor_name`, `actor_role`, `entity_name`, `ip_address` to `public.audit_logs`.
+  - Composite indexes `(category, created_at DESC)`, `(severity, created_at DESC)`, and `(created_at DESC, id DESC)` for zero-JOIN sub-millisecond filtering.
+  - Append-only tamper-proof RLS with role-based selective read access and automated PII redaction of super-admin emails.
+
+### 5. 📝 Operator Daily Machine Logs & Log History (`/operations` for operators)
 - **Daily Machine Log Entry (`tab=entry`)**:
   - **Machine Timeline Sequencing & Zero-Overlap Guarantee**: Strictly prevents duplicate and overlapping shifts for each machine. New logs must start at or after the previous log's end time. Supports exact handovers (`06:00 AM – 06:00 PM → 06:00 PM – 10:00 PM`) and overnight shifts (`31-Aug 10:00 PM → 01-Sep 06:00 AM`) across calendar days.
   - **Timeline Context Banner & 1-Click Handover Alignment**: Real-time banner displays previous log end time and handover eligibility with a 1-click button to align start time to exact handover.
@@ -81,22 +99,25 @@
   - **Shift End Time Validation & Future Logging Prevention**: Strict 3-tier validation (Frontend, Server Actions/Zod, and PostgreSQL DB trigger & RPC) preventing operators from submitting logs before their shift has completed (e.g. attempting to log 02:00 PM when current time is 01:00 PM). Live 30-second interval ticker highlights future shift ends with `border-rose-500` and displays the concise error `"Cannot log before shift end."` optimized for compact mobile and desktop viewports.
   - **Section C (Machine Breakdown Tracking & Formatted Timestamp Persistence)**: Start Time and End Time time pickers for equipment breakdowns, live duration calculation (e.g. `(55min)` or `(3h:55min)`), breakdown bounds enforcement ensuring breakdown duration cannot exceed total shift duration, and structured database storage (`breakdown_start_time`, `breakdown_end_time`, `breakdown_duration`, `breakdown_hours` columns and `[Breakdown Duration: 02:30 PM - 03:25 PM (55min)]` formatted remarks) across web, mobile, and PostgreSQL schema.
   - **Enterprise Security & Lifecycle Hardening (Migration 052)**: Atomic RPC `submit_operator_hour_log_atomic` enforces caller identity checks (`auth.uid() = p_operator_id`), client-machine deployment matching, and equipment lifecycle guards (blocking hour logs on equipment in `maintenance` or `decommissioned` status). Synchronized across Web and React Native mobile apps.
-- **Log History (`tab=history`)**:
+- **Log History & Supervisor Running Hours Hub (`tab=logs` & `tab=history`)**:
+  - **Server-Side Pagination & Database Indexing (Migration 058)**: Replaced full eager dataset loading with server-side pagination (fixed 10 records per page), exact counting, 3-tier resilient fallbacks, and composite indexes (`idx_machine_hour_logs_date_created` on `log_date DESC, created_at DESC, id DESC` and `idx_machine_hour_logs_client_date` on `client_id, log_date DESC`).
+  - **Debounced Global Search & URL-Driven Filtering**: 300ms debounced search on Web and 400ms on Mobile querying machine model/serial, operator name, remarks, and locations via pre-resolved foreign key indices. Synchronized with Next.js App Router URL search params (`page`, `view`, `machine`, `client`, `operator`, `month`, `start`, `end`, `search`, `sort`) for bookmarkable and shareable views with `isPending` loading state.
+  - **Cross-Platform Mobile Sync**: Mobile app logs feed features server-side range pagination (`.range()`), native touch controls (min 44px touch targets), and query-level date/status filtering.
   - Operators inspect past submitted daily machine logs with real-time shift timings alongside normal working time (excl. OT), overtime badges, and breakdown duration indicators (`🔴 02:30 PM - 03:25 PM (55min)`).
   - **7-Day Edit Locking Window**: Operators can edit and resubmit logs created within the past 7 days across desktop and mobile card views, after which logs are automatically locked to prevent retro-edits.
 
-### 5. 🏢 Client Directory & Tax/Billing Management (`/clients`)
+### 6. 🏢 Client Directory & Tax/Billing Management (`/clients`)
 - **Streamlined Client Profile**: Uses Company Name as the single primary client identifier along with Contact Person, Phone Number, GSTIN Number, and PAN Card Number.
 - **Site Location & District**: Stores primary Office / Site Street Address, City, District, State, and Pincode across database constraints, validation schemas, and UI modals.
 - **Conditional Billing Address**: Supports dedicated separate billing addresses (Billing Address, City, District, State, Pincode) toggleable when billing differs from operational site locations.
 - **Client Lifecycle Management**: Register new clients, update client parameters, inspect machine fleet counts, soft delete clients with historical log preservation, and manage contact persons.
 
-### 6. 🚀 User Profile Onboarding & Fast Validation (`/onboarding`)
+### 7. 🚀 User Profile Onboarding & Fast Validation (`/onboarding`)
 - **Incomplete Profile Interception**: Detects users missing essential details (`full_name`, `phone`, `role`, `shift_time`, `address`, `city`, `district`, `state`, `aadhaar_number`) and routes them directly to `/onboarding`.
 - **Ultra-Fast Zero-Latency Bypass**: Employs a single `complete_profile = 'yes'` flag in `public.users`. Once completed, subsequent logins and requests verify in a single string comparison (`if (user.complete_profile === 'yes')`) with zero CPU overhead, completely skipping multi-field inspection.
 - **Unified UX**: Reuses the battle-tested 4-section architecture from `/signup` with pre-filled profile information, `<CustomTimePicker>` / `<TimeInput>` integration, live shift duration calculations, and Verhoeff Aadhaar validation across Web and Mobile.
 
-### 7. 🎨 Centralized UI Design System (`apps/web/components/ui/`)
+### 8. 🎨 Centralized UI Design System (`apps/web/components/ui/`)
 - **Single Canonical UI Architecture**: One centralized reusable UI system across buttons, form controls, date & time pickers, search & filtering controls, enterprise tables, export controls, modals, and layouts.
 - **Buttons**: Canonical `<Button>` supporting variants (`primary`, `secondary`, `outline`, `ghost`, `danger`, `destructive`, `success`, `link`, `primary-sm`, `ghost-sm`, `danger-sm`, `success-sm`), sizes (`sm`, `md`, `lg`, `icon`), `fullWidth`, `responsive` / `mobileIconOnly` (auto icon collapse on ≤640px), and `<IconButton>`.
 - **Form Controls**: `<Input>`, `<PasswordInput>`, `<NumberInput>`, `<Textarea>`, `<Select>`, `<MultiSelect>`, `<Checkbox>`, `<Radio>`, `<Switch>`, and `<FormField>` layout wrappers.
@@ -211,7 +232,7 @@ ReachInternational-Monorepo/
 
 The core database is built on 7 central tables in Supabase PostgreSQL:
 
-1. `public.users`: System user accounts (email, phone, role, city, district, state, state_id references states(id), aadhaar_number, license_number, address, shift_time, shift_start_time, shift_end_time, complete_profile ['yes', 'no'], status).
+1. `public.users`: System user accounts (email, phone, role, supervisor_id references users(id), supervisor_ids uuid[] (multi-supervisor roster with GIN index and parity sync trigger), working_location_id references working_locations(id), city, district, state, state_id references states(id), aadhaar_number, license_number, address, shift_time, shift_start_time, shift_end_time, complete_profile ['yes', 'no'], status).
 2. `public.machines`: Machine fleet master (machine_code, model, serial_number, manufacturer, year_of_manufacture, hour_meter, customer_name, status, health_status, current_operator_id).
 3. `public.machine_hour_logs`: Daily running hour logs (machine_id, client_id, operator_id, supervisor_id, log_date, start_time, end_time, start_meter, end_meter, running_hours, normal_working_hours, overtime_hours, is_breakdown, breakdown_start_time, breakdown_end_time, breakdown_duration, breakdown_hours, location, remarks, conflict_flag, conflict_reason, conflict_status, conflict_resolved_by, conflict_resolved_at, conflict_resolution_notes, idempotency_key).
 4. `public.operator_machine_assignments`: Authoritative multi-shift operator assignment roster with recurring daily shift windows (id, machine_id, operator_id, shift_start_time, shift_end_time, crosses_midnight, is_active, assigned_by, assigned_at, ended_at, ended_by, end_reason). Enforces max 3 distinct active operators per machine via advisory transaction locks.
@@ -225,6 +246,7 @@ The core database is built on 7 central tables in Supabase PostgreSQL:
 12. `public.master_location`: Unified high-speed location lookup and autocomplete master (15,331 records) indexed with composite B-Tree and `pg_trgm` GIN indexes (`search_text`).
 13. `public.idempotency_keys`: Replay attack protection & state mutation deduplication key ledger (idempotency_key, user_id, action_name, request_hash, status, response_payload, created_at, expires_at).
 14. `public.audit_logs`: Immutable, append-only security & compliance audit trail (id, user_id, action, entity_type, entity_id, metadata, details, ip_address, created_at).
+15. `public.working_locations`: Enterprise physical work-sites, depots, workshops, warehouses, and regional offices (id, name, type ['yard', 'workshop', 'office', 'warehouse', 'site'], address, city, state, pincode, status ['active', 'inactive']).
 
 ---
 

@@ -14,6 +14,7 @@ import {
   sendPasswordResetNotification,
 } from "@/lib/email";
 import { validateAadhaarNumber, validateLicenseNumber } from "@reachinternational/utils";
+import { isSupervisedRole } from "@reachinternational/permissions";
 import type { User, UserRole } from "@/lib/types/database";
 
 export interface UserFormState {
@@ -85,7 +86,7 @@ export async function getAllUsers(): Promise<User[]> {
   
   const { data, error } = await supabase
     .from("users")
-    .select("id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, created_at")
+    .select("id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, supervisor_id, created_at")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -312,6 +313,8 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
     const shiftTime = (formData.get("shift_time") as string)?.trim() || null;
     const aadhaarNumber = (formData.get("aadhaar_number") as string)?.trim() || "";
     const licenseNumber = (formData.get("license_number") as string)?.trim() || "";
+    const supervisorId = (formData.get("supervisor_id") as string)?.trim() || null;
+    const workingLocationId = (formData.get("working_location_id") as string)?.trim() || null;
 
     if (!fullName || !email || !password || !role || !phone) {
       return { error: "Full name, email, mobile number, password, and role fields are required." };
@@ -422,6 +425,9 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
       user_metadata: {
         full_name: fullName,
         role: role,
+        supervisor_id: supervisorId || null,
+        supervisor_ids: supervisorId ? [supervisorId] : [],
+        working_location_id: workingLocationId || null,
         phone: phone || null,
         address: address || null,
         shift_time: shiftTime || null,
@@ -449,12 +455,15 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
       return { error: "Failed to create user. Please try again." };
     }
 
-    // Update status to active and sync role, phone, city, district, state, state_id, aadhaar_number, license_number, address, shift_time
+    // Update status to active and sync role, phone, city, district, state, state_id, aadhaar_number, license_number, address, shift_time, supervisor_id, working_location_id
     const { error: updateError } = await adminSupabase
       .from("users")
       .update({
         status: "active",
         role: role,
+        supervisor_id: supervisorId || null,
+        supervisor_ids: supervisorId ? [supervisorId] : [],
+        working_location_id: workingLocationId || null,
         phone: phone || null,
         address: address || null,
         shift_time: shiftTime || null,
@@ -735,6 +744,120 @@ export async function updateUserRole(userId: string, newRole: UserRole): Promise
   }
 }
 
+// Update user supervisor (for operator, mechanic, service_engineer, engineer)
+export async function updateUserSupervisor(
+  userId: string,
+  supervisorIdsInput: string[] | string | null
+): Promise<UserFormState> {
+  if (!isValidUuid(userId)) {
+    return { error: "Invalid user ID format." };
+  }
+
+  // Normalize input to clean unique array of UUID strings
+  const rawIds = Array.isArray(supervisorIdsInput)
+    ? supervisorIdsInput
+    : supervisorIdsInput
+    ? [supervisorIdsInput]
+    : [];
+
+  const cleanSupervisorIds: string[] = [];
+  for (const id of rawIds) {
+    const trimmed = typeof id === "string" ? id.trim() : "";
+    if (trimmed) {
+      if (!isValidUuid(trimmed)) {
+        return { error: `Invalid supervisor ID format: ${trimmed}` };
+      }
+      if (!cleanSupervisorIds.includes(trimmed)) {
+        cleanSupervisorIds.push(trimmed);
+      }
+    }
+  }
+
+  try {
+    const currentUser = await requireRole("admin", "super_admin");
+    const supabase = await createSupabaseServerClient();
+    const adminSupabase = createSupabaseAdminClient();
+
+    // Fast target user fetch
+    const { data: targetUser, error: fetchError } = await supabase
+      .from("users")
+      .select("id, full_name, email, role, supervisor_id, supervisor_ids")
+      .eq("id", userId)
+      .single();
+
+    if (fetchError || !targetUser) {
+      return { error: "User not found." };
+    }
+
+    if (currentUser.role === "admin" && targetUser.role === "super_admin") {
+      return { error: "Only Super Admins can modify other Super Admins." };
+    }
+
+    if (cleanSupervisorIds.includes(userId)) {
+      return { error: "A user cannot be assigned as their own supervisor." };
+    }
+
+    // Role check: Only supervised roles can have a supervisor assigned
+    if (cleanSupervisorIds.length > 0 && !isSupervisedRole(targetUser.role)) {
+      return { error: "Supervisors can only be assigned to operators, mechanics, and service engineers." };
+    }
+
+    const primarySupervisorId = cleanSupervisorIds[0] ?? null;
+
+    // Parallel atomic updates to auth metadata and database users table
+    const [authRes, dbRes] = await Promise.all([
+      adminSupabase.auth.admin.updateUserById(userId, {
+        user_metadata: {
+          supervisor_id: primarySupervisorId,
+          supervisor_ids: cleanSupervisorIds,
+        },
+      }),
+      adminSupabase
+        .from("users")
+        .update({
+          supervisor_id: primarySupervisorId,
+          supervisor_ids: cleanSupervisorIds,
+        })
+        .eq("id", userId),
+    ]);
+
+    if (dbRes.error) {
+      console.error("Error updating user supervisor in users table:", dbRes.error);
+      return { error: "Failed to update supervisor in database." };
+    }
+
+    if (authRes.error) {
+      console.warn("Note: auth metadata update error:", authRes.error);
+    }
+
+    // Structured audit logging
+    await logAudit({
+      action: "user.supervisor_updated",
+      entity_type: "user",
+      entity_id: userId,
+      user_id: currentUser.id,
+      metadata: {
+        user_email: targetUser.email,
+        user_name: targetUser.full_name,
+        role: targetUser.role,
+        old_supervisor_id: targetUser.supervisor_id,
+        new_supervisor_id: primarySupervisorId,
+        old_supervisor_ids: targetUser.supervisor_ids || (targetUser.supervisor_id ? [targetUser.supervisor_id] : []),
+        new_supervisor_ids: cleanSupervisorIds,
+        updated_by_name: currentUser.full_name,
+        updated_by_email: currentUser.email,
+      },
+    });
+
+    revalidatePath("/users");
+    revalidateTag(CACHE_TAGS.users, "max");
+    return { message: `Supervisor assignment for ${targetUser.full_name} updated successfully.` };
+  } catch (error) {
+    console.error("Error in updateUserSupervisor:", error);
+    return { error: "Unauthorized or an error occurred." };
+  }
+}
+
 // Delete user (admin can delete non-super_admins, super_admin can delete anyone except self)
 export async function deleteUser(userId: string): Promise<UserFormState> {
   if (!isValidUuid(userId)) {
@@ -832,6 +955,8 @@ export async function editUser(userId: string, formData: FormData): Promise<User
     const shiftTime = (formData.get("shift_time") as string)?.trim() || null;
     const aadhaarNumber = (formData.get("aadhaar_number") as string)?.trim() || "";
     const licenseNumber = (formData.get("license_number") as string)?.trim() || "";
+    const supervisorId = (formData.get("supervisor_id") as string)?.trim() || null;
+    const workingLocationId = (formData.get("working_location_id") as string)?.trim() || null;
     
     if (!fullName) {
       return { error: "Full name is required." };
@@ -922,6 +1047,10 @@ export async function editUser(userId: string, formData: FormData): Promise<User
     // Resolve state_id and normalized state name from states table
     const stateInfo = await resolveStateInfo(adminSupabase, state, formData.get("state_id") as string);
     
+    const editSupervisorIds = supervisorId
+      ? Array.from(new Set([supervisorId, ...(targetUser.supervisor_ids || [])]))
+      : [];
+
     // Update auth user metadata
     const { error: authError } = await adminSupabase.auth.admin.updateUserById(userId, {
       user_metadata: { 
@@ -936,6 +1065,9 @@ export async function editUser(userId: string, formData: FormData): Promise<User
         location: `${city}, ${district}, ${stateInfo.state}`,
         aadhaar_number: cleanAadhaar,
         license_number: formattedLicense,
+        supervisor_id: supervisorId,
+        supervisor_ids: editSupervisorIds,
+        working_location_id: workingLocationId,
         ...(role ? { role } : {}),
       }
     });
@@ -956,6 +1088,9 @@ export async function editUser(userId: string, formData: FormData): Promise<User
       state_id: stateInfo.state_id,
       aadhaar_number: cleanAadhaar,
       license_number: formattedLicense,
+      supervisor_id: supervisorId,
+      supervisor_ids: editSupervisorIds,
+      working_location_id: workingLocationId,
     };
     if (role && (currentUser.role === "super_admin" || role !== "super_admin")) {
       updatePayload.role = role;
@@ -1318,4 +1453,9 @@ export async function bulkRejectUsers(userIds: string[]): Promise<BulkActionResu
     return { error: "Unauthorized or an error occurred while rejecting users." };
   }
 }
-
+
+import { getUserList } from "@/lib/queries/users";
+export async function exportUsersFilteredAction(params: any) {
+  const result = await getUserList({ ...params, page: 1, pageSize: 10000 });
+  return result.users;
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -57,7 +57,7 @@ import {
   updateFinanceSettingsAction,
 } from "@/app/actions/finance";
 
-import { Select, SegmentedToggle } from "@/components/ui";
+import { Select, SegmentedToggle, Pagination } from "@/components/ui";
 
 interface FinanceClientProps {
   user: User;
@@ -107,6 +107,26 @@ export function FinanceClient({
   const [statusFilter, setStatusFilter] = useState("all");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const [financePage, setFinancePage] = useState(1);
+  const [financePageSize, setFinancePageSize] = useState(20);
+
+  useEffect(() => {
+    setFinancePage(1);
+  }, [activeTab, searchQuery, statusFilter]);
+
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter((inv) => {
+      if (statusFilter !== "all" && inv.status !== statusFilter) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const num = (inv.invoice_number || "").toLowerCase();
+        const cust = (inv.customer_name || "").toLowerCase();
+        return num.includes(q) || cust.includes(q);
+      }
+      return true;
+    });
+  }, [invoices, statusFilter, searchQuery]);
 
   // Modals state
   const [showCreateInvoiceModal, setShowCreateInvoiceModal] = useState(false);
@@ -617,14 +637,16 @@ export function FinanceClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-hairline)] text-[var(--color-ink)]">
-                  {invoices.length === 0 ? (
+                  {filteredInvoices.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="p-8 text-center text-[var(--color-mute)]">
                         No invoices found. Click "Create Invoice" to generate one.
                       </td>
                     </tr>
                   ) : (
-                    invoices.map((inv) => (
+                    filteredInvoices
+                      .slice((financePage - 1) * financePageSize, financePage * financePageSize)
+                      .map((inv) => (
                       <tr key={inv.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors">
                         <td className="p-4 font-semibold text-emerald-400">{inv.invoice_number}</td>
                         <td className="p-4">{inv.customer_name}</td>
@@ -673,6 +695,21 @@ export function FinanceClient({
                 </tbody>
               </table>
             </div>
+            {filteredInvoices.length > 0 && (
+              <div className="px-4 py-2 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)]">
+                <Pagination
+                  page={financePage}
+                  pageSize={financePageSize}
+                  total={filteredInvoices.length}
+                  onPageChange={setFinancePage}
+                  pageSizeOptions={[10, 20, 50]}
+                  onPageSizeChange={(newSize) => {
+                    setFinancePageSize(newSize);
+                    setFinancePage(1);
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -711,7 +748,9 @@ export function FinanceClient({
                       </td>
                     </tr>
                   ) : (
-                    payments.map((p) => (
+                    payments
+                      .slice((financePage - 1) * financePageSize, financePage * financePageSize)
+                      .map((p) => (
                       <tr key={p.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors">
                         <td className="p-4 font-semibold text-sky-400">{p.payment_number}</td>
                         <td className="p-4">{p.customer_name}</td>
@@ -726,6 +765,21 @@ export function FinanceClient({
                 </tbody>
               </table>
             </div>
+            {payments.length > 0 && (
+              <div className="px-4 py-2 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)]">
+                <Pagination
+                  page={financePage}
+                  pageSize={financePageSize}
+                  total={payments.length}
+                  onPageChange={setFinancePage}
+                  pageSizeOptions={[10, 20, 50]}
+                  onPageSizeChange={(newSize) => {
+                    setFinancePageSize(newSize);
+                    setFinancePage(1);
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -768,7 +822,9 @@ export function FinanceClient({
                       </td>
                     </tr>
                   ) : (
-                    receivablesAging.unpaidInvoices.map((inv) => (
+                    receivablesAging.unpaidInvoices
+                      .slice((financePage - 1) * financePageSize, financePage * financePageSize)
+                      .map((inv) => (
                       <tr key={inv.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors">
                         <td className="p-4 font-semibold text-emerald-400">{inv.invoice_number}</td>
                         <td className="p-4">{inv.customer_name}</td>
@@ -809,6 +865,21 @@ export function FinanceClient({
                 </tbody>
               </table>
             </div>
+            {receivablesAging.unpaidInvoices.length > 0 && (
+              <div className="px-4 py-2 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)]">
+                <Pagination
+                  page={financePage}
+                  pageSize={financePageSize}
+                  total={receivablesAging.unpaidInvoices.length}
+                  onPageChange={setFinancePage}
+                  pageSizeOptions={[10, 20, 50]}
+                  onPageSizeChange={(newSize) => {
+                    setFinancePageSize(newSize);
+                    setFinancePage(1);
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -870,7 +941,9 @@ export function FinanceClient({
                       </td>
                     </tr>
                   ) : (
-                    threeWayMatches.map((m) => (
+                    threeWayMatches
+                      .slice((financePage - 1) * financePageSize, financePage * financePageSize)
+                      .map((m) => (
                       <tr key={m.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors">
                         <td className="p-4 font-semibold text-emerald-400">{m.po_number}</td>
                         <td className="p-4 font-mono text-xs">{m.supplier_invoice_number || "—"}</td>
@@ -897,6 +970,21 @@ export function FinanceClient({
                 </tbody>
               </table>
             </div>
+            {threeWayMatches.length > 0 && (
+              <div className="px-4 py-2 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)]">
+                <Pagination
+                  page={financePage}
+                  pageSize={financePageSize}
+                  total={threeWayMatches.length}
+                  onPageChange={setFinancePage}
+                  pageSizeOptions={[10, 20, 50]}
+                  onPageSizeChange={(newSize) => {
+                    setFinancePageSize(newSize);
+                    setFinancePage(1);
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -935,7 +1023,9 @@ export function FinanceClient({
                       </td>
                     </tr>
                   ) : (
-                    expenses.map((exp) => (
+                    expenses
+                      .slice((financePage - 1) * financePageSize, financePage * financePageSize)
+                      .map((exp) => (
                       <tr key={exp.id} className="hover:bg-[var(--color-hairline-soft-surface)] transition-colors">
                         <td className="p-4 font-semibold text-purple-400">{exp.expense_number}</td>
                         <td className="p-4 font-medium">{exp.category}</td>
@@ -971,6 +1061,21 @@ export function FinanceClient({
                 </tbody>
               </table>
             </div>
+            {expenses.length > 0 && (
+              <div className="px-4 py-2 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)]">
+                <Pagination
+                  page={financePage}
+                  pageSize={financePageSize}
+                  total={expenses.length}
+                  onPageChange={setFinancePage}
+                  pageSizeOptions={[10, 20, 50]}
+                  onPageSizeChange={(newSize) => {
+                    setFinancePageSize(newSize);
+                    setFinancePage(1);
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}

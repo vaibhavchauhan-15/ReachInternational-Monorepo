@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   AnimatedPackage,
@@ -18,7 +18,7 @@ import {
   AnimatedBarChart3,
   AnimatedClipboardList,
 } from "@/components/ui/animated-icons";
-import { Badge, Button, Input, Modal, Select, useToast, TooltipWrapper } from "@/components/ui";
+import { Badge, Button, Input, Modal, Select, Pagination, useToast, TooltipWrapper } from "@/components/ui";
 import type {
   InventoryStock,
   InventoryTransaction,
@@ -207,6 +207,22 @@ export function StockLedgerClient({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
+  // Additional tab pagination states (default 20)
+  const [prPage, setPrPage] = useState(1);
+  const [prPageSize, setPrPageSize] = useState(20);
+  const [poPage, setPoPage] = useState(1);
+  const [poPageSize, setPoPageSize] = useState(20);
+  const [grnPage, setGrnPage] = useState(1);
+  const [grnPageSize, setGrnPageSize] = useState(20);
+  const [issuesPage, setIssuesPage] = useState(1);
+  const [issuesPageSize, setIssuesPageSize] = useState(20);
+  const [returnsPage, setReturnsPage] = useState(1);
+  const [returnsPageSize, setReturnsPageSize] = useState(20);
+  const [txPage, setTxPage] = useState(1);
+  const [txPageSize, setTxPageSize] = useState(20);
+  const [transfersPage, setTransfersPage] = useState(1);
+  const [transfersPageSize, setTransfersPageSize] = useState(20);
+
   // Add Part Form State
   const [partNo, setPartNo] = useState("");
   const [partName, setPartName] = useState("");
@@ -309,6 +325,45 @@ export function StockLedgerClient({
   const safePage = Math.min(currentPage, totalPages);
   const startIndex = (safePage - 1) * pageSize;
   const paginatedProducts = filteredProducts.slice(startIndex, startIndex + pageSize);
+
+  const paginatedPR = useMemo(() => {
+    const start = (prPage - 1) * prPageSize;
+    return purchaseRequests.slice(start, start + prPageSize);
+  }, [purchaseRequests, prPage, prPageSize]);
+
+  const paginatedPO = useMemo(() => {
+    const start = (poPage - 1) * poPageSize;
+    return purchaseOrders.slice(start, start + poPageSize);
+  }, [purchaseOrders, poPage, poPageSize]);
+
+  const paginatedGRN = useMemo(() => {
+    const start = (grnPage - 1) * grnPageSize;
+    return goodsReceipts.slice(start, start + grnPageSize);
+  }, [goodsReceipts, grnPage, grnPageSize]);
+
+  const paginatedIssues = useMemo(() => {
+    const start = (issuesPage - 1) * issuesPageSize;
+    return partIssues.slice(start, start + issuesPageSize);
+  }, [partIssues, issuesPage, issuesPageSize]);
+
+  const returnableIssues = useMemo(() => {
+    return partIssues.filter((i) => i.is_returnable);
+  }, [partIssues]);
+
+  const paginatedReturns = useMemo(() => {
+    const start = (returnsPage - 1) * returnsPageSize;
+    return returnableIssues.slice(start, start + returnsPageSize);
+  }, [returnableIssues, returnsPage, returnsPageSize]);
+
+  const paginatedTransactions = useMemo(() => {
+    const start = (txPage - 1) * txPageSize;
+    return transactions.slice(start, start + txPageSize);
+  }, [transactions, txPage, txPageSize]);
+
+  const paginatedTransfers = useMemo(() => {
+    const start = (transfersPage - 1) * transfersPageSize;
+    return transfers.slice(start, start + transfersPageSize);
+  }, [transfers, transfersPage, transfersPageSize]);
 
   const handleSort = (column: "part_number" | "name" | "manufacturer" | "stock" | "unit_cost") => {
     if (sortColumn === column) {
@@ -1275,58 +1330,18 @@ export function StockLedgerClient({
 
             {/* Pagination & Footer */}
             {filteredProducts.length > 0 && (
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-2 p-3 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs text-[var(--color-mute)]">
-                <div>
-                  Showing <span className="font-bold text-[var(--color-ink)]">{startIndex + 1}</span>–
-                  <span className="font-bold text-[var(--color-ink)]">
-                    {Math.min(startIndex + pageSize, filteredProducts.length)}
-                  </span>{" "}
-                  of <span className="font-bold text-[var(--color-ink)]">{filteredProducts.length}</span> parts
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-1.5">
-                    <span>Rows per page:</span>
-                    <Select
-                      value={String(pageSize)}
-                      onChange={(e) => {
-                        setPageSize(Number(e.target.value));
-                        setCurrentPage(1);
-                      }}
-                      options={[
-                        { value: "10", label: "10" },
-                        { value: "25", label: "25" },
-                        { value: "50", label: "50" },
-                        { value: "100", label: "100" },
-                      ]}
-                      className="w-20 text-xs"
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      disabled={safePage <= 1}
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      className="px-2.5 py-1.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs hover:bg-[var(--color-hairline-soft-surface)] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1 transition-all text-xs"
-                    >
-                      <ChevronLeft className="h-3.5 w-3.5 text-[var(--color-ink)]" />
-                      <span>Prev</span>
-                    </button>
-
-                    <span className="px-2.5 py-1 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] font-bold text-[var(--color-ink)] text-xs">
-                      {safePage} / {totalPages}
-                    </span>
-
-                    <button
-                      disabled={safePage >= totalPages}
-                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                      className="px-2.5 py-1.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs hover:bg-[var(--color-hairline-soft-surface)] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1 transition-all text-xs"
-                    >
-                      <span>Next</span>
-                      <ChevronRight className="h-3.5 w-3.5 text-[var(--color-ink)]" />
-                    </button>
-                  </div>
-                </div>
+              <div className="px-4 py-2 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)]">
+                <Pagination
+                  page={safePage}
+                  pageSize={pageSize}
+                  total={filteredProducts.length}
+                  onPageChange={setCurrentPage}
+                  pageSizeOptions={[10, 25, 50, 100]}
+                  onPageSizeChange={(newSize) => {
+                    setPageSize(newSize);
+                    setCurrentPage(1);
+                  }}
+                />
               </div>
             )}
           </div>
@@ -1421,7 +1436,7 @@ export function StockLedgerClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-hairline)] font-medium text-[var(--color-ink)] text-[11px]">
-                  {purchaseRequests.map((pr) => (
+                  {paginatedPR.map((pr) => (
                     <tr key={pr.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
                       <td className="p-3 font-mono font-bold text-sky-600 dark:text-sky-400">{pr.request_no}</td>
                       <td className="p-3 font-bold">{pr.requester?.full_name || "Store Manager"}</td>
@@ -1470,6 +1485,22 @@ export function StockLedgerClient({
                 </tbody>
               </table>
             </div>
+
+            {purchaseRequests.length > 0 && (
+              <div className="pt-2">
+                <Pagination
+                  page={prPage}
+                  pageSize={prPageSize}
+                  total={purchaseRequests.length}
+                  onPageChange={setPrPage}
+                  pageSizeOptions={[10, 20, 50]}
+                  onPageSizeChange={(newSize) => {
+                    setPrPageSize(newSize);
+                    setPrPage(1);
+                  }}
+                />
+              </div>
+            )}
           </div>
 
           {/* Generated Purchase Orders Section */}
@@ -1490,7 +1521,7 @@ export function StockLedgerClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-hairline)] font-medium text-[var(--color-ink)] text-[11px]">
-                  {purchaseOrders.map((po) => (
+                  {paginatedPO.map((po) => (
                     <tr key={po.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
                       <td className="p-3 font-mono font-bold text-purple-600 dark:text-purple-400">{po.po_number}</td>
                       <td className="p-3 font-bold">{po.vendor_name}</td>
@@ -1511,6 +1542,22 @@ export function StockLedgerClient({
                 </tbody>
               </table>
             </div>
+
+            {purchaseOrders.length > 0 && (
+              <div className="pt-2">
+                <Pagination
+                  page={poPage}
+                  pageSize={poPageSize}
+                  total={purchaseOrders.length}
+                  onPageChange={setPoPage}
+                  pageSizeOptions={[10, 20, 50]}
+                  onPageSizeChange={(newSize) => {
+                    setPoPageSize(newSize);
+                    setPoPage(1);
+                  }}
+                />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1548,7 +1595,7 @@ export function StockLedgerClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-hairline)] font-medium text-[var(--color-ink)] text-[11px]">
-                {goodsReceipts.map((grn) => (
+                {paginatedGRN.map((grn) => (
                   <tr key={grn.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
                     <td className="p-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">{grn.grn_number}</td>
                     <td className="p-3 font-bold">{grn.supplier_name}</td>
@@ -1574,6 +1621,22 @@ export function StockLedgerClient({
               </tbody>
             </table>
           </div>
+
+          {goodsReceipts.length > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={grnPage}
+                pageSize={grnPageSize}
+                total={goodsReceipts.length}
+                onPageChange={setGrnPage}
+                pageSizeOptions={[10, 20, 50]}
+                onPageSizeChange={(newSize) => {
+                  setGrnPageSize(newSize);
+                  setGrnPage(1);
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -1596,7 +1659,7 @@ export function StockLedgerClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-hairline)] font-medium text-[var(--color-ink)] text-[11px]">
-                {partIssues.map((issue) => (
+                {paginatedIssues.map((issue) => (
                   <tr key={issue.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
                     <td className="p-3 font-mono font-bold text-sky-600 dark:text-sky-400">{issue.challan_number}</td>
                     <td className="p-3 font-mono">{issue.issue_date}</td>
@@ -1631,6 +1694,22 @@ export function StockLedgerClient({
               </tbody>
             </table>
           </div>
+
+          {partIssues.length > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={issuesPage}
+                pageSize={issuesPageSize}
+                total={partIssues.length}
+                onPageChange={setIssuesPage}
+                pageSizeOptions={[10, 20, 50]}
+                onPageSizeChange={(newSize) => {
+                  setIssuesPageSize(newSize);
+                  setIssuesPage(1);
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -1652,35 +1731,49 @@ export function StockLedgerClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-hairline)] font-medium text-[var(--color-ink)] text-[11px]">
-                {partIssues
-                  .filter((i) => i.is_returnable)
-                  .map((issue) => (
-                    <tr key={issue.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
-                      <td className="p-3 font-mono font-bold text-sky-600 dark:text-sky-400">{issue.challan_number}</td>
-                      <td className="p-3 font-bold">{issue.issued_to_name}</td>
-                      <td className="p-3 font-mono">{issue.issue_date}</td>
-                      <td className="p-3 font-mono font-bold text-rose-600">{issue.expected_return_date || "Overdue"}</td>
-                      <td className="p-3 text-center">
-                        <Badge variant={issue.status === "fully_returned" ? "success" : "warning"}>{issue.status}</Badge>
-                      </td>
-                      <td className="p-3 text-right">
-                        {issue.status !== "fully_returned" && (
-                          <button
-                            onClick={() => {
-                              setReturnModalIssue(issue);
-                              setReturnedByName(issue.issued_to_name);
-                            }}
-                            className="px-2.5 py-1 rounded bg-purple-600 text-white font-bold text-[10px] cursor-pointer"
-                          >
-                            Return Part
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                {paginatedReturns.map((issue) => (
+                  <tr key={issue.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
+                    <td className="p-3 font-mono font-bold text-sky-600 dark:text-sky-400">{issue.challan_number}</td>
+                    <td className="p-3 font-bold">{issue.issued_to_name}</td>
+                    <td className="p-3 font-mono">{issue.issue_date}</td>
+                    <td className="p-3 font-mono font-bold text-rose-600">{issue.expected_return_date || "Overdue"}</td>
+                    <td className="p-3 text-center">
+                      <Badge variant={issue.status === "fully_returned" ? "success" : "warning"}>{issue.status}</Badge>
+                    </td>
+                    <td className="p-3 text-right">
+                      {issue.status !== "fully_returned" && (
+                        <button
+                          onClick={() => {
+                            setReturnModalIssue(issue);
+                            setReturnedByName(issue.issued_to_name);
+                          }}
+                          className="px-2.5 py-1 rounded bg-purple-600 text-white font-bold text-[10px] cursor-pointer"
+                        >
+                          Return Part
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
+
+          {returnableIssues.length > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={returnsPage}
+                pageSize={returnsPageSize}
+                total={returnableIssues.length}
+                onPageChange={setReturnsPage}
+                pageSizeOptions={[10, 20, 50]}
+                onPageSizeChange={(newSize) => {
+                  setReturnsPageSize(newSize);
+                  setReturnsPage(1);
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -1704,7 +1797,7 @@ export function StockLedgerClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-hairline)] font-medium text-[var(--color-ink)] text-[11px]">
-                {transactions.map((t) => (
+                {paginatedTransactions.map((t) => (
                   <tr key={t.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
                     <td className="p-3 font-mono font-bold">{t.transaction_no}</td>
                     <td className="p-3">
@@ -1734,6 +1827,22 @@ export function StockLedgerClient({
               </tbody>
             </table>
           </div>
+
+          {transactions.length > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={txPage}
+                pageSize={txPageSize}
+                total={transactions.length}
+                onPageChange={setTxPage}
+                pageSizeOptions={[10, 20, 50, 100]}
+                onPageSizeChange={(newSize) => {
+                  setTxPageSize(newSize);
+                  setTxPage(1);
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -1756,7 +1865,7 @@ export function StockLedgerClient({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-hairline)] font-medium text-[var(--color-ink)] text-[11px]">
-                {transfers.map((tr) => (
+                {paginatedTransfers.map((tr) => (
                   <tr key={tr.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
                     <td className="p-3 font-mono font-bold text-purple-600 dark:text-purple-400">{tr.transfer_no}</td>
                     <td className="p-3">Main Store</td>
@@ -1784,6 +1893,22 @@ export function StockLedgerClient({
               </tbody>
             </table>
           </div>
+
+          {transfers.length > 0 && (
+            <div className="pt-2">
+              <Pagination
+                page={transfersPage}
+                pageSize={transfersPageSize}
+                total={transfers.length}
+                onPageChange={setTransfersPage}
+                pageSizeOptions={[10, 20, 50]}
+                onPageSizeChange={(newSize) => {
+                  setTransfersPageSize(newSize);
+                  setTransfersPage(1);
+                }}
+              />
+            </div>
+          )}
         </div>
       )}
 

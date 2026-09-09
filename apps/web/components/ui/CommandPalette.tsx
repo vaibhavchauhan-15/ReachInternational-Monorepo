@@ -18,6 +18,7 @@ import {
   AnimatedPackage,
   AnimatedBuilding2,
   AnimatedGauge,
+  AnimatedScrollText,
 } from "./animated-icons";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -103,14 +104,15 @@ export function CommandPalette({
         roles: ["super_admin", "admin", "manager", "supervisor", "service_manager"],
       },
       {
-        id: "nav-operations-assignment-audit",
-        title: "Assignment History & Audit Logs",
-        subtitle: "Audit trail of operator machine assignments, shifts, and closures",
+        id: "nav-audit-logs",
+        title: "Go to Audit Logs",
+        subtitle: "Centralized audit trail of machines, assignments, employees, sign-ins, and security",
         category: "Navigation",
-        icon: AnimatedClipboardList,
-        href: "/operations/audit-logs",
-        keywords: ["assignment audit", "shift logs", "history", "audit logs", "closures"],
-        roles: ["super_admin", "admin", "manager", "supervisor", "service_manager"],
+        icon: AnimatedScrollText,
+        href: "/audit",
+        shortcut: "⌘A",
+        keywords: ["audit", "logs", "security", "history", "compliance", "activities", "assignment audit", "employee logs", "machine logs"],
+        roles: ["super_admin", "admin", "manager", "service_manager", "supervisor", "service_engineer", "engineer", "mechanic", "store_manager", "hr_manager"],
       },
       {
         id: "nav-clients",

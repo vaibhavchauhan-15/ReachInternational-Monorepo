@@ -49,7 +49,7 @@ import {
   submitOperatorHourLogAction,
   updateOperatorHourLogAction,
 } from "@/app/actions/operators";
-import { useToast, CustomTimePicker, CustomDatePicker, Modal, MachineSelect, ClientSelect, SegmentedToggle, Button } from "@/components/ui";
+import { useToast, CustomTimePicker, CustomDatePicker, Modal, MachineSelect, ClientSelect, SegmentedToggle, Button, Pagination } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import {
   formatDate,
@@ -161,6 +161,8 @@ export function OperatorDashboard({
   // Search & Date Filter for Log History Table
   const [historySearch, setHistorySearch] = useState("");
   const [historyDateFilter, setHistoryDateFilter] = useState<string>("all");
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyPageSize, setHistoryPageSize] = useState(20);
 
   const isLogFromToday = (dateStr?: string) => {
     if (!dateStr) return false;
@@ -240,6 +242,11 @@ export function OperatorDashboard({
       );
     });
   }, [recentLogs, historyDateFilter, historySearch]);
+
+  const paginatedLogs = useMemo(() => {
+    const from = (historyPage - 1) * historyPageSize;
+    return filteredLogs.slice(from, from + historyPageSize);
+  }, [filteredLogs, historyPage, historyPageSize]);
 
   // PDF Print & Excel Export Modal State
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
@@ -1700,14 +1707,20 @@ export function OperatorDashboard({
               <input
                 type="text"
                 value={historySearch}
-                onChange={(e) => setHistorySearch(e.target.value)}
+                onChange={(e) => {
+                  setHistorySearch(e.target.value);
+                  setHistoryPage(1);
+                }}
                 placeholder="Search history by machine name, code, date, remarks..."
                 className="w-full pl-9 pr-8 py-1.5 bg-[var(--color-canvas)] text-xs text-[var(--color-ink)] rounded-lg border border-[var(--color-hairline)] focus:outline-none focus:border-sky-500 placeholder:text-[var(--color-mute)]"
               />
               {historySearch && (
                 <button
                   type="button"
-                  onClick={() => setHistorySearch("")}
+                  onClick={() => {
+                    setHistorySearch("");
+                    setHistoryPage(1);
+                  }}
                   className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-mute)] hover:text-[var(--color-ink)] cursor-pointer"
                 >
                   <AnimatedX size={12} />
@@ -1730,7 +1743,10 @@ export function OperatorDashboard({
                 <button
                   key={period.id}
                   type="button"
-                  onClick={() => setHistoryDateFilter(period.id)}
+                  onClick={() => {
+                    setHistoryDateFilter(period.id);
+                    setHistoryPage(1);
+                  }}
                   className={`flex-1 sm:flex-none px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer text-center whitespace-nowrap ${
                     historyDateFilter === period.id
                       ? "bg-sky-600 text-white shadow-2xs"
@@ -1770,7 +1786,7 @@ export function OperatorDashboard({
             <>
               {/* Mobile Native Card View (rendered on screens < 640px) */}
               <div className="block sm:hidden space-y-2.5">
-                {filteredLogs.map((log) => {
+                {paginatedLogs.map((log) => {
                   const isBkd = log.is_breakdown || log.machine_condition === "breakdown";
                   const isToday = isLogFromToday(log.log_date);
                   const canEdit = isLogEditable(log.log_date);
@@ -1959,7 +1975,7 @@ export function OperatorDashboard({
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--color-hairline)]">
-                    {filteredLogs.map((log) => {
+                    {paginatedLogs.map((log) => {
                       const isBkd = log.is_breakdown || log.machine_condition === "breakdown";
                       const isToday = isLogFromToday(log.log_date);
                       const canEdit = isLogEditable(log.log_date);
@@ -2079,6 +2095,23 @@ export function OperatorDashboard({
                   </tbody>
                 </table>
               </div>
+
+              {/* Pagination Controls */}
+              {filteredLogs.length > 0 && (
+                <div className="pt-3 border-t border-[var(--color-hairline)]">
+                  <Pagination
+                    page={historyPage}
+                    pageSize={historyPageSize}
+                    total={filteredLogs.length}
+                    onPageChange={setHistoryPage}
+                    pageSizeOptions={[10, 20, 50]}
+                    onPageSizeChange={(newSize) => {
+                      setHistoryPageSize(newSize);
+                      setHistoryPage(1);
+                    }}
+                  />
+                </div>
+              )}
             </>
           )}
         </div>
