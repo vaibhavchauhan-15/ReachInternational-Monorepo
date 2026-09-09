@@ -5,7 +5,10 @@ import {
   getPendingUsersCached,
   getPendingProfileChangeRequests,
   getUserListAggregatesCached,
+  getSupervisorUserListAggregatesCached,
+  USERS_PAGE_SIZE,
 } from "@/lib/queries/users";
+import { canViewUsers, canCreateUser } from "@reachinternational/permissions";
 import { UsersPageClient } from "./users-client";
 import { UsersSkeleton } from "@/components/ui";
 
@@ -27,13 +30,17 @@ async function UsersPageContent({ searchParams }: PageProps) {
   const currentUser = await getCurrentUser();
   if (!currentUser) return null;
 
+  const isSupervisor = currentUser.role === "supervisor";
   const isAuthorized =
     currentUser.role === "admin" ||
     currentUser.role === "super_admin" ||
     currentUser.role === "service_manager" ||
     currentUser.role === "hr_manager" ||
-    currentUser.role === "manager";
+    currentUser.role === "manager" ||
+    isSupervisor ||
+    canViewUsers(currentUser.role);
   const isSuperAdmin = currentUser.role === "super_admin";
+  const readOnly = isSupervisor || !canCreateUser(currentUser.role);
 
   if (!isAuthorized) {
     return (
@@ -55,10 +62,10 @@ async function UsersPageContent({ searchParams }: PageProps) {
   const sort = typeof params?.sort === "string" ? params.sort : "newest";
 
   const [{ users, totalPages, total }, pendingUsers, profileChangeRequests, aggregates] = await Promise.all([
-    getUserList({ search, role, status, kyc, state, dateRange, sort, page, pageSize: 10 }),
-    getPendingUsersCached(),
-    getPendingProfileChangeRequests(currentUser.role),
-    getUserListAggregatesCached(),
+    getUserList({ search, role, status, kyc, state, dateRange, sort, page, pageSize: USERS_PAGE_SIZE }),
+    isSupervisor ? Promise.resolve([]) : getPendingUsersCached(),
+    isSupervisor ? Promise.resolve([]) : getPendingProfileChangeRequests(currentUser.role),
+    isSupervisor ? getSupervisorUserListAggregatesCached(currentUser.id) : getUserListAggregatesCached(),
   ]);
 
   return (
@@ -72,6 +79,7 @@ async function UsersPageContent({ searchParams }: PageProps) {
       totalCount={total}
       currentPage={page}
       aggregates={aggregates}
+      readOnly={readOnly}
     />
   );
 }

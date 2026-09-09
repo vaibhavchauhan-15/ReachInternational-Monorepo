@@ -187,6 +187,12 @@ export const UserRow = memo(function UserRow({
   const canViewContactInfo = (targetUser: User) => {
     if (currentUser.role === "super_admin" || currentUser.role === "admin") return true;
     if (targetUser.id === currentUser.id) return true;
+    if (currentUser.role === "supervisor") {
+      const isAssigned =
+        targetUser.supervisor_id === currentUser.id ||
+        (targetUser.supervisor_ids && targetUser.supervisor_ids.includes(currentUser.id));
+      if (isAssigned) return true;
+    }
     return false;
   };
 
@@ -351,22 +357,16 @@ export const UserRow = memo(function UserRow({
         {getRoleBadge(user.role)}
       </td>
 
-      {/* 4. Supervisor (Badges/Chips for all assigned supervisors) */}
+      {/* 4. Supervisor (Plain text — no chips/icons per UI feedback) */}
       <td className="py-3 px-4">
         {isSupervisedRole(user.role) ? (
           assignedSupervisors.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-1.5 max-w-[240px]">
-              {assignedSupervisors.map((s) => (
-                <span
-                  key={s.id}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-ink)] shadow-2xs"
-                  title={`Supervisor: ${s.full_name}${s.email ? ` (${s.email})` : ""}`}
-                >
-                  <AnimatedUser size={12} className="text-[var(--color-link)] shrink-0 opacity-80" />
-                  <span className="truncate max-w-[120px]">{truncateText(s.full_name, 15)}</span>
-                </span>
-              ))}
-            </div>
+            <span
+              className="text-xs font-medium text-[var(--color-ink)] truncate block max-w-[240px]"
+              title={assignedSupervisors.map((s) => s.full_name).join(", ")}
+            >
+              {assignedSupervisors.map((s) => truncateText(s.full_name, 15)).join(", ")}
+            </span>
           ) : (
             <span className="text-xs text-[var(--color-mute)] font-mono">Unassigned</span>
           )
@@ -417,20 +417,22 @@ export const UserRow = memo(function UserRow({
         {formatDate(user.created_at)}
       </td>
 
-      {/* 7. Actions Menu */}
+      {/* 7. Actions Menu — hidden entirely for read-only viewers (e.g. supervisor) since they cannot perform any action */}
       <td className="py-3 px-3 text-right" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-end relative">
-          <TooltipWrapper content="More actions" side="left">
-            <Button
-              ref={triggerRef}
-              variant="ghost-sm"
-              onClick={toggleDropdown}
-              aria-label="More actions"
-              className="h-8 w-8 p-0 flex items-center justify-center rounded-sm hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] cursor-pointer active:scale-[0.98] transition-all"
-            >
-              <AnimatedMoreVertical size={16} />
-            </Button>
-          </TooltipWrapper>
+          {canManageUser(user) && (
+            <TooltipWrapper content="More actions" side="left">
+              <Button
+                ref={triggerRef}
+                variant="ghost-sm"
+                onClick={toggleDropdown}
+                aria-label="More actions"
+                className="h-8 w-8 p-0 flex items-center justify-center rounded-sm hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] cursor-pointer active:scale-[0.98] transition-all"
+              >
+                <AnimatedMoreVertical size={16} />
+              </Button>
+            </TooltipWrapper>
+          )}
 
           {mounted &&
             dropdownOpen &&
@@ -555,9 +557,16 @@ export const UserRow = memo(function UserRow({
                       </button>
                     </>
                   ) : (
-                    <div className="px-3 py-2 text-xs text-[var(--color-mute)] text-center">
-                      No actions available
-                    </div>
+                    <button
+                      onClick={() => {
+                        onViewDetails?.(user);
+                        closeDropdown();
+                      }}
+                      className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium rounded-[calc(var(--radius-sm)-2px)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer text-left text-[var(--color-ink)]"
+                    >
+                      <AnimatedUser size={14} className="text-[var(--color-link)] shrink-0" />
+                      <span>View Details</span>
+                    </button>
                   )}
                 </div>
               </div>,

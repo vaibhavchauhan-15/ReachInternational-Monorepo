@@ -30,6 +30,8 @@ export interface FilterToolbarProps {
   className?: string;
   /** Optional submit handler for form submission */
   onSubmitSearch?: (e: React.FormEvent) => void;
+  /** Whether search query or filter is actively loading/debouncing */
+  isLoading?: boolean;
 }
 
 export function FilterToolbar({
@@ -43,6 +45,7 @@ export function FilterToolbar({
   defaultOpen = false,
   className = "",
   onSubmitSearch,
+  isLoading = false,
 }: FilterToolbarProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -73,16 +76,45 @@ export function FilterToolbar({
       <form onSubmit={handleFormSubmit} className="flex items-center gap-2 sm:gap-2.5">
         {/* Instant Search Input Bar */}
         <div className="relative flex-1 group">
-          <AnimatedSearch
-            size={14}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-mute)] group-focus-within:text-[var(--color-ink)] group-hover:text-[var(--color-ink)] transition-colors pointer-events-none"
-          />
+          {isLoading ? (
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-ink)] pointer-events-none flex items-center justify-center">
+              <svg
+                className="animate-spin h-3.5 w-3.5 text-[var(--color-ink)]"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+            </div>
+          ) : (
+            <AnimatedSearch
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-mute)] group-focus-within:text-[var(--color-ink)] group-hover:text-[var(--color-ink)] transition-colors pointer-events-none"
+            />
+          )}
           <input
             type="text"
             placeholder={placeholder}
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-9 pr-8 py-2 text-xs rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[var(--color-mute)] focus:outline-none focus:border-[var(--color-ink)] focus:ring-1 focus:ring-[var(--color-ink)]/20 transition-all"
+            className={`w-full h-11 sm:h-9 pl-9 pr-8 text-[16px] sm:text-xs rounded-lg border bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[var(--color-mute)] focus:outline-none focus:border-[var(--color-ink)] focus:ring-1 focus:ring-[var(--color-ink)]/20 transition-all ${
+              isLoading
+                ? "border-[var(--color-ink)]/40 ring-1 ring-[var(--color-ink)]/10"
+                : "border-[var(--color-hairline)]"
+            }`}
           />
           {searchQuery && (
             <button
@@ -103,7 +135,7 @@ export function FilterToolbar({
             onClick={toggleOpen}
             aria-expanded={isOpen}
             aria-controls="filter-panel-content"
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold active:scale-95 transition-all duration-200 shrink-0 select-none cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3 h-11 sm:h-9 rounded-lg border text-xs font-semibold active:scale-95 transition-all duration-200 shrink-0 select-none cursor-pointer ${
               isOpen || activeFilterCount > 0
                 ? "bg-[var(--color-ink)] text-[var(--color-canvas)] border-[var(--color-ink)] shadow-xs"
                 : "bg-[var(--color-canvas)] text-[var(--color-ink)] border-[var(--color-hairline)] hover:border-[var(--color-ink)]/40 hover:bg-[var(--color-hairline-soft-surface)]"
@@ -137,7 +169,7 @@ export function FilterToolbar({
           <button
             type="button"
             onClick={onResetFilters}
-            className="flex items-center gap-1 px-2.5 py-2 rounded-lg text-xs font-medium text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-all shrink-0 cursor-pointer active:scale-95"
+            className="flex items-center gap-1 px-2.5 h-11 sm:h-9 rounded-lg text-xs font-medium text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-all shrink-0 cursor-pointer active:scale-95"
             title="Reset all filters"
           >
             <AnimatedRotateCcw size={14} />

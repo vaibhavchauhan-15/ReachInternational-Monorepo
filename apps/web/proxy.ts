@@ -7,6 +7,7 @@ const activeProtectedRoutes = [
   "/operations",
   "/clients",
   "/users",
+  "/audit",
   "/onboarding",
 ];
 
@@ -102,15 +103,24 @@ export async function proxy(request: NextRequest) {
 
   // SECURITY: Use getUser() instead of getSession() — getUser() validates the JWT
   // against the Supabase Auth server, preventing forged/tampered JWT cookie attacks.
-  // getSession() only decodes the JWT locally without server-side verification.
+  // Wrapped in a 5000ms timeout guard to prevent network hangs from stalling proxy requests.
   let authenticatedUser = null;
   try {
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const getUserWithTimeout = Promise.race([
+      supabase.auth.getUser(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Auth verification timeout")), 5000)
+      ),
+    ]);
+
+    const { data: { user }, error: userError } = await getUserWithTimeout;
     if (!userError && user) {
       authenticatedUser = user;
     }
   } catch (err: any) {
-    if (err?.status === 429 || err?.code === "over_request_rate_limit" || err?.name === "AuthApiError") {
+    if (err?.message === "Auth verification timeout") {
+      console.warn("[Auth Proxy] Supabase auth getUser timed out after 5000ms. Proceeding without active session.");
+    } else if (err?.status === 429 || err?.code === "over_request_rate_limit" || err?.name === "AuthApiError") {
       console.warn("[Auth Proxy] Supabase auth rate limit reached (429). Continuing with request processing.");
     } else {
       console.error("[Auth Proxy] Error verifying user:", err);

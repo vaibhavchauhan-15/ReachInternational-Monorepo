@@ -4,7 +4,7 @@
 **ReachInternational** is an enterprise-grade industrial machine service, maintenance tracking, and notification management platform built for Service Managers, Engineers, and Clients.
 
 ## Technology Stack
-- **Framework**: Next.js 16.2 (App Router - `apps/web`), Expo React Native (`apps/mobile`), Turborepo monorepo
+- **Framework**: Next.js 16.2 (App Router - `apps/web`), Expo SDK 57 React Native (`apps/mobile`), Turborepo monorepo
 - **Language**: TypeScript 5 (Strict Mode)
 - **UI Library**: React 19.2 (Web), React Native / Expo (Mobile), Tailwind CSS v4, Base UI, Lucide Icons, Recharts
 - **Animations**: Framer Motion 12, TW Animate CSS

@@ -7,7 +7,6 @@ import {
   AnimatedPhone,
   AnimatedMapPin,
   AnimatedChevronRight,
-  AnimatedUser,
 } from "@/components/ui/animated-icons";
 import type { User } from "@/lib/types/database";
 
@@ -300,9 +299,8 @@ export const MobileUserCard = memo(function MobileUserCard({
               <span className="truncate">{user.city || user.location}</span>
             </div>
           )}
-          {((user.supervisors && user.supervisors.length > 0) || user.supervisor?.full_name) && (
+          {(user.supervisors && user.supervisors.length > 0) || user.supervisor?.full_name ? (
             <div className="flex items-center gap-1.5 text-[11px] truncate">
-              <AnimatedUser size={12} className="flex-shrink-0 text-[var(--color-link)] opacity-70" />
               <span className="text-[var(--color-mute)]">Sup:</span>
               <span className="text-[var(--color-ink)] font-medium truncate">
                 {user.supervisors && user.supervisors.length > 0
@@ -310,7 +308,7 @@ export const MobileUserCard = memo(function MobileUserCard({
                   : truncateText(user.supervisor?.full_name, 15)}
               </span>
             </div>
-          )}
+          ) : null}
           {user.working_location?.name && (
             <div className="flex items-center gap-1.5 text-[11px] truncate">
               <AnimatedMapPin size={12} className="flex-shrink-0 text-[var(--color-link)] opacity-70" />

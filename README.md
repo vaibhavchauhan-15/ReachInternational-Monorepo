@@ -141,9 +141,10 @@ ReachInternational-Monorepo/
 │   │   ├── components/               # Geist system UI components, forms & print modals
 │   │   └── lib/                      # Data Access Layer (DAL), query helpers & server actions
 │   └── mobile/                       # Expo / React Native Mobile Application (@reachinternational/mobile)
-│       ├── app/                      # Expo Router screens ((auth)/login, (auth)/signup, (app)/machines, (app)/operations, (app)/users, (app)/profile)
-│       ├── components/               # Native design system primitives, action sheets & modal dialogs
-│       └── lib/                      # Supabase client, secure storage adapter, auth hooks & nav registry
+│       ├── shell/                    # Native WebView Shell (AppWebView, NativeBridge, OfflineScreen, ErrorScreen)
+│       ├── app/                      # Dual-mode gateway router (WebView shell default / legacy fallback)
+│       ├── components/               # Legacy React Native components (preserved during parity transition)
+│       └── lib/                      # Supabase client, offline queue, auth & navigation helpers
 ├── packages/                         # Canonical Shared Monorepo Packages
 │   ├── types/                        # @reachinternational/types — TypeScript interfaces & database types
 │   ├── validation/                   # @reachinternational/validation — Zod validation schemas
@@ -162,7 +163,7 @@ ReachInternational-Monorepo/
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
 | **Framework** | Next.js 16.2 (App Router) | React Server Components, Server Actions, Edge Proxy |
-| **Mobile** | Expo React Native | iOS & Android Cross-Platform Mobile Application |
+| **Mobile** | Expo 57 / React Native 0.86 (WebView Shell) | Native WebView shell loading authoritative web app with cookie persistence, offline interception & native print/download bridge |
 | **Language** | TypeScript 5 (Strict Mode) | End-to-end type safety across web, mobile, and packages |
 | **Database** | Supabase PostgreSQL | Relational database with Row Level Security (RLS) & Triggers |
 | **Auth** | Supabase Auth (SSR) | Server-side cookie sessions & JWT authentication |
@@ -223,7 +224,7 @@ ReachInternational-Monorepo/
 | `admin` | Global Operations | Add/edit/delete machines, manage users, review all running hour logs, reassign operators. |
 | `manager` | Operations & Business | Fleet management, client contracts, running hour logs review, user assignments, and reporting. |
 | `service_manager` | Fleet Operations | Oversee machine directory, review running hour logs, export PDF/Excel reports. |
-| `supervisor` | Site Operations | Monitor daily running hour logs, track operator machine assignments, record logs. |
+| `supervisor` | Site Operations | Monitor daily running hour logs, track operator machine assignments, record logs, scoped read-only access to assigned field personnel (`/users`). |
 | `operator` | Field Operations | Submit daily machine running hour logs (`/operations?tab=entry`) and view log history (`/operations?tab=history`). |
 
 ---
@@ -232,7 +233,7 @@ ReachInternational-Monorepo/
 
 The core database is built on 7 central tables in Supabase PostgreSQL:
 
-1. `public.users`: System user accounts (email, phone, role, supervisor_id references users(id), supervisor_ids uuid[] (multi-supervisor roster with GIN index and parity sync trigger), working_location_id references working_locations(id), city, district, state, state_id references states(id), aadhaar_number, license_number, address, shift_time, shift_start_time, shift_end_time, complete_profile ['yes', 'no'], status).
+1. `public.users`: System user accounts (email, phone, role, supervisor_id references users(id), supervisor_ids uuid[] (multi-supervisor roster with GIN index and parity sync trigger), working_location_id references working_locations(id), city, district, state, state_id references states(id), aadhaar_number, license_number, address, shift_time, shift_start_time, shift_end_time, complete_profile ['yes', 'no'], status, role-aware RLS with supervisor scoping).
 2. `public.machines`: Machine fleet master (machine_code, model, serial_number, manufacturer, year_of_manufacture, hour_meter, customer_name, status, health_status, current_operator_id).
 3. `public.machine_hour_logs`: Daily running hour logs (machine_id, client_id, operator_id, supervisor_id, log_date, start_time, end_time, start_meter, end_meter, running_hours, normal_working_hours, overtime_hours, is_breakdown, breakdown_start_time, breakdown_end_time, breakdown_duration, breakdown_hours, location, remarks, conflict_flag, conflict_reason, conflict_status, conflict_resolved_by, conflict_resolved_at, conflict_resolution_notes, idempotency_key).
 4. `public.operator_machine_assignments`: Authoritative multi-shift operator assignment roster with recurring daily shift windows (id, machine_id, operator_id, shift_start_time, shift_end_time, crosses_midnight, is_active, assigned_by, assigned_at, ended_at, ended_by, end_reason). Enforces max 3 distinct active operators per machine via advisory transaction locks.

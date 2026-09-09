@@ -127,7 +127,7 @@ export function Pagination({
             <select
               value={pageSize}
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              className="h-7 px-1.5 text-xs rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] focus:outline-none focus:border-sky-500 cursor-pointer"
+              className="h-9 sm:h-7 px-1.5 text-xs rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] focus:outline-none focus:border-sky-500 cursor-pointer"
             >
               {pageSizeOptions.map((opt) => (
                 <option key={opt} value={opt}>
@@ -144,7 +144,7 @@ export function Pagination({
           type="button"
           onClick={() => onPageChange(1)}
           disabled={page <= 1}
-          className="h-7 px-2 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer font-mono text-xs"
+          className="h-11 sm:h-8 px-2 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer font-mono text-xs"
           title="First Page"
           aria-label="First Page"
         >
@@ -154,7 +154,7 @@ export function Pagination({
           type="button"
           onClick={() => onPageChange(page - 1)}
           disabled={page <= 1}
-          className="h-7 px-2.5 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer font-medium text-xs"
+          className="h-11 sm:h-8 px-2.5 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer font-medium text-xs"
         >
           Prev
         </button>
@@ -167,7 +167,7 @@ export function Pagination({
           type="button"
           onClick={() => onPageChange(page + 1)}
           disabled={page >= totalPages}
-          className="h-7 px-2.5 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer font-medium text-xs"
+          className="h-11 sm:h-8 px-2.5 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer font-medium text-xs"
         >
           Next
         </button>
@@ -175,7 +175,7 @@ export function Pagination({
           type="button"
           onClick={() => onPageChange(totalPages)}
           disabled={page >= totalPages}
-          className="h-7 px-2 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer font-mono text-xs"
+          className="h-11 sm:h-8 px-2 rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer font-mono text-xs"
           title="Last Page"
           aria-label="Last Page"
         >

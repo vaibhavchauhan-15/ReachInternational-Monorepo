@@ -4,7 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import crypto from "crypto";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { requireRole } from "@/lib/dal";
+import { requireRole, getCurrentUser } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
 import { CACHE_TAGS } from "@/lib/cache";
 import {
@@ -1454,8 +1454,24 @@ export async function bulkRejectUsers(userIds: string[]): Promise<BulkActionResu
   }
 }
 
-import { getUserList } from "@/lib/queries/users";
-export async function exportUsersFilteredAction(params: any) {
+import { getUserList, type UserListParams } from "@/lib/queries/users";
+export async function exportUsersFilteredAction(params: Omit<UserListParams, "page" | "pageSize"> = {}) {
+  const currentUser = await getCurrentUser();
+  if (!currentUser) throw new Error("Unauthorized");
+
   const result = await getUserList({ ...params, page: 1, pageSize: 10000 });
+
+  logAudit({
+    action: "USER_EXPORT",
+    user_id: currentUser.id,
+    entity_type: "users",
+    entity_id: currentUser.id,
+    metadata: {
+      exportedCount: result.users.length,
+      filters: params,
+      userRole: currentUser.role,
+    },
+  }).catch((err) => console.error("Error logging user export audit:", err));
+
   return result.users;
 }

@@ -1,29 +1,41 @@
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useAuth } from '../lib/auth/useAuth';
-import { colorsDark, spacingNumeric } from '@reachinternational/design-tokens';
+import React, { useEffect } from "react";
+import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
+import { useRouter } from "expo-router";
+import { useAuth } from "../lib/auth/useAuth";
+import { colorsDark, spacingNumeric } from "@reachinternational/design-tokens";
+import { AppWebView } from "../shell/AppWebView";
 
-export default function GatewayScreen() {
+const SHELL_MODE = process.env.EXPO_PUBLIC_SHELL_MODE || "webview";
+
+function LegacyGatewayScreen() {
   const { isLoading, session } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!isLoading) {
       if (session) {
-        router.replace('/(app)/machines');
+        router.replace("/(app)/machines");
       } else {
-        router.replace('/(auth)/login');
+        router.replace("/(auth)/login");
       }
     }
-  }, [isLoading, session]);
+  }, [isLoading, session, router]);
 
   return (
     <View style={styles.container}>
       <ActivityIndicator size="large" color={colorsDark.link} />
-      <Text style={styles.loadingText}>Initializing Reach International...</Text>
+      <Text style={styles.loadingText}>Initializing Reach International (Legacy)...</Text>
     </View>
   );
+}
+
+export default function GatewayScreen() {
+  if (SHELL_MODE === "legacy") {
+    return <LegacyGatewayScreen />;
+  }
+
+  // Authoritative WebView Shell Mode (Default)
+  return <AppWebView />;
 }
 
 const styles = StyleSheet.create({

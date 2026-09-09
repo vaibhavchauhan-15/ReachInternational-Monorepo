@@ -188,12 +188,12 @@ export function ProfileChangeRequestsSection({
           </div>
 
           {/* Batch Actions */}
-          <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+          <div className="flex items-center gap-2 self-end sm:self-center shrink-0 w-full sm:w-auto">
             <Button
               variant="success-sm"
               onClick={onApproveAll}
               loading={isBulkApproving}
-              className="h-8 px-3.5 text-xs font-semibold rounded-md sm:rounded-sm shadow-xs inline-flex items-center justify-center active:scale-95 transition-all cursor-pointer"
+              className="h-9 sm:h-8 px-3.5 flex-1 sm:flex-initial text-xs font-semibold rounded-md sm:rounded-sm shadow-xs inline-flex items-center justify-center active:scale-95 transition-all cursor-pointer"
               title={`Accept all ${requests.length} profile change requests`}
             >
               Accept All ({requests.length})
@@ -202,7 +202,7 @@ export function ProfileChangeRequestsSection({
               variant="danger-sm"
               onClick={onRejectAll}
               loading={isBulkRejecting}
-              className="h-8 px-3 text-xs font-semibold rounded-md sm:rounded-sm shadow-xs inline-flex items-center justify-center active:scale-95 transition-all cursor-pointer bg-[var(--color-canvas-elevated)] hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/60 hover:border-rose-300 dark:hover:border-rose-700"
+              className="h-9 sm:h-8 px-3 flex-1 sm:flex-initial text-xs font-semibold rounded-md sm:rounded-sm shadow-xs inline-flex items-center justify-center active:scale-95 transition-all cursor-pointer bg-[var(--color-canvas-elevated)] hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/60 hover:border-rose-300 dark:hover:border-rose-700"
               title={`Reject all ${requests.length} profile change requests`}
             >
               Reject All
@@ -286,7 +286,7 @@ export function ProfileChangeRequestsSection({
                       variant="success-sm"
                       onClick={() => onApprove(req.id)}
                       loading={loadingState?.type === "approve" && loadingState.id === req.id}
-                      className="h-8 px-4 text-xs font-semibold rounded-md shadow-xs cursor-pointer active:scale-95 transition-all flex-1 sm:flex-initial justify-center"
+                      className="h-9 sm:h-8 px-4 text-xs font-semibold rounded-md shadow-xs cursor-pointer active:scale-95 transition-all flex-1 sm:flex-initial justify-center"
                       title="Approve and apply profile changes"
                     >
                       Approve Change
@@ -295,7 +295,7 @@ export function ProfileChangeRequestsSection({
                       variant="danger-sm"
                       onClick={() => setRejectModalReq(req)}
                       loading={loadingState?.type === "reject" && loadingState.id === req.id}
-                      className="h-8 px-3.5 text-xs font-semibold rounded-md shadow-xs cursor-pointer active:scale-95 transition-all flex-1 sm:flex-initial justify-center bg-[var(--color-canvas-elevated)] hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/60"
+                      className="h-9 sm:h-8 px-3.5 text-xs font-semibold rounded-md shadow-xs cursor-pointer active:scale-95 transition-all flex-1 sm:flex-initial justify-center bg-[var(--color-canvas-elevated)] hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/60"
                       title="Reject profile change request"
                     >
                       Reject

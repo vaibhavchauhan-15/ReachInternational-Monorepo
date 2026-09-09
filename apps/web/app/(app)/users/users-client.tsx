@@ -16,7 +16,7 @@ import {
   AnimatedTrash2,
   AnimatedChevronDown,
 } from "@/components/ui/animated-icons";
-import { LayoutGrid, Table as TableIcon, Check, X, Plus, Copy, Download, FileSpreadsheet, Trash2, Mail, Phone, MapPin, Clock } from "lucide-react";
+import { LayoutGrid, Table as TableIcon, Check, X, Plus, Copy, Download, FileSpreadsheet, FileText, Trash2, Mail, Phone, MapPin, Clock } from "lucide-react";
 import {
   Button,
   Card,
@@ -27,7 +27,6 @@ import {
   ConfirmationDialog,
   FilterToolbar,
   TooltipWrapper,
-  ExportButton,
 } from "@/components/ui";
 import { Pagination } from "@/components/ui/Table";
 import { motion, AnimatePresence } from "framer-motion";
@@ -54,17 +53,16 @@ import {
   bulkApproveProfileChangeRequests,
   bulkRejectProfileChangeRequests,
 } from "@/app/actions/profile";
-import { exportUsersToExcel, exportUsersToCSV } from "@/lib/utils/users-export";
 import { formatDateTime, formatTimeAgo, formatTinyRelativeTime } from "@reachinternational/utils";
 import { UserRow } from "./UserRow";
 import { MobileUserCard } from "./MobileUserCard";
-import { UserDetailSheet } from "./UserDetailSheet";
-import { ProfileChangeRequestsSection } from "./ProfileChangeRequestsSection";
 import dynamic from "next/dynamic";
 import type { User, UserRole, ProfileChangeRequest } from "@/lib/types/database";
 
 const UserCreateModal = dynamic(() => import("./UserCreateModal").then(mod => mod.UserCreateModal), { ssr: false });
 const UserEditModal = dynamic(() => import("./UserEditModal").then(mod => mod.UserEditModal), { ssr: false });
+const UserDetailSheet = dynamic(() => import("./UserDetailSheet").then(mod => mod.UserDetailSheet), { ssr: false });
+const ProfileChangeRequestsSection = dynamic(() => import("./ProfileChangeRequestsSection").then(mod => mod.ProfileChangeRequestsSection), { ssr: false });
 
 function getPendingRoleBadge(role: string) {
   switch (role) {
@@ -187,6 +185,13 @@ const ROLE_OPTIONS = [
   { id: "super_admin", label: "Super Admins", activeColor: "text-red-700 dark:text-red-400 font-semibold", dotColor: "bg-red-500" },
 ];
 
+const SUPERVISOR_ROLE_OPTIONS = [
+  { id: "all", label: "All Assigned Roles", activeColor: "text-[var(--color-ink)]", dotColor: "" },
+  { id: "operator", label: "Operators", activeColor: "text-amber-700 dark:text-amber-400 font-semibold", dotColor: "bg-amber-500" },
+  { id: "mechanic", label: "Mechanics", activeColor: "text-orange-700 dark:text-orange-400 font-semibold", dotColor: "bg-orange-500" },
+  { id: "service_engineer", label: "Engineers", activeColor: "text-blue-700 dark:text-blue-400 font-semibold", dotColor: "bg-blue-500" },
+];
+
 const STATUS_OPTIONS = [
   { id: "all", label: "All Status", activeColor: "text-[var(--color-ink)]", dotColor: "" },
   { id: "active", label: "Active", activeColor: "text-emerald-700 dark:text-emerald-400 font-semibold", dotColor: "bg-emerald-500" },
@@ -282,7 +287,7 @@ function CustomFilterSelector({
         onClick={() => setOpen((prev) => !prev)}
         aria-label={ariaLabel}
         aria-expanded={open}
-        className={`w-full h-9 px-2.5 sm:px-3 rounded-lg border text-xs font-semibold flex items-center justify-between gap-1.5 transition-all cursor-pointer shadow-xs select-none ${
+        className={`w-full h-11 sm:h-9 px-2.5 sm:px-3 rounded-lg border text-xs font-semibold flex items-center justify-between gap-1.5 transition-all cursor-pointer shadow-xs select-none ${
           open || value !== "all"
             ? "bg-[var(--color-canvas-elevated)] border-[var(--color-ink)] ring-1 ring-[var(--color-ink)]/15 text-[var(--color-ink)]"
             : "bg-[var(--color-canvas)] border-[var(--color-hairline)] text-[var(--color-ink)] hover:border-[var(--color-ink)]/40"
@@ -334,7 +339,7 @@ function CustomFilterSelector({
                     onChange(opt.id);
                     setOpen(false);
                   }}
-                  className={`w-full min-h-[36px] flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-left transition-all cursor-pointer active:scale-[0.98] ${
+                  className={`w-full min-h-[44px] sm:min-h-[36px] flex items-center justify-between px-2.5 py-2 rounded-lg text-xs font-medium text-left transition-all cursor-pointer active:scale-[0.98] ${
                     isSelected
                       ? "bg-[var(--color-ink)] text-[var(--color-canvas)] font-semibold shadow-xs"
                       : "text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:bg-[var(--color-hairline-soft-surface)]"
@@ -360,6 +365,95 @@ function CustomFilterSelector({
     </div>
   );
 }
+ 
+function TableSkeletonRows({ readOnly }: { readOnly?: boolean }) {
+  return (
+    <>
+      {[1, 2, 3, 4, 5, 6].map((i) => (
+        <tr key={i} className="animate-pulse border-b border-[var(--color-hairline)]/60">
+          {!readOnly && (
+            <td className="py-3.5 px-3 text-center">
+              <div className="h-4 w-4 rounded bg-[var(--color-hairline)]/70 mx-auto" />
+            </td>
+          )}
+          {/* Name */}
+          <td className="py-3.5 px-4">
+            <div className="flex items-center gap-2.5">
+              <div className="h-8 w-8 rounded-lg bg-[var(--color-hairline)]/80 shrink-0" />
+              <div className="space-y-1.5 flex-1 min-w-0">
+                <div className="h-3.5 w-24 bg-[var(--color-hairline)] rounded" />
+                <div className="h-2.5 w-16 bg-[var(--color-hairline)]/60 rounded" />
+              </div>
+            </div>
+          </td>
+          {/* Contact */}
+          <td className="py-3.5 px-4">
+            <div className="space-y-1.5">
+              <div className="h-3 w-28 bg-[var(--color-hairline)]/80 rounded" />
+              <div className="h-2.5 w-36 bg-[var(--color-hairline)]/60 rounded" />
+            </div>
+          </td>
+          {/* Role */}
+          <td className="py-3.5 px-4">
+            <div className="h-5 w-20 rounded-full bg-[var(--color-hairline)]/70" />
+          </td>
+          {/* Supervisor */}
+          <td className="py-3.5 px-4">
+            <div className="h-3 w-20 bg-[var(--color-hairline)]/70 rounded" />
+          </td>
+          {/* Location */}
+          <td className="py-3.5 px-4">
+            <div className="h-3 w-24 bg-[var(--color-hairline)]/70 rounded" />
+          </td>
+          {/* City */}
+          <td className="py-3.5 px-4">
+            <div className="h-3 w-16 bg-[var(--color-hairline)]/70 rounded" />
+          </td>
+          {/* Status */}
+          <td className="py-3.5 px-4">
+            <div className="h-5 w-16 rounded-md bg-[var(--color-hairline)]/70" />
+          </td>
+          {/* Joined Date */}
+          <td className="py-3.5 px-4">
+            <div className="h-3 w-20 bg-[var(--color-hairline)]/70 rounded" />
+          </td>
+          {/* Actions */}
+          <td className="py-3.5 px-3 text-right">
+            <div className="h-7 w-7 rounded bg-[var(--color-hairline)]/60 ml-auto" />
+          </td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
+function MobileCardSkeletonList() {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {[1, 2, 3, 4, 5, 6].map((i) => (
+        <div
+          key={i}
+          className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs animate-pulse flex flex-col gap-3"
+        >
+          <div className="flex items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5 flex-1 min-w-0">
+              <div className="h-9 w-9 rounded-lg bg-[var(--color-hairline)] shrink-0" />
+              <div className="space-y-1.5 flex-1">
+                <div className="h-3.5 w-24 bg-[var(--color-hairline)] rounded" />
+                <div className="h-2.5 w-16 bg-[var(--color-hairline)]/60 rounded" />
+              </div>
+            </div>
+            <div className="h-5 w-16 rounded-full bg-[var(--color-hairline)]" />
+          </div>
+          <div className="space-y-2 pt-1 border-t border-[var(--color-hairline)]/60">
+            <div className="h-3 w-36 bg-[var(--color-hairline)]/70 rounded" />
+            <div className="h-3 w-28 bg-[var(--color-hairline)]/60 rounded" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export interface UserListAggregates {
   totalUsers: number;
@@ -378,6 +472,7 @@ interface UsersPageClientProps {
   totalCount: number;
   currentPage: number;
   aggregates?: UserListAggregates;
+  readOnly?: boolean;
 }
 
 export function UsersPageClient({
@@ -390,6 +485,7 @@ export function UsersPageClient({
   totalCount,
   currentPage,
   aggregates,
+  readOnly = false,
 }: UsersPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -417,11 +513,13 @@ export function UsersPageClient({
   const [profileLoading, setProfileLoading] = useState<{ type: "approve" | "reject"; id: string } | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
+  const currentRoleOptions = readOnly ? SUPERVISOR_ROLE_OPTIONS : ROLE_OPTIONS;
+
   useEffect(() => {
-    if (searchParams?.get("action") === "create") {
+    if (!readOnly && searchParams?.get("action") === "create") {
       setShowCreateModal(true);
     }
-  }, [searchParams]);
+  }, [searchParams, readOnly]);
   const [showEditModal, setShowEditModal] = useState<User | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [selectedSheetUser, setSelectedSheetUser] = useState<User | null>(null);
@@ -442,7 +540,11 @@ export function UsersPageClient({
   const [availableSupervisors, setAvailableSupervisors] = useState<Array<{ value: string; label: string; description?: string }>>([]);
   const [availableWorkingLocations, setAvailableWorkingLocations] = useState<Array<{ value: string; label: string; description?: string }>>([]);
 
+  // Hydrate supervisors & working locations only for users who can manage accounts.
+  // Read-only viewers (e.g. supervisors) skip these — saves 2 server-action round-trips per page load (critical on mobile networks).
   useEffect(() => {
+    if (readOnly) return;
+
     getSupervisorsAction().then((res) => {
       if (Array.isArray(res)) {
         setAvailableSupervisors(res);
@@ -454,7 +556,7 @@ export function UsersPageClient({
         setAvailableWorkingLocations(res);
       }
     }).catch(() => {});
-  }, []);
+  }, [readOnly]);
 
   const supervisorOptions = useMemo(() => {
     const map = new Map<string, { value: string; label: string; description?: string }>();
@@ -489,8 +591,10 @@ export function UsersPageClient({
   const [isBulkApprovingProfile, setIsBulkApprovingProfile] = useState(false);
   const [isBulkRejectingProfile, setIsBulkRejectingProfile] = useState(false);
 
-  // Search and Filter State
+  // Search, Filter and Pagination State
+  const PAGE_SIZE = 10;
   const [searchTerm, setSearchTerm] = useState(searchParams?.get("search") || "");
+  const lastCommittedSearchRef = useRef(searchParams?.get("search") || "");
   const [viewMode, setViewMode] = useState<"auto" | "cards" | "table">("auto");
   
   const roleFilter = searchParams?.get("role") || "all";
@@ -499,6 +603,19 @@ export function UsersPageClient({
   const kycFilter = searchParams?.get("kyc") || "all";
   const dateRangeFilter = searchParams?.get("dateRange") || "all";
   const sortBy = searchParams?.get("sort") || "newest";
+
+  // Query loading state: true when a transition is pending or when user is actively debouncing search input
+  const isSearchDebouncing = searchTerm.trim() !== (searchParams?.get("search") || "").trim();
+  const isQueryLoading = isPending || isSearchDebouncing;
+
+  // Re-sync searchTerm when URL search param changes externally (browser back/forward, shared links)
+  useEffect(() => {
+    const urlSearch = searchParams?.get("search") || "";
+    if (urlSearch !== lastCommittedSearchRef.current) {
+      lastCommittedSearchRef.current = urlSearch;
+      setSearchTerm(urlSearch);
+    }
+  }, [searchParams]);
 
   const updateFilter = useCallback((key: string, value: string) => {
     const params = new URLSearchParams(searchParams?.toString() || "");
@@ -518,14 +635,46 @@ export function UsersPageClient({
     });
   }, [searchParams, router]);
 
+  // Debounced search: 300ms pause, auto-runs query without requiring button click
   useEffect(() => {
+    const trimmed = searchTerm.trim();
+    const currentSearch = (searchParams?.get("search") || "").trim();
+
+    if (trimmed === "") {
+      if (currentSearch !== "") {
+        lastCommittedSearchRef.current = "";
+        updateFilter("search", "");
+      }
+      return;
+    }
+
+    // Search automatically if user takes a 300ms pause
     const handler = setTimeout(() => {
-      const currentSearch = searchParams?.get("search") || "";
-      if (searchTerm !== currentSearch) {
-        updateFilter("search", searchTerm);
+      if (trimmed !== currentSearch) {
+        lastCommittedSearchRef.current = trimmed;
+        updateFilter("search", trimmed);
       }
     }, 300);
+
     return () => clearTimeout(handler);
+  }, [searchTerm, searchParams, updateFilter]);
+
+  const handleSearchChange = useCallback((val: string) => {
+    setSearchTerm(val);
+    if (val === "") {
+      lastCommittedSearchRef.current = "";
+      updateFilter("search", "");
+    }
+  }, [updateFilter]);
+
+  const handleSearchSubmit = useCallback((e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const trimmed = searchTerm.trim();
+    const currentSearch = searchParams?.get("search") || "";
+    if (trimmed !== currentSearch) {
+      lastCommittedSearchRef.current = trimmed;
+      updateFilter("search", trimmed);
+    }
   }, [searchTerm, searchParams, updateFilter]);
 
   const setRoleFilter = (val: string) => updateFilter("role", val);
@@ -1049,9 +1198,6 @@ export function UsersPageClient({
     ];
   }, [aggregates?.states, usersList]);
 
-  // Filter and Sort Users List
-  const filteredUsers = usersList;
-
   const totalUsersCount = aggregates?.totalUsers ?? totalCount ?? usersList.length;
   const activeCount = aggregates?.activeUsers ?? usersList.filter((u) => u.status === "active").length;
   const engineerCount = aggregates?.engineerCount ?? usersList.filter((u) => u.role === "engineer" || u.role === "service_engineer").length;
@@ -1067,6 +1213,7 @@ export function UsersPageClient({
 
   const resetFilters = useCallback(() => {
     setSearchTerm("");
+    lastCommittedSearchRef.current = "";
     startTransition(() => {
       router.push("?", { scroll: false });
     });
@@ -1074,12 +1221,12 @@ export function UsersPageClient({
 
   // Multi-selection computed states
   const allFilteredSelected = useMemo(() => {
-    return filteredUsers.length > 0 && filteredUsers.every((u) => selectedUserIds.includes(u.id));
-  }, [filteredUsers, selectedUserIds]);
+    return usersList.length > 0 && usersList.every((u) => selectedUserIds.includes(u.id));
+  }, [usersList, selectedUserIds]);
 
   const someFilteredSelected = useMemo(() => {
-    return filteredUsers.some((u) => selectedUserIds.includes(u.id)) && !allFilteredSelected;
-  }, [filteredUsers, selectedUserIds, allFilteredSelected]);
+    return usersList.some((u) => selectedUserIds.includes(u.id)) && !allFilteredSelected;
+  }, [usersList, selectedUserIds, allFilteredSelected]);
 
   const handleToggleSelect = useCallback((userId: string) => {
     setSelectedUserIds((prev) =>
@@ -1089,85 +1236,148 @@ export function UsersPageClient({
 
   const handleSelectAllFiltered = useCallback(() => {
     if (allFilteredSelected) {
-      const filteredIdSet = new Set(filteredUsers.map((u) => u.id));
-      setSelectedUserIds((prev) => prev.filter((id) => !filteredIdSet.has(id)));
+      const idSet = new Set(usersList.map((u) => u.id));
+      setSelectedUserIds((prev) => prev.filter((id) => !idSet.has(id)));
     } else {
-      const filteredIds = filteredUsers.map((u) => u.id);
-      setSelectedUserIds((prev) => Array.from(new Set([...prev, ...filteredIds])));
+      const ids = usersList.map((u) => u.id);
+      setSelectedUserIds((prev) => Array.from(new Set([...prev, ...ids])));
     }
-  }, [allFilteredSelected, filteredUsers]);
+  }, [allFilteredSelected, usersList]);
 
   const handleClearSelection = useCallback(() => {
     setSelectedUserIds([]);
   }, []);
 
-  const handleExportSelectedExcel = useCallback(async () => {
-    if (selectedUserIds.length > 0) {
+  // Export Scope & Menu State
+  const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<"xlsx" | "csv">("xlsx");
+  const [isExportingAll, setIsExportingAll] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close export dropdown on click outside or Escape
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent | TouchEvent) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setIsExportMenuOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsExportMenuOpen(false);
+      }
+    }
+    if (isExportMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("touchstart", handleClickOutside);
+      document.addEventListener("keydown", handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isExportMenuOpen]);
+
+  // 1. Export Current Page (users on current paginated view)
+  const handleExportCurrentPage = useCallback(
+    async (format: "xlsx" | "csv" = "xlsx") => {
+      if (!usersList || usersList.length === 0) {
+        toast("warning", "No users on current page to export.");
+        return;
+      }
+      const filename = `Users-Page-${currentPage}`;
+      const scopeLabel = `Page ${currentPage} of User Directory (${usersList.length} users)`;
+      const { exportUsersToExcel, exportUsersToCSV } = await import("@/lib/utils/users-export");
+      if (format === "xlsx") {
+        exportUsersToExcel(usersList, filename, scopeLabel);
+        toast("success", `Exported ${usersList.length} user${usersList.length > 1 ? "s" : ""} (Page ${currentPage}) to Excel (.xlsx)`);
+      } else {
+        exportUsersToCSV(usersList, filename);
+        toast("success", `Exported ${usersList.length} user${usersList.length > 1 ? "s" : ""} (Page ${currentPage}) to CSV (.csv)`);
+      }
+    },
+    [usersList, currentPage, toast]
+  );
+
+  // 2. Export All Matching Users (across all pages)
+  const handleExportAllMatching = useCallback(
+    async (format: "xlsx" | "csv" = "xlsx") => {
+      try {
+        setIsExportingAll(true);
+        toast("info", "Preparing export of matching users across all pages...");
+        const [fullList, { exportUsersToExcel, exportUsersToCSV }] = await Promise.all([
+          exportUsersFilteredAction({
+            search: searchTerm || undefined,
+            role: roleFilter !== "all" ? roleFilter : undefined,
+            status: statusFilter !== "all" ? statusFilter : undefined,
+            kyc: kycFilter !== "all" ? kycFilter : undefined,
+            state: stateFilter !== "all" ? stateFilter : undefined,
+            dateRange: dateRangeFilter !== "all" ? dateRangeFilter : undefined,
+            sort: sortBy,
+          }),
+          import("@/lib/utils/users-export"),
+        ]);
+
+        if (!fullList || fullList.length === 0) {
+          toast("warning", "No users found matching current filters.");
+          return;
+        }
+
+        const filename = activeFilterCount > 0 ? "Users-Directory-Filtered" : "Users-Directory-All";
+        const scopeLabel = activeFilterCount > 0
+          ? `Filtered User Directory (${fullList.length} matching users)`
+          : `Entire User Directory (${fullList.length} users)`;
+
+        if (format === "xlsx") {
+          exportUsersToExcel(fullList, filename, scopeLabel);
+          toast("success", `Exported ${fullList.length} user${fullList.length > 1 ? "s" : ""} to Excel (.xlsx)`);
+        } else {
+          exportUsersToCSV(fullList, filename);
+          toast("success", `Exported ${fullList.length} user${fullList.length > 1 ? "s" : ""} to CSV (.csv)`);
+        }
+      } catch (err: any) {
+        toast("error", "Failed to export users: " + (err?.message || "Unknown error"));
+      } finally {
+        setIsExportingAll(false);
+      }
+    },
+    [searchTerm, roleFilter, statusFilter, kycFilter, stateFilter, dateRangeFilter, sortBy, activeFilterCount, toast]
+  );
+
+  // 3. Export Selected Users (checked rows)
+  const handleExportSelected = useCallback(
+    async (format: "xlsx" | "csv" = "xlsx") => {
+      if (selectedUserIds.length === 0) {
+        toast("warning", "No users selected. Check one or more rows to export.");
+        return;
+      }
       const targetUsers = usersList.filter((u) => selectedUserIds.includes(u.id));
       if (targetUsers.length === 0) {
-        toast("warning", "No users available to export.");
+        toast("warning", "Selected users are no longer available on this page.");
         return;
       }
-      exportUsersToExcel(targetUsers, "Selected-Users");
-      toast("success", `Exported ${targetUsers.length} user${targetUsers.length > 1 ? "s" : ""} to Excel (.xlsx)`);
-      return;
-    }
+      const filename = "Users-Selected";
+      const scopeLabel = `Selected Users (${targetUsers.length} users)`;
+      const { exportUsersToExcel, exportUsersToCSV } = await import("@/lib/utils/users-export");
+      if (format === "xlsx") {
+        exportUsersToExcel(targetUsers, filename, scopeLabel);
+        toast("success", `Exported ${targetUsers.length} selected user${targetUsers.length > 1 ? "s" : ""} to Excel (.xlsx)`);
+      } else {
+        exportUsersToCSV(targetUsers, filename);
+        toast("success", `Exported ${targetUsers.length} selected user${targetUsers.length > 1 ? "s" : ""} to CSV (.csv)`);
+      }
+    },
+    [selectedUserIds, usersList, toast]
+  );
 
-    try {
-      toast("info", "Preparing export of matching users...");
-      const fullList = await exportUsersFilteredAction({
-        search: searchTerm || undefined,
-        role: roleFilter !== "all" ? roleFilter : undefined,
-        status: statusFilter !== "all" ? statusFilter : undefined,
-        kyc: kycFilter !== "all" ? kycFilter : undefined,
-        state: stateFilter !== "all" ? stateFilter : undefined,
-        dateRange: dateRangeFilter !== "all" ? dateRangeFilter : undefined,
-        sort: sortBy,
-      });
-      if (!fullList || fullList.length === 0) {
-        toast("warning", "No users available to export.");
-        return;
-      }
-      exportUsersToExcel(fullList, "Users-Directory");
-      toast("success", `Exported ${fullList.length} user${fullList.length > 1 ? "s" : ""} to Excel (.xlsx)`);
-    } catch (err: any) {
-      toast("error", "Failed to export users: " + (err?.message || "Unknown error"));
-    }
-  }, [selectedUserIds, usersList, searchTerm, roleFilter, statusFilter, kycFilter, stateFilter, dateRangeFilter, sortBy, toast]);
+  // Bulk action bar bindings
+  const handleExportSelectedExcel = useCallback(() => {
+    handleExportSelected("xlsx");
+  }, [handleExportSelected]);
 
-  const handleExportSelectedCSV = useCallback(async () => {
-    if (selectedUserIds.length > 0) {
-      const targetUsers = usersList.filter((u) => selectedUserIds.includes(u.id));
-      if (targetUsers.length === 0) {
-        toast("warning", "No users available to export.");
-        return;
-      }
-      exportUsersToCSV(targetUsers, "Selected-Users");
-      toast("success", `Exported ${targetUsers.length} user${targetUsers.length > 1 ? "s" : ""} to CSV (.csv)`);
-      return;
-    }
-
-    try {
-      toast("info", "Preparing export of matching users...");
-      const fullList = await exportUsersFilteredAction({
-        search: searchTerm || undefined,
-        role: roleFilter !== "all" ? roleFilter : undefined,
-        status: statusFilter !== "all" ? statusFilter : undefined,
-        kyc: kycFilter !== "all" ? kycFilter : undefined,
-        state: stateFilter !== "all" ? stateFilter : undefined,
-        dateRange: dateRangeFilter !== "all" ? dateRangeFilter : undefined,
-        sort: sortBy,
-      });
-      if (!fullList || fullList.length === 0) {
-        toast("warning", "No users available to export.");
-        return;
-      }
-      exportUsersToCSV(fullList, "Users-Directory");
-      toast("success", `Exported ${fullList.length} user${fullList.length > 1 ? "s" : ""} to CSV (.csv)`);
-    } catch (err: any) {
-      toast("error", "Failed to export users: " + (err?.message || "Unknown error"));
-    }
-  }, [selectedUserIds, usersList, searchTerm, roleFilter, statusFilter, kycFilter, stateFilter, dateRangeFilter, sortBy, toast]);
+  const handleExportSelectedCSV = useCallback(() => {
+    handleExportSelected("csv");
+  }, [handleExportSelected]);
 
   const handleBulkDeleteConfirm = useCallback(async () => {
     if (selectedUserIds.length === 0) return;
@@ -1211,28 +1421,194 @@ export function UsersPageClient({
         breadcrumbs={[{ label: "Users" }]}
         actions={
           <div className="flex items-center gap-2">
-            <ExportButton
-              format="xlsx"
-              iconOnly
-              onClick={handleExportSelectedExcel}
-              tooltip="Export user directory to Excel (.xlsx)"
-            />
+            {/* Export Scope Menu Dropdown */}
+            <div className="relative inline-block" ref={exportMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsExportMenuOpen((prev) => !prev)}
+                aria-haspopup="menu"
+                aria-expanded={isExportMenuOpen}
+                aria-label="Export user directory options"
+                className={`h-11 sm:h-9 px-2.5 sm:px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-[0.98] transition-all ${
+                  isExportMenuOpen ? "border-[var(--color-ink)] ring-1 ring-[var(--color-ink)]/10" : ""
+                }`}
+                title="Export user directory (.xlsx / .csv)"
+              >
+                <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span className="hidden sm:inline text-xs font-semibold">Export</span>
+                <AnimatedChevronDown
+                  size={13}
+                  className={`text-[var(--color-mute)] transition-transform duration-200 ${
+                    isExportMenuOpen ? "rotate-180 text-[var(--color-ink)]" : ""
+                  }`}
+                />
+              </button>
 
-            <Button
-              variant="primary"
-              icon={<AnimatedUserPlus size={15} />}
-              responsive
-              onClick={() => setShowCreateModal(true)}
-              className="h-9 px-4 text-xs font-semibold whitespace-nowrap"
-            >
-              Add User
-            </Button>
+              <AnimatePresence>
+                {isExportMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                    transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                    className="absolute right-0 top-full mt-1.5 z-50 w-[290px] sm:w-[320px] rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl backdrop-blur-md text-[var(--color-ink)] overflow-hidden"
+                  >
+                    {/* Header: Title + Format Selector */}
+                    <div className="p-3 border-b border-[var(--color-hairline)]">
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="text-[11px] font-mono font-bold tracking-wider uppercase text-[var(--color-mute)]">
+                          Export Directory
+                        </span>
+                        <span className="text-[11px] font-mono text-[var(--color-mute)]">
+                          {totalCount} Total
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1 p-0.5 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)]">
+                        <button
+                          type="button"
+                          onClick={() => setExportFormat("xlsx")}
+                          className={`h-7 px-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            exportFormat === "xlsx"
+                              ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-xs"
+                              : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                          }`}
+                        >
+                          <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                          <span>Excel (.xlsx)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setExportFormat("csv")}
+                          className={`h-7 px-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            exportFormat === "csv"
+                              ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-xs"
+                              : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                          }`}
+                        >
+                          <FileText className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
+                          <span>CSV (.csv)</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Scope Options */}
+                    <div className="p-1.5 space-y-1">
+                      {/* Option 1: Current Page */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleExportCurrentPage(exportFormat);
+                          setIsExportMenuOpen(false);
+                        }}
+                        className="w-full flex items-center justify-between gap-3 p-2.5 rounded-lg text-left hover:bg-[var(--color-canvas)] transition-all cursor-pointer group"
+                      >
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          <div className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-center shrink-0 text-emerald-700 dark:text-emerald-400 group-hover:scale-105 transition-transform">
+                            <FileSpreadsheet className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-semibold text-[var(--color-ink)]">
+                              Current Page
+                            </div>
+                            <p className="text-[11px] text-[var(--color-mute)] truncate">
+                              Page {currentPage} of {totalPages}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-ink)]">
+                          {usersList.length} {usersList.length === 1 ? "user" : "users"}
+                        </span>
+                      </button>
+
+                      {/* Option 2: All Matching Users */}
+                      <button
+                        type="button"
+                        disabled={isExportingAll || totalCount === 0}
+                        onClick={async () => {
+                          await handleExportAllMatching(exportFormat);
+                          setIsExportMenuOpen(false);
+                        }}
+                        className="w-full flex items-center justify-between gap-3 p-2.5 rounded-lg text-left hover:bg-[var(--color-canvas)] transition-all cursor-pointer group disabled:opacity-50 disabled:pointer-events-none"
+                      >
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          <div className="h-8 w-8 rounded-lg bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/60 flex items-center justify-center shrink-0 text-blue-700 dark:text-blue-400 group-hover:scale-105 transition-transform">
+                            {isExportingAll ? (
+                              <span className="h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-xs font-semibold text-[var(--color-ink)]">
+                              All Matching Users
+                            </div>
+                            <p className="text-[11px] text-[var(--color-mute)] truncate">
+                              {activeFilterCount > 0 ? "Filtered dataset across all pages" : "Entire directory across all pages"}
+                            </p>
+                          </div>
+                        </div>
+                        <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-ink)]">
+                          {totalCount} {totalCount === 1 ? "user" : "users"}
+                        </span>
+                      </button>
+
+                      {/* Option 3: Selected Users (Only when selectedUserIds.length > 0) */}
+                      {selectedUserIds.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleExportSelected(exportFormat);
+                            setIsExportMenuOpen(false);
+                          }}
+                          className="w-full flex items-center justify-between gap-3 p-2.5 rounded-lg text-left hover:bg-[var(--color-canvas)] transition-all cursor-pointer group border-t border-[var(--color-hairline)] mt-1 pt-2"
+                        >
+                          <div className="flex items-start gap-2.5 min-w-0">
+                            <div className="h-8 w-8 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/60 flex items-center justify-center shrink-0 text-amber-700 dark:text-amber-400 group-hover:scale-105 transition-transform">
+                              <Check className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <div className="text-xs font-semibold text-[var(--color-ink)]">
+                                Selected Users
+                              </div>
+                              <p className="text-[11px] text-[var(--color-mute)] truncate">
+                                Checked rows on current page
+                              </p>
+                            </div>
+                          </div>
+                          <span className="shrink-0 px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-amber-100 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300">
+                            {selectedUserIds.length} {selectedUserIds.length === 1 ? "user" : "users"}
+                          </span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Footer / Hint */}
+                    <div className="px-3 py-2 bg-[var(--color-canvas)] border-t border-[var(--color-hairline)] rounded-b-xl flex items-center justify-between text-[10px] text-[var(--color-mute)]">
+                      <span>Format: .{exportFormat}</span>
+                      <span>Instant file download</span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
+            {!readOnly && (
+              <Button
+                variant="primary"
+                icon={<AnimatedUserPlus size={15} />}
+                responsive
+                onClick={() => setShowCreateModal(true)}
+                className="h-9 px-4 text-xs font-semibold whitespace-nowrap"
+              >
+                Add User
+              </Button>
+            )}
           </div>
         }
       />
 
       {/* Metrics Snapshot Header Cards */}
-      <div className={`grid grid-cols-2 md:grid-cols-4 ${profileRequestsList.length > 0 ? "lg:grid-cols-5" : ""} gap-3.5`}>
+      <div className={`grid grid-cols-2 md:grid-cols-4 ${!readOnly && profileRequestsList.length > 0 ? "lg:grid-cols-5" : ""} gap-3.5`}>
         <motion.div
           whileTap={{ scale: 0.98 }}
           onClick={() => {
@@ -1294,32 +1670,34 @@ export function UsersPageClient({
           </div>
         </motion.div>
 
-        <motion.div
-          whileTap={{ scale: 0.98 }}
-          onClick={() => {
-            if (pendingUsersList.length > 0) {
-              const el = document.getElementById("pending-approvals-section");
-              if (el) el.scrollIntoView({ behavior: "smooth" });
-            }
-          }}
-          className={`cursor-pointer p-4 rounded-[var(--radius-md)] border transition-all ${
-            pendingUsersList.length > 0
-              ? "bg-amber-50/40 border-amber-500 shadow-xs dark:bg-amber-950/20"
-              : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)]"
-          }`}
-        >
-          <div className="flex items-center justify-between text-[var(--color-mute)]">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-              New Registrations
-            </span>
-            <AnimatedShieldAlert size={16} className="text-amber-600 dark:text-amber-400" />
-          </div>
-          <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300 mt-1">
-            <AnimatedCounter value={pendingUsersList.length} />
-          </div>
-        </motion.div>
+        {!readOnly && (
+          <motion.div
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              if (pendingUsersList.length > 0) {
+                const el = document.getElementById("pending-approvals-section");
+                if (el) el.scrollIntoView({ behavior: "smooth" });
+              }
+            }}
+            className={`cursor-pointer p-4 rounded-[var(--radius-md)] border transition-all ${
+              pendingUsersList.length > 0
+                ? "bg-amber-50/40 border-amber-500 shadow-xs dark:bg-amber-950/20"
+                : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)]"
+            }`}
+          >
+            <div className="flex items-center justify-between text-[var(--color-mute)]">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                New Registrations
+              </span>
+              <AnimatedShieldAlert size={16} className="text-amber-600 dark:text-amber-400" />
+            </div>
+            <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300 mt-1">
+              <AnimatedCounter value={pendingUsersList.length} />
+            </div>
+          </motion.div>
+        )}
 
-        {profileRequestsList.length > 0 && (
+        {!readOnly && profileRequestsList.length > 0 && (
           <motion.div
             whileTap={{ scale: 0.98 }}
             onClick={() => {
@@ -1342,19 +1720,21 @@ export function UsersPageClient({
       </div>
 
       {/* Dedicated Profile Change Requests Section */}
-      <ProfileChangeRequestsSection
-        requests={profileRequestsList}
-        onApprove={handleApproveProfileChange}
-        onReject={handleRejectProfileChange}
-        onApproveAll={handleApproveAllProfileChanges}
-        onRejectAll={handleRejectAllProfileChanges}
-        loadingState={profileLoading}
-        isBulkApproving={isBulkApprovingProfile}
-        isBulkRejecting={isBulkRejectingProfile}
-      />
+      {!readOnly && profileRequestsList.length > 0 && (
+        <ProfileChangeRequestsSection
+          requests={profileRequestsList}
+          onApprove={handleApproveProfileChange}
+          onReject={handleRejectProfileChange}
+          onApproveAll={handleApproveAllProfileChanges}
+          onRejectAll={handleRejectAllProfileChanges}
+          loadingState={profileLoading}
+          isBulkApproving={isBulkApprovingProfile}
+          isBulkRejecting={isBulkRejectingProfile}
+        />
+      )}
 
-      {/* Pending Approvals Mobile & Desktop Card Section */}
-      {pendingUsersList.length > 0 && (
+      {/* Pending Account Requests Section */}
+      {!readOnly && pendingUsersList.length > 0 && (
         <div
           id="pending-approvals-section"
           className="relative overflow-hidden rounded-2xl border border-amber-500/25 dark:border-amber-500/20 bg-gradient-to-b from-amber-500/[0.04] via-[var(--color-canvas-elevated)] to-[var(--color-canvas-elevated)] dark:from-amber-950/[0.18] dark:via-[var(--color-canvas-elevated)] dark:to-[var(--color-canvas-elevated)] p-4 sm:p-5 shadow-xs transition-all"
@@ -1389,12 +1769,12 @@ export function UsersPageClient({
             </div>
 
             {/* Optimized Parallel Batch Actions */}
-            <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+            <div className="flex items-center gap-2 self-end sm:self-center shrink-0 w-full sm:w-auto">
               <Button
                 variant="success-sm"
                 onClick={handleApproveAll}
                 loading={isBulkApproving}
-                className="h-8 px-3.5 text-xs font-semibold rounded-md sm:rounded-sm shadow-xs inline-flex items-center justify-center active:scale-95 transition-all cursor-pointer"
+                className="h-9 sm:h-8 px-3.5 flex-1 sm:flex-initial text-xs font-semibold rounded-md sm:rounded-sm shadow-xs inline-flex items-center justify-center active:scale-95 transition-all cursor-pointer"
                 title={`Accept and approve all ${pendingUsersList.length} pending registration requests`}
               >
                 Accept All ({pendingUsersList.length})
@@ -1403,7 +1783,7 @@ export function UsersPageClient({
                 variant="danger-sm"
                 onClick={() => setShowRejectAllConfirm(true)}
                 loading={isBulkRejecting}
-                className="h-8 px-3 text-xs font-semibold rounded-md sm:rounded-sm shadow-xs inline-flex items-center justify-center active:scale-95 transition-all cursor-pointer bg-[var(--color-canvas-elevated)] hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/60 hover:border-rose-300 dark:hover:border-rose-700"
+                className="h-9 sm:h-8 px-3 flex-1 sm:flex-initial text-xs font-semibold rounded-md sm:rounded-sm shadow-xs inline-flex items-center justify-center active:scale-95 transition-all cursor-pointer bg-[var(--color-canvas-elevated)] hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800/60 hover:border-rose-300 dark:hover:border-rose-700"
                 title={`Reject all ${pendingUsersList.length} pending registration requests`}
               >
                 Reject All
@@ -1517,7 +1897,9 @@ export function UsersPageClient({
       {/* Filter and Search Controls Toolbar */}
       <FilterToolbar
         searchQuery={searchTerm}
-        onSearchChange={setSearchTerm}
+        onSearchChange={handleSearchChange}
+        onSubmitSearch={handleSearchSubmit}
+        isLoading={isQueryLoading}
         placeholder="Search user by name, email, phone, city, state, aadhaar, or role..."
         activeFilterCount={activeFilterCount}
         onResetFilters={resetFilters}
@@ -1574,7 +1956,7 @@ export function UsersPageClient({
                 label="Role"
                 value={roleFilter}
                 onChange={setRoleFilter}
-                options={ROLE_OPTIONS}
+                options={currentRoleOptions}
                 ariaLabel="Filter by role"
                 align="left"
               />
@@ -1652,7 +2034,11 @@ export function UsersPageClient({
                   <span>Search: &quot;{searchTerm}&quot;</span>
                   <button
                     type="button"
-                    onClick={() => setSearchTerm("")}
+                    onClick={() => {
+                      setSearchTerm("");
+                      lastCommittedSearchRef.current = "";
+                      updateFilter("search", "");
+                    }}
                     className="hover:text-rose-500 cursor-pointer p-0.5 rounded-full"
                     aria-label="Clear search"
                   >
@@ -1662,7 +2048,7 @@ export function UsersPageClient({
               )}
               {roleFilter !== "all" && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/60">
-                  <span>Role: {ROLE_OPTIONS.find((r) => r.id === roleFilter)?.label || roleFilter}</span>
+                  <span>Role: {currentRoleOptions.find((r) => r.id === roleFilter)?.label || roleFilter}</span>
                   <button
                     type="button"
                     onClick={() => setRoleFilter("all")}
@@ -1751,16 +2137,7 @@ export function UsersPageClient({
       </FilterToolbar>
 
       {/* Content View: Mobile Cards Stack vs Desktop Table */}
-      <div className={`relative transition-opacity duration-200 ${isPending ? "opacity-60 pointer-events-none" : ""}`}>
-        {isPending && (
-          <div className="absolute -top-3 inset-x-0 z-20 flex justify-center">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] text-[var(--color-mute)] shadow-sm">
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-link)] animate-ping" />
-              Loading users...
-            </span>
-          </div>
-        )}
-
+      <div className="relative">
         {/* Mobile / Responsive Cards View */}
         <div
           className={
@@ -1771,19 +2148,30 @@ export function UsersPageClient({
               : "block md:hidden"
           }
         >
-          {filteredUsers.length === 0 ? (
-            <div className="py-12 px-4 text-center rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
-              <p className="text-sm font-semibold text-[var(--color-ink)]">No users found</p>
-              <p className="text-xs text-[var(--color-mute)] mt-1">
-                Try adjusting your search terms or clearing filters.
+          {isQueryLoading ? (
+            <MobileCardSkeletonList />
+          ) : usersList.length === 0 ? (
+            <div className="py-14 px-4 text-center rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] flex flex-col items-center justify-center">
+              <div className="w-12 h-12 rounded-full bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] flex items-center justify-center text-[var(--color-mute)] mb-3 shadow-xs">
+                <AnimatedSearch size={22} />
+              </div>
+              <h3 className="text-sm font-semibold text-[var(--color-ink)]">No users found</h3>
+              <p className="text-xs text-[var(--color-mute)] mt-1.5 max-w-xs text-center leading-relaxed">
+                {searchTerm.trim() !== "" && activeFilterCount > 1
+                  ? `No user records match "${searchTerm}" with the active filter criteria. Try adjusting or clearing your filters.`
+                  : searchTerm.trim() !== ""
+                  ? `No user records match "${searchTerm}". Check for typos or try searching with name, phone, email, or role.`
+                  : activeFilterCount > 0
+                  ? "No users match the active filter criteria. Try adjusting or clearing some filters."
+                  : "No registered users in this directory."}
               </p>
-              {activeFilterCount > 0 && (
+              {(searchTerm.trim() !== "" || activeFilterCount > 0) && (
                 <Button
                   variant="ghost-sm"
                   onClick={resetFilters}
-                  className="mt-3 h-8 px-3.5 text-xs font-medium rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs cursor-pointer active:scale-[0.98] transition-all"
+                  className="mt-4 h-8 px-4 text-xs font-medium rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs cursor-pointer active:scale-[0.98] transition-all"
                 >
-                  Reset Filters
+                  Clear Search & Filters
                 </Button>
               )}
             </div>
@@ -1791,13 +2179,13 @@ export function UsersPageClient({
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <AnimatePresence mode="popLayout">
-                  {filteredUsers.map((u) => (
+                  {usersList.map((u) => (
                     <MobileUserCard
                       key={u.id}
                       user={u}
                       currentUser={currentUser}
                       loadingId={loading}
-                      selectable={true}
+                      selectable={!readOnly}
                       isSelected={selectedUserIds.includes(u.id)}
                       onToggleSelect={handleToggleSelect}
                       onOpenSheet={(targetUser) => setSelectedSheetUser(targetUser)}
@@ -1811,7 +2199,7 @@ export function UsersPageClient({
                 <div className="pt-2">
                   <Pagination
                     page={currentPage}
-                    pageSize={10}
+                    pageSize={PAGE_SIZE}
                     total={totalCount}
                     onPageChange={handlePageChange}
                   />
@@ -1836,20 +2224,22 @@ export function UsersPageClient({
               <table className="w-full text-left border-collapse">
                 <thead className="bg-[var(--color-canvas)] border-b border-[var(--color-hairline)] text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
                   <tr>
-                    <th className="py-3 px-3 w-10 text-center">
-                      <input
-                        type="checkbox"
-                        checked={allFilteredSelected && filteredUsers.length > 0}
-                        ref={(el) => {
-                          if (el) {
-                            el.indeterminate = someFilteredSelected;
-                          }
-                        }}
-                        onChange={handleSelectAllFiltered}
-                        aria-label="Select all filtered users"
-                        className="h-4 w-4 rounded-[4px] border-[var(--color-hairline)] text-[var(--color-ink)] focus:ring-[var(--color-link)] cursor-pointer transition-all accent-[var(--color-ink)]"
-                      />
-                    </th>
+                    {!readOnly && (
+                      <th className="py-3 px-3 w-10 text-center">
+                        <input
+                          type="checkbox"
+                          checked={allFilteredSelected && usersList.length > 0}
+                          ref={(el) => {
+                            if (el) {
+                              el.indeterminate = someFilteredSelected;
+                            }
+                          }}
+                          onChange={handleSelectAllFiltered}
+                          aria-label="Select all filtered users"
+                          className="h-4 w-4 rounded-[4px] border-[var(--color-hairline)] text-[var(--color-ink)] focus:ring-[var(--color-link)] cursor-pointer transition-all accent-[var(--color-ink)]"
+                        />
+                      </th>
+                    )}
                     <th className="py-3 px-4 w-[16%] whitespace-nowrap">
                       Name
                     </th>
@@ -1880,34 +2270,67 @@ export function UsersPageClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
-                  {filteredUsers.map((userItem) => (
-                    <UserRow
-                      key={userItem.id}
-                      user={userItem}
-                      currentUser={currentUser}
-                      isSuperAdmin={isSuperAdmin}
-                      loadingId={loading}
-                      selectable={true}
-                      isSelected={selectedUserIds.includes(userItem.id)}
-                      supervisors={supervisorOptions}
-                      onToggleSelect={handleToggleSelect}
-                      onViewDetails={(u) => setSelectedSheetUser(u)}
-                      onResetPassword={handleResetPassword}
-                      onToggleStatus={handleToggleStatus}
-                      onEdit={setShowEditModal}
-                      onUpdateRole={handleUpdateRole}
-                      onUpdateSupervisor={handleUpdateSupervisor}
-                      onDelete={(id) => setDeletingUserId(id)}
-                    />
-                  ))}
+                  {isQueryLoading ? (
+                    <TableSkeletonRows readOnly={readOnly} />
+                  ) : usersList.length === 0 ? (
+                    <tr>
+                      <td colSpan={readOnly ? 9 : 10} className="py-16 px-4 text-center">
+                        <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
+                          <div className="w-12 h-12 rounded-full bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] flex items-center justify-center text-[var(--color-mute)] mb-3 shadow-xs">
+                            <AnimatedSearch size={22} />
+                          </div>
+                          <h3 className="text-sm font-semibold text-[var(--color-ink)]">No users found</h3>
+                          <p className="text-xs text-[var(--color-mute)] mt-1.5 text-center leading-relaxed">
+                            {searchTerm.trim() !== "" && activeFilterCount > 1
+                              ? `No user records match "${searchTerm}" with the active filter criteria. Try adjusting or clearing your filters.`
+                              : searchTerm.trim() !== ""
+                              ? `No user records match "${searchTerm}". Check for typos or try searching with name, phone, email, or role.`
+                              : activeFilterCount > 0
+                              ? "No users match the active filter criteria. Try adjusting or clearing some filters."
+                              : "No registered users in this directory."}
+                          </p>
+                          {(searchTerm.trim() !== "" || activeFilterCount > 0) && (
+                            <Button
+                              variant="ghost-sm"
+                              onClick={resetFilters}
+                              className="mt-4 h-8 px-4 text-xs font-medium rounded-sm border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs cursor-pointer active:scale-[0.98] transition-all"
+                            >
+                              Clear Search & Filters
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    usersList.map((userItem) => (
+                      <UserRow
+                        key={userItem.id}
+                        user={userItem}
+                        currentUser={currentUser}
+                        isSuperAdmin={isSuperAdmin}
+                        loadingId={loading}
+                        selectable={!readOnly}
+                        isSelected={selectedUserIds.includes(userItem.id)}
+                        supervisors={supervisorOptions}
+                        onToggleSelect={handleToggleSelect}
+                        onViewDetails={(u) => setSelectedSheetUser(u)}
+                        onResetPassword={handleResetPassword}
+                        onToggleStatus={handleToggleStatus}
+                        onEdit={setShowEditModal}
+                        onUpdateRole={handleUpdateRole}
+                        onUpdateSupervisor={handleUpdateSupervisor}
+                        onDelete={(id) => setDeletingUserId(id)}
+                      />
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
-            {totalCount > 0 && (
+            {!isQueryLoading && totalCount > 0 && (
               <div className="px-4 bg-[var(--color-canvas)] border-t border-[var(--color-hairline)]">
                 <Pagination
                   page={currentPage}
-                  pageSize={10}
+                  pageSize={PAGE_SIZE}
                   total={totalCount}
                   onPageChange={handlePageChange}
                   className="border-t-0"
@@ -1918,21 +2341,23 @@ export function UsersPageClient({
         </div>
       </div>
 
-      {/* Mobile User Detail Sheet Drawer */}
-      <UserDetailSheet
-        user={selectedSheetUser}
-        currentUser={currentUser}
-        isSuperAdmin={isSuperAdmin}
-        loadingId={loading}
-        supervisors={supervisorOptions}
-        onClose={() => setSelectedSheetUser(null)}
-        onResetPassword={handleResetPassword}
-        onToggleStatus={handleToggleStatus}
-        onEdit={setShowEditModal}
-        onUpdateRole={handleUpdateRole}
-        onUpdateSupervisor={handleUpdateSupervisor}
-        onDelete={(id) => setDeletingUserId(id)}
-      />
+      {/* Mobile User Detail Sheet Drawer - mounted only when open */}
+      {selectedSheetUser && (
+        <UserDetailSheet
+          user={selectedSheetUser}
+          currentUser={currentUser}
+          isSuperAdmin={isSuperAdmin}
+          loadingId={loading}
+          supervisors={supervisorOptions}
+          onClose={() => setSelectedSheetUser(null)}
+          onResetPassword={handleResetPassword}
+          onToggleStatus={handleToggleStatus}
+          onEdit={setShowEditModal}
+          onUpdateRole={handleUpdateRole}
+          onUpdateSupervisor={handleUpdateSupervisor}
+          onDelete={(id) => setDeletingUserId(id)}
+        />
+      )}
 
       {/* Create User Modal */}
       {showCreateModal && (
@@ -2080,13 +2505,13 @@ export function UsersPageClient({
 
       {/* Floating Bulk Actions Bar */}
       <AnimatePresence>
-        {selectedUserIds.length > 0 && (
+        {!readOnly && selectedUserIds.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 24, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 24, scale: 0.96 }}
             transition={{ type: "spring", stiffness: 450, damping: 30 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[92%] sm:w-auto min-w-[320px] max-w-xl bg-[var(--color-ink)] text-white dark:bg-[#1a1a1a] dark:text-neutral-100 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.35)] border border-neutral-700/60 p-2.5 px-4 flex flex-wrap items-center justify-between gap-3 backdrop-blur-md"
+            className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 w-[92%] sm:w-auto min-w-0 sm:min-w-[320px] max-w-xl bg-[var(--color-ink)] text-white dark:bg-[#1a1a1a] dark:text-neutral-100 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.35)] border border-neutral-700/60 p-2.5 px-4 flex flex-wrap items-center justify-between gap-3 backdrop-blur-md"
           >
             <div className="flex items-center gap-2">
               <span className="flex items-center justify-center h-6 min-w-6 px-2 rounded-full bg-white/20 text-xs font-bold text-white">
@@ -2108,7 +2533,7 @@ export function UsersPageClient({
               <button
                 type="button"
                 onClick={handleExportSelectedExcel}
-                className="h-8 px-3 rounded-sm text-xs font-medium bg-white/10 hover:bg-white/20 text-white border border-white/15 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
+                className="h-9 sm:h-8 px-3 rounded-sm text-xs font-medium bg-white/10 hover:bg-white/20 text-white border border-white/15 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
                 title="Export selected users to Excel (.xlsx)"
               >
                 <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-400" />
@@ -2118,7 +2543,7 @@ export function UsersPageClient({
               <button
                 type="button"
                 onClick={handleExportSelectedCSV}
-                className="h-8 px-3 rounded-sm text-xs font-medium bg-white/10 hover:bg-white/20 text-white border border-white/15 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
+                className="h-9 sm:h-8 px-3 rounded-sm text-xs font-medium bg-white/10 hover:bg-white/20 text-white border border-white/15 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
                 title="Export selected users to CSV (.csv)"
               >
                 <Download className="h-3.5 w-3.5 text-sky-400" />
@@ -2129,7 +2554,7 @@ export function UsersPageClient({
                 type="button"
                 onClick={() => setShowBulkDeleteModal(true)}
                 disabled={isBulkDeleting}
-                className="h-8 px-3.5 rounded-sm text-xs font-medium bg-rose-600 hover:bg-rose-700 text-white shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50"
+                className="h-9 sm:h-8 px-3.5 rounded-sm text-xs font-medium bg-rose-600 hover:bg-rose-700 text-white shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98] disabled:opacity-50"
               >
                 <AnimatedTrash2 size={14} />
                 <span>Delete ({selectedUserIds.length})</span>

@@ -70,6 +70,113 @@ function truncateText(str?: string | null, maxChars: number = 15): string {
   return str.length > maxChars ? `${str.slice(0, maxChars)}…` : str;
 }
 
+function sanitizeSearchToken(token: string): string {
+  return token
+    .replace(/[,()"]/g, '')
+    .replace(/[\\%_]/g, '\\$&')
+    .trim();
+}
+
+function applyOptimizedUserSearch(query: any, search?: string) {
+  if (!search) return query;
+  const trimmed = search.trim();
+  if (trimmed.length === 0) return query;
+
+  const sanitized = sanitizeSearchToken(trimmed);
+  if (!sanitized) return query;
+
+  // Single-character fast prefix search: hits B-Tree index on prefix without full table scan
+  if (trimmed.length === 1) {
+    return query.or(`full_name.ilike.${sanitized}%,email.ilike.${sanitized}%,role.ilike.${sanitized}%`);
+  }
+
+  // 1. Phone or Aadhaar search: input consists mostly of numbers, +, -, spaces, ()
+  const isDigitsOnly = /^[0-9+\s\-()]+$/.test(trimmed);
+  const digits = trimmed.replace(/\D/g, '');
+
+  if (isDigitsOnly && digits.length >= 3) {
+    let phoneDigits = digits;
+    if (digits.length === 12 && digits.startsWith('91')) {
+      phoneDigits = digits.slice(2);
+    } else if (digits.length === 11 && digits.startsWith('0')) {
+      phoneDigits = digits.slice(1);
+    }
+
+    const conditions: string[] = [];
+    if (phoneDigits.length >= 3) {
+      conditions.push(`phone.ilike.%${phoneDigits}%`);
+    }
+    if (digits.length >= 4) {
+      conditions.push(`aadhaar_number.ilike.%${digits}%`);
+    }
+    conditions.push(`license_number.ilike.%${sanitized}%`);
+    conditions.push(`full_name.ilike.%${sanitized}%`);
+
+    return query.or(conditions.join(','));
+  }
+
+  // 2. Email search: contains @ or domain ending
+  if (trimmed.includes('@') || trimmed.endsWith('.com') || trimmed.endsWith('.in')) {
+    return query.or(`email.ilike.%${sanitized}%,full_name.ilike.%${sanitized}%`);
+  }
+
+  // 3. Multi-token or Role search
+  const words = trimmed.split(/\s+/).map(sanitizeSearchToken).filter((w) => w.length >= 2);
+  const roleSlug = sanitized.toLowerCase().replace(/\s+/g, '_');
+  const isKnownRole = [
+    'super_admin',
+    'admin',
+    'service_manager',
+    'service_engineer',
+    'engineer',
+    'supervisor',
+    'store_manager',
+    'hr_manager',
+    'operator',
+    'mechanic',
+    'manager',
+    'branch_manager',
+  ].some((r) => r === roleSlug || r.includes(roleSlug) || roleSlug.includes(r));
+
+  if (words.length > 1) {
+    if (isKnownRole) {
+      return query.or(`role.ilike.%${roleSlug}%,full_name.ilike.%${sanitized}%,email.ilike.%${sanitized}%`);
+    }
+
+    // Composite multi-token AND matching across name, role, city, district, state, email
+    for (const word of words) {
+      const wRole = word.toLowerCase().replace(/s$/, '');
+      query = query.or(
+        `full_name.ilike.%${word}%,role.ilike.%${wRole}%,city.ilike.%${word}%,district.ilike.%${word}%,state.ilike.%${word}%,email.ilike.%${word}%`
+      );
+    }
+    return query;
+  }
+
+  // 4. Single-token text search
+  const roleVariant = sanitized.toLowerCase().replace(/s$/, '');
+  const conditions = [
+    `full_name.ilike.%${sanitized}%`,
+    `email.ilike.%${sanitized}%`,
+    `role.ilike.%${sanitized}%`,
+    `city.ilike.%${sanitized}%`,
+    `district.ilike.%${sanitized}%`,
+    `state.ilike.%${sanitized}%`,
+    `license_number.ilike.%${sanitized}%`,
+  ];
+
+  if (roleVariant !== sanitized.toLowerCase()) {
+    conditions.push(`role.ilike.%${roleVariant}%`);
+  }
+
+  if (digits.length >= 3) {
+    conditions.push(`phone.ilike.%${digits}%`);
+    conditions.push(`aadhaar_number.ilike.%${digits}%`);
+  }
+
+  return query.or(conditions.join(','));
+}
+
 export default function UsersScreen() {
   const { theme } = useTheme();
   const { role } = useAuth();
@@ -79,6 +186,24 @@ export default function UsersScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // 300ms debounce: search automatically when user pauses
+  useEffect(() => {
+    const trimmed = search.trim();
+    if (trimmed.length === 0) {
+      setDebouncedSearch('');
+      return;
+    }
+    const timer = setTimeout(() => {
+      setDebouncedSearch(trimmed);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const isSearchingDebounce = search.trim() !== debouncedSearch;
+  const showLoading = isLoading || isSearchingDebounce;
+
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
@@ -111,7 +236,8 @@ export default function UsersScreen() {
       let query = supabase
         .from('users')
         .select('id, full_name, email, phone, role, status, city, district, state, state_id, shift_time, address, aadhaar_number, license_number, supervisor_id, supervisor_ids, working_location_id, created_at', { count: 'exact' })
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true });
 
       if (roleFilter !== 'all') {
         if (roleFilter === 'engineers') query = query.in('role', ['engineer', 'service_engineer']);
@@ -123,10 +249,8 @@ export default function UsersScreen() {
         else if (roleFilter === 'pending') query = query.eq('status', 'pending');
       }
 
-      if (search) {
-        const s = search.replace(/[,()"\\]/g, "");
-        query = query.or(`full_name.ilike.%${s}%,email.ilike.%${s}%,phone.ilike.%${s}%,city.ilike.%${s}%,district.ilike.%${s}%,state.ilike.%${s}%,aadhaar_number.ilike.%${s}%,license_number.ilike.%${s}%`);
-      }
+      query = applyOptimizedUserSearch(query, debouncedSearch);
+
 
       const { data, count, error } = await query.range(from, to);
       if (count !== null) setTotalUsersCount(count);
@@ -224,7 +348,7 @@ export default function UsersScreen() {
   useEffect(() => {
     setPage(1);
     fetchUsers(false, 1);
-  }, [fetchUsers, search, roleFilter, statusFilter]);
+  }, [fetchUsers, debouncedSearch, roleFilter, statusFilter]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -849,7 +973,7 @@ export default function UsersScreen() {
         )}
 
         {/* All Users Feed */}
-        {isLoading ? (
+        {showLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.colors.link} />
             <Text style={[styles.loadingText, { color: theme.colors.mute }]}>Loading user accounts...</Text>
@@ -859,8 +983,23 @@ export default function UsersScreen() {
             <Users size={32} color={theme.colors.mute} />
             <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>No user accounts found</Text>
             <Text style={[styles.emptySubtext, { color: theme.colors.mute }]}>
-              Try adjusting your search criteria or role filters.
+              {search.trim() !== ''
+                ? `No users match "${search.trim()}". Check for typos or search by name, role, or phone.`
+                : 'Try adjusting your search criteria or role filters.'}
             </Text>
+            {(search.trim() !== '' || roleFilter !== 'all' || statusFilter !== 'all') && (
+              <TouchableOpacity
+                onPress={() => {
+                  setSearch('');
+                  setDebouncedSearch('');
+                  setRoleFilter('all');
+                  setStatusFilter('all');
+                }}
+                style={{ marginTop: 12, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 6, borderWidth: 1, borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.ink }}>Clear Search & Filters</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
           users.map((u) => {

@@ -53,10 +53,10 @@ export async function login(state: AuthFormState, formData: FormData): Promise<A
     };
   }
 
-  // Check if user has a profile and is active — select minimal role and status columns
+  // Check if user has a profile and is active — select minimal role, status, and onboarding status
   const { data: profile } = await supabase
     .from("users")
-    .select("role, status")
+    .select("role, status, complete_profile")
     .eq("id", data.user.id)
     .single();
 
@@ -95,6 +95,10 @@ export async function login(state: AuthFormState, formData: FormData): Promise<A
     user_id: data.user.id,
     metadata: { user_email: email },
   });
+
+  if (profile.complete_profile !== "yes") {
+    redirect("/onboarding");
+  }
 
   if (profile.role === "operator") {
     redirect("/operations?tab=entry");

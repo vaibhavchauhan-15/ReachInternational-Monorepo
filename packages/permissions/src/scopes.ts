@@ -66,3 +66,61 @@ export function canAccessScope(
   const userScope = ROLE_DEFAULT_SCOPES[userRole];
   return SCOPE_HIERARCHY[userScope] >= SCOPE_HIERARCHY[requiredScope];
 }
+
+import { roleHasPermission } from "./matrix";
+
+/**
+ * Roles that supervisors are permitted to view and oversee.
+ */
+export const SUPERVISOR_VISIBLE_USER_ROLES = [
+  "operator",
+  "mechanic",
+  "service_engineer",
+  "engineer",
+] as const;
+
+export type SupervisorVisibleUserRole = (typeof SUPERVISOR_VISIBLE_USER_ROLES)[number];
+
+export function canViewUsers(role?: string | null): boolean {
+  if (!role) return false;
+  return roleHasPermission(role as UserRole, "user.view");
+}
+
+export function canCreateUser(role?: string | null): boolean {
+  if (!role) return false;
+  return roleHasPermission(role as UserRole, "user.create");
+}
+
+export function canUpdateUser(role?: string | null): boolean {
+  if (!role) return false;
+  return roleHasPermission(role as UserRole, "user.edit");
+}
+
+export function canDeleteUser(role?: string | null): boolean {
+  if (!role) return false;
+  return roleHasPermission(role as UserRole, "user.delete");
+}
+
+export function canActivateUser(role?: string | null): boolean {
+  if (!role) return false;
+  return roleHasPermission(role as UserRole, "user.activate");
+}
+
+export function canAssignSupervisor(role?: string | null): boolean {
+  if (!role) return false;
+  return roleHasPermission(role as UserRole, "user.assign_supervisor");
+}
+
+export function canBulkMutateUsers(role?: string | null): boolean {
+  if (!role) return false;
+  return roleHasPermission(role as UserRole, "user.bulk_manage");
+}
+
+export function getUserDataScope(role?: string | null): 
+  | { kind: "ALL" }
+  | { kind: "ASSIGNED"; roles: readonly string[] } {
+  if (role === "supervisor") {
+    return { kind: "ASSIGNED", roles: SUPERVISOR_VISIBLE_USER_ROLES };
+  }
+  return { kind: "ALL" };
+}

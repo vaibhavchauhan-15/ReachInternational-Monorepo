@@ -2,10 +2,14 @@ import "server-only";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser, requireRole } from "@/lib/dal";
 import { TAGS, CACHE_TIERS } from "@/lib/cache";
 import type { User, UserRole, UserStatus, ProfileChangeRequest, WorkingLocation } from "@/lib/types/database";
 import { getISTDateString } from "@reachinternational/utils";
+import { SUPERVISOR_VISIBLE_USER_ROLES } from "@reachinternational/permissions";
+
+export const USERS_PAGE_SIZE = 10;
 
 export interface UserListParams {
   search?: string;
@@ -29,17 +33,143 @@ export interface UserListAggregates {
 const USER_SELECT_COLUMNS =
   "id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, address, shift_time, supervisor_id, supervisor_ids, working_location_id, created_at, updated_at";
 
-export async function getUserList(params: UserListParams = {}) {
-  await requireRole("admin", "super_admin", "service_manager", "hr_manager", "manager");
-  const supabase = createSupabaseAdminClient();
+function sanitizeSearchToken(token: string): string {
+  return token
+    .replace(/[,()"]/g, "")
+    .replace(/[\\%_]/g, "\\$&")
+    .trim();
+}
 
-  const { search, role, status, kyc, state, dateRange, sort, page = 1, pageSize = 10 } = params;
+/**
+ * Applies an optimized, high-performance search query filter to the Supabase query builder.
+ * Targets only relevant indexed columns based on input pattern (digits, email, role, multi-token text)
+ * and skips single-character queries to prevent heavy unindexed sequential table scans.
+ */
+export function applyOptimizedUserSearch(query: any, search?: string) {
+  if (!search) return query;
+  const trimmed = search.trim();
+  if (trimmed.length === 0) return query;
+
+  const sanitized = sanitizeSearchToken(trimmed);
+  if (!sanitized) return query;
+
+  // Single-character fast prefix search: hits B-Tree index on prefix without full table scan
+  if (trimmed.length === 1) {
+    return query.or(`full_name.ilike.${sanitized}%,email.ilike.${sanitized}%,role.ilike.${sanitized}%`);
+  }
+
+  // 1. Phone or Aadhaar search: input consists mostly of numbers, +, -, spaces, ()
+  const isDigitsOnly = /^[0-9+\s\-()]+$/.test(trimmed);
+  const digits = trimmed.replace(/\D/g, "");
+
+  if (isDigitsOnly && digits.length >= 3) {
+    let phoneDigits = digits;
+    if (digits.length === 12 && digits.startsWith("91")) {
+      phoneDigits = digits.slice(2);
+    } else if (digits.length === 11 && digits.startsWith("0")) {
+      phoneDigits = digits.slice(1);
+    }
+
+    const conditions: string[] = [];
+    if (phoneDigits.length >= 3) {
+      conditions.push(`phone.ilike.%${phoneDigits}%`);
+    }
+    if (digits.length >= 4) {
+      conditions.push(`aadhaar_number.ilike.%${digits}%`);
+    }
+    conditions.push(`license_number.ilike.%${sanitized}%`);
+    conditions.push(`full_name.ilike.%${sanitized}%`);
+
+    return query.or(conditions.join(","));
+  }
+
+  // 2. Email search: contains @ or domain ending
+  if (trimmed.includes("@") || trimmed.endsWith(".com") || trimmed.endsWith(".in")) {
+    return query.or(`email.ilike.%${sanitized}%,full_name.ilike.%${sanitized}%`);
+  }
+
+  // 3. Multi-token or Role search
+  const words = trimmed.split(/\s+/).map(sanitizeSearchToken).filter((w) => w.length >= 2);
+  const roleSlug = sanitized.toLowerCase().replace(/\s+/g, "_");
+  const isKnownRole = [
+    "super_admin",
+    "admin",
+    "service_manager",
+    "service_engineer",
+    "engineer",
+    "supervisor",
+    "store_manager",
+    "hr_manager",
+    "operator",
+    "mechanic",
+    "manager",
+    "branch_manager",
+  ].some((r) => r === roleSlug || r.includes(roleSlug) || roleSlug.includes(r));
+
+  if (words.length > 1) {
+    if (isKnownRole) {
+      return query.or(`role.ilike.%${roleSlug}%,full_name.ilike.%${sanitized}%,email.ilike.%${sanitized}%`);
+    }
+
+    // Composite multi-token AND matching across name, role, city, district, state, email
+    for (const word of words) {
+      const wRole = word.toLowerCase().replace(/s$/, "");
+      query = query.or(
+        `full_name.ilike.%${word}%,role.ilike.%${wRole}%,city.ilike.%${word}%,district.ilike.%${word}%,state.ilike.%${word}%,email.ilike.%${word}%`
+      );
+    }
+    return query;
+  }
+
+  // 4. Single-token text search
+  const roleVariant = sanitized.toLowerCase().replace(/s$/, "");
+  const conditions = [
+    `full_name.ilike.%${sanitized}%`,
+    `email.ilike.%${sanitized}%`,
+    `role.ilike.%${sanitized}%`,
+    `city.ilike.%${sanitized}%`,
+    `district.ilike.%${sanitized}%`,
+    `state.ilike.%${sanitized}%`,
+    `license_number.ilike.%${sanitized}%`,
+  ];
+
+  if (roleVariant !== sanitized.toLowerCase()) {
+    conditions.push(`role.ilike.%${roleVariant}%`);
+  }
+
+  if (digits.length >= 3) {
+    conditions.push(`phone.ilike.%${digits}%`);
+    conditions.push(`aadhaar_number.ilike.%${digits}%`);
+  }
+
+  return query.or(conditions.join(","));
+}
+
+export async function getUserList(params: UserListParams = {}) {
+  await requireRole("admin", "super_admin", "service_manager", "hr_manager", "manager", "supervisor");
+  const currentUser = await getCurrentUser();
+  if (!currentUser) throw new Error("Unauthorized");
+
+  const isSupervisor = currentUser.role === "supervisor";
+  let supabase;
+  if (isSupervisor) {
+    try {
+      supabase = await createSupabaseServerClient();
+    } catch {
+      supabase = createSupabaseAdminClient();
+    }
+  } else {
+    supabase = createSupabaseAdminClient();
+  }
+
+  const { search, role, status, kyc, state, dateRange, sort, page = 1, pageSize = USERS_PAGE_SIZE } = params;
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
+  const isExport = pageSize > 100;
   let query = supabase
     .from("users")
-    .select(USER_SELECT_COLUMNS, { count: "exact" });
+    .select(USER_SELECT_COLUMNS, isExport ? {} : { count: "exact" });
 
   if (sort) {
     if (sort === "newest") query = query.order("created_at", { ascending: false });
@@ -51,9 +181,27 @@ export async function getUserList(params: UserListParams = {}) {
   } else {
     query = query.order("created_at", { ascending: false });
   }
+  // Deterministic secondary sort key ensures stable page boundaries on equal timestamps/values
+  query = query.order("id", { ascending: true });
 
-  if (role && role !== "all") {
-    query = query.eq("role", role);
+  if (isSupervisor) {
+    // Supervisor scope: assigned via primary supervisor_id or supervisor_ids array
+    query = query.or(`supervisor_id.eq.${currentUser.id},supervisor_ids.cs.{${currentUser.id}}`);
+
+    // Clamp role filter to supervisor visible roles only
+    if (role && role !== "all") {
+      if ((SUPERVISOR_VISIBLE_USER_ROLES as readonly string[]).includes(role)) {
+        query = query.eq("role", role);
+      } else {
+        query = query.eq("role", "__unauthorized_scope__");
+      }
+    } else {
+      query = query.in("role", SUPERVISOR_VISIBLE_USER_ROLES);
+    }
+  } else {
+    if (role && role !== "all") {
+      query = query.eq("role", role);
+    }
   }
 
   if (status && status !== "all") {
@@ -98,12 +246,8 @@ export async function getUserList(params: UserListParams = {}) {
     }
   }
 
-  if (search) {
-    const s = search.replace(/[,()"\\]/g, "");
-    query = query.or(
-      `full_name.ilike.%${s}%,email.ilike.%${s}%,phone.ilike.%${s}%,city.ilike.%${s}%,district.ilike.%${s}%,state.ilike.%${s}%,aadhaar_number.ilike.%${s}%,license_number.ilike.%${s}%`
-    );
-  }
+  query = applyOptimizedUserSearch(query, search);
+
 
   const { data, count, error } = await query.range(from, to);
 
@@ -130,13 +274,18 @@ export async function getUserList(params: UserListParams = {}) {
     new Set(rawUsers.map((u) => u.working_location_id).filter(Boolean))
   ) as string[];
 
-  // Parallelize secondary supervisor and working location relations lookup
+  // Parallelize secondary supervisor and working location relations lookup with URL overflow protection
+  const adminClient = createSupabaseAdminClient();
   const [supsRes, locsRes] = await Promise.all([
-    supervisorIds.length > 0
-      ? supabase.from("users").select("id, full_name, email, phone").in("id", supervisorIds)
+    supervisorIds.length > 50
+      ? adminClient.from("users").select("id, full_name, email, phone").in("role", ["supervisor", "admin", "super_admin", "manager", "service_manager"])
+      : supervisorIds.length > 0
+      ? adminClient.from("users").select("id, full_name, email, phone").in("id", supervisorIds)
       : Promise.resolve({ data: null }),
-    workingLocationIds.length > 0
-      ? supabase.from("working_locations").select("id, name, type, city, state, address").in("id", workingLocationIds)
+    workingLocationIds.length > 50
+      ? adminClient.from("working_locations").select("id, name, type, city, state, address")
+      : workingLocationIds.length > 0
+      ? adminClient.from("working_locations").select("id, name, type, city, state, address").in("id", workingLocationIds)
       : Promise.resolve({ data: null }),
   ]);
 
@@ -173,10 +322,10 @@ export async function getUserList(params: UserListParams = {}) {
 
   return {
     users: hydratedUsers,
-    total: count ?? 0,
+    total: isExport ? hydratedUsers.length : (count ?? 0),
     page,
     pageSize,
-    totalPages: Math.ceil((count ?? 0) / pageSize),
+    totalPages: isExport ? 1 : Math.ceil((count ?? 0) / pageSize),
   };
 }
 
@@ -184,11 +333,30 @@ export const getUserListAggregatesCached = unstable_cache(
   async (): Promise<UserListAggregates> => {
     const supabase = createSupabaseAdminClient();
 
+    // 1. Try single round-trip RPC (Migration 059)
+    try {
+      const { data: rpcData, error: rpcError } = await supabase.rpc("get_user_aggregates");
+      if (!rpcError && rpcData) {
+        const parsed = typeof rpcData === "string" ? JSON.parse(rpcData) : rpcData;
+        if (parsed && typeof parsed.total_users !== "undefined") {
+          return {
+            totalUsers: Number(parsed.total_users ?? 0),
+            activeUsers: Number(parsed.active_users ?? 0),
+            engineerCount: Number(parsed.engineer_count ?? 0),
+            states: Array.isArray(parsed.states) ? parsed.states : [],
+          };
+        }
+      }
+    } catch {
+      // Fallback below if RPC is not yet registered in DB
+    }
+
+    // 2. Parallel fallback queries
     const [totalRes, activeRes, engineerRes, statesRes] = await Promise.all([
       supabase.from("users").select("id", { count: "exact", head: true }),
       supabase.from("users").select("id", { count: "exact", head: true }).eq("status", "active"),
       supabase.from("users").select("id", { count: "exact", head: true }).in("role", ["engineer", "service_engineer"]),
-      supabase.from("users").select("state, state_id").not("state", "is", null),
+      supabase.from("users").select("state, state_id").not("state", "is", null).limit(300),
     ]);
 
     const statesMap = new Map<string, { id: string; label: string }>();
@@ -215,9 +383,74 @@ export const getUserListAggregatesCached = unstable_cache(
       states: sortedStates,
     };
   },
-  ["user-list-aggregates-v1"],
+  ["user-list-aggregates-v2"],
   { revalidate: CACHE_TIERS.CLASS_C_OPERATIONAL, tags: [TAGS.users] }
 );
+
+export async function getSupervisorUserListAggregatesCached(
+  supervisorId: string
+): Promise<UserListAggregates> {
+  const fetchScoped = unstable_cache(
+    async (supId: string): Promise<UserListAggregates> => {
+      const supabase = createSupabaseAdminClient();
+      const scopeFilter = `supervisor_id.eq.${supId},supervisor_ids.cs.{${supId}}`;
+
+      const [totalRes, activeRes, engineerRes, statesRes] = await Promise.all([
+        supabase
+          .from("users")
+          .select("id", { count: "exact", head: true })
+          .or(scopeFilter)
+          .in("role", SUPERVISOR_VISIBLE_USER_ROLES),
+        supabase
+          .from("users")
+          .select("id", { count: "exact", head: true })
+          .or(scopeFilter)
+          .in("role", SUPERVISOR_VISIBLE_USER_ROLES)
+          .eq("status", "active"),
+        supabase
+          .from("users")
+          .select("id", { count: "exact", head: true })
+          .or(scopeFilter)
+          .in("role", ["engineer", "service_engineer"]),
+        supabase
+          .from("users")
+          .select("state, state_id")
+          .or(scopeFilter)
+          .in("role", SUPERVISOR_VISIBLE_USER_ROLES)
+          .not("state", "is", null)
+          .limit(100),
+      ]);
+
+      const statesMap = new Map<string, { id: string; label: string }>();
+      if (statesRes.data) {
+        for (const row of statesRes.data as Array<{ state: string | null; state_id: string | number | null }>) {
+          if (row.state && row.state.trim()) {
+            const cleanState = row.state.trim();
+            const key = row.state_id ? String(row.state_id) : cleanState.toLowerCase();
+            if (!statesMap.has(key)) {
+              statesMap.set(key, { id: key, label: cleanState });
+            }
+          }
+        }
+      }
+
+      const sortedStates = Array.from(statesMap.values()).sort((a, b) =>
+        a.label.localeCompare(b.label)
+      );
+
+      return {
+        totalUsers: totalRes.count ?? 0,
+        activeUsers: activeRes.count ?? 0,
+        engineerCount: engineerRes.count ?? 0,
+        states: sortedStates,
+      };
+    },
+    [`supervisor-user-aggregates-${supervisorId}`],
+    { revalidate: CACHE_TIERS.CLASS_C_OPERATIONAL, tags: [TAGS.users] }
+  );
+
+  return fetchScoped(supervisorId);
+}
 
 export const getAllUsersCached = unstable_cache(
   async (): Promise<User[]> => {

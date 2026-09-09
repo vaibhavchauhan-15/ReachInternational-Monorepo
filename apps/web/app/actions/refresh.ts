@@ -14,7 +14,7 @@ export async function refreshPageDataAction(path?: string, tag?: string) {
     const user = await getCurrentUserOrNull();
 
     if (tag) {
-      revalidateTag(tag, "default");
+      revalidateTag(tag, "max");
     }
 
     if (path) {
@@ -43,7 +43,7 @@ export async function refreshPageDataAction(path?: string, tag?: string) {
       for (const t of tagsToRevalidate) {
         if (t) {
           try {
-            revalidateTag(t, "default");
+            revalidateTag(t, "max");
           } catch {
             // Ignore tag revalidation issues if individual tag is missing
           }

@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
-import { useTheme, Badge } from '../ui';
+import { useTheme } from '../ui/ThemeProvider';
+import { Badge } from '../ui/Badge';
 import { getVisibleMobileNavItems } from '../../lib/nav/navItems';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { X, ChevronDown, ChevronRight, LogOut, Sun, Moon } from 'lucide-react-native';

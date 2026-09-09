@@ -73,7 +73,7 @@ export const mainNavItems: NavItem[] = [
     href: "/users",
     label: "Employees & Users",
     icon: AnimatedUsers,
-    roles: ["super_admin", "admin", "manager", "service_manager", "hr_manager"],
+    roles: ["super_admin", "admin", "manager", "service_manager", "hr_manager", "supervisor"],
     subItems: [
       { label: "All Employee Accounts", tab: "all" },
     ],

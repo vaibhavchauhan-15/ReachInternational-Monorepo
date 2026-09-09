@@ -153,6 +153,19 @@ export function UserDetailSheet({
       if (user.id === currentUser.id) return true;
       return false;
     }
+    if (currentUser.role === "supervisor") {
+      const isAssigned =
+        user.supervisor_id === currentUser.id ||
+        (user.supervisor_ids && user.supervisor_ids.includes(currentUser.id));
+      if (isAssigned) return true;
+    }
+    if (user.id === currentUser.id) return true;
+    return false;
+  };
+
+  const canRevealSensitiveDocs = () => {
+    if (!user) return false;
+    if (currentUser.role === "super_admin" || currentUser.role === "admin") return true;
     if (user.id === currentUser.id) return true;
     return false;
   };
@@ -166,6 +179,7 @@ export function UserDetailSheet({
 
   const showContact = canViewContactInfo();
   const showManage = canManageUser();
+  const canRevealDocs = canRevealSensitiveDocs();
 
   const assignedSupervisors = user
     ? (user.supervisors && user.supervisors.length > 0
@@ -419,7 +433,7 @@ export function UserDetailSheet({
                         : maskAadhaar(user.aadhaar_number)
                       : "—"}
                   </span>
-                  {user.aadhaar_number && (
+                  {user.aadhaar_number && canRevealDocs && (
                     <>
                       <button
                         type="button"
@@ -459,7 +473,7 @@ export function UserDetailSheet({
                   <span className="font-semibold font-mono text-[var(--color-ink)]">
                     {user.license_number ? formatLicenseNumber(user.license_number) : "—"}
                   </span>
-                  {user.license_number && (
+                  {user.license_number && canRevealDocs && (
                     <button
                       type="button"
                       onClick={() => copyToClipboard(user.license_number!, "Licence")}

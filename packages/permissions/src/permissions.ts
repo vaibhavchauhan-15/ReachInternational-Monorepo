@@ -139,6 +139,9 @@ export const PERMISSIONS = {
   USER_EDIT: "user.edit",
   USER_DELETE: "user.delete",
   USER_ASSIGN_ROLE: "user.assign_role",
+  USER_ACTIVATE: "user.activate",
+  USER_ASSIGN_SUPERVISOR: "user.assign_supervisor",
+  USER_BULK_MANAGE: "user.bulk_manage",
 
   // Operator & Meter Logs
   OPERATOR_VIEW: "operator.view",

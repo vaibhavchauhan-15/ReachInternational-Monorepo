@@ -22,7 +22,7 @@ ReachInternational is an enterprise industrial machine service, equipment rental
                     ┌───────────────────────────┴───────────────────────────┐
                     │                                                       │
          apps/web [@reachinternational/web]                    apps/mobile [@reachinternational/mobile]
-    (Next.js 16.2 App Router, RSC, DAL, Actions)                (Expo 54, React Native 0.81, React Query)
+    (Next.js 16.2 App Router, RSC, DAL, Actions)                (Expo 57, React Native 0.86, WebView Shell)
                     │                                                       │
                     └───────────────────────────┬───────────────────────────┘
                                                 │
@@ -117,9 +117,7 @@ Dependencies between monorepo packages MUST use explicit workspace protocols (`"
    * NEVER exposes raw client-side database connections for mutations.
 
 2. **`apps/mobile` (`@reachinternational/mobile`)**:
-   * Field Engineer & Operations mobile application built on Expo 54 and React Native 0.81.
-   * Consumes `@reachinternational/api-client` and `@tanstack/react-query` for client-side data fetching.
-   * Manages authentication via Supabase JS client with custom native secure storage persistence.
+   * Field Operations & Heavy Machinery mobile application built on Expo SDK 57 and React Native 0.86 (WebView Shell).
 
 3. **Strict Boundary Rule**:
    * `apps/web` and `apps/mobile` are sibling applications.
@@ -201,13 +199,18 @@ apps/web/
 
 ---
 
-## 9. Mobile Architecture (Expo 54 & React Native)
+## 9. Mobile Architecture (Expo 57 & React Native WebView Shell)
 
-`apps/mobile` enforces clean React Native & Expo Router separation:
+`apps/mobile` operates as a high-performance native WebView Shell loading the authoritative 3-tier responsive Next.js web application (`apps/web`):
 
-1. **Routing**: `apps/mobile/app/` uses Expo Router file-based navigation (`(auth)`, `(app)/(tabs)`).
-2. **Data Fetching**: Consumes `@tanstack/react-query` (`useQuery`, `useMutation`) wrapping `@reachinternational/api-client` endpoints.
-3. **Session Management**: `apps/mobile/lib/supabase.ts` instantiates `@supabase/supabase-js` using custom native AsyncStorage adapter to persist JWT sessions safely across app restarts.
+1. **Native WebView Shell (`apps/mobile/shell/`)**:
+   * Powered by `react-native-webview` with `sharedCookiesEnabled` and `domStorageEnabled` for native HttpOnly cookie jar session persistence.
+   * `AppWebView.tsx`: Root shell handling Android hardware back navigation, NetInfo network reachability (`OfflineScreen`), loading progress, and safe areas.
+   * `NativeBridge.ts`: Non-sensitive hardware bridge for system browser links (`Linking.openURL`), file downloads (`expo-file-system`), native share sheets (`expo-sharing`), and native printing (`expo-print` polyfilling `window.print()`).
+2. **Transition Gate (`EXPO_PUBLIC_SHELL_MODE`)**:
+   * `webview` (default): Immediately mounts `AppWebView`, providing instant feature parity with web.
+   * `legacy`: Preserves previous React Native screen routing during verification phases.
+3. **Hardware Tuning**: Configured with `softwareKeyboardLayoutMode: "resize"`, camera/photo permissions, and edge-to-edge layout.
 
 ---
 
