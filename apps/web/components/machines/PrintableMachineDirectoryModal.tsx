@@ -25,6 +25,7 @@ const FILTER_TABS = [
   { value: "all", label: "All Fleet" },
   { value: "available", label: "Available" },
   { value: "rented", label: "On Rent" },
+  { value: "spare", label: "Spare" },
   { value: "breakdown", label: "Breakdown" },
   { value: "under_maintenance", label: "Maintenance" },
 ];
@@ -48,6 +49,8 @@ function formatHealthStatus(health?: string): string {
   switch (health) {
     case "active":
       return "Active";
+    case "spare":
+      return "Spare";
     case "under_maintenance":
       return "Maintenance";
     case "breakdown":
@@ -196,6 +199,7 @@ function MachineDirectoryReportContent({
 
                 const isBreakdown = m.health_status === "breakdown";
                 const isMaint = m.health_status === "under_maintenance";
+                const isSpare = m.health_status === "spare";
                 const isRented = m.status === "rented";
 
                 return (
@@ -237,6 +241,8 @@ function MachineDirectoryReportContent({
                             ? "bg-rose-100 text-rose-800"
                             : isMaint
                             ? "bg-amber-100 text-amber-800"
+                            : isSpare
+                            ? "bg-cyan-100 text-cyan-800"
                             : "bg-emerald-100 text-emerald-800"
                         }`}
                       >
@@ -352,6 +358,7 @@ export function PrintableMachineDirectoryModal({
     if (activeFilter === "all") return true;
     if (activeFilter === "available") return m.status === "available";
     if (activeFilter === "rented") return m.status === "rented";
+    if (activeFilter === "spare") return m.health_status === "spare";
     if (activeFilter === "breakdown") return m.health_status === "breakdown";
     if (activeFilter === "under_maintenance") return m.health_status === "under_maintenance";
     return true;

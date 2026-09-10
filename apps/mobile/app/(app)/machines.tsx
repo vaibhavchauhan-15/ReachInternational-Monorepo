@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,97 +7,117 @@ import {
   RefreshControl,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
+  BackHandler,
+  StatusBar,
 } from 'react-native';
-import { Card, Badge, Input, Button, useTheme, MobileHeader } from '../../components/ui';
-import { MachineDetailModal } from '../../components/machines/MachineDetailModal';
-import { AddMachineModal } from '../../components/machines/AddMachineModal';
+import { useLocalSearchParams } from 'expo-router';
+import { Input, useTheme, MobileHeader } from '../../components/ui';
+import { MobileMachineCard } from '../../components/machines/MobileMachineCard';
+import { MachineModal } from '../../components/machines/MachineModal';
+import { MachineDetailView } from '../../components/machines/MachineDetailView';
+import { DeleteMachineDialog } from '../../components/machines/DeleteMachineDialog';
+import { MachineImportModal } from '../../components/machines/MachineImportModal';
+import { CustomFilterSelectorModal, type FilterOption } from '../../components/machines/CustomFilterSelectorModal';
+import { MachineExportModal } from '../../components/machines/MachineExportModal';
+import { MachineCategoryModal } from '../../components/machines/MachineCategoryModal';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { Search, Plus, Wrench, Copy, Check, Edit2, Trash2 } from 'lucide-react-native';
+import {
+  Search,
+  Plus,
+  X,
+  ChevronDown,
+  RefreshCw,
+  FileSpreadsheet,
+  Wrench,
+  RotateCcw,
+  Printer,
+  FolderTree,
+} from 'lucide-react-native';
 
-export type StatusFilter = 'all' | 'available' | 'rented';
+export type RentalFilterType = 'all' | 'available' | 'rented';
+export type HealthFilterType = 'all' | 'active' | 'spare' | 'under_maintenance' | 'breakdown';
+export type SortOptionType =
+  | 'machine_id_asc'
+  | 'machine_id_desc'
+  | 'model_asc'
+  | 'newest_yum'
+  | 'oldest_yum'
+  | 'highest_hmr'
+  | 'lowest_hmr';
 
-export interface MachineRecord {
-  id: string;
-  machine_id: string;
-  model: string;
-  serial_number: string;
-  year_of_mfg?: string;
-  manufacturer?: string;
-  status: string;
-  health_status: string;
-  hour_meter: number;
-  customer_name?: string;
-  client_id?: string;
-  client?: { id: string; code?: string; company_name: string } | null;
-  supervisor_id?: string;
-  operator_id?: string;
-  current_supervisor?: { full_name: string } | null;
-  current_operator?: { full_name: string } | null;
-}
+const RENTAL_FILTER_OPTIONS: FilterOption[] = [
+  { id: 'all', label: 'All Rental Status' },
+  { id: 'available', label: 'Available', dotColor: '#10b981' },
+  { id: 'rented', label: 'Rented', dotColor: '#0ea5e9' },
+];
+
+const HEALTH_FILTER_OPTIONS: FilterOption[] = [
+  { id: 'all', label: 'All Health Status' },
+  { id: 'active', label: 'Active', dotColor: '#10b981' },
+  { id: 'spare', label: 'Spare', dotColor: '#06b6d4' },
+  { id: 'under_maintenance', label: 'Under Maintenance', dotColor: '#f59e0b' },
+  { id: 'breakdown', label: 'Breakdown', dotColor: '#ef4444' },
+];
+
+const SORT_OPTIONS: FilterOption[] = [
+  { id: 'machine_id_asc', label: 'Machine ID (A → Z)' },
+  { id: 'machine_id_desc', label: 'Machine ID (Z → A)' },
+  { id: 'model_asc', label: 'Model (A → Z)' },
+  { id: 'newest_yum', label: 'Newest Mfg Year' },
+  { id: 'oldest_yum', label: 'Oldest Mfg Year' },
+  { id: 'highest_hmr', label: 'Highest HMR' },
+  { id: 'lowest_hmr', label: 'Lowest HMR' },
+];
 
 export default function MachinesScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const { role } = useAuth();
+  const params = useLocalSearchParams<{ id?: string; machineId?: string }>();
 
-  const [machines, setMachines] = useState<MachineRecord[]>([]);
+  // Data states
+  const [machines, setMachines] = useState<any[]>([]);
+  const [supervisorsList, setSupervisorsList] = useState<Array<{ id: string; full_name: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Filter & Search states
   const [search, setSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState<StatusFilter>('all');
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [rentalFilter, setRentalFilter] = useState<RentalFilterType>('all');
+  const [healthFilter, setHealthFilter] = useState<HealthFilterType>('all');
+  const [supervisorFilter, setSupervisorFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<SortOptionType>('machine_id_asc');
 
-  // Modals
+  // Filter Selector Modal states
+  const [activePickerModal, setActivePickerModal] = useState<
+    'rental' | 'health' | 'supervisor' | 'sort' | null
+  >(null);
+
+  // Selection & Details view
   const [selectedMachine, setSelectedMachine] = useState<any | null>(null);
-  const [detailModalVisible, setDetailModalVisible] = useState(false);
 
-  const [addModalVisible, setAddModalVisible] = useState(false);
+  // Action Modals
+  const [machineModalOpen, setMachineModalOpen] = useState(false);
   const [machineToEdit, setMachineToEdit] = useState<any | null>(null);
+  const [deleteMachine, setDeleteMachine] = useState<any | null>(null);
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [meterMachine, setMeterMachine] = useState<any | null>(null);
 
-  const [meterModalVisible, setMeterModalVisible] = useState(false);
-  const [meterMachineData, setMeterMachineData] = useState<{ id: string; code: string; model?: string; serial?: string }>({
-    id: '',
-    code: '',
-  });
-
+  // Role permissions
   const normalizedRole = (role || '').toLowerCase();
-  const isManagerOrAdmin =
+  const isAdminOrManager =
     normalizedRole === 'admin' ||
     normalizedRole === 'super_admin' ||
     normalizedRole === 'manager' ||
     normalizedRole === 'service_manager';
   const isSupervisor = normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor';
-  const canEdit = isManagerOrAdmin;
-  const canEditStatus = isManagerOrAdmin || isSupervisor;
-  const canDelete = isManagerOrAdmin;
+  const canCreate = isAdminOrManager;
 
-  const handleDeleteMachine = (m: MachineRecord) => {
-    Alert.alert(
-      'Delete Machine',
-      `Are you sure you want to permanently delete machine ${m.machine_id} (${m.model || 'Unknown Model'})? This action cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const { error } = await supabase.from('machines').delete().eq('id', m.id);
-              if (error) throw error;
-              fetchMachines();
-            } catch (err: any) {
-              Alert.alert('Error', err?.message || 'Failed to delete machine');
-            }
-          },
-        },
-      ]
-    );
-  };
-
+  // Fetch machines with full hydration
   const fetchMachines = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -124,34 +144,48 @@ export default function MachinesScreen() {
             company_name,
             contact_person,
             phone,
+            email,
             address,
             city,
             district,
             state,
             pincode,
             gstin,
-            pan_number
+            pan_number,
+            is_billing_address_different,
+            billing_address,
+            billing_city,
+            billing_district,
+            billing_state,
+            billing_pincode,
+            status
           ),
-          current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, shift_time),
-          current_operator:users!machines_current_operator_id_fkey(id, full_name, shift_time)
+          current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email, shift_time, role),
+          current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email, shift_time, role)
         `)
         .order('created_at', { ascending: false });
 
       if (error) {
         console.warn('Error fetching machines:', error);
       } else if (data) {
-        // Hydrate all personnel
+        // Collect all distinct user IDs for supervisors and operators
         const allUserIds = new Set<string>();
         data.forEach((m: any) => {
-          if (Array.isArray(m.supervisor_ids)) m.supervisor_ids.forEach((id: string) => id && allUserIds.add(id));
-          if (Array.isArray(m.operator_ids)) m.operator_ids.forEach((id: string) => id && allUserIds.add(id));
+          if (Array.isArray(m.supervisor_ids)) {
+            m.supervisor_ids.forEach((id: string) => id && allUserIds.add(id));
+          }
+          if (m.current_supervisor_id) allUserIds.add(m.current_supervisor_id);
+          if (Array.isArray(m.operator_ids)) {
+            m.operator_ids.forEach((id: string) => id && allUserIds.add(id));
+          }
+          if (m.current_operator_id) allUserIds.add(m.current_operator_id);
         });
 
         let usersMap = new Map<string, any>();
         if (allUserIds.size > 0) {
           const { data: usersData } = await supabase
             .from('users')
-            .select('id, full_name, shift_time')
+            .select('id, full_name, phone, email, shift_time, role')
             .in('id', Array.from(allUserIds));
 
           (usersData || []).forEach((u: any) => {
@@ -160,12 +194,23 @@ export default function MachinesScreen() {
         }
 
         const hydrated = data.map((m: any) => {
-          const sups = Array.isArray(m.supervisor_ids) && m.supervisor_ids.length > 0
-            ? m.supervisor_ids.map((id: string) => usersMap.get(id) || (m.current_supervisor?.id === id ? m.current_supervisor : null)).filter(Boolean)
-            : m.current_supervisor ? [m.current_supervisor] : [];
-          const ops = Array.isArray(m.operator_ids) && m.operator_ids.length > 0
-            ? m.operator_ids.map((id: string) => usersMap.get(id) || (m.current_operator?.id === id ? m.current_operator : null)).filter(Boolean)
-            : m.current_operator ? [m.current_operator] : [];
+          const sups =
+            Array.isArray(m.supervisor_ids) && m.supervisor_ids.length > 0
+              ? m.supervisor_ids
+                  .map((id: string) => usersMap.get(id) || (m.current_supervisor?.id === id ? m.current_supervisor : null))
+                  .filter(Boolean)
+              : m.current_supervisor
+              ? [m.current_supervisor]
+              : [];
+
+          const ops =
+            Array.isArray(m.operator_ids) && m.operator_ids.length > 0
+              ? m.operator_ids
+                  .map((id: string) => usersMap.get(id) || (m.current_operator?.id === id ? m.current_operator : null))
+                  .filter(Boolean)
+              : m.current_operator
+              ? [m.current_operator]
+              : [];
 
           return {
             ...m,
@@ -174,7 +219,15 @@ export default function MachinesScreen() {
           };
         });
 
-        setMachines(hydrated as any);
+        setMachines(hydrated);
+
+        // Keep selectedMachine updated if it's currently selected
+        if (selectedMachine) {
+          const refreshedMatch = hydrated.find((item: any) => item.id === selectedMachine.id);
+          if (refreshedMatch) {
+            setSelectedMachine(refreshedMatch);
+          }
+        }
       }
     } catch (err) {
       console.error('Error fetching live machines:', err);
@@ -182,382 +235,850 @@ export default function MachinesScreen() {
       setIsLoading(false);
       setRefreshing(false);
     }
+  }, [selectedMachine]);
+
+  // Fetch active supervisors for filter dropdown
+  useEffect(() => {
+    async function loadSupervisors() {
+      try {
+        const { data } = await supabase
+          .from('users')
+          .select('id, full_name')
+          .in('role', ['supervisor', 'site_supervisor'])
+          .order('full_name');
+        if (data) {
+          setSupervisorsList(data);
+        }
+      } catch (err) {
+        console.warn('Error loading supervisors:', err);
+      }
+    }
+    loadSupervisors();
   }, []);
 
   useEffect(() => {
     fetchMachines();
-  }, [fetchMachines]);
+  }, []);
+
+  // Hardware Back Button handling on Android
+  useEffect(() => {
+    const onBackPress = () => {
+      if (selectedMachine) {
+        setSelectedMachine(null);
+        return true;
+      }
+      return false;
+    };
+
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => backHandler.remove();
+  }, [selectedMachine]);
+
+  // Deep Link Parameter resolution
+  useEffect(() => {
+    const targetId = params.id || params.machineId;
+    if (targetId && machines.length > 0) {
+      const found = machines.find((m) => m.id === targetId || m.machine_id === targetId);
+      if (found) {
+        setSelectedMachine(found);
+      }
+    }
+  }, [params.id, params.machineId, machines]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchMachines();
   }, [fetchMachines]);
 
-  const handleCopyId = (mId: string) => {
-    setCopiedId(mId);
-    setTimeout(() => setCopiedId(null), 1800);
-  };
+  // Statistics calculation
+  const statsSummary = useMemo(() => {
+    let availableCount = 0;
+    let rentedCount = 0;
+    let breakdownCount = 0;
+    let maintenanceCount = 0;
+    let spareCount = 0;
 
-  const openDetail = (m: any) => {
-    setSelectedMachine(m);
-    setDetailModalVisible(true);
-  };
+    machines.forEach((m) => {
+      if (m.status === 'rented') rentedCount++;
+      else availableCount++;
 
-  const openEdit = (m: any) => {
-    setMachineToEdit(m);
-    setAddModalVisible(true);
-  };
-
-  const openAdd = () => {
-    setMachineToEdit(null);
-    setAddModalVisible(true);
-  };
-
-  const openMeter = (m: MachineRecord) => {
-    setMeterMachineData({
-      id: m.id,
-      code: m.machine_id,
-      model: m.model,
-      serial: m.serial_number,
+      if (m.health_status === 'breakdown') breakdownCount++;
+      if (m.health_status === 'under_maintenance') maintenanceCount++;
+      if (m.health_status === 'spare') spareCount++;
     });
-    setMeterModalVisible(true);
+
+    return {
+      total: machines.length,
+      availableCount,
+      rentedCount,
+      breakdownCount,
+      maintenanceCount,
+      spareCount,
+    };
+  }, [machines]);
+
+  // Dynamic Supervisor Options for CustomFilterSelectorModal
+  const supervisorFilterOptions = useMemo<FilterOption[]>(() => {
+    const map = new Map<string, string>();
+    supervisorsList.forEach((s) => {
+      if (s.id && s.full_name) map.set(s.id, s.full_name);
+    });
+    machines.forEach((m) => {
+      if (m.current_supervisor?.id && m.current_supervisor?.full_name) {
+        map.set(m.current_supervisor.id, m.current_supervisor.full_name);
+      }
+    });
+    const items: FilterOption[] = Array.from(map.entries()).map(([id, name]) => ({
+      id,
+      label: name,
+    }));
+    return [{ id: 'all', label: 'All Supervisors' }, ...items];
+  }, [supervisorsList, machines]);
+
+  // Active filter count
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (rentalFilter !== 'all') count++;
+    if (healthFilter !== 'all') count++;
+    if (supervisorFilter !== 'all') count++;
+    if (search.trim() !== '') count++;
+    if (sortBy !== 'machine_id_asc') count++;
+    return count;
+  }, [rentalFilter, healthFilter, supervisorFilter, search, sortBy]);
+
+  const handleResetAllFilters = () => {
+    setSearch('');
+    setRentalFilter('all');
+    setHealthFilter('all');
+    setSupervisorFilter('all');
+    setSortBy('machine_id_asc');
   };
 
-  const filteredMachines = machines.filter((m) => {
-    const query = search.toLowerCase().trim();
-    const matchesSearch =
-      !query ||
-      (m.machine_id && m.machine_id.toLowerCase().includes(query)) ||
-      (m.model && m.model.toLowerCase().includes(query)) ||
-      (m.serial_number && m.serial_number.toLowerCase().includes(query)) ||
-      (m.manufacturer && m.manufacturer.toLowerCase().includes(query)) ||
-      (m.client?.company_name && m.client.company_name.toLowerCase().includes(query)) ||
-      (m.client?.code && m.client.code.toLowerCase().includes(query)) ||
-      (m.customer_name && m.customer_name.toLowerCase().includes(query));
+  // Client-side search, filtering and sorting
+  const filteredAndSortedMachines = useMemo(() => {
+    let list = [...machines];
 
-    const matchesStatus = activeFilter === 'all' || m.status === activeFilter;
+    // Search query
+    const q = search.toLowerCase().trim();
+    if (q) {
+      list = list.filter((m) => {
+        return (
+          m.machine_id?.toLowerCase().includes(q) ||
+          m.model?.toLowerCase().includes(q) ||
+          m.serial_number?.toLowerCase().includes(q) ||
+          m.manufacturer?.toLowerCase().includes(q) ||
+          m.year_of_mfg?.toLowerCase().includes(q) ||
+          m.client?.company_name?.toLowerCase().includes(q) ||
+          m.client?.code?.toLowerCase().includes(q) ||
+          m.customer_name?.toLowerCase().includes(q) ||
+          (Array.isArray(m.supervisors) &&
+            m.supervisors.some((s: any) => s.full_name?.toLowerCase().includes(q))) ||
+          (Array.isArray(m.operators) &&
+            m.operators.some((o: any) => o.full_name?.toLowerCase().includes(q)))
+        );
+      });
+    }
 
-    return matchesSearch && matchesStatus;
-  });
+    // Rental status filter
+    if (rentalFilter !== 'all') {
+      list = list.filter((m) => m.status === rentalFilter);
+    }
 
-  const availableCount = machines.filter((m) => m.status === 'available').length;
-  const rentedCount = machines.filter((m) => m.status === 'rented').length;
+    // Health status filter
+    if (healthFilter !== 'all') {
+      list = list.filter((m) => m.health_status === healthFilter);
+    }
+
+    // Supervisor filter
+    if (supervisorFilter !== 'all') {
+      list = list.filter((m) => {
+        if (m.current_supervisor_id === supervisorFilter) return true;
+        if (Array.isArray(m.supervisor_ids) && m.supervisor_ids.includes(supervisorFilter)) {
+          return true;
+        }
+        return false;
+      });
+    }
+
+    // Sorting
+    list.sort((a, b) => {
+      if (sortBy === 'machine_id_asc') return (a.machine_id || '').localeCompare(b.machine_id || '');
+      if (sortBy === 'machine_id_desc') return (b.machine_id || '').localeCompare(a.machine_id || '');
+      if (sortBy === 'model_asc') return (a.model || '').localeCompare(b.model || '');
+      if (sortBy === 'newest_yum') return (b.year_of_mfg || '').localeCompare(a.year_of_mfg || '');
+      if (sortBy === 'oldest_yum') return (a.year_of_mfg || '').localeCompare(b.year_of_mfg || '');
+      if (sortBy === 'highest_hmr') return (Number(b.hour_meter) || 0) - (Number(a.hour_meter) || 0);
+      if (sortBy === 'lowest_hmr') return (Number(a.hour_meter) || 0) - (Number(b.hour_meter) || 0);
+      return 0;
+    });
+
+    return list;
+  }, [machines, search, rentalFilter, healthFilter, supervisorFilter, sortBy]);
+
+  // If a machine is selected, render the full-featured MachineDetailView directly
+  if (selectedMachine) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+        <MachineDetailView
+          machine={selectedMachine}
+          onBack={() => setSelectedMachine(null)}
+          onMachineUpdated={() => {
+            fetchMachines();
+          }}
+          onMachineDeleted={() => {
+            setSelectedMachine(null);
+            fetchMachines();
+          }}
+          userRole={role}
+        />
+      </View>
+    );
+  }
+
+  // Get current filter label helpers
+  const currentRentalLabel =
+    RENTAL_FILTER_OPTIONS.find((opt) => opt.id === rentalFilter)?.label || 'Rental Status';
+  const currentHealthLabel =
+    HEALTH_FILTER_OPTIONS.find((opt) => opt.id === healthFilter)?.label || 'Health Status';
+  const currentSupervisorLabel =
+    supervisorFilterOptions.find((opt) => opt.id === supervisorFilter)?.label || 'Supervisor';
+  const currentSortLabel =
+    SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label || 'Sort';
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      {/* Top Header */}
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+
+      {/* Top Mobile Header */}
       <MobileHeader
         eyebrow="FLEET ASSETS"
-        title="Machine Fleet Directory"
+        title="Machine Directory"
         subtitle="Industrial machinery assets, HMR meter readings & personnel assignments"
         rightAction={
-          isManagerOrAdmin ? (
+          <View style={styles.headerActions}>
             <TouchableOpacity
-              onPress={openAdd}
+              onPress={() => setExportModalOpen(true)}
               style={[
-                styles.addBtn,
-                { backgroundColor: theme.colors.ink },
+                styles.headerIconBtn,
+                {
+                  borderColor: theme.colors.hairline,
+                  backgroundColor: theme.colors.canvasElevated,
+                },
               ]}
-              activeOpacity={0.8}
+              accessibilityLabel="Export Fleet Directory"
             >
-              <Plus size={14} color={theme.colors.canvas} />
-              <Text style={[styles.addBtnText, { color: theme.colors.canvas }]}>Add</Text>
+              <Printer size={15} color={theme.colors.mute} />
             </TouchableOpacity>
-          ) : undefined
+
+            {isAdminOrManager && (
+              <TouchableOpacity
+                onPress={() => setCategoryModalOpen(true)}
+                style={[
+                  styles.headerIconBtn,
+                  {
+                    borderColor: theme.colors.hairline,
+                    backgroundColor: theme.colors.canvasElevated,
+                  },
+                ]}
+                accessibilityLabel="Manage Categories"
+              >
+                <FolderTree size={15} color={theme.colors.mute} />
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              onPress={() => setImportModalOpen(true)}
+              style={[
+                styles.headerIconBtn,
+                {
+                  borderColor: theme.colors.hairline,
+                  backgroundColor: theme.colors.canvasElevated,
+                },
+              ]}
+              accessibilityLabel="Bulk Excel Import Guide"
+            >
+              <FileSpreadsheet size={16} color={theme.colors.mute} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={onRefresh}
+              style={[
+                styles.headerIconBtn,
+                {
+                  borderColor: theme.colors.hairline,
+                  backgroundColor: theme.colors.canvasElevated,
+                },
+              ]}
+              accessibilityLabel="Refresh Fleet Data"
+            >
+              <RefreshCw size={15} color={theme.colors.mute} />
+            </TouchableOpacity>
+
+            {canCreate && (
+              <TouchableOpacity
+                onPress={() => {
+                  setMachineToEdit(null);
+                  setMachineModalOpen(true);
+                }}
+                style={[styles.addBtn, { backgroundColor: theme.colors.ink }]}
+                activeOpacity={0.8}
+                accessibilityLabel="Add Machine"
+              >
+                <Plus size={14} color={theme.colors.canvas} />
+                <Text style={[styles.addBtnText, { color: theme.colors.canvas }]}>Add</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         }
       />
 
-      {/* Search & Filter Bar */}
-      <View style={[styles.searchFilterContainer, { backgroundColor: theme.colors.canvas, borderBottomColor: theme.colors.hairline }]}>
-        <Input
-          placeholder="Search ID, model, serial no, manufacturer..."
-          value={search}
-          onChangeText={setSearch}
-          leftIcon={<Search size={16} color={theme.colors.mute} />}
-          containerStyle={styles.searchInput}
-        />
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.link}
+          />
+        }
+      >
+        {/* Interactive KPI Statistic Cards Grid (2x2 matching Web & Tokens) */}
+        <View style={styles.kpiGrid}>
+          {/* 1. Total Machines Card */}
+          <TouchableOpacity
+            onPress={() => setRentalFilter('all')}
+            activeOpacity={0.7}
+            style={[
+              styles.kpiCard,
+              {
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor:
+                  rentalFilter === 'all' ? theme.colors.ink : theme.colors.hairline,
+                borderWidth: rentalFilter === 'all' ? 1.5 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>
+              TOTAL MACHINES
+            </Text>
+            <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
+              {statsSummary.total}
+            </Text>
+          </TouchableOpacity>
 
-        {/* Filter Pills Strip */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-          {[
-            { key: 'all', label: `All Fleet (${machines.length})` },
-            { key: 'available', label: `Available (${availableCount})` },
-            { key: 'rented', label: `Rented (${rentedCount})` },
-          ].map((f) => {
-            const isActive = activeFilter === f.key;
-            return (
-              <TouchableOpacity
-                key={f.key}
-                onPress={() => setActiveFilter(f.key as StatusFilter)}
-                activeOpacity={0.7}
+          {/* 2. Available Fleet Card */}
+          <TouchableOpacity
+            onPress={() => setRentalFilter(rentalFilter === 'available' ? 'all' : 'available')}
+            activeOpacity={0.7}
+            style={[
+              styles.kpiCard,
+              {
+                backgroundColor:
+                  rentalFilter === 'available'
+                    ? isDark
+                      ? 'rgba(16, 185, 129, 0.12)'
+                      : '#ecfdf5'
+                    : theme.colors.canvasElevated,
+                borderColor:
+                  rentalFilter === 'available' ? '#10b981' : theme.colors.hairline,
+                borderWidth: rentalFilter === 'available' ? 1.5 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.kpiLabel, { color: '#10b981' }]}>
+              AVAILABLE FLEET
+            </Text>
+            <Text style={[styles.kpiValue, { color: isDark ? '#34d399' : '#059669' }]}>
+              {statsSummary.availableCount}
+            </Text>
+          </TouchableOpacity>
+
+          {/* 3. On Rent Card */}
+          <TouchableOpacity
+            onPress={() => setRentalFilter(rentalFilter === 'rented' ? 'all' : 'rented')}
+            activeOpacity={0.7}
+            style={[
+              styles.kpiCard,
+              {
+                backgroundColor:
+                  rentalFilter === 'rented'
+                    ? isDark
+                      ? 'rgba(14, 165, 233, 0.12)'
+                      : '#f0f9ff'
+                    : theme.colors.canvasElevated,
+                borderColor:
+                  rentalFilter === 'rented' ? '#0ea5e9' : theme.colors.hairline,
+                borderWidth: rentalFilter === 'rented' ? 1.5 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.kpiLabel, { color: '#0ea5e9' }]}>
+              ON RENT
+            </Text>
+            <Text style={[styles.kpiValue, { color: isDark ? '#38bdf8' : '#0284c7' }]}>
+              {statsSummary.rentedCount}
+            </Text>
+          </TouchableOpacity>
+
+          {/* 4. Breakdown Events Card */}
+          <TouchableOpacity
+            onPress={() => setHealthFilter(healthFilter === 'breakdown' ? 'all' : 'breakdown')}
+            activeOpacity={0.7}
+            style={[
+              styles.kpiCard,
+              {
+                backgroundColor:
+                  healthFilter === 'breakdown'
+                    ? isDark
+                      ? 'rgba(239, 68, 68, 0.12)'
+                      : '#fef2f2'
+                    : theme.colors.canvasElevated,
+                borderColor:
+                  healthFilter === 'breakdown' ? '#ef4444' : theme.colors.hairline,
+                borderWidth: healthFilter === 'breakdown' ? 1.5 : 1,
+              },
+            ]}
+          >
+            <Text style={[styles.kpiLabel, { color: '#ef4444' }]}>
+              BREAKDOWN EVENTS
+            </Text>
+            <Text style={[styles.kpiValue, { color: isDark ? '#f87171' : '#dc2626' }]}>
+              {statsSummary.breakdownCount}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Search Input */}
+        <View style={styles.searchSection}>
+          <Input
+            placeholder="Search Machine ID, Model, Serial Number..."
+            value={search}
+            onChangeText={setSearch}
+            leftIcon={<Search size={16} color={theme.colors.mute} />}
+            rightIcon={
+              search ? (
+                <TouchableOpacity onPress={() => setSearch('')}>
+                  <X size={16} color={theme.colors.mute} />
+                </TouchableOpacity>
+              ) : undefined
+            }
+            containerStyle={styles.searchInput}
+          />
+
+          {/* Filter Trigger Chips Strip */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterStrip}
+          >
+            {/* Rental Trigger */}
+            <TouchableOpacity
+              onPress={() => setActivePickerModal('rental')}
+              style={[
+                styles.filterDropdownBtn,
+                {
+                  backgroundColor:
+                    rentalFilter !== 'all'
+                      ? theme.colors.ink
+                      : theme.colors.canvasElevated,
+                  borderColor:
+                    rentalFilter !== 'all'
+                      ? theme.colors.ink
+                      : theme.colors.hairline,
+                },
+              ]}
+            >
+              {rentalFilter === 'available' && <View style={[styles.dot, { backgroundColor: '#10b981' }]} />}
+              {rentalFilter === 'rented' && <View style={[styles.dot, { backgroundColor: '#0ea5e9' }]} />}
+              <Text
                 style={[
-                  styles.filterPill,
+                  styles.filterDropdownText,
                   {
-                    backgroundColor: isActive ? theme.colors.primary : theme.colors.canvasElevated,
-                    borderColor: isActive ? theme.colors.primary : theme.colors.hairline,
+                    color:
+                      rentalFilter !== 'all'
+                        ? theme.colors.canvas
+                        : theme.colors.ink,
                   },
                 ]}
+                numberOfLines={1}
               >
-                <Text style={[styles.filterText, { color: isActive ? theme.colors.onPrimary : theme.colors.body }]}>
-                  {f.label}
+                {rentalFilter === 'all' ? 'Rental' : currentRentalLabel}
+              </Text>
+              <ChevronDown
+                size={13}
+                color={rentalFilter !== 'all' ? theme.colors.canvas : theme.colors.mute}
+              />
+            </TouchableOpacity>
+
+            {/* Health Trigger */}
+            <TouchableOpacity
+              onPress={() => setActivePickerModal('health')}
+              style={[
+                styles.filterDropdownBtn,
+                {
+                  backgroundColor:
+                    healthFilter !== 'all'
+                      ? theme.colors.ink
+                      : theme.colors.canvasElevated,
+                  borderColor:
+                    healthFilter !== 'all'
+                      ? theme.colors.ink
+                      : theme.colors.hairline,
+                },
+              ]}
+            >
+              {healthFilter === 'active' && <View style={[styles.dot, { backgroundColor: '#10b981' }]} />}
+              {healthFilter === 'spare' && <View style={[styles.dot, { backgroundColor: '#06b6d4' }]} />}
+              {healthFilter === 'under_maintenance' && <View style={[styles.dot, { backgroundColor: '#f59e0b' }]} />}
+              {healthFilter === 'breakdown' && <View style={[styles.dot, { backgroundColor: '#ef4444' }]} />}
+              <Text
+                style={[
+                  styles.filterDropdownText,
+                  {
+                    color:
+                      healthFilter !== 'all'
+                        ? theme.colors.canvas
+                        : theme.colors.ink,
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {healthFilter === 'all' ? 'Health' : currentHealthLabel}
+              </Text>
+              <ChevronDown
+                size={13}
+                color={healthFilter !== 'all' ? theme.colors.canvas : theme.colors.mute}
+              />
+            </TouchableOpacity>
+
+            {/* Supervisor Trigger */}
+            <TouchableOpacity
+              onPress={() => setActivePickerModal('supervisor')}
+              style={[
+                styles.filterDropdownBtn,
+                {
+                  backgroundColor:
+                    supervisorFilter !== 'all'
+                      ? theme.colors.ink
+                      : theme.colors.canvasElevated,
+                  borderColor:
+                    supervisorFilter !== 'all'
+                      ? theme.colors.ink
+                      : theme.colors.hairline,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.filterDropdownText,
+                  {
+                    color:
+                      supervisorFilter !== 'all'
+                        ? theme.colors.canvas
+                        : theme.colors.ink,
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {supervisorFilter === 'all' ? 'Supervisor' : currentSupervisorLabel}
+              </Text>
+              <ChevronDown
+                size={13}
+                color={supervisorFilter !== 'all' ? theme.colors.canvas : theme.colors.mute}
+              />
+            </TouchableOpacity>
+
+            {/* Sort Trigger */}
+            <TouchableOpacity
+              onPress={() => setActivePickerModal('sort')}
+              style={[
+                styles.filterDropdownBtn,
+                {
+                  backgroundColor:
+                    sortBy !== 'machine_id_asc'
+                      ? theme.colors.ink
+                      : theme.colors.canvasElevated,
+                  borderColor:
+                    sortBy !== 'machine_id_asc'
+                      ? theme.colors.ink
+                      : theme.colors.hairline,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.filterDropdownText,
+                  {
+                    color:
+                      sortBy !== 'machine_id_asc'
+                        ? theme.colors.canvas
+                        : theme.colors.ink,
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {sortBy === 'machine_id_asc' ? 'Sort' : currentSortLabel}
+              </Text>
+              <ChevronDown
+                size={13}
+                color={sortBy !== 'machine_id_asc' ? theme.colors.canvas : theme.colors.mute}
+              />
+            </TouchableOpacity>
+          </ScrollView>
+
+          {/* Active Filter Badges Strip */}
+          {activeFilterCount > 0 && (
+            <View style={styles.activeFiltersRow}>
+              {search.trim() !== '' && (
+                <TouchableOpacity
+                  onPress={() => setSearch('')}
+                  style={[styles.activeBadge, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
+                >
+                  <Text style={[styles.activeBadgeText, { color: theme.colors.ink }]}>
+                    Search: "{search}"
+                  </Text>
+                  <X size={11} color={theme.colors.mute} />
+                </TouchableOpacity>
+              )}
+
+              {rentalFilter !== 'all' && (
+                <TouchableOpacity
+                  onPress={() => setRentalFilter('all')}
+                  style={[styles.activeBadge, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
+                >
+                  <Text style={[styles.activeBadgeText, { color: theme.colors.ink }]}>
+                    Rental: {currentRentalLabel}
+                  </Text>
+                  <X size={11} color={theme.colors.mute} />
+                </TouchableOpacity>
+              )}
+
+              {healthFilter !== 'all' && (
+                <TouchableOpacity
+                  onPress={() => setHealthFilter('all')}
+                  style={[styles.activeBadge, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
+                >
+                  <Text style={[styles.activeBadgeText, { color: theme.colors.ink }]}>
+                    Health: {currentHealthLabel}
+                  </Text>
+                  <X size={11} color={theme.colors.mute} />
+                </TouchableOpacity>
+              )}
+
+              {supervisorFilter !== 'all' && (
+                <TouchableOpacity
+                  onPress={() => setSupervisorFilter('all')}
+                  style={[styles.activeBadge, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
+                >
+                  <Text style={[styles.activeBadgeText, { color: theme.colors.ink }]}>
+                    Supervisor: {currentSupervisorLabel}
+                  </Text>
+                  <X size={11} color={theme.colors.mute} />
+                </TouchableOpacity>
+              )}
+
+              {sortBy !== 'machine_id_asc' && (
+                <TouchableOpacity
+                  onPress={() => setSortBy('machine_id_asc')}
+                  style={[styles.activeBadge, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
+                >
+                  <Text style={[styles.activeBadgeText, { color: theme.colors.ink }]}>
+                    Sort: {currentSortLabel}
+                  </Text>
+                  <X size={11} color={theme.colors.mute} />
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                onPress={handleResetAllFilters}
+                style={[styles.resetAllBtn, { borderColor: theme.colors.hairline }]}
+              >
+                <RotateCcw size={11} color={theme.colors.link} />
+                <Text style={[styles.resetAllText, { color: theme.colors.link }]}>
+                  Reset all
                 </Text>
               </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+            </View>
+          )}
 
-      {/* Machine Card List Feed */}
-      <ScrollView
-        contentContainerStyle={styles.feedContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
-      >
+          {/* Results Count Line */}
+          <View style={styles.resultsCountRow}>
+            <Text style={[styles.resultsCountText, { color: theme.colors.mute }]}>
+              Showing{' '}
+              <Text style={{ fontWeight: '700', color: theme.colors.ink }}>
+                {filteredAndSortedMachines.length}
+              </Text>{' '}
+              of {machines.length} machine assets
+            </Text>
+          </View>
+        </View>
+
+        {/* Machine Cards List */}
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.colors.link} />
-            <Text style={[styles.loadingText, { color: theme.colors.mute }]}>Loading fleet inventory...</Text>
-          </View>
-        ) : filteredMachines.length === 0 ? (
-          <View style={[styles.emptyContainer, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <Wrench size={32} color={theme.colors.mute} />
-            <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>No machines found</Text>
-            <Text style={[styles.emptySubtext, { color: theme.colors.mute }]}>
-              Try adjusting your search criteria or clear active status filters.
+            <Text style={[styles.loadingText, { color: theme.colors.mute }]}>
+              Loading fleet machinery...
             </Text>
           </View>
+        ) : filteredAndSortedMachines.length === 0 ? (
+          <View
+            style={[
+              styles.emptyContainer,
+              {
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            <Wrench size={36} color={theme.colors.mute} />
+            <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>
+              No machines found
+            </Text>
+            <Text style={[styles.emptySubtext, { color: theme.colors.mute }]}>
+              Try adjusting your search query or clear your active filter selections.
+            </Text>
+            {activeFilterCount > 0 && (
+              <TouchableOpacity
+                onPress={handleResetAllFilters}
+                style={[styles.emptyResetBtn, { backgroundColor: theme.colors.ink }]}
+              >
+                <Text style={[styles.emptyResetBtnText, { color: theme.colors.canvas }]}>
+                  Reset All Filters
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         ) : (
-          filteredMachines.map((m) => {
-            const isCopied = copiedId === m.machine_id;
-            return (
-              <Card key={m.id} style={styles.card}>
-                {/* Top Row: Machine Code, Model & Status Badges */}
-                <View style={styles.cardHeader}>
-                  <View style={styles.headerLeftInfo}>
-                    <TouchableOpacity
-                      onPress={() => handleCopyId(m.machine_id)}
-                      activeOpacity={0.7}
-                      style={styles.codeBtn}
-                    >
-                      <Text style={[styles.codeText, { color: theme.colors.ink }]}>
-                        {m.machine_id}
-                      </Text>
-                      {isCopied ? (
-                        <Check size={12} color={theme.colors.success} />
-                      ) : (
-                        <Copy size={12} color={theme.colors.mute} />
-                      )}
-                    </TouchableOpacity>
-                    {m.model && (
-                      <Text style={[styles.modelText, { color: theme.colors.ink }]} numberOfLines={1}>
-                        • {m.model}
-                      </Text>
-                    )}
-                  </View>
-
-                  <View style={styles.badgeColumn}>
-                    {m.health_status === 'breakdown' && <Badge status="breakdown" customLabel="Breakdown" />}
-                    {m.health_status === 'under_maintenance' && <Badge status="under_maintenance" customLabel="Maintenance" />}
-                    {m.health_status === 'active' && <Badge status="active" customLabel="Active" />}
-                    <Badge status={m.status === 'rented' ? 'in_transit' : 'available'} customLabel={m.status === 'rented' ? 'Rented' : 'Available'} />
-                  </View>
-                </View>
-
-                {/* Sub Metadata Row */}
-                <View style={styles.metaRow}>
-                  {m.serial_number && (
-                    <Text style={[styles.metaText, { color: theme.colors.mute }]}>
-                      S/N: {m.serial_number}
-                    </Text>
-                  )}
-                  {m.year_of_mfg && (
-                    <Text style={[styles.metaText, { color: theme.colors.mute }]}>
-                      • YUM: {m.year_of_mfg}
-                    </Text>
-                  )}
-                  {m.manufacturer && (
-                    <Text style={[styles.metaText, { color: theme.colors.mute }]}>
-                      • Mfg: {m.manufacturer}
-                    </Text>
-                  )}
-                </View>
-
-                {/* Inset Specs Well */}
-                <View style={[styles.specsWell, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                  <View style={styles.specsGrid}>
-                    <View style={styles.specsItem}>
-                      <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Hour Meter (HMR):</Text>
-                      <Text style={[styles.specsValue, { color: theme.colors.ink }]}>{m.hour_meter ?? 0} hrs</Text>
-                    </View>
-                    <View style={styles.specsItem}>
-                      <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>Assigned Client:</Text>
-                      <Text style={[styles.specsValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                        {m.client?.company_name || m.customer_name || '—'}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={[styles.specsDivider, { backgroundColor: theme.colors.hairline }]} />
-
-                  <View style={styles.specsGrid}>
-                    <View style={styles.specsItem}>
-                      <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>
-                        Supervisor{Array.isArray((m as any).supervisors) && (m as any).supervisors.length > 3 ? ` (+${(m as any).supervisors.length - 3})` : ''}:
-                      </Text>
-                      {(() => {
-                        const sups = Array.isArray((m as any).supervisors) && (m as any).supervisors.length > 0
-                          ? (m as any).supervisors.filter((s: any) => Boolean(s?.full_name))
-                          : m.current_supervisor?.full_name ? [m.current_supervisor] : [];
-                        
-                        if (sups.length === 0) {
-                          return <Text style={[styles.personnelText, { color: theme.colors.mute, fontStyle: 'italic' }]}>Unassigned</Text>;
-                        }
-
-                        const count = sups.length;
-                        const visible = sups.slice(0, 3);
-                        const fontSize = count === 1 ? 12 : count === 2 ? 11 : 10;
-                        const lineHeight = count === 1 ? 16 : count === 2 ? 14 : 13;
-
-                        return (
-                          <View style={{ gap: 2, marginTop: 2 }}>
-                            {visible.map((s: any, idx: number) => (
-                              <Text
-                                key={s.id || idx}
-                                style={[styles.personnelText, { color: theme.colors.ink, fontSize, lineHeight }]}
-                                numberOfLines={1}
-                              >
-                                {s.full_name}
-                              </Text>
-                            ))}
-                          </View>
-                        );
-                      })()}
-                    </View>
-                    <View style={styles.specsItem}>
-                      <Text style={[styles.specsLabel, { color: theme.colors.mute }]}>
-                        Operator{Array.isArray((m as any).operators) && (m as any).operators.length > 3 ? ` (+${(m as any).operators.length - 3})` : ''}:
-                      </Text>
-                      {(() => {
-                        const ops = Array.isArray((m as any).operators) && (m as any).operators.length > 0
-                          ? (m as any).operators.filter((o: any) => Boolean(o?.full_name))
-                          : m.current_operator?.full_name ? [m.current_operator] : [];
-                        
-                        if (ops.length === 0) {
-                          return <Text style={[styles.personnelText, { color: theme.colors.mute, fontStyle: 'italic' }]}>Unassigned</Text>;
-                        }
-
-                        const count = ops.length;
-                        const visible = ops.slice(0, 3);
-                        const fontSize = count === 1 ? 12 : count === 2 ? 11 : 10;
-                        const lineHeight = count === 1 ? 16 : count === 2 ? 14 : 13;
-
-                        return (
-                          <View style={{ gap: 2, marginTop: 2 }}>
-                            {visible.map((o: any, idx: number) => (
-                              <Text
-                                key={o.id || idx}
-                                style={[styles.personnelText, { color: theme.colors.ink, fontSize, lineHeight }]}
-                                numberOfLines={1}
-                              >
-                                {o.full_name}
-                              </Text>
-                            ))}
-                          </View>
-                        );
-                      })()}
-                    </View>
-                  </View>
-                </View>
-
-                {/* Card Actions Footer */}
-                <View style={[styles.cardActions, { borderTopColor: theme.colors.hairline }]}>
-                  <View style={styles.actionsLeft}>
-                    {canEdit && (
-                      <Button
-                        label="Edit"
-                        onPress={() => openEdit(m)}
-                        size="sm"
-                        variant="ghost"
-                        icon={<Edit2 size={12} color={theme.colors.body} />}
-                      />
-                    )}
-                    {isSupervisor && !canEdit && (
-                      <Button
-                        label="Update"
-                        onPress={() => openEdit(m)}
-                        size="sm"
-                        variant="ghost"
-                        icon={<Edit2 size={12} color={theme.colors.link} />}
-                      />
-                    )}
-                    {canDelete && (
-                      <Button
-                        label="Delete"
-                        onPress={() => handleDeleteMachine(m)}
-                        size="sm"
-                        variant="danger"
-                        icon={<Trash2 size={12} color={theme.colors.error} />}
-                      />
-                    )}
-                    <Button
-                      label="Log Meter"
-                      onPress={() => openMeter(m)}
-                      size="sm"
-                      variant="outline"
-                    />
-                  </View>
-
-                  <Button
-                    label="View Specs"
-                    onPress={() => openDetail(m)}
-                    size="sm"
-                    variant="primary"
-                  />
-                </View>
-              </Card>
-            );
-          })
+          <View style={styles.cardsContainer}>
+            {filteredAndSortedMachines.map((machine) => (
+              <MobileMachineCard
+                key={machine.id}
+                machine={machine}
+                isAdmin={isAdminOrManager}
+                isSupervisor={isSupervisor}
+                onViewDetails={(m) => setSelectedMachine(m)}
+                onEdit={(m) => {
+                  setMachineToEdit(m);
+                  setMachineModalOpen(true);
+                }}
+                onDelete={(m) => setDeleteMachine(m)}
+                onLogMeter={(m) => setMeterMachine(m)}
+              />
+            ))}
+          </View>
         )}
       </ScrollView>
 
-      {/* Machine Details Bottom Sheet Modal */}
-      {selectedMachine && (
-        <MachineDetailModal
-          visible={detailModalVisible}
-          onClose={() => setDetailModalVisible(false)}
-          machineData={selectedMachine}
-          canEdit={canEdit}
-          canDelete={canDelete}
-          onEdit={() => {
-            setDetailModalVisible(false);
-            openEdit(selectedMachine);
-          }}
-          onDelete={() => {
-            setDetailModalVisible(false);
-            handleDeleteMachine(selectedMachine);
-          }}
-        />
-      )}
+      {/* Filter Selector Modals */}
+      <CustomFilterSelectorModal
+        visible={activePickerModal === 'rental'}
+        onClose={() => setActivePickerModal(null)}
+        title="Filter by Rental Status"
+        options={RENTAL_FILTER_OPTIONS}
+        selectedValue={rentalFilter}
+        onSelect={(val) => {
+          setRentalFilter(val as RentalFilterType);
+          setActivePickerModal(null);
+        }}
+      />
+
+      <CustomFilterSelectorModal
+        visible={activePickerModal === 'health'}
+        onClose={() => setActivePickerModal(null)}
+        title="Filter by Health Status"
+        options={HEALTH_FILTER_OPTIONS}
+        selectedValue={healthFilter}
+        onSelect={(val) => {
+          setHealthFilter(val as HealthFilterType);
+          setActivePickerModal(null);
+        }}
+      />
+
+      <CustomFilterSelectorModal
+        visible={activePickerModal === 'supervisor'}
+        onClose={() => setActivePickerModal(null)}
+        title="Filter by Supervisor"
+        options={supervisorFilterOptions}
+        selectedValue={supervisorFilter}
+        onSelect={(val) => {
+          setSupervisorFilter(val);
+          setActivePickerModal(null);
+        }}
+      />
+
+      <CustomFilterSelectorModal
+        visible={activePickerModal === 'sort'}
+        onClose={() => setActivePickerModal(null)}
+        title="Sort Machines"
+        options={SORT_OPTIONS}
+        selectedValue={sortBy}
+        onSelect={(val) => {
+          setSortBy(val as SortOptionType);
+          setActivePickerModal(null);
+        }}
+      />
 
       {/* Add / Edit Machine Modal */}
-      <AddMachineModal
-        visible={addModalVisible}
-        onClose={() => setAddModalVisible(false)}
-        onSuccess={fetchMachines}
+      <MachineModal
+        visible={machineModalOpen}
+        onClose={() => setMachineModalOpen(false)}
+        onSuccess={() => {
+          setMachineModalOpen(false);
+          fetchMachines();
+        }}
         machineToEdit={machineToEdit}
         userRole={role}
       />
 
-      {/* Meter Log Modal */}
-      <MeterLogModal
-        visible={meterModalVisible}
-        onClose={() => setMeterModalVisible(false)}
-        machineId={meterMachineData.id}
-        machineCode={meterMachineData.code}
-        model={meterMachineData.model}
-        serialNumber={meterMachineData.serial}
-        onSubmit={fetchMachines}
+      {/* Delete Machine Dialog */}
+      <DeleteMachineDialog
+        visible={Boolean(deleteMachine)}
+        machine={deleteMachine}
+        onClose={() => setDeleteMachine(null)}
+        onDeleted={() => {
+          setDeleteMachine(null);
+          fetchMachines();
+        }}
       />
+
+      {/* Bulk Excel Import Info Modal */}
+      <MachineImportModal
+        visible={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+      />
+
+      {/* Export Fleet Directory Modal (PDF & CSV) */}
+      <MachineExportModal
+        visible={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        machines={machines}
+      />
+
+      {/* Machine Categories Modal */}
+      <MachineCategoryModal
+        visible={categoryModalOpen}
+        onClose={() => setCategoryModalOpen(false)}
+        onCategoriesChanged={() => fetchMachines()}
+      />
+
+      {/* Log Meter Modal */}
+      {meterMachine && (
+        <MeterLogModal
+          visible={Boolean(meterMachine)}
+          onClose={() => setMeterMachine(null)}
+          machineId={meterMachine.id}
+          machineCode={meterMachine.machine_id}
+          model={meterMachine.model}
+          serialNumber={meterMachine.serial_number}
+          onSubmit={() => {
+            setMeterMachine(null);
+            fetchMachines();
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -566,45 +1087,130 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: radiusNumeric.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radiusNumeric.md,
   },
   addBtnText: {
     fontSize: 12,
     fontWeight: '700',
   },
-  searchFilterContainer: {
+  scrollContent: {
     paddingHorizontal: spacingNumeric.md,
-    paddingTop: spacingNumeric.xs,
-    paddingBottom: spacingNumeric.sm,
-    borderBottomWidth: 1,
+    paddingTop: spacingNumeric.sm,
+    paddingBottom: 90,
+    gap: spacingNumeric.md,
+  },
+  kpiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacingNumeric.sm,
+  },
+  kpiCard: {
+    width: '48%',
+    flexGrow: 1,
+    padding: spacingNumeric.md,
+    borderRadius: radiusNumeric.md,
+  },
+  kpiLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  kpiValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  searchSection: {
     gap: spacingNumeric.xs,
   },
   searchInput: {
     marginBottom: 0,
   },
-  filterScroll: {
-    gap: spacingNumeric.xs,
-    paddingVertical: 2,
+  filterStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
   },
-  filterPill: {
-    paddingHorizontal: spacingNumeric.sm + 2,
-    paddingVertical: 6,
+  filterDropdownBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
-  filterText: {
+  filterDropdownText: {
     fontSize: 12,
     fontWeight: '600',
   },
-  feedContent: {
-    padding: spacingNumeric.md,
-    paddingBottom: 40,
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  activeFiltersRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  activeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+  },
+  activeBadgeText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  resetAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+  },
+  resetAllText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  resultsCountRow: {
+    paddingHorizontal: 2,
+    paddingTop: 2,
+  },
+  resultsCountText: {
+    fontSize: 11,
+  },
+  cardsContainer: {
     gap: spacingNumeric.md,
   },
   loadingContainer: {
@@ -620,7 +1226,8 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
+    marginTop: 10,
   },
   emptyTitle: {
     fontSize: 16,
@@ -630,95 +1237,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
   },
-  card: {
-    gap: spacingNumeric.xs,
-    padding: spacingNumeric.md,
+  emptyResetBtn: {
+    marginTop: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: radiusNumeric.md,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  headerLeftInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-    flex: 1,
-  },
-  codeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  codeText: {
-    fontSize: 14,
-    fontWeight: '800',
-    fontFamily: 'monospace',
-  },
-  modelText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  badgeColumn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 2,
-  },
-  metaText: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  specsWell: {
-    padding: spacingNumeric.sm,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-    marginTop: 4,
-  },
-  specsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  specsItem: {
-    flex: 1,
-  },
-  specsLabel: {
-    fontSize: 10,
-    fontWeight: '500',
-  },
-  specsValue: {
+  emptyResetBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    marginTop: 1,
-  },
-  personnelText: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 1,
-  },
-  specsDivider: {
-    height: 1,
-    marginVertical: 6,
-  },
-  cardActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: spacingNumeric.xs,
-    borderTopWidth: 1,
-    marginTop: 4,
-  },
-  actionsLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
   },
 });

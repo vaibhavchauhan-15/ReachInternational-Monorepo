@@ -21,7 +21,7 @@ export type PermissionScope =
 
 export type UserStatus = "active" | "inactive" | "pending";
 export type MachineStatus = "available" | "rented" | "active" | "inactive" | "on_rent" | "under_maintenance";
-export type MachineHealthStatus = "active" | "under_maintenance" | "breakdown";
+export type MachineHealthStatus = "active" | "under_maintenance" | "breakdown" | "spare";
 export type OwnershipType = "company_owned" | "customer_owned" | "rental_fleet";
 export type ComplaintStatus = "open" | "in_progress" | "pending_parts" | "resolved" | "closed";
 export type ServiceStatus = "scheduled" | "in_progress" | "completed" | "overdue";

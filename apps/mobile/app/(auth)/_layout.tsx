@@ -4,14 +4,16 @@
 
 import React from 'react';
 import { Stack } from 'expo-router';
-import { colorsDark } from '@reachinternational/design-tokens';
+import { useTheme } from '../../components/ui/ThemeProvider';
 
 export default function AuthLayout() {
+  const { theme } = useTheme();
+
   return (
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: colorsDark.canvas },
+        contentStyle: { backgroundColor: theme.colors.canvas },
       }}
     />
   );

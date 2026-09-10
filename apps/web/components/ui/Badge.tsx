@@ -12,7 +12,8 @@ type BadgeVariant =
   | "overdue"
   | "today"
   | "tomorrow"
-  | "upcoming";
+  | "upcoming"
+  | "spare";
 
 interface BadgeProps {
   variant?: BadgeVariant;
@@ -34,6 +35,7 @@ const variantClasses: Record<BadgeVariant, string> = {
   today: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20",
   tomorrow: "bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/20",
   upcoming: "bg-muted text-muted-foreground border border-border",
+  spare: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border border-cyan-500/20",
 };
 
 const dotColors: Record<BadgeVariant, string> = {
@@ -49,6 +51,7 @@ const dotColors: Record<BadgeVariant, string> = {
   today: "bg-amber-500",
   tomorrow: "bg-sky-500",
   upcoming: "bg-muted-foreground",
+  spare: "bg-cyan-500",
 };
 
 export function Badge({ variant = "default", children, className = "", dot = false }: BadgeProps) {

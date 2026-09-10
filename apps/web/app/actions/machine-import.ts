@@ -243,14 +243,16 @@ export async function importMachinesFromExcel(formData: FormData): Promise<BulkI
         : "available";
 
       let healthStatus = "active";
-      if (["active", "under_maintenance", "breakdown"].includes(rawHealthStatus)) {
+      if (["active", "under_maintenance", "breakdown", "spare"].includes(rawHealthStatus)) {
         healthStatus = rawHealthStatus;
       } else if (rawHealthStatus === "maintenance") {
         healthStatus = "under_maintenance";
       }
 
       let status = "available";
-      if (["available", "rented"].includes(rawStatus)) {
+      if (healthStatus === "spare") {
+        status = "rented";
+      } else if (["available", "rented"].includes(rawStatus)) {
         status = rawStatus;
       } else if (["on_rent", "in_use", "rent"].includes(rawStatus)) {
         status = "rented";

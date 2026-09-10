@@ -9,7 +9,7 @@ import { Slot } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '../lib/auth/useAuth';
-import { colorsDark } from '@reachinternational/design-tokens';
+import { ThemeProvider, useTheme } from '../components/ui/ThemeProvider';
 
 function MobileAgentation() {
   if (process.env.NODE_ENV !== 'development' || Platform.OS !== 'web') {
@@ -32,15 +32,25 @@ const queryClient = new QueryClient({
   },
 });
 
+function ThemedAppContainer() {
+  const { theme, isDark } = useTheme();
+
+  return (
+    <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <Slot />
+      <MobileAgentation />
+    </View>
+  );
+}
+
 export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <View style={styles.container}>
-          <StatusBar style="light" />
-          <Slot />
-          <MobileAgentation />
-        </View>
+        <ThemeProvider>
+          <ThemedAppContainer />
+        </ThemeProvider>
       </AuthProvider>
     </QueryClientProvider>
   );
@@ -49,6 +59,5 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colorsDark.canvas,
   },
 });

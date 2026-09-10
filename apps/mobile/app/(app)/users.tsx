@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,14 @@ import {
 import { Card, Badge, Input, Button, useTheme, MobileHeader } from '../../components/ui';
 import { UserDetailModal, type UserRecord } from '../../components/users/UserDetailModal';
 import { CreateUserModal } from '../../components/users/CreateUserModal';
+import { UserEditModal } from '../../components/users/UserEditModal';
+import { PasswordResetModal } from '../../components/users/PasswordResetModal';
+import { RejectReasonModal } from '../../components/users/RejectReasonModal';
+import { UserExportModal } from '../../components/users/UserExportModal';
+import {
+  CustomFilterSelectorModal,
+  type FilterModalType,
+} from '../../components/users/CustomFilterSelectorModal';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -20,8 +28,10 @@ import {
   Users,
   User,
   UserCheck,
+  UserX,
   ShieldCheck,
   ShieldAlert,
+  Shield,
   Search,
   Plus,
   Phone,
@@ -34,6 +44,10 @@ import {
   Mail,
   Clock,
   ChevronRight,
+  Filter,
+  FileSpreadsheet,
+  RotateCcw,
+  SlidersHorizontal,
 } from 'lucide-react-native';
 
 function formatRoleName(role: string): string {
@@ -65,7 +79,36 @@ function formatRoleName(role: string): string {
   }
 }
 
-function truncateText(str?: string | null, maxChars: number = 15): string {
+function getRoleAccentColor(role: string): string {
+  switch (role) {
+    case 'super_admin':
+      return '#ef4444';
+    case 'admin':
+      return '#f59e0b';
+    case 'manager':
+    case 'branch_manager':
+      return '#6366f1';
+    case 'service_manager':
+      return '#0284c7';
+    case 'service_engineer':
+    case 'engineer':
+      return '#2563eb';
+    case 'supervisor':
+      return '#0d9488';
+    case 'store_manager':
+      return '#9333ea';
+    case 'operator':
+      return '#d97706';
+    case 'mechanic':
+      return '#ea580c';
+    case 'hr_manager':
+      return '#059669';
+    default:
+      return '#64748b';
+  }
+}
+
+function truncateText(str?: string | null, maxChars: number = 22): string {
   if (!str) return '';
   return str.length > maxChars ? `${str.slice(0, maxChars)}…` : str;
 }
@@ -85,12 +128,10 @@ function applyOptimizedUserSearch(query: any, search?: string) {
   const sanitized = sanitizeSearchToken(trimmed);
   if (!sanitized) return query;
 
-  // Single-character fast prefix search: hits B-Tree index on prefix without full table scan
   if (trimmed.length === 1) {
     return query.or(`full_name.ilike.${sanitized}%,email.ilike.${sanitized}%,role.ilike.${sanitized}%`);
   }
 
-  // 1. Phone or Aadhaar search: input consists mostly of numbers, +, -, spaces, ()
   const isDigitsOnly = /^[0-9+\s\-()]+$/.test(trimmed);
   const digits = trimmed.replace(/\D/g, '');
 
@@ -115,12 +156,10 @@ function applyOptimizedUserSearch(query: any, search?: string) {
     return query.or(conditions.join(','));
   }
 
-  // 2. Email search: contains @ or domain ending
   if (trimmed.includes('@') || trimmed.endsWith('.com') || trimmed.endsWith('.in')) {
     return query.or(`email.ilike.%${sanitized}%,full_name.ilike.%${sanitized}%`);
   }
 
-  // 3. Multi-token or Role search
   const words = trimmed.split(/\s+/).map(sanitizeSearchToken).filter((w) => w.length >= 2);
   const roleSlug = sanitized.toLowerCase().replace(/\s+/g, '_');
   const isKnownRole = [
@@ -143,7 +182,6 @@ function applyOptimizedUserSearch(query: any, search?: string) {
       return query.or(`role.ilike.%${roleSlug}%,full_name.ilike.%${sanitized}%,email.ilike.%${sanitized}%`);
     }
 
-    // Composite multi-token AND matching across name, role, city, district, state, email
     for (const word of words) {
       const wRole = word.toLowerCase().replace(/s$/, '');
       query = query.or(
@@ -153,7 +191,6 @@ function applyOptimizedUserSearch(query: any, search?: string) {
     return query;
   }
 
-  // 4. Single-token text search
   const roleVariant = sanitized.toLowerCase().replace(/s$/, '');
   const conditions = [
     `full_name.ilike.%${sanitized}%`,
@@ -179,7 +216,7 @@ function applyOptimizedUserSearch(query: any, search?: string) {
 
 export default function UsersScreen() {
   const { theme } = useTheme();
-  const { role } = useAuth();
+  const { role: currentUserRole, user: authUser } = useAuth();
 
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -188,7 +225,7 @@ export default function UsersScreen() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
-  // 300ms debounce: search automatically when user pauses
+  // 300ms debounce
   useEffect(() => {
     const trimmed = search.trim();
     if (trimmed.length === 0) {
@@ -204,24 +241,145 @@ export default function UsersScreen() {
   const isSearchingDebounce = search.trim() !== debouncedSearch;
   const showLoading = isLoading || isSearchingDebounce;
 
+  // 6 Primary Filter Dimensions
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [stateFilter, setStateFilter] = useState('all');
+  const [kycFilter, setKycFilter] = useState('all');
+  const [dateRangeFilter, setDateRangeFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('newest');
+
+  // Filter Selector Modal State
+  const [activeFilterModal, setActiveFilterModal] = useState<FilterModalType | null>(null);
+
+  // Pagination & Counts
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isPaginating, setIsPaginating] = useState(false);
   const [totalUsersCount, setTotalUsersCount] = useState(0);
-  const PAGE_SIZE = 20;
+  const PAGE_SIZE = 25;
 
-  // Modals
+  // Modals & Action States
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [userToEdit, setUserToEdit] = useState<UserRecord | null>(null);
 
-  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [passwordResetModalVisible, setPasswordResetModalVisible] = useState(false);
+  const [resetPasswordUserName, setResetPasswordUserName] = useState('');
+  const [temporaryPassword, setTemporaryPassword] = useState('');
+
+  const [exportModalVisible, setExportModalVisible] = useState(false);
+
+  // Profile Change Requests State
   const [profileRequests, setProfileRequests] = useState<any[]>([]);
   const [approvingProfileId, setApprovingProfileId] = useState<string | null>(null);
+  const [rejectModalReq, setRejectModalReq] = useState<any | null>(null);
+  const [isRejectingProfileReq, setIsRejectingProfileReq] = useState(false);
   const [isBulkApprovingProfile, setIsBulkApprovingProfile] = useState(false);
   const [isBulkRejectingProfile, setIsBulkRejectingProfile] = useState(false);
+
+  // Multi-Selection State
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false);
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (roleFilter !== 'all') count++;
+    if (statusFilter !== 'all') count++;
+    if (stateFilter !== 'all') count++;
+    if (kycFilter !== 'all') count++;
+    if (dateRangeFilter !== 'all') count++;
+    if (sortBy !== 'newest') count++;
+    return count;
+  }, [roleFilter, statusFilter, stateFilter, kycFilter, dateRangeFilter, sortBy]);
+
+  const resetAllFilters = () => {
+    setRoleFilter('all');
+    setStatusFilter('all');
+    setStateFilter('all');
+    setKycFilter('all');
+    setDateRangeFilter('all');
+    setSortBy('newest');
+    setSearch('');
+    setDebouncedSearch('');
+  };
+
+  const buildBaseQuery = useCallback(() => {
+    let query = supabase
+      .from('users')
+      .select(
+        'id, full_name, email, phone, role, status, city, district, state, state_id, shift_time, address, aadhaar_number, license_number, supervisor_id, supervisor_ids, working_location_id, created_at',
+        { count: 'exact' }
+      );
+
+    // 1. Role Filter
+    if (roleFilter !== 'all') {
+      if (roleFilter === 'engineers') {
+        query = query.in('role', ['engineer', 'service_engineer']);
+      } else if (roleFilter === 'managers') {
+        query = query.in('role', ['manager', 'branch_manager', 'admin', 'super_admin']);
+      } else {
+        query = query.eq('role', roleFilter);
+      }
+    }
+
+    // 2. Status Filter
+    if (statusFilter !== 'all') {
+      query = query.eq('status', statusFilter);
+    }
+
+    // 3. State Filter
+    if (stateFilter !== 'all') {
+      query = query.ilike('state', `%${stateFilter}%`);
+    }
+
+    // 4. KYC Filter
+    if (kycFilter === 'verified') {
+      query = query.not('aadhaar_number', 'is', null).neq('aadhaar_number', '');
+    } else if (kycFilter === 'unverified') {
+      query = query.or('aadhaar_number.is.null,aadhaar_number.eq.');
+    }
+
+    // 5. Joined Date Range Filter
+    if (dateRangeFilter !== 'all') {
+      const now = new Date();
+      if (dateRangeFilter === 'today') {
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+        query = query.gte('created_at', today);
+      } else if (dateRangeFilter === 'last_7_days') {
+        const d7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        query = query.gte('created_at', d7);
+      } else if (dateRangeFilter === 'last_30_days') {
+        const d30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        query = query.gte('created_at', d30);
+      } else if (dateRangeFilter === 'last_90_days') {
+        const d90 = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
+        query = query.gte('created_at', d90);
+      }
+    }
+
+    // 6. Search
+    query = applyOptimizedUserSearch(query, debouncedSearch);
+
+    // 7. Sort Order
+    if (sortBy === 'oldest') {
+      query = query.order('created_at', { ascending: true });
+    } else if (sortBy === 'name_asc') {
+      query = query.order('full_name', { ascending: true });
+    } else if (sortBy === 'name_desc') {
+      query = query.order('full_name', { ascending: false });
+    } else if (sortBy === 'role') {
+      query = query.order('role', { ascending: true });
+    } else {
+      query = query.order('created_at', { ascending: false });
+    }
+    query = query.order('id', { ascending: true });
+
+    return query;
+  }, [roleFilter, statusFilter, stateFilter, kycFilter, dateRangeFilter, debouncedSearch, sortBy]);
 
   const fetchUsers = useCallback(async (isLoadMore = false, currentPage = 1) => {
     if (!isLoadMore) {
@@ -233,26 +391,9 @@ export default function UsersScreen() {
       const from = (currentPage - 1) * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      let query = supabase
-        .from('users')
-        .select('id, full_name, email, phone, role, status, city, district, state, state_id, shift_time, address, aadhaar_number, license_number, supervisor_id, supervisor_ids, working_location_id, created_at', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .order('id', { ascending: true });
-
-      if (roleFilter !== 'all') {
-        if (roleFilter === 'engineers') query = query.in('role', ['engineer', 'service_engineer']);
-        else if (roleFilter === 'managers') query = query.in('role', ['manager', 'branch_manager', 'admin', 'super_admin']);
-        else if (roleFilter === 'operators') query = query.eq('role', 'operator');
-        else if (roleFilter === 'mechanics') query = query.eq('role', 'mechanic');
-        else if (roleFilter === 'supervisors') query = query.eq('role', 'supervisor');
-        else if (roleFilter === 'active') query = query.eq('status', 'active');
-        else if (roleFilter === 'pending') query = query.eq('status', 'pending');
-      }
-
-      query = applyOptimizedUserSearch(query, debouncedSearch);
-
-
+      const query = buildBaseQuery();
       const { data, count, error } = await query.range(from, to);
+
       if (count !== null) setTotalUsersCount(count);
 
       if (error) {
@@ -260,7 +401,6 @@ export default function UsersScreen() {
       } else if (data) {
         const userMap = new Map((data as any[]).map((u) => [u.id, u]));
 
-        // Fetch working locations to hydrate working_location
         let workingLocMap = new Map<string, any>();
         try {
           const { data: locs } = await supabase.from('working_locations').select('id, name, type, city, state');
@@ -268,7 +408,7 @@ export default function UsersScreen() {
             workingLocMap = new Map(locs.map((l: any) => [l.id, l]));
           }
         } catch {
-          // ignore if table not accessible
+          // ignore
         }
 
         const hydrated = (data as any[]).map((u) => {
@@ -304,6 +444,7 @@ export default function UsersScreen() {
               : null,
           };
         });
+
         if (isLoadMore) {
           setUsers((prev) => [...prev, ...(hydrated as any)]);
         } else {
@@ -343,12 +484,22 @@ export default function UsersScreen() {
       setRefreshing(false);
       setIsPaginating(false);
     }
-  }, []);
+  }, [buildBaseQuery]);
+
+  // Export full matching users across all pages
+  const handleFetchAllMatchingUsers = useCallback(async (): Promise<any[]> => {
+    const query = buildBaseQuery();
+    const { data, error } = await query.limit(2000);
+    if (error) {
+      throw error;
+    }
+    return data || [];
+  }, [buildBaseQuery]);
 
   useEffect(() => {
     setPage(1);
     fetchUsers(false, 1);
-  }, [fetchUsers, debouncedSearch, roleFilter, statusFilter]);
+  }, [fetchUsers]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -363,10 +514,10 @@ export default function UsersScreen() {
     fetchUsers(true, nextPage);
   }, [page, hasMore, isPaginating, fetchUsers]);
 
+  // Profile Change Request Actions
   const handleApproveProfileReq = async (reqId: string, reqData: any, userId: string) => {
     setApprovingProfileId(reqId);
     try {
-      // 1. Update user row
       const { error: userErr } = await supabase
         .from('users')
         .update({
@@ -377,7 +528,6 @@ export default function UsersScreen() {
 
       if (userErr) throw userErr;
 
-      // 2. Mark request approved
       const { error: reqErr } = await supabase
         .from('profile_change_requests')
         .update({
@@ -397,8 +547,9 @@ export default function UsersScreen() {
     }
   };
 
-  const handleRejectProfileReq = async (reqId: string) => {
-    setApprovingProfileId(reqId);
+  const handleConfirmRejectProfileReq = async (reason: string) => {
+    if (!rejectModalReq) return;
+    setIsRejectingProfileReq(true);
     try {
       const { error } = await supabase
         .from('profile_change_requests')
@@ -406,15 +557,16 @@ export default function UsersScreen() {
           status: 'rejected',
           reviewed_at: new Date().toISOString(),
         })
-        .eq('id', reqId);
+        .eq('id', rejectModalReq.id);
 
       if (error) throw error;
+      setRejectModalReq(null);
       Alert.alert('Rejected', 'Profile change request has been declined.');
       fetchUsers(false, 1);
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to reject profile changes.');
     } finally {
-      setApprovingProfileId(null);
+      setIsRejectingProfileReq(false);
     }
   };
 
@@ -470,91 +622,23 @@ export default function UsersScreen() {
     }
   };
 
-  const handleApprove = async (userId: string) => {
-    setApprovingId(userId);
-    const prevUsers = [...users];
-    setUsers((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, status: 'active' as const } : u))
-    );
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ status: 'active' })
-        .eq('id', userId);
-      if (error) throw error;
-      fetchUsers(false, 1);
-    } catch (e) {
-      setUsers(prevUsers);
-      console.warn('Error approving user:', e);
-    } finally {
-      setApprovingId(null);
-    }
+  // Password Reset Trigger
+  const handleTriggerResetPassword = (userToReset: UserRecord) => {
+    const rawFirst = (userToReset.full_name || '').trim().split(/\s+/)[0] || 'User';
+    const cleaned = rawFirst.replace(/[^a-zA-Z0-9]/g, '');
+    const firstName = cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : 'User';
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const generatedPwd = `${firstName}@${randomNum}`;
+
+    setResetPasswordUserName(userToReset.full_name);
+    setTemporaryPassword(generatedPwd);
+    setPasswordResetModalVisible(true);
   };
 
-  const handleReject = async (userId: string) => {
-    setApprovingId(userId);
-    const prevUsers = [...users];
-    setUsers((prev) => prev.filter((u) => u.id !== userId));
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ status: 'inactive' })
-        .eq('id', userId);
-      if (error) throw error;
-      fetchUsers(false, 1);
-    } catch (e) {
-      setUsers(prevUsers);
-      console.warn('Error rejecting user:', e);
-    } finally {
-      setApprovingId(null);
-    }
-  };
-
-  const [isBulkApprovingMobile, setIsBulkApprovingMobile] = useState(false);
-  const [isBulkRejectingMobile, setIsBulkRejectingMobile] = useState(false);
-
-  const handleApproveAll = async () => {
-    if (pendingUsers.length === 0) return;
-    const pendingIds = pendingUsers.map((u) => u.id);
-    const prevUsers = [...users];
-    setUsers((prev) =>
-      prev.map((u) => (pendingIds.includes(u.id) ? { ...u, status: 'active' } : u))
-    );
-    setIsBulkApprovingMobile(true);
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ status: 'active' })
-        .in('id', pendingIds);
-      if (error) throw error;
-      fetchUsers(false, 1);
-    } catch (e) {
-      setUsers(prevUsers);
-      console.warn('Error bulk approving users:', e);
-    } finally {
-      setIsBulkApprovingMobile(false);
-    }
-  };
-
-  const handleRejectAll = async () => {
-    if (pendingUsers.length === 0) return;
-    const pendingIds = pendingUsers.map((u) => u.id);
-    const prevUsers = [...users];
-    setUsers((prev) => prev.filter((u) => !pendingIds.includes(u.id)));
-    setIsBulkRejectingMobile(true);
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({ status: 'inactive' })
-        .in('id', pendingIds);
-      if (error) throw error;
-      fetchUsers(false, 1);
-    } catch (e) {
-      setUsers(prevUsers);
-      console.warn('Error bulk rejecting users:', e);
-    } finally {
-      setIsBulkRejectingMobile(false);
-    }
+  // Edit Account Info Trigger
+  const handleTriggerEdit = (userToEditRecord: UserRecord) => {
+    setUserToEdit(userToEditRecord);
+    setEditModalVisible(true);
   };
 
   const openUserDetail = (u: UserRecord) => {
@@ -562,15 +646,7 @@ export default function UsersScreen() {
     setDetailModalVisible(true);
   };
 
-  const pendingUsers = users.filter((u) => u.status === 'pending');
-  const activeCount = users.filter((u) => u.status === 'active').length;
-  const engineerCount = users.filter((u) => u.role === 'service_engineer' || u.role === 'engineer').length;
-
-  // Multi-Selection State
-  const [isSelectMode, setIsSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [isDeletingBulk, setIsDeletingBulk] = useState(false);
-
+  // Multi-Selection Logic
   const toggleSelectUser = (userId: string) => {
     setSelectedIds((prev) =>
       prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
@@ -623,17 +699,34 @@ export default function UsersScreen() {
     );
   };
 
-
+  // Metric snapshot calculations
+  const pendingCount = users.filter((u) => u.status === 'pending').length;
+  const activeCount = users.filter((u) => u.status === 'active').length;
+  const engineerCount = users.filter((u) => u.role === 'service_engineer' || u.role === 'engineer').length;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
       {/* Header */}
       <MobileHeader
         eyebrow="STAFF DIRECTORY"
-        title="Employee & User Accounts"
+        title="User Management"
         subtitle="Manage organization staff, role authorizations & account approvals"
         rightAction={
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {/* Export Directory CTA */}
+            <TouchableOpacity
+              onPress={() => setExportModalVisible(true)}
+              style={[
+                styles.headerActionBtn,
+                { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
+              ]}
+              activeOpacity={0.75}
+            >
+              <FileSpreadsheet size={15} color="#10b981" />
+              <Text style={[styles.headerActionBtnText, { color: theme.colors.ink }]}>Export</Text>
+            </TouchableOpacity>
+
+            {/* Select Mode Toggle */}
             <TouchableOpacity
               onPress={() => {
                 if (isSelectMode) {
@@ -644,143 +737,271 @@ export default function UsersScreen() {
                 }
               }}
               style={[
-                styles.addBtn,
+                styles.headerActionBtn,
                 {
-                  backgroundColor: isSelectMode ? theme.colors.canvasElevated : theme.colors.hairlineSoft,
-                  borderWidth: 1,
+                  backgroundColor: isSelectMode ? theme.colors.ink : theme.colors.canvasElevated,
                   borderColor: theme.colors.hairline,
                 },
               ]}
-              activeOpacity={0.8}
+              activeOpacity={0.75}
             >
-              <Text style={[styles.addBtnText, { color: isSelectMode ? theme.colors.link : theme.colors.body }]}>
+              <Text style={[styles.headerActionBtnText, { color: isSelectMode ? theme.colors.canvas : theme.colors.ink }]}>
                 {isSelectMode ? 'Done' : 'Select'}
               </Text>
             </TouchableOpacity>
 
+            {/* Add User Button */}
             {!isSelectMode && (
               <TouchableOpacity
                 onPress={() => setCreateModalVisible(true)}
-                style={[styles.addBtn, { backgroundColor: theme.colors.ink }]}
+                style={[styles.headerActionBtn, { backgroundColor: theme.colors.ink, borderColor: theme.colors.ink }]}
                 activeOpacity={0.8}
               >
-                <Plus size={14} color={theme.colors.canvas} />
-                <Text style={[styles.addBtnText, { color: theme.colors.canvas }]}>Invite</Text>
+                <Plus size={15} color={theme.colors.canvas} />
+                <Text style={[styles.headerActionBtnText, { color: theme.colors.canvas }]}>Add</Text>
               </TouchableOpacity>
             )}
           </View>
         }
       />
 
-      {/* Search and Filters */}
+      {/* Search and Filters Bar */}
       <View style={[styles.searchFilterContainer, { backgroundColor: theme.colors.canvas, borderBottomColor: theme.colors.hairline }]}>
         <Input
-          placeholder="Search user by name, email, phone, city, role..."
+          placeholder="Search name, email, phone, city, role..."
           value={search}
           onChangeText={setSearch}
           leftIcon={<Search size={16} color={theme.colors.mute} />}
           containerStyle={styles.searchInput}
         />
 
-        {/* Role & Status Filter Strip */}
+        {/* 6 Dimension Filter Strip */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
-          {[
-            { key: 'all', label: `All Users (${totalUsersCount})` },
-            { key: 'active', label: `Active (${activeCount})` },
-            { key: 'pending', label: `Pending (${pendingUsers.length})` },
-            { key: 'engineers', label: `Engineers (${engineerCount})` },
-            { key: 'operators', label: 'Operators' },
-            { key: 'mechanics', label: 'Mechanics' },
-            { key: 'supervisors', label: 'Supervisors' },
-            { key: 'managers', label: 'Managers & Admins' },
-          ].map((f) => {
-            const isActive = roleFilter === f.key;
-            return (
-              <TouchableOpacity
-                key={f.key}
-                onPress={() => setRoleFilter(f.key)}
-                style={[
-                  styles.filterPill,
-                  {
-                    backgroundColor: isActive ? theme.colors.primary : theme.colors.canvasElevated,
-                    borderColor: isActive ? theme.colors.primary : theme.colors.hairline,
-                  },
-                ]}
-              >
-                <Text style={[styles.filterText, { color: isActive ? theme.colors.onPrimary : theme.colors.body }]}>
-                  {f.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
+          {/* 1. Role Filter Pill */}
+          <TouchableOpacity
+            onPress={() => setActiveFilterModal('role')}
+            style={[
+              styles.filterPill,
+              {
+                backgroundColor: roleFilter !== 'all' ? theme.colors.ink : theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            <Shield size={12} color={roleFilter !== 'all' ? theme.colors.canvas : theme.colors.mute} />
+            <Text style={[styles.filterPillText, { color: roleFilter !== 'all' ? theme.colors.canvas : theme.colors.ink }]}>
+              {roleFilter !== 'all' ? formatRoleName(roleFilter) : 'Role: All'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* 2. Status Filter Pill */}
+          <TouchableOpacity
+            onPress={() => setActiveFilterModal('status')}
+            style={[
+              styles.filterPill,
+              {
+                backgroundColor: statusFilter !== 'all' ? theme.colors.ink : theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            <UserCheck size={12} color={statusFilter !== 'all' ? theme.colors.canvas : theme.colors.mute} />
+            <Text style={[styles.filterPillText, { color: statusFilter !== 'all' ? theme.colors.canvas : theme.colors.ink }]}>
+              {statusFilter !== 'all' ? statusFilter.toUpperCase() : 'Status: All'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* 3. State Filter Pill */}
+          <TouchableOpacity
+            onPress={() => setActiveFilterModal('state')}
+            style={[
+              styles.filterPill,
+              {
+                backgroundColor: stateFilter !== 'all' ? theme.colors.ink : theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            <MapPin size={12} color={stateFilter !== 'all' ? theme.colors.canvas : theme.colors.mute} />
+            <Text style={[styles.filterPillText, { color: stateFilter !== 'all' ? theme.colors.canvas : theme.colors.ink }]}>
+              {stateFilter !== 'all' ? stateFilter : 'State: All'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* 4. KYC Filter Pill */}
+          <TouchableOpacity
+            onPress={() => setActiveFilterModal('kyc')}
+            style={[
+              styles.filterPill,
+              {
+                backgroundColor: kycFilter !== 'all' ? theme.colors.ink : theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            <ShieldCheck size={12} color={kycFilter !== 'all' ? theme.colors.canvas : theme.colors.mute} />
+            <Text style={[styles.filterPillText, { color: kycFilter !== 'all' ? theme.colors.canvas : theme.colors.ink }]}>
+              {kycFilter === 'verified' ? 'KYC: Verified' : kycFilter === 'unverified' ? 'KYC: Unverified' : 'KYC: All'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* 5. Joined Date Pill */}
+          <TouchableOpacity
+            onPress={() => setActiveFilterModal('joined')}
+            style={[
+              styles.filterPill,
+              {
+                backgroundColor: dateRangeFilter !== 'all' ? theme.colors.ink : theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            <Clock size={12} color={dateRangeFilter !== 'all' ? theme.colors.canvas : theme.colors.mute} />
+            <Text style={[styles.filterPillText, { color: dateRangeFilter !== 'all' ? theme.colors.canvas : theme.colors.ink }]}>
+              {dateRangeFilter !== 'all' ? dateRangeFilter.replace(/_/g, ' ') : 'Joined: All Time'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* 6. Sort By Pill */}
+          <TouchableOpacity
+            onPress={() => setActiveFilterModal('sort')}
+            style={[
+              styles.filterPill,
+              {
+                backgroundColor: sortBy !== 'newest' ? theme.colors.ink : theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            <SlidersHorizontal size={12} color={sortBy !== 'newest' ? theme.colors.canvas : theme.colors.mute} />
+            <Text style={[styles.filterPillText, { color: sortBy !== 'newest' ? theme.colors.canvas : theme.colors.ink }]}>
+              Sort: {sortBy === 'newest' ? 'Newest' : sortBy === 'oldest' ? 'Oldest' : sortBy === 'name_asc' ? 'Name (A-Z)' : sortBy === 'name_desc' ? 'Name (Z-A)' : 'Role'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Reset Filters Pill */}
+          {activeFilterCount > 0 && (
+            <TouchableOpacity
+              onPress={resetAllFilters}
+              style={[styles.filterPill, { backgroundColor: '#fee2e2', borderColor: '#fca5a5' }]}
+            >
+              <RotateCcw size={12} color="#b91c1c" />
+              <Text style={[styles.filterPillText, { color: '#b91c1c', fontWeight: '700' }]}>
+                Reset ({activeFilterCount})
+              </Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </View>
 
-      {/* Feed Content */}
+      {/* Main Feed Content */}
       <ScrollView
         contentContainerStyle={styles.feedContent}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
+        onMomentumScrollEnd={(e) => {
+          const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+          if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 100) {
+            handleLoadMore();
+          }
+        }}
       >
-        {/* Metric Snapshot Counters */}
+        {/* Interactive KPI Metric Cards */}
         <View style={styles.metricsGrid}>
-          <Card style={styles.metricCard}>
-            <View style={styles.metricRow}>
-              <Text style={[styles.metricLabel, { color: theme.colors.mute }]}>Total Users</Text>
-              <Users size={14} color={theme.colors.ink} />
-            </View>
-            <Text style={[styles.metricVal, { color: theme.colors.ink }]}>{users.length}</Text>
-          </Card>
+          {/* Card 1: Total Users */}
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            onPress={() => {
+              resetAllFilters();
+            }}
+            activeOpacity={0.8}
+          >
+            <Card style={styles.metricCard}>
+              <View style={styles.metricRow}>
+                <Text style={[styles.metricLabel, { color: theme.colors.mute }]}>Total</Text>
+                <Users size={14} color={theme.colors.ink} />
+              </View>
+              <Text style={[styles.metricVal, { color: theme.colors.ink }]}>{totalUsersCount || users.length}</Text>
+            </Card>
+          </TouchableOpacity>
 
-          <Card style={styles.metricCard}>
-            <View style={styles.metricRow}>
-              <Text style={[styles.metricLabel, { color: theme.colors.success }]}>Active</Text>
-              <UserCheck size={14} color={theme.colors.success} />
-            </View>
-            <Text style={[styles.metricVal, { color: theme.colors.success }]}>{activeCount}</Text>
-          </Card>
+          {/* Card 2: Active Users */}
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            onPress={() => {
+              setStatusFilter(statusFilter === 'active' ? 'all' : 'active');
+            }}
+            activeOpacity={0.8}
+          >
+            <Card style={[styles.metricCard, statusFilter === 'active' && { borderColor: '#10b981', borderWidth: 1.5 }]}>
+              <View style={styles.metricRow}>
+                <Text style={[styles.metricLabel, { color: '#047857' }]}>Active</Text>
+                <UserCheck size={14} color="#10b981" />
+              </View>
+              <Text style={[styles.metricVal, { color: '#047857' }]}>{activeCount}</Text>
+            </Card>
+          </TouchableOpacity>
 
-          <Card style={styles.metricCard}>
-            <View style={styles.metricRow}>
-              <Text style={[styles.metricLabel, { color: theme.colors.link }]}>Engineers</Text>
-              <ShieldCheck size={14} color={theme.colors.link} />
-            </View>
-            <Text style={[styles.metricVal, { color: theme.colors.link }]}>{engineerCount}</Text>
-          </Card>
+          {/* Card 3: Service Engineers */}
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            onPress={() => {
+              setRoleFilter(roleFilter === 'service_engineer' ? 'all' : 'service_engineer');
+            }}
+            activeOpacity={0.8}
+          >
+            <Card style={[styles.metricCard, roleFilter === 'service_engineer' && { borderColor: '#2563eb', borderWidth: 1.5 }]}>
+              <View style={styles.metricRow}>
+                <Text style={[styles.metricLabel, { color: '#1d4ed8' }]}>Engineers</Text>
+                <Shield size={14} color="#2563eb" />
+              </View>
+              <Text style={[styles.metricVal, { color: '#1d4ed8' }]}>{engineerCount}</Text>
+            </Card>
+          </TouchableOpacity>
 
-          <Card style={styles.metricCard}>
-            <View style={styles.metricRow}>
-              <Text style={[styles.metricLabel, { color: theme.colors.warning }]}>Pending</Text>
-              <ShieldAlert size={14} color={theme.colors.warning} />
-            </View>
-            <Text style={[styles.metricVal, { color: theme.colors.warning }]}>{pendingUsers.length}</Text>
-          </Card>
+          {/* Card 4: Pending Approvals */}
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            onPress={() => {
+              setStatusFilter(statusFilter === 'pending' ? 'all' : 'pending');
+            }}
+            activeOpacity={0.8}
+          >
+            <Card style={[styles.metricCard, statusFilter === 'pending' && { borderColor: '#f59e0b', borderWidth: 1.5 }]}>
+              <View style={styles.metricRow}>
+                <Text style={[styles.metricLabel, { color: '#b45309' }]}>Pending</Text>
+                <ShieldAlert size={14} color="#f59e0b" />
+              </View>
+              <Text style={[styles.metricVal, { color: '#b45309' }]}>{pendingCount}</Text>
+            </Card>
+          </TouchableOpacity>
         </View>
 
         {/* Profile Detail Change Requests Section */}
         {profileRequests.length > 0 && (
-          <View style={styles.pendingSection}>
-            <View style={[styles.pendingHeaderRow, { justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <ShieldCheck size={16} color="#6366f1" />
-                <Text style={[styles.pendingTitle, { color: theme.colors.ink }]}>Profile Change Requests</Text>
-                <Badge status="pending" customLabel={`${profileRequests.length} Pending`} />
+          <View style={[styles.changeReqsContainer, { borderColor: '#6366f133', backgroundColor: '#6366f108' }]}>
+            <View style={[styles.changeReqsHeader, { borderBottomColor: '#6366f120' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                <View style={[styles.alertDot, { backgroundColor: '#6366f1' }]} />
+                <Text style={[styles.changeReqsTitle, { color: theme.colors.ink }]}>
+                  Profile Change Requests ({profileRequests.length})
+                </Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Button
-                  label={`Accept All (${profileRequests.length})`}
+                <TouchableOpacity
+                  style={[styles.miniActionBtn, { backgroundColor: '#6366f1', borderColor: '#6366f1' }]}
                   onPress={handleApproveAllProfileReqs}
-                  isLoading={isBulkApprovingProfile}
-                  variant="primary"
-                  size="sm"
-                />
-                <Button
-                  label="Reject All"
+                  disabled={isBulkApprovingProfile}
+                >
+                  <Text style={styles.miniActionBtnTextWhite}>Accept All</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.miniActionBtn, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
                   onPress={handleRejectAllProfileReqs}
-                  isLoading={isBulkRejectingProfile}
-                  variant="ghost"
-                  size="sm"
-                />
+                  disabled={isBulkRejectingProfile}
+                >
+                  <Text style={[styles.miniActionBtnText, { color: theme.colors.ink }]}>Reject All</Text>
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -791,188 +1012,108 @@ export default function UsersScreen() {
               const isApproving = approvingProfileId === pr.id;
 
               return (
-                <Card key={pr.id} style={[styles.pendingCard, { borderLeftWidth: 3, borderLeftColor: '#6366f1' }]}>
-                  <View style={{ gap: 8 }}>
-                    {/* User Info Header */}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <View style={[styles.avatarCircle, { backgroundColor: 'rgba(99,102,241,0.1)', borderColor: 'rgba(99,102,241,0.3)', borderWidth: 1 }]}>
-                          <Text style={[styles.avatarLetter, { color: '#6366f1' }]}>
-                            {reqUser.full_name ? reqUser.full_name[0].toUpperCase() : 'U'}
-                          </Text>
-                        </View>
-                        <View>
-                          <Text style={[styles.pendingName, { color: theme.colors.ink }]}>{reqUser.full_name || 'User'}</Text>
-                          <Text style={[styles.pendingEmail, { color: theme.colors.mute }]}>{reqUser.email}</Text>
-                        </View>
+                <View key={pr.id} style={[styles.changeReqCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+                  <View style={styles.changeReqCardHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                      <View style={[styles.avatarCircle, { backgroundColor: '#6366f115', borderColor: '#6366f130', borderWidth: 1 }]}>
+                        <Text style={[styles.avatarLetter, { color: '#6366f1' }]}>
+                          {reqUser.full_name ? reqUser.full_name[0].toUpperCase() : 'U'}
+                        </Text>
                       </View>
-                      <View style={[styles.pendingTimeChip, { backgroundColor: 'rgba(99,102,241,0.1)', borderColor: 'rgba(99,102,241,0.2)' }]}>
-                        <Clock size={9} color="#6366f1" />
-                        <Text style={[styles.pendingTimeChipText, { color: '#6366f1' }]}>
-                          {pr.created_at ? formatTinyRelativeTime(pr.created_at) : 'Just now'}
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.changeReqUserName, { color: theme.colors.ink }]}>
+                          {reqUser.full_name || 'User'}
+                        </Text>
+                        <Text style={[styles.changeReqUserSub, { color: theme.colors.mute }]}>
+                          {reqUser.email}
                         </Text>
                       </View>
                     </View>
-
-                    {/* Diffs Summary */}
-                    <View style={{ backgroundColor: theme.colors.canvasElevated, padding: 8, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.hairline }}>
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: theme.colors.mute, textTransform: 'uppercase', marginBottom: 4 }}>
-                        Requested Changes:
-                      </Text>
-                      {reqData.full_name && reqData.full_name !== currData.full_name && (
-                        <Text style={{ fontSize: 11, color: theme.colors.ink, marginBottom: 2 }}>
-                          • Name: <Text style={{ textDecorationLine: 'line-through', color: theme.colors.mute }}>{currData.full_name || '—'}</Text> → <Text style={{ fontWeight: '700', color: theme.colors.success }}>{reqData.full_name}</Text>
-                        </Text>
-                      )}
-                      {reqData.shift_time && reqData.shift_time !== currData.shift_time && (
-                        <Text style={{ fontSize: 11, color: theme.colors.ink, marginBottom: 2 }}>
-                          • Shift: <Text style={{ textDecorationLine: 'line-through', color: theme.colors.mute }}>{currData.shift_time || 'Standard'}</Text> → <Text style={{ fontWeight: '700', color: theme.colors.link }}>{reqData.shift_time}</Text>
-                        </Text>
-                      )}
-                      {reqData.phone && reqData.phone !== currData.phone && (
-                        <Text style={{ fontSize: 11, color: theme.colors.ink, marginBottom: 2 }}>
-                          • Phone: <Text style={{ textDecorationLine: 'line-through', color: theme.colors.mute }}>{currData.phone || '—'}</Text> → <Text style={{ fontWeight: '700', color: theme.colors.success }}>{reqData.phone}</Text>
-                        </Text>
-                      )}
-                      {reqData.address && reqData.address !== currData.address && (
-                        <Text style={{ fontSize: 11, color: theme.colors.ink, marginBottom: 2 }}>
-                          • Address: <Text style={{ textDecorationLine: 'line-through', color: theme.colors.mute }}>{currData.address || '—'}</Text> → <Text style={{ fontWeight: '700', color: theme.colors.success }}>{reqData.address}</Text>
-                        </Text>
-                      )}
-                      {reqData.aadhaar_number && reqData.aadhaar_number !== currData.aadhaar_number && (
-                        <Text style={{ fontSize: 11, color: theme.colors.ink, marginBottom: 2 }}>
-                          • Aadhaar: <Text style={{ textDecorationLine: 'line-through', color: theme.colors.mute }}>{currData.aadhaar_number || '—'}</Text> → <Text style={{ fontWeight: '700', color: theme.colors.success }}>{reqData.aadhaar_number}</Text>
-                        </Text>
-                      )}
-                      {reqData.license_number && reqData.license_number !== currData.license_number && (
-                        <Text style={{ fontSize: 11, color: theme.colors.ink, marginBottom: 2 }}>
-                          • Licence: <Text style={{ textDecorationLine: 'line-through', color: theme.colors.mute }}>{currData.license_number || '—'}</Text> → <Text style={{ fontWeight: '700', color: theme.colors.success }}>{reqData.license_number}</Text>
-                        </Text>
-                      )}
-                    </View>
-
-                    {/* Action Buttons */}
-                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-                      <Button
-                        label="Approve Change"
-                        onPress={() => handleApproveProfileReq(pr.id, reqData, pr.user_id)}
-                        isLoading={isApproving}
-                        variant="primary"
-                        size="sm"
-                        style={{ flex: 1 }}
-                      />
-                      <Button
-                        label="Reject"
-                        onPress={() => handleRejectProfileReq(pr.id)}
-                        disabled={isApproving}
-                        variant="outline"
-                        size="sm"
-                        style={{ flex: 1 }}
-                      />
-                    </View>
+                    <Text style={[styles.changeReqTime, { color: '#6366f1' }]}>
+                      {pr.created_at ? formatTinyRelativeTime(pr.created_at) : 'Just now'}
+                    </Text>
                   </View>
-                </Card>
+
+                  {/* Diffs Comparison Box */}
+                  <View style={[styles.diffsBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                    {reqData.full_name && reqData.full_name !== currData.full_name && (
+                      <Text style={styles.diffItem}>
+                        <Text style={{ fontWeight: '700', color: theme.colors.mute }}>Name: </Text>
+                        <Text style={styles.diffOld}>{currData.full_name || '—'}</Text>
+                        <Text style={styles.diffArrow}> → </Text>
+                        <Text style={styles.diffNew}>{reqData.full_name}</Text>
+                      </Text>
+                    )}
+                    {reqData.phone && reqData.phone !== currData.phone && (
+                      <Text style={styles.diffItem}>
+                        <Text style={{ fontWeight: '700', color: theme.colors.mute }}>Phone: </Text>
+                        <Text style={styles.diffOld}>{currData.phone || '—'}</Text>
+                        <Text style={styles.diffArrow}> → </Text>
+                        <Text style={styles.diffNew}>{reqData.phone}</Text>
+                      </Text>
+                    )}
+                    {reqData.shift_time && reqData.shift_time !== currData.shift_time && (
+                      <Text style={styles.diffItem}>
+                        <Text style={{ fontWeight: '700', color: theme.colors.mute }}>Shift: </Text>
+                        <Text style={styles.diffOld}>{currData.shift_time || 'Standard'}</Text>
+                        <Text style={styles.diffArrow}> → </Text>
+                        <Text style={styles.diffNew}>{reqData.shift_time}</Text>
+                      </Text>
+                    )}
+                    {reqData.address && reqData.address !== currData.address && (
+                      <Text style={styles.diffItem}>
+                        <Text style={{ fontWeight: '700', color: theme.colors.mute }}>Address: </Text>
+                        <Text style={styles.diffOld}>{currData.address || '—'}</Text>
+                        <Text style={styles.diffArrow}> → </Text>
+                        <Text style={styles.diffNew}>{reqData.address}</Text>
+                      </Text>
+                    )}
+                    {reqData.aadhaar_number && reqData.aadhaar_number !== currData.aadhaar_number && (
+                      <Text style={styles.diffItem}>
+                        <Text style={{ fontWeight: '700', color: theme.colors.mute }}>Aadhaar: </Text>
+                        <Text style={styles.diffOld}>{currData.aadhaar_number || '—'}</Text>
+                        <Text style={styles.diffArrow}> → </Text>
+                        <Text style={styles.diffNew}>{reqData.aadhaar_number}</Text>
+                      </Text>
+                    )}
+                    {reqData.license_number && reqData.license_number !== currData.license_number && (
+                      <Text style={styles.diffItem}>
+                        <Text style={{ fontWeight: '700', color: theme.colors.mute }}>Licence: </Text>
+                        <Text style={styles.diffOld}>{currData.license_number || '—'}</Text>
+                        <Text style={styles.diffArrow}> → </Text>
+                        <Text style={styles.diffNew}>{reqData.license_number}</Text>
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* Actions */}
+                  <View style={styles.changeReqActions}>
+                    <TouchableOpacity
+                      style={[styles.reqApproveBtn, { backgroundColor: '#10b981' }]}
+                      onPress={() => handleApproveProfileReq(pr.id, reqData, pr.user_id)}
+                      disabled={isApproving}
+                    >
+                      {isApproving ? (
+                        <ActivityIndicator size="small" color="#ffffff" />
+                      ) : (
+                        <Text style={styles.reqBtnTextWhite}>Approve</Text>
+                      )}
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.reqRejectBtn, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
+                      onPress={() => setRejectModalReq(pr)}
+                      disabled={isApproving}
+                    >
+                      <Text style={[styles.reqBtnText, { color: theme.colors.error }]}>Reject...</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
               );
             })}
           </View>
         )}
 
-        {/* Pending Registrations Approvals Section */}
-        {pendingUsers.length > 0 && (
-          <View style={styles.pendingSection}>
-            <View style={[styles.pendingHeaderRow, { justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <ShieldAlert size={16} color={theme.colors.warning} />
-                <Text style={[styles.pendingTitle, { color: theme.colors.ink }]}>Pending User Approvals</Text>
-                <Badge status="pending" customLabel={`${pendingUsers.length} Pending`} />
-              </View>
-              {pendingUsers.length > 0 && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Button
-                    label={`Accept All (${pendingUsers.length})`}
-                    onPress={handleApproveAll}
-                    isLoading={isBulkApprovingMobile}
-                    variant="primary"
-                    size="sm"
-                  />
-                  <Button
-                    label="Reject All"
-                    onPress={handleRejectAll}
-                    isLoading={isBulkRejectingMobile}
-                    variant="ghost"
-                    size="sm"
-                  />
-                </View>
-              )}
-            </View>
-
-            {pendingUsers.map((p) => (
-              <Card key={p.id} style={styles.pendingCard}>
-                <View style={styles.pendingCardLeft}>
-                  <View style={[styles.avatarCircle, { backgroundColor: theme.colors.hairlineSoft, borderColor: theme.colors.hairline, borderWidth: 1 }]}>
-                    <Text style={[styles.avatarLetter, { color: theme.colors.ink }]}>
-                      {p.full_name ? p.full_name[0].toUpperCase() : 'U'}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
-                      <Text style={[styles.pendingName, { color: theme.colors.ink }]}>{p.full_name}</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <View style={[styles.pendingRoleChip, { backgroundColor: theme.colors.hairlineSoft, borderColor: theme.colors.hairline }]}>
-                          <Text style={[styles.pendingRoleChipText, { color: theme.colors.link }]}>
-                            {formatRoleName(p.role)}
-                          </Text>
-                        </View>
-                        {p.created_at ? (
-                          <View style={[styles.pendingTimeChip, { backgroundColor: theme.colors.hairlineSoft, borderColor: theme.colors.hairline }]}>
-                            <Clock size={9} color={theme.colors.warning} />
-                            <Text style={[styles.pendingTimeChipText, { color: theme.colors.warning }]}>
-                              {formatTinyRelativeTime(p.created_at)}
-                            </Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Mail size={11} color={theme.colors.mute} />
-                      <Text style={[styles.pendingEmail, { color: theme.colors.mute }]}>{p.email}</Text>
-                    </View>
-                    {p.phone ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <Phone size={11} color={theme.colors.mute} />
-                        <Text style={[styles.pendingEmail, { color: theme.colors.mute }]}>{p.phone}</Text>
-                      </View>
-                    ) : null}
-                    {p.city ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <MapPin size={11} color={theme.colors.mute} />
-                        <Text style={[styles.pendingEmail, { color: theme.colors.mute }]}>{p.city}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                </View>
-
-                <View style={styles.pendingActions}>
-                  <Button
-                    label="Approve"
-                    onPress={() => handleApprove(p.id)}
-                    isLoading={approvingId === p.id}
-                    variant="primary"
-                    size="sm"
-                  />
-                  <Button
-                    label="Reject"
-                    onPress={() => handleReject(p.id)}
-                    variant="ghost"
-                    size="sm"
-                  />
-                </View>
-              </Card>
-            ))}
-          </View>
-        )}
-
-        {/* All Users Feed */}
+        {/* User Touch Cards List */}
         {showLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={theme.colors.link} />
@@ -980,30 +1121,27 @@ export default function UsersScreen() {
           </View>
         ) : users.length === 0 ? (
           <View style={[styles.emptyContainer, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <Users size={32} color={theme.colors.mute} />
+            <Users size={36} color={theme.colors.mute} />
             <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>No user accounts found</Text>
             <Text style={[styles.emptySubtext, { color: theme.colors.mute }]}>
               {search.trim() !== ''
-                ? `No users match "${search.trim()}". Check for typos or search by name, role, or phone.`
-                : 'Try adjusting your search criteria or role filters.'}
+                ? `No users match "${search.trim()}". Try clearing search or changing filters.`
+                : 'No users in this directory scope.'}
             </Text>
-            {(search.trim() !== '' || roleFilter !== 'all' || statusFilter !== 'all') && (
+            {(activeFilterCount > 0 || search.trim() !== '') && (
               <TouchableOpacity
-                onPress={() => {
-                  setSearch('');
-                  setDebouncedSearch('');
-                  setRoleFilter('all');
-                  setStatusFilter('all');
-                }}
-                style={{ marginTop: 12, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 6, borderWidth: 1, borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }}
+                onPress={resetAllFilters}
+                style={[styles.resetEmptyBtn, { backgroundColor: theme.colors.ink }]}
               >
-                <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.ink }}>Clear Search & Filters</Text>
+                <Text style={styles.resetEmptyBtnText}>Reset Search & Filters</Text>
               </TouchableOpacity>
             )}
           </View>
         ) : (
           users.map((u) => {
             const isSelected = selectedIds.includes(u.id);
+            const accentColor = getRoleAccentColor(u.role);
+
             return (
               <TouchableOpacity
                 key={u.id}
@@ -1020,20 +1158,30 @@ export default function UsersScreen() {
                     setSelectedIds([u.id]);
                   }
                 }}
-                activeOpacity={0.8}
+                activeOpacity={0.85}
               >
-                <Card
+                <View
                   style={[
                     styles.userCard,
-                    isSelectMode && isSelected
-                      ? { borderColor: theme.colors.link, borderWidth: 1.5, backgroundColor: theme.colors.canvasElevated }
-                      : null,
+                    {
+                      backgroundColor: theme.colors.canvasElevated,
+                      borderColor: theme.colors.hairline,
+                      borderLeftColor: accentColor,
+                      borderLeftWidth: 4,
+                    },
+                    isSelectMode && isSelected && {
+                      borderColor: theme.colors.link,
+                      borderWidth: 1.5,
+                      borderLeftWidth: 4,
+                      backgroundColor: theme.colors.canvas,
+                    },
                   ]}
                 >
-                  <View style={styles.userHeader}>
+                  {/* Card Header */}
+                  <View style={styles.userCardHeader}>
                     <View style={styles.userAvatarRow}>
                       {isSelectMode ? (
-                        <View style={{ marginRight: 2 }}>
+                        <View style={{ marginRight: 6 }}>
                           {isSelected ? (
                             <CheckSquare size={20} color={theme.colors.link} />
                           ) : (
@@ -1049,84 +1197,109 @@ export default function UsersScreen() {
                       )}
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.userName, { color: theme.colors.ink }]} numberOfLines={1}>
-                          {truncateText(u.full_name, 15)}
+                          {truncateText(u.full_name, 24)}
                         </Text>
                         <Text style={[styles.userEmail, { color: theme.colors.mute }]} numberOfLines={1}>
-                          {truncateText(u.email, 20)}
+                          {truncateText(u.email, 28)}
                         </Text>
                       </View>
                     </View>
 
+                    {/* Status Dot & Badge */}
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Badge status={u.status === 'active' ? 'active' : 'inactive'} customLabel={u.status.toUpperCase()} />
+                      {u.status === 'active' ? (
+                        <View style={[styles.cardStatusBadge, { backgroundColor: '#d1fae5', borderColor: '#a7f3d0' }]}>
+                          <View style={[styles.statusDot, { backgroundColor: '#10b981' }]} />
+                          <Text style={[styles.cardStatusText, { color: '#047857' }]}>Active</Text>
+                        </View>
+                      ) : (
+                        <View style={[styles.cardStatusBadge, { backgroundColor: '#f1f5f9', borderColor: '#e2e8f0' }]}>
+                          <View style={[styles.statusDot, { backgroundColor: '#94a3b8' }]} />
+                          <Text style={[styles.cardStatusText, { color: '#64748b' }]}>
+                            {u.status ? u.status.toUpperCase() : 'INACTIVE'}
+                          </Text>
+                        </View>
+                      )}
                       <ChevronRight size={16} color={theme.colors.mute} />
                     </View>
                   </View>
 
-                  {/* Sub details */}
-                  <View style={[styles.specsWell, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                    <View style={styles.subDetailRow}>
-                      <Badge status="available" customLabel={u.role.replace('_', ' ').toUpperCase()} />
-                      {u.phone && (
-                        <View style={styles.metaItem}>
+                  {/* Card Metadata Section */}
+                  <View style={[styles.cardMetaBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                    <View style={styles.cardMetaRow}>
+                      <View style={[styles.roleBadgePill, { backgroundColor: accentColor + '18', borderColor: accentColor + '35' }]}>
+                        <Text style={[styles.roleBadgePillText, { color: accentColor }]}>
+                          {formatRoleName(u.role)}
+                        </Text>
+                      </View>
+
+                      {u.phone ? (
+                        <View style={styles.metaChip}>
                           <Phone size={11} color={theme.colors.mute} />
-                          <Text style={[styles.metaText, { color: theme.colors.body }]}>{u.phone}</Text>
+                          <Text style={[styles.metaChipText, { color: theme.colors.ink, fontFamily: 'monospace' }]}>
+                            {u.phone}
+                          </Text>
                         </View>
-                      )}
+                      ) : null}
                     </View>
 
+                    {/* Location and Supervisor Details */}
                     {(u.city || u.state) && (
-                      <View style={[styles.metaItem, { marginTop: 4 }]}>
+                      <View style={styles.metaChipRow}>
                         <MapPin size={11} color={theme.colors.mute} />
-                        <Text style={[styles.metaText, { color: theme.colors.body }]}>
+                        <Text style={[styles.metaChipText, { color: theme.colors.mute }]}>
                           {[u.city, u.district, u.state].filter(Boolean).join(', ')}
                         </Text>
                       </View>
                     )}
 
                     {((u.supervisors && u.supervisors.length > 0) || u.supervisor?.full_name) && (
-                      <View style={[styles.metaItem, { marginTop: 4 }]}>
-                        <User size={11} color={theme.colors.link} />
-                        <Text style={[styles.metaText, { color: theme.colors.body }]} numberOfLines={1}>
-                          Sup: {u.supervisors && u.supervisors.length > 0
-                            ? u.supervisors.map((s: any) => truncateText(s.full_name, 15)).join(', ')
-                            : truncateText(u.supervisor?.full_name, 15)}
+                      <View style={styles.metaChipRow}>
+                        <User size={11} color="#0d9488" />
+                        <Text style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
+                          Supervisor: {u.supervisors && u.supervisors.length > 0
+                            ? u.supervisors.map((s: any) => s.full_name).join(', ')
+                            : u.supervisor?.full_name}
                         </Text>
                       </View>
                     )}
 
                     {u.working_location?.name && (
-                      <View style={[styles.metaItem, { marginTop: 4 }]}>
+                      <View style={styles.metaChipRow}>
                         <MapPin size={11} color={theme.colors.link} />
-                        <Text style={[styles.metaText, { color: theme.colors.body }]}>
+                        <Text style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
                           Base: {u.working_location.name}
+                          {u.working_location.city ? ` (${u.working_location.city})` : ''}
                         </Text>
                       </View>
                     )}
                   </View>
-                </Card>
+                </View>
               </TouchableOpacity>
             );
           })
         )}
+
+        {isPaginating && (
+          <View style={{ paddingVertical: 12, alignItems: 'center' }}>
+            <ActivityIndicator size="small" color={theme.colors.link} />
+          </View>
+        )}
       </ScrollView>
 
-      {/* Floating Bulk Actions Bar for Mobile */}
+      {/* Floating Bulk Actions Bar */}
       {isSelectMode && selectedIds.length > 0 && (
         <View
           style={[
             styles.mobileBulkBar,
-            {
-              backgroundColor: theme.colors.ink,
-              shadowColor: '#000',
-            },
+            { backgroundColor: theme.colors.ink, shadowColor: '#000' },
           ]}
         >
           <View style={styles.bulkCountRow}>
             <View style={[styles.bulkBadge, { backgroundColor: theme.colors.link }]}>
-              <Text style={[styles.bulkBadgeText, { color: '#ffffff' }]}>{selectedIds.length}</Text>
+              <Text style={styles.bulkBadgeText}>{selectedIds.length}</Text>
             </View>
-            <Text style={[styles.bulkSelectedText, { color: '#ffffff' }]}>selected</Text>
+            <Text style={styles.bulkSelectedText}>selected</Text>
           </View>
 
           <View style={styles.bulkActionsRow}>
@@ -1135,9 +1308,18 @@ export default function UsersScreen() {
               style={[styles.bulkBtnSecondary, { borderColor: 'rgba(255,255,255,0.2)' }]}
               activeOpacity={0.7}
             >
-              <Text style={{ color: '#ffffff', fontSize: 12, fontWeight: '600' }}>
+              <Text style={styles.bulkBtnSecondaryText}>
                 {selectedIds.length === users.length ? 'Deselect' : 'All'}
               </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setExportModalVisible(true)}
+              style={[styles.bulkBtnSecondary, { borderColor: 'rgba(255,255,255,0.2)' }]}
+              activeOpacity={0.7}
+            >
+              <FileSpreadsheet size={13} color="#10b981" />
+              <Text style={styles.bulkBtnSecondaryText}>Export</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1146,10 +1328,8 @@ export default function UsersScreen() {
               style={[styles.bulkBtnDanger, { backgroundColor: theme.colors.error }]}
               activeOpacity={0.8}
             >
-              <Trash2 size={14} color="#ffffff" />
-              <Text style={{ color: '#ffffff', fontSize: 12, fontWeight: '700' }}>
-                Delete ({selectedIds.length})
-              </Text>
+              <Trash2 size={13} color="#ffffff" />
+              <Text style={styles.bulkBtnDangerText}>Delete</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1160,30 +1340,107 @@ export default function UsersScreen() {
         visible={detailModalVisible}
         onClose={() => setDetailModalVisible(false)}
         user={selectedUser}
-        onSuccess={fetchUsers}
+        currentUserRole={currentUserRole || 'super_admin'}
+        currentUserId={authUser?.id}
+        onSuccess={() => fetchUsers(false, 1)}
+        onEdit={handleTriggerEdit}
+        onResetPassword={handleTriggerResetPassword}
       />
 
       {/* Create User Modal */}
       <CreateUserModal
         visible={createModalVisible}
         onClose={() => setCreateModalVisible(false)}
-        onSuccess={fetchUsers}
+        onSuccess={() => fetchUsers(false, 1)}
+        isSuperAdmin={currentUserRole === 'super_admin'}
       />
+
+      {/* User Edit Modal */}
+      <UserEditModal
+        visible={editModalVisible}
+        onClose={() => setEditModalVisible(false)}
+        user={userToEdit}
+        onSuccess={() => fetchUsers(false, 1)}
+        isSuperAdmin={currentUserRole === 'super_admin'}
+      />
+
+      {/* Password Reset Modal */}
+      <PasswordResetModal
+        visible={passwordResetModalVisible}
+        onClose={() => setPasswordResetModalVisible(false)}
+        userName={resetPasswordUserName}
+        temporaryPassword={temporaryPassword}
+      />
+
+      {/* Reject Reason Modal */}
+      <RejectReasonModal
+        visible={Boolean(rejectModalReq)}
+        onClose={() => setRejectModalReq(null)}
+        userName={rejectModalReq?.user?.full_name || 'user'}
+        onConfirm={handleConfirmRejectProfileReq}
+        isSubmitting={isRejectingProfileReq}
+      />
+
+      {/* User Export Modal */}
+      <UserExportModal
+        visible={exportModalVisible}
+        onClose={() => setExportModalVisible(false)}
+        currentPageUsers={users}
+        totalMatchingCount={totalUsersCount || users.length}
+        selectedUserIds={selectedIds}
+        currentPage={page}
+        totalPages={Math.ceil((totalUsersCount || users.length) / PAGE_SIZE) || 1}
+        activeFilterCount={activeFilterCount}
+        onFetchAllMatchingUsers={handleFetchAllMatchingUsers}
+      />
+
+      {/* Filter Dimension Selector Modal */}
+      {activeFilterModal && (
+        <CustomFilterSelectorModal
+          visible={Boolean(activeFilterModal)}
+          onClose={() => setActiveFilterModal(null)}
+          filterType={activeFilterModal}
+          currentValue={
+            activeFilterModal === 'role'
+              ? roleFilter
+              : activeFilterModal === 'status'
+              ? statusFilter
+              : activeFilterModal === 'state'
+              ? stateFilter
+              : activeFilterModal === 'kyc'
+              ? kycFilter
+              : activeFilterModal === 'joined'
+              ? dateRangeFilter
+              : sortBy
+          }
+          onSelect={(val) => {
+            if (activeFilterModal === 'role') setRoleFilter(val);
+            else if (activeFilterModal === 'status') setStatusFilter(val);
+            else if (activeFilterModal === 'state') setStateFilter(val);
+            else if (activeFilterModal === 'kyc') setKycFilter(val);
+            else if (activeFilterModal === 'joined') setDateRangeFilter(val);
+            else if (activeFilterModal === 'sort') setSortBy(val);
+          }}
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  addBtn: {
+  container: {
+    flex: 1,
+  },
+  headerActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
   },
-  addBtnText: {
+  headerActionBtnText: {
     fontSize: 12,
     fontWeight: '700',
   },
@@ -1194,29 +1451,45 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     gap: spacingNumeric.xs,
   },
-  searchInput: { marginBottom: 0 },
-  filterScroll: { gap: spacingNumeric.xs, paddingVertical: 2 },
+  searchInput: {
+    marginBottom: 0,
+  },
+  filterScroll: {
+    gap: 6,
+    paddingVertical: 2,
+    alignItems: 'center',
+  },
   filterPill: {
-    paddingHorizontal: spacingNumeric.sm + 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
-  filterText: { fontSize: 12, fontWeight: '600' },
-  feedContent: { padding: spacingNumeric.md, paddingBottom: 40, gap: spacingNumeric.md },
+  filterPillText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  feedContent: {
+    padding: spacingNumeric.md,
+    gap: spacingNumeric.md,
+    paddingBottom: 90,
+  },
   metricsGrid: {
     flexDirection: 'row',
     gap: 8,
   },
   metricCard: {
-    flex: 1,
-    padding: 8,
-    gap: 2,
+    padding: spacingNumeric.sm,
+    borderRadius: radiusNumeric.md,
   },
   metricRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 2,
   },
   metricLabel: {
     fontSize: 10,
@@ -1224,32 +1497,135 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   metricVal: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
   },
-  pendingSection: {
-    gap: 8,
+  changeReqsContainer: {
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    padding: spacingNumeric.md,
+    gap: spacingNumeric.sm,
   },
-  pendingHeaderRow: {
+  changeReqsHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginLeft: 2,
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
   },
-  pendingTitle: {
+  alertDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+  },
+  changeReqsTitle: {
     fontSize: 13,
     fontWeight: '700',
   },
-  pendingCard: {
-    padding: spacingNumeric.sm,
-    gap: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#f5a623',
+  miniActionBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
   },
-  pendingCardLeft: {
+  miniActionBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  miniActionBtnTextWhite: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  changeReqCard: {
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    padding: spacingNumeric.sm,
+    gap: 6,
+  },
+  changeReqCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'space-between',
+  },
+  changeReqUserName: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  changeReqUserSub: {
+    fontSize: 11,
+  },
+  changeReqTime: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  diffsBox: {
+    padding: 8,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    gap: 2,
+  },
+  diffItem: {
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  diffOld: {
+    textDecorationLine: 'line-through',
+    color: '#94a3b8',
+  },
+  diffArrow: {
+    color: '#64748b',
+    fontWeight: '700',
+  },
+  diffNew: {
+    color: '#10b981',
+    fontWeight: '700',
+  },
+  changeReqActions: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 2,
+  },
+  reqApproveBtn: {
+    flex: 1,
+    height: 32,
+    borderRadius: radiusNumeric.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reqBtnTextWhite: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  reqRejectBtn: {
+    flex: 1,
+    height: 32,
+    borderRadius: radiusNumeric.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
+  reqBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  userCard: {
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    padding: spacingNumeric.md,
+    gap: 8,
+  },
+  userCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  userAvatarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
   },
   avatarCircle: {
     width: 36,
@@ -1259,68 +1635,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarLetter: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-  },
-  pendingName: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  pendingEmail: {
-    fontSize: 11,
-  },
-  pendingRoleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  pendingRoleLabel: {
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  pendingRoleChip: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-  },
-  pendingRoleChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  pendingTimeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-  },
-  pendingTimeChipText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  pendingActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-  },
-  userCard: {
-    padding: spacingNumeric.sm + 2,
-    gap: spacingNumeric.xs,
-  },
-  userHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  userAvatarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
   },
   userName: {
     fontSize: 14,
@@ -1328,45 +1644,111 @@ const styles = StyleSheet.create({
   },
   userEmail: {
     fontSize: 11,
+    marginTop: 1,
   },
-  specsWell: {
-    padding: spacingNumeric.xs + 2,
-    borderRadius: radiusNumeric.sm,
+  cardStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
-  subDetailRow: {
+  statusDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  cardStatusText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  cardMetaBox: {
+    padding: 8,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    gap: 4,
+  },
+  cardMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 6,
   },
-  metaItem: {
+  roleBadgePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radiusNumeric.full,
+    borderWidth: 1,
+  },
+  roleBadgePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  metaChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
   },
-  metaText: {
+  metaChipText: {
     fontSize: 11,
   },
-  loadingContainer: { paddingVertical: 40, alignItems: 'center', gap: 10 },
-  loadingText: { fontSize: 13 },
-  emptyContainer: { padding: 32, borderRadius: radiusNumeric.md, borderWidth: 1, alignItems: 'center', gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '700' },
-  emptySubtext: { fontSize: 12, textAlign: 'center' },
+  metaChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  loadingContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 13,
+  },
+  emptyContainer: {
+    padding: 24,
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  emptySubtext: {
+    fontSize: 12,
+    textAlign: 'center',
+    maxWidth: 280,
+  },
+  resetEmptyBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: radiusNumeric.md,
+    marginTop: 6,
+  },
+  resetEmptyBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   mobileBulkBar: {
     position: 'absolute',
-    bottom: 24,
-    left: spacingNumeric.md,
-    right: spacingNumeric.md,
-    borderRadius: radiusNumeric.lg,
-    padding: spacingNumeric.sm,
-    paddingHorizontal: spacingNumeric.md,
+    bottom: 16,
+    left: 16,
+    right: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: radiusNumeric.full,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
     elevation: 8,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
   },
   bulkCountRow: {
     flexDirection: 'row',
@@ -1374,37 +1756,50 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   bulkBadge: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: radiusNumeric.full,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   bulkBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
   },
   bulkSelectedText: {
+    color: '#ffffff',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   bulkActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   bulkBtnSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: radiusNumeric.sm,
+    borderRadius: radiusNumeric.full,
     borderWidth: 1,
+  },
+  bulkBtnSecondaryText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '600',
   },
   bulkBtnDanger: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: radiusNumeric.sm,
+    borderRadius: radiusNumeric.full,
+  },
+  bulkBtnDangerText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

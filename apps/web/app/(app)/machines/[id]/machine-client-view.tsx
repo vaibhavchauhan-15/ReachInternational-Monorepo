@@ -441,6 +441,8 @@ export function MachineClientView({
                         ? "overdue"
                         : machine.health_status === "under_maintenance"
                         ? "warning"
+                        : machine.health_status === "spare"
+                        ? "spare"
                         : "success"
                     }
                     dot
@@ -450,6 +452,8 @@ export function MachineClientView({
                         ? "Breakdown"
                         : machine.health_status === "under_maintenance"
                         ? "Under Maintenance"
+                        : machine.health_status === "spare"
+                        ? "Spare"
                         : "Active"}
                     </span>
                   </Badge>
@@ -654,7 +658,13 @@ export function MachineClientView({
                 <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                   <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Health Status</span>
                   <span className="font-bold text-xs sm:text-sm capitalize text-[var(--color-ink)]">
-                    {machine.health_status === "breakdown" ? "Breakdown" : machine.health_status === "under_maintenance" ? "Under Maintenance" : "Active"}
+                    {machine.health_status === "breakdown"
+                      ? "Breakdown"
+                      : machine.health_status === "under_maintenance"
+                      ? "Under Maintenance"
+                      : machine.health_status === "spare"
+                      ? "Spare"
+                      : "Active"}
                   </span>
                 </div>
 

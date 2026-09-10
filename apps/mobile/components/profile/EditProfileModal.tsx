@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,24 +9,37 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  FlatList,
+  TextInput,
 } from 'react-native';
 import { Input, Button, TimeInput, useTheme } from '../ui';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { validateAadhaarNumber, validateLicenseNumber } from '@reachinternational/utils';
+import {
+  INDIAN_STATES,
+  getStateByName,
+  getStateById,
+  validateAadhaarNumber,
+  validateLicenseNumber,
+} from '@reachinternational/utils';
+import { ProfileUpdateSchema } from '@reachinternational/validation';
 import {
   X,
   Clock,
   MapPin,
   CheckCircle,
   AlertCircle,
+  ChevronDown,
+  Search,
+  Check,
 } from 'lucide-react-native';
 
 interface EditProfileModalProps {
   visible: boolean;
   onClose: () => void;
   onSuccess?: () => void;
+  currentUser?: any;
 }
 
 function parseShiftTimes(shiftStr?: string | null): { start: string; end: string } {
@@ -51,51 +64,65 @@ function parseShiftTimes(shiftStr?: string | null): { start: string; end: string
   return { start: '08:00 AM', end: '08:00 PM' };
 }
 
-export function EditProfileModal({ visible, onClose, onSuccess }: EditProfileModalProps) {
+export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: EditProfileModalProps) {
   const { theme } = useTheme();
-  const { user, role } = useAuth();
-  const metadata = user?.user_metadata || {};
+  const { user, role, userProfile: authProfile } = useAuth();
 
-  const [fullName, setFullName] = useState(metadata.full_name || '');
-  const [phone, setPhone] = useState(metadata.phone || '');
-
-  const initialTimes = parseShiftTimes(metadata.shift_time);
-  const [startTime, setStartTime] = useState(initialTimes.start);
-  const [endTime, setEndTime] = useState(initialTimes.end);
-
-  const [address, setAddress] = useState(metadata.address || '');
-  const [city, setCity] = useState(metadata.city || '');
-  const [district, setDistrict] = useState(metadata.district || '');
-  const [stateName, setStateName] = useState(metadata.state || 'Maharashtra');
-  const [aadhaarNumber, setAadhaarNumber] = useState(metadata.aadhaar_number || '');
-  const [licenseNumber, setLicenseNumber] = useState(metadata.license_number || '');
+  const [fullName, setFullName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [startTime, setStartTime] = useState('08:00 AM');
+  const [endTime, setEndTime] = useState('08:00 PM');
+  const [address, setAddress] = useState('');
+  const [city, setCity] = useState('Mumbai');
+  const [district, setDistrict] = useState('Mumbai');
+  const [stateName, setStateName] = useState('Maharashtra');
+  const [stateId, setStateId] = useState<number>(27);
+  const [aadhaarNumber, setAadhaarNumber] = useState('');
+  const [licenseNumber, setLicenseNumber] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statePickerVisible, setStatePickerVisible] = useState(false);
+  const [stateSearchQuery, setStateSearchQuery] = useState('');
 
   useEffect(() => {
-    if (visible && user) {
-      const meta = user.user_metadata || {};
-      setFullName(meta.full_name || '');
-      setPhone(meta.phone || '');
-      const times = parseShiftTimes(meta.shift_time);
+    if (visible) {
+      const src = currentUser || authProfile || {};
+      const meta = user?.user_metadata || {};
+
+      setFullName(src.full_name || meta.full_name || '');
+      setPhone(src.phone || meta.phone || '');
+      
+      const times = parseShiftTimes(src.shift_time || meta.shift_time);
       setStartTime(times.start);
       setEndTime(times.end);
-      setAddress(meta.address || '');
-      setCity(meta.city || '');
-      setDistrict(meta.district || '');
-      setStateName(meta.state || 'Maharashtra');
-      setAadhaarNumber(meta.aadhaar_number || '');
-      setLicenseNumber(meta.license_number || '');
+      
+      setAddress(src.address || meta.address || '');
+      setCity(src.city || meta.city || 'Mumbai');
+      setDistrict(src.district || meta.district || 'Mumbai');
+
+      const sName = src.state || meta.state || 'Maharashtra';
+      const sObj = getStateByName(sName) || (src.state_id ? getStateById(src.state_id) : undefined) || getStateById(27);
+      setStateName(sObj?.name || sName);
+      setStateId(sObj?.id || 27);
+
+      setAadhaarNumber(src.aadhaar_number || meta.aadhaar_number || '');
+      setLicenseNumber(src.license_number || meta.license_number || '');
     }
-  }, [visible, user]);
+  }, [visible, currentUser, authProfile, user]);
 
   const isSuperAdmin = role === 'super_admin';
   const approverLabel =
     role === 'admin'
       ? 'Super Administrator'
-      : ['manager', 'service_manager', 'hr_manager'].includes(role || '')
+      : ['manager', 'service_manager', 'hr_manager', 'store_manager'].includes(role || '')
       ? 'Administrator'
       : 'Manager / Administrator';
+
+  const filteredStates = useMemo(() => {
+    if (!stateSearchQuery.trim()) return INDIAN_STATES;
+    const q = stateSearchQuery.trim().toLowerCase();
+    return INDIAN_STATES.filter((s) => s.name.toLowerCase().includes(q));
+  }, [stateSearchQuery]);
 
   const handleSubmit = async () => {
     if (!fullName.trim()) {
@@ -109,20 +136,24 @@ export function EditProfileModal({ visible, onClose, onSuccess }: EditProfileMod
       return;
     }
 
+    let cleanAadhaar: string | null = null;
     if (aadhaarNumber.trim()) {
       const aRes = validateAadhaarNumber(aadhaarNumber);
       if (!aRes.isValid) {
         Alert.alert('Invalid Aadhaar', aRes.error || 'Please check your 12-digit Aadhaar number.');
         return;
       }
+      cleanAadhaar = aRes.clean || null;
     }
 
+    let formattedLicense: string | null = null;
     if (licenseNumber.trim()) {
       const lRes = validateLicenseNumber(licenseNumber);
       if (!lRes.isValid) {
         Alert.alert('Invalid Licence', lRes.error || 'Please check your driving licence format.');
         return;
       }
+      formattedLicense = lRes.formatted || licenseNumber.trim().toUpperCase();
     }
 
     const finalShift =
@@ -130,18 +161,100 @@ export function EditProfileModal({ visible, onClose, onSuccess }: EditProfileMod
         ? `${startTime.trim()} - ${endTime.trim()}`
         : startTime.trim() || endTime.trim() || '';
 
+    const resolvedStateObj = getStateByName(stateName) || getStateById(stateId);
+    const resolvedStateName = resolvedStateObj?.name || stateName.trim() || 'Maharashtra';
+    const resolvedStateId = resolvedStateObj?.id || stateId || 27;
+
+    // Validate using Zod ProfileUpdateSchema
+    const validationInput = {
+      full_name: fullName.trim(),
+      phone: phone.trim(),
+      shift_time: finalShift || null,
+      address: address.trim() || null,
+      city: city.trim() || 'Mumbai',
+      district: district.trim() || 'Mumbai',
+      state: resolvedStateName,
+      state_id: resolvedStateId,
+      aadhaar_number: cleanAadhaar,
+      license_number: formattedLicense,
+    };
+
+    const parsed = ProfileUpdateSchema.safeParse(validationInput);
+    if (!parsed.success) {
+      const firstError = parsed.error.issues[0]?.message || 'Validation error in profile form.';
+      Alert.alert('Validation Error', firstError);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      // 1. Uniqueness check: Phone
+      if (user?.id) {
+        const { data: existingPhones } = await supabase
+          .from('users')
+          .select('id, phone')
+          .neq('id', user.id)
+          .not('phone', 'is', null);
+
+        const hasDuplicatePhone = existingPhones?.some((u: any) => {
+          if (!u.phone) return false;
+          const uDigits = u.phone.replace(/\D/g, '');
+          if (digitsOnly.length >= 10 && uDigits.length >= 10) {
+            return digitsOnly.slice(-10) === uDigits.slice(-10);
+          }
+          return digitsOnly === uDigits;
+        });
+
+        if (hasDuplicatePhone) {
+          Alert.alert('Duplicate Phone', 'Another user account with this mobile number already exists.');
+          setIsSubmitting(false);
+          return;
+        }
+
+        // 2. Uniqueness check: Aadhaar
+        if (cleanAadhaar) {
+          const { data: existingAadhaar } = await supabase
+            .from('users')
+            .select('id')
+            .neq('id', user.id)
+            .eq('aadhaar_number', cleanAadhaar)
+            .maybeSingle();
+
+          if (existingAadhaar) {
+            Alert.alert('Duplicate Aadhaar', 'Another user account with this Aadhaar number already exists.');
+            setIsSubmitting(false);
+            return;
+          }
+        }
+
+        // 3. Uniqueness check: Driving Licence
+        if (formattedLicense) {
+          const { data: existingLic } = await supabase
+            .from('users')
+            .select('id')
+            .neq('id', user.id)
+            .ilike('license_number', formattedLicense)
+            .maybeSingle();
+
+          if (existingLic) {
+            Alert.alert('Duplicate Licence', 'Another user account with this driving licence number already exists.');
+            setIsSubmitting(false);
+            return;
+          }
+        }
+      }
+
       const payload = {
-        full_name: fullName.trim(),
-        phone: phone.trim(),
-        shift_time: finalShift || null,
-        address: address.trim() || null,
-        city: city.trim() || 'Mumbai',
-        district: district.trim() || 'Mumbai',
-        state: stateName.trim() || 'Maharashtra',
-        aadhaar_number: aadhaarNumber.trim() || null,
-        license_number: licenseNumber.trim().toUpperCase() || null,
+        full_name: parsed.data.full_name,
+        phone: parsed.data.phone,
+        shift_time: parsed.data.shift_time || null,
+        address: parsed.data.address || null,
+        city: parsed.data.city,
+        district: parsed.data.district,
+        state: parsed.data.state,
+        state_id: parsed.data.state_id,
+        aadhaar_number: cleanAadhaar,
+        license_number: formattedLicense,
       };
 
       if (isSuperAdmin) {
@@ -182,6 +295,21 @@ export function EditProfileModal({ visible, onClose, onSuccess }: EditProfileMod
           .eq('status', 'pending')
           .maybeSingle();
 
+        const activeSource = currentUser || authProfile || {};
+        const meta = user?.user_metadata || {};
+        const currentData = {
+          full_name: activeSource.full_name || meta.full_name || '',
+          phone: activeSource.phone || meta.phone || '',
+          shift_time: activeSource.shift_time || meta.shift_time || null,
+          address: activeSource.address || meta.address || null,
+          city: activeSource.city || meta.city || 'Mumbai',
+          district: activeSource.district || meta.district || 'Mumbai',
+          state: activeSource.state || meta.state || 'Maharashtra',
+          state_id: activeSource.state_id || 27,
+          aadhaar_number: activeSource.aadhaar_number || meta.aadhaar_number || null,
+          license_number: activeSource.license_number || meta.license_number || null,
+        };
+
         if (existing) {
           const { error: updErr } = await supabase
             .from('profile_change_requests')
@@ -199,17 +327,7 @@ export function EditProfileModal({ visible, onClose, onSuccess }: EditProfileMod
             .insert({
               user_id: user?.id,
               requester_role: role || 'operator',
-              current_data: {
-                full_name: metadata.full_name,
-                phone: metadata.phone,
-                shift_time: metadata.shift_time,
-                address: metadata.address,
-                city: metadata.city,
-                district: metadata.district,
-                state: metadata.state,
-                aadhaar_number: metadata.aadhaar_number,
-                license_number: metadata.license_number,
-              },
+              current_data: currentData,
               requested_data: payload,
               target_approver_role: targetApprover,
               status: 'pending',
@@ -349,17 +467,32 @@ export function EditProfileModal({ visible, onClose, onSuccess }: EditProfileMod
             <Text style={[styles.sectionTitle, { color: theme.colors.mute, marginTop: 14 }]}>
               3. Address
             </Text>
-            <Input
-              label="State *"
-              value={stateName}
-              onChangeText={setStateName}
-              placeholder="e.g. Maharashtra"
-              containerStyle={styles.inputSpacing}
-            />
+            
+            {/* State Picker Button */}
+            <Text style={[styles.fieldLabel, { color: theme.colors.mute }]}>State *</Text>
+            <TouchableOpacity
+              style={[
+                styles.stateSelectorBtn,
+                {
+                  borderColor: theme.colors.hairline,
+                  backgroundColor: theme.colors.canvas,
+                },
+              ]}
+              onPress={() => {
+                setStateSearchQuery('');
+                setStatePickerVisible(true);
+              }}
+            >
+              <Text style={[styles.stateSelectorText, { color: theme.colors.ink }]}>
+                {stateName || 'Select Indian State'}
+              </Text>
+              <ChevronDown size={18} color={theme.colors.mute} />
+            </TouchableOpacity>
+
             <View style={styles.row}>
               <View style={{ flex: 1, marginRight: 8 }}>
                 <Input
-                  label="District"
+                  label="District *"
                   value={district}
                   onChangeText={setDistrict}
                   placeholder="e.g. Thane"
@@ -376,6 +509,14 @@ export function EditProfileModal({ visible, onClose, onSuccess }: EditProfileMod
                 />
               </View>
             </View>
+
+            <Input
+              label="Street / Landmark Address"
+              value={address}
+              onChangeText={setAddress}
+              placeholder="e.g. Plot No. 42, MIDC Industrial Area"
+              containerStyle={styles.inputSpacing}
+            />
 
             <View style={{ height: 20 }} />
           </ScrollView>
@@ -400,6 +541,75 @@ export function EditProfileModal({ visible, onClose, onSuccess }: EditProfileMod
           </View>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Indian States Selector Modal */}
+      <Modal visible={statePickerVisible} animationType="slide" transparent onRequestClose={() => setStatePickerVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.statePickerSheet, { backgroundColor: theme.colors.canvas }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
+              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select State / UT</Text>
+              <TouchableOpacity onPress={() => setStatePickerVisible(false)} style={styles.closeBtn}>
+                <X size={20} color={theme.colors.mute} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.searchBox, { borderColor: theme.colors.hairline }]}>
+              <Search size={16} color={theme.colors.mute} />
+              <TextInput
+                style={[styles.searchInput, { color: theme.colors.ink }]}
+                placeholder="Search state or union territory..."
+                placeholderTextColor={theme.colors.mute}
+                value={stateSearchQuery}
+                onChangeText={setStateSearchQuery}
+                autoFocus
+              />
+              {stateSearchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setStateSearchQuery('')}>
+                  <X size={16} color={theme.colors.mute} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            <FlatList
+              data={filteredStates}
+              keyExtractor={(item) => String(item.id)}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }) => {
+                const isSelected = item.name.toLowerCase() === stateName.toLowerCase();
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.stateItem,
+                      {
+                        borderBottomColor: theme.colors.hairline,
+                        backgroundColor: isSelected ? 'rgba(0, 112, 243, 0.08)' : 'transparent',
+                      },
+                    ]}
+                    onPress={() => {
+                      setStateName(item.name);
+                      setStateId(item.id);
+                      setStatePickerVisible(false);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.stateItemText,
+                        {
+                          color: isSelected ? theme.colors.link : theme.colors.ink,
+                          fontWeight: isSelected ? '700' : '500',
+                        },
+                      ]}
+                    >
+                      {item.name}
+                    </Text>
+                    {isSelected && <Check size={18} color={theme.colors.link} />}
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -414,6 +624,12 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radiusNumeric.lg,
     borderTopRightRadius: radiusNumeric.lg,
     maxHeight: '90%',
+    paddingBottom: 24,
+  },
+  statePickerSheet: {
+    borderTopLeftRadius: radiusNumeric.lg,
+    borderTopRightRadius: radiusNumeric.lg,
+    height: '75%',
     paddingBottom: 24,
   },
   modalHeader: {
@@ -462,6 +678,53 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     marginBottom: 8,
   },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 4,
+  },
+  stateSelectorBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 44,
+    borderWidth: 1,
+    borderRadius: radiusNumeric.md,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+  stateSelectorText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    margin: spacingNumeric.md,
+    marginBottom: spacingNumeric.xs,
+    paddingHorizontal: 12,
+    height: 42,
+    borderWidth: 1,
+    borderRadius: radiusNumeric.md,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+  },
+  stateItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: spacingNumeric.md,
+    borderBottomWidth: 1,
+  },
+  stateItemText: {
+    fontSize: 14,
+  },
   inputSpacing: {
     marginBottom: 10,
   },
@@ -475,4 +738,5 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
 });
+
 

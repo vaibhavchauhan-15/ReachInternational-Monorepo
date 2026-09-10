@@ -228,6 +228,13 @@ export function AppWebView() {
         // Error Handlers
         onError={handleError}
         onHttpError={handleHttpError}
+        renderError={(errorDomain, errorCode, errorDesc) => (
+          <ErrorScreen
+            errorDescription={`Failed to connect to web server at ${initialUrl} (${errorDesc || errorCode || errorDomain}). Please ensure the web server is running and reachable.`}
+            onReload={handleReload}
+            onGoHome={handleGoHome}
+          />
+        )}
         onLoadProgress={(e: any) => setLoadProgress(e?.nativeEvent?.progress ?? 0)}
         // Session Cookies & Native Capabilities
         sharedCookiesEnabled={true}

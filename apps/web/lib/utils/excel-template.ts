@@ -47,6 +47,17 @@ export function getSampleExcelTemplate(): Blob {
       "available",
       "under_maintenance",
     ],
+    [
+      "",
+      "Dingli JCPT1612DC Scissor Lift",
+      "Dingli",
+      "SN-DNG-2024-881",
+      "2024",
+      120.0,
+      2,
+      "rented",
+      "spare",
+    ],
   ];
 
   const worksheet = XLSX.utils.aoa_to_sheet([headers, ...sampleRows]);

@@ -5,9 +5,9 @@ import { useAuth } from "../lib/auth/useAuth";
 import { colorsDark, spacingNumeric } from "@reachinternational/design-tokens";
 import { AppWebView } from "../shell/AppWebView";
 
-const SHELL_MODE = process.env.EXPO_PUBLIC_SHELL_MODE || "webview";
+const SHELL_MODE = process.env.EXPO_PUBLIC_SHELL_MODE || "native";
 
-function LegacyGatewayScreen() {
+function NativeGatewayScreen() {
   const { isLoading, session } = useAuth();
   const router = useRouter();
 
@@ -24,18 +24,19 @@ function LegacyGatewayScreen() {
   return (
     <View style={styles.container}>
       <ActivityIndicator size="large" color={colorsDark.link} />
-      <Text style={styles.loadingText}>Initializing Reach International (Legacy)...</Text>
+      <Text style={styles.loadingText}>Initializing Reach International...</Text>
     </View>
   );
 }
 
 export default function GatewayScreen() {
-  if (SHELL_MODE === "legacy") {
-    return <LegacyGatewayScreen />;
+  // WebView Shell Mode (Optional override via EXPO_PUBLIC_SHELL_MODE=webview)
+  if (SHELL_MODE === "webview") {
+    return <AppWebView />;
   }
 
-  // Authoritative WebView Shell Mode (Default)
-  return <AppWebView />;
+  // Authoritative Native Mobile App Mode (Default for Expo Go & Native Builds)
+  return <NativeGatewayScreen />;
 }
 
 const styles = StyleSheet.create({

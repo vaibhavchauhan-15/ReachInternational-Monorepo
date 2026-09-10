@@ -65,8 +65,8 @@ export const colorsLight: ColorTokens = {
   // Chromatic Accents
   violet: '#7928ca',
   violetSoft: '#d8ccf1',
-  cyan: '#50e3c2',
-  cyanSoft: '#aaffec',
+  cyan: '#0891b2',
+  cyanSoft: '#ecfeff',
   pink: '#ff0080',
   magenta: '#eb367f',
 
@@ -113,8 +113,8 @@ export const colorsDark: ColorTokens = {
   // Chromatic Accents
   violet: '#a78bfa',
   violetSoft: '#4c1d95',
-  cyan: '#5eead4',
-  cyanSoft: '#134e4a',
+  cyan: '#22d3ee',
+  cyanSoft: '#164e63',
   pink: '#f472b6',
   magenta: '#ec4899',
 

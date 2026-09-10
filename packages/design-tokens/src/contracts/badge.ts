@@ -13,9 +13,11 @@ export interface BadgeConfig {
 export const BADGE_CONFIGS: Record<string, BadgeConfig> = {
   // Machine Statuses
   active: { label: 'Active', variant: 'success', colorToken: 'success', bgToken: 'successSoft' },
+  spare: { label: 'Spare', variant: 'info', colorToken: 'cyan', bgToken: 'cyanSoft' },
   inactive: { label: 'Inactive', variant: 'neutral', colorToken: 'mute', bgToken: 'hairlineSoft' },
   on_rent: { label: 'On Rent', variant: 'info', colorToken: 'link', bgToken: 'linkSoft' },
   under_maintenance: { label: 'Under Maintenance', variant: 'warning', colorToken: 'warningDeep', bgToken: 'warningSoft' },
+  breakdown: { label: 'Breakdown', variant: 'error', colorToken: 'error', bgToken: 'errorSoft' },
 
   // Complaint Statuses
   open: { label: 'Open', variant: 'warning', colorToken: 'warningDeep', bgToken: 'warningSoft' },

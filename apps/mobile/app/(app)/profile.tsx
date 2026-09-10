@@ -1,10 +1,12 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { Card, Badge, Button, useTheme, MobileHeader } from '../../components/ui';
 import { EditProfileModal } from '../../components/profile/EditProfileModal';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { formatDate } from '@reachinternational/utils';
+import { supabase } from '../../lib/supabase';
 import {
   LogOut,
   Sun,
@@ -19,14 +21,50 @@ import {
   Clock,
   FileText,
   Edit,
+  AlertTriangle,
+  XCircle,
 } from 'lucide-react-native';
 
 export default function ProfileScreen() {
-  const { user, role, signOut, refreshSession } = useAuth();
+  const { user, role, signOut, refreshSession, userProfile: authProfile } = useAuth();
   const { theme, isDark, setMode } = useTheme();
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [dbUser, setDbUser] = useState<any>(authProfile || null);
+  const [pendingRequest, setPendingRequest] = useState<any>(null);
+  const [isCancellingRequest, setIsCancellingRequest] = useState(false);
+
+  const fetchProfileData = useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const [userRes, reqRes] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, full_name, phone, role, status, complete_profile, shift_time, city, district, state, state_id, address, aadhaar_number, license_number, email')
+          .eq('id', user.id)
+          .maybeSingle(),
+        supabase
+          .from('profile_change_requests')
+          .select('id, user_id, requester_role, current_data, requested_data, target_approver_role, status, created_at')
+          .eq('user_id', user.id)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+          .maybeSingle(),
+      ]);
+
+      if (userRes.data) {
+        setDbUser(userRes.data);
+      }
+      setPendingRequest(reqRes.data || null);
+    } catch (err) {
+      console.warn('[ProfileScreen] Error fetching profile record:', err);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    fetchProfileData();
+  }, [fetchProfileData]);
 
   const handleLogout = async () => {
     await signOut();
@@ -39,28 +77,78 @@ export default function ProfileScreen() {
       if (refreshSession) {
         await refreshSession();
       }
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await fetchProfileData();
     } catch (e) {
-      console.error(e);
+      console.error('[ProfileScreen] Refresh error:', e);
     } finally {
       setRefreshing(false);
     }
-  }, [refreshSession]);
+  }, [refreshSession, fetchProfileData]);
 
+  const handleCancelPendingRequest = () => {
+    if (!pendingRequest?.id) return;
+
+    Alert.alert(
+      'Cancel Change Request',
+      'Are you sure you want to withdraw your pending profile update request?',
+      [
+        { text: 'Keep Request', style: 'cancel' },
+        {
+          text: 'Withdraw Request',
+          style: 'destructive',
+          onPress: async () => {
+            setIsCancellingRequest(true);
+            try {
+              const { error } = await supabase
+                .from('profile_change_requests')
+                .update({
+                  status: 'cancelled',
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', pendingRequest.id);
+
+              if (error) throw error;
+              Alert.alert('Request Withdrawn', 'Your profile change request has been cancelled.');
+              await fetchProfileData();
+            } catch (err: any) {
+              Alert.alert('Error', err?.message || 'Failed to cancel the change request.');
+            } finally {
+              setIsCancellingRequest(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Authoritative data resolution: DB row -> Auth Context -> Auth user metadata
+  const profile = dbUser || authProfile || {};
   const metadata = user?.user_metadata || {};
-  const fullName = metadata.full_name || (user?.email ? user.email.split('@')[0] : 'User');
-  const userPhone = metadata.phone || '—';
-  const shiftSchedule = metadata.shift_time || 'General / Day Shift (08:00 AM - 08:00 PM)';
-  const locationString = [metadata.city, metadata.district, metadata.state].filter(Boolean).join(', ') || '—';
-  const fullAddress = metadata.address
-    ? `${metadata.address}${locationString !== '—' ? `, ${locationString}` : ''}`
+
+  const fullName = profile.full_name || metadata.full_name || (user?.email ? user.email.split('@')[0] : 'User');
+  const userPhone = profile.phone || metadata.phone || '—';
+  const shiftSchedule = profile.shift_time || metadata.shift_time || 'General / Day Shift (08:00 AM - 08:00 PM)';
+  
+  const city = profile.city || metadata.city;
+  const district = profile.district || metadata.district;
+  const state = profile.state || metadata.state;
+  const locationParts = [city, district, state].filter(Boolean);
+  const locationString = locationParts.length > 0 ? locationParts.join(', ') : '—';
+  
+  const rawAddress = profile.address || metadata.address;
+  const fullAddress = rawAddress
+    ? `${rawAddress}${locationString !== '—' ? `, ${locationString}` : ''}`
     : locationString;
-  const aadhaarDisplay = metadata.aadhaar_number
-    ? metadata.aadhaar_number.length >= 12
-      ? `XXXX-XXXX-${metadata.aadhaar_number.slice(-4)}`
-      : metadata.aadhaar_number
+
+  const rawAadhaar = profile.aadhaar_number || metadata.aadhaar_number;
+  const aadhaarDisplay = rawAadhaar
+    ? rawAadhaar.length >= 12
+      ? `XXXX-XXXX-${rawAadhaar.slice(-4)}`
+      : rawAadhaar
     : 'Not Provided';
-  const licenceDisplay = metadata.license_number || 'Not Provided';
+
+  const licenceDisplay = profile.license_number || metadata.license_number || 'Not Provided';
+  const currentRole = (profile.role || role || metadata.role || 'operator').replace(/_/g, ' ').toUpperCase();
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
@@ -75,6 +163,50 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
       >
+        {/* Pending Change Request Banner */}
+        {pendingRequest && (
+          <View
+            style={[
+              styles.pendingBanner,
+              {
+                backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                borderColor: 'rgba(245, 158, 11, 0.35)',
+              },
+            ]}
+          >
+            <View style={styles.pendingHeader}>
+              <View style={styles.pendingTitleGroup}>
+                <AlertTriangle size={16} color="#d97706" />
+                <Text style={styles.pendingTitle}>Pending Profile Review</Text>
+              </View>
+              <Badge status="pending" customLabel="PENDING" />
+            </View>
+            <Text style={[styles.pendingDescription, { color: theme.colors.mute }]}>
+              A profile change request submitted on{' '}
+              <Text style={{ fontWeight: '700', color: theme.colors.ink }}>
+                {formatDate(pendingRequest.created_at)}
+              </Text>{' '}
+              is currently under review by{' '}
+              <Text style={{ fontWeight: '700', color: theme.colors.ink }}>
+                {pendingRequest.target_approver_role === 'super_admin'
+                  ? 'Super Administrator'
+                  : 'Administrator / Manager'}
+              </Text>
+              . New edits will overwrite this pending submission.
+            </Text>
+            <TouchableOpacity
+              style={styles.cancelRequestBtn}
+              onPress={handleCancelPendingRequest}
+              disabled={isCancellingRequest}
+            >
+              <XCircle size={14} color="#dc2626" />
+              <Text style={styles.cancelRequestText}>
+                {isCancellingRequest ? 'Cancelling...' : 'Withdraw Request'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* User Identity & Operations Card */}
         <Card variant="elevated" style={styles.card}>
           <View style={styles.avatarRow}>
@@ -95,7 +227,7 @@ export default function ProfileScreen() {
           <View style={styles.infoRow}>
             <Shield size={14} color={theme.colors.link} />
             <Text style={[styles.label, { color: theme.colors.mute }]}>System Role:</Text>
-            <Badge status="active" customLabel={(role || 'Operator').replace('_', ' ').toUpperCase()} />
+            <Badge status="active" customLabel={currentRole} />
           </View>
 
           <View style={styles.divider} />
@@ -192,8 +324,12 @@ export default function ProfileScreen() {
 
       <EditProfileModal
         visible={editModalVisible}
+        currentUser={dbUser || authProfile}
         onClose={() => setEditModalVisible(false)}
-        onSuccess={onRefresh}
+        onSuccess={() => {
+          fetchProfileData();
+          if (refreshSession) refreshSession();
+        }}
       />
     </View>
   );
@@ -203,6 +339,48 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: spacingNumeric.md, paddingBottom: spacingNumeric.xl },
   card: { marginVertical: spacingNumeric.xs, padding: spacingNumeric.md },
+  pendingBanner: {
+    padding: spacingNumeric.sm + 4,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    marginBottom: spacingNumeric.sm,
+  },
+  pendingHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  pendingTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pendingTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#d97706',
+  },
+  pendingDescription: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 8,
+  },
+  cancelRequestBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: radiusNumeric.sm,
+    backgroundColor: 'rgba(220, 38, 38, 0.08)',
+  },
+  cancelRequestText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#dc2626',
+  },
   avatarRow: {
     flexDirection: 'row',
     alignItems: 'center',

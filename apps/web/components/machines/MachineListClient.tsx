@@ -699,6 +699,7 @@ const RENTAL_STATUS_OPTIONS = [
 const HEALTH_STATUS_OPTIONS = [
   { id: "all", label: "All Health Status", activeColor: "text-[var(--color-ink)]", dotColor: "" },
   { id: "active", label: "Active", activeColor: "text-emerald-700 dark:text-emerald-400 font-semibold", dotColor: "bg-emerald-500" },
+  { id: "spare", label: "Spare", activeColor: "text-cyan-700 dark:text-cyan-400 font-semibold", dotColor: "bg-cyan-500" },
   { id: "under_maintenance", label: "Under Maintenance", activeColor: "text-amber-700 dark:text-amber-400 font-semibold", dotColor: "bg-amber-500" },
   { id: "breakdown", label: "Breakdown", activeColor: "text-rose-700 dark:text-rose-400 font-semibold", dotColor: "bg-rose-500" },
 ];
@@ -879,6 +880,7 @@ export function MachineListClient({
     let rentedCount = 0;
     let breakdownCount = 0;
     let maintenanceCount = 0;
+    let spareCount = 0;
 
     machines.forEach((m) => {
       if (m.status === "rented") rentedCount++;
@@ -886,9 +888,10 @@ export function MachineListClient({
 
       if (m.health_status === "breakdown") breakdownCount++;
       if (m.health_status === "under_maintenance") maintenanceCount++;
+      if (m.health_status === "spare") spareCount++;
     });
 
-    return { availableCount, rentedCount, breakdownCount, maintenanceCount };
+    return { availableCount, rentedCount, breakdownCount, maintenanceCount, spareCount };
   }, [machines]);
 
   // Client-side instant filter and sort pipeline
@@ -1087,6 +1090,7 @@ export function MachineListClient({
         cell: (row: Machine) => {
           if (row.health_status === "breakdown") return <Badge variant="overdue" dot className="whitespace-nowrap">Breakdown</Badge>;
           if (row.health_status === "under_maintenance") return <Badge variant="warning" dot className="whitespace-nowrap">Maintenance</Badge>;
+          if (row.health_status === "spare") return <Badge variant="spare" dot className="whitespace-nowrap">Spare</Badge>;
           return <Badge variant="success" dot className="whitespace-nowrap">Active</Badge>;
         },
       },
@@ -1380,7 +1384,15 @@ export function MachineListClient({
                     </span>
                   )}
                   {healthStatusFilter !== "all" && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-medium">
+                    <span
+                      className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border font-medium ${
+                        healthStatusFilter === "spare"
+                          ? "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/20"
+                          : healthStatusFilter === "breakdown"
+                          ? "bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/20"
+                          : "bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/20"
+                      }`}
+                    >
                       <span>Health: {healthStatusFilter.replace(/_/g, " ")}</span>
                       <button
                         type="button"

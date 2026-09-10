@@ -21,6 +21,8 @@ function formatHealthStatus(health?: string): string {
   switch (health) {
     case "active":
       return "Active (Healthy)";
+    case "spare":
+      return "Spare (Idle on Site)";
     case "under_maintenance":
       return "Under Maintenance";
     case "breakdown":
@@ -94,6 +96,7 @@ export function exportMachinesToExcel(
   let rentedCount = 0;
   let breakdownCount = 0;
   let maintenanceCount = 0;
+  let spareCount = 0;
   let activeHealthCount = 0;
   let totalHmr = 0;
 
@@ -104,6 +107,7 @@ export function exportMachinesToExcel(
 
     if (m.health_status === "breakdown") breakdownCount++;
     else if (m.health_status === "under_maintenance") maintenanceCount++;
+    else if (m.health_status === "spare") spareCount++;
     else activeHealthCount++;
 
     const hmr = Number(m.hour_meter) || 0;
@@ -151,7 +155,7 @@ export function exportMachinesToExcel(
     `Fleet HMR: ${Math.round(totalHmr * 10) / 10} hrs`,
     "",
     `Available: ${availableCount} | Rented: ${rentedCount}`,
-    `Active: ${activeHealthCount} | Maint: ${maintenanceCount} | Breakdown: ${breakdownCount}`,
+    `Active: ${activeHealthCount} | Spare: ${spareCount} | Maint: ${maintenanceCount} | Breakdown: ${breakdownCount}`,
     "",
     "",
     "",

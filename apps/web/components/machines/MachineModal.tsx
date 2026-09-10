@@ -190,6 +190,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
 
   const healthStatusOptions = [
     { value: "active", label: "Active" },
+    { value: "spare", label: "Spare" },
     { value: "under_maintenance", label: "Under Maintenance" },
     { value: "breakdown", label: "Breakdown" },
   ];
@@ -338,6 +339,9 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
               onChange={(val) => {
                 const nextVal = typeof val === "string" ? val : val?.target?.value || "active";
                 setHealthStatus(nextVal);
+                if (nextVal === "spare" && rentalStatus !== "rented") {
+                  setRentalStatus("rented");
+                }
               }}
               disabled={isSaving}
             />

@@ -48,6 +48,9 @@ export function MobileMachineCard({
     if (machine.health_status === "under_maintenance") {
       return "border-l-[3px] border-l-amber-500 dark:border-l-amber-400";
     }
+    if (machine.health_status === "spare") {
+      return "border-l-[3px] border-l-cyan-500 dark:border-l-cyan-400";
+    }
     if (machine.status === "rented") {
       return "border-l-[3px] border-l-sky-500 dark:border-l-sky-400";
     }
@@ -114,6 +117,11 @@ export function MobileMachineCard({
           {machine.health_status === "under_maintenance" && (
             <Badge variant="warning" dot className="whitespace-nowrap text-[10px] sm:text-xs">
               Maintenance
+            </Badge>
+          )}
+          {machine.health_status === "spare" && (
+            <Badge variant="spare" dot className="whitespace-nowrap text-[10px] sm:text-xs">
+              Spare
             </Badge>
           )}
           {(!machine.health_status || machine.health_status === "active") && (

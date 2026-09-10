@@ -1,4 +1,11 @@
-import React, { useState, useRef } from 'react';
+/**
+ * Reach International Mobile — Signup / Registration Screen
+ * Exact replication of the Web Mobile Viewport Signup UI/UX.
+ * Production-ready with native keyboard management, safe areas, theme adaptation,
+ * dynamic status bar contrast, haptic feedback, validation, and full Supabase authentication lifecycle parity.
+ */
+
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,18 +15,21 @@ import {
   ScrollView,
   TouchableOpacity,
   Modal,
+  ActivityIndicator,
+  Vibration,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
-import { Button, Input, Card, TimeInput, useTheme } from '../../components/ui';
-import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
+import { Input, Alert, TimeInput, useTheme } from '../../components/ui';
+import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
 import {
   validateAadhaarNumber,
   validateLicenseNumber,
   formatAadhaar,
   INDIAN_STATES,
   getStateById,
-  getStateByName,
   computeShiftTiming,
 } from '@reachinternational/utils';
 import { isSupervisedRole } from '@reachinternational/permissions';
@@ -31,14 +41,13 @@ import {
   MapPin,
   ShieldCheck,
   CreditCard,
-  CheckCircle2,
   ChevronDown,
   X,
   Check,
-  ArrowLeft,
   Info,
-  Clock,
   Search,
+  Sun,
+  Moon,
 } from 'lucide-react-native';
 
 const SIGNUP_ROLES = [
@@ -61,8 +70,10 @@ export default function SignupScreen() {
   const [phone, setPhone] = useState('');
   const [selectedRole, setSelectedRole] = useState('service_engineer');
   const [roleModalVisible, setRoleModalVisible] = useState(false);
+
   const [shiftStartTime, setShiftStartTime] = useState('08:00 AM');
   const [shiftEndTime, setShiftEndTime] = useState('08:00 PM');
+
   const [city, setCity] = useState('');
   const [district, setDistrict] = useState('');
   const [address, setAddress] = useState('');
@@ -70,6 +81,7 @@ export default function SignupScreen() {
   const [stateId, setStateId] = useState<number | null>(null);
   const [stateModalVisible, setStateModalVisible] = useState(false);
   const [stateSearch, setStateSearch] = useState('');
+
   const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
   const [password, setPassword] = useState('');
@@ -87,11 +99,27 @@ export default function SignupScreen() {
   const [workingLocationModalVisible, setWorkingLocationModalVisible] = useState(false);
   const [workingLocationSearch, setWorkingLocationSearch] = useState('');
 
-  React.useEffect(() => {
+  const [isLoading, setIsLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const clearFieldError = (fieldName: string) => {
+    setFieldErrors((prev) => {
+      if (!prev[fieldName]) return prev;
+      const copy = { ...prev };
+      delete copy[fieldName];
+      return copy;
+    });
+  };
+
+  useEffect(() => {
+    let isMounted = true;
     async function loadSupervisors() {
       try {
         const { data, error } = await supabase.rpc('get_active_supervisors_public');
-        if (!error && data) {
+        if (!error && data && isMounted) {
           setSupervisors(data as Array<{ id: string; full_name: string; email?: string }>);
         }
       } catch (err) {
@@ -102,7 +130,7 @@ export default function SignupScreen() {
     async function loadWorkingLocations() {
       try {
         const { data, error } = await supabase.rpc('get_active_working_locations_public');
-        if (!error && data) {
+        if (!error && data && isMounted) {
           setWorkingLocations(data as Array<{ id: string; name: string; type: string; city?: string }>);
         }
       } catch (err) {
@@ -112,18 +140,16 @@ export default function SignupScreen() {
 
     loadSupervisors();
     loadWorkingLocations();
+    return () => {
+      isMounted = false;
+    };
   }, []);
-
-  const [isLoading, setIsLoading] = useState(false);
-  const isSubmittingRef = useRef(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
 
   const selectedRoleObj = SIGNUP_ROLES.find((r) => r.value === selectedRole) || SIGNUP_ROLES[0];
   const selectedSupervisor = supervisors.find((s) => s.id === selectedSupervisorId);
   const selectedWorkingLocation = workingLocations.find((l) => l.id === selectedWorkingLocationId);
 
-  const shiftSummary = React.useMemo(() => {
+  const shiftSummary = useMemo(() => {
     if (!shiftStartTime || !shiftEndTime) return null;
     return computeShiftTiming({
       startTime: shiftStartTime,
@@ -131,94 +157,129 @@ export default function SignupScreen() {
     });
   }, [shiftStartTime, shiftEndTime]);
 
+  const triggerHaptic = () => {
+    if (Platform.OS === 'android') {
+      try {
+        Vibration.vibrate(12);
+      } catch {
+        // Safe fallback
+      }
+    }
+  };
+
+  const handleAadhaarChange = (val: string) => {
+    const formatted = formatAadhaar(val);
+    setAadhaarNumber(formatted);
+    clearFieldError('aadhaar_number');
+    const clean = formatted.replace(/\D/g, '');
+    if (clean.length === 12) {
+      const res = validateAadhaarNumber(clean);
+      if (!res.isValid) {
+        setFieldErrors((prev) => ({ ...prev, aadhaar_number: res.error || 'Invalid Aadhaar number' }));
+      }
+    }
+  };
+
+  const handleLicenseChange = (val: string) => {
+    const upper = val.toUpperCase();
+    setLicenseNumber(upper);
+    clearFieldError('license_number');
+  };
+
   const handleSignup = async () => {
     if (isSubmittingRef.current || isLoading) return;
+    triggerHaptic();
     setErrorMessage('');
     setSuccessMessage('');
 
-    // Field Validations
+    const errors: Record<string, string> = {};
+
     if (!fullName.trim() || fullName.trim().length < 2) {
-      setErrorMessage('Full name is required (minimum 2 characters).');
-      return;
+      errors.full_name = 'Full name is required (minimum 2 characters).';
     }
-    if (!email.trim() || !email.includes('@')) {
-      setErrorMessage('A valid email address is required.');
-      return;
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!email.trim() || !emailRegex.test(email.trim().toLowerCase())) {
+      errors.email = 'Please enter a valid email address.';
     }
+
     const cleanPhone = phone.replace(/[^0-9+]/g, '');
     if (cleanPhone.length < 10) {
-      setErrorMessage('Valid 10-digit mobile number is required.');
-      return;
-    }
-    if (!city.trim() || city.trim().length < 2) {
-      setErrorMessage('City/Town/Village is required.');
-      return;
-    }
-    if (!district.trim() || district.trim().length < 2) {
-      setErrorMessage('District is required.');
-      return;
-    }
-    if (!stateVal.trim() && !stateId) {
-      setErrorMessage('State is required.');
-      return;
-    }
-    if (!address.trim()) {
-      setErrorMessage('Street / Site address is required.');
-      return;
-    }
-    if (!shiftStartTime.trim()) {
-      setErrorMessage('Shift start time is required.');
-      return;
-    }
-    if (!shiftEndTime.trim()) {
-      setErrorMessage('Shift end time is required.');
-      return;
-    }
-    if (!password || password.length < 8) {
-      setErrorMessage('Password must be at least 8 characters long.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setErrorMessage('Passwords do not match.');
-      return;
-    }
-
-    if (!aadhaarNumber.trim()) {
-      setErrorMessage('Aadhaar card number is required.');
-      return;
-    }
-    const aadhaarRes = validateAadhaarNumber(aadhaarNumber);
-    if (!aadhaarRes.isValid) {
-      setErrorMessage(aadhaarRes.error || 'Please enter a valid 12-digit Aadhaar number.');
-      return;
-    }
-    const cleanAadhaar = aadhaarRes.clean || null;
-
-    let formattedLic: string | null = null;
-    if (licenseNumber.trim()) {
-      const licRes = validateLicenseNumber(licenseNumber);
-      if (!licRes.isValid) {
-        setErrorMessage(licRes.error || 'Please enter a valid driving licence number.');
-        return;
-      }
-      formattedLic = licRes.formatted || licenseNumber.trim().toUpperCase();
+      errors.phone = 'Valid 10-digit mobile number is required.';
     }
 
     if (isSupervisedRole(selectedRole) && supervisors.length > 0 && !selectedSupervisorId) {
-      setErrorMessage('Please select your designated supervisor.');
+      errors.supervisor_id = 'Please select your designated supervisor.';
+    }
+
+    if (!shiftStartTime.trim()) {
+      errors.shift_start_time = 'Shift start time is required.';
+    }
+    if (!shiftEndTime.trim()) {
+      errors.shift_end_time = 'Shift end time is required.';
+    }
+
+    if (!city.trim() || city.trim().length < 2) {
+      errors.city = 'City/Town/Village is required.';
+    }
+    if (!district.trim() || district.trim().length < 2) {
+      errors.district = 'District is required.';
+    }
+    if (!stateVal.trim() && !stateId) {
+      errors.state = 'State is required.';
+    }
+    if (!address.trim()) {
+      errors.address = 'Street / site base address is required.';
+    }
+
+    if (!aadhaarNumber.trim()) {
+      errors.aadhaar_number = 'Aadhaar card number is required.';
+    } else {
+      const aadhaarRes = validateAadhaarNumber(aadhaarNumber);
+      if (!aadhaarRes.isValid) {
+        errors.aadhaar_number = aadhaarRes.error || 'Invalid Aadhaar number.';
+      }
+    }
+
+    if (licenseNumber.trim()) {
+      const licRes = validateLicenseNumber(licenseNumber);
+      if (!licRes.isValid) {
+        errors.license_number = licRes.error || 'Invalid driving licence format.';
+      }
+    }
+
+    if (!password || password.length < 8) {
+      errors.password = 'Password must be at least 8 characters long.';
+    } else {
+      const hasUppercase = /[A-Z]/.test(password);
+      const hasLowercase = /[a-z]/.test(password);
+      const hasDigit = /\d/.test(password);
+      if (!hasUppercase || !hasLowercase || !hasDigit) {
+        errors.password = 'Password must include uppercase, lowercase, and a number.';
+      }
+    }
+
+    if (password !== confirmPassword) {
+      errors.confirm_password = 'Passwords do not match.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      setErrorMessage('Please correct the highlighted fields before submitting.');
       return;
     }
+
+    setFieldErrors({});
+    isSubmittingRef.current = true;
+    setIsLoading(true);
 
     const finalShift =
       shiftStartTime.trim() && shiftEndTime.trim()
         ? `${shiftStartTime.trim()} - ${shiftEndTime.trim()}`
         : shiftStartTime.trim() || shiftEndTime.trim() || null;
 
-    isSubmittingRef.current = true;
-    setIsLoading(true);
-
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
@@ -237,8 +298,8 @@ export default function SignupScreen() {
             state: stateVal.trim(),
             state_id: stateId,
             location: `${address.trim() ? `${address.trim()}, ` : ''}${city.trim()}, ${district.trim()}, ${stateVal.trim()}`,
-            aadhaar_number: cleanAadhaar,
-            license_number: formattedLic,
+            aadhaar_number: aadhaarNumber.replace(/\D/g, ''),
+            license_number: licenseNumber.trim().toUpperCase() || null,
           },
         },
       });
@@ -248,11 +309,10 @@ export default function SignupScreen() {
         isSubmittingRef.current = false;
         setIsLoading(false);
       } else {
-        setSuccessMessage('Account request submitted successfully! Please wait for administrator approval.');
-        // Keep isLoading=true and isSubmittingRef=true during redirect
+        setSuccessMessage('Registration request submitted! Your account is pending administrator approval.');
         setTimeout(() => {
           router.replace('/(auth)/login');
-        }, 2000);
+        }, 2200);
       }
     } catch (err: any) {
       setErrorMessage(err?.message || 'An unexpected error occurred during signup.');
@@ -261,412 +321,511 @@ export default function SignupScreen() {
     }
   };
 
+  const canvasBackground = isDark ? '#0a0a0a' : '#fafafa';
+  const cardBackground = isDark ? '#171717' : '#ffffff';
+  const cardBorder = isDark ? '#262626' : '#ebebeb';
+  const sectionBg = isDark ? 'rgba(10, 10, 10, 0.6)' : 'rgba(250, 250, 250, 0.8)';
+  const primarySkyBlue = '#0ea5e9';
+
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={[styles.flexContainer, { backgroundColor: theme.colors.canvas }]}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* Soft Background Glow Circles */}
-        <View style={[styles.ambientGlowTop, { backgroundColor: theme.colors.link + '15' }]} />
-        <View style={[styles.ambientGlowBottom, { backgroundColor: theme.colors.violet + '15' }]} />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: canvasBackground }]}>
+      {/* Dynamic Status Bar — Ensures battery, wifi, notifications & time are dark in light theme and light in dark theme */}
+      <StatusBar style={isDark ? 'light' : 'dark'} />
 
-        {/* Top Header */}
-        <View style={styles.topHeader}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.backBtn, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
-          >
-            <ArrowLeft size={16} color={theme.colors.ink} />
-          </TouchableOpacity>
-
-          <View style={styles.brandRow}>
-            <View style={[styles.logoEmblem, { backgroundColor: theme.colors.ink }]}>
-              <Text style={[styles.logoLetter, { color: theme.colors.canvas }]}>R</Text>
-            </View>
-            <Text style={[styles.brandTitle, { color: theme.colors.ink }]}>Reach International</Text>
-          </View>
-
-          <TouchableOpacity
-            onPress={() => setMode(isDark ? 'light' : 'dark')}
-            style={[styles.themeBtn, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
-          >
-            <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.mute }}>
-              {isDark ? 'LIGHT' : 'DARK'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Hero Section */}
-        <View style={styles.heroSection}>
-          <Text style={[styles.heroHeadline, { color: theme.colors.ink }]}>
-            Join your machine fleet team
-          </Text>
-        </View>
-
-        {/* Form Card */}
-        <Card variant="elevated" style={styles.card}>
-          <Text style={[styles.formTitle, { color: theme.colors.ink, marginBottom: spacingNumeric.md }]}>
-            Create Your Account
-          </Text>
-
-          {errorMessage ? (
-            <View style={[styles.alertContainer, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error }]}>
-              <Text style={[styles.alertText, { color: theme.colors.error }]}>{errorMessage}</Text>
-            </View>
-          ) : null}
-
-          {successMessage ? (
-            <View style={[styles.alertContainer, { backgroundColor: theme.colors.success + '1a', borderColor: theme.colors.success }]}>
-              <Text style={[styles.alertText, { color: theme.colors.success }]}>{successMessage}</Text>
-            </View>
-          ) : null}
-
-          {/* Section 1: Account & Role */}
-          <View style={[styles.sectionContainer, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-            <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
-              <View style={styles.sectionHeaderLeft}>
-                <View style={[styles.sectionNumberBadge, { backgroundColor: theme.colors.link + '18' }]}>
-                  <Text style={[styles.sectionNumberText, { color: theme.colors.link }]}>1</Text>
-                </View>
-                <Text style={[styles.sectionHeaderTitle, { color: theme.colors.ink }]}>Account & Role</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.keyboardContainer}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Main Card Container */}
+          <View style={styles.centerContainer}>
+            <View
+              style={[
+                styles.card,
+                {
+                  backgroundColor: cardBackground,
+                  borderColor: cardBorder,
+                },
+              ]}
+            >
+              {/* Brand Logo Centered */}
+              <View style={styles.logoContainer}>
+                <ReachInternationalLogo size={28} />
               </View>
-            </View>
 
-            <Input
-              label="Full Name *"
-              placeholder="Rahul Sharma"
-              value={fullName}
-              onChangeText={setFullName}
-              autoCapitalize="words"
-              leftIcon={<User size={16} color={theme.colors.mute} />}
-            />
+              {/* Card Title */}
+              <Text style={[styles.title, { color: theme.colors.ink }]}>
+                Create an account
+              </Text>
 
-            <Input
-              label="Email Address *"
-              placeholder="rahul@domain.in"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              leftIcon={<Mail size={16} color={theme.colors.mute} />}
-            />
-
-            <Input
-              label="Mobile Number *"
-              placeholder="+91 98765 43210"
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              leftIcon={<Phone size={16} color={theme.colors.mute} />}
-            />
-
-            {/* Role Selector Trigger */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Account Role Requested *</Text>
-              <TouchableOpacity
-                onPress={() => setRoleModalVisible(true)}
-                activeOpacity={0.8}
-                style={[
-                  styles.selectTrigger,
-                  { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
-                ]}
-              >
-                <View style={styles.roleSelectedLeft}>
-                  <ShieldCheck size={16} color={theme.colors.link} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.roleSelectTitle, { color: theme.colors.ink }]}>
-                      {selectedRoleObj.label}
-                    </Text>
-                    <Text style={[styles.roleSelectDesc, { color: theme.colors.mute }]} numberOfLines={1}>
-                      {selectedRoleObj.desc}
-                    </Text>
-                  </View>
+              {/* Global Error Banner */}
+              {errorMessage && Object.keys(fieldErrors).length === 0 ? (
+                <View style={styles.bannerContainer}>
+                  <Alert variant="error">{errorMessage}</Alert>
                 </View>
-                <ChevronDown size={16} color={theme.colors.mute} />
-              </TouchableOpacity>
-            </View>
+              ) : null}
 
-            {/* Conditional Supervisor Selector Trigger */}
-            {isSupervisedRole(selectedRole) && (
-              <View style={styles.inputGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
-                  Designated Supervisor *
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setSupervisorModalVisible(true)}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.selectTrigger,
-                    {
-                      backgroundColor: theme.colors.canvasElevated,
-                      borderColor: selectedSupervisorId ? theme.colors.ink : theme.colors.hairline,
-                    },
-                  ]}
-                >
-                  <View style={styles.roleSelectedLeft}>
-                    <User size={16} color={theme.colors.link} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.roleSelectTitle, { color: selectedSupervisor ? theme.colors.ink : theme.colors.mute }]}>
-                        {selectedSupervisor ? selectedSupervisor.full_name : 'Select your supervisor...'}
-                      </Text>
-                      {selectedSupervisor?.email && (
-                        <Text style={[styles.roleSelectDesc, { color: theme.colors.mute }]} numberOfLines={1}>
-                          {selectedSupervisor.email}
-                        </Text>
-                      )}
+              {/* Global Success Banner */}
+              {successMessage ? (
+                <View style={styles.bannerContainer}>
+                  <Alert variant="success">{successMessage}</Alert>
+                </View>
+              ) : null}
+
+              {/* Section 1: Account & Role */}
+              <View style={[styles.sectionCard, { backgroundColor: sectionBg, borderColor: cardBorder }]}>
+                <View style={[styles.sectionHeader, { borderBottomColor: cardBorder }]}>
+                  <View style={styles.sectionHeaderTitleRow}>
+                    <View style={styles.sectionBadge}>
+                      <Text style={styles.sectionBadgeText}>1</Text>
                     </View>
-                  </View>
-                  <ChevronDown size={16} color={theme.colors.mute} />
-                </TouchableOpacity>
-                <Text style={{ fontSize: 11, color: theme.colors.mute, marginTop: 4 }}>
-                  Supervisors coordinate machine allocations, daily shifts, and technical escalations.
-                </Text>
-              </View>
-            )}
-
-            {/* Working Location Trigger Card for ALL roles */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
-                Working Location / Base
-              </Text>
-              <TouchableOpacity
-                onPress={() => setWorkingLocationModalVisible(true)}
-                activeOpacity={0.8}
-                style={[
-                  styles.selectTrigger,
-                  {
-                    backgroundColor: theme.colors.canvasElevated,
-                    borderColor: selectedWorkingLocationId ? theme.colors.ink : theme.colors.hairline,
-                  },
-                ]}
-              >
-                <View style={styles.roleSelectedLeft}>
-                  <MapPin size={16} color={theme.colors.link} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.roleSelectTitle, { color: selectedWorkingLocation ? theme.colors.ink : theme.colors.mute }]}>
-                      {selectedWorkingLocation ? selectedWorkingLocation.name : 'Select working base / site...'}
+                    <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
+                      Account & Role
                     </Text>
-                    {selectedWorkingLocation && (
-                      <Text style={[styles.roleSelectDesc, { color: theme.colors.mute }]} numberOfLines={1}>
-                        {[selectedWorkingLocation.type?.toUpperCase(), selectedWorkingLocation.city].filter(Boolean).join(' • ')}
-                      </Text>
-                    )}
                   </View>
                 </View>
-                <ChevronDown size={16} color={theme.colors.mute} />
-              </TouchableOpacity>
-              <Text style={{ fontSize: 11, color: theme.colors.mute, marginTop: 4 }}>
-                Designate your primary yard, workshop, regional office, or site depot.
-              </Text>
-            </View>
-          </View>
 
-          {/* Section 2: Work Shift Schedule */}
-          <View style={[styles.sectionContainer, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-            <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
-              <View style={styles.sectionHeaderLeft}>
-                <View style={[styles.sectionNumberBadge, { backgroundColor: theme.colors.link + '18' }]}>
-                  <Text style={[styles.sectionNumberText, { color: theme.colors.link }]}>2</Text>
-                </View>
-                <Text style={[styles.sectionHeaderTitle, { color: theme.colors.ink }]}>Work Shift Schedule</Text>
-              </View>
-              {shiftSummary?.isValid && (
-                <View style={[styles.shiftBadge, { backgroundColor: theme.colors.link + '15', borderColor: theme.colors.link + '30' }]}>
-                  <Text style={[styles.shiftBadgeText, { color: theme.colors.link }]}>
-                    {shiftSummary.isOvernight ? '🌙' : '☀️'} {shiftSummary.durationFormatted}
+                <Input
+                  label="Full Name"
+                  required
+                  placeholder="Rahul Sharma"
+                  value={fullName}
+                  onChangeText={(val) => {
+                    setFullName(val);
+                    clearFieldError('full_name');
+                  }}
+                  autoCapitalize="words"
+                  autoComplete="name"
+                  error={fieldErrors.full_name}
+                  leftIcon={<User size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                />
+
+                <Input
+                  label="Email Address"
+                  required
+                  placeholder="rahul@domain.com"
+                  value={email}
+                  onChangeText={(val) => {
+                    setEmail(val);
+                    clearFieldError('email');
+                  }}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoComplete="email"
+                  error={fieldErrors.email}
+                  leftIcon={<Mail size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                />
+
+                <Input
+                  label="Mobile Number"
+                  required
+                  placeholder="+91 98765 43210"
+                  value={phone}
+                  onChangeText={(val) => {
+                    setPhone(val);
+                    clearFieldError('phone');
+                  }}
+                  keyboardType="phone-pad"
+                  autoComplete="tel"
+                  error={fieldErrors.phone}
+                  leftIcon={<Phone size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                />
+
+                {/* Role Selector Trigger */}
+                <View style={styles.selectGroup}>
+                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
+                    Role Requested <Text style={{ color: '#ef4444', fontWeight: '700' }}>*</Text>
                   </Text>
-                </View>
-              )}
-            </View>
-
-            {/* Shift Timing Fields */}
-            <View style={styles.rowInputs}>
-              <View style={{ flex: 1 }}>
-                <TimeInput
-                  label="Shift Start Time"
-                  required
-                  value={shiftStartTime}
-                  onChangeText={setShiftStartTime}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <TimeInput
-                  label="Shift End Time"
-                  required
-                  value={shiftEndTime}
-                  onChangeText={setShiftEndTime}
-                />
-              </View>
-            </View>
-            <Text style={[styles.sectionHelperText, { color: theme.colors.mute }]}>
-              Assigned daily operational work hours for duty logs and verification.
-            </Text>
-          </View>
-
-          {/* Section 3: Work Location & Identity */}
-          <View style={[styles.sectionContainer, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-            <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
-              <View style={styles.sectionHeaderLeft}>
-                <View style={[styles.sectionNumberBadge, { backgroundColor: theme.colors.link + '18' }]}>
-                  <Text style={[styles.sectionNumberText, { color: theme.colors.link }]}>3</Text>
-                </View>
-                <Text style={[styles.sectionHeaderTitle, { color: theme.colors.ink }]}>Work Location & Identity</Text>
-              </View>
-            </View>
-
-            {/* Address Fields */}
-            <View style={styles.rowInputs}>
-              <View style={{ flex: 1 }}>
-                <Input
-                  label="City/Town/Village *"
-                  placeholder="Pune"
-                  value={city}
-                  onChangeText={setCity}
-                  leftIcon={<MapPin size={16} color={theme.colors.mute} />}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Input
-                  label="District *"
-                  placeholder="Pune"
-                  value={district}
-                  onChangeText={setDistrict}
-                  leftIcon={<MapPin size={16} color={theme.colors.mute} />}
-                />
-              </View>
-            </View>
-
-            {/* State Selector Trigger */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>State *</Text>
-              <TouchableOpacity
-                onPress={() => setStateModalVisible(true)}
-                activeOpacity={0.8}
-                style={[
-                  styles.selectTrigger,
-                  { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
-                ]}
-              >
-                <View style={styles.roleSelectedLeft}>
-                  <MapPin size={16} color={theme.colors.mute} />
-                  <Text
+                  <TouchableOpacity
+                    onPress={() => setRoleModalVisible(true)}
+                    activeOpacity={0.7}
                     style={[
-                      styles.roleSelectTitle,
+                      styles.selectTrigger,
                       {
-                        color: stateVal ? theme.colors.ink : theme.colors.mute,
-                        fontWeight: stateVal ? '600' : '400',
+                        backgroundColor: isDark ? '#121212' : theme.colors.canvasElevated,
+                        borderColor: isDark ? '#292c2f' : cardBorder,
                       },
                     ]}
                   >
-                    {stateVal || 'Select state or UT...'}
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.selectValue, { color: theme.colors.ink }]}>
+                        {selectedRoleObj.label}
+                      </Text>
+                      <Text style={[styles.selectSubtext, { color: theme.colors.mute }]}>
+                        {selectedRoleObj.desc}
+                      </Text>
+                    </View>
+                    <ChevronDown size={16} color={isDark ? '#737373' : '#9ca3af'} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Conditional Supervisor Selector */}
+                {isSupervisedRole(selectedRole) && (
+                  <View style={[styles.selectGroup, { paddingTop: 6, borderTopWidth: 1, borderTopColor: cardBorder }]}>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
+                      Supervisor <Text style={{ color: '#ef4444', fontWeight: '700' }}>*</Text>
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setSupervisorModalVisible(true)}
+                      activeOpacity={0.7}
+                      style={[
+                        styles.selectTrigger,
+                        {
+                          backgroundColor: isDark ? '#121212' : theme.colors.canvasElevated,
+                          borderColor: fieldErrors.supervisor_id ? '#ef4444' : isDark ? '#292c2f' : cardBorder,
+                        },
+                      ]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text
+                          style={[
+                            styles.selectValue,
+                            { color: selectedSupervisor ? theme.colors.ink : isDark ? '#525252' : '#9ca3af' },
+                          ]}
+                        >
+                          {selectedSupervisor ? selectedSupervisor.full_name : 'Select supervisor who oversees your work...'}
+                        </Text>
+                      </View>
+                      <ChevronDown size={16} color={isDark ? '#737373' : '#9ca3af'} />
+                    </TouchableOpacity>
+                    {fieldErrors.supervisor_id ? (
+                      <Text style={styles.errorText}>{fieldErrors.supervisor_id}</Text>
+                    ) : null}
+                  </View>
+                )}
+
+                {/* Working Location Selector */}
+                <View style={[styles.selectGroup, { paddingTop: 6, borderTopWidth: 1, borderTopColor: cardBorder }]}>
+                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
+                    Working Location / Site <Text style={{ fontSize: 11, fontWeight: '400', color: theme.colors.mute }}>(Optional)</Text>
                   </Text>
+                  <TouchableOpacity
+                    onPress={() => setWorkingLocationModalVisible(true)}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.selectTrigger,
+                      {
+                        backgroundColor: isDark ? '#121212' : theme.colors.canvasElevated,
+                        borderColor: isDark ? '#292c2f' : cardBorder,
+                      },
+                    ]}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.selectValue,
+                          { color: selectedWorkingLocation ? theme.colors.ink : isDark ? '#525252' : '#9ca3af' },
+                        ]}
+                      >
+                        {selectedWorkingLocation ? selectedWorkingLocation.name : 'Select operational base yard / site...'}
+                      </Text>
+                    </View>
+                    <ChevronDown size={16} color={isDark ? '#737373' : '#9ca3af'} />
+                  </TouchableOpacity>
                 </View>
-                <ChevronDown size={16} color={theme.colors.mute} />
+              </View>
+
+              {/* Section 2: Work Shift Schedule */}
+              <View style={[styles.sectionCard, { backgroundColor: sectionBg, borderColor: cardBorder }]}>
+                <View style={[styles.sectionHeader, { borderBottomColor: cardBorder }]}>
+                  <View style={styles.sectionHeaderTitleRow}>
+                    <View style={styles.sectionBadge}>
+                      <Text style={styles.sectionBadgeText}>2</Text>
+                    </View>
+                    <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
+                      Work Shift Schedule
+                    </Text>
+                  </View>
+                  {shiftSummary?.isValid && (
+                    <View style={styles.shiftPill}>
+                      <Text style={styles.shiftPillText}>
+                        {shiftSummary.isOvernight ? '🌙 Overnight' : '☀️ Standard'} · {shiftSummary.durationFormatted}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.twoColumnRow}>
+                  <View style={{ flex: 1 }}>
+                    <TimeInput
+                      label="Shift Start Time"
+                      value={shiftStartTime}
+                      onChange={setShiftStartTime}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <TimeInput
+                      label="Shift End Time"
+                      value={shiftEndTime}
+                      onChange={setShiftEndTime}
+                    />
+                  </View>
+                </View>
+
+                <Text style={[styles.helperCaption, { color: theme.colors.mute }]}>
+                  Assigned daily operational work hours. This schedule is recorded on your profile and daily duty logs.
+                </Text>
+              </View>
+
+              {/* Section 3: Work Location & Identity */}
+              <View style={[styles.sectionCard, { backgroundColor: sectionBg, borderColor: cardBorder }]}>
+                <View style={[styles.sectionHeader, { borderBottomColor: cardBorder }]}>
+                  <View style={styles.sectionHeaderTitleRow}>
+                    <View style={styles.sectionBadge}>
+                      <Text style={styles.sectionBadgeText}>3</Text>
+                    </View>
+                    <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
+                      Work Location & Identity
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.twoColumnRow}>
+                  <View style={{ flex: 1 }}>
+                    <Input
+                      label="City / Town"
+                      required
+                      placeholder="Pune"
+                      value={city}
+                      onChangeText={(val) => {
+                        setCity(val);
+                        clearFieldError('city');
+                      }}
+                      error={fieldErrors.city}
+                      leftIcon={<MapPin size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Input
+                      label="District"
+                      required
+                      placeholder="Pune"
+                      value={district}
+                      onChangeText={(val) => {
+                        setDistrict(val);
+                        clearFieldError('district');
+                      }}
+                      error={fieldErrors.district}
+                      leftIcon={<MapPin size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                    />
+                  </View>
+                </View>
+
+                {/* State Picker Trigger */}
+                <View style={styles.selectGroup}>
+                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
+                    State <Text style={{ color: '#ef4444', fontWeight: '700' }}>*</Text>
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setStateModalVisible(true)}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.selectTrigger,
+                      {
+                        backgroundColor: isDark ? '#121212' : theme.colors.canvasElevated,
+                        borderColor: fieldErrors.state ? '#ef4444' : isDark ? '#292c2f' : cardBorder,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.selectValue,
+                        { color: stateVal ? theme.colors.ink : isDark ? '#525252' : '#9ca3af' },
+                      ]}
+                    >
+                      {stateVal || 'Select state...'}
+                    </Text>
+                    <ChevronDown size={16} color={isDark ? '#737373' : '#9ca3af'} />
+                  </TouchableOpacity>
+                  {fieldErrors.state ? (
+                    <Text style={styles.errorText}>{fieldErrors.state}</Text>
+                  ) : null}
+                </View>
+
+                <Input
+                  label="Street / Site Base Address"
+                  required
+                  placeholder="Plot No. 42, MIDC Industrial Area"
+                  value={address}
+                  onChangeText={(val) => {
+                    setAddress(val);
+                    clearFieldError('address');
+                  }}
+                  error={fieldErrors.address}
+                  leftIcon={<MapPin size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                />
+
+                <Input
+                  label="Aadhaar Card Number"
+                  required
+                  placeholder="12-digit Aadhaar Number"
+                  value={aadhaarNumber}
+                  onChangeText={handleAadhaarChange}
+                  keyboardType="numeric"
+                  maxLength={14}
+                  error={fieldErrors.aadhaar_number}
+                  leftIcon={<ShieldCheck size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                />
+
+                <Input
+                  label="Driving Licence Number (Optional)"
+                  placeholder="e.g. MH12 20110012345"
+                  value={licenseNumber}
+                  onChangeText={handleLicenseChange}
+                  autoCapitalize="characters"
+                  maxLength={25}
+                  error={fieldErrors.license_number}
+                  leftIcon={<CreditCard size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                />
+              </View>
+
+              {/* Section 4: Security Credentials */}
+              <View style={[styles.sectionCard, { backgroundColor: sectionBg, borderColor: cardBorder }]}>
+                <View style={[styles.sectionHeader, { borderBottomColor: cardBorder }]}>
+                  <View style={styles.sectionHeaderTitleRow}>
+                    <View style={styles.sectionBadge}>
+                      <Text style={styles.sectionBadgeText}>4</Text>
+                    </View>
+                    <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
+                      Security Credentials
+                    </Text>
+                  </View>
+                </View>
+
+                <Input
+                  label="Password"
+                  required
+                  placeholder="••••••••••••"
+                  value={password}
+                  onChangeText={(val) => {
+                    setPassword(val);
+                    clearFieldError('password');
+                  }}
+                  isPassword
+                  autoCapitalize="none"
+                  autoComplete="new-password"
+                  error={fieldErrors.password}
+                  leftIcon={<Lock size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                />
+
+                <Input
+                  label="Confirm Password"
+                  required
+                  placeholder="••••••••••••"
+                  value={confirmPassword}
+                  onChangeText={(val) => {
+                    setConfirmPassword(val);
+                    clearFieldError('confirm_password');
+                  }}
+                  isPassword
+                  autoCapitalize="none"
+                  autoComplete="new-password"
+                  error={fieldErrors.confirm_password}
+                  leftIcon={<Lock size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                />
+
+                <Text style={[styles.helperCaption, { color: theme.colors.mute }]}>
+                  Password must be at least 8 characters long. Make sure both passwords match.
+                </Text>
+              </View>
+
+              {/* Note Banner */}
+              <View style={styles.noteBox}>
+                <Info size={16} color="#0ea5e9" style={{ marginTop: 2 }} />
+                <Text style={styles.noteText}>
+                  <Text style={{ fontWeight: '700' }}>Note: </Text>
+                  Account status will be &ldquo;pending&rdquo; until approved by an administrator.
+                </Text>
+              </View>
+
+              {/* Submit CTA Button */}
+              <TouchableOpacity
+                style={[
+                  styles.submitButton,
+                  { backgroundColor: primarySkyBlue },
+                  isLoading && styles.buttonDisabled,
+                ]}
+                onPress={handleSignup}
+                disabled={isLoading}
+                activeOpacity={0.8}
+              >
+                {isLoading ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Request Platform Access</Text>
+                )}
               </TouchableOpacity>
-            </View>
 
-            <Input
-              label="Street / Site Base Address *"
-              placeholder="e.g. Plot No. 42, MIDC Chakan"
-              value={address}
-              onChangeText={setAddress}
-              leftIcon={<MapPin size={16} color={theme.colors.mute} />}
-            />
-
-            <Input
-              label="Aadhaar Card Number *"
-              placeholder="12-digit Aadhaar Number"
-              value={aadhaarNumber}
-              onChangeText={(text) => setAadhaarNumber(formatAadhaar(text))}
-              keyboardType="number-pad"
-              maxLength={14}
-              leftIcon={<ShieldCheck size={16} color={theme.colors.mute} />}
-            />
-
-            <Input
-              label="Driving Licence Number (Optional)"
-              placeholder="e.g. MH12 20110012345"
-              value={licenseNumber}
-              onChangeText={(text) => setLicenseNumber(text.toUpperCase())}
-              autoCapitalize="characters"
-              maxLength={25}
-              leftIcon={<CreditCard size={16} color={theme.colors.mute} />}
-            />
-          </View>
-
-          {/* Section 4: Security Credentials */}
-          <View style={[styles.sectionContainer, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-            <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
-              <View style={styles.sectionHeaderLeft}>
-                <View style={[styles.sectionNumberBadge, { backgroundColor: theme.colors.link + '18' }]}>
-                  <Text style={[styles.sectionNumberText, { color: theme.colors.link }]}>4</Text>
-                </View>
-                <Text style={[styles.sectionHeaderTitle, { color: theme.colors.ink }]}>Security Credentials</Text>
+              {/* Card Footer */}
+              <View style={[styles.cardFooter, { borderTopColor: cardBorder }]}>
+                <Text style={[styles.cardFooterText, { color: theme.colors.mute }]}>
+                  Already have an account?
+                </Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/(auth)/login')}
+                  activeOpacity={0.7}
+                  hitSlop={8}
+                >
+                  <Text style={[styles.signInLinkText, { color: primarySkyBlue }]}>
+                    Sign in
+                  </Text>
+                </TouchableOpacity>
               </View>
             </View>
-
-            <Input
-              label="Password *"
-              placeholder="••••••••••••"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              leftIcon={<Lock size={16} color={theme.colors.mute} />}
-            />
-
-            <Input
-              label="Confirm Password *"
-              placeholder="••••••••••••"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-              leftIcon={<Lock size={16} color={theme.colors.mute} />}
-            />
-            <Text style={[styles.sectionHelperText, { color: theme.colors.mute }]}>
-              Must be at least 8 characters long. Make sure both passwords match.
-            </Text>
           </View>
 
-          {/* Admin Approval Notice */}
-          <View style={[styles.noticeBox, { backgroundColor: theme.colors.link + '12', borderColor: theme.colors.link + '30' }]}>
-            <Info size={16} color={theme.colors.link} style={{ marginTop: 1 }} />
-            <Text style={[styles.noticeText, { color: theme.colors.link, flex: 1 }]}>
-              <Text style={{ fontWeight: '700' }}>Note: </Text>
-              Account status will be &ldquo;pending&rdquo; until authorized by an administrator.
-            </Text>
+          {/* Bottom Screen Footer & Theme Toggle */}
+          <View style={styles.screenFooter}>
+            <View style={styles.footerInner}>
+              <Text
+                style={[
+                  styles.copyrightText,
+                  { color: isDark ? '#737373' : '#8f8f8f' },
+                ]}
+              >
+                &copy; {new Date().getFullYear()} REACH INTERNATIONAL. ALL RIGHTS RESERVED.
+              </Text>
+
+              {/* Quick Floating Theme Switcher */}
+              <TouchableOpacity
+                style={[
+                  styles.themeToggleBtn,
+                  {
+                    backgroundColor: isDark ? '#1e1e1e' : '#f0f0f0',
+                    borderColor: cardBorder,
+                  },
+                ]}
+                onPress={() => setMode(isDark ? 'light' : 'dark')}
+                activeOpacity={0.7}
+                accessibilityLabel="Toggle Theme"
+                hitSlop={8}
+              >
+                {isDark ? (
+                  <Sun size={15} color="#e0e0e0" />
+                ) : (
+                  <Moon size={15} color="#333333" />
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-          <Button
-            label="Request Platform Access"
-            onPress={handleSignup}
-            isLoading={isLoading}
-            shape="square"
-            fullWidth
-            style={styles.signupBtn}
-          />
-
-          <View style={styles.footerLinkRow}>
-            <Text style={[styles.footerText, { color: theme.colors.mute }]}>Already have an account?</Text>
-            <TouchableOpacity onPress={() => router.push('/(auth)/login')}>
-              <Text style={[styles.footerLink, { color: theme.colors.link }]}>Sign In</Text>
-            </TouchableOpacity>
-          </View>
-        </Card>
-      </ScrollView>
-
-      {/* Role Picker Bottom Sheet Modal */}
+      {/* Role Selection Modal */}
       <Modal visible={roleModalVisible} animationType="slide" transparent onRequestClose={() => setRoleModalVisible(false)}>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
+          <View style={[styles.modalSheet, { backgroundColor: cardBackground, borderColor: cardBorder }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: cardBorder }]}>
               <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select Account Role</Text>
               <TouchableOpacity onPress={() => setRoleModalVisible(false)} style={styles.modalCloseBtn}>
                 <X size={18} color={theme.colors.ink} />
               </TouchableOpacity>
             </View>
-
-            <ScrollView style={styles.roleListScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.modalListScroll} showsVerticalScrollIndicator={false}>
               {SIGNUP_ROLES.map((r) => {
                 const isSelected = selectedRole === r.value;
                 return (
@@ -674,21 +833,24 @@ export default function SignupScreen() {
                     key={r.value}
                     onPress={() => {
                       setSelectedRole(r.value);
+                      if (!isSupervisedRole(r.value)) {
+                        setSelectedSupervisorId('');
+                      }
                       setRoleModalVisible(false);
                     }}
                     style={[
-                      styles.roleItemRow,
-                      { borderBottomColor: theme.colors.hairline },
-                      isSelected && { backgroundColor: theme.colors.link + '12' },
+                      styles.modalItemRow,
+                      { borderBottomColor: cardBorder },
+                      isSelected && { backgroundColor: 'rgba(14, 165, 233, 0.1)' },
                     ]}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.roleItemTitle, { color: isSelected ? theme.colors.link : theme.colors.ink, fontWeight: isSelected ? '700' : '600' }]}>
+                      <Text style={[styles.modalItemTitle, { color: isSelected ? primarySkyBlue : theme.colors.ink }]}>
                         {r.label}
                       </Text>
-                      <Text style={[styles.roleItemDesc, { color: theme.colors.mute }]}>{r.desc}</Text>
+                      <Text style={[styles.modalItemDesc, { color: theme.colors.mute }]}>{r.desc}</Text>
                     </View>
-                    {isSelected && <Check size={18} color={theme.colors.link} />}
+                    {isSelected && <Check size={18} color={primarySkyBlue} />}
                   </TouchableOpacity>
                 );
               })}
@@ -697,29 +859,27 @@ export default function SignupScreen() {
         </View>
       </Modal>
 
-      {/* State Picker Bottom Sheet Modal */}
+      {/* State Selection Modal */}
       <Modal visible={stateModalVisible} animationType="slide" transparent onRequestClose={() => setStateModalVisible(false)}>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
-              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select State / UT</Text>
+          <View style={[styles.modalSheet, { backgroundColor: cardBackground, borderColor: cardBorder }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: cardBorder }]}>
+              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select State</Text>
               <TouchableOpacity onPress={() => setStateModalVisible(false)} style={styles.modalCloseBtn}>
                 <X size={18} color={theme.colors.ink} />
               </TouchableOpacity>
             </View>
-
-            <View style={{ paddingHorizontal: spacingNumeric.md, paddingVertical: spacingNumeric.xs }}>
+            <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
               <Input
                 placeholder="Search state..."
                 value={stateSearch}
                 onChangeText={setStateSearch}
-                leftIcon={<MapPin size={15} color={theme.colors.mute} />}
+                leftIcon={<Search size={15} color={isDark ? '#737373' : '#9ca3af'} />}
               />
             </View>
-
-            <ScrollView style={styles.roleListScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.modalListScroll} showsVerticalScrollIndicator={false}>
               {INDIAN_STATES.filter((s) => s.name.toLowerCase().includes(stateSearch.toLowerCase().trim())).map((s) => {
-                const isSelected = stateId === s.id || stateVal === s.name;
+                const isSelected = stateId === s.id;
                 return (
                   <TouchableOpacity
                     key={s.id}
@@ -728,25 +888,18 @@ export default function SignupScreen() {
                       setStateVal(s.name);
                       setStateModalVisible(false);
                       setStateSearch('');
+                      clearFieldError('state');
                     }}
                     style={[
-                      styles.roleItemRow,
-                      { borderBottomColor: theme.colors.hairline },
-                      isSelected && { backgroundColor: theme.colors.link + '12' },
+                      styles.modalItemRow,
+                      { borderBottomColor: cardBorder },
+                      isSelected && { backgroundColor: 'rgba(14, 165, 233, 0.1)' },
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.roleItemTitle,
-                        {
-                          color: isSelected ? theme.colors.link : theme.colors.ink,
-                          fontWeight: isSelected ? '700' : '500',
-                        },
-                      ]}
-                    >
+                    <Text style={[styles.modalItemTitle, { color: isSelected ? primarySkyBlue : theme.colors.ink }]}>
                       {s.name}
                     </Text>
-                    {isSelected && <Check size={18} color={theme.colors.link} />}
+                    {isSelected && <Check size={18} color={primarySkyBlue} />}
                   </TouchableOpacity>
                 );
               })}
@@ -755,36 +908,27 @@ export default function SignupScreen() {
         </View>
       </Modal>
 
-      {/* Supervisor Picker Bottom Sheet Modal */}
+      {/* Supervisor Selection Modal */}
       <Modal visible={supervisorModalVisible} animationType="slide" transparent onRequestClose={() => setSupervisorModalVisible(false)}>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
-              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select Designated Supervisor</Text>
+          <View style={[styles.modalSheet, { backgroundColor: cardBackground, borderColor: cardBorder }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: cardBorder }]}>
+              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select Supervisor</Text>
               <TouchableOpacity onPress={() => setSupervisorModalVisible(false)} style={styles.modalCloseBtn}>
                 <X size={18} color={theme.colors.ink} />
               </TouchableOpacity>
             </View>
-
-            <View style={{ paddingHorizontal: spacingNumeric.md, paddingVertical: spacingNumeric.xs }}>
+            <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
               <Input
-                placeholder="Search supervisor by name or email..."
+                placeholder="Search supervisor by name..."
                 value={supervisorSearch}
                 onChangeText={setSupervisorSearch}
-                leftIcon={<User size={15} color={theme.colors.mute} />}
+                leftIcon={<Search size={15} color={isDark ? '#737373' : '#9ca3af'} />}
               />
             </View>
-
-            <ScrollView style={styles.roleListScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.modalListScroll} showsVerticalScrollIndicator={false}>
               {supervisors
-                .filter((s) => {
-                  const q = supervisorSearch.toLowerCase().trim();
-                  if (!q) return true;
-                  return (
-                    s.full_name.toLowerCase().includes(q) ||
-                    (s.email && s.email.toLowerCase().includes(q))
-                  );
-                })
+                .filter((s) => s.full_name.toLowerCase().includes(supervisorSearch.toLowerCase().trim()))
                 .map((s) => {
                   const isSelected = selectedSupervisorId === s.id;
                   return (
@@ -794,27 +938,28 @@ export default function SignupScreen() {
                         setSelectedSupervisorId(s.id);
                         setSupervisorModalVisible(false);
                         setSupervisorSearch('');
+                        clearFieldError('supervisor_id');
                       }}
                       style={[
-                        styles.roleItemRow,
-                        { borderBottomColor: theme.colors.hairline },
-                        isSelected && { backgroundColor: theme.colors.link + '12' },
+                        styles.modalItemRow,
+                        { borderBottomColor: cardBorder },
+                        isSelected && { backgroundColor: 'rgba(14, 165, 233, 0.1)' },
                       ]}
                     >
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.roleItemTitle, { color: isSelected ? theme.colors.link : theme.colors.ink, fontWeight: isSelected ? '700' : '600' }]}>
+                        <Text style={[styles.modalItemTitle, { color: isSelected ? primarySkyBlue : theme.colors.ink }]}>
                           {s.full_name}
                         </Text>
                         {s.email && (
-                          <Text style={[styles.roleItemDesc, { color: theme.colors.mute }]}>{s.email}</Text>
+                          <Text style={[styles.modalItemDesc, { color: theme.colors.mute }]}>{s.email}</Text>
                         )}
                       </View>
-                      {isSelected && <Check size={18} color={theme.colors.link} />}
+                      {isSelected && <Check size={18} color={primarySkyBlue} />}
                     </TouchableOpacity>
                   );
                 })}
               {supervisors.length === 0 && (
-                <View style={{ padding: spacingNumeric.md, alignItems: 'center' }}>
+                <View style={{ padding: 16, alignItems: 'center' }}>
                   <Text style={{ color: theme.colors.mute, fontSize: 13 }}>No active supervisors found</Text>
                 </View>
               )}
@@ -823,27 +968,25 @@ export default function SignupScreen() {
         </View>
       </Modal>
 
-      {/* Working Location Picker Bottom Sheet Modal */}
+      {/* Working Location Selection Modal */}
       <Modal visible={workingLocationModalVisible} animationType="slide" transparent onRequestClose={() => setWorkingLocationModalVisible(false)}>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
+          <View style={[styles.modalSheet, { backgroundColor: cardBackground, borderColor: cardBorder }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: cardBorder }]}>
               <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select Working Location</Text>
               <TouchableOpacity onPress={() => setWorkingLocationModalVisible(false)} style={styles.modalCloseBtn}>
                 <X size={18} color={theme.colors.ink} />
               </TouchableOpacity>
             </View>
-
-            <View style={{ paddingHorizontal: spacingNumeric.md, paddingVertical: spacingNumeric.xs }}>
+            <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
               <Input
-                placeholder="Search working location by name or city..."
+                placeholder="Search by location name or city..."
                 value={workingLocationSearch}
                 onChangeText={setWorkingLocationSearch}
-                leftIcon={<Search size={15} color={theme.colors.mute} />}
+                leftIcon={<Search size={15} color={isDark ? '#737373' : '#9ca3af'} />}
               />
             </View>
-
-            <ScrollView style={styles.roleListScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.modalListScroll} showsVerticalScrollIndicator={false}>
               {workingLocations
                 .filter((l) => {
                   const q = workingLocationSearch.toLowerCase().trim();
@@ -863,27 +1006,28 @@ export default function SignupScreen() {
                         setSelectedWorkingLocationId(l.id);
                         setWorkingLocationModalVisible(false);
                         setWorkingLocationSearch('');
+                        clearFieldError('working_location_id');
                       }}
                       style={[
-                        styles.roleItemRow,
-                        { borderBottomColor: theme.colors.hairline },
-                        isSelected && { backgroundColor: theme.colors.link + '12' },
+                        styles.modalItemRow,
+                        { borderBottomColor: cardBorder },
+                        isSelected && { backgroundColor: 'rgba(14, 165, 233, 0.1)' },
                       ]}
                     >
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.roleItemTitle, { color: isSelected ? theme.colors.link : theme.colors.ink, fontWeight: isSelected ? '700' : '600' }]}>
+                        <Text style={[styles.modalItemTitle, { color: isSelected ? primarySkyBlue : theme.colors.ink }]}>
                           {l.name}
                         </Text>
-                        <Text style={[styles.roleItemDesc, { color: theme.colors.mute }]}>
+                        <Text style={[styles.modalItemDesc, { color: theme.colors.mute }]}>
                           {[l.type?.toUpperCase(), l.city].filter(Boolean).join(' • ')}
                         </Text>
                       </View>
-                      {isSelected && <Check size={18} color={theme.colors.link} />}
+                      {isSelected && <Check size={18} color={primarySkyBlue} />}
                     </TouchableOpacity>
                   );
                 })}
               {workingLocations.length === 0 && (
-                <View style={{ padding: spacingNumeric.md, alignItems: 'center' }}>
+                <View style={{ padding: 16, alignItems: 'center' }}>
                   <Text style={{ color: theme.colors.mute, fontSize: 13 }}>No active working locations found</Text>
                 </View>
               )}
@@ -891,249 +1035,257 @@ export default function SignupScreen() {
           </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  flexContainer: { flex: 1 },
+  safeArea: {
+    flex: 1,
+  },
+  keyboardContainer: {
+    flex: 1,
+  },
   scrollContent: {
     flexGrow: 1,
-    padding: spacingNumeric.lg,
-    paddingTop: 52,
-    paddingBottom: 40,
-    position: 'relative',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 20,
   },
-  ambientGlowTop: {
-    position: 'absolute',
-    top: -50,
-    right: -50,
-    width: 250,
-    height: 250,
-    borderRadius: 125,
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
+    paddingVertical: 8,
   },
-  ambientGlowBottom: {
-    position: 'absolute',
-    bottom: -50,
-    left: -50,
-    width: 250,
-    height: 250,
-    borderRadius: 125,
+  card: {
+    width: '100%',
+    maxWidth: 480,
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 20,
+    paddingTop: 22,
+    paddingBottom: 20,
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.35,
+        shadowRadius: 20,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
   },
-  topHeader: {
+  logoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+  title: {
+    fontSize: 23,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+    marginBottom: 16,
+  },
+  bannerContainer: {
+    marginBottom: 14,
+  },
+  sectionCard: {
+    width: '100%',
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 14,
+  },
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacingNumeric.lg,
+    paddingBottom: 8,
+    marginBottom: 10,
+    borderBottomWidth: 1,
   },
-  backBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brandRow: {
+  sectionHeaderTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  logoEmblem: {
-    width: 32,
-    height: 32,
-    borderRadius: radiusNumeric.sm,
+  sectionBadge: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    backgroundColor: 'rgba(14, 165, 233, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoLetter: {
-    fontSize: 16,
+  sectionBadgeText: {
+    color: '#0ea5e9',
+    fontSize: 10,
     fontWeight: '800',
   },
-  brandTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
-  themeBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: radiusNumeric.full,
-    borderWidth: 1,
-  },
-  heroSection: {
-    marginBottom: spacingNumeric.md,
-  },
-  heroHeadline: {
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: -0.6,
-    lineHeight: 28,
-  },
-  card: {
-    width: '100%',
-    padding: spacingNumeric.lg,
-  },
-  formTitle: {
-    fontSize: 18,
+  sectionTitle: {
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: -0.3,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
-  formSubtitle: {
-    fontSize: 12,
-    marginBottom: spacingNumeric.md,
-  },
-  alertContainer: {
-    padding: spacingNumeric.sm,
-    borderRadius: radiusNumeric.sm,
+  shiftPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: 'rgba(14, 165, 233, 0.1)',
     borderWidth: 1,
-    marginBottom: spacingNumeric.md,
+    borderColor: 'rgba(14, 165, 233, 0.25)',
   },
-  alertText: {
-    fontSize: 12,
-    textAlign: 'center',
-    fontWeight: '500',
+  shiftPillText: {
+    color: '#0ea5e9',
+    fontSize: 10,
+    fontWeight: '600',
   },
-  inputGroup: {
-    marginBottom: spacingNumeric.sm,
+  selectGroup: {
+    marginBottom: 12,
+    width: '100%',
   },
   fieldLabel: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '500',
     marginBottom: 6,
+    letterSpacing: -0.1,
   },
   selectTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 12,
-    borderRadius: radiusNumeric.sm,
+    height: 46,
     borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 12,
   },
-  roleSelectedLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
+  selectValue: {
+    fontSize: 14,
+    fontWeight: '500',
   },
-  roleSelectTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  roleSelectDesc: {
+  selectSubtext: {
     fontSize: 11,
     marginTop: 1,
   },
-  rowInputs: {
+  twoColumnRow: {
     flexDirection: 'row',
     gap: 10,
   },
-  sectionContainer: {
-    borderWidth: 1,
-    borderRadius: radiusNumeric.md,
-    padding: spacingNumeric.md,
-    marginBottom: spacingNumeric.md,
-    gap: spacingNumeric.xs,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 8,
-    marginBottom: 8,
-    borderBottomWidth: 1,
-  },
-  sectionHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  sectionNumberBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sectionNumberText: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  sectionHeaderTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  sectionStepText: {
-    fontSize: 10,
-    fontWeight: '500',
-  },
-  sectionHelperText: {
+  helperCaption: {
     fontSize: 11,
-    lineHeight: 15,
-    marginTop: 2,
+    lineHeight: 16,
+    marginTop: 4,
   },
-  shiftBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-  },
-  shiftBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  noticeBox: {
+  noteBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    padding: 10,
-    borderRadius: radiusNumeric.sm,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: 'rgba(14, 165, 233, 0.1)',
     borderWidth: 1,
-    marginVertical: spacingNumeric.xs,
+    borderColor: 'rgba(14, 165, 233, 0.25)',
+    marginBottom: 16,
   },
-  noticeText: {
-    fontSize: 11,
-    lineHeight: 16,
+  noteText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#0ea5e9',
   },
-  signupBtn: {
-    marginTop: spacingNumeric.md,
+  submitButton: {
+    height: 48,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    shadowColor: '#0ea5e9',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  footerLinkRow: {
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+  submitButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  cardFooter: {
+    marginTop: 18,
+    paddingTop: 14,
+    borderTopWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginTop: spacingNumeric.md,
-    paddingTop: spacingNumeric.sm,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(150,150,150,0.15)',
   },
-  footerText: {
-    fontSize: 12,
+  cardFooterText: {
+    fontSize: 13,
   },
-  footerLink: {
-    fontSize: 12,
+  signInLinkText: {
+    fontSize: 13,
     fontWeight: '700',
+  },
+  screenFooter: {
+    width: '100%',
+    paddingTop: 16,
+    paddingBottom: 4,
+  },
+  footerInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  copyrightText: {
+    flex: 1,
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    letterSpacing: 0.5,
+  },
+  themeToggleBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 11,
+    marginTop: 4,
+    fontWeight: '500',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    borderTopLeftRadius: radiusNumeric.lg,
-    borderTopRightRadius: radiusNumeric.lg,
-    borderTopWidth: 1,
     maxHeight: '75%',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: 1,
     paddingBottom: 24,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: spacingNumeric.md,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderBottomWidth: 1,
   },
   modalTitle: {
@@ -1143,22 +1295,23 @@ const styles = StyleSheet.create({
   modalCloseBtn: {
     padding: 4,
   },
-  roleListScroll: {
-    paddingHorizontal: spacingNumeric.md,
+  modalListScroll: {
+    maxHeight: 380,
   },
-  roleItemRow: {
+  modalItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    paddingHorizontal: 6,
   },
-  roleItemTitle: {
+  modalItemTitle: {
     fontSize: 14,
+    fontWeight: '600',
   },
-  roleItemDesc: {
-    fontSize: 11,
+  modalItemDesc: {
+    fontSize: 12,
     marginTop: 2,
   },
 });

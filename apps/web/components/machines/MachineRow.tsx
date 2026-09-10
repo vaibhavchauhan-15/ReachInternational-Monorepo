@@ -20,6 +20,9 @@ function getHealthBadge(healthStatus: string) {
   if (healthStatus === "under_maintenance") {
     return <Badge variant="warning" dot>Under Maintenance</Badge>;
   }
+  if (healthStatus === "spare") {
+    return <Badge variant="spare" dot>Spare</Badge>;
+  }
   return <Badge variant="success" dot>Active</Badge>;
 }
 

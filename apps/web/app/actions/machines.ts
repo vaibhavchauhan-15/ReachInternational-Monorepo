@@ -89,7 +89,7 @@ export async function createMachine(state: MachineFormState, formData: FormData)
       errors.machine_id = "Machine ID format should be RI-MC-0001 or valid alphanumeric string.";
     }
 
-    if (!["active", "under_maintenance", "breakdown"].includes(health_status)) {
+    if (!["active", "under_maintenance", "breakdown", "spare"].includes(health_status)) {
       errors.health_status = "Invalid health status option selected.";
     }
     if (!["available", "rented"].includes(status)) {
@@ -221,7 +221,7 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
     const health_status = (formData.get("health_status") as string) || "active";
     const status = (formData.get("status") as string) || "available";
 
-    if (!["active", "under_maintenance", "breakdown"].includes(health_status)) {
+    if (!["active", "under_maintenance", "breakdown", "spare"].includes(health_status)) {
       return { error: "Invalid health status option selected." };
     }
     if (!["available", "rented"].includes(status)) {
@@ -375,7 +375,7 @@ export async function updateMachineOperationalStatus(
     operator_ids?: string[] | null;
     supervisor_ids?: string[] | null;
     client_id?: string | null;
-    health_status?: "active" | "under_maintenance" | "breakdown";
+    health_status?: "active" | "under_maintenance" | "breakdown" | "spare";
     status?: "available" | "rented";
   }
 ): Promise<{ success?: boolean; error?: string }> {
@@ -406,7 +406,7 @@ export async function updateMachineOperationalStatus(
     }
 
     if (payload.health_status !== undefined) {
-      if (!["active", "under_maintenance", "breakdown"].includes(payload.health_status)) {
+      if (!["active", "under_maintenance", "breakdown", "spare"].includes(payload.health_status)) {
         return { error: "Invalid health status option." };
       }
       updateData.health_status = payload.health_status;

@@ -12,7 +12,7 @@ export const CreateMachineSchema = z.object({
   current_operator_id: z.string().uuid().optional().nullable(),
   operator_ids: z.array(z.string().uuid()).optional().default([]),
   client_id: z.string().uuid().optional().nullable(),
-  health_status: z.enum(["active", "under_maintenance", "breakdown"]).optional().default("active"),
+  health_status: z.enum(["active", "under_maintenance", "breakdown", "spare"]).optional().default("active"),
   status: z.enum(["available", "rented"]).optional().default("available"),
   // Backward compatibility fields during transition
   machine_code: z.string().max(50, "Machine code cannot exceed 50 characters").optional().nullable(),

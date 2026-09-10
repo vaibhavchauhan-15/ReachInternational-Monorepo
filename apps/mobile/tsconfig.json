@@ -1,12 +1,12 @@
 {
   "compilerOptions": {
     "strict": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./*"
       ]
-    }
+    },
+    "types": ["jest"]
   },
   "exclude": [
     "node_modules"
