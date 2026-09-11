@@ -156,6 +156,17 @@
     - **Google Play Store Compliance**: Full Play Store submission suite: production AAB configuration (`eas.json`), `versionCode: 1`, blocked transitive permissions (`app.json`), public web compliance endpoints (`/privacy`, `/terms`, `/account-deletion`), store listing copy and visual assets (`apps/mobile/store-assets/`), Data Safety declaration (`PLAY_STORE_DATA_SAFETY.md`), Content Rating guide (`PLAY_STORE_CONTENT_RATING.md`), and end-to-end AAB build checklist (`PLAY_STORE_SUBMISSION_CHECKLIST.md`).
     - **Sign Out**: Red pill button with confirmation alert calling `signOut()` and navigating to login.
 
+### 10. 🔒 Account Deletion & Statutory Data Governance (`/account-deletion`)
+- **Self-Service Deletion Portals (Web & Mobile Parity)**:
+  - **Web Portal (`apps/web/app/account-deletion`)**: Clean, W3C-standard, unauthenticated/authenticated public portal with real-time submission form (`AccountDeletionWebForm.tsx`). Users specify their registered email/phone and reason. Integrated into Profile sheet (`MobileBottomNav.tsx`), User Profile Dropdown (`UserProfileDropdown.tsx`), and Settings (`SettingsClient.tsx`).
+  - **Mobile Native Screen (`apps/mobile/app/(app)/account-deletion.tsx`)**: Accessible via Settings -> Profile (`profile.tsx` & `settings.tsx`). Provides real-time pending status tracking, withdrawal/cancellation capabilities, and direct native submission.
+- **Administrative Review & Approval Workflow (`/users`)**:
+  - Deletion requests from both Web and Mobile stream directly into the Admin Users management console alongside pending employee approvals.
+  - **Web Admin Review (`AccountDeletionRequestsSection.tsx`)**: Side-by-side review cards with requester identity, origin badge (`Web Portal` vs `Mobile App`), reason, and action triggers. Approving sets user `status = 'inactive'`, scrubs sensitive KYC identity numbers (`aadhaar_number = NULL`, `license_number = NULL`), and records structured audit log `user.account_deleted`.
+  - **Mobile Admin Review (`apps/mobile/app/(app)/users.tsx`)**: High-contrast native review cards with alert notification badges, Approve & Deactivate modal, and Decline modal.
+- **Statutory Heavy Equipment Compliance**: In full accordance with Indian Factories Act, Motor Vehicles Act, and insurance regulations, daily machine running logs (HMR), maintenance records, and safety inspections are permanently preserved with operator identity attribution for statutory audits.
+- **Database & Backend Resilience**: Dedicated table `account_deletion_requests` (Migration 063) backed by automatic fallback to `profile_change_requests` (`requested_data.type = 'account_deletion'`) to ensure 100% immediate runtime availability across environments.
+
 ---
 
 ## 🏗 Monorepo Architecture
