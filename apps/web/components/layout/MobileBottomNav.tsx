@@ -25,6 +25,7 @@ import { CommandPalette } from "@/components/ui/CommandPalette";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Button } from "@/components/ui";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
+import { AccountDeletionModal } from "@/components/profile/AccountDeletionModal";
 import { Phone, MapPin, ShieldCheck, Clock, FileText, Edit, Shield, Building, Mail, Trash2 } from "lucide-react";
 
 interface MobileBottomNavProps {
@@ -62,6 +63,7 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   // Global ⌘K / Search shortcut listener
   useEffect(() => {
@@ -474,9 +476,9 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
 
                 {/* Request Account Deletion Link */}
                 <Link
-                  href="/account-deletion"
+                  href="/delete-account"
                   onClick={() => setProfileSheetOpen(false)}
-                  className="flex items-center justify-center gap-2 h-9 px-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-rose-500/10 hover:border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-semibold shadow-2xs transition-all active:scale-[0.98]"
+                  className="w-full flex items-center justify-center gap-2 h-9 px-3 rounded-xl border border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-semibold shadow-2xs transition-all active:scale-[0.98]"
                 >
                   <Trash2 size={13} className="text-rose-500" />
                   <span>Request Account Deletion</span>
@@ -509,6 +511,15 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
           user={user}
           isOpen={editProfileOpen}
           onClose={() => setEditProfileOpen(false)}
+        />
+      )}
+
+      {/* Account Deletion Modal */}
+      {user && (
+        <AccountDeletionModal
+          user={user}
+          isOpen={deleteModalOpen}
+          onClose={() => setDeleteModalOpen(false)}
         />
       )}
 

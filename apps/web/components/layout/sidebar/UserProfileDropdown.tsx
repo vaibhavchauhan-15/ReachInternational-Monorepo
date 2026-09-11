@@ -363,11 +363,11 @@ export const UserProfileDropdown = memo(function UserProfileDropdown({
                 {/* Account Actions & Links */}
                 <div className="space-y-0.5">
                   <Link
-                    href="/account-deletion"
+                    href="/delete-account"
                     onClick={() => setOpen(false)}
-                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[var(--color-mute)] hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-500/5 transition-colors"
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors text-left"
                   >
-                    <Trash2 size={13} className="text-rose-500/70 shrink-0" />
+                    <Trash2 size={13} className="text-rose-500 shrink-0" />
                     <span>Account Deletion</span>
                   </Link>
 

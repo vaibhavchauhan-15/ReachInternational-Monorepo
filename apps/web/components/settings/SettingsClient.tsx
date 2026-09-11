@@ -43,6 +43,7 @@ import {
 } from "lucide-react";
 import type { User as UserType } from "@/lib/types/database";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
+import { AccountDeletionModal } from "@/components/profile/AccountDeletionModal";
 import { logout, changePasswordAction } from "@/app/actions/auth";
 import { useTheme, type Theme } from "@/components/theme/ThemeProvider";
 import { useRouter } from "next/navigation";
@@ -57,6 +58,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
 
   // Modal states
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [activeLegalModal, setActiveLegalModal] = useState<"privacy" | "terms" | "help" | "guide" | null>(null);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
@@ -669,13 +671,21 @@ export function SettingsClient({ user }: SettingsClientProps) {
                 Submit a permanent account de-provisioning and personal data erasure request under data protection regulations.
               </p>
             </div>
-            <Link
-              href="/account-deletion"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold border border-rose-500/30 text-rose-600 dark:text-rose-400 bg-rose-500/5 hover:bg-rose-500/10 transition-colors shrink-0"
-            >
-              <Trash2 size={14} />
-              <span>Request Deletion</span>
-            </Link>
+            <div className="flex items-center gap-3 shrink-0">
+              <Link
+                href="/account-deletion"
+                className="text-xs font-semibold text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:underline transition-colors"
+              >
+                Read Deletion Guide
+              </Link>
+              <Link
+                href="/delete-account"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold border border-rose-500/30 text-rose-600 dark:text-rose-400 bg-rose-500/5 hover:bg-rose-500/10 transition-colors"
+              >
+                <Trash2 size={14} />
+                <span>Delete Account</span>
+              </Link>
+            </div>
           </div>
         </section>
 
@@ -885,6 +895,15 @@ export function SettingsClient({ user }: SettingsClientProps) {
           </div>
         </div>
       </Modal>
+
+      {/* Account Deletion Modal */}
+      {user && (
+        <AccountDeletionModal
+          user={user}
+          isOpen={deleteModalOpen}
+          onClose={() => setDeleteModalOpen(false)}
+        />
+      )}
 
     </div>
   );

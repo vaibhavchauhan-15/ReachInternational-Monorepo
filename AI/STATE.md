@@ -4,6 +4,21 @@
 - **Phase**: **Production Ready — Google Play Store Compliance & Mobile Deployment Pipeline**
 - **Release Candidate**: `v2026.09.07` (Branch: `main`)
 - **Health**: Production Ready (0 TypeScript Errors across all workspace packages, 0 Runtime Errors, 0 Warnings, 0 P0/P1/P2 Issues)
+- [x] **Dedicated Delete Account Page (/delete-account) & Separation from Guide (/account-deletion) (2026-09-11)**:
+  - **User Feedback & Resolutions**:
+    1. **Strict Separation of Guide vs Deletion Page**:
+       - `http://localhost:3000/account-deletion` is strictly the official **Account Deletion & Data Erasure Guide** (statutory policies, Google Play Store compliance, step-by-step methods, data breakdown, SLA timeline).
+       - `http://localhost:3000/delete-account` is the dedicated, standalone **Delete Account Page** where users submit or withdraw deletion requests.
+    2. **UserProfileDropdown Navigation Linkage (`/machines` feedback)**:
+       - User clicking "Account Deletion" in `UserProfileDropdown` navigates directly via `<Link href="/delete-account">` to the new dedicated deletion page (`/delete-account`), exactly as requested.
+       - Mobile bottom navigation (`MobileBottomNav.tsx`) and Settings (`SettingsClient.tsx`) also direct to `/delete-account` while providing secondary access to `/account-deletion` guide.
+    3. **Edge Proxy Whitelist**:
+       - Added `/delete-account` and `/account-deletion-guide` to `publicLegalRoutes` in `apps/web/proxy.ts` so operators without active sessions can read policies and request data erasure freely.
+    4. **Full-Stack Operational Resilience**:
+       - Real-time pending status tracking with cancellation support.
+       - Dual-platform review workflow in admin `/users` on both Web and Mobile.
+  - **Verification**: `@reachinternational/web` `typecheck` -> 0 errors; `@reachinternational/mobile` `typecheck` -> 0 errors; `node apps/mobile/run-tests.mjs` -> 18/18 tests passed.
+
 - [x] **Page Feedback: /machines — UserProfileDropdown Cleanup & Removal of Settings & Preferences (2026-09-11)**:
   - **User Feedback & Resolutions**:
     1. **Removed Settings & Preferences Link**: Removed `<Link href="/settings">Settings & Preferences</Link>` from the user profile dropdown popover (`UserProfileDropdown.tsx`). Settings is already accessible directly in the primary navigation sidebar (`AppSidebar.tsx`), eliminating redundant navigation. Cleaned up unused `Settings` import from `lucide-react`.

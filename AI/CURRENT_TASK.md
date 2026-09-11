@@ -1,56 +1,39 @@
-# Current Task: Account Deletion System — Web Feedback, Full-Stack Request Workflow & Admin Dashboard Parity
+# Current Task: Dedicated Delete Account Page & Strict Separation from Guide
 
 Status: COMPLETE (2026-09-11)
 
 ## Overview & User Feedback Resolutions
-1. **Public `/account-deletion` Feedback Polished**:
-   - Removed "Data Subject Right" badge (`.flex > div > .flex > .text-[11px]`).
-   - Removed rounded amber icon box (`.max-w-3xl > .p-6 > .flex > .w-12`).
-   - Removed "Google Play Compliant" text (`.flex > div > .flex > .text-xs`).
-   - Styled page header with canonical vector branding matching `/privacy`.
-   - Added interactive web submission portal (`AccountDeletionWebForm.tsx`) directly on `/account-deletion`.
-2. **Web App Navigation Integration**:
-   - Linked "Request Account Deletion" in the bottom profile sheet (`MobileBottomNav.tsx`).
-   - Added "Account Deletion" link in the user profile dropdown (`UserProfileDropdown.tsx`).
-   - Added "Account & Data Deletion" card in user settings (`SettingsClient.tsx`).
-3. **Mobile App Screen & Navigation**:
-   - Built dedicated screen `apps/mobile/app/(app)/account-deletion.tsx` with data retention disclosures, real-time pending status tracking, and cancellation.
-   - Registered `account-deletion` in `apps/mobile/app/(app)/_layout.tsx` and `apps/mobile/lib/security.ts`.
-   - Linked in `apps/mobile/app/(app)/profile.tsx` and `apps/mobile/app/(app)/settings.tsx`.
-4. **Admin Dashboard Parity (Web & Mobile)**:
-   - Requests from both Web and Mobile arrive in the Admin Users page (`/users`) alongside pending registrations.
-   - **Web Admin**: Built `AccountDeletionRequestsSection.tsx` and connected it in `users-client.tsx` and `page.tsx` with Approve (inactivates user, scrubs Aadhaar/license, logs audit) and Decline modals.
-   - **Mobile Admin**: Added deletion request fetching, notification badge, and native review cards with Approve & Deactivate / Decline actions in `apps/mobile/app/(app)/users.tsx`.
-5. **Backend & Database Dual-Path Resilience**:
-   - Migration `063_create_account_deletion_requests.sql` created with RLS and indexing.
-   - TypeScript definitions added in `packages/types/src/database.ts`.
-   - Server actions in `apps/web/app/actions/account-deletion.ts` with graceful fallback to `profile_change_requests` (`type = 'account_deletion'`) to ensure 100% immediate functionality.
+1. **Dedicated Delete Account Page (`/delete-account`)**:
+   - Created standalone Server Component `apps/web/app/delete-account/page.tsx` with ScissorLift branding, metadata, auth detection, and pending status prefetch.
+   - Built interactive client interface `apps/web/app/delete-account/DeleteAccountClient.tsx` featuring:
+     - Operator/User profile identification summary.
+     - Unauthenticated fallback identification for operators without active credentials.
+     - Common deletion reason chips + customizable notes.
+     - Policy & irreversible data loss acknowledgement checkbox.
+     - Live pending status banner with submission timestamp, stated reason, and cancellation option (`cancelMyAccountDeletionRequestAction`).
+2. **Account Deletion Guide (`/account-deletion`) Kept Pure & Distinct**:
+   - `http://localhost:3000/account-deletion` is strictly the educational and statutory guide.
+   - Does NOT contain the direct deletion form.
+   - Prominently features direct action buttons routing to `http://localhost:3000/delete-account`.
+3. **UserProfileDropdown Linkage (`/machines` feedback)**:
+   - Clicking "Account Deletion" in `UserProfileDropdown` opens and navigates directly to `/delete-account` via `<Link href="/delete-account">`.
+   - Cleaned up redundant modal code.
+4. **Edge Proxy Whitelist**:
+   - Added `/delete-account` and `/account-deletion-guide` to `publicLegalRoutes` in `apps/web/proxy.ts`.
 
-## Files Changed
+## Files Modified / Created
+- 🆕 `apps/web/app/delete-account/page.tsx`
+- 🆕 `apps/web/app/delete-account/DeleteAccountClient.tsx`
 - ✏️ `apps/web/app/account-deletion/page.tsx`
-- 🆕 `apps/web/app/account-deletion/AccountDeletionWebForm.tsx`
-- ✏️ `apps/web/components/layout/MobileBottomNav.tsx`
 - ✏️ `apps/web/components/layout/sidebar/UserProfileDropdown.tsx`
+- ✏️ `apps/web/components/layout/MobileBottomNav.tsx`
 - ✏️ `apps/web/components/settings/SettingsClient.tsx`
-- 🆕 `apps/mobile/app/(app)/account-deletion.tsx`
-- ✏️ `apps/mobile/app/(app)/_layout.tsx`
-- ✏️ `apps/mobile/lib/security.ts`
-- ✏️ `apps/mobile/app/(app)/profile.tsx`
-- ✏️ `apps/mobile/app/(app)/settings.tsx`
-- ✏️ `apps/mobile/app/(app)/users.tsx`
-- 🆕 `apps/web/app/(app)/users/AccountDeletionRequestsSection.tsx`
-- ✏️ `apps/web/app/(app)/users/page.tsx`
-- ✏️ `apps/web/app/(app)/users/users-client.tsx`
-- 🆕 `apps/web/app/actions/account-deletion.ts`
-- ✏️ `apps/web/lib/queries/users.ts`
-- 🆕 `supabase/migrations/063_create_account_deletion_requests.sql`
-- ✏️ `packages/types/src/database.ts`
-- ✏️ `AI/STATE.md`
+- ✏️ `apps/web/proxy.ts`
 - ✏️ `AI/CURRENT_TASK.md`
+- ✏️ `AI/STATE.md`
 - ✏️ `AI/CHANGELOG_AI.md`
-- ✏️ `README.md`
 
-## Verification Matrix
-- `@reachinternational/web` `typecheck`: **PASSED (0 TypeScript errors)**
-- `@reachinternational/mobile` `typecheck`: **PASSED (0 TypeScript errors)**
+## Verification
+- `@reachinternational/web` `typecheck`: **PASSED (0 errors)**
+- `@reachinternational/mobile` `typecheck`: **PASSED (0 errors)**
 - `node apps/mobile/run-tests.mjs`: **PASSED (18/18 scenarios verified)**

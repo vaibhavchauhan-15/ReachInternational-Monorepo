@@ -6,6 +6,12 @@ import {
   Globe,
   Clock,
   FileCheck,
+  Laptop,
+  AlertTriangle,
+  ArrowRight,
+  ShieldCheck,
+  Mail,
+  Trash2,
 } from "lucide-react";
 import {
   BRAND_NAME,
@@ -15,19 +21,18 @@ import {
 } from "@/lib/brand";
 import { getCurrentUserOrNull } from "@/lib/dal";
 import { ScissorLiftLogoIcon } from "@/components/branding";
-import { AccountDeletionWebForm } from "./AccountDeletionWebForm";
 
 export const metadata: Metadata = {
-  title: "Account & Data Deletion — REACH INTERNATIONAL",
+  title: "Account & Data Deletion Guide — REACH INTERNATIONAL",
   description:
-    "Official Account and Personal Data Erasure Request Portal for Reach International mobile application and enterprise platform.",
+    "Official Account and Personal Data Erasure Policy and Guide for Reach International mobile application and enterprise platform.",
   alternates: {
     canonical: `${BRAND_WEBSITE}/account-deletion`,
   },
   openGraph: {
-    title: "Account & Data Deletion — REACH INTERNATIONAL",
+    title: "Account & Data Deletion Guide — REACH INTERNATIONAL",
     description:
-      "Instructions and portal for requesting complete account deletion and data erasure under Google Play Store policies.",
+      "Step-by-step instructions and compliance policy for requesting complete account deletion and data erasure under Google Play Store policies.",
     type: "website",
     url: `${BRAND_WEBSITE}/account-deletion`,
     siteName: BRAND_NAME,
@@ -91,13 +96,42 @@ export default async function AccountDeletionPage() {
       <main className="max-w-[760px] mx-auto w-full px-4 sm:px-6 py-10 sm:py-14 space-y-6 sm:space-y-8 flex-1">
         {/* Header Hero — Clean Minimalist Typography */}
         <section className="p-6 sm:p-8 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs space-y-3">
+          <div className="flex items-center gap-2 text-xs font-bold text-[var(--color-mute)] uppercase tracking-wider">
+            <ShieldCheck size={14} className="text-[#0070f3]" />
+            <span>Compliance & Privacy Policy</span>
+          </div>
+
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[var(--color-ink)]">
-            Account & Data Deletion Request
+            Account Deletion & Data Erasure Guide
           </h1>
 
           <p className="text-sm leading-relaxed text-[var(--color-body)]">
-            In compliance with the <strong>Google Play Developer Account Deletion Policy</strong> and statutory privacy regulations, users of the <strong>ReachInternational</strong> application (<code>com.reachinternational.app</code>) have the full right to request complete de-provisioning of their user account and permanent erasure of their personal identity records.
+            In compliance with the <strong>Google Play Developer Account Deletion Policy</strong> and statutory privacy regulations (including India's Digital Personal Data Protection Act), users of the <strong>ReachInternational</strong> mobile application (<code>com.reachinternational.app</code>) and web portal have the full right to request complete de-provisioning of their account and permanent erasure of their personal identity records.
           </p>
+
+          <div className="mt-3 p-3.5 rounded-xl border border-sky-500/20 bg-sky-500/5 text-xs text-[var(--color-body)] flex items-start gap-2.5">
+            <Clock size={16} className="text-[#0070f3] shrink-0 mt-0.5" />
+            <div className="leading-relaxed">
+              <strong className="text-[var(--color-ink)]">Policy Notice: </strong>
+              This page is the informational compliance guide. To submit an official deletion request immediately, proceed to our dedicated deletion portal.
+            </div>
+          </div>
+
+          <div className="mt-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-red-500/20 bg-red-500/5 text-xs">
+            <div className="flex items-center gap-2">
+              <Trash2 size={16} className="text-red-600 dark:text-red-400 shrink-0" />
+              <span className="text-[var(--color-body)]">
+                Ready to submit an official account deletion request?
+              </span>
+            </div>
+            <Link
+              href="/delete-account"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-semibold text-xs transition-colors shrink-0 cursor-pointer shadow-xs"
+            >
+              <span>Go to Delete Account Page</span>
+              <ArrowRight size={12} />
+            </Link>
+          </div>
         </section>
 
         {/* Step-by-Step Instructions & Methods */}
@@ -107,41 +141,73 @@ export default async function AccountDeletionPage() {
           </h2>
 
           <div className="grid grid-cols-1 gap-4">
-            {/* Method 1: Direct Web Portal (Functional Web Deletion Form) */}
-            <AccountDeletionWebForm
-              initialEmail={currentUser?.email || ""}
-              initialName={currentUser?.full_name || ""}
-              isAuthenticated={Boolean(currentUser)}
-            />
-
-            {/* Method 2: In-App */}
-            <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2">
-              <div className="flex items-center gap-2 font-semibold text-sm text-[var(--color-ink)]">
-                <Smartphone className="w-4 h-4 text-[var(--color-link)]" />
-                <span>Method 2: Inside the Mobile App</span>
+            {/* Method 1: Web Application (From Profile Dialogue) */}
+            <div className="p-5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold text-sm text-[var(--color-ink)]">
+                  <Laptop className="w-4 h-4 text-[#0070f3]" />
+                  <span>Method 1: In the Web Application (From Your Profile)</span>
+                </div>
+                <Link
+                  href="/delete-account"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 text-xs font-semibold transition-colors"
+                >
+                  <Trash2 size={12} />
+                  <span>Open Deletion Page</span>
+                  <ArrowRight size={11} />
+                </Link>
               </div>
-              <ol className="list-decimal list-inside text-xs text-[var(--color-body)] space-y-1.5 ml-1">
-                <li>Launch the <strong>ReachInternational</strong> app on your Android or iOS device.</li>
-                <li>Tap the <strong>Settings</strong> tab in the bottom navigation bar.</li>
-                <li>Tap on <strong>My Account</strong> to expand your profile details.</li>
-                <li>Scroll to the bottom and select <strong>Request Account Deletion</strong>.</li>
-                <li>Submit your confirmation directly to our compliance desk.</li>
+
+              <ol className="list-decimal list-inside text-xs text-[var(--color-body)] space-y-2 ml-1 leading-relaxed">
+                <li>
+                  Sign in to your account at <strong>{BRAND_WEBSITE_DISPLAY}</strong>.
+                </li>
+                <li>
+                  Click on your <strong>Profile Card</strong> at the bottom of the navigation sidebar (or open the profile dropdown).
+                </li>
+                <li>
+                  Select the red <strong>Account Deletion</strong> option.
+                </li>
+                <li>
+                  A secure dialogue box will appear prompting you to fill in the <strong>Reason for Deletion</strong>.
+                </li>
+                <li>
+                  Click <strong>Submit Deletion Request</strong> to transmit the request directly to administrators.
+                </li>
+                <li>
+                  Company administrators will review the request, deactivate your account, and permanently scrub your personal KYC credentials.
+                </li>
+              </ol>
+            </div>
+
+            {/* Method 2: In-App Mobile */}
+            <div className="p-5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3">
+              <div className="flex items-center gap-2 font-bold text-sm text-[var(--color-ink)]">
+                <Smartphone className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                <span>Method 2: Inside the Mobile App (Android & iOS)</span>
+              </div>
+              <ol className="list-decimal list-inside text-xs text-[var(--color-body)] space-y-2 ml-1 leading-relaxed">
+                <li>Launch the <strong>ReachInternational</strong> app on your mobile device.</li>
+                <li>Tap the <strong>Settings</strong> tab in the bottom floating navigation bar.</li>
+                <li>Select <strong>My Account</strong> or tap on your Profile.</li>
+                <li>Scroll down and tap <strong>Request Account Deletion</strong>.</li>
+                <li>In the confirmation dialogue, provide your reason and confirm submission.</li>
               </ol>
             </div>
 
             {/* Method 3: Web / Direct Email */}
-            <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2">
-              <div className="flex items-center gap-2 font-semibold text-sm text-[var(--color-ink)]">
-                <Globe className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                <span>Method 3: Direct Email Request (No App Required)</span>
+            <div className="p-5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3">
+              <div className="flex items-center gap-2 font-bold text-sm text-[var(--color-ink)]">
+                <Mail className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>Method 3: Direct Email Request (If You Cannot Access the App)</span>
               </div>
               <p className="text-xs text-[var(--color-body)] leading-relaxed">
-                If you have uninstalled the application or cannot access your device, send an email directly to our compliance desk:
+                If you have uninstalled the application, lost your device, or are unable to log in, you can submit a manual deletion request directly to our compliance desk:
               </p>
-              <div className="p-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-1 text-xs">
-                <p><strong>To:</strong> <a href="mailto:info@reachinternational.co.in" className="text-[var(--color-link)] font-semibold">info@reachinternational.co.in</a></p>
-                <p><strong>Subject:</strong> Account Deletion Request — [Your Registered Email]</p>
-                <p><strong>Body:</strong> Please delete my user account and associated personal KYC records registered under this email address.</p>
+              <div className="p-3.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-1 text-xs">
+                <p><strong>To:</strong> <a href={`mailto:${BRAND_EMAIL}`} className="text-[#0070f3] font-semibold">{BRAND_EMAIL}</a></p>
+                <p><strong>Subject:</strong> Account Deletion Request — [Your Registered Email / Phone]</p>
+                <p><strong>Body:</strong> Please delete my user account and associated personal KYC records registered under this email address. Reason: [Brief reason].</p>
               </div>
             </div>
           </div>
@@ -160,10 +226,10 @@ export default async function AccountDeletionPage() {
                 <span>Data Permanently Purged</span>
               </div>
               <ul className="list-disc list-inside space-y-1 text-[var(--color-body)] ml-1">
-                <li>Full legal name, email, and phone number</li>
-                <li>Encrypted authentication credentials and login sessions</li>
-                <li>Masked Aadhaar and Driving Licence numbers</li>
-                <li>Push notification tokens and device metadata</li>
+                <li>Full legal name, email address, and personal phone</li>
+                <li>Encrypted authentication credentials and active sessions</li>
+                <li>Aadhaar card number and Driving Licence records</li>
+                <li>Push notification tokens and device hardware IDs</li>
                 <li>Personal shift preferences and avatar photos</li>
               </ul>
             </div>
@@ -171,10 +237,10 @@ export default async function AccountDeletionPage() {
             <div className="p-4 rounded-xl border border-amber-500/20 bg-amber-500/5 space-y-2">
               <div className="flex items-center gap-2 font-bold text-amber-700 dark:text-amber-400">
                 <FileCheck className="w-4 h-4" />
-                <span>Statutory Records Retained</span>
+                <span>Statutory Machine Records Retained</span>
               </div>
               <p className="text-[var(--color-body)] leading-relaxed">
-                Industrial safety legislation and equipment warranty statutes mandate that historical machine hour meter logs, pre-shift safety checklists, and equipment inspection logs be preserved in an anonymized format for auditing and regulatory insurance purposes.
+                Industrial machinery safety legislation (Indian Factories Act, 1948) and insurance policies mandate that historical machine hour meter readings (HMR), breakdown durations, and equipment pre-shift inspection logs be preserved in an anonymized archive for statutory safety auditing.
               </p>
             </div>
           </div>
@@ -184,11 +250,11 @@ export default async function AccountDeletionPage() {
         <section className="p-6 sm:p-8 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs space-y-3">
           <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wide text-[var(--color-ink)]">
             <Clock className="w-4 h-4 text-sky-600" />
-            <span>Processing Timeline</span>
+            <span>Processing Timeline & Verification</span>
           </div>
 
           <p className="text-xs text-[var(--color-body)] leading-relaxed">
-            All verified account deletion requests are acknowledged within <strong>48 hours</strong> and fully executed within <strong>14 business days</strong>. Once finalized, you will receive a confirmation email verifying permanent erasure of your identity from our database.
+            All submitted account deletion requests are reviewed by system administrators and acknowledged within <strong>48 hours</strong>. Complete account de-provisioning and KYC scrubbing is fully executed within <strong>14 business days</strong>. You will receive an automated confirmation email once the process is complete.
           </p>
         </section>
       </main>

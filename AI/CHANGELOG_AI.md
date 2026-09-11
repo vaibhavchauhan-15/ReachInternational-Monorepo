@@ -1,3 +1,26 @@
+- **Dedicated Delete Account Page (/delete-account) & UserProfileDropdown Linkage (2026-09-11)**:
+  - **1. Objective & Requirements**:
+    - Per user feedback: `http://localhost:3000/account-deletion` must be strictly the **Account Deletion Guide**, while the actual account deletion request form must live on its own separate, dedicated page: `http://localhost:3000/delete-account`.
+    - From the user profile dropdown on `/machines` (`UserProfileDropdown` button "Account Deletion"), clicking "Account Deletion" must link to and open this dedicated deletion page (`/delete-account`).
+    - The guide (`/account-deletion`) and actual deletion page (`/delete-account`) must be clearly distinct.
+  - **2. Implementation Details**:
+    - `apps/web/app/delete-account/page.tsx`: Created standalone Server Component with ScissorLift branding, metadata, auth detection, and pending status prefetch.
+    - `apps/web/app/delete-account/DeleteAccountClient.tsx`: Built comprehensive, responsive deletion portal featuring:
+      - Authenticated user identification (avatar, name, email, role, phone).
+      - Unauthenticated fallback for former operators requiring KYC phone/email entry.
+      - Reason selection chips (`COMMON_REASONS`) + custom notes textarea.
+      - Irreversible data loss and statutory machine log disclosure confirmation checkbox.
+      - Live pending status banner with submission timestamp, stated reason, and cancellation option (`cancelMyAccountDeletionRequestAction`).
+    - `apps/web/app/account-deletion/page.tsx`: Polished guide with explicit callout banners and action links directing users to the dedicated `/delete-account` portal.
+    - `apps/web/components/layout/sidebar/UserProfileDropdown.tsx`: Updated "Account Deletion" item to link directly to `/delete-account` via `<Link href="/delete-account" onClick={() => setOpen(false)}>`, removing modal overlay overhead.
+    - `apps/web/components/layout/MobileBottomNav.tsx`: Updated "Request Account Deletion" in mobile bottom sheet to navigate to `/delete-account`.
+    - `apps/web/components/settings/SettingsClient.tsx`: Updated settings danger zone to link to `/delete-account` with secondary access to `/account-deletion` guide.
+    - `apps/web/proxy.ts`: Added `/delete-account` and `/account-deletion-guide` to `publicLegalRoutes`.
+  - **3. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed (0 errors).
+    - `@reachinternational/mobile` `typecheck`: Passed (0 errors).
+    - `node apps/mobile/run-tests.mjs`: Passed (18/18 scenarios verified).
+
 - **Account Deletion Full-Stack System & Web/Mobile Parity (2026-09-11)**:
   - **1. Objective & Requirements**:
     - Resolve user feedback on `/account-deletion` (viewport `1536×695`):

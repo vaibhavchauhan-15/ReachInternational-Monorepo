@@ -38,7 +38,13 @@ const deprecatedRoutes = [
 ];
 
 const authRoutes = ["/login", "/forgot-password", "/signup"];
-const publicLegalRoutes = ["/privacy", "/terms", "/account-deletion"];
+const publicLegalRoutes = [
+  "/privacy",
+  "/terms",
+  "/account-deletion",
+  "/delete-account",
+  "/account-deletion-guide",
+];
 const publicRoutes = [...authRoutes, ...publicLegalRoutes];
 
 export async function proxy(request: NextRequest) {
