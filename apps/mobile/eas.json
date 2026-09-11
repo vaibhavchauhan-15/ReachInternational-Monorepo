@@ -7,12 +7,31 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "node": "22.22.3",
+      "pnpm": "11.21.0",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "development",
+        "EXPO_PUBLIC_SHELL_MODE": "native",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://dhbbgfzbyatzvqafnsqp.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_FL-1BqCcGNxYByFYzrBWuA_BvHMxVis",
+        "EXPO_PUBLIC_SCHEME": "reachinternational"
+      },
       "android": {
         "buildType": "apk"
       }
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
+      "node": "22.22.3",
+      "pnpm": "11.21.0",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "preview",
+        "EXPO_PUBLIC_SHELL_MODE": "native",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://dhbbgfzbyatzvqafnsqp.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_FL-1BqCcGNxYByFYzrBWuA_BvHMxVis",
+        "EXPO_PUBLIC_SCHEME": "reachinternational"
+      },
       "android": {
         "buildType": "apk"
       },
@@ -22,12 +41,33 @@
     },
     "production": {
       "autoIncrement": true,
+      "channel": "production",
+      "node": "22.22.3",
+      "pnpm": "11.21.0",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_SHELL_MODE": "native",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://dhbbgfzbyatzvqafnsqp.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_FL-1BqCcGNxYByFYzrBWuA_BvHMxVis",
+        "EXPO_PUBLIC_SCHEME": "reachinternational"
+      },
       "android": {
         "buildType": "app-bundle"
       }
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "track": "internal",
+        "changesNotSentForReview": false
+      }
+    },
+    "production-play": {
+      "android": {
+        "track": "production",
+        "changesNotSentForReview": false
+      }
+    }
   }
 }

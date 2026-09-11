@@ -15,7 +15,7 @@ export const SHELL_USER_AGENT_SUFFIX = `ReachInternationalApp/${SHELL_VERSION} (
  * 1. Explicit EXPO_PUBLIC_WEB_APP_URL environment variable
  * 2. In development on Android emulator: http://10.0.2.2:3000
  * 3. In development on iOS simulator / Expo Go: http://<LAN_IP>:3000
- * 4. Production fallback: https://reachinternation.com
+ * 4. Production fallback: https://www.reachinternational.co.in
  */
 export function getWebAppUrl(): string {
   const envUrl = process.env.EXPO_PUBLIC_WEB_APP_URL;
@@ -40,7 +40,7 @@ export function getWebAppUrl(): string {
     return "http://localhost:3000";
   }
 
-  return "https://reachinternation.com";
+  return "https://www.reachinternational.co.in";
 }
 
 /**
@@ -48,8 +48,8 @@ export function getWebAppUrl(): string {
  * Any navigation request targeting outside this whitelist is diverted to the native system browser.
  */
 export const TRUSTED_DOMAINS: string[] = [
-  "reachinternation.com",
-  "www.reachinternation.com",
+  "reachinternational.co.in",
+  "www.reachinternational.co.in",
   "localhost",
   "10.0.2.2",
   "127.0.0.1",

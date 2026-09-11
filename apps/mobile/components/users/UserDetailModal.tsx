@@ -20,6 +20,7 @@ import {
   formatLicenseNumber,
 } from '@reachinternational/utils';
 import { isSupervisedRole } from '@reachinternational/permissions';
+import { notifyUserStatusChanged, notifyUserUpdated } from '../../lib/notifications';
 import {
   X,
   User,
@@ -292,6 +293,7 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                 .update({ status: newStatus, updated_at: new Date().toISOString() })
                 .eq('id', user.id);
               if (error) throw error;
+              notifyUserStatusChanged(user.full_name, newStatus);
               onSuccess();
               onClose();
             } catch (err: any) {
@@ -313,6 +315,7 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
         .update({ role: newRole, updated_at: new Date().toISOString() })
         .eq('id', user.id);
       if (error) throw error;
+      notifyUserUpdated(user.full_name, newRole);
       setRoleModalVisible(false);
       onSuccess();
       onClose();

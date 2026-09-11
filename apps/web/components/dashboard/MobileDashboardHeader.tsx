@@ -73,7 +73,7 @@ export function MobileDashboardHeader({
           {overdueCount > 0 && (
             <motion.div whileTap={{ scale: 0.95 }}>
               <Link
-                href={isAdmin ? "/machines?bucket=overdue" : "/services"}
+                href={isAdmin ? "/machines?bucket=overdue" : "/machines"}
                 className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-semibold whitespace-nowrap shadow-2xs hover:bg-rose-500/20 transition-all"
               >
                 <AnimatedAlertTriangle size={16} animation="bounce" />
@@ -86,7 +86,7 @@ export function MobileDashboardHeader({
           {todayDueCount > 0 && (
             <motion.div whileTap={{ scale: 0.95 }}>
               <Link
-                href={isAdmin ? "/machines?bucket=today" : "/services"}
+                href={isAdmin ? "/machines?bucket=today" : "/machines"}
                 className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-semibold whitespace-nowrap shadow-2xs hover:bg-amber-500/20 transition-all"
               >
                 <AnimatedCalendarClock size={16} />
@@ -98,11 +98,11 @@ export function MobileDashboardHeader({
 
           <motion.div whileTap={{ scale: 0.95 }}>
             <Link
-              href={isAdmin ? "/machines" : "/services"}
+              href={isAdmin ? "/machines" : "/machines"}
               className="inline-flex items-center gap-2 px-3.5 py-2 rounded-full bg-muted border border-border text-foreground text-xs font-semibold whitespace-nowrap shadow-2xs hover:border-muted-foreground/40 transition-all"
             >
               <AnimatedWrench size={16} className="text-muted-foreground" />
-              <span>{isAdmin ? "Manage Fleet" : "My Schedule"}</span>
+              <span>{isAdmin ? "Manage Fleet" : "Fleet Machinery"}</span>
             </Link>
           </motion.div>
         </div>

@@ -11,8 +11,10 @@ import {
   Linking,
   Platform,
   TextInput,
+  StatusBar,
 } from 'react-native';
-import { Card, Badge, Input, Button, useTheme, MobileHeader } from '../../components/ui';
+import { useLocalSearchParams } from 'expo-router';
+import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem } from '../../components/ui';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { MobileAssignmentModal } from '../../components/operations/MobileAssignmentModal';
 import { MobileConflictResolutionModal } from '../../components/operations/MobileConflictResolutionModal';
@@ -21,6 +23,10 @@ import {
   OperationsFilterSelectorModal,
   FilterSelectOption,
 } from '../../components/operations/OperationsFilterSelectorModal';
+import {
+  OperationLogListSkeleton,
+  AssignmentListSkeleton,
+} from '../../components/operations/OperationsSkeleton';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -35,6 +41,7 @@ import {
   parseProfileShiftTime,
   parseTimeToMinutes,
   getISTDateString,
+  parseConflictReason,
 } from '@reachinternational/utils';
 import { useOfflineQueue } from '../../lib/offline/useOfflineQueue';
 import { offlineQueueManager } from '../../lib/offline/OfflineQueueManager';
@@ -51,6 +58,7 @@ import {
   Building2,
   Calendar,
   Truck,
+  User,
   Sun,
   Moon,
   Users,
@@ -59,7 +67,6 @@ import {
   ChevronDown,
   ChevronUp,
   Phone,
-  FileText,
   RefreshCw,
   Printer,
   X,
@@ -93,6 +100,9 @@ export interface HourLogRecord {
   conflict_flag?: boolean;
   conflict_reason?: string;
   conflict_status?: string;
+  conflict_resolved_by?: string;
+  conflict_resolved_at?: string;
+  conflict_resolution_notes?: string;
   is_offline_draft?: boolean;
   sync_status?: MutationStatus;
   queued_item?: QueuedMutation;
@@ -181,7 +191,20 @@ export default function OperationsScreen() {
   const { role, user, userProfile } = useAuth();
 
   const isOperator = (role || '').toLowerCase() === 'operator';
-  const [activeTab, setActiveTab] = useState<OpsTab>(isOperator ? 'entry' : 'logs');
+  const params = useLocalSearchParams<{ tab?: string }>();
+
+  const [activeTab, setActiveTab] = useState<OpsTab>(() => {
+    if (params.tab === 'assignments' || params.tab === 'logs' || params.tab === 'entry' || params.tab === 'history') {
+      return params.tab as OpsTab;
+    }
+    return isOperator ? 'entry' : 'logs';
+  });
+
+  useEffect(() => {
+    if (params.tab && (params.tab === 'assignments' || params.tab === 'logs' || params.tab === 'entry' || params.tab === 'history')) {
+      setActiveTab(params.tab as OpsTab);
+    }
+  }, [params.tab]);
 
   // Master Data State
   const [logs, setLogs] = useState<HourLogRecord[]>([]);
@@ -215,6 +238,7 @@ export default function OperationsScreen() {
 
   // Assignments Tab States
   const [assignmentSearch, setAssignmentSearch] = useState<string>('');
+  const [debouncedAssignmentSearch, setDebouncedAssignmentSearch] = useState<string>('');
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'assigned' | 'unassigned' | 'full'>('all');
   const [expandedMachineIds, setExpandedMachineIds] = useState<Set<string>>(() => new Set());
 
@@ -227,6 +251,7 @@ export default function OperationsScreen() {
   const [assignModalTargetMachineId, setAssignModalTargetMachineId] = useState<string>('');
   const [showConflictModal, setShowConflictModal] = useState<boolean>(false);
   const [selectedConflictLog, setSelectedConflictLog] = useState<HourLogRecord | null>(null);
+  const [showAllConflicts, setShowAllConflicts] = useState<boolean>(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
 
   // Reusable Selector Modal State
@@ -258,14 +283,25 @@ export default function OperationsScreen() {
     serial_number?: string;
   } | null>(null);
 
-  // Debounce search input
+  // Debounce search input for logs
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(search);
       setLogsPage(1);
-    }, 300);
+    }, 280);
     return () => clearTimeout(timer);
   }, [search]);
+
+  // Debounce search input for assignments
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedAssignmentSearch(assignmentSearch);
+    }, 280);
+    return () => clearTimeout(timer);
+  }, [assignmentSearch]);
+
+  const isSearchingLogs = search.trim() !== debouncedSearch.trim() && search.trim() !== '';
+  const isSearchingAssignments = assignmentSearch.trim() !== debouncedAssignmentSearch.trim() && assignmentSearch.trim() !== '';
 
   // Expand / Collapse Single Machine Card
   const toggleMachineExpanded = (machineId: string) => {
@@ -355,7 +391,7 @@ export default function OperationsScreen() {
           .order('full_name'),
         supabase
           .from('clients')
-          .select('id, code, company_name, phone, email, address, city, state')
+          .select('id, code, company_name, phone, address, city, state')
           .order('company_name'),
         supabase
           .from('machine_hour_logs')
@@ -379,9 +415,12 @@ export default function OperationsScreen() {
             conflict_flag,
             conflict_reason,
             conflict_status,
+            conflict_resolved_by,
+            conflict_resolved_at,
+            conflict_resolution_notes,
             machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number, manufacturer, status),
             operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone),
-            client:clients!machine_hour_logs_client_id_fkey(id, company_name, phone, email, address, city, state)
+            client:clients!machine_hour_logs_client_id_fkey(id, company_name, phone, address, city, state)
           `)
           .order('log_date', { ascending: false })
           .order('created_at', { ascending: false })
@@ -756,122 +795,245 @@ export default function OperationsScreen() {
     setShowConflictModal(true);
   };
 
+  const headerActions = useMemo<HeaderActionItem[]>(() => {
+    const list: HeaderActionItem[] = [];
+
+    if (!isOperator) {
+      list.push({
+        id: 'assign-operator',
+        label: 'Assign Operator',
+        icon: <UserCheck size={16} color={theme.colors.link} />,
+        onPress: () => handleOpenAssignModal(),
+      });
+    }
+
+    list.push({
+      id: 'export-print',
+      label: 'Export / Print Report',
+      icon: <Printer size={16} color={theme.colors.ink} />,
+      onPress: () => setShowExportModal(true),
+    });
+
+    list.push({
+      id: 'refresh-data',
+      label: 'Refresh Operations Data',
+      icon: <RefreshCw size={16} color={theme.colors.ink} />,
+      onPress: () => onRefresh(),
+    });
+
+    if (!isOperator) {
+      if (activeTab === 'logs') {
+        list.push({
+          id: 'switch-assignments',
+          label: 'Switch to Shift Assignments',
+          icon: <Gauge size={16} color={theme.colors.ink} />,
+          onPress: () => setActiveTab('assignments'),
+        });
+      } else {
+        list.push({
+          id: 'switch-logs',
+          label: 'Switch to Running Hours',
+          icon: <Clock size={16} color={theme.colors.ink} />,
+          onPress: () => setActiveTab('logs'),
+        });
+      }
+    }
+
+    if (pendingConflicts.length > 0) {
+      list.push({
+        id: 'review-conflict',
+        label: `Review Conflicts (${pendingConflicts.length})`,
+        icon: <AlertTriangle size={16} color="#d97706" />,
+        badge: pendingConflicts.length,
+        onPress: () => handleOpenConflictModal(pendingConflicts[0]),
+      });
+    }
+
+    return list;
+  }, [isOperator, activeTab, theme.colors.link, theme.colors.ink, onRefresh, pendingConflicts]);
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      {/* 1. TOP MOBILE HEADER WITH ASSIGN OPERATOR CTA */}
-      <View style={[styles.headerStrip, { borderBottomColor: theme.colors.hairline }]}>
-        <View style={styles.headerTitleRow}>
-          <Text style={[styles.screenTitle, { color: theme.colors.ink }]}>Fleet Operations</Text>
-          <TouchableOpacity
-            onPress={onRefresh}
-            style={[styles.refreshIconBtn, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <RefreshCw size={14} color={refreshing ? theme.colors.link : theme.colors.mute} style={refreshing ? { transform: [{ rotate: '45deg' }] } : undefined} />
-          </TouchableOpacity>
-        </View>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-        {/* Primary Assign Operator CTA */}
-        {!isOperator && (
-          <TouchableOpacity
-            onPress={() => handleOpenAssignModal()}
-            activeOpacity={0.8}
-            style={[styles.assignOperatorTopBtn, { backgroundColor: theme.colors.link }]}
-          >
-            <UserCheck size={16} color="#ffffff" style={{ marginRight: 6 }} />
-            <Text style={styles.assignOperatorTopBtnText}>Assign Operator</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Top-Level Segmented Tabs */}
-        {isOperator ? (
-          <View style={[styles.segmentContainer, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+      {/* 1. TOP STANDARDIZED MOBILE HEADER: [Logo] + [Page Title] + [Assign CTA] + [Quick Access] + [3-Dot Actions] */}
+      <MobileHeader
+        title="Fleet Operations"
+        actions={headerActions}
+        rightAction={
+          !isOperator ? (
             <TouchableOpacity
-              onPress={() => setActiveTab('entry')}
+              onPress={() => handleOpenAssignModal()}
+              activeOpacity={0.8}
               style={[
-                styles.segmentBtn,
-                activeTab === 'entry' && [styles.segmentActive, { backgroundColor: theme.colors.primary }],
+                styles.headerAssignBtn,
+                { backgroundColor: theme.colors.ink },
               ]}
+              accessibilityLabel="Assign Operator"
             >
-              <Text
-                style={[
-                  styles.segmentText,
-                  { color: activeTab === 'entry' ? theme.colors.onPrimary : theme.colors.body },
-                  activeTab === 'entry' && { fontWeight: '700' },
-                ]}
-              >
-                Log Entry
+              <UserCheck size={13} color={theme.colors.canvas} style={{ marginRight: 4 }} />
+              <Text style={[styles.headerAssignBtnText, { color: theme.colors.canvas }]}>
+                Assign
               </Text>
             </TouchableOpacity>
+          ) : undefined
+        }
+      />
 
-            <TouchableOpacity
-              onPress={() => setActiveTab('history')}
-              style={[
-                styles.segmentBtn,
-                activeTab === 'history' && [styles.segmentActive, { backgroundColor: theme.colors.primary }],
-              ]}
-            >
-              <Text
+      {/* 2. TOP NAVBAR (ABOVE NAVBAR) DIRECTLY BELOW HEADER */}
+      <View
+        style={[
+          styles.aboveNavbar,
+          {
+            backgroundColor: theme.colors.canvas,
+            borderBottomColor: theme.colors.hairline,
+          },
+        ]}
+      >
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.aboveNavbarContent}
+        >
+          {isOperator ? (
+            <>
+              {/* Operator Tab 1: Log Entry */}
+              <TouchableOpacity
+                onPress={() => setActiveTab('entry')}
+                activeOpacity={0.8}
                 style={[
-                  styles.segmentText,
-                  { color: activeTab === 'history' ? theme.colors.onPrimary : theme.colors.body },
-                  activeTab === 'history' && { fontWeight: '700' },
+                  styles.aboveNavbarTab,
+                  activeTab === 'entry'
+                    ? [styles.aboveNavbarTabActive, { backgroundColor: theme.colors.ink }]
+                    : [
+                        styles.aboveNavbarTabInactive,
+                        {
+                          backgroundColor: theme.colors.canvasElevated,
+                          borderColor: theme.colors.hairline,
+                        },
+                      ],
                 ]}
               >
-                Log History ({logs.length})
-              </Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={[styles.segmentContainer, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <TouchableOpacity
-              onPress={() => setActiveTab('logs')}
-              style={[
-                styles.segmentBtn,
-                activeTab === 'logs' && [styles.segmentActive, { backgroundColor: theme.colors.primary }],
-              ]}
-            >
-              <Text
-                style={[
-                  styles.segmentText,
-                  { color: activeTab === 'logs' ? theme.colors.onPrimary : theme.colors.body },
-                  activeTab === 'logs' && { fontWeight: '700' },
-                ]}
-              >
-                Daily Running Hours
-              </Text>
-              {pendingConflicts.length > 0 && (
-                <View style={styles.alertCountBadge}>
-                  <Text style={styles.alertCountBadgeText}>{pendingConflicts.length} Alerts</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setActiveTab('assignments')}
-              style={[
-                styles.segmentBtn,
-                activeTab === 'assignments' && [styles.segmentActive, { backgroundColor: theme.colors.primary }],
-              ]}
-            >
-              <Text
-                style={[
-                  styles.segmentText,
-                  { color: activeTab === 'assignments' ? theme.colors.onPrimary : theme.colors.body },
-                  activeTab === 'assignments' && { fontWeight: '700' },
-                ]}
-                numberOfLines={1}
-              >
-                Operator Machine Assignments
-              </Text>
-              <View style={[styles.counterBadge, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : 'rgba(0, 112, 243, 0.1)' }]}>
-                <Text style={[styles.counterBadgeText, { color: theme.colors.link }]}>
-                  {activeAssignmentsList.length}
+                <Text
+                  style={[
+                    styles.aboveNavbarTabText,
+                    {
+                      color:
+                        activeTab === 'entry'
+                          ? theme.colors.canvas
+                          : theme.colors.body,
+                    },
+                    activeTab === 'entry' && styles.aboveNavbarTabTextActive,
+                  ]}
+                >
+                  Log Entry
                 </Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        )}
+              </TouchableOpacity>
+
+              {/* Operator Tab 2: Log History */}
+              <TouchableOpacity
+                onPress={() => setActiveTab('history')}
+                activeOpacity={0.8}
+                style={[
+                  styles.aboveNavbarTab,
+                  activeTab === 'history'
+                    ? [styles.aboveNavbarTabActive, { backgroundColor: theme.colors.ink }]
+                    : [
+                        styles.aboveNavbarTabInactive,
+                        {
+                          backgroundColor: theme.colors.canvasElevated,
+                          borderColor: theme.colors.hairline,
+                        },
+                      ],
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.aboveNavbarTabText,
+                    {
+                      color:
+                        activeTab === 'history'
+                          ? theme.colors.canvas
+                          : theme.colors.body,
+                    },
+                    activeTab === 'history' && styles.aboveNavbarTabTextActive,
+                  ]}
+                >
+                  Log History
+                </Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              {/* Daily Running Hours Tab */}
+              <TouchableOpacity
+                onPress={() => setActiveTab('logs')}
+                activeOpacity={0.8}
+                style={[
+                  styles.aboveNavbarTab,
+                  activeTab === 'logs'
+                    ? [styles.aboveNavbarTabActive, { backgroundColor: theme.colors.ink }]
+                    : [
+                        styles.aboveNavbarTabInactive,
+                        {
+                          backgroundColor: theme.colors.canvasElevated,
+                          borderColor: theme.colors.hairline,
+                        },
+                      ],
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.aboveNavbarTabText,
+                    {
+                      color:
+                        activeTab === 'logs'
+                          ? theme.colors.canvas
+                          : theme.colors.body,
+                    },
+                    activeTab === 'logs' && styles.aboveNavbarTabTextActive,
+                  ]}
+                >
+                  Daily Running Hours
+                </Text>
+              </TouchableOpacity>
+
+              {/* Machine Assignments Tab */}
+              <TouchableOpacity
+                onPress={() => setActiveTab('assignments')}
+                activeOpacity={0.8}
+                style={[
+                  styles.aboveNavbarTab,
+                  activeTab === 'assignments'
+                    ? [styles.aboveNavbarTabActive, { backgroundColor: theme.colors.ink }]
+                    : [
+                        styles.aboveNavbarTabInactive,
+                        {
+                          backgroundColor: theme.colors.canvasElevated,
+                          borderColor: theme.colors.hairline,
+                        },
+                      ],
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.aboveNavbarTabText,
+                    {
+                      color:
+                        activeTab === 'assignments'
+                          ? theme.colors.canvas
+                          : theme.colors.body,
+                    },
+                    activeTab === 'assignments' && styles.aboveNavbarTabTextActive,
+                  ]}
+                  numberOfLines={1}
+                >
+                  Machine Assignments
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </ScrollView>
       </View>
 
       {/* 2. TAB 1: DAILY RUNNING HOURS FEED */}
@@ -884,43 +1046,214 @@ export default function OperationsScreen() {
         >
           {/* Overtime Conflict Alert Banner */}
           {pendingConflicts.length > 0 && (
-            <View style={[styles.conflictBanner, { backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : '#fffbeb', borderColor: '#fde68a' }]}>
+            <View
+              style={[
+                styles.conflictBanner,
+                {
+                  backgroundColor: isDark ? 'rgba(245, 158, 11, 0.08)' : '#fffbeb',
+                  borderColor: isDark ? 'rgba(245, 158, 11, 0.3)' : '#fde68a',
+                },
+              ]}
+            >
+              {/* Header: Title + Action Required Badge + Show All Toggle */}
               <View style={styles.conflictBannerHeader}>
                 <View style={styles.conflictBannerTitleWrap}>
-                  <ShieldAlert size={18} color="#d97706" />
+                  <ShieldAlert size={16} color={isDark ? '#fbbf24' : '#d97706'} />
                   <Text style={[styles.conflictBannerTitle, { color: theme.colors.ink }]}>
                     {pendingConflicts.length} Overtime Shift Conflict{pendingConflicts.length > 1 ? 's' : ''}
                   </Text>
-                </View>
-                <View style={styles.conflictActionBadge}>
-                  <Text style={styles.conflictActionBadgeText}>Action Required</Text>
-                </View>
-              </View>
-              <Text style={[styles.conflictBannerDesc, { color: theme.colors.mute }]}>
-                Recorded hours exceeded shift windows and overlapped with subsequent operator assignments.
-              </Text>
-
-              {/* Conflict Preview Card */}
-              {pendingConflicts.slice(0, 2).map((cLog) => (
-                <View
-                  key={cLog.id}
-                  style={[styles.conflictCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.conflictCardMachine, { color: theme.colors.ink }]}>{cLog.machine_code}</Text>
-                    <Text style={[styles.conflictCardMeta, { color: theme.colors.mute }]}>
-                      {cLog.operator?.full_name || 'Operator'} · {formatDate(cLog.log_date)}
-                    </Text>
-                    <Text style={styles.conflictCardReason}>{cLog.conflict_reason || 'Shift overlap detected'}</Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => handleOpenConflictModal(cLog)}
-                    style={[styles.conflictReviewBtn, { borderColor: '#f59e0b' }]}
+                  <View
+                    style={[
+                      styles.conflictActionBadge,
+                      {
+                        backgroundColor: isDark ? 'rgba(245, 158, 11, 0.22)' : '#fef3c7',
+                        borderColor: isDark ? 'rgba(245, 158, 11, 0.35)' : '#fde68a',
+                        borderWidth: 1,
+                      },
+                    ]}
                   >
-                    <Text style={styles.conflictReviewBtnText}>Review</Text>
-                  </TouchableOpacity>
+                    <Text
+                      style={[
+                        styles.conflictActionBadgeText,
+                        { color: isDark ? '#fbbf24' : '#92400e' },
+                      ]}
+                    >
+                      Action Required
+                    </Text>
+                  </View>
                 </View>
-              ))}
+
+                {pendingConflicts.length > 2 && (
+                  <TouchableOpacity
+                    onPress={() => setShowAllConflicts(!showAllConflicts)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#fbbf24' : '#d97706' }}>
+                      {showAllConflicts ? 'Show Fewer' : `View All (${pendingConflicts.length})`}
+                    </Text>
+                    {showAllConflicts ? (
+                      <ChevronUp size={13} color={isDark ? '#fbbf24' : '#d97706'} />
+                    ) : (
+                      <ChevronDown size={13} color={isDark ? '#fbbf24' : '#d97706'} />
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Clean, Structured Conflict Cards */}
+              {(showAllConflicts ? pendingConflicts : pendingConflicts.slice(0, 2)).map((cLog) => {
+                const parsed = parseConflictReason(cLog.conflict_reason, {
+                  machineCode: cLog.machine_code,
+                  machineModel: cLog.machine?.model,
+                  operatorName: cLog.operator?.full_name,
+                  startTime: cLog.start_time,
+                  endTime: cLog.end_time,
+                  runningHours: cLog.running_hours,
+                  overtimeHours: cLog.overtime_hours,
+                  logDate: cLog.log_date,
+                });
+
+                return (
+                  <View
+                    key={cLog.id}
+                    style={[
+                      styles.cleanConflictCard,
+                      {
+                        backgroundColor: theme.colors.canvasElevated,
+                        borderColor: isDark ? 'rgba(245, 158, 11, 0.25)' : '#fde68a',
+                        borderLeftColor: isDark ? '#fbbf24' : '#d97706',
+                      },
+                    ]}
+                  >
+                    {/* Top Tier: Machine Code & Model (Left) | Conflict Badge & Review Button (Right) */}
+                    <View style={styles.cleanConflictCardHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, minWidth: 160 }}>
+                        <View style={[styles.cleanMachineIconBox, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#f3f4f6' }]}>
+                          <Truck size={13} color={theme.colors.ink} />
+                        </View>
+                        <Text style={[styles.cleanConflictMachineCode, { color: theme.colors.ink }]}>
+                          {cLog.machine_code}
+                        </Text>
+                        {cLog.machine?.model ? (
+                          <Text style={[styles.cleanConflictMachineModel, { color: theme.colors.mute }]}>
+                            ({cLog.machine.model})
+                          </Text>
+                        ) : null}
+                      </View>
+
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View
+                          style={[
+                            styles.cleanSeverityPill,
+                            {
+                              backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#fef3c7',
+                              borderColor: isDark ? 'rgba(245, 158, 11, 0.35)' : '#fde68a',
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.cleanSeverityPillText, { color: isDark ? '#fbbf24' : '#b45309' }]}>
+                            {parsed.badgeText || 'DUAL MACHINE CONFLICT'}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          onPress={() => handleOpenConflictModal(cLog)}
+                          style={[
+                            styles.cleanReviewBtn,
+                            {
+                              borderColor: isDark ? 'rgba(245, 158, 11, 0.4)' : '#fde68a',
+                              backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#fef3c7',
+                            },
+                          ]}
+                        >
+                          <ShieldAlert size={12} color={isDark ? '#fbbf24' : '#b45309'} style={{ marginRight: 4 }} />
+                          <Text style={[styles.cleanReviewBtnText, { color: isDark ? '#fbbf24' : '#b45309' }]}>
+                            Review
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Bottom Tier: 4-Column High-Density Info Grid */}
+                    <View style={[styles.cleanInfoStrip, { borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : theme.colors.hairline }]}>
+                      {/* 1. Operator */}
+                      <View style={styles.cleanInfoItem}>
+                        <Text style={[styles.cleanInfoLabel, { color: theme.colors.mute }]}>OPERATOR</Text>
+                        <View style={styles.cleanInfoValueRow}>
+                          <User size={12} color={theme.colors.mute} />
+                          <Text style={[styles.cleanInfoValueText, { color: theme.colors.ink }]} numberOfLines={1}>
+                            {cLog.operator?.full_name || 'Operator'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* 2. Shift Date */}
+                      <View style={styles.cleanInfoItem}>
+                        <Text style={[styles.cleanInfoLabel, { color: theme.colors.mute }]}>SHIFT DATE</Text>
+                        <View style={styles.cleanInfoValueRow}>
+                          <Calendar size={12} color={theme.colors.mute} />
+                          <Text style={[styles.cleanInfoValueText, { color: theme.colors.ink }]}>
+                            {formatDate(cLog.log_date)}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* 3. Shift Time & Overtime */}
+                      <View style={styles.cleanInfoItem}>
+                        <Text style={[styles.cleanInfoLabel, { color: theme.colors.mute }]}>SHIFT & OVERTIME</Text>
+                        <View style={styles.cleanInfoValueRow}>
+                          <Clock size={12} color={theme.colors.mute} />
+                          <Text style={[styles.cleanInfoValueMono, { color: theme.colors.ink }]}>
+                            {formatShiftTimingRange(cLog.start_time, cLog.end_time)}
+                          </Text>
+                          {cLog.overtime_hours ? (
+                            <View
+                              style={[
+                                styles.cleanOtPill,
+                                {
+                                  backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#fef3c7',
+                                  borderColor: isDark ? 'rgba(245, 158, 11, 0.35)' : '#fde68a',
+                                },
+                              ]}
+                            >
+                              <Text style={[styles.cleanOtPillText, { color: isDark ? '#fbbf24' : '#b45309' }]}>
+                                +{cLog.overtime_hours}h OT
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      </View>
+
+                      {/* 4. Conflict With */}
+                      <View style={styles.cleanInfoItemConflict}>
+                        <Text style={[styles.cleanConflictTargetLabel, { color: isDark ? '#f87171' : '#dc2626' }]}>
+                          CONFLICTS WITH
+                        </Text>
+                        <View style={styles.cleanInfoValueRow}>
+                          <AlertTriangle size={12} color={isDark ? '#f87171' : '#dc2626'} />
+                          <View
+                            style={[
+                              styles.cleanConflictEntityBadge,
+                              {
+                                backgroundColor: isDark ? 'rgba(239, 68, 68, 0.18)' : '#fee2e2',
+                                borderColor: isDark ? 'rgba(239, 68, 68, 0.35)' : '#fecaca',
+                              },
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.cleanConflictEntityBadgeText,
+                                { color: isDark ? '#f87171' : '#b91c1c' },
+                              ]}
+                            >
+                              {parsed.conflictingEntity ? parsed.conflictingEntity : 'Subsequent Shift Roster'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
             </View>
           )}
 
@@ -940,13 +1273,13 @@ export default function OperationsScreen() {
                     }}
                     style={[
                       styles.subTabPill,
-                      isSelected && [styles.subTabPillActive, { backgroundColor: theme.colors.primary }],
+                      isSelected && [styles.subTabPillActive, { backgroundColor: theme.colors.ink }],
                     ]}
                   >
                     <Text
                       style={[
                         styles.subTabPillText,
-                        { color: isSelected ? theme.colors.onPrimary : theme.colors.mute },
+                        { color: isSelected ? theme.colors.canvas : theme.colors.mute },
                         isSelected && { fontWeight: '700' },
                       ]}
                     >
@@ -959,7 +1292,11 @@ export default function OperationsScreen() {
 
             {/* Search Input Bar */}
             <View style={[styles.searchBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-              <Search size={14} color={theme.colors.mute} style={{ marginRight: 8 }} />
+              {isSearchingLogs ? (
+                <ActivityIndicator size="small" color={theme.colors.link} style={{ marginRight: 8 }} />
+              ) : (
+                <Search size={14} color={theme.colors.mute} style={{ marginRight: 8 }} />
+              )}
               <TextInput
                 style={[styles.searchInput, { color: theme.colors.ink }]}
                 placeholder="Search machine, operator, remarks, location..."
@@ -980,10 +1317,17 @@ export default function OperationsScreen() {
               <TouchableOpacity
                 onPress={() => setShowExportModal(true)}
                 activeOpacity={0.8}
-                style={[styles.exportBtn, { backgroundColor: theme.colors.link }]}
+                style={[
+                  styles.exportBtn,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                    borderWidth: 1,
+                  },
+                ]}
               >
-                <Printer size={15} color="#ffffff" style={{ marginRight: 6 }} />
-                <Text style={styles.exportBtnText}>Export / Print</Text>
+                <Printer size={14} color={theme.colors.ink} style={{ marginRight: 6 }} />
+                <Text style={[styles.exportBtnText, { color: theme.colors.ink }]}>Export / Print</Text>
               </TouchableOpacity>
             </View>
 
@@ -1148,7 +1492,7 @@ export default function OperationsScreen() {
                 </View>
                 <View style={styles.specItem}>
                   <Text style={[styles.specLabel, { color: theme.colors.mute }]}>BREAKDOWN EVENTS</Text>
-                  <Text style={[styles.specValueMono, { color: '#f43f5e' }]}>
+                  <Text style={[styles.specValueMono, { color: isDark ? '#fb7185' : '#f43f5e' }]}>
                     {activeMetrics.breakdowns} Events
                   </Text>
                 </View>
@@ -1180,7 +1524,7 @@ export default function OperationsScreen() {
                     </Text>
                   </View>
                   <View style={[styles.infoPill, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.2)' : '#ecfdf5' }]}>
-                    <Text style={[styles.infoPillText, { color: '#059669' }]}>
+                    <Text style={[styles.infoPillText, { color: isDark ? '#34d399' : '#059669' }]}>
                       Working Days: 30 Days ({MONTH_OPTIONS.find((m) => m.id === selectedMonth)?.label || 'Month'})
                     </Text>
                   </View>
@@ -1216,13 +1560,13 @@ export default function OperationsScreen() {
                 </View>
                 <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                   <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>TOTAL OVERTIME</Text>
-                  <Text style={[styles.kpiValue, { color: '#d97706' }]}>
+                  <Text style={[styles.kpiValue, { color: isDark ? '#fbbf24' : '#d97706' }]}>
                     {Math.round(activeMetrics.otHours * 10) / 10} hrs
                   </Text>
                 </View>
                 <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                   <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>BREAKDOWN EVENTS</Text>
-                  <Text style={[styles.kpiValue, { color: '#f43f5e' }]}>
+                  <Text style={[styles.kpiValue, { color: isDark ? '#fb7185' : '#f43f5e' }]}>
                     {activeMetrics.breakdowns} Events
                   </Text>
                 </View>
@@ -1247,13 +1591,13 @@ export default function OperationsScreen() {
               </View>
               <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
                 <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>TOTAL OVERTIME</Text>
-                <Text style={[styles.kpiValue, { color: '#d97706' }]}>
+                <Text style={[styles.kpiValue, { color: isDark ? '#fbbf24' : '#d97706' }]}>
                   {Math.round(activeMetrics.otHours * 10) / 10} hrs
                 </Text>
               </View>
               <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
                 <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>BREAKDOWN EVENTS</Text>
-                <Text style={[styles.kpiValue, { color: '#f43f5e' }]}>
+                <Text style={[styles.kpiValue, { color: isDark ? '#fb7185' : '#f43f5e' }]}>
                   {activeMetrics.breakdowns} Events
                 </Text>
               </View>
@@ -1268,7 +1612,9 @@ export default function OperationsScreen() {
 
           {/* 4. DAILY RUNNING LOG CARDS LIST */}
           <View style={styles.logsListContainer}>
-            {filteredLogs.length === 0 ? (
+            {isLoading || isSearchingLogs ? (
+              <OperationLogListSkeleton count={4} />
+            ) : filteredLogs.length === 0 ? (
               <View style={[styles.emptyCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
                 <Text style={[styles.emptyCardText, { color: theme.colors.mute }]}>
                   No daily running hour logs found matching active filters.
@@ -1285,9 +1631,32 @@ export default function OperationsScreen() {
                 const clientName = log.client?.name || log.client?.company_name || 'Unassigned Client';
                 const opName = log.operator?.full_name || 'Operator';
                 const cleanRemarks = (log.remarks || '—').replace(/\[Breakdown Duration:[^\]]+\]/gi, '').trim();
+                const hasConflict = Boolean(log.conflict_flag);
+                const isPendingConflict = hasConflict && (!log.conflict_status || log.conflict_status === 'pending');
+                const isResolvedConflict = hasConflict && (log.conflict_status === 'resolved' || log.conflict_status === 'acknowledged' || log.conflict_status === 'adjusted');
+                const cardConflict = hasConflict
+                  ? parseConflictReason(log.conflict_reason, {
+                      machineCode: log.machine_code,
+                      machineModel: mModel,
+                      operatorName: opName,
+                      startTime: log.start_time,
+                      endTime: log.end_time,
+                      runningHours: runningHrs,
+                      overtimeHours: otHrs,
+                      logDate: log.log_date,
+                    })
+                  : null;
 
                 return (
-                  <Card key={log.id} variant="elevated" style={styles.logCard}>
+                  <Card
+                    key={log.id}
+                    variant="elevated"
+                    style={[
+                      styles.logCard,
+                      isPendingConflict && { borderLeftWidth: 3, borderLeftColor: '#d97706' },
+                      isResolvedConflict && { borderLeftWidth: 3, borderLeftColor: '#059669' },
+                    ]}
+                  >
                     {/* Log Card Header */}
                     <View style={styles.logCardHeader}>
                       <View style={styles.logCardHeaderLeft}>
@@ -1306,16 +1675,49 @@ export default function OperationsScreen() {
                         <Text style={[styles.logMachineSerial, { color: theme.colors.mute }]}>S/N: {mSerial}</Text>
                       </View>
 
-                      {log.is_breakdown ? (
-                        <View style={styles.breakdownBadge}>
-                          <AlertTriangle size={11} color="#e11d48" style={{ marginRight: 3 }} />
-                          <Text style={styles.breakdownBadgeText}>Breakdown</Text>
-                        </View>
-                      ) : (
-                        <View style={[styles.normalBadge, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                          <Text style={[styles.normalBadgeText, { color: theme.colors.mute }]}>0</Text>
-                        </View>
-                      )}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {isPendingConflict && (
+                          <View
+                            style={[
+                              styles.conflictBadge,
+                              {
+                                backgroundColor: isDark ? 'rgba(245, 158, 11, 0.18)' : '#fef3c7',
+                                borderColor: isDark ? 'rgba(245, 158, 11, 0.35)' : '#fde68a',
+                              },
+                            ]}
+                          >
+                            <ShieldAlert size={11} color={isDark ? '#fbbf24' : '#d97706'} style={{ marginRight: 3 }} />
+                            <Text style={[styles.conflictBadgeText, { color: isDark ? '#fbbf24' : '#92400e' }]}>Shift Conflict</Text>
+                          </View>
+                        )}
+                        {isResolvedConflict && (
+                          <View
+                            style={[
+                              styles.conflictResolvedBadge,
+                              {
+                                backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5',
+                                borderColor: isDark ? 'rgba(16, 185, 129, 0.35)' : '#a7f3d0',
+                              },
+                            ]}
+                          >
+                            <Check size={11} color={isDark ? '#34d399' : '#059669'} style={{ marginRight: 3 }} />
+                            <Text style={[styles.conflictResolvedBadgeText, { color: isDark ? '#34d399' : '#047857' }]}>
+                              {log.conflict_status === 'adjusted' ? 'Adjusted' : 'Acknowledged'}
+                            </Text>
+                          </View>
+                        )}
+
+                        {log.is_breakdown ? (
+                          <View style={[styles.breakdownBadge, { backgroundColor: isDark ? 'rgba(225, 29, 72, 0.18)' : '#fee2e2', borderWidth: 1, borderColor: isDark ? 'rgba(225, 29, 72, 0.35)' : '#fecaca' }]}>
+                            <AlertTriangle size={11} color={isDark ? '#fb7185' : '#e11d48'} style={{ marginRight: 3 }} />
+                            <Text style={[styles.breakdownBadgeText, { color: isDark ? '#fb7185' : '#e11d48' }]}>Breakdown</Text>
+                          </View>
+                        ) : (
+                          <View style={[styles.normalBadge, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                            <Text style={[styles.normalBadgeText, { color: theme.colors.mute }]}>0</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
 
                     {/* Middle Specs Box */}
@@ -1349,12 +1751,12 @@ export default function OperationsScreen() {
 
                       {/* Timings & Running Hours Row */}
                       <View style={[styles.logTimingRow, { borderTopColor: theme.colors.hairline }]}>
-                        <div>
+                        <View>
                           <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Shift Timings:</Text>
                           <Text style={[styles.logDetailValueMono, { color: theme.colors.ink }]}>
                             {formatCompactTiming(log.start_time, log.end_time)}
                           </Text>
-                        </div>
+                        </View>
                         <View style={{ alignItems: 'center' }}>
                           <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Meter Reading:</Text>
                           <Text style={[styles.logDetailValueMono, { color: theme.colors.ink }]}>
@@ -1375,7 +1777,7 @@ export default function OperationsScreen() {
                           {otHrs > 0 && (
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                               <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Overtime:</Text>
-                              <Text style={[styles.logOtValue, { color: '#d97706' }]}>{otHrs} hrs</Text>
+                              <Text style={[styles.logOtValue, { color: isDark ? '#fbbf24' : '#d97706' }]}>{otHrs} hrs</Text>
                             </View>
                           )}
                           {cleanRemarks !== '—' && (
@@ -1386,6 +1788,99 @@ export default function OperationsScreen() {
                         </View>
                       )}
                     </View>
+
+                    {/* Inline Overtime Shift Conflict Detailed Warning Box */}
+                    {hasConflict && cardConflict && (
+                      <View
+                        style={[
+                          styles.logConflictAdvisoryWell,
+                          {
+                            backgroundColor: isPendingConflict
+                              ? isDark
+                                ? 'rgba(245, 158, 11, 0.08)'
+                                : '#fffbeb'
+                              : isDark
+                              ? 'rgba(16, 185, 129, 0.08)'
+                              : '#f0fdf4',
+                            borderColor: isPendingConflict
+                              ? isDark
+                                ? 'rgba(245, 158, 11, 0.3)'
+                                : '#fde68a'
+                              : isDark
+                              ? 'rgba(16, 185, 129, 0.3)'
+                              : '#bbf7d0',
+                          },
+                        ]}
+                      >
+                        <View style={styles.logConflictHeaderRow}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                            <ShieldAlert
+                              size={15}
+                              color={isPendingConflict ? (isDark ? '#fbbf24' : '#d97706') : (isDark ? '#34d399' : '#059669')}
+                            />
+                            <Text
+                              style={[
+                                styles.logConflictTitle,
+                                { color: isPendingConflict ? (isDark ? '#fbbf24' : '#92400e') : (isDark ? '#34d399' : '#047857') },
+                              ]}
+                            >
+                              {isPendingConflict
+                                ? cardConflict.title
+                                : `Overtime Conflict Resolved (${log.conflict_status || 'approved'})`}
+                            </Text>
+                          </View>
+                          {isPendingConflict && (
+                            <TouchableOpacity
+                              onPress={() => handleOpenConflictModal(log)}
+                              style={[
+                                styles.resolveInlineBtn,
+                                {
+                                  borderColor: isDark ? 'rgba(245, 158, 11, 0.4)' : '#fde68a',
+                                  backgroundColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#fef3c7',
+                                },
+                              ]}
+                            >
+                              <ShieldAlert size={12} color={isDark ? '#fbbf24' : '#b45309'} style={{ marginRight: 4 }} />
+                              <Text style={[styles.resolveInlineBtnText, { color: isDark ? '#fbbf24' : '#b45309' }]}>
+                                Resolve Conflict
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+
+                        {/* Clean summary row */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
+                          {otHrs > 0 ? (
+                            <View
+                              style={[
+                                styles.cleanOtPill,
+                                {
+                                  backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#fef3c7',
+                                  borderColor: isDark ? 'rgba(245, 158, 11, 0.35)' : '#fde68a',
+                                },
+                              ]}
+                            >
+                              <Text style={[styles.cleanOtPillText, { color: isDark ? '#fbbf24' : '#b45309' }]}>
+                                +{otHrs}h Overtime
+                              </Text>
+                            </View>
+                          ) : null}
+                          <Text style={{ fontSize: 11, color: isPendingConflict ? (isDark ? '#fde68a' : '#92400e') : (isDark ? '#a7f3d0' : '#065f46'), fontWeight: '600' }}>
+                            {isPendingConflict
+                              ? cardConflict.conflictingEntity
+                                ? `Collides with active shift on ${cardConflict.conflictingEntity}`
+                                : 'Overtime overlaps with subsequent shift'
+                              : 'Approved by supervisor'}
+                          </Text>
+                        </View>
+
+                        {log.conflict_resolution_notes && (
+                          <Text style={[styles.logConflictNotes, { color: theme.colors.mute }]}>
+                            Resolution Note: {log.conflict_resolution_notes}
+                          </Text>
+                        )}
+                      </View>
+                    )}
                   </Card>
                 );
               })
@@ -1455,18 +1950,22 @@ export default function OperationsScreen() {
             </View>
             <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
               <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>FULL CAPACITY (3/3)</Text>
-              <Text style={[styles.kpiValue, { color: '#059669' }]}>{fullCapacityCount}</Text>
+              <Text style={[styles.kpiValue, { color: isDark ? '#34d399' : '#059669' }]}>{fullCapacityCount}</Text>
             </View>
             <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
               <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>UNASSIGNED (0/3)</Text>
-              <Text style={[styles.kpiValue, { color: '#d97706' }]}>{unassignedCount}</Text>
+              <Text style={[styles.kpiValue, { color: isDark ? '#fbbf24' : '#d97706' }]}>{unassignedCount}</Text>
             </View>
           </View>
 
           {/* Search Bar & Filter Strip */}
           <Card variant="elevated" style={styles.assignmentFilterCard}>
             <View style={[styles.searchBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-              <Search size={14} color={theme.colors.mute} style={{ marginRight: 8 }} />
+              {isSearchingAssignments ? (
+                <ActivityIndicator size="small" color={theme.colors.link} style={{ marginRight: 8 }} />
+              ) : (
+                <Search size={14} color={theme.colors.mute} style={{ marginRight: 8 }} />
+              )}
               <TextInput
                 style={[styles.searchInput, { color: theme.colors.ink }]}
                 placeholder="Search machines, models, serial numbers, operators..."
@@ -1498,15 +1997,15 @@ export default function OperationsScreen() {
                     style={[
                       styles.assignmentFilterPill,
                       {
-                        backgroundColor: isSelected ? theme.colors.primary : theme.colors.canvas,
-                        borderColor: isSelected ? theme.colors.primary : theme.colors.hairline,
+                        backgroundColor: isSelected ? theme.colors.ink : theme.colors.canvas,
+                        borderColor: isSelected ? theme.colors.ink : theme.colors.hairline,
                       },
                     ]}
                   >
                     <Text
                       style={[
                         styles.assignmentFilterPillText,
-                        { color: isSelected ? theme.colors.onPrimary : theme.colors.body },
+                        { color: isSelected ? theme.colors.canvas : theme.colors.body },
                         isSelected && { fontWeight: '700' },
                       ]}
                     >
@@ -1542,7 +2041,9 @@ export default function OperationsScreen() {
 
           {/* Machine Assignment Cards List */}
           <View style={styles.assignmentCardsList}>
-            {filteredMachinesForAssignments.length === 0 ? (
+            {isLoading || isSearchingAssignments ? (
+              <AssignmentListSkeleton count={4} />
+            ) : filteredMachinesForAssignments.length === 0 ? (
               <View style={[styles.emptyCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
                 <Text style={[styles.emptyCardText, { color: theme.colors.mute }]}>
                   No equipment matched your search or filter criteria.
@@ -1587,12 +2088,12 @@ export default function OperationsScreen() {
                             styles.machCapacityBadge,
                             {
                               backgroundColor: isFull
-                                ? '#ecfdf5'
+                                ? isDark ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5'
                                 : activeAss.length > 0
                                 ? isDark ? 'rgba(59, 130, 246, 0.15)' : '#e0f2fe'
                                 : theme.colors.canvas,
                               borderColor: isFull
-                                ? '#a7f3d0'
+                                ? isDark ? 'rgba(16, 185, 129, 0.35)' : '#a7f3d0'
                                 : activeAss.length > 0
                                 ? isDark ? 'rgba(59, 130, 246, 0.3)' : '#bae6fd'
                                 : theme.colors.hairline,
@@ -1602,13 +2103,13 @@ export default function OperationsScreen() {
                           <View
                             style={[
                               styles.capacityDot,
-                              { backgroundColor: isFull ? '#059669' : activeAss.length > 0 ? theme.colors.link : '#a3a3a3' },
+                              { backgroundColor: isFull ? (isDark ? '#34d399' : '#059669') : activeAss.length > 0 ? theme.colors.link : (isDark ? '#525252' : '#a3a3a3') },
                             ]}
                           />
                           <Text
                             style={[
                               styles.machCapacityText,
-                              { color: isFull ? '#047857' : activeAss.length > 0 ? theme.colors.link : theme.colors.mute },
+                              { color: isFull ? (isDark ? '#34d399' : '#047857') : activeAss.length > 0 ? theme.colors.link : theme.colors.mute },
                             ]}
                           >
                             {activeAss.length} / 3 Operators
@@ -1656,13 +2157,42 @@ export default function OperationsScreen() {
                                   style={[
                                     styles.timingPill,
                                     {
-                                      backgroundColor: isOvernight ? 'rgba(99, 102, 241, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                                      borderColor: isOvernight ? '#a5b4fc' : '#fde68a',
+                                      backgroundColor: isOvernight
+                                        ? isDark
+                                          ? 'rgba(99, 102, 241, 0.15)'
+                                          : '#eef2ff'
+                                        : isDark
+                                        ? 'rgba(245, 158, 11, 0.15)'
+                                        : '#fef3c7',
+                                      borderColor: isOvernight
+                                        ? isDark
+                                          ? 'rgba(99, 102, 241, 0.35)'
+                                          : '#c7d2fe'
+                                        : isDark
+                                        ? 'rgba(245, 158, 11, 0.35)'
+                                        : '#fde68a',
                                     },
                                   ]}
                                 >
-                                  {isOvernight ? <Moon size={11} color="#4f46e5" /> : <Sun size={11} color="#d97706" />}
-                                  <Text style={[styles.timingPillText, { color: isOvernight ? '#4338ca' : '#b45309' }]}>
+                                  {isOvernight ? (
+                                    <Moon size={11} color={isDark ? '#a5b4fc' : '#4f46e5'} />
+                                  ) : (
+                                    <Sun size={11} color={isDark ? '#fbbf24' : '#d97706'} />
+                                  )}
+                                  <Text
+                                    style={[
+                                      styles.timingPillText,
+                                      {
+                                        color: isOvernight
+                                          ? isDark
+                                            ? '#c7d2fe'
+                                            : '#4338ca'
+                                          : isDark
+                                          ? '#fbbf24'
+                                          : '#92400e',
+                                      },
+                                    ]}
+                                  >
                                     {sDisplay} – {eDisplay}
                                   </Text>
                                 </View>
@@ -1801,95 +2331,51 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  headerStrip: {
-    paddingHorizontal: spacingNumeric.md,
-    paddingTop: Platform.OS === 'ios' ? 44 : spacingNumeric.md,
-    paddingBottom: spacingNumeric.sm,
-    borderBottomWidth: 1,
-  },
-  headerTitleRow: {
+  headerAssignBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacingNumeric.sm,
-  },
-  screenTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    letterSpacing: -0.5,
-  },
-  refreshIconBtn: {
-    width: 32,
+    paddingHorizontal: 10,
     height: 32,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  assignOperatorTopBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 40,
-    borderRadius: radiusNumeric.full,
-    marginBottom: spacingNumeric.sm,
-    shadowColor: '#0070f3',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  assignOperatorTopBtnText: {
-    color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  segmentContainer: {
-    flexDirection: 'row',
-    padding: 3,
-    borderRadius: radiusNumeric.lg,
-    borderWidth: 1,
-  },
-  segmentBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 6,
     borderRadius: radiusNumeric.md,
-    gap: 6,
+    gap: 4,
   },
-  segmentActive: {
+  headerAssignBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  aboveNavbar: {
+    borderBottomWidth: 1,
+    paddingVertical: spacingNumeric.xs,
+    paddingHorizontal: spacingNumeric.md,
+  },
+  aboveNavbarContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  aboveNavbarTab: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    height: 36,
+    borderRadius: radiusNumeric.lg,
+  },
+  aboveNavbarTabActive: {
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.12,
     shadowRadius: 2,
     elevation: 2,
   },
-  segmentText: {
-    fontSize: 11,
+  aboveNavbarTabInactive: {
+    borderWidth: 1,
+  },
+  aboveNavbarTabText: {
+    fontSize: 13,
     fontWeight: '600',
   },
-  alertCountBadge: {
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 999,
-  },
-  alertCountBadgeText: {
-    color: '#d97706',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  counterBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 999,
-  },
-  counterBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
+  aboveNavbarTabTextActive: {
+    fontWeight: '700',
   },
   contentScroll: {
     flex: 1,
@@ -1920,7 +2406,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   conflictActionBadge: {
-    backgroundColor: 'rgba(245, 158, 11, 0.25)',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 999,
@@ -1928,45 +2413,190 @@ const styles = StyleSheet.create({
   conflictActionBadgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#b45309',
   },
   conflictBannerDesc: {
     fontSize: 11,
     lineHeight: 15,
   },
-  conflictCard: {
+  cleanConflictCard: {
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    borderLeftWidth: 3,
+    padding: spacingNumeric.sm + 2,
+    gap: 8,
+  },
+  cleanConflictCardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: spacingNumeric.sm,
-    borderRadius: radiusNumeric.md,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  cleanMachineIconBox: {
+    width: 24,
+    height: 24,
+    borderRadius: radiusNumeric.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cleanConflictMachineCode: {
+    fontSize: 13,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    letterSpacing: 0.2,
+  },
+  cleanConflictMachineModel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  cleanSeverityPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
-  conflictCardMachine: {
-    fontSize: 12,
+  cleanSeverityPillText: {
+    fontSize: 9,
     fontWeight: '800',
+    letterSpacing: 0.4,
   },
-  conflictCardMeta: {
-    fontSize: 10,
-    marginTop: 1,
-  },
-  conflictCardReason: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#d97706',
-    marginTop: 2,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  conflictReviewBtn: {
+  cleanReviewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
   },
-  conflictReviewBtnText: {
+  cleanReviewBtnText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#d97706',
+  },
+  cleanInfoStrip: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    gap: 12,
+  },
+  cleanInfoItem: {
+    gap: 2,
+    minWidth: 120,
+    flexGrow: 1,
+  },
+  cleanInfoItemConflict: {
+    gap: 2,
+    minWidth: 140,
+    flexGrow: 1,
+  },
+  cleanInfoLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  cleanConflictTargetLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  cleanInfoValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  cleanInfoValueText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  cleanInfoValueMono: {
+    fontSize: 11,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  cleanOtPill: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  cleanOtPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  cleanConflictEntityBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  cleanConflictEntityBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  conflictBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  conflictBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  conflictResolvedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  conflictResolvedBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  logConflictAdvisoryWell: {
+    padding: spacingNumeric.sm,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    marginTop: spacingNumeric.xs,
+    gap: 4,
+  },
+  logConflictHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  logConflictTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  logConflictDesc: {
+    fontSize: 10.5,
+    lineHeight: 14,
+    fontWeight: '500',
+  },
+  logConflictNotes: {
+    fontSize: 10,
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  resolveInlineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+  },
+  resolveInlineBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   filterCard: {
     padding: spacingNumeric.md,
@@ -2001,10 +2631,10 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 38,
+    height: 40,
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
   },
   searchInput: {
     flex: 1,
@@ -2019,14 +2649,14 @@ const styles = StyleSheet.create({
   exportBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    height: 34,
-    borderRadius: radiusNumeric.full,
+    paddingHorizontal: 12,
+    height: 36,
+    borderRadius: radiusNumeric.sm,
+    gap: 6,
   },
   exportBtnText: {
-    color: '#ffffff',
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   dropdownsContainer: {
     gap: 8,
@@ -2208,13 +2838,11 @@ const styles = StyleSheet.create({
   breakdownBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fee2e2',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
   },
   breakdownBadgeText: {
-    color: '#e11d48',
     fontSize: 10,
     fontWeight: '800',
   },

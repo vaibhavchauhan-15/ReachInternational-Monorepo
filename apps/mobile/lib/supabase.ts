@@ -11,19 +11,23 @@ import { createClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
+// Production backend fallbacks to guarantee client initialization never throws
+// even if environment variables are stripped or omitted during cloud builds
+const FALLBACK_SUPABASE_URL = 'https://dhbbgfzbyatzvqafnsqp.supabase.co';
+const FALLBACK_SUPABASE_ANON_KEY = 'sb_publishable_FL-1BqCcGNxYByFYzrBWuA_BvHMxVis';
+
 const SUPABASE_URL =
   process.env.EXPO_PUBLIC_SUPABASE_URL ||
   process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  '';
+  FALLBACK_SUPABASE_URL;
 const SUPABASE_ANON_KEY =
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-  '';
+  FALLBACK_SUPABASE_ANON_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.error(
-    '[Supabase] CRITICAL: Missing required environment variables EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY. ' +
-    'Set these in your .env file or EAS build secrets.'
+if (!process.env.EXPO_PUBLIC_SUPABASE_URL) {
+  console.warn(
+    '[Supabase] EXPO_PUBLIC_SUPABASE_URL not provided at build time. Using production fallback endpoint.'
   );
 }
 

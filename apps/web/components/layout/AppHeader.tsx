@@ -32,15 +32,11 @@ export function AppHeader({ user }: AppHeaderProps) {
 
   const getPageTitle = () => {
     if (pathname.startsWith("/my-work")) return "My Work Action Center";
-    if (pathname.startsWith("/crm")) return "CRM & Client Management";
     if (pathname.startsWith("/machines")) return "Machine Directory";
-    if (pathname.startsWith("/service")) return "Service & Maintenance";
-    if (pathname.startsWith("/inventory")) return "Inventory & Stock Ledger";
     if (pathname.startsWith("/vendors")) return "Vendor Management";
     if (pathname.startsWith("/purchase-orders")) return "Purchase Orders";
     if (pathname.startsWith("/challans")) return "Delivery Challans";
     if (pathname.startsWith("/documents")) return "Smart Document Repository";
-    if (pathname.startsWith("/hr")) return "Human Resources";
     if (pathname.startsWith("/reports")) return "Operations & Analytics Reports";
     if (pathname.startsWith("/administration")) return "Administration Console";
     if (pathname.startsWith("/dashboard")) return "Dashboard Overview";

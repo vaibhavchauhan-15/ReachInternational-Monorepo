@@ -9,7 +9,6 @@ import {
   AnimatedClock,
   AnimatedWrench,
   AnimatedClipboardList,
-  AnimatedBell,
   AnimatedUsers,
   AnimatedSearch,
   AnimatedUser,
@@ -26,7 +25,7 @@ import { CommandPalette } from "@/components/ui/CommandPalette";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { Button } from "@/components/ui";
 import { EditProfileModal } from "@/components/profile/EditProfileModal";
-import { Phone, MapPin, ShieldCheck, Clock, FileText, Edit, Shield } from "lucide-react";
+import { Phone, MapPin, ShieldCheck, Clock, FileText, Edit, Shield, Building, Mail, Trash2 } from "lucide-react";
 
 interface MobileBottomNavProps {
   user: User;
@@ -121,13 +120,6 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
           icon: AnimatedSearch,
           isAction: true,
           actionType: "search",
-        },
-        {
-          id: "notifications",
-          href: "/notifications",
-          label: "Alerts",
-          icon: AnimatedBell,
-          roles: ["super_admin", "admin"],
         },
         ...(user.role === "super_admin" || user.role === "admin"
           ? [
@@ -309,83 +301,157 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
               </div>
 
               {/* User Detailed Operational & Identity Profile Info */}
-              <div className="space-y-2.5">
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider">
-                    Profile & Operational Info
+              <div className="space-y-3">
+                {/* 1. OPERATIONAL & SHIFT */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">
+                    Operational & Shift
                   </span>
+                  <div className="rounded-xl bg-background border border-border divide-y divide-border overflow-hidden shadow-2xs">
+                    {/* Shift Time */}
+                    <div className="flex items-center gap-3 p-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
+                        <Clock size={16} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                          Shift Schedule
+                        </p>
+                        <p className="text-xs font-semibold text-foreground truncate mt-0.5">
+                          {user.shift_time || "General Shift (08:00 AM - 08:00 PM)"}
+                        </p>
+                      </div>
+                      <span className="badge-base bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px]">
+                        Active
+                      </span>
+                    </div>
+
+                    {/* Base Location */}
+                    <div className="flex items-center gap-3 p-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                        <Building size={16} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                          Base Yard / Location
+                        </p>
+                        <p className="text-xs font-semibold text-foreground truncate mt-0.5">
+                          {[user.city, user.state].filter(Boolean).join(", ") || "Corporate HQ / Base Yard"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-2">
-                  {/* Shift Time Card */}
-                  <div className="flex items-center gap-3 p-2.5 rounded-xl bg-background border border-border shadow-2xs">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
-                      <Clock size={16} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                        Shift Schedule
-                      </p>
-                      <p className="text-xs font-semibold text-foreground truncate mt-0.5">
-                        {user.shift_time || "Not Assigned (Standard)"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Phone / Mobile Card */}
-                  <div className="flex items-center gap-3 p-2.5 rounded-xl bg-background border border-border shadow-2xs">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                      <Phone size={16} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                        Mobile Phone
-                      </p>
-                      <p className="text-xs font-semibold font-mono text-foreground truncate mt-0.5">
-                        {user.phone || "—"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Address Card */}
-                  <div className="flex items-start gap-3 p-2.5 rounded-xl bg-background border border-border shadow-2xs">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 mt-0.5">
-                      <MapPin size={16} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                        Address
-                      </p>
-                      <p className="text-xs font-semibold text-foreground leading-snug mt-0.5">
-                        {[user.address, user.city, user.district, user.state].filter(Boolean).join(", ") || "—"}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Identity Docs (Aadhaar & Licence) Grid */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="p-2.5 rounded-xl bg-background border border-border shadow-2xs">
-                      <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-                        <ShieldCheck size={14} className="text-indigo-500" />
-                        <span className="text-[10px] font-bold uppercase tracking-wide">Aadhaar</span>
+                {/* 2. CONTACT & RESIDENCE */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">
+                    Contact & Residence
+                  </span>
+                  <div className="rounded-xl bg-background border border-border divide-y divide-border overflow-hidden shadow-2xs">
+                    {/* Phone */}
+                    <div className="flex items-center gap-3 p-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                        <Phone size={16} />
                       </div>
-                      <p className="text-xs font-mono font-semibold text-foreground truncate">
-                        {user.aadhaar_number
-                          ? user.aadhaar_number.length >= 12
-                            ? `XXXX-XXXX-${user.aadhaar_number.slice(-4)}`
-                            : user.aadhaar_number
-                          : "Not Provided"}
-                      </p>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                          Mobile Phone
+                        </p>
+                        <p className="text-xs font-semibold font-mono text-foreground truncate mt-0.5">
+                          {user.phone ? (user.phone.startsWith('+') ? user.phone : '+91 ' + user.phone) : '—'}
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="p-2.5 rounded-xl bg-background border border-border shadow-2xs">
-                      <div className="flex items-center gap-1.5 text-muted-foreground mb-1">
-                        <FileText size={14} className="text-purple-500" />
-                        <span className="text-[10px] font-bold uppercase tracking-wide">Licence</span>
+                    {/* Email */}
+                    <div className="flex items-center gap-3 p-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                        <Mail size={16} />
                       </div>
-                      <p className="text-xs font-mono font-semibold text-foreground truncate uppercase">
-                        {user.license_number || "Not Provided"}
-                      </p>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                          Official Email
+                        </p>
+                        <p className="text-xs font-semibold text-foreground truncate mt-0.5">
+                          {user.email}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Address */}
+                    <div className="flex items-start gap-3 p-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 mt-0.5">
+                        <MapPin size={16} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                          Registered Address
+                        </p>
+                        <p className="text-xs font-semibold text-foreground leading-snug mt-0.5">
+                          {[user.address, user.city, user.district, user.state].filter(Boolean).join(", ") || "No address registered"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. GOVERNMENT KYC & CREDENTIALS */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">
+                    Government KYC & Credentials
+                  </span>
+                  <div className="rounded-xl bg-background border border-border divide-y divide-border overflow-hidden shadow-2xs">
+                    {/* Aadhaar */}
+                    <div className="flex items-center gap-3 p-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+                        <ShieldCheck size={16} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                          Aadhaar Card (KYC)
+                        </p>
+                        <p className="text-xs font-mono font-semibold text-foreground truncate mt-0.5">
+                          {user.aadhaar_number
+                            ? user.aadhaar_number.length >= 12
+                              ? `XXXX-XXXX-${user.aadhaar_number.slice(-4)}`
+                              : user.aadhaar_number
+                            : "Not Provided"}
+                        </p>
+                      </div>
+                      {user.aadhaar_number ? (
+                        <span className="badge-base bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px]">
+                          Verified
+                        </span>
+                      ) : (
+                        <span className="badge-base bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px]">
+                          Pending
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Licence */}
+                    <div className="flex items-center gap-3 p-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                        <FileText size={16} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                          Driving Licence
+                        </p>
+                        <p className="text-xs font-mono font-semibold text-foreground truncate uppercase mt-0.5">
+                          {user.license_number || "Not Provided"}
+                        </p>
+                      </div>
+                      {user.license_number ? (
+                        <span className="badge-base bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px]">
+                          Valid
+                        </span>
+                      ) : (
+                        <span className="badge-base bg-muted text-muted-foreground border border-border text-[10px]">
+                          Optional
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -403,8 +469,18 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
                   icon={<Edit size={14} className="text-sky-500" />}
                   className="h-10 rounded-xl justify-center font-bold text-xs shadow-xs border border-border hover:bg-muted active:scale-[0.98] transition-all"
                 >
-                  Edit Profile
+                  Edit Profile & Shift Details
                 </Button>
+
+                {/* Request Account Deletion Link */}
+                <Link
+                  href="/account-deletion"
+                  onClick={() => setProfileSheetOpen(false)}
+                  className="flex items-center justify-center gap-2 h-9 px-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-rose-500/10 hover:border-rose-500/30 text-rose-600 dark:text-rose-400 text-xs font-semibold shadow-2xs transition-all active:scale-[0.98]"
+                >
+                  <Trash2 size={13} className="text-rose-500" />
+                  <span>Request Account Deletion</span>
+                </Link>
               </div>
 
               {/* Sign Out Action */}

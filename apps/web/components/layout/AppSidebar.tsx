@@ -12,6 +12,7 @@ import {
   AnimatedGauge,
   AnimatedBuilding2,
   AnimatedScrollText,
+  AnimatedSettings,
 } from "@/components/ui/animated-icons";
 import type { User } from "@/lib/types/database";
 import { CommandPalette } from "@/components/ui/CommandPalette";
@@ -44,8 +45,6 @@ export const mainNavItems: NavItem[] = [
     ],
     subItems: [
       { label: "Machine Directory", tab: "inventory" },
-      // { label: "Service Logs", tab: "services" }, // Soft-removed per user request
-      // { label: "Breakdown Complaints", tab: "complaints" }, // Soft-removed per user request
     ],
   },
   {
@@ -85,6 +84,15 @@ export const mainNavItems: NavItem[] = [
     roles: [
       "super_admin", "admin", "manager", "service_manager", "supervisor",
       "service_engineer", "engineer", "mechanic", "store_manager", "hr_manager"
+    ],
+  },
+  {
+    href: "/settings",
+    label: "Settings",
+    icon: AnimatedSettings,
+    roles: [
+      "super_admin", "admin", "manager", "service_manager", "service_engineer", "engineer",
+      "supervisor", "mechanic", "store_manager", "hr_manager", "operator"
     ],
   },
 ];

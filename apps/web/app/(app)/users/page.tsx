@@ -4,6 +4,7 @@ import {
   getUserList,
   getPendingUsersCached,
   getPendingProfileChangeRequests,
+  getPendingAccountDeletionRequestsCached,
   getUserListAggregatesCached,
   getSupervisorUserListAggregatesCached,
   USERS_PAGE_SIZE,
@@ -61,10 +62,11 @@ async function UsersPageContent({ searchParams }: PageProps) {
   const dateRange = typeof params?.dateRange === "string" ? params.dateRange : "all";
   const sort = typeof params?.sort === "string" ? params.sort : "newest";
 
-  const [{ users, totalPages, total }, pendingUsers, profileChangeRequests, aggregates] = await Promise.all([
+  const [{ users, totalPages, total }, pendingUsers, profileChangeRequests, accountDeletionRequests, aggregates] = await Promise.all([
     getUserList({ search, role, status, kyc, state, dateRange, sort, page, pageSize: USERS_PAGE_SIZE }),
     isSupervisor ? Promise.resolve([]) : getPendingUsersCached(),
     isSupervisor ? Promise.resolve([]) : getPendingProfileChangeRequests(currentUser.role),
+    isSupervisor ? Promise.resolve([]) : getPendingAccountDeletionRequestsCached(),
     isSupervisor ? getSupervisorUserListAggregatesCached(currentUser.id) : getUserListAggregatesCached(),
   ]);
 
@@ -73,6 +75,7 @@ async function UsersPageContent({ searchParams }: PageProps) {
       users={users}
       pendingUsers={pendingUsers}
       profileChangeRequests={profileChangeRequests}
+      accountDeletionRequests={accountDeletionRequests}
       currentUser={currentUser}
       isSuperAdmin={isSuperAdmin}
       totalPages={totalPages}

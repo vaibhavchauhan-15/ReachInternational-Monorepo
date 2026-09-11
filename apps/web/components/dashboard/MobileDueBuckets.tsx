@@ -61,7 +61,7 @@ export function MobileDueBuckets({
         activePillClass: "bg-[var(--color-error)]/10 border-[var(--color-error)]/30 text-[var(--color-error-deep)] dark:text-[var(--color-error)]",
         badgeVariant: "overdue",
         emptyText: "No overdue machines 🎉",
-        linksTo: isAdmin ? "/machines?bucket=overdue" : "/services",
+        linksTo: isAdmin ? "/machines?bucket=overdue" : "/machines",
         items: overdueMachines,
       },
       {
@@ -73,7 +73,7 @@ export function MobileDueBuckets({
         activePillClass: "bg-[var(--color-warning)]/10 border-[var(--color-warning)]/30 text-[var(--color-warning-deep)] dark:text-[var(--color-warning)]",
         badgeVariant: "today",
         emptyText: "No machines due today",
-        linksTo: isAdmin ? "/machines?bucket=today" : "/services",
+        linksTo: isAdmin ? "/machines?bucket=today" : "/machines",
         items: todayDue,
       },
       {
@@ -85,7 +85,7 @@ export function MobileDueBuckets({
         activePillClass: "bg-[var(--color-link-soft)] border-[var(--color-link)]/30 text-[var(--color-link-deep)] dark:text-[var(--color-link)]",
         badgeVariant: "tomorrow",
         emptyText: "No machines due tomorrow",
-        linksTo: isAdmin ? "/machines?bucket=tomorrow" : "/services",
+        linksTo: isAdmin ? "/machines?bucket=tomorrow" : "/machines",
         items: tomorrowDue,
       },
     ],

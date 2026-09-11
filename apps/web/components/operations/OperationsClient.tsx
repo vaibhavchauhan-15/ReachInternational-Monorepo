@@ -31,9 +31,20 @@ import {
 } from "@/app/actions/assignments";
 import { PrintableSupervisorLogsModal } from "./PrintableSupervisorLogsModal";
 import { MONTH_NAMES, getLogMonthNumber, formatCompactTiming } from "@/lib/utils/operator-logs-export";
-import { formatDate, formatExactTimestamp, formatTimeAgo, formatTo12Hour, parseProfileShiftTime, parseTimeToMinutes, getISTDateString } from "@reachinternational/utils";
+import {
+  formatDate,
+  formatExactTimestamp,
+  formatTimeAgo,
+  formatTo12Hour,
+  parseProfileShiftTime,
+  parseTimeToMinutes,
+  getISTDateString,
+  parseConflictReason,
+  calculateAdjustedHours,
+  formatShiftTimingRange,
+} from "@reachinternational/utils";
 import { CustomDatePicker } from "@/components/ui/CustomDatePicker";
-import { Printer, Clock, ShieldAlert, Check, UserPlus, AlertCircle, Sun, Moon, Users, Filter, ChevronDown, RefreshCw, Phone, UserCheck, Search, X } from "lucide-react";
+import { Printer, Clock, ShieldAlert, Check, UserPlus, AlertCircle, AlertTriangle, Info, Sun, Moon, Users, Filter, ChevronDown, RefreshCw, Phone, UserCheck, Search, X, User as UserIcon, Truck, Calendar } from "lucide-react";
 
 export interface OperationsClientProps {
   machines: Machine[];
@@ -82,6 +93,85 @@ export function formatMachineSelectLabel(m: {
   const serial = m.serial_number && m.serial_number !== code ? `S/N: ${m.serial_number}` : null;
   const details = [model, serial].filter(Boolean).join(" — ");
   return details ? `${code} (${details})` : code;
+}
+
+function OperationsLogTableSkeletonRows({ colSpan = 8, count = 5 }: { colSpan?: number; count?: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <tr key={`op-log-skel-${i}`} className="animate-pulse">
+          <td className="px-3 py-3 text-center">
+            <div className="h-4 w-6 rounded bg-[var(--color-hairline)] mx-auto" />
+          </td>
+          <td className="px-4 py-3">
+            <div className="h-4 w-20 rounded bg-[var(--color-hairline)] mb-1" />
+            <div className="h-3 w-28 rounded bg-[var(--color-hairline)]/70" />
+          </td>
+          <td className="px-4 py-3">
+            <div className="h-4 w-28 rounded bg-[var(--color-hairline)] mb-1" />
+            <div className="h-3 w-24 rounded bg-[var(--color-hairline)]/70" />
+          </td>
+          <td className="px-4 py-3">
+            <div className="h-4 w-24 rounded bg-[var(--color-hairline)]" />
+          </td>
+          <td className="px-4 py-3 text-center">
+            <div className="h-4 w-16 rounded bg-[var(--color-hairline)] mx-auto" />
+          </td>
+          <td className="px-4 py-3 text-center">
+            <div className="h-4 w-12 rounded bg-[var(--color-hairline)] mx-auto" />
+          </td>
+          <td className="px-4 py-3 text-center">
+            <div className="h-5 w-16 rounded-full bg-[var(--color-hairline)] mx-auto" />
+          </td>
+          <td className="px-4 py-3">
+            <div className="h-3.5 w-24 rounded bg-[var(--color-hairline)]/70" />
+          </td>
+          {colSpan > 8 && (
+            <td className="px-4 py-3 text-center">
+              <div className="h-4 w-12 rounded bg-[var(--color-hairline)] mx-auto" />
+            </td>
+          )}
+          {colSpan > 9 && (
+            <td className="px-4 py-3 text-center">
+              <div className="h-4 w-12 rounded bg-[var(--color-hairline)] mx-auto" />
+            </td>
+          )}
+        </tr>
+      ))}
+    </>
+  );
+}
+
+function MobileOperationsLogCardSkeletonList({ count = 4 }: { count?: number }) {
+  return (
+    <div className="space-y-3" aria-label="Loading logs...">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={`op-card-skel-${i}`}
+          className="p-3.5 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs space-y-3 animate-pulse"
+        >
+          <div className="flex items-start justify-between">
+            <div className="space-y-1 flex-1">
+              <div className="h-3.5 w-24 rounded bg-[var(--color-hairline)]" />
+              <div className="h-4 w-32 rounded bg-[var(--color-hairline)]" />
+              <div className="h-3 w-28 rounded bg-[var(--color-hairline)]/70" />
+            </div>
+            <div className="h-5 w-16 rounded-full bg-[var(--color-hairline)] shrink-0" />
+          </div>
+          <div className="p-2.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="h-3.5 w-20 rounded bg-[var(--color-hairline)]/70" />
+              <div className="h-3.5 w-20 rounded bg-[var(--color-hairline)]/70" />
+            </div>
+            <div className="grid grid-cols-2 gap-2 pt-1 border-t border-[var(--color-hairline)]">
+              <div className="h-4 w-16 rounded bg-[var(--color-hairline)]" />
+              <div className="h-4 w-16 rounded bg-[var(--color-hairline)]" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function OperationsClient({
@@ -161,6 +251,7 @@ export function OperationsClient({
   const [conflictAdjustedEndTime, setConflictAdjustedEndTime] = useState("");
   const [conflictNotes, setConflictNotes] = useState("");
   const [resolvingConflict, setResolvingConflict] = useState(false);
+  const [showAllConflictsWeb, setShowAllConflictsWeb] = useState(false);
 
   // Filter states: Assignments Tab
   const [assignmentSearch, setAssignmentSearch] = useState("");
@@ -574,6 +665,56 @@ export function OperationsClient({
     );
   }, [hourLogs]);
 
+  // Parse structured conflict information for selected log in modal
+  const modalConflictDetails = useMemo(() => {
+    if (!selectedConflictLog) return null;
+    const m = selectedConflictLog.machine as any;
+    const op = selectedConflictLog.operator as any;
+    const machineCode = m?.machine_name || m?.machine_code || m?.machine_id || (selectedConflictLog as any).machine_code || "Equipment";
+    return parseConflictReason(selectedConflictLog.conflict_reason, {
+      machineCode,
+      machineModel: m?.model,
+      operatorName: op?.full_name || op?.name || "Operator",
+      startTime: selectedConflictLog.start_time,
+      endTime: selectedConflictLog.end_time,
+      runningHours: selectedConflictLog.running_hours,
+      overtimeHours: selectedConflictLog.overtime_hours,
+      logDate: selectedConflictLog.log_date,
+    });
+  }, [selectedConflictLog]);
+
+  // Live calculation feedback for conflict modal time adjustment
+  const modalAdjustedCalculation = useMemo(() => {
+    if (!selectedConflictLog?.start_time || !conflictAdjustedEndTime) return null;
+    return calculateAdjustedHours(selectedConflictLog.start_time, conflictAdjustedEndTime);
+  }, [selectedConflictLog?.start_time, conflictAdjustedEndTime]);
+
+  // Structured assignment conflict parsing
+  const isAssignmentConflict = useMemo(() => {
+    if (!assignmentError) return false;
+    const lower = assignmentError.toLowerCase();
+    return (
+      lower.includes("conflict") ||
+      lower.includes("overlap") ||
+      lower.includes("23p01") ||
+      lower.includes("custody") ||
+      lower.includes("shift_overlap_conflict")
+    );
+  }, [assignmentError]);
+
+  const parsedAssignmentConflict = useMemo(() => {
+    if (!isAssignmentConflict || !assignmentError) return null;
+    const op = operators.find((u) => u.id === selectedOperatorId);
+    const mach = machines.find((m) => m.id === selectedMachineId);
+    return parseConflictReason(assignmentError, {
+      machineCode: mach ? formatMachineSelectLabel(mach) : undefined,
+      machineModel: mach?.model || undefined,
+      operatorName: op?.full_name || undefined,
+      startTime: shiftStartTime,
+      endTime: shiftEndTime,
+    });
+  }, [isAssignmentConflict, assignmentError, operators, selectedOperatorId, machines, selectedMachineId, shiftStartTime, shiftEndTime]);
+
   const isOvernightShift = useMemo(() => {
     if (!shiftStartTime || !shiftEndTime) return false;
     const s = parseTimeToMinutes(shiftStartTime);
@@ -843,18 +984,13 @@ export function OperationsClient({
                 setActiveTab("logs");
                 router.push("/operations?tab=logs");
               }}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center cursor-pointer ${
                 activeTab === "logs"
                   ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
                   : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas-elevated)]"
               }`}
             >
               <span>Daily Running Hours</span>
-              {pendingConflicts.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                  {pendingConflicts.length} Alert{pendingConflicts.length > 1 ? "s" : ""}
-                </span>
-              )}
             </button>
 
             <button
@@ -863,16 +999,13 @@ export function OperationsClient({
                 setActiveTab("assignments");
                 router.push("/operations?tab=assignments");
               }}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center cursor-pointer ${
                 activeTab === "assignments"
                   ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
                   : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas-elevated)]"
               }`}
             >
-              <span>Operator Machine Assignments</span>
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-extrabold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
-                {assignments.filter((a: any) => a.status === "active" || a.is_active).length}
-              </span>
+              <span>Machine Assignments</span>
             </button>
 
           </div>
@@ -897,49 +1030,129 @@ export function OperationsClient({
           {pendingConflicts.length > 0 && (
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 dark:bg-amber-500/10 p-4 space-y-3">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
-                    <ShieldAlert className="w-5 h-5" />
+                <div className="flex items-center gap-2.5">
+                  <div className="p-1.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 shrink-0">
+                    <ShieldAlert className="w-4 h-4" />
                   </div>
-                  <div>
-                    <h4 className="text-sm font-extrabold text-[var(--color-ink)] flex items-center gap-2">
-                      <span>{pendingConflicts.length} Realized Overtime Shift Conflict{pendingConflicts.length > 1 ? "s" : ""}</span>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300">
-                        Action Required
-                      </span>
-                    </h4>
-                    <p className="text-xs text-[var(--color-mute)] mt-0.5">
-                      Operator running hours exceeded their scheduled shift window and overlapped with another operator's assignment. Review and acknowledge or adjust.
-                    </p>
-                  </div>
+                  <h4 className="text-sm font-extrabold text-[var(--color-ink)] flex items-center gap-2">
+                    <span>{pendingConflicts.length} Overtime Shift Conflict{pendingConflicts.length > 1 ? "s" : ""}</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-700 dark:text-amber-300">
+                      Action Required
+                    </span>
+                  </h4>
                 </div>
+
+                {pendingConflicts.length > 3 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllConflictsWeb((prev) => !prev)}
+                    className="text-xs font-bold text-amber-700 dark:text-amber-300 hover:underline cursor-pointer shrink-0 self-start sm:self-center"
+                  >
+                    {showAllConflictsWeb ? "Show Fewer Conflicts" : `View All ${pendingConflicts.length} Conflicts (${pendingConflicts.length - 3} more)`}
+                  </button>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
-                {pendingConflicts.slice(0, 6).map((log) => {
-                  const mName = (log.machine as any)?.machine_name || (log.machine as any)?.machine_code || "Equipment";
-                  const opName = (log.operator as any)?.full_name || (log.operator as any)?.name || "Operator";
+                {(showAllConflictsWeb ? pendingConflicts : pendingConflicts.slice(0, 3)).map((log) => {
+                  const mObj = log.machine as any;
+                  const opObj = log.operator as any;
+                  const mName = mObj?.machine_name || mObj?.machine_code || mObj?.machine_id || (log as any).machine_code || "Equipment";
+                  const opName = opObj?.full_name || opObj?.name || "Operator";
+                  const parsed = parseConflictReason(log.conflict_reason, {
+                    machineCode: mName,
+                    machineModel: mObj?.model,
+                    operatorName: opName,
+                    startTime: log.start_time,
+                    endTime: log.end_time,
+                    runningHours: log.running_hours,
+                    overtimeHours: log.overtime_hours,
+                    logDate: log.log_date,
+                  });
+
                   return (
                     <div
                       key={log.id}
-                      className="p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-amber-500/20 flex items-center justify-between gap-3 text-xs shadow-2xs"
+                      className="p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-amber-500/30 border-l-4 border-l-amber-500 flex flex-col justify-between gap-2.5 text-xs shadow-2xs"
                     >
-                      <div className="min-w-0 flex-1">
-                        <div className="font-bold text-[var(--color-ink)] truncate">{mName}</div>
-                        <div className="text-[11px] text-[var(--color-mute)] truncate">{opName} • {log.log_date}</div>
-                        <div className="text-[10px] font-mono text-amber-600 dark:text-amber-400 truncate mt-0.5">
-                          {log.conflict_reason || "Shift overlap detected"}
+                      {/* Top Tier: Machine (Left) | Conflict Badge & Review Button (Right) */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="p-1 rounded bg-[var(--color-canvas)] text-[var(--color-ink)] border border-[var(--color-hairline)] shrink-0">
+                            <Truck className="w-3.5 h-3.5" />
+                          </div>
+                          <span className="font-bold text-[var(--color-ink)] truncate text-xs font-mono">
+                            {mName}
+                          </span>
+                          {mObj?.model ? (
+                            <span className="text-[11px] text-[var(--color-mute)] truncate">
+                              ({mObj.model})
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className="px-1.5 py-0.5 rounded text-[9.5px] font-extrabold uppercase bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                            {parsed.badgeText || "DUAL MACHINE CONFLICT"}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => handleOpenConflictModal(log)}
+                            className="text-[11px] font-bold border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 py-1 h-7 flex items-center gap-1"
+                          >
+                            <ShieldAlert className="w-3 h-3 text-amber-600 shrink-0" />
+                            Review
+                          </Button>
                         </div>
                       </div>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => handleOpenConflictModal(log)}
-                        className="shrink-0 text-xs font-bold border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10"
-                      >
-                        Review
-                      </Button>
+
+                      {/* Bottom Tier: 4-Column Structured Info Strip */}
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[var(--color-hairline)] text-[11px]">
+                        {/* 1. Operator */}
+                        <div className="space-y-0.5">
+                          <div className="text-[9px] font-extrabold tracking-wider text-[var(--color-mute)] uppercase">OPERATOR</div>
+                          <div className="flex items-center gap-1 font-semibold text-[var(--color-ink)] truncate">
+                            <UserIcon className="w-3 h-3 text-[var(--color-mute)] shrink-0" />
+                            <span className="truncate">{opName}</span>
+                          </div>
+                        </div>
+
+                        {/* 2. Shift Date */}
+                        <div className="space-y-0.5">
+                          <div className="text-[9px] font-extrabold tracking-wider text-[var(--color-mute)] uppercase">SHIFT DATE</div>
+                          <div className="flex items-center gap-1 font-semibold text-[var(--color-ink)]">
+                            <Calendar className="w-3 h-3 text-[var(--color-mute)] shrink-0" />
+                            <span>{formatDate(log.log_date)}</span>
+                          </div>
+                        </div>
+
+                        {/* 3. Shift Time & Overtime */}
+                        <div className="space-y-0.5">
+                          <div className="text-[9px] font-extrabold tracking-wider text-[var(--color-mute)] uppercase">SHIFT & OVERTIME</div>
+                          <div className="flex items-center gap-1 font-mono font-medium text-[var(--color-ink)]">
+                            <Clock className="w-3 h-3 text-[var(--color-mute)] shrink-0" />
+                            <span>{formatShiftTimingRange(log.start_time, log.end_time)}</span>
+                            {log.overtime_hours ? (
+                              <span className="px-1 py-0.2 rounded text-[9.5px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                                +{log.overtime_hours}h
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        {/* 4. Conflict With */}
+                        <div className="space-y-0.5">
+                          <div className="text-[9px] font-extrabold tracking-wider text-rose-600 dark:text-rose-400 uppercase">CONFLICTS WITH</div>
+                          <div className="flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30 truncate">
+                              {parsed.conflictingEntity ? parsed.conflictingEntity : "Subsequent Shift Roster"}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   );
                 })}
@@ -1510,7 +1723,12 @@ export function OperationsClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-hairline)] font-medium text-[var(--color-ink)]">
-                  {filteredHourLogs.length === 0 ? (
+                  {isPending ? (
+                    <OperationsLogTableSkeletonRows
+                      colSpan={logsViewMode === "operator" ? 10 : logsViewMode === "client" ? 9 : 8}
+                      count={5}
+                    />
+                  ) : filteredHourLogs.length === 0 ? (
                     <tr>
                       <td colSpan={logsViewMode === "operator" ? 10 : logsViewMode === "client" ? 9 : 8} className="px-4 py-8 text-center text-[var(--color-mute)]">
                         No daily running hour logs found matching the active filter selection.
@@ -1539,8 +1757,12 @@ export function OperationsClient({
                       }
                       const displayBkdText = log.is_breakdown ? (bkdDurationOnly && bkdDurationOnly.toLowerCase() !== "breakdown" ? bkdDurationOnly : "Breakdown") : "Normal";
 
+                      const hasConflict = Boolean(log.conflict_flag);
+                      const isPendingConflict = hasConflict && (!log.conflict_status || log.conflict_status === "pending");
+                      const isResolvedConflict = hasConflict && (log.conflict_status === "acknowledged" || log.conflict_status === "adjusted");
+
                       return (
-                        <tr key={log.id} className="hover:bg-[var(--color-hairline-soft-surface)]">
+                        <tr key={log.id} className={`hover:bg-[var(--color-hairline-soft-surface)] ${isPendingConflict ? "bg-amber-500/5 dark:bg-amber-500/10" : ""}`}>
                           <td className="px-3 py-3 text-center font-bold text-xs text-[var(--color-mute)] font-mono">
                             {((currentPage || 1) - 1) * (logsPageSize || 10) + idx + 1}
                           </td>
@@ -1555,6 +1777,26 @@ export function OperationsClient({
                                 <span>{formatExactTimestamp(log.created_at, true)}</span>
                               </div>
                             ) : null}
+                            {isPendingConflict && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenConflictModal(log)}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-extrabold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 hover:bg-amber-500/25 transition-colors cursor-pointer mt-1"
+                                title={log.conflict_reason || "Overtime shift conflict detected. Click to review."}
+                              >
+                                <ShieldAlert size={10} className="shrink-0 text-amber-600 dark:text-amber-400" />
+                                <span>Shift Conflict</span>
+                              </button>
+                            )}
+                            {isResolvedConflict && (
+                              <span
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 mt-1"
+                                title={`Conflict resolved: ${log.conflict_resolution_notes || log.conflict_status}`}
+                              >
+                                <Check size={10} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                <span>{log.conflict_status === "adjusted" ? "Adjusted" : "Acknowledged"}</span>
+                              </span>
+                            )}
                           </td>
                           {logsViewMode === "operator" ? (
                             <>
@@ -1705,8 +1947,10 @@ export function OperationsClient({
           </div>
 
           {/* MOBILE TOUCH CARDS (block sm:hidden) */}
-          <div className={`block sm:hidden space-y-3 transition-opacity duration-200 ${isPending ? "opacity-50 pointer-events-none" : ""}`}>
-            {filteredHourLogs.length === 0 ? (
+          <div className="block sm:hidden space-y-3">
+            {isPending ? (
+              <MobileOperationsLogCardSkeletonList count={4} />
+            ) : filteredHourLogs.length === 0 ? (
               <div className="p-6 text-center text-xs text-[var(--color-mute)] rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
                 No daily running hour logs found matching active filters.
               </div>
@@ -1728,10 +1972,28 @@ export function OperationsClient({
                 }
                 const displayBkdText = log.is_breakdown ? (bkdDurationOnly && bkdDurationOnly.toLowerCase() !== "breakdown" ? bkdDurationOnly : "Breakdown") : "Normal";
 
+                const hasConflict = Boolean(log.conflict_flag);
+                const isPendingConflict = hasConflict && (!log.conflict_status || log.conflict_status === "pending");
+                const isResolvedConflict = hasConflict && (log.conflict_status === "acknowledged" || log.conflict_status === "adjusted");
+                const cardConflict = hasConflict
+                  ? parseConflictReason(log.conflict_reason, {
+                      machineCode: mObj?.machine_code || mObj?.machine_id || mObj?.model || "Equipment",
+                      machineModel: mObj?.model,
+                      operatorName: opObj?.full_name || "Operator",
+                      startTime: log.start_time,
+                      endTime: log.end_time,
+                      runningHours: runningHours,
+                      overtimeHours: otHours,
+                      logDate: log.log_date,
+                    })
+                  : null;
+
                 return (
                   <div
                     key={log.id}
-                    className="p-4 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-3 shadow-2xs"
+                    className={`p-4 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-3 shadow-2xs ${
+                      isPendingConflict ? "border-l-4 border-l-amber-500" : isResolvedConflict ? "border-l-4 border-l-emerald-500" : ""
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -1749,11 +2011,25 @@ export function OperationsClient({
                           {mObj?.serial_number ? `S/N: ${mObj.serial_number}` : mObj?.machine_code ? `S/N: ${mObj.machine_code}` : "—"}
                         </span>
                       </div>
-                      {log.is_breakdown ? (
-                        <Badge variant="error" className="font-extrabold">{displayBkdText}</Badge>
-                      ) : (
-                        <Badge variant="neutral" className="font-bold font-mono">0</Badge>
-                      )}
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        {isPendingConflict && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                            <ShieldAlert size={11} className="text-amber-600 dark:text-amber-400" />
+                            Shift Conflict
+                          </span>
+                        )}
+                        {isResolvedConflict && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                            <Check size={11} className="text-emerald-600 dark:text-emerald-400" />
+                            {log.conflict_status === "adjusted" ? "Adjusted" : "Acknowledged"}
+                          </span>
+                        )}
+                        {log.is_breakdown ? (
+                          <Badge variant="error" className="font-extrabold">{displayBkdText}</Badge>
+                        ) : (
+                          <Badge variant="neutral" className="font-bold font-mono">0</Badge>
+                        )}
+                      </div>
                     </div>
 
                     {logsViewMode === "operator" ? (
@@ -1889,6 +2165,57 @@ export function OperationsClient({
                           </div>
                         )}
                       </>
+                    )}
+
+                    {/* Inline Overtime Shift Conflict Detailed Warning Box */}
+                    {hasConflict && cardConflict && (
+                      <div className={`p-3 rounded-xl border space-y-2 text-xs ${
+                        isPendingConflict
+                          ? "bg-amber-500/5 dark:bg-amber-500/10 border-amber-500/30"
+                          : "bg-emerald-500/5 dark:bg-emerald-500/10 border-emerald-500/30"
+                      }`}>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <ShieldAlert size={14} className={isPendingConflict ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"} />
+                            <span className={`font-bold ${isPendingConflict ? "text-amber-800 dark:text-amber-300" : "text-emerald-800 dark:text-emerald-300"}`}>
+                              {isPendingConflict ? cardConflict.title : `Overtime Conflict Resolved (${log.conflict_status || "approved"})`}
+                            </span>
+                          </div>
+                          {isPendingConflict && (
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleOpenConflictModal(log)}
+                              className="text-[11px] font-bold border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 py-1 h-7"
+                            >
+                              Resolve Conflict
+                            </Button>
+                          )}
+                        </div>
+
+                        {/* Clean summary row */}
+                        <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                          {Number(log.overtime_hours || 0) > 0 ? (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                              +{log.overtime_hours}h Overtime
+                            </span>
+                          ) : null}
+                          <span className={`text-[11px] font-medium ${isPendingConflict ? "text-amber-800 dark:text-amber-300" : "text-emerald-800 dark:text-emerald-300"}`}>
+                            {isPendingConflict
+                              ? cardConflict.conflictingEntity
+                                ? `Collides with active shift on ${cardConflict.conflictingEntity}`
+                                : "Overtime overlaps with subsequent shift"
+                              : "Approved by supervisor"}
+                          </span>
+                        </div>
+
+                        {log.conflict_resolution_notes && (
+                          <div className="text-[10px] text-[var(--color-mute)] italic pt-1 border-t border-[var(--color-hairline)]">
+                            Resolution Note: {log.conflict_resolution_notes}
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 );
@@ -2430,15 +2757,47 @@ export function OperationsClient({
               </button>
             </div>
 
-            {/* Error Banner if any */}
+            {/* Error Banner / Detailed Conflict Warning */}
             {assignmentError && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-400 text-xs flex items-start gap-2 animate-in fade-in">
-                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-bold">Assignment Conflict / Error</div>
-                  <div className="mt-0.5">{assignmentError}</div>
+              isAssignmentConflict && parsedAssignmentConflict ? (
+                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs space-y-2 animate-in fade-in">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 text-rose-700 dark:text-rose-300 font-extrabold text-xs">
+                      <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>{parsedAssignmentConflict.title}</span>
+                    </div>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-rose-600 text-white">
+                      {parsedAssignmentConflict.badgeText}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-rose-800 dark:text-rose-200 leading-relaxed font-medium">
+                    {parsedAssignmentConflict.description}
+                  </p>
+
+                  <ul className="space-y-1 pl-1 pt-0.5">
+                    {parsedAssignmentConflict.bulletWarnings.map((w, i) => (
+                      <li key={i} className="text-[11px] text-rose-800 dark:text-rose-200 flex items-start gap-1.5">
+                        <span className="text-rose-500 font-bold">•</span>
+                        <span>{w}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <div className="p-2.5 rounded-lg bg-[var(--color-canvas-elevated)] border border-rose-500/20 text-[11px] text-rose-900 dark:text-rose-200 flex items-start gap-2">
+                    <span className="font-extrabold text-rose-600 shrink-0">Action Required:</span>
+                    <span>{parsedAssignmentConflict.resolutionGuidance.adjustAdvice}</span>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-400 text-xs flex items-start gap-2 animate-in fade-in">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <div>
+                    <div className="font-bold">Assignment Error</div>
+                    <div className="mt-0.5">{assignmentError}</div>
+                  </div>
+                </div>
+              )
             )}
 
             <div className="space-y-4">
@@ -2648,9 +3007,9 @@ export function OperationsClient({
       )}
 
       {/* MODAL: Review & Resolve Overtime Conflict */}
-      {showConflictModal && selectedConflictLog && (
+      {showConflictModal && selectedConflictLog && modalConflictDetails && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in duration-150">
-          <div className="bg-[var(--color-canvas-elevated)] p-6 rounded-2xl border border-[var(--color-hairline)] max-w-md w-full space-y-4 shadow-xl">
+          <div className="bg-[var(--color-canvas-elevated)] p-6 rounded-2xl border border-[var(--color-hairline)] max-w-lg w-full space-y-4 shadow-xl max-h-[90vh] overflow-y-auto custom-scrollbar">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-base font-extrabold text-[var(--color-ink)] flex items-center gap-2">
@@ -2658,7 +3017,7 @@ export function OperationsClient({
                   Resolve Overtime Conflict
                 </h3>
                 <p className="text-xs text-[var(--color-mute)] mt-0.5">
-                  Log Date: <strong className="text-[var(--color-ink)]">{selectedConflictLog.log_date}</strong>
+                  {(selectedConflictLog.machine as any)?.machine_name || (selectedConflictLog.machine as any)?.machine_code || "Equipment"} • {(selectedConflictLog.operator as any)?.full_name || "Operator"}
                 </p>
               </div>
               <button
@@ -2671,44 +3030,101 @@ export function OperationsClient({
               </button>
             </div>
 
-            {/* Conflict Summary Card */}
-            <div className="p-3.5 rounded-xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 text-xs space-y-2">
+            {/* Severity Tag & Alert Heading Banner */}
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-500 text-white">
+                  {modalConflictDetails.badgeText}
+                </span>
+                {modalConflictDetails.overtimeHoursText && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-800 dark:text-amber-300">
+                    {modalConflictDetails.overtimeHoursText}
+                  </span>
+                )}
+              </div>
+              <h4 className="font-extrabold text-sm text-[var(--color-ink)]">
+                {modalConflictDetails.title}
+              </h4>
+              <p className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed font-medium">
+                {modalConflictDetails.description}
+              </p>
+            </div>
+
+            {/* Structured Incident Breakdown */}
+            <div className="p-3.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-xs space-y-2.5">
+              <span className="text-[11px] font-bold text-[var(--color-ink)] uppercase tracking-wider block">
+                Incident Breakdown
+              </span>
+
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <span className="text-[10px] text-[var(--color-mute)] uppercase font-bold block">Equipment</span>
+                  <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Target Equipment</span>
                   <span className="font-bold text-[var(--color-ink)]">
                     {(selectedConflictLog.machine as any)?.machine_name || (selectedConflictLog.machine as any)?.machine_code || "Equipment"}
+                    {(selectedConflictLog.machine as any)?.model ? ` (${(selectedConflictLog.machine as any).model})` : ""}
                   </span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-[var(--color-mute)] uppercase font-bold block">Operator</span>
+                  <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Operator</span>
                   <span className="font-bold text-[var(--color-ink)]">
                     {(selectedConflictLog.operator as any)?.full_name || "Operator"}
                   </span>
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-amber-500/15 grid grid-cols-2 gap-2 font-mono">
+              <div className="pt-2 border-t border-[var(--color-hairline)] grid grid-cols-2 gap-2">
                 <div>
-                  <span className="text-[10px] text-[var(--color-mute)] uppercase font-bold block">Recorded Times</span>
-                  <span className="font-bold text-[var(--color-ink)]">
-                    {formatCompactTiming(selectedConflictLog.start_time, selectedConflictLog.end_time)}
-                  </span>
+                  <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Shift Log Date</span>
+                  <span className="font-bold text-[var(--color-ink)]">{selectedConflictLog.log_date}</span>
                 </div>
                 <div>
-                  <span className="text-[10px] text-[var(--color-mute)] uppercase font-bold block">Hours (Run / OT)</span>
-                  <span className="font-bold text-sky-600 dark:text-sky-400">
-                    {selectedConflictLog.running_hours || 0} hrs / <span className="text-amber-600">{selectedConflictLog.overtime_hours || 0} OT</span>
+                  <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Recorded Timings</span>
+                  <span className="font-bold font-mono text-[var(--color-ink)]">
+                    {formatShiftTimingRange(selectedConflictLog.start_time, selectedConflictLog.end_time)}
                   </span>
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-amber-500/15 text-[11px] text-amber-800 dark:text-amber-300">
-                <strong>Conflict:</strong> {selectedConflictLog.conflict_reason || "Recorded hours exceeded shift window into next assignment."}
+              <div className="pt-2 border-t border-[var(--color-hairline)] grid grid-cols-2 gap-2">
+                <div>
+                  <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Total Duration</span>
+                  <span className="font-bold text-sky-600 dark:text-sky-400">
+                    {selectedConflictLog.running_hours || 0} hrs
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-[var(--color-mute)] uppercase font-semibold block">Overtime Claimed</span>
+                  <span className="font-bold text-amber-600 dark:text-amber-400">
+                    {selectedConflictLog.overtime_hours ? `+${selectedConflictLog.overtime_hours} hrs OT` : "None"}
+                  </span>
+                </div>
               </div>
+
+              {modalConflictDetails.conflictingEntity && (
+                <div className="pt-2 border-t border-[var(--color-hairline)] flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-bold text-[11px]">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                  <span>Conflicting Equipment: {modalConflictDetails.conflictingEntity}</span>
+                </div>
+              )}
             </div>
 
-            {/* Resolution Choice */}
+            {/* Operational Risk & Compliance Warning Card */}
+            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs space-y-2">
+              <div className="flex items-center gap-1.5 text-rose-700 dark:text-rose-300 font-extrabold text-xs">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>Operational Risk & Compliance Warning</span>
+              </div>
+              <ul className="space-y-1 pl-1">
+                {modalConflictDetails.bulletWarnings.map((warn, i) => (
+                  <li key={i} className="text-[11px] text-rose-800 dark:text-rose-200 flex items-start gap-1.5">
+                    <span className="text-rose-500 font-bold">•</span>
+                    <span>{warn}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Supervisor Action Selection */}
             <div className="space-y-3">
               <label className="text-xs font-bold text-[var(--color-ink)] block">
                 Supervisor Action *
@@ -2724,11 +3140,11 @@ export function OperationsClient({
                       : "bg-[var(--color-canvas)] border-[var(--color-hairline)] text-[var(--color-mute)]"
                   }`}
                 >
-                  <div className="text-xs flex items-center gap-1.5">
+                  <div className="text-xs flex items-center gap-1.5 font-bold">
                     <Check className="w-3.5 h-3.5 text-sky-500" /> Acknowledge
                   </div>
-                  <div className="text-[10px] mt-1 font-normal opacity-80">
-                    Keep recorded hours as verified field overtime.
+                  <div className="text-[10px] mt-1 font-normal opacity-80 leading-relaxed">
+                    {modalConflictDetails.resolutionGuidance.acknowledgeAdvice}
                   </div>
                 </button>
 
@@ -2741,17 +3157,17 @@ export function OperationsClient({
                       : "bg-[var(--color-canvas)] border-[var(--color-hairline)] text-[var(--color-mute)]"
                   }`}
                 >
-                  <div className="text-xs flex items-center gap-1.5">
+                  <div className="text-xs flex items-center gap-1.5 font-bold">
                     <Clock className="w-3.5 h-3.5 text-amber-500" /> Adjust Time
                   </div>
-                  <div className="text-[10px] mt-1 font-normal opacity-80">
-                    Trim end time to eliminate shift overlap.
+                  <div className="text-[10px] mt-1 font-normal opacity-80 leading-relaxed">
+                    {modalConflictDetails.resolutionGuidance.adjustAdvice}
                   </div>
                 </button>
               </div>
 
               {conflictAction === "adjust" && (
-                <div className="p-3 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-2 animate-in fade-in">
+                <div className="p-3.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-2 animate-in fade-in">
                   <CustomTimePicker
                     label="Adjusted End Time *"
                     required
@@ -2759,6 +3175,16 @@ export function OperationsClient({
                     onChange={(v) => setConflictAdjustedEndTime(v)}
                     placeholder="e.g. 04:00 PM"
                   />
+                  {modalAdjustedCalculation && (
+                    <div className={`p-2 rounded-lg border text-xs flex items-center gap-1.5 font-medium ${
+                      modalAdjustedCalculation.valid
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400"
+                        : "bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-400"
+                    }`}>
+                      <Info className="w-3.5 h-3.5 shrink-0" />
+                      <span>{modalAdjustedCalculation.message}</span>
+                    </div>
+                  )}
                   <p className="text-[10px] text-[var(--color-mute)]">
                     Adjusting end time will recompute running and overtime hours automatically.
                   </p>
@@ -2795,7 +3221,7 @@ export function OperationsClient({
                 size="sm"
                 loading={resolvingConflict}
                 onClick={handleResolveConflict}
-                disabled={resolvingConflict || (conflictAction === "adjust" && !conflictAdjustedEndTime)}
+                disabled={resolvingConflict || (conflictAction === "adjust" && (!conflictAdjustedEndTime || modalAdjustedCalculation?.valid === false))}
               >
                 Confirm Resolution
               </Button>

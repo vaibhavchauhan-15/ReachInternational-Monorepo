@@ -10,9 +10,10 @@ import {
   Platform,
 } from 'react-native';
 import { Button, Input, useTheme } from '../ui';
+import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { supabase } from '../../lib/supabase';
-import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { X, Plus, Wrench, Check } from 'lucide-react-native';
+import { notifyMachineCreated, notifyMachineUpdated } from '../../lib/notifications';
 
 export interface AddMachineModalProps {
   visible: boolean;
@@ -198,11 +199,13 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
             .update(payload)
             .eq('id', machineToEdit.id);
           if (error) throw error;
+          notifyMachineUpdated(machineToEdit.machine_id || cleanModel, `Specifications & status (${healthStatus}) updated`);
         } else {
           const { error } = await supabase
             .from('machines')
             .insert([payload]);
           if (error) throw error;
+          notifyMachineCreated(payload.machine_id || cleanSerial, cleanModel);
         }
       }
 

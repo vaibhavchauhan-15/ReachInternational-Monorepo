@@ -37,7 +37,9 @@ const deprecatedRoutes = [
   "/settings",
 ];
 
-const publicRoutes = ["/login", "/forgot-password", "/signup"];
+const authRoutes = ["/login", "/forgot-password", "/signup"];
+const publicLegalRoutes = ["/privacy", "/terms", "/account-deletion"];
+const publicRoutes = [...authRoutes, ...publicLegalRoutes];
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
@@ -139,9 +141,11 @@ export async function proxy(request: NextRequest) {
     request.nextUrl.searchParams.has("reason") ||
     request.nextUrl.searchParams.has("status");
 
-  // Redirect authenticated user visiting public route (/login, /signup) to /machines
-  // UNLESS they arrived with an error/status parameter (prevents redirect loops on pending/inactive accounts)
-  if (isPublicRoute && authenticatedUser && !hasAuthErrorParam) {
+  // Redirect authenticated user visiting auth entry routes (/login, /signup, /forgot-password) to /machines
+  // UNLESS they arrived with an error/status parameter (prevents redirect loops on pending/inactive accounts).
+  // Public legal routes (/privacy, /terms, /account-deletion) remain accessible to both authenticated and guest users.
+  const isAuthRoute = authRoutes.some((route) => path.startsWith(route));
+  if (isAuthRoute && authenticatedUser && !hasAuthErrorParam) {
     return NextResponse.redirect(new URL("/machines", request.nextUrl));
   }
 
@@ -155,6 +159,6 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|robots.txt|sitemap.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf)$).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|manifest.webmanifest|robots.txt|sitemap.xml|\\.well-known/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff|woff2|ttf)$).*)",
   ],
 };

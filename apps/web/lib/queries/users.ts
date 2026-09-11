@@ -5,7 +5,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser, requireRole } from "@/lib/dal";
 import { TAGS, CACHE_TIERS } from "@/lib/cache";
-import type { User, UserRole, UserStatus, ProfileChangeRequest, WorkingLocation } from "@/lib/types/database";
+import type { User, UserRole, UserStatus, ProfileChangeRequest, AccountDeletionRequest, WorkingLocation } from "@/lib/types/database";
 import { getISTDateString } from "@reachinternational/utils";
 import { SUPERVISOR_VISIBLE_USER_ROLES } from "@reachinternational/permissions";
 
@@ -650,3 +650,101 @@ export const getPendingUsersCached = unstable_cache(
   ["pending-users-list-v1"],
   { revalidate: 30, tags: [TAGS.users] }
 );
+
+export const getPendingAccountDeletionRequestsCached = unstable_cache(
+  async (): Promise<AccountDeletionRequest[]> => {
+    const supabase = createSupabaseAdminClient();
+    const requests: AccountDeletionRequest[] = [];
+
+    // 1. Direct table
+    const { data: directData } = await supabase
+      .from("account_deletion_requests")
+      .select(`
+        id,
+        user_id,
+        email,
+        full_name,
+        phone,
+        role,
+        reason,
+        source,
+        status,
+        admin_notes,
+        reviewed_by,
+        reviewed_at,
+        created_at,
+        updated_at,
+        user:users!account_deletion_requests_user_id_fkey(id, full_name, email, role, phone)
+      `)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+
+    if (directData && Array.isArray(directData)) {
+      for (const d of directData) {
+        requests.push({
+          id: d.id,
+          user_id: d.user_id,
+          email: d.email,
+          full_name: d.full_name || (d.user as any)?.full_name,
+          phone: d.phone || (d.user as any)?.phone,
+          role: d.role || (d.user as any)?.role,
+          reason: d.reason,
+          source: (d.source as any) || "web",
+          status: "pending",
+          admin_notes: d.admin_notes,
+          reviewed_by: d.reviewed_by,
+          reviewed_at: d.reviewed_at,
+          created_at: d.created_at,
+          updated_at: d.updated_at,
+          user: d.user as any,
+        });
+      }
+    }
+
+    // 2. Fallback in profile_change_requests
+    const { data: fallbackData } = await supabase
+      .from("profile_change_requests")
+      .select(`
+        id,
+        user_id,
+        requester_role,
+        requested_data,
+        status,
+        created_at,
+        updated_at,
+        user:users!profile_change_requests_user_id_fkey(id, full_name, email, role, phone)
+      `)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+
+    if (fallbackData && Array.isArray(fallbackData)) {
+      for (const f of fallbackData) {
+        const reqData = f.requested_data as Record<string, any>;
+        if (reqData && reqData.type === "account_deletion") {
+          if (!requests.some((r) => r.id === f.id)) {
+            const u = f.user as any;
+            requests.push({
+              id: f.id,
+              user_id: f.user_id,
+              email: reqData.email || u?.email || "Unknown",
+              full_name: reqData.full_name || u?.full_name,
+              phone: reqData.phone || u?.phone,
+              role: reqData.role || f.requester_role || u?.role,
+              reason: reqData.reason || "Account deletion requested",
+              source: (reqData.source as any) || "web",
+              status: "pending",
+              created_at: f.created_at,
+              updated_at: f.updated_at,
+              user: u,
+            });
+          }
+        }
+      }
+    }
+
+    return requests.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  },
+  ["pending-account-deletion-requests-v1"],
+  { revalidate: 30, tags: [TAGS.users] }
+);
+

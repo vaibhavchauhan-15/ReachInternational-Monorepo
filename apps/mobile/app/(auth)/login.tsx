@@ -234,7 +234,7 @@ export default function LoginScreen() {
                 <Input
                   label="Email address"
                   required
-                  placeholder="vaibhav@company.com"
+                  placeholder="user@reachinternational.co.in"
                   value={email}
                   onChangeText={handleEmailChange}
                   autoCapitalize="none"

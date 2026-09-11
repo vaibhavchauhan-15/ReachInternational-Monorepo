@@ -23,6 +23,84 @@ import { ClientModal } from "./ClientModal";
 import { softDeleteClientAction } from "@/app/actions/clients";
 import { Button, PageHeader, Pagination } from "@/components/ui";
 
+function ClientTableSkeletonRows({ canManageClients, count = 5 }: { canManageClients: boolean; count?: number }) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <tr key={`client-skel-${i}`} className="animate-pulse">
+          <td className="py-3 px-4">
+            <div className="h-4 w-16 rounded bg-[var(--color-hairline)]" />
+          </td>
+          <td className="py-3 px-4">
+            <div className="h-4 w-36 rounded bg-[var(--color-hairline)] mb-1" />
+            <div className="h-3 w-24 rounded bg-[var(--color-hairline)]/70" />
+          </td>
+          <td className="py-3 px-4">
+            <div className="h-3.5 w-28 rounded bg-[var(--color-hairline)]" />
+          </td>
+          <td className="py-3 px-4">
+            <div className="h-3.5 w-24 rounded bg-[var(--color-hairline)]" />
+          </td>
+          <td className="py-3 px-4">
+            <div className="h-3.5 w-32 rounded bg-[var(--color-hairline)]" />
+          </td>
+          <td className="py-3 px-4">
+            <div className="h-5 w-16 rounded-full bg-[var(--color-hairline)]" />
+          </td>
+          {canManageClients && (
+            <td className="py-3 px-4 text-right">
+              <div className="flex items-center justify-end gap-1">
+                <div className="h-7 w-7 rounded bg-[var(--color-hairline)]" />
+                <div className="h-7 w-7 rounded bg-[var(--color-hairline)]" />
+              </div>
+            </td>
+          )}
+        </tr>
+      ))}
+    </>
+  );
+}
+
+function MobileClientCardSkeletonList({ count = 4 }: { count?: number }) {
+  return (
+    <div className="space-y-3" aria-label="Loading client directory...">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={`client-card-skel-${i}`}
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 shadow-xs space-y-2.5 animate-pulse"
+        >
+          <div className="flex items-start justify-between">
+            <div className="space-y-1.5 flex-1 pr-2">
+              <div className="h-3.5 w-16 rounded bg-[var(--color-hairline)]" />
+              <div className="h-4 w-36 rounded bg-[var(--color-hairline)]" />
+              <div className="flex items-center gap-1.5 mt-1">
+                <div className="h-4 w-20 rounded bg-[var(--color-hairline)]/70" />
+                <div className="h-4 w-16 rounded bg-[var(--color-hairline)]/70" />
+              </div>
+            </div>
+            <div className="h-5 w-16 rounded-full bg-[var(--color-hairline)] shrink-0" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-xs border-t border-[var(--color-hairline)] pt-2">
+            <div className="space-y-1">
+              <div className="h-2.5 w-16 rounded bg-[var(--color-hairline)]/70" />
+              <div className="h-3.5 w-24 rounded bg-[var(--color-hairline)]" />
+            </div>
+            <div className="space-y-1">
+              <div className="h-2.5 w-14 rounded bg-[var(--color-hairline)]/70" />
+              <div className="h-3.5 w-24 rounded bg-[var(--color-hairline)]" />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <div className="h-2.5 w-12 rounded bg-[var(--color-hairline)]/70" />
+              <div className="h-3.5 w-28 rounded bg-[var(--color-hairline)]" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 interface ClientsClientProps {
   user: User;
   initialClients: CRMClient[];
@@ -123,7 +201,7 @@ export function ClientsClient({ user, initialClients, total, page, pageSize, met
   }
 
   return (
-    <div className={`space-y-4 transition-opacity duration-200 ${isPending ? "opacity-60 pointer-events-none" : "opacity-100"}`}>
+    <div className="space-y-4">
       {/* Toast Notice */}
       <AnimatePresence>
         {toastMessage && (
@@ -222,8 +300,13 @@ export function ClientsClient({ user, initialClients, total, page, pageSize, met
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search by company name, code, GSTIN, PAN, contact, city, district, state..."
-            className="w-full rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] pl-9 pr-3 py-2 text-xs text-[var(--color-ink)] placeholder:text-[var(--color-mute)] focus:bg-[var(--color-canvas-elevated)] focus:outline-hidden focus:ring-2 focus:ring-sky-500 transition-all"
+            className="w-full rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] pl-9 pr-9 py-2 text-xs text-[var(--color-ink)] placeholder:text-[var(--color-mute)] focus:bg-[var(--color-canvas-elevated)] focus:outline-hidden focus:ring-2 focus:ring-sky-500 transition-all"
           />
+          {isPending && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <Loader2 className="h-4 w-4 text-[var(--color-mute)] animate-spin" />
+            </div>
+          )}
         </div>
 
         {/* Status Filter Pills */}
@@ -279,7 +362,9 @@ export function ClientsClient({ user, initialClients, total, page, pageSize, met
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-hairline)]">
-            {initialClients.length === 0 ? (
+            {isPending ? (
+              <ClientTableSkeletonRows canManageClients={canManageClients} count={5} />
+            ) : initialClients.length === 0 ? (
               <tr>
                 <td colSpan={canManageClients ? 7 : 6} className="py-12 text-center text-[var(--color-mute)]">
                   <Building2 className="mx-auto h-8 w-8 text-[var(--color-mute)]/60 mb-2" />
@@ -398,7 +483,9 @@ export function ClientsClient({ user, initialClients, total, page, pageSize, met
 
       {/* Mobile Touch Cards View */}
       <div className="block sm:hidden space-y-3">
-        {initialClients.length === 0 ? (
+        {isPending ? (
+          <MobileClientCardSkeletonList count={4} />
+        ) : initialClients.length === 0 ? (
           <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-8 text-center text-[var(--color-mute)]">
             <Building2 className="mx-auto h-8 w-8 text-[var(--color-mute)]/60 mb-2" />
             <p className="font-semibold text-[var(--color-ink)]">No clients found</p>

@@ -1,0 +1,26 @@
+name: Publish OTA Update (Production Channel)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - apps/mobile/**
+      - packages/**
+      - pnpm-lock.yaml
+  workflow_dispatch: {}
+
+jobs:
+  quality_gate:
+    name: Quality Gate & Typecheck
+    steps:
+      - uses: eas/checkout
+      - uses: eas/install_node_modules
+      - run: pnpm typecheck
+
+  publish_update:
+    name: Publish EAS Update to Production Channel
+    needs: [quality_gate]
+    type: update
+    params:
+      channel: production

@@ -135,7 +135,7 @@ function isRedirectError(error: unknown): boolean {
             value={email}
             onChange={(e) => handleEmailChange(e.target.value)}
             error={fieldErrors.email}
-            placeholder="vaibhav@company.com"
+            placeholder="user@reachinternational.co.in"
             icon={<AnimatedMail size={16} />}
             required
             autoComplete="email"

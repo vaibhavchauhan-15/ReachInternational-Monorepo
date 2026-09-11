@@ -671,4 +671,63 @@ export async function getWorkingLocationsAction(): Promise<
     console.error("Exception in getWorkingLocationsAction:", err);
     return [];
   }
-}
+}
+
+/**
+ * Authenticated server action to change the current user's password.
+ * Optionally verifies current password if provided, then updates password and logs audit.
+ */
+export async function changePasswordAction(params: {
+  currentPassword?: string;
+  newPassword: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return { success: false, error: "Not authenticated. Please log in again." };
+    }
+
+    if (!params.newPassword || params.newPassword.length < 6) {
+      return { success: false, error: "Password must be at least 6 characters long." };
+    }
+
+    // If current password provided, verify it first
+    if (params.currentPassword && user.email) {
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: params.currentPassword,
+      });
+
+      if (signInError) {
+        return { success: false, error: "Current password is incorrect." };
+      }
+    }
+
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: params.newPassword,
+    });
+
+    if (updateError) {
+      return { success: false, error: updateError.message || "Failed to update password." };
+    }
+
+    await logAudit({
+      action: "auth.password_change",
+      entity_type: "user",
+      entity_id: user.id,
+      user_id: user.id,
+      metadata: { user_email: user.email },
+    });
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("Exception in changePasswordAction:", err);
+    return { success: false, error: err?.message || "An unexpected error occurred." };
+  }
+}
+

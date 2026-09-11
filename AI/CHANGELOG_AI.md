@@ -1,3 +1,941 @@
+- **Account Deletion Full-Stack System & Web/Mobile Parity (2026-09-11)**:
+  - **1. Objective & Requirements**:
+    - Resolve user feedback on `/account-deletion` (viewport `1536×695`):
+      1. Remove "Data Subject Right" badge.
+      2. Remove rounded amber icon container.
+      3. Remove "Google Play Compliant" text.
+      4. Add direct web deletion request portal on `/account-deletion`.
+    - Web App: Link deletion page to profile tab at bottom (`MobileBottomNav.tsx`), user profile dropdown (`UserProfileDropdown.tsx`), and settings (`SettingsClient.tsx`).
+    - Mobile App: Create dedicated deletion page (`apps/mobile/app/(app)/account-deletion.tsx`) and link it to Settings -> Profile page (`profile.tsx` & `settings.tsx`).
+    - Admin Review Integration: Deletion requests from both Web and Mobile must stream into the Admin Users page (`/users`) alongside pending registrations with full approve/decline workflow.
+    - Database & Backend: Fully functional backend with dual-path resilience across PostgreSQL tables and PostgREST schema cache.
+  - **2. Implementation Details**:
+    - `supabase/migrations/063_create_account_deletion_requests.sql`: Created `account_deletion_requests` table with status (`pending`, `approved`, `rejected`), source (`web`, `mobile`), reason, user foreign key, indexes, and RLS policies.
+    - `packages/types/src/database.ts`: Exported `AccountDeletionRequest`, `AccountDeletionSource`, and `AccountDeletionStatus`.
+    - `apps/web/app/actions/account-deletion.ts`: Created server actions for submitting, fetching, approving, rejecting, and canceling deletion requests with dual-path fallback to `profile_change_requests` (`requested_data.type = 'account_deletion'`).
+    - `apps/web/lib/queries/users.ts`: Added `getPendingAccountDeletionRequestsCached`.
+    - `apps/web/app/account-deletion/page.tsx`: Stripped "Data Subject Right", amber box, and "Google Play Compliant". Modernized with brand scissor lift icon, clean typography, and embedded `AccountDeletionWebForm.tsx`.
+    - `apps/web/app/account-deletion/AccountDeletionWebForm.tsx`: Built interactive web deletion request portal with live submission and verification feedback.
+    - Navigation: Added links in `MobileBottomNav.tsx`, `UserProfileDropdown.tsx`, and `SettingsClient.tsx`.
+    - `apps/mobile/app/(app)/account-deletion.tsx`: Created native mobile deletion screen with status checking, cancellation, and direct submission.
+    - Mobile Navigation: Registered in `_layout.tsx`, allowed in `security.ts`, linked in `profile.tsx` and `settings.tsx`.
+    - `apps/web/app/(app)/users/AccountDeletionRequestsSection.tsx`: Created administrative deletion review component with KPI cards, source badges, approval (inactivates user, scrubs KYC, logs audit), and decline modals.
+    - `apps/web/app/(app)/users/page.tsx` & `users-client.tsx`: Hydrated and integrated deletion request management into the admin pending view.
+    - `apps/mobile/app/(app)/users.tsx`: Added deletion request querying, red alert badge, and native review cards with Approve & Deactivate / Decline actions.
+  - **3. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed with 0 errors.
+    - `@reachinternational/mobile` `typecheck`: Passed with 0 errors.
+    - `node apps/mobile/run-tests.mjs`: Passed 18/18 scenarios.
+
+- **Page Feedback: /machines — UserProfileDropdown Cleanup & Removal of Settings & Preferences (2026-09-11)**:
+  - **1. Objective & Requirements**:
+    - Resolve user feedback on `/machines` (viewport `1536×695`):
+      1. Remove "Settings & Preferences" link from the user profile dropdown popover.
+      2. Clean up and polish the UI/UX of the user profile dropdown popover.
+  - **2. Implementation Details (`UserProfileDropdown.tsx`)**:
+    - **Removed Settings & Preferences**: Deleted the redundant navigation link to `/settings` since Settings is already prominently located in the primary navigation sidebar (`AppSidebar.tsx`). Cleaned up unused `Settings` import from `lucide-react`.
+    - **Refined Profile Header**: Formatted avatar, full name, direct user email (`text-[11px] text-[var(--color-mute)] truncate`), role badge, and edit profile icon button with subtle border and focus ring.
+    - **Streamlined Key-Value Info Strip**: Converted bulky stacked rows into high-density key-value pairs for Phone, Shift Timing, and Base Yard / Location with micro-icons and clean typographic hierarchy.
+    - **Compact Credentials Display**: Rendered masked Aadhaar and Driving Licence in a clean 2-column strip with `ShieldCheck` and `FileText` micro-icons.
+    - **Polished Links & Sign Out**: Clean, low-profile row for `Account Deletion`, integrated `Appearance` theme toggle row, and refined danger-hover ghost `Sign Out` button.
+    - **Safe Viewport Positioning**: Updated dynamic positioning with `maxHeight` clamping (`min(480px, calc(100vh - ${pos.bottom + 16}px))`), window resize/scroll listeners, and smooth spring animation to prevent any cutoff or awkward scrolling on short viewports like 1536×695.
+  - **3. Verification**:
+    - `@reachinternational/web` `tsc --noEmit`: Passed with 0 errors.
+
+- **Page Feedback: /terms — UI/UX, Header Parity, Box Layout & Footer Parity with /privacy (2026-09-11)**:
+  - **1. Objective & Requirements**:
+    - Harmonize `/terms` page with the `/privacy` page design, header layout, brand vector icon, 760px container, and colors.
+    - If user is logged in, show "Go to Dashboard" button; if not, show "Sign In" button in brand blue.
+    - Remove "v2026.09" badge from both web and mobile.
+    - Fix "Contact Operations" button text visibility and style in brand blue.
+    - Retain and unify the boxed card layout for every heading across `/terms`, `/privacy`, and `/account-deletion`.
+    - Mention the Account Deletion page in the footer across all compliance pages.
+  - **2. Implementation Details**:
+    - `apps/web/app/terms/page.tsx`:
+      - Connected `await getCurrentUserOrNull()` to conditionally render "Go to Dashboard" (`/operations?tab=entry` or `/machines`) or "Sign In" (`/login`).
+      - Clean static header identical to privacy page with `<ScissorLiftLogoIcon size={32} />`, dual-tone brand name, and hairline divider.
+      - Removed "v2026.09" version pill badge.
+      - Styled "Contact Operations" button with `#0070f3` brand blue and explicit `text-white !text-white` for guaranteed high-contrast visibility.
+      - Standardized layout to `max-w-[760px] mx-auto` with box card sections (`p-6 sm:p-8 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs space-y-4`).
+      - Updated footer to link to Privacy Policy, Terms of Service, and Account Deletion.
+    - `apps/web/app/privacy/page.tsx`:
+      - Wrapped document hero and all 13 sections in boxed card layout (`p-6 sm:p-8 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs space-y-4`).
+      - Nested cards in Section 6, 8, and 13 styled with `bg-[var(--color-canvas)]` for clean elevated layering.
+      - Added Account Deletion link to footer.
+    - `apps/web/app/account-deletion/page.tsx`:
+      - Unified header to use `<ScissorLiftLogoIcon size={32} />`, brand blue action buttons, `max-w-[760px]` container, and synchronized footer.
+    - `apps/mobile/app/(app)/terms.tsx`:
+      - Removed `v2026.09` badge to preserve exact web/mobile design parity.
+  - **3. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed with 0 errors.
+    - `@reachinternational/mobile` `typecheck`: Passed with 0 errors.
+
+- **Page Feedback: /privacy — Scissor Lift Icon, Brand Text Alignment & Blue Action Buttons (2026-09-11)**:
+  - **1. Objective & Requirements**:
+    - Resolve user feedback on `/privacy` (viewport `1536×695`): reuse existing scissor lift icon, properly align brand name and tagline, ensure button text visibility, and style action buttons in brand blue.
+  - **2. Implementation Details**:
+    - `apps/web/app/privacy/page.tsx`:
+      - Reused official `<ScissorLiftLogoIcon size={32} />` vector component.
+      - Aligned brand typography: "REACH" (ink) and "INTERNATIONAL" (vibrant blue `#0070f3`), separated by a full-width hairline divider, with "REACHING ALL HEIGHTS" letter-spacing `0.22em` below.
+      - Fixed text visibility for "Go to Dashboard" / "Sign In" button with explicit `text-white !text-white leading-none`.
+      - Styled "Go to Dashboard" / "Sign In" button in vibrant brand blue (`bg-[#0070f3] hover:bg-[#0060df]`).
+      - Styled "Contact Compliance Desk" button in Section 13 in vibrant brand blue (`bg-[#0070f3] hover:bg-[#0060df] text-white !text-white`).
+  - **3. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed with 0 errors.
+    - `@reachinternational/mobile` `typecheck`: Passed with 0 errors.
+
+- **Page Feedback: /privacy — Typography Overhaul & 14-Point UI/UX Polish (2026-09-11)**:
+  - **1. Objective & Requirements**:
+    - Fulfill user's typography specification (Inter/system font, Page title 32–36px 700, Headings 22–24px 700, Subheadings 17–19px 600, Body 16px 400, Meta 14px, Line height 1.65, Paragraph spacing 16–20px, Max width 760px within 720–800px range, Left aligned) and address all 14 visual feedback items.
+  - **2. Implementation Details**:
+    - `apps/web/app/privacy/page.tsx`:
+      - Removed floating back to top button, search filter, category pills, and all interactive overhead.
+      - Removed "OFFICIAL COMPLIANCE POLICY" badge and "v2026.09" version pill from hero.
+      - Created clean static header identical to main brand language with Boom Lift icon (`BoomLiftLogoIcon`), "REACH" in ink, and "INTERNATIONAL" in vibrant blue (`#0070f3`).
+      - Connected `getCurrentUserOrNull()` to conditionally render "Go to Dashboard" if logged in, otherwise "Sign In".
+      - Removed "Account Deletion" from header navigation.
+      - Removed outer layout badges around section numbers; headings now render as `1. Scope...`, `2. Categories...`, etc., matching heading font and size.
+      - Fixed "Contact Compliance Desk" button contrast so text is 100% visible and crisp in light and dark modes.
+      - Removed "Account Deletion" link and "Enterprise Heavy Equipment..." subtitle from footer.
+      - Polished footer with clean hairline, Privacy Policy, Terms of Service, contact email, and copyright.
+    - `apps/web/components/branding/BoomLiftLogoIcon.tsx`: Created scalable vector SVG boom lift emblem with mobile chassis, wheels, hydraulic cylinder, knuckle joint, and personnel platform.
+  - **3. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed with 0 errors.
+    - `@reachinternational/mobile` `typecheck`: Passed with 0 errors.
+    - Content width constrained to `max-w-[760px]`.
+
+- **Web App Privacy Policy (`/privacy`) — Clean UI/UX & Comprehensive Point Coverage (2026-09-11)**:
+  - **1. Objective & Requirements**:
+    - Build an enterprise-grade, clean, and comprehensive Data Protection & Privacy Policy for the web app (`http://localhost:3000/privacy`) covering every point of fleet telemetry, operator KYC protection, and statutory data safety in accordance with Vercel Geist design tokens.
+  - **2. Implementation Details**:
+    - `apps/web/app/privacy/page.tsx`: Rebuilt complete privacy policy with 13 exhaustive sections:
+      1. Scope, Applicability & Statutory Legal Framework (DPDP Act 2023, IT Act 2000, Google Play Policies, ISO 27001).
+      2. Categories of Information We Collect (Masked Aadhaar `XXXX-XXXX-1234`, Operator Licences, HMR telemetry, Shift logs, Diagnostics, Push tokens, Photos).
+      3. Methods & Channels of Data Collection (Direct input, automated calculations, supervisor allocations, offline sync queues).
+      4. Purposes & Legal Grounds (Equipment custody, shift fatigue/conflict prevention, predictive maintenance, rental billing, safety auditing).
+      5. Data Security, Cryptographic Controls & Architecture (PostgreSQL Kernel RLS, RBAC, TLS 1.3, AES-256 at rest, salted password hashes, immutable audit trails).
+      6. Third-Party Sub-processors & Strict Zero Data Sale Guarantee (Strict pledge against selling data; Supabase, Expo/EAS, Vercel).
+      7. Data Retention & Archival Policies (Active account lifecycle, 7-year statutory machinery log retention, permanent audit logs).
+      8. User Rights & Google Play Account Deletion Policy (Access, rectification, portability, 3 deletion methods: in-app, web portal, email; 14-day SLA).
+      9. Cookies & Local Session Storage Policy (Strictly necessary JWT tokens, theme preferences, zero third-party marketing tracking).
+      10. Working Age & Operator Eligibility (Minors policy — strict 18+ working age requirement for heavy machinery).
+      11. Cross-Border Transfers & Storage Localization (Adherence to Indian data localization principles and Standard Contractual Clauses).
+      12. Policy Modifications & Notification Framework (Versioning system with 15-day advance notice for material changes).
+      13. Grievance Redressal, Compliance Officer & Official Contact (`info@reachinternational.co.in`, `www.reachinternational.co.in`, 48h acknowledgment, 30-day resolution).
+    - `apps/web/app/privacy/PrivacyPolicyInteractive.tsx`: Client-side interactive toolbar featuring real-time topic search, 13-section quick jump pill strip, "Print / Save PDF" button, and smooth back-to-top floating button.
+    - `apps/web/proxy.ts`: Fixed auth redirect condition so authenticated users are not redirected to `/machines` when reading public legal pages (`/privacy`, `/terms`, `/account-deletion`).
+    - `apps/mobile/app/(app)/privacy.tsx`: Synchronized mobile privacy policy screen with Zero Data Sale Guarantee, 7-year statutory retention, account deletion channels, and 18+ working age compliance.
+  - **3. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed with 0 errors.
+    - `@reachinternational/mobile` `typecheck`: Passed with 0 errors.
+    - `node apps/mobile/run-tests.mjs`: All 18/18 test scenarios passed.
+
+- **DevOps / Mobile Stability: Android 15 Launch Crash ("ReachInternational keeps stopping") Resolution (2026-09-11)**:
+  - **1. Problem & Root Cause**:
+    - When users opened the Play Store internal test build on Android 15 (API 35), the app immediately crashed with *"ReachInternational keeps stopping"*.
+    - Root Cause 1: Missing `<SafeAreaProvider>` in Root Layout (`apps/mobile/app/_layout.tsx`). In Android 15, edge-to-edge layout is mandatory. Multiple startup components (`PostNotificationBanner`, `MobileHeader`, `MobileBottomNav`, `login.tsx`) invoke `useSafeAreaInsets()`. Calling this outside `<SafeAreaProvider>` throws an uncaught JavaScript error that terminates the native Activity.
+    - Root Cause 2: Missing environment variables in EAS Cloud build. `.env` is gitignored, and `eas.json` had no `env` block. At top-level module load in `apps/mobile/lib/supabase.ts`, `@supabase/supabase-js`'s `createClient("", "")` synchronously threw `Error: supabaseUrl is required.` before any component could render.
+    - Root Cause 3: Unguarded `Updates.checkForUpdateAsync()` without `Updates.isEnabled` check.
+    - Root Cause 4: Missing top-level `ErrorBoundary` in `_layout.tsx`.
+    - Root Cause 5: Missing `expo-system-ui` for Android 15 `"userInterfaceStyle": "automatic"`.
+  - **2. Implementation**:
+    - `apps/mobile/lib/supabase.ts`: Added hardcoded fallback constants (`FALLBACK_SUPABASE_URL`, `FALLBACK_SUPABASE_ANON_KEY`) guaranteeing `createClient` never receives empty strings. Added warning logger instead of fatal throw.
+    - `apps/mobile/eas.json`: Injected explicit `env` variables across `production`, `preview`, and `development` build profiles.
+    - `apps/mobile/app/_layout.tsx`: Wrapped `RootLayout` in `<SafeAreaProvider style={styles.safeArea}>`; exported an `ErrorBoundary` with reload action; guarded OTA check with `Updates.isEnabled` inside try/catch.
+    - `apps/mobile/package.json`: Installed `expo-system-ui@~57.0.3` and updated lockfile.
+    - `apps/mobile/run-tests.mjs`: Added assertions for all stability requirements (18/18 scenarios passed).
+  - **3. Verification Matrix**:
+    - `node apps/mobile/run-tests.mjs`: 18/18 tests passed.
+    - `npx expo-doctor`: 21/21 checks passed.
+    - `npx eas-cli config --profile production --platform android`: Environment variables verified loaded.
+    - Monorepo `pnpm typecheck`: 7/7 workspace packages passed with 0 errors.
+
+- **DevOps / Build: Exclusion of Test Files from .aab, Play Store Logo & Deobfuscation Resolution (2026-09-11)**:
+  - **1. Deobfuscation File Warning Resolution (`https://support.google.com/googleplay/android-developer/answer/14151465`)**:
+    - Clarified that the "no deobfuscation file" warning for Version Code 5 is a standard, non-blocking advisory alert (yellow warning), NOT an error.
+    - Explained that React Native compiles JavaScript via Hermes bytecode and native Java code does not emit an R8/ProGuard `mapping.txt` file unless explicit shrinking is turned on. It does not block rollout or prevent internal/closed/production testing.
+  - **2. Play Store Internal Testing Logo & Title Resolution**:
+    - Identified root cause of the default Android robot icon and `com.reachinternational.app (unreviewed)` title in the Play Store dialog: Google Play fetches store sheet graphics from **Google Play Console → Grow → Store presence → Main store listing**, not from the binary.
+    - Provided the exact step-by-step path to upload `apps/mobile/store-assets/app-icon-512x512.png` and save the Main Store Listing so the branded squircle emblem appears immediately.
+  - **3. Build Hardening — Complete Test File & Asset Exclusion**:
+    - Created `apps/mobile/.easignore` preventing EAS build uploads of `run-tests.mjs`, unit tests (`**/__tests__/**`), specs (`**/*.test.*`, `**/*.spec.*`), `docs/`, `store-assets/`, and coverage directories.
+    - Updated `apps/mobile/metro.config.js` with `resolver.blockList` regular expressions preventing Metro from bundling test files, test runners, and markdown documentation into the application JavaScript bundle.
+    - Hardened `apps/mobile/app.json` by restricting `assetBundlePatterns` from `["**/*"]` to `["assets/**/*"]` to prevent non-runtime mockups and markdown files from entering the `.aab`.
+  - **4. Verification Matrix**:
+    - `npx expo export --clear`: Exported cleanly with code 0 (Android bundle: 7.3 MB, 0 test files bundled).
+    - `apps/mobile/run-tests.mjs`: 12/12 scenarios passed.
+    - Monorepo `typecheck`: 0 errors.
+
+- **Store Compliance: Google Play Developer Program Policy, App Bundle & Data Safety Verification (2026-09-11)**:
+  - **1. Objective**: Perform end-to-end technical, visual, legal, and operational audit of the mobile app (`apps/mobile`, `com.reachinternational.app`, Expo SDK 57) and supporting web services against Google Play Developer Program Policies, target API level requirements, Android App Bundle format, Play App Signing terms, release rollout & testing regulations, and store listing data safety standards.
+  - **2. In-App Account Deletion & User Data Compliance**:
+    - Added "Request Account Deletion" action to `AccountSettingsModal` and Card 5 (About & Legal) in `apps/mobile/app/(app)/settings.tsx`.
+    - Built dedicated `DeleteAccountModal` clearly breaking down permanently purged data (name, email, phone, credentials, session tokens, masked KYC records, push notification tokens) vs statutory records retained for heavy equipment safety compliance (historical hour meter readings HMR, pre-shift safety checklists, breakdown tickets in anonymized format).
+    - Integrated dual-action deletion dispatch: direct email generation to `info@reachinternational.co.in` with pre-filled subject/body + external web portal launcher to `https://www.reachinternational.co.in/account-deletion`.
+  - **3. Digital Asset Links & App Links Verification**:
+    - Created `apps/web/public/.well-known/assetlinks.json` for Google Play `autoVerify: true` app links verification on `reachinternational.co.in` and `www.reachinternational.co.in`.
+    - Created `apps/web/public/.well-known/apple-app-site-association` for iOS Universal Links.
+    - Updated `apps/web/proxy.ts` to include `/account-deletion` in `publicRoutes` and exclude `.well-known` from proxy interception.
+  - **4. Policy & Specification Matrix**:
+    - Target API level: Android 15 (API 35), fully exceeding Google Play's mandatory target API level 34+ requirement.
+    - Publishing format: Android App Bundle (`.aab`) with EAS build profile `production`.
+    - Play App Signing: Managed securely in EAS credential vault.
+    - Store listing graphics: Icon (512×512, 184 KB), Feature graphic (1024×500, 124 KB).
+    - Text limits: Title (19/30 chars), Short description (80/80 chars), Full description (2,126/4,000 chars).
+    - Minimal runtime permissions: `INTERNET`, `ACCESS_NETWORK_STATE`, and `POST_NOTIFICATIONS` with permission primer modal.
+  - **5. Verification Matrix**:
+    - `npx expo-doctor`: **21/21 checks passed (0 issues detected)**.
+    - `apps/mobile/run-tests.mjs`: **12/12 test scenarios passed**.
+    - TypeScript compilation: **0 errors across mobile and web packages**.
+
+- **DevOps / Build: Expo Config Schema Conformance — Splash Screen Migration (`apps/mobile/app.json`) (2026-09-11)**:
+  - **1. Objective**: Resolve Expo doctor schema error `should NOT have additional property 'splash'` in `apps/mobile/app.json`.
+  - **2. Root Cause**: In Expo SDK 57, top-level `"splash"` configuration is deprecated and removed from the official Expo config schema. Splash configuration must be registered under `"plugins"` via the `expo-splash-screen` config plugin.
+  - **3. Resolution**:
+    - Removed root `"splash"` property from `apps/mobile/app.json`.
+    - Added `["expo-splash-screen", { "image": "./assets/splash.png", "resizeMode": "contain", "backgroundColor": "#09090b" }]` under `"plugins"`.
+  - **4. Verification Matrix**:
+    - `npx expo-doctor`: **21/21 checks passed. No issues detected! (Exit Code: 0)**.
+    - `node apps/mobile/run-tests.mjs`: **PASSED (12/12 scenarios verified)**.
+
+- **DevOps / CI/CD: Automated EAS Android Deployment Pipeline, Workflows & EAS Update (OTA) (2026-09-11)**:
+  - **1. Objective**: Implement automated cloud CI/CD, EAS Workflows, Play Store submission configurations, and over-the-air (OTA) updates for the ReachInternational mobile application (`apps/mobile`, `com.reachinternational.app`, Expo SDK 57).
+  - **2. Phase A — Fix Blockers & Configuration Prereqs**:
+    - `apps/mobile/eas.json`: Removed `serviceAccountKeyPath` to eliminate local secret dependencies (key managed in EAS cloud vault); kept `track: "internal"` with `"changesNotSentForReview": false`; added separate `submit.production-play` profile (`track: "production"`, `"changesNotSentForReview": false`) for store rollout promotion.
+    - `.github/workflows/ci.yml`: Aligned name to `ReachInternational Monorepo — CI Pipeline`, updated pnpm setup to `11.21.0` and Node to `22`, and corrected workspace filter target from `@servicecentric/mobile` to `@reachinternational/mobile`.
+    - Deleted obsolete `.github/workflows/deploy-mobile.yml` which ran redundant builds on push to `main` burning EAS quotas.
+    - Upgraded `apps/mobile/run-tests.mjs` into a standalone ESM verification suite checking `app.json`, `eas.json`, workflow existence, and brand constants (12/12 test scenarios passing).
+  - **3. Phase B — EAS Workflows (The Pipeline)**:
+    - Created `apps/mobile/.eas/workflows/deploy-android.yml`:
+      - Trigger: `push` to `main` on paths `apps/mobile/**`, `packages/**`, `pnpm-lock.yaml`, plus manual `workflow_dispatch`.
+      - `quality_gate`: `eas/checkout` → `eas/install_node_modules` → `pnpm typecheck`.
+      - `build_android`: `type: build`, `profile: production`, `platform: android` (outputs production `.aab`).
+      - `submit_android`: `type: submit`, passing `${{ needs.build_android.outputs.build_id }}` and submitting to Play Store internal testing track.
+  - **4. Phase C — EAS Update (OTA Pipeline & Routing Rules)**:
+    - Installed `expo-updates@^57.0.21` in `apps/mobile/package.json` with updated `pnpm-lock.yaml`.
+    - Configured `apps/mobile/app.json`:
+      - `"updates": { "url": "https://u.expo.dev/40432ac1-55a2-4bfa-985e-a51562398743" }`
+      - `"runtimeVersion": { "policy": "appVersion" }`
+    - Created `apps/mobile/.eas/workflows/publish-update.yml`: automated workflow publishing to EAS Update `production` channel following quality gate typecheck.
+    - Established deterministic routing rule: native changes (dependencies, permissions, manifest, appVersion) route through binary builds (`deploy-android.yml` / `[build]` tag / `release/*`); JS/UI updates publish instantly via OTA updates.
+  - **5. Phase D — Memory & Rules**:
+    - Updated `apps/mobile/docs/PLAY_STORE_SUBMISSION_CHECKLIST.md` with EAS credential upload steps, automated workflow execution, store promotion, and OTA governance.
+    - Updated `AI/RULES/DEPLOYMENT-DEVOPS-RELEASE.md` with Section 55 (Mobile Application Release & OTA Update Pipeline).
+    - Updated `README.md` with Mobile CI/CD & EAS Workflows section.
+  - **6. Verification Matrix**:
+    - `run-tests.mjs`: **PASSED (12/12 scenarios verified)**.
+    - `eas config --profile production --platform android`: **PASSED (Exit Code: 0)**.
+    - Monorepo `pnpm typecheck`: **All 7 workspace packages successful, 0 errors**.
+    - Monorepo `pnpm install --frozen-lockfile`: Verified in sync.
+
+- **Performance / Bundle Optimization: Elimination of Unused 964 KB `MaterialSymbols_400Regular.ttf` from Mobile Bundle (`apps/mobile`) (2026-09-11)**:
+  - **1. Objective**: Prevent Expo / Metro from bundling the massive 964 KB `MaterialSymbols_400Regular.ttf` font in `apps/mobile` exported assets.
+  - **2. UI Dependency Audit**:
+    - Confirmed that `apps/mobile` does not import or use `@expo-google-fonts/material-symbols`, `expo-symbols`, or `@expo/vector-icons`.
+    - Every component, bottom navigation bar, card, modal, and drawer in the mobile app is built exclusively with `lucide-react-native` and `react-native-svg`.
+  - **3. Root Cause**:
+    - Expo Router v57 (`expo-router@~57.0.20`) includes support for native tab material icons on Android (`optionsIconConverter.android.js` -> `materialIconConverter.android.js` -> `expo-symbols`).
+    - `expo-symbols` unconditionally imports `@expo-google-fonts/material-symbols/400Regular`, which performs `require('./MaterialSymbols_400Regular.ttf')`.
+    - Metro statically resolves this require tree and copies the entire 964 KB font into bundle assets, even though the application never invokes native tab material symbols.
+  - **4. Resolution**:
+    - Created `apps/mobile/stubs/empty-material-symbols.js`.
+    - Configured `config.resolver.resolveRequest` in `apps/mobile/metro.config.js` to redirect all imports starting with `@expo-google-fonts/material-symbols` to the lightweight stub.
+  - **5. Verification Matrix**:
+    - Re-exported bundle via `npx expo export --clear`: Exported asset count decreased from 52 to 51, and `MaterialSymbols_400Regular.ttf` (964 KB) was removed completely.
+    - Verified cross-monorepo TypeScript compilation: `pnpm turbo run typecheck` passed across all 7 workspace packages with 0 errors.
+
+- **DevOps / Build: Fix EAS Android Production Build Failure (`@vaibhavchauhan_15/reachinternational-monorepo`) (2026-09-11)**:
+  - **1. Objective**: Fix Android production build failure (Build ID: `7f38e63c-6a39-476f-9fdd-d85dcd7435ea`) on EAS caused by `ERR_PNPM_NO_LOCKFILE Cannot install with "frozen-lockfile" because pnpm-lock.yaml is absent`.
+  - **2. Root Cause**:
+    - Triggering `eas build` from monorepo root without Expo in root `package.json` led EAS to detect `SDK < 41` and provision ancient worker image `ubuntu-22.04-jdk-11-ndk-r21e` with **pnpm 8.7.5**, **Node 18.18.0**, and **Java 11**.
+    - pnpm 8 could not parse the repository's v9 lockfile (`pnpm@11.21.0`), failing immediately on `frozen-lockfile`.
+    - EAS created stub `app.json` and default `eas.json` in root folder.
+  - **3. Monorepo Root Cleanup**:
+    - Removed stub `app.json` and `eas.json` from root.
+    - Added convenience scripts to `package.json`: `"build:mobile"` and `"build:mobile:preview"`.
+  - **4. Mobile Workspace Configuration (`apps/mobile`)**:
+    - `apps/mobile/app.json`: Added `extra.eas.projectId: "40432ac1-55a2-4bfa-985e-a51562398743"` to link directly to the EAS project where the Android Keystore was created, and aligned `slug: "reachinternational-monorepo"`.
+    - `apps/mobile/eas.json`: Explicitly configured `"node": "22.22.3"` and `"pnpm": "11.21.0"` in `production`, `preview`, and `development` build profiles to guarantee modern SDK 57 build image.
+  - **5. Verification Matrix**:
+    - `apps/mobile` `eas config --profile production --platform android`: **PASSED (Exit Code: 0)**.
+    - `apps/mobile` `eas config --profile preview --platform android`: **PASSED (Exit Code: 0)**.
+    - Monorepo root `pnpm build:mobile`: validated configuration cleanly.
+    - Monorepo `pnpm turbo run typecheck`: **All 7 workspace packages successful, 0 errors**.
+
+- **UI / Clean Redesign: Page Feedback — Clean UI/UX for Terms of Service & Privacy Policy (`/terms` & `/privacy`) (2026-09-11)**:
+  - **1. Objective**: Fulfill user feedback on `/terms` (viewport 412×915) to remove the `<Badge>` ("TERMS & CONDITIONS"), remove the hero icon box (`Scale`), shift version text (`v2026.09`) to the top-right, remove all decorative icons next to titles (`ShieldCheck`, `Clock`, `Truck`, `Wrench`, `Ban`, `Scale`, `Building`), and make a clean, modern UI/UX for both Terms and Privacy pages across mobile and web.
+  - **2. Mobile App Changes (`apps/mobile`)**:
+    - `app/(app)/terms.tsx`:
+      - Removed `Badge` and `heroIconBox` (`Scale`).
+      - Positioned `v2026.09` as a clean top-right pill (`versionPill`) opposite the title and effective date subtitle.
+      - Stripped icons from all section titles: `ShieldCheck` (Section 1), `Clock` (Section 2), `Truck` (Section 3), `Wrench` (Section 4), `Ban` (Section 5), `Scale` (Section 6), and `Building` (Section 7).
+      - Removed `AlertTriangle` icon from the zero-tolerance telemetry warning inset.
+      - Pruned dead styles and unused icon imports.
+    - `app/(app)/privacy.tsx`:
+      - Shifted `v2026.09` to a clean top-right pill (`versionPill`) matching `/terms`.
+      - Removed icons from telemetry/KYC/diagnostic section titles (`Clock`, `KeyRound`, `Server`).
+      - Cleaned up stylesheet (`heroHeaderRow`, `heroTitleCol`, `versionPill`) and pruned unused imports.
+  - **3. Web App Parity (`apps/web`)**:
+    - `app/terms/page.tsx`: Removed `Scale` hero icon box and badge, aligned `v2026.09` badge to top-right, and stripped all icons from Section 1-5 headers (`ShieldCheck`, `Clock`, `Ban`, `Wrench`, `Building`).
+    - `app/privacy/page.tsx`: Aligned `v2026.09` badge to top-right, removed icons from telemetry/KYC/diagnostic card titles (`Clock`, `KeyRound`, `Server`), and pruned unused imports.
+  - **4. Verification Matrix**:
+    - `apps/mobile`: `tsc --noEmit` -> **0 errors**.
+    - `apps/web`: `tsc --noEmit` -> **0 errors**.
+
+- **UI / Clean Redesign: Page Feedback — Clean Minimalist Privacy Policy Screen (`/privacy`) (2026-09-11)**:
+  - **1. Objective**: Address user feedback on `/privacy` (viewport 412×915) by removing the hero `<Badge>` and hero icon box (`ShieldCheck`), plus decorative section header icons (`Database`, `Eye`, `Lock`, `FileText`, `Building`), creating a clean, professional, document-grade aesthetic.
+  - **2. Mobile App Changes (`apps/mobile/app/(app)/privacy.tsx`)**:
+    - Removed `<Badge status="active" customLabel="OFFICIAL POLICY" />` and `<heroIconBox>` containing `ShieldCheck`.
+    - Retained clean typography: monospace version badge (`v2026.09`), bold title (`Data Protection & Privacy`), last updated date subtitle, and hairline divider.
+    - Stripped section header icons: `<Database>` (Section 1), `<Eye>` (Section 2), `<Lock>` (Section 3), `<FileText>` (Section 4), and `<Building>` (Section 5).
+    - Pruned dead styles (`heroRow`, `heroIconBox`, `badgeRow`) and removed unused icon/badge imports.
+  - **3. Web App Parity (`apps/web/app/privacy/page.tsx`)**:
+    - Synchronized Web Privacy Policy to the exact same clean document layout: removed hero icon box, `Official Policy` badge, and all section header icons (`Database`, `Eye`, `Lock`, `Trash2`, `FileText`, `Building`).
+    - Pruned unused `lucide-react` imports.
+  - **4. Verification Matrix**:
+    - `apps/mobile`: `tsc --noEmit` -> **0 errors**.
+    - `apps/web`: `tsc --noEmit` -> **0 errors**.
+
+- **Feature / Compliance: Global Domain & Contact Email Standardization (`www.reachinternational.co.in` & `info@reachinternational.co.in`) (2026-09-11)**:
+  - **1. Objective**: Update the official website to `www.reachinternational.co.in` and official contact email to `info@reachinternational.co.in` across all pages, footers, settings, legal screens, intent filters, store assets, preview components, and metadata across both Web (`apps/web`) and Mobile (`apps/mobile`) apps.
+  - **2. Brand Constants Centralization**:
+    - `apps/mobile/lib/brand.ts`: Defined `BRAND_WEBSITE = "https://www.reachinternational.co.in"`, `BRAND_WEBSITE_DISPLAY = "www.reachinternational.co.in"`, and `BRAND_EMAIL = "info@reachinternational.co.in"`.
+    - `apps/web/lib/brand.ts`: Created identical centralized constants.
+  - **3. Mobile App Changes (`apps/mobile`)**:
+    - `app.json`: Updated intent filters to `www.reachinternational.co.in` and `reachinternational.co.in`.
+    - `shell/webview-config.ts`: Updated production webview fallback and trusted domain list.
+    - `app/(app)/settings.tsx`: Added interactive, direct-launch rows for Official Website (`WebBrowser.openBrowserAsync`) and Official Email (`Linking.openURL('mailto:info@reachinternational.co.in')`); updated brand footer.
+    - `app/(app)/privacy.tsx` & `app/(app)/terms.tsx`: Updated direct mailto action to `info@reachinternational.co.in` and display texts to `www.reachinternational.co.in`.
+    - `components/ui/SharedLinkPreviewCard.tsx`: Updated link preview domain.
+    - `components/machines/MachineDetailView.tsx`: Updated share URL to `https://www.reachinternational.co.in/machines?id=...`.
+    - `components/users/CreateUserModal.tsx` & `app/(auth)/forgot-password.tsx`: Updated email input placeholders.
+    - `components/navigation/MobileProfileSheet.tsx`: Updated footer version string with `www.reachinternational.co.in`.
+    - `store-assets/listing-details.json`, `docs/PLAY_STORE_SUBMISSION_CHECKLIST.md`, `docs/PLAY_STORE_DATA_SAFETY.md`, `docs/PLAY_STORE_CONTENT_RATING.md`: Updated developer website, contact email, and URLs.
+  - **4. Web App Changes (`apps/web`)**:
+    - `app/layout.tsx`: Configured root `metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://www.reachinternational.co.in")`.
+    - `app/sitemap.ts`: Set fallback baseUrl to `https://www.reachinternational.co.in` and registered `/privacy`, `/terms`, `/account-deletion`.
+    - `app/privacy/page.tsx`, `app/terms/page.tsx`, `app/account-deletion/page.tsx`: Updated canonical URLs, contact email (`info@reachinternational.co.in`), and website (`www.reachinternational.co.in`).
+    - `components/settings/SettingsClient.tsx`: Updated Support card button to `mailto:info@reachinternational.co.in` and system version footer with `www.reachinternational.co.in`.
+    - `components/landing/LandingFooter.tsx`: Added `info@reachinternational.co.in` under Account column and `www.reachinternational.co.in` in copyright line.
+  - **5. Documentation & System Rules**:
+    - Updated `README.md`, `AI/RULES/SEO-METADATA-DISCOVERABILITY.md`, `AI/RULES/DEPLOYMENT-DEVOPS-RELEASE.md`, `AI/PROJECT_MEMORY.md`, `AI/STATE.md`, and `AI/CURRENT_TASK.md`.
+  - **6. Verification Matrix**:
+    - `apps/mobile`: `tsc --noEmit` -> **0 errors**.
+    - `apps/web`: `tsc --noEmit` -> **0 errors**.
+    - Monorepo `pnpm turbo run typecheck`: **All 7 workspace packages successful, 0 errors**.
+- **Feature / Compliance: Google Play Store Compliance & Production Readiness (2026-09-11)**:
+  - **1. Objective**: Implement the full Comprehensive Play Store Compliance Plan for the ReachInternational React Native application (`com.reachinternational.app`) and web endpoints (`apps/web`), satisfying all Google Play Console technical, visual, legal, and operational requirements.
+  - **2. Mobile App Technical Configuration (`apps/mobile/app.json` & `eas.json`)**:
+    - `app.json`: Added `versionCode: 1`, `allowBackup: false` for enterprise data protection, `blockedPermissions` (`CAMERA`, `RECORD_AUDIO`, `ACCESS_FINE_LOCATION`, `ACCESS_COARSE_LOCATION`, `READ_CONTACTS` to prevent transitive SDK permission bloat), and deep link `intentFilters` for `https://reachinternation.com` and `https://reachinternational.in`.
+    - `eas.json`: Added `channel: "production"` and `channel: "preview"` to build profiles for EAS Update & release channel tracking; configured `submit.production.android` with `track: "internal"` and service account key setup.
+  - **3. Public Web Legal & Compliance Endpoints (`apps/web`)**:
+    - `apps/web/app/privacy/page.tsx`: Publicly accessible, unauthenticated Privacy Policy route with Vercel Geist design tokens (`#171717`, `#fafafa`, `#ffffff`, `#ebebeb`, `#0070f3`) covering HMR telemetry, operator identity, masked KYC credentials, data security, zero third-party sale, and compliance officer contact.
+    - `apps/web/app/terms/page.tsx`: Publicly accessible Terms of Service route detailing equipment custody, HMR anti-falsification, shift overrun safeguards, and safety inspections.
+    - `apps/web/app/account-deletion/page.tsx`: Dedicated public Account Deletion portal fulfilling Google Play's mandatory policy (in-app self-serve and external web email request methods).
+    - `apps/web/components/landing/LandingFooter.tsx`: Added Account Deletion alongside Privacy Policy and Terms of Service.
+  - **4. Store Listing Assets (`apps/mobile/store-assets/`)**:
+    - `listing-details.json`: Structured metadata containing app title ("Reach International"), exact 80-character short description, full description, category (`BUSINESS`), and support URLs.
+    - `release-notes-en-US.txt`: Version 1.0.0 initial release notes.
+    - `app-icon-512x512.png`: Official 512×512 PNG app icon.
+    - `feature-graphic-1024x500.png`: Exact 1024×500 24-bit RGB PNG feature graphic generated with official brand typography and squircle emblem.
+    - `SCREENSHOTS_SPEC.md`: Comprehensive specification and capture guide for 5 primary phone screens at 1080×2400.
+  - **5. Policy Compliance Documentation (`apps/mobile/docs/`)**:
+    - `PLAY_STORE_DATA_SAFETY.md`: Complete field-by-field answers for the Google Play Data Safety Questionnaire.
+    - `PLAY_STORE_CONTENT_RATING.md`: Complete IARC questionnaire answers resulting in an "Everyone / PEGI 3" rating.
+    - `PLAY_STORE_SUBMISSION_CHECKLIST.md`: Step-by-step AAB build, internal testing track, closed testing, and production rollout guide.
+  - **6. Verification Matrix**:
+    - `apps/mobile`: `tsc --noEmit` -> **0 errors**.
+    - `apps/web`: `tsc --noEmit` -> **0 errors**.
+    - Monorepo `pnpm turbo run typecheck`: **All 7 workspace packages successful, 0 errors**.
+- **Feature: Dedicated Privacy Policy & Terms of Service Screens & Pages (Web & Mobile Parity) (2026-09-11)**:
+  - **1. Objective**: Create separate, full-featured Privacy Policy and Terms of Service (Terms and Conditions) screens in the Mobile App (`apps/mobile`), integrate them into the routing architecture, update the Settings screen to link directly to these pages (replacing the temporary single-sentence popup modal), and synchronize matching public pages and links in the Web App (`apps/web`).
+  - **2. Mobile Application (`apps/mobile`)**:
+    - **Privacy Policy (`apps/mobile/app/(app)/privacy.tsx`)**: Created complete privacy policy screen using Geist design tokens (`Card`, `Badge`, `useTheme`, `spacingNumeric`, `radiusNumeric`), `<MobileHeader title="Privacy Policy" showBack={true} />`, operational telemetry (HMR logs), statutory KYC security (Aadhaar & Driver Licences), PostgreSQL RLS database security, and compliance contact (`support@reachinternational.in`).
+    - **Terms of Service (`apps/mobile/app/(app)/terms.tsx`)**: Created complete terms screen with `<MobileHeader title="Terms of Service" showBack={true} />`, operator certification rules, zero-tolerance HMR anti-falsification clause, single machine custody, overtime shift conflict resolution, daily pre-shift inspections, breakdown reporting, and worksite liability limitations.
+    - **Routing & Navigation**: Registered `privacy` and `terms` in `apps/mobile/app/(app)/_layout.tsx` under `<Tabs>` with `href: null`; added both to `ALLOWED_ROUTES` in `apps/mobile/lib/security.ts`.
+    - **Settings Screen (`apps/mobile/app/(app)/settings.tsx`)**: Replaced the brief popup modal and updated the "Privacy Policy" and "Terms of Service" rows in the "ABOUT REACH INTERNATIONAL" card to directly navigate via `router.push('/(app)/privacy')` and `router.push('/(app)/terms')`.
+  - **3. Web Application (`apps/web`)**:
+    - **Public Pages**: Created `apps/web/app/privacy/page.tsx` and `apps/web/app/terms/page.tsx` with responsive Geist typography, brand emblems, and complete industrial fleet terms.
+    - **Routing & Proxy**: Added `/privacy` and `/terms` to `publicRoutes` in `apps/web/proxy.ts`.
+    - **Navigation Wiring**: Updated `LandingFooter.tsx` to link directly to `/privacy` and `/terms`; updated `SettingsClient.tsx` to navigate directly to `/privacy` and `/terms` from the About & Support section.
+    - **Routing Map**: Updated `AI/ROUTING_MAP.md`.
+  - **4. Verification Matrix**:
+    - `apps/mobile`: `tsc --noEmit` -> **0 errors**.
+    - `apps/web`: `tsc --noEmit` -> **0 errors**.
+    - Monorepo `pnpm turbo run typecheck`: **All 7 workspace packages successful, 0 errors**.
+- **UI/UX Redesign: Profile Details & Slide-Up Sheets (Web & Mobile Parity) (2026-09-11)**:
+  - **1. Objective**: Redesign the profile details presentation across the mobile profile slide-up sheet (`MobileProfileSheet.tsx`), mobile settings account modal (`settings.tsx`), and web mobile profile drawer (`MobileBottomNav.tsx`). Replace cluttered, chunky, disconnected boxes with elegant Inset Grouped Cards adhering to Vercel Geist design tokens and iOS Settings standards.
+  - **2. Mobile Profile Slide-Up Sheet (`apps/mobile/components/navigation/MobileProfileSheet.tsx`)**:
+    - Replaced fragmented stack of 5 bulky individual boxes with 3 clean Inset Grouped Cards (`radiusNumeric.lg`, `backgroundColor: theme.colors.canvas`, hairline borders and dividers):
+      - **Operational & Shift**: Shift Schedule (`Clock` icon in sky-blue pill, shift timing, `ACTIVE` badge) and Base Yard / Location (`Building` icon in amber pill, city/state or default base yard).
+      - **Contact & Residence**: Mobile Phone (`Phone` icon in emerald pill, monospace formatting), Official Email (`Mail` icon in blue pill, user email), and Registered Address (`MapPin` icon in amber pill, full address with comfortable line height).
+      - **Government KYC & Credentials**: Aadhaar Card (`ShieldCheck` icon in indigo pill, masked `XXXX-XXXX-XXXX`, `VERIFIED` or `NOT SUBMITTED` status badge) and Driving Licence (`FileText` icon in purple pill, licence number, `VALID` or `OPTIONAL` badge).
+    - Removed misplaced Push Notifications card from profile info.
+    - Elevated Hero Header: Avatar circle with 1.5px hairline border, bold typography, email, and live `Badge` for role display. Neatly aligned theme toggle and close buttons.
+    - Integrated Change Password modal directly accessible via outline button alongside Edit Profile and Sign Out.
+  - **3. Settings Account Modal (`apps/mobile/app/(app)/settings.tsx`)**:
+    - Updated `AccountSettingsModal` to mirror the exact same structured, high-density grouped rows (Shift, Yard, Phone, Address, Aadhaar with Verified badge, Driving Licence with Valid badge).
+  - **4. Web Parity (`apps/web/components/layout/MobileBottomNav.tsx`)**:
+    - Synchronized web's mobile profile slide-up drawer to render the exact same 3 clean grouped inset cards (Operational & Shift, Contact & Residence, Government KYC & Credentials) with proper badges and hairline dividers, guaranteeing 100% web-to-mobile parity.
+  - **5. Verification Matrix**:
+    - `apps/mobile`: `tsc --noEmit` -> **0 errors**.
+    - `apps/web`: `tsc --noEmit` -> **0 errors**.
+    - Monorepo `pnpm turbo run typecheck`: **7/7 workspace packages successful, 0 errors**.
+- **Feature: Dedicated Settings Pages for Web & Mobile Applications (2026-09-11)**:
+  - **1. Objective**: Deliver dedicated, differentiated settings experiences across Web (`apps/web`) and Mobile (`apps/mobile`) applications: Web is optimized for administration, enterprise credentials, corporate policy, and system telemetry; Mobile is optimized for field operations, device notifications, offline sync resilience, and app preferences.
+  - **2. Web Application (`apps/web`)**:
+    - Route (`apps/web/app/(app)/settings/page.tsx`): Authenticated RSC route enforcing user session via `getCurrentUser()` from `@/lib/dal`.
+    - Component (`apps/web/components/settings/SettingsClient.tsx`):
+      - **Account**: User profile overview card (Avatar, role badge, KYC status, contact info, shift timing, yard & street address), Edit Profile modal trigger (`EditProfileModal`), and Change Password form with length/match validation, loading indicator, and server action integration.
+      - **Server Action (`apps/web/app/actions/auth.ts`)**: Implemented `changePasswordAction` with Supabase session check, current password verification, `updateUser({ password })`, and `auth.password_change` audit logging.
+      - **Theme & Appearance**: Interactive 3-card preview system for Light, Dark, and System appearance adhering to Vercel Geist tokens (`#171717`, `#fafafa`, `#ffffff`, `#ebebeb`, `#0070f3`) using `useTheme()`.
+      - **About & Support**: Help & FAQ modal, Operator Guide modal (pre-shift, operation, handover checklists), direct Contact Support email link (`support@reachinternational.in`), Privacy Policy modal, Terms of Service modal, and system version display (`v1.2.0 Build 2026.09`).
+      - **Sign Out**: Red destructive sign out card with confirmation modal and direct server action call to `logout()`.
+      - **Navigation Wiring**: Added Settings to `mainNavItems` in `AppSidebar.tsx` with `AnimatedSettings` icon and direct navigation link in `UserProfileDropdown.tsx`.
+  - **3. Mobile Application (`apps/mobile`)**:
+    - Bottom Navbar: Replaced `Profile` with `Settings` in `_layout.tsx` and `MobileBottomNav.tsx` as the 4th primary tab with active route indicator. Relegated `profile` to `href: null` accessible via Settings.
+    - Screen (`apps/mobile/app/(app)/settings.tsx`):
+      - Header: Simplified title to strictly `"Settings"`.
+      - My Account: Replaced expanded fields with a compact touch card (`variant="interactive"`) displaying Avatar, Name, Role badge, and email; tapping opens `AccountSettingsModal` showing shift schedule, assigned yard, KYC compliance, Edit Profile launcher, Change Password modal trigger, and link to full Profile screen.
+      - Notifications: Replaced expanded switch list with a compact touch card (`variant="interactive"`) displaying active notification badge; tapping opens `NotificationSettingsModal` with switches for Push Notifications, Shift Reminders, Breakdown Alerts, Assignment Alerts, and Overtime Alerts.
+      - App Theme: Streamlined to purely Color Appearance (`Light`, `Dark`, `System`), removing language, time format, and date format pickers per user request.
+      - Offline & Sync: Completely removed manual sync card per user request since offline sync is automatic upon network return.
+      - App Permissions: Push notification permission status badge and `NotificationPermissionModal` launcher.
+      - About & Legal: App version `v1.0.0 (Build 42)`, Expo SDK 57 runtime, Privacy Policy modal, Terms of Service modal, and brand footer.
+      - Sign Out: Red pill button with confirmation alert calling `signOut()` and navigating to login.
+    - Profile Screen (`profile.tsx`): Updated header to title `"Profile"` with `showBack={true}` and removed redundant Settings link.
+  - **4. Verification Matrix**:
+    - `apps/web`: `tsc --noEmit` -> **0 errors**.
+    - `apps/mobile`: `tsc --noEmit` -> **0 errors**.
+    - Monorepo: `pnpm turbo run typecheck` across all 7 packages -> **7/7 packages successful, 0 errors**.
+- **Feature & UI/UX Optimization: Users Page — Infinite Pagination on Scroll, FlatList Virtualization & Smooth UX (2026-09-11)**:
+  - **1. Objective**: Replace static/all-at-once user loading with high-performance infinite pagination on scroll for `/users` (Viewport: `418 × 930`) across React Native Mobile and Web App Mobile Cards view. Maintain non-blocking bottom spinner, deduplication, inline failure retry, subtle end-of-list indicator, and 60fps virtualization.
+  - **2. Web Server Action (`apps/web/app/actions/users.ts`)**:
+    - Created `getPaginatedUsersAction(params: UserListParams)` accepting pagination params (`page`, `pageSize`, `search`, `role`, `status`, `state`, `kyc`, `sort`, `dateRange`).
+    - Enforced authentication and supervisor scoping (`SUPERVISOR_VISIBLE_USER_ROLES` and `supervisor_id`/`supervisor_ids`).
+    - Relational lookups for supervisor names and branch state metadata.
+    - Returns structured payload with `users`, `page`, `pageSize`, `totalCount`, `totalPages`, and `hasMore`.
+  - **3. Web App Mobile View Infinite Scroll (`apps/web/app/(app)/users/users-client.tsx`)**:
+    - Implemented mobile-specific pagination state (`mobileUsersList`, `mobilePage`, `mobileHasMore`, `isLoadingMoreMobile`, `loadMoreMobileError`).
+    - Added `IntersectionObserver` sentinel element that fires `handleLoadMoreMobile()` when approaching the end of loaded cards.
+    - Integrated clean micro-spinner at bottom during next page fetches without interrupting card interaction or re-rendering existing items.
+    - Added inline retry card on network failure with single-tap retry handler.
+    - Rendered subtle end-of-list message: "All users have been displayed".
+    - Kept desktop high-density table view with standard pagination intact.
+  - **4. React Native Mobile App Virtualization (`apps/mobile/app/(app)/users.tsx`)**:
+    - Replaced the unvirtualized root `<ScrollView>` and card `.map()` loop with `<FlatList<UserRecord>>`.
+    - Created memoized `UserTouchCard` (`React.memo`) to eliminate re-renders of already-mounted cards when appending new pages.
+    - Encapsulated KPIs, search bar, filter toggle, expandable filter drawer, active filter badges strip, and pending change requests into `ListHeaderComponent`.
+    - Created `ListFooterComponent` rendering:
+      - Non-blocking micro-spinner with loading label during `isLoadingMore`.
+      - Inline error retry banner with `RefreshCw` icon and min 44px touch target.
+      - Subtle "All users have been displayed" divider when `hasMore === false`.
+    - Added `onMomentumScrollBegin` guard and `onEndReachedThreshold={0.35}` to prevent accidental duplicate fetches on fast scrolls.
+    - Added `isFetchingRef` concurrency lock and `requestVersionRef` to cancel stale query results when search/filter inputs change rapidly.
+    - Added Set-based ID deduplication (`new Set(prev.map(u => u.id))`) ensuring cards are never duplicated.
+    - Enabled visible native scrollbar (`showsVerticalScrollIndicator={true}`).
+    - Configured windowing props (`windowSize={7}`, `maxToRenderPerBatch={8}`, `initialNumToRender={10}`).
+  - **5. Build Resilience**:
+    - Replaced broken untracked scratch file `apps/web/app/(app)/settings/page.tsx` with a clean redirect to `/administration`.
+  - **6. Verification Matrix**:
+    - `apps/mobile`: `tsc --noEmit` -> **0 errors**.
+    - `apps/web`: `tsc --noEmit` -> **0 errors**.
+    - Monorepo: `pnpm turbo run typecheck` across all 7 workspace packages -> **7/7 packages successful, 0 errors**.
+- **Bugfix: Mobile App Web Bundling, Hook Order & Runtime Error Fixes (2026-09-11)**:
+  - **1. Objective**: Fix Expo web bundling errors and console warnings in `apps/mobile`: `Rendered fewer hooks than expected. This may be caused by an accidental early return statement.`, `Invalid mimeType for image with source: ./public/light-favicon.ico`, `Invalid style property of "outline"`, require cycles, and deprecated `props.pointerEvents`.
+  - **2. React Rules of Hooks (`apps/mobile/app/(app)/machines.tsx`)**:
+    - Identified that `MachinesScreen` contained an early return statement (`if (selectedMachine) return (...)`) before `const headerActions = useMemo(...)`.
+    - Moved all helper label lookups and `headerActions = useMemo(...)` to the top of the component body before any rendering.
+    - Eliminated the early return in favor of conditional rendering inside the root return block (`{selectedMachine ? <MachineDetailView ... /> : <>...</>}`).
+    - AST traversal verified 0 hook violations across the entire mobile codebase.
+  - **3. Favicon Config (`apps/mobile/app.json`, `apps/mobile/assets/favicon.png`)**:
+    - Replaced `"favicon": "./public/light-favicon.ico"` with `"favicon": "./public/light-favicon-96x96.png"` in `apps/mobile/app.json`. Expo CLI web favicon middleware uses `@expo/image-utils` (sharp/jimp) which requires standard raster image formats (PNG), not `.ico`.
+    - Synchronized `apps/mobile/assets/favicon.png` with a clean 96x96 PNG.
+  - **4. React Native Web Outline Long-Form Properties (`Input.tsx`, `DropdownFilterSelector.tsx`, `machines.tsx`, `users.tsx`)**:
+    - React Native Web strictly rejects shorthand `outline` in `StyleSheet.create`.
+    - Replaced shorthand `{ outlineStyle: 'none', outline: 'none' }` with long-form `{ outlineStyle: 'none' }` across all input components.
+  - **5. Require Cycle Elimination (`components/ui/index.ts`, `CustomBottomTabBar.tsx`, `EditProfileModal.tsx`)**:
+    - Pruned obsolete `CustomBottomTabBar.tsx` and removed redundant navigation exports from `components/ui/index.ts`.
+    - Converted `EditProfileModal.tsx` to direct imports (`../ui/Input`, `../ui/Button`, `../ui/TimeInput`, `../ui/ThemeProvider`), completely severing circular dependency chains.
+  - **6. PointerEvents Prop Deprecation (`PostNotificationBanner.tsx`, `MobileBottomNav.tsx`)**:
+    - Replaced deprecated `pointerEvents="box-none"` JSX prop with modern `style={{ pointerEvents: 'box-none' }}` on container views.
+  - **7. Verification Matrix**:
+    - TypeScript AST scan: 0 hook order violations.
+    - `node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit` in `apps/mobile`: **0 errors**.
+- **Feature: Comprehensive Post Notifications System Across Mobile App (2026-09-10)**:
+  - **1. Objective**: Complete wiring of user-facing and system post notifications across **Machine**, **User**, **Logs Entry**, **Logs Export & Manage**, and **Profile** modules with dual native/web delivery, ambient in-app floating banner, and persistent operational event feed.
+  - **2. Core Service & UI (`apps/mobile/lib/notifications/`, `apps/mobile/components/notifications/`)**:
+    - `postNotification.ts`: Dispatches events to system notifications (Web Notification API / Android), in-app subscribers, and `@reach:operational_notifications_feed` (up to 40 records in `AsyncStorage`).
+    - `PostNotificationBanner.tsx`: High-elevation, floating card banner positioned at the top of the viewport with domain icons, status pill, auto-dismiss (4.5s), and tap/swipe dismiss. Mounted in `_layout.tsx`.
+    - `PostNotificationFeedModal.tsx`: Slide-up bottom sheet allowing users to view recent notification logs categorized by domain with clear action.
+  - **3. Domain Wiring**:
+    - **Machine**: `AddMachineModal.tsx` (`notifyMachineCreated`, `notifyMachineUpdated`), `DeleteMachineDialog.tsx` (`notifyMachineDeleted`), `MachineExportModal.tsx` (`notifyMachineExported`).
+    - **User**: `CreateUserModal.tsx` (`notifyUserCreated`), `UserEditModal.tsx` (`notifyUserUpdated`), `UserDetailModal.tsx` (`notifyUserStatusChanged`, `notifyUserUpdated`), `UserExportModal.tsx` (`notifyUserExported`), `app/(app)/users.tsx` (`notifyUserPasswordReset`).
+    - **Logs Entry (Operations)**: `MeterLogModal.tsx` (`notifyLogEntryCreated`, `notifyMachineStatusChanged`).
+    - **Logs Export & Manage**: `OperationsExportModal.tsx` (`notifyLogsPdfExported`, `notifyLogsCsvExported`), `MobileAssignmentModal.tsx` (`notifyOperatorAssigned`, `notifyShiftConflictDetected`), `MobileConflictResolutionModal.tsx` (`notifyConflictResolved`).
+    - **Profile**: `EditProfileModal.tsx` (`notifyProfileUpdated`, `notifyProfileRequestSubmitted`), `app/(app)/profile.tsx` (`notifyProfileRequestCancelled`, `notifyThemeToggled`, "Recent Notifications Feed" button + modal mount).
+  - **4. Verification Matrix**:
+    - `apps/mobile`: `tsc --noEmit` -> **0 errors**.
+    - Monorepo: `pnpm turbo run typecheck` -> **7/7 packages successful, 0 errors**.
+- **UI/UX Refactor: Page Feedback: /operations — Clean Overtime Shift Conflict Alert UI/UX (2026-09-10)**:
+  - **1. User Request**: "see the current screenshots messy ui/ux , too much text , i cant understand anything make it clean and use only imp info to show show me which user and machine and shift date , time overtime conflict with clearly" on `/operations` (viewport `1536×695`).
+  - **2. Mobile App Conflict Alert Overhaul (`apps/mobile/app/(app)/operations.tsx`)**:
+    - Replaced long explanatory paragraphs and repetitive bullet points with a scannable 2-tier card design:
+      - **Top Header Tier**: Equipment icon (`Truck`) + machine code/model + severity badge ("DUAL MACHINE CONFLICT" / "SHIFT OVERLAP") + direct "Review" button.
+      - **Bottom High-Density Info Strip (4 Key Fields)**:
+        - `OPERATOR`: User icon + operator full name.
+        - `SHIFT DATE`: Calendar icon + formatted shift date.
+        - `SHIFT & OVERTIME`: Clock icon + start/end time range + amber `+X.Xh OT` badge.
+        - `CONFLICTS WITH`: AlertTriangle icon + distinct rose badge indicating the conflicting equipment/shift roster.
+    - Inline daily log warning: Replaced lengthy description text with a compact OT pill and single-line conflict badge.
+    - Cleaned up obsolete styles and added clean high-density layout styles.
+  - **3. Web App Synchronization (`apps/web/components/operations/OperationsClient.tsx`)**:
+    - Replaced cluttered conflict cards and inline mobile warnings with the identical 2-tier, 4-column structured layout matching mobile.
+    - Fixed JSX nesting and unclosed tag structure in the conflict alert section.
+  - **4. Resilience Fixes**:
+    - `apps/mobile/components/users/UserExportModal.tsx`: Imported missing Lucide icons (`FileSpreadsheet, X, FileText, Download, Check`).
+  - **5. Verification Matrix**:
+    - `apps/mobile`: `typecheck` -> **0 errors**.
+    - `apps/web`: `tsc --noEmit` -> **0 errors**.
+    - Monorepo: `pnpm typecheck` -> **7/7 packages successful, 0 errors**.
+- **UI/UX Refactor: Page Feedback: /operations — Show Only Titles in Top Navbar Tabs (Remove Icons, Numbers, Badges) (2026-09-10)**:
+  - **1. User Request**: "show only title, remove icon, any number, or anythungs keep short, clean and properly visible" on `/operations` top navbar tabs (viewport `1536×695`).
+  - **2. Mobile Top Navbar Overhaul (`apps/mobile/app/(app)/operations.tsx`)**:
+    - Stripped all icons (`Clock`, `FileText`, `Truck`) from all tabs.
+    - Stripped all numeric/counter badges (`{logs.length}`, `{activeAssignmentsList.length}`) and alert badges (`{pendingConflicts.length} Alert(s)`).
+    - Tabs now display strictly clean, short titles: **Daily Running Hours** and **Machine Assignments** (or **Log Entry** and **Log History** for Operators).
+    - Centered pill layout (`height: 36, paddingHorizontal: 16, borderRadius: radiusNumeric.lg`), refined typography (`fontSize: 13, fontWeight: '600'`, active `fontWeight: '700'`).
+    - Pruned 6 dead badge styles from stylesheet.
+  - **3. Web App Synchronization (`apps/web/components/operations/OperationsClient.tsx`)**:
+    - Removed amber conflict alert badge and sky counter badge from the top supervisor tab bar.
+    - Renamed "Operator Machine Assignments" to "Machine Assignments" for 100% naming parity.
+    - Fixed pre-existing malformed JSX in conflict banner header.
+  - **4. Type Resilience Fixes**:
+    - Resolved missing `radiusNumeric, spacingNumeric` in `AddMachineModal.tsx`.
+    - Resolved `NodeJS.Timeout` type in `PostNotificationBanner.tsx`.
+  - **5. Verification Matrix**:
+    - `apps/mobile`: `tsc --noEmit` -> **0 errors**.
+    - `apps/web`: `tsc --noEmit` -> **0 errors**.
+- **Feature / Security: Mobile App Permissions Configuration & Post-Install Notification Prompt Flow (2026-09-10)**:
+  - **1. User Request**:
+    - Recommended permissions matrix: `INTERNET` (Yes), `ACCESS_NETWORK_STATE` (Recommended), `POST_NOTIFICATIONS` (Ask user after install).
+    - Remove unused permissions: `CAMERA`, `READ/WRITE_EXTERNAL_STORAGE`, `LOCATION`, `READ_CONTACTS`, `CALL_PHONE`, etc.
+    - Implement post-install notification permission prompt properly.
+  - **2. Manifest Configuration (`apps/mobile/app.json`)**:
+    - Configured `android.permissions` to `["INTERNET", "ACCESS_NETWORK_STATE", "POST_NOTIFICATIONS"]`.
+    - Pruned deprecated `CAMERA`, `READ_EXTERNAL_STORAGE`, `WRITE_EXTERNAL_STORAGE`.
+    - Pruned `NSCameraUsageDescription` and `NSPhotoLibraryUsageDescription` from iOS `infoPlist`.
+  - **3. Permissions Service (`apps/mobile/lib/permissions/notificationPermissions.ts`)**:
+    - Created cross-platform permissions utility supporting Android 13+ (`PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS`), Web browser Notification API (`window.Notification`), and persistent fallback.
+    - Built functions: `getNotificationPermissionStatus()`, `requestNotificationPermission()`, `shouldPromptNotificationPermission()`, `dismissNotificationPrompt()`, and `getAppPermissionsOverview()`.
+    - Implemented 7-day cooldown on soft dismissals via `@reach:notif_permission_dismissed_at` in `AsyncStorage`.
+  - **4. Value-First Permission Primer Modal (`NotificationPermissionModal.tsx`)**:
+    - Built with Vercel Geist design tokens (`#171717` ink, `#fafafa` canvas, `#ffffff` elevated, hairline borders).
+    - Explains key operational reasons (shift conflict alerts, equipment handover notices, zero spam) prior to invoking system dialog.
+    - Min 44px touch targets on primary and secondary action buttons.
+  - **5. App Layout & Profile Integration**:
+    - `apps/mobile/app/(app)/_layout.tsx`: Automatically runs `shouldPromptNotificationPermission()` on launch post-auth and prompts user if undetermined.
+    - `apps/mobile/app/(app)/profile.tsx`: Added "APP PERMISSIONS & TELEMETRY" card with real-time status badges (`INTERNET: ACTIVE`, `ACCESS_NETWORK_STATE: ACTIVE`, `POST_NOTIFICATIONS: ENABLED / NOT ENABLED`) and 1-tap "Enable Notifications" button.
+    - `apps/mobile/components/navigation/MobileProfileSheet.tsx`: Added interactive Push Notifications card in profile drawer.
+  - **6. Verification**:
+    - `apps/mobile`: `tsc --noEmit` -> **0 errors**.
+    - Monorepo: `pnpm typecheck` -> **7/7 packages successful, 0 errors**.
+    - Browser: Tested on `http://localhost:8081/profile`, verified modal and telemetry cards.
+- **UI/UX Refactor: Page Feedback: /users — Remove Header Subtitle Text & Synchronize Search & Filter Toolbar with /machines (2026-09-10)**:
+  - **1. User Request**: Remove extra subtitle text from `<MobileHeader>` and synchronize `/users` search and filter with the `/machines` design and optimizations (viewport `1536×695`).
+  - **2. Mobile Header Pruning (`apps/mobile/components/ui/MobileHeader.tsx`)**:
+    - Removed eyebrow and subtitle rendering (`{eyebrow && ...}`, `{subtitle && ...}`) so `<MobileHeader>` strictly displays only the squircle brand emblem icon (`<ReachBrandEmblem size={24} />`) + page title (`titleText`) on the left, with Quick Access and 3-dot actions on the right.
+    - Pruned dead `eyebrowText` and `subtitleText` styles.
+    - Removed redundant `search={{...}}` prop invocation from `<MobileHeader>` on `/users`.
+  - **3. Shared UI Component Export (`apps/mobile/components/ui/index.ts`)**:
+    - Re-exported `DropdownFilterSelector` and `type FilterOption` as shared components for universal mobile use.
+  - **4. FilterToolbar Synchronization (`apps/mobile/app/(app)/users.tsx`)**:
+    - **Capsule Search Bar**: Full rounded pill (`borderRadius: radiusNumeric.full`, `height: 40`), `paddingHorizontal: 14`, search icon, clear `X` button, return-key search submission (`onSubmitEditing`), web outline suppression, and whole-border focus highlight with subtle 1px ring (`boxShadow`). 280ms debounce with micro `ActivityIndicator` during typing.
+    - **Filter Toggle Button**: Pill button with `SlidersHorizontal` icon, "Filter" label, active count badge (`activeCountBadge`), and rotating `ChevronDown` (CSS transition on web, `Animated.timing` with cubic-bezier easing on native).
+    - **Quick Reset Button**: Displays `RotateCcw` and "Reset" when `activeFilterCount > 0`.
+    - **Instant & Smooth Expandable Filter Panel**: Web uses GPU-accelerated CSS Grid transition (`gridTemplateRows: 1fr / 0fr`, `opacity: 1 / 0`, 220ms `cubic-bezier(0.16, 1, 0.3, 1)`); Native uses `Animated.View` with `filterAnim` interpolated `maxHeight` and `opacity`.
+    - **6 Dimension Dropdown Selectors (`DropdownFilterSelector`)**: Role, Status, State (with search), KYC, Joined range, and Sort By.
+    - **Active Filter Badges Strip**: Horizontal chips for search, role, status, state, KYC, joined range, and sort with status dots, direct removal `X` triggers, and "Reset all" action.
+    - **Results Count Indicator**: Shows dynamic count of matching staff members.
+    - **Pruned Legacy Code**: Removed obsolete `CustomFilterSelectorModal` and pruned dead styles (`searchFilterContainer`, `searchInput`, `filterScroll`, `filterPill`, etc.).
+  - **5. Verification**:
+    - `apps/mobile`: `npx tsc --noEmit` -> **0 errors**.
+    - Bundler and runtime loads cleanly on web and mobile viewports.
+- **Feature / UI/UX Refactor: Page Feedback: /operations — Comprehensive Overtime Shift Conflict Detailed Warnings & Web/Mobile Parity (2026-09-10)**:
+  - **1. User Request**: "overtime shift conflict error give me more properly and detailed warnings" on `/operations` (viewport `1536×695`).
+  - **2. Shared Conflict Parsing Utility (`packages/utils/src/conflict.ts` & `packages/utils/src/index.ts`)**:
+    - Implemented `parseConflictReason(reason, context)`:
+      - Classifies conflict categories: Dual Machine Custody (`overtime_overlaps_assignment:code`), Shift Overrun, SQLSTATE `23P01`, and generic shift overlaps.
+      - Produces high-clarity title, severity pill (`DUAL MACHINE CUSTODY CONFLICT`, `SHIFT OVERRUN CONFLICT`), overtime hours badge (`+{ot} hrs Overtime Claimed`), colliding machine code (`Collides with: RI-MC-0012`), risk bullet points (unverified custody, billing concurrency, schedule overlap), and concrete supervisor guidance (`acknowledgeAdvice` vs `adjustAdvice`).
+    - Implemented `calculateAdjustedHours(startTime, adjustedEndTime)`:
+      - Live client-side recalculation of running and overtime hours with validation messages.
+    - Built and verified with `pnpm --filter @reachinternational/utils build` (0 errors).
+  - **3. Mobile App Enhancements (`apps/mobile`)**:
+    - `MobileConflictResolutionModal.tsx`: Overhauled modal with severity badge, formatted header alert, incident breakdown grid, operational risk & compliance advisory card, supervisor choice guidance, and live adjusted calculation.
+    - `app/(app)/operations.tsx`:
+      - Upgraded Overtime Conflict Alert Banner with formatted descriptions, severity pills, conflicting equipment tags, overtime claimed badges, and expand toggle (`showAllConflicts`).
+      - Upgraded daily log cards with amber/green left borders, `Shift Conflict · Pending` header badge, and inline Overtime Shift Conflict Warning Well with direct `Resolve Conflict` button.
+    - `MobileAssignmentModal.tsx`: Upgraded error handling to capture `data && !data.success` and render structured conflict alert card with bullet warnings and actionable guidance.
+  - **4. Web App Synchronization (`apps/web/components/operations/OperationsClient.tsx`)**:
+    - Achieved 100% parity across the web application:
+      - Overtime Conflict Alert Banner: upgraded with `parseConflictReason`, severity badges, conflicting entity pills, and expand toggle (`showAllConflictsWeb`).
+      - Daily Running Hours Table (Desktop): added row highlight, shift conflict review button, and resolved status badge (`Adjusted` / `Acknowledged`).
+      - Daily Running Hours Mobile Cards: added amber/green left border accent, shift conflict header pill, and inline Overtime Shift Conflict Detailed Warning Well with direct `Resolve Conflict` button.
+      - Conflict Resolution Modal: overhauled with full incident breakdown, risk & compliance advisory box, supervisor choice guidance, and live interactive recalculation feedback via `calculateAdjustedHours`.
+      - Shift Assignment Modal: upgraded error display to rich conflict alert card with bullet warnings and actionable guidance.
+  - **5. Verification**:
+    - `node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit` in `apps/web`: **0 errors**.
+    - Mobile operations TypeScript check: **0 errors**.
+    - Full Web-to-Mobile Parity verified.
+- **UI/UX Refactor: Page Feedback: /users — Remove Select Button (Rely on Long Press for Selection) (2026-09-10)**:
+  - **1. User Request**: "remove select btn since we can long press to use select option" on `<MobileHeader>` 3-dot actions menu (viewport `1536×695`).
+  - **2. Pruned Header Action Item (`apps/mobile/app/(app)/users.tsx`)**:
+    - Removed `select-mode` ("Batch Select Staff" / "Exit Selection Mode") from `headerActions` passed to `<MobileHeader>`.
+    - Removed `isSelectMode` from `headerActions` dependency array.
+  - **3. Enhanced Long-Press Selection & Floating Bulk Bar**:
+    - Long-pressing (`onLongPress`) on any user card activates batch selection mode (`isSelectMode = true`).
+    - `toggleSelectUser`: Automatically exits `isSelectMode(false)` if the last item is unchecked.
+    - `handleSelectAll`: Tapping "Deselect" resets selection and exits `isSelectMode(false)`.
+    - Floating Bulk Bar (`mobileBulkBar`): Added dedicated `X` cancel button inside `bulkCountRow` (`bulkCloseBtn`) with 24×24 circular touch target and 44px min hitSlop for 1-tap exit.
+  - **4. Verification**:
+    - `npx tsc --noEmit` in `apps/mobile`: **0 errors**.
+    - `npx tsc --noEmit` in `apps/web`: **0 errors**.
+- **UI/UX Refactor: Page Feedback: /operations — Relocate Quick Access from Bottom Nav to Mobile Header Across All Mobile Pages (2026-09-10)**:
+  - **1. User Request**: "remove the quick access from here and place it to the header to every page in mobile app" on `<MobileBottomNav>` `button [Search]` (viewport `1536×695`).
+  - **2. Bottom Nav Streamlining (`apps/mobile/components/navigation/MobileBottomNav.tsx`)**:
+    - Removed `search` nav item and `Search` icon from `MobileBottomNav.tsx`.
+    - Removed `cmdOpen` state and `<MobileCommandPalette>` component from the bottom navigation bar.
+    - Bottom bar is now dedicated purely to primary screen navigation:
+      - **Operator**: Operations, Profile.
+      - **Admin / Managers**: Machines, Operations, (Users if admin), Profile.
+  - **3. Universal Mobile Header Quick Access (`apps/mobile/components/ui/MobileHeader.tsx`)**:
+    - Added `showQuickAccess?: boolean` (default `true`) and `onQuickAccessPress?: () => void`.
+    - **Wide Viewport (≥640px, Tablet & Desktop `1536×695`)**: Renders a sleek Quick Access capsule pill (`[Search icon]  Quick Access  [ ⌘K / Ctrl K ]`) with elevated canvas background and hairline border.
+    - **Compact Viewport (<640px, Mobile Phones)**: Renders a 36×36 circular icon button with Search icon and accessibility role/label "Quick Access".
+    - Added global keyboard shortcut listener on web (`(e.metaKey || e.ctrlKey) && e.key === 'k'`) toggling Command Palette.
+    - Added "Global Quick Access Palette" entry in 3-dot dropdown menu.
+  - **4. Cleaned Page Headers (`operations.tsx`, `machines.tsx`, `users.tsx`)**:
+    - Removed redundant `search={{ ... }}` prop from `<MobileHeader>` calls on `/operations`, `/machines`, and `/users`.
+    - Fixed `resetAllFilters()` binding in `users.tsx`.
+    - All 7 authenticated mobile screens (`/operations`, `/machines`, `/users`, `/clients`, `/dashboard`, `/my-work`, `/profile`) now consistently display the Quick Access trigger in their headers.
+  - **5. Verification**:
+    - `node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit` in `apps/mobile`: **0 errors**.
+    - `npx tsc --noEmit` in `apps/web`: **0 errors**.
+    - Monorepo TypeScript check: **0 errors**.
+- **UI/UX Refactor: Page Feedback: /operations — Add Top Navbar Below Header with Daily Running Hours & Machine Assignments (2026-09-10)**:
+  - **1. User Request**: "below the header add above navbar and place daily runnings hours and machine assignmenst to the above navbar in the mobile app" on viewport `1536×695`.
+  - **2. Top Navbar Implementation (`apps/mobile/app/(app)/operations.tsx`)**:
+    - **Header "Assign" Action**: Added compact 32px high-contrast `Assign` operator button (`headerAssignBtn`) to `<MobileHeader>` `rightAction` with `UserCheck` icon and Geist ink background.
+    - **Dedicated Top Navbar ("Above Navbar")**: Positioned `<View style={styles.aboveNavbar}>` directly below `<MobileHeader>` with `borderBottomColor: theme.colors.hairline` and horizontal scrolling (`ScrollView horizontal`) for 320px–1536px responsive consistency.
+    - **Daily Running Hours Tab**: High-contrast active tab pill (`#171717` ink background, `#ffffff` text, font-weight 800) with `Clock` icon and amber alert badge for pending conflicts (`{pendingConflicts.length} Alert(s)`).
+    - **Machine Assignments Tab**: High-contrast active tab pill with `Truck` icon and active counter badge (`{activeAssignmentsList.length}`) in cyan/sky.
+    - **Operator Mode Support**: Dedicated tabs for "Log Entry" (`Clock`) and "Log History" (`FileText` with `{logs.length}` badge).
+    - **Route Query Sync**: Added `useLocalSearchParams<{ tab?: string }>()` from `expo-router` so deep links (`?tab=logs` or `?tab=assignments`) automatically activate the matching tab.
+  - **3. Verification**:
+    - `npx tsc --noEmit` in `apps/mobile`: **0 errors**.
+    - `npx tsc --noEmit` in `apps/web`: **0 errors**.
+    - Monorepo `pnpm turbo run typecheck` across all 7 workspace packages: **7/7 successful, 0 errors**.
+- **Feature Parity & UI/UX: Standardize Mobile Header (Logo + Title + Search + 3-Dot Actions) Across All Mobile Pages (2026-09-10)**:
+  - **1. User Request**: "in the header place log + page title + seach + 3 dot for other action / this header follow to all the pages in the mobile / make sure dont miss any pages" on viewport `1536×695`.
+  - **2. Upgraded `MobileHeader.tsx` Primitive (`apps/mobile/components/ui/MobileHeader.tsx`)**:
+    - **Logo**: Squircle brand mark `<ReachBrandEmblem size={24} />` directly beside page title on the left.
+    - **Search**:
+      - On wider screens (≥560px, e.g. web preview `1536×695`): Always-visible rounded capsule search bar with search icon, real-time input, micro-spinner during debounce, and clear `X`.
+      - On compact screens (<560px): Search icon button that expands the search input across the header with back navigation.
+      - Click on screens without direct query opens integrated `MobileCommandPalette`.
+    - **3-Dot Action Menu**:
+      - 36×36 `MoreVertical` button opening anchored dropdown modal directly beneath trigger on web (`getBoundingClientRect`) and native (`measureInWindow`).
+      - Houses all secondary operations (Assign Operator, Export/Print, Add Record, Bulk Import, Reset Filters, Refresh Data, Edit Profile, Sign Out).
+  - **3. Standardized Across All 7 Mobile App Screens (`apps/mobile/app/(app)/`)**:
+    - `/operations`: Replaced custom `headerStrip` with `MobileHeader` with dual-tab search (`search` & `assignmentSearch`) and 3-dot actions (`Assign Operator`, `Export / Print Report`, `Refresh Operations Data`, `Switch Tabs`, `Review Conflicts`).
+    - `/machines`: Connected `search` and 3-dot actions (`+ Add Machine`, `Export Fleet Directory`, `Bulk Excel Import Guide`, `Reset Active Filters`, `Refresh Fleet Machinery`).
+    - `/users`: Connected `search` and 3-dot actions (`+ Add / Invite Staff`, `Export Users Directory`, `Batch Select Staff`, `Reset All Filters`, `Refresh Users Directory`).
+    - `/clients`: Connected `search` and 3-dot actions (`+ Add New Client`, `Refresh Client Directory`).
+    - `/dashboard`: Connected search to command palette and 3-dot actions (`View Machine Directory`, `View Fleet Operations`, `Refresh Dashboard Data`).
+    - `/my-work`: Connected search to command palette and 3-dot actions (`Log Daily Meter`, `View Shift Operations`, `Refresh Work Feed`).
+    - `/profile`: Connected search to command palette and 3-dot actions (`Edit Profile & Shift Details`, `Refresh Profile Data`, `Theme Toggle`, `Sign Out of Account`).
+  - **4. Verification**:
+    - `node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit` in `apps/mobile`: **0 errors**.
+    - Monorepo `pnpm turbo run typecheck` across all 7 workspace packages: **7/7 successful, 0 errors**.
+- **UI/UX Refactor: Page Feedback: /machines — Keep Only Logo to the Left of Page Name in Header (2026-09-10)**:
+  - **1. User Request**: "keep only logo in the header in the left of the page name".
+  - **2. Mobile Header Brand Alignment (`apps/mobile/components/ui/MobileHeader.tsx`)**:
+    - Integrated `<ReachBrandEmblem size={24} />` directly inside `titleWithLogoRow`, rendering immediately to the left of the page name (`titleText`).
+    - Made `showLogo = true` the default for `MobileHeader` so all main screens display the iconic brand emblem without cumbersome text lockups.
+    - Preserved single-row layout, eliminating redundant multi-tier headers and keeping vertical height minimal (~52px total on web).
+    - Kept theme toggle button omitted from header (accessible via Mobile Profile Sheet & Command Palette).
+  - **3. Verification**:
+    - `tsc --noEmit` in `apps/mobile`: **0 errors**.
+- **Feature: Mobile App Reach International "Reaching All Heights" Logo with Squircle Brand Emblem Icon (2026-09-10)**:
+  - **1. User Request**: "Feedback: remove this icon and use the earlier logo / keep reach international reaching all heights just replace the icon".
+  - **2. Emblem Icon Integration (`apps/mobile/components/branding/ReachInternationalLogo.tsx`)**:
+    - Added `iconType?: 'emblem' | 'scissor'` to `ReachInternationalLogo`, defaulting to `'emblem'`.
+    - Integrated `ReachBrandEmblem` squircle icon mark (trellis + bold 'R' + chevron roof + baseline bar) directly beside `"REACH INTERNATIONAL"` and the `"REACHING ALL HEIGHTS"` tagline.
+    - Preserved 100% theme polarity: in dark mode renders white squircle container with dark trellis, bold 'R' and cyan chevron; in light mode renders dark container with white trellis, bold 'R' and brand blue chevron.
+  - **3. Mobile Header Alignment (`apps/mobile/components/ui/MobileHeader.tsx`)**:
+    - Retained `<ReachInternationalLogo size={24} showTagline={true} />` in `MobileHeader.tsx` which now renders the squircle brand mark emblem alongside the canonical brand typography.
+  - **4. Verification**:
+    - `tsc --noEmit` in `apps/mobile`: **0 errors**.
+- **Feature: Mobile App Brand Identity, SVG Logos, Opening Splash & Shared Link Preview (2026-09-10)**:
+  - **1. User Request**: "read this folder all the icon , logo properly and use in the svg , shared link logo preview , also while opening the app show the Logo properly(make sure in the dark theme use light logo , in the light theme use dark logo everywhere in the mobile app also make sure this should be properluy optimize".
+  - **2. Vector SVG Brand Primitives (`apps/mobile/components/branding/ReachInternationalLogo.tsx`)**:
+    - `ScissorLiftLogoIcon`: Built exact vector geometry matching `dark-favicon.svg` and `light-favicon.svg` (`viewBox="0 0 100 100"`), including chassis, wheels, hydraulic mounts, double X-braces, center hydraulic cylinder with opacity, platform deck, guardrails, and upward height arrow.
+    - `ReachBrandEmblem`: Built squircle app icon mark mirroring `dark-web-app-manifest-512x512.png` and `light-web-app-manifest-512x512.png` (trellis + bold 'R' + isometric blue chevron + blue underline bar).
+    - `ReachInternationalLogo`: Built full horizontal lockup matching `pdf-logo.png` (scissor mark + REACH + INTERNATIONAL + hairline divider + REACHING ALL HEIGHTS).
+    - **Theme Polarity**: In dark theme, renders the **light logo** (white marks, cyan `#38bdf8` accent); in light theme, renders the **dark logo** (charcoal `#0f172a` marks, brand blue `#0284c7` accent). Fully memoized with `React.memo`.
+  - **3. App Opening Splash & Gateway Screen (`index.tsx` & `_layout.tsx`)**:
+    - Replaced raw activity indicator with centered `<ReachInternationalLogo size={42} showTagline={true} />` on `theme.colors.canvas`.
+    - Implemented native-driver breathing pulse animation loop on scale and opacity with `"INITIALIZING FLEET PLATFORM"` status pill.
+    - Handled `SplashScreen.preventAutoHideAsync()` and `SplashScreen.hideAsync()` in `_layout.tsx` to eliminate cold-start flashes.
+    - Updated `assets/icon.png`, `assets/adaptive-icon.png`, and `assets/splash.png` with official 512×512 icon assets; updated `app.json`.
+  - **4. Shared Link Logo Preview (`+html.tsx`, `SharedLinkPreviewCard.tsx`, `layout.tsx`)**:
+    - Created `apps/mobile/app/+html.tsx` with Open Graph (`og:image: /dark-web-app-manifest-512x512.png`), Twitter card, and theme-adaptive favicons.
+    - Created `SharedLinkPreviewCard.tsx` with brand emblem, domain pill, logo banner, and 1-tap Copy/Share actions.
+    - Added "Share Machine Link" action to `MachineDetailView.tsx`.
+    - Added matching `openGraph.images` and `twitter.images` to `apps/web/app/layout.tsx`.
+  - **5. Universal Light/Dark Logo Switching Across Mobile App**:
+    - `MobileHeader.tsx`: Replaced letter 'R' square with `<ReachBrandEmblem size={30} />`.
+    - `forgot-password.tsx`: Replaced letter 'R' square with `<ReachInternationalLogo size={24} showTagline={false} />`.
+    - `onboarding.tsx`: Added `<ReachInternationalLogo size={26} />` to header banner.
+    - `MachineDetailView.tsx`: Updated hero squircle with themed `<ScissorLiftLogoIcon size={24} />`.
+    - `MobileProfileSheet.tsx` & `profile.tsx`: Added brand footprint footer with version info.
+    - `lib/brand.ts`: Single source of truth for branding metadata and public asset paths.
+  - **6. Verification**:
+    - `node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit` in `apps/mobile`: **0 errors**.
+    - `pnpm turbo run typecheck` across all 7 workspace packages: **7/7 successful, 0 errors**.
+- **Feature: Complete Removal of Notifications Module from Web and Mobile Apps (2026-09-10)**:
+  - **1. User Request**: "remove the notification tooo", "i want want any traces of this module in bolt mobile and webapp remove it completely from everywhere".
+  - **2. Mobile App Deletions & Refactoring (`apps/mobile`)**:
+    - Deleted screen `apps/mobile/app/(app)/notifications.tsx`.
+    - Removed `notifications` tab registration from `apps/mobile/app/(app)/_layout.tsx`.
+    - Pruned `Bell` import, `notifications` nav item, and active state check from `apps/mobile/components/navigation/MobileBottomNav.tsx`.
+    - Pruned `Bell` import and `nav-notifications` command item from `apps/mobile/components/navigation/MobileCommandPalette.tsx`.
+    - Pruned `/(app)/notifications` from `ALLOWED_ROUTES` in `apps/mobile/lib/security.ts`.
+    - Overhauled `apps/mobile/app/(app)/dashboard.tsx`: removed `notifications` query, `unreadAlerts` metric, `recentAlerts` state, and the "RECENT DISPATCH ALERTS" section and unused alert styles.
+    - Fixed missing `isDark` destructuring from `useTheme()` in `apps/mobile/components/machines/MachineDetailView.tsx`.
+  - **3. Web App Deletions & Refactoring (`apps/web`)**:
+    - Deleted route directories: `apps/web/app/(app)/notifications/` (loading.tsx, page.tsx) and `apps/web/app/(app)/notification/` (page.tsx).
+    - Deleted component directory: `apps/web/components/notifications/` (`NotificationRow.tsx`, `NotificationPreviewModal.tsx`, `NotificationMobileCard.tsx`, `NotificationListClient.tsx`).
+    - Deleted component: `apps/web/components/landing/NotificationEngineSection.tsx`.
+    - Deleted server actions: `apps/web/app/actions/notifications.ts` and `apps/web/app/actions/manual-reminder.ts`.
+    - Deleted queries: `apps/web/lib/queries/notifications.ts`.
+    - Deleted cron endpoint: `apps/web/app/api/cron/send-reminders/`.
+    - Deleted dispatch library: `apps/web/lib/notifications/` (`daily-summary.ts`, `email-templates.tsx`, `index.ts`, `send-reminders.ts`).
+    - Deleted scratch scripts: `test-notifications.ts` and `test-notification.ts`.
+    - Pruned `AnimatedBell` import and `notifications` nav item from `apps/web/components/layout/MobileBottomNav.tsx`.
+    - Pruned `AnimatedBell` import and `notification_settings` entry from `apps/web/components/admin/AdminClient.tsx`.
+    - Pruned `notifications` and `userNotifications` cache tags from `apps/web/lib/cache/tags.ts` and `apps/web/lib/cache.ts`.
+    - Pruned `CACHE_TAGS.notifications` from `apps/web/app/actions/refresh.ts`.
+  - **4. Verification**:
+    - `node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit` in `apps/mobile` (0 errors).
+    - `npx tsc --noEmit` in `apps/web` (0 errors).
+    - Monorepo `pnpm turbo run typecheck` across all 7 workspace packages (7/7 successful, 0 errors).
+- **Feature: Universal Animated Skeleton Loading Across Machines, Users, Clients, Operations, and Dashboard (2026-09-10)**:
+  - **1. User Request**: "use skeleton loading in machine , user , clients , operaton etc page properly" and page feedback on `/machines`: "use skeletor loading while loading the page also while seaching the machine".
+  - **2. Native Animated Skeleton Primitive (`apps/mobile/components/ui/Skeleton.tsx`)**:
+    - Upgraded the `Skeleton` primitive with an animated opacity pulse loop (`0.4` <-> `0.85` with 800ms ease-in-out easing).
+    - Enabled `useNativeDriver: Platform.OS !== 'web'` for 60fps rendering without UI thread blocking.
+  - **3. Machines Screen (`/machines`)**:
+    - Mobile: Created `MobileMachineCardSkeleton.tsx` and `MobileMachineListSkeleton` mirroring the exact geometry of `MobileMachineCard` (16px rounded card surface, 3px left accent border, Machine ID pill `86×26`, model text `76×16`, 2 status badges `60×20` and `56×20`, metadata line, 2-column specs well for HMR/Client/Supervisor/Operator, card footer action buttons).
+    - Mobile: Added 280ms debounced search, `isSearching` state, micro `ActivityIndicator` in capsule search input replacing magnifying glass, `<MobileMachineListSkeleton count={4} />` on initial load (`isLoading`), and `<MobileMachineListSkeleton count={3} />` during search debouncing (`isSearching`).
+    - Web: Connected `MobileMachineCardSkeletonList` for mobile viewports and passed `isLoading={isPending}` to `FilterToolbar` for micro-spinner feedback.
+  - **4. Users Screen (`/users`)**:
+    - Mobile: Created `UserCardSkeleton.tsx` and `UserListSkeleton` mirroring `MobileUserCard` geometry (36×36 avatar circle, 125×15 name, 160×12 email, status badge, role pill, phone chip, location, and supervisor details). Exported via `apps/mobile/components/users/index.ts`.
+    - Mobile: Replaced legacy `<ActivityIndicator>` with `<UserListSkeleton count={4} />`, added 280ms debounced search with micro-spinner in search capsule, and rendered `<UserListSkeleton count={4} />` during debounced search.
+    - Web: Verified `TableSkeletonRows` and `MobileCardSkeletonList` during `isPending`.
+  - **5. Clients Screen (`/clients`)**:
+    - Mobile: Created `ClientCardSkeleton.tsx` and `ClientListSkeleton` mirroring `ClientCard` geometry (client code badge 64×13, company name 160×17, GST/PAN badges, status badge 65×22, details well with contact person, phone, email, address, and action buttons). Exported via `apps/mobile/components/clients/index.ts`.
+    - Mobile: Added live Supabase fetching with fallback, 280ms debounced search with micro-spinner, and rendered `<ClientListSkeleton count={4} />` during load and search debouncing.
+    - Web: Replaced `opacity-60 pointer-events-none` with `ClientTableSkeletonRows` for desktop and `MobileClientCardSkeletonList` for mobile cards, plus spinning `Loader2` indicator in search bar during `isPending`.
+  - **6. Operations Screen (`/operations`)**:
+    - Mobile: Created `OperationsSkeleton.tsx` providing `OperationLogCardSkeleton` / `OperationLogListSkeleton` (mirroring running log cards) and `AssignmentCardSkeleton` / `AssignmentListSkeleton` (mirroring equipment shift cards). Exported via `apps/mobile/components/operations/index.ts`.
+    - Mobile: Added 280ms debounced search on both Daily Running Hours (`isSearchingLogs`) and Operator Machine Assignments (`isSearchingAssignments`), micro-spinners in both search capsules, and rendered `<OperationLogListSkeleton count={4} />` and `<AssignmentListSkeleton count={4} />`.
+    - Web: Replaced `opacity-50 pointer-events-none` with `OperationsLogTableSkeletonRows` and `MobileOperationsLogCardSkeletonList` during `isPending`, plus spinning `Loader2` in search input.
+  - **7. Dashboard Screen (`/dashboard`)**:
+    - Mobile: Replaced fallback `'—'` text in the 4 KPI fleet metric cards with pulsating `<Skeleton width={44} height={26} borderRadius={4} />` during `isLoading`.
+    - Web: Verified existing dashboard skeleton placeholders.
+  - **8. Verification Matrix**:
+    - `node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit` in `apps/mobile` (0 errors).
+    - `pnpm --filter @reachinternational/web typecheck` (0 errors).
+    - Monorepo `pnpm turbo run typecheck` across all 7 workspace packages (7/7 successful, 0 errors).
+- **Feature: Complete Removal of Deprecated Modules from Web and Mobile Apps (2026-09-10)**:
+  - **1. User Request**: "from the mobile and web app remove invontory , hr , crm , task ,breakdown ,service , field service report ,wquippment rental , spare part , hr , finanace page completely i want want any traces of this module in bolt mobile and webapp remove it completely from everywhere".
+  - **2. Mobile App Deletions (`apps/mobile`)**:
+    - Deleted 8 screen routes in `apps/mobile/app/(app)/`: `complaints.tsx`, `crm.tsx`, `finance.tsx`, `fsr.tsx`, `hr.tsx`, `inventory.tsx`, `rentals.tsx`, `tasks.tsx`.
+    - Deleted 8 component directories in `apps/mobile/components/`: `complaints`, `crm`, `finance`, `fsr`, `hr`, `inventory`, `rentals`, `tasks`, and deleted `apps/mobile/components/work/ComplaintStatusModal.tsx`.
+    - Updated `apps/mobile/app/(app)/_layout.tsx`: pruned tab registrations for deleted modules.
+    - Updated `apps/mobile/components/navigation/MobileCommandPalette.tsx`: removed command items (`nav-crm`, `nav-complaints`, `nav-fsr`, `nav-rentals`, `nav-tasks`, `nav-inventory`, `nav-hr`, `nav-finance`) and unused icons.
+    - Updated `apps/mobile/lib/security.ts`: pruned deleted routes from `ALLOWED_ROUTES`.
+    - Updated `apps/mobile/app/(app)/dashboard.tsx`: removed `tasks` query and `activeTasks` metric.
+    - Updated `apps/mobile/app/(app)/my-work.tsx`: overhauled to focus purely on active shift equipment and meter logging, removing complaints, service jobs, and FSR review sections.
+  - **3. Web App Deletions (`apps/web`)**:
+    - Deleted 10 route directories in `apps/web/app/(app)/`: `crm`, `finance`, `hr`, `inventory`, `rentals`, `service`, `services`, `tasks`, `complaints`, `clients/[id]`.
+    - Deleted 6 component directories in `apps/web/components/`: `crm`, `finance`, `hr`, `inventory`, `rentals`, `tasks`.
+    - Deleted 6 server action files in `apps/web/app/actions/`: `finance.ts`, `hr.ts`, `inventory.ts`, `rentals.ts`, `sales.ts`, `tasks.ts`.
+    - Deleted 6 query files in `apps/web/lib/queries/`: `finance.ts`, `hr.ts`, `inventory.ts`, `rentals.ts`, `sales.ts`, `tasks.ts`.
+    - Updated `apps/web/components/layout/AppHeader.tsx`: removed title mappings for deleted modules.
+    - Updated `apps/web/components/layout/AppSidebar.tsx`: pruned commented subItems for service logs and breakdown complaints.
+    - Updated `apps/web/components/admin/AdminClient.tsx`: changed Employees shortcut destination from `/hr` to `/users`.
+    - Updated `apps/web/components/dashboard/MobileDueBuckets.tsx` & `MobileDashboardHeader.tsx`: redirected fallback links from `/services` to `/machines`.
+    - Updated `apps/web/app/globals.css`: removed `#printable-fsr-report` print CSS.
+    - Updated `apps/web/lib/queries/my-work.ts` & `apps/web/components/my-work/MyWorkClient.tsx`: pruned complaints, services, and spare parts references.
+  - **4. Verification Matrix**:
+    - `npx tsc --noEmit` in `apps/web` (0 errors).
+    - `node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit` in `apps/mobile` (0 errors).
+    - Monorepo `pnpm turbo run typecheck` across all 7 workspace packages (7/7 successful, 0 errors).
+- **Mobile App: Remove "ALL PLATFORM MODULES" Section from Mobile Profile Sheet (2026-09-10)**:
+  - **1. User Request**: "read the screenshot and remove the all platform module from the profile page".
+  - **2. Root Cause**:
+    - `apps/mobile/components/navigation/MobileProfileSheet.tsx` displayed an obsolete quick-navigation list titled `"ALL PLATFORM MODULES"` with 11 module rows (`clients`, `crm`, `tasks`, `complaints`, `fsr`, `rentals`, `inventory`, `hr`, `finance`, `dashboard`, `profile`).
+    - The authoritative web profile drawer in `apps/web/components/layout/MobileBottomNav.tsx` does not have this section, leading to UI clutter and drift.
+  - **3. Implementation Details**:
+    - Pruned `<View style={styles.sectionContainer}>` containing `"ALL PLATFORM MODULES"` and its mapped items from `apps/mobile/components/navigation/MobileProfileSheet.tsx`.
+    - Removed unused Lucide icons (`Building2`, `Briefcase`, `AlertTriangle`, `SlidersHorizontal`, `CheckSquare`, `Package`, `Calendar`, `DollarSign`, `LayoutDashboard`, `User`, `ChevronRight`, `Wrench`, `Gauge`, `Bell`, `Users`).
+    - Removed unused `handleNavigate` function and dead styles (`modulesCard`, `moduleRow`, `moduleRowLeft`, `moduleIconBox`, `moduleRowText`).
+    - Adjusted `signOutBtn` top margin to 8px for clean, balanced spacing directly beneath "Edit Profile & Shift Details".
+  - **4. Verification Matrix**:
+    - `npx tsc --noEmit` in `apps/mobile` (0 errors).
+- **Page Feedback: /machines — Skeleton Loading During Page Load & Machine Search (2026-09-10)**:
+  - **1. User Feedback**: "use skeletor loading while loading the page, also while seaching the machine" on viewport `1536×695`.
+  - **2. Root Cause & Requirements**:
+    - During initial page load (`isLoading === true`), `apps/mobile/app/(app)/machines.tsx` rendered a legacy `<ActivityIndicator size="large" />` with plain text *"Loading fleet machinery..."*, causing abrupt layout shifting when machine cards rendered.
+    - During search, query updates were synchronous without debounce, without loading feedback in the search box, and without skeleton cards, causing UI jumping on keystrokes.
+  - **3. Native Pulsing Skeleton Primitive (`apps/mobile/components/ui/Skeleton.tsx`)**:
+    - Upgraded the `Skeleton` primitive with an animated opacity pulse loop (`0.4` <-> `0.85` with 800ms ease-in-out easing, using native driver where available) to give all skeleton placeholders a smooth, living shimmer.
+  - **4. Mobile Machine Card Skeleton (`apps/mobile/components/machines/MobileMachineCardSkeleton.tsx`)**:
+    - Created `MobileMachineCardSkeleton` and `MobileMachineListSkeleton` mirroring the exact geometry of `MobileMachineCard`: 16px rounded card surface, 3px left accent border, Machine ID pill (`86×26`), model text (`76×16`), 2 status badges (`60×20` and `56×20`), metadata line, 2-column specs well (HMR, Client, Supervisor, Operator), and card footer action buttons.
+  - **5. Search Debounce & Real-Time Loading Indicator (`apps/mobile/app/(app)/machines.tsx`)**:
+    - Introduced `debouncedSearch` and `isSearching` state with a snappy 280ms debounce. Input field remains bound to immediate `search` for zero keystroke lag. When searching (`isSearching === true`), a micro `ActivityIndicator` smoothly replaces the search magnifying glass.
+  - **6. Skeletons on Page Load and Search**:
+    - Replaced legacy `<ActivityIndicator>` and *"Loading fleet machinery..."* text with `<MobileMachineListSkeleton count={4} />` during initial page load (`isLoading`). Rendered `<MobileMachineListSkeleton count={3} />` during active search debouncing (`isSearching`), completely eliminating abrupt content flashing. Results count row displays a matching placeholder skeleton during transitions.
+  - **7. Web Synchronization (`apps/web/components/machines/MachineListClient.tsx`)**:
+    - Added `MobileMachineCardSkeletonList` to web's mobile touch-card view (`block sm:hidden`) and passed `isLoading={isPending}` to `FilterToolbar` for complete cross-platform parity.
+  - **8. Verification Matrix**:
+    - `node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit` in `apps/mobile` (0 errors).
+    - `pnpm turbo run typecheck` across all 7 workspace packages (7/7 successful, 0 errors).
+- **Feature: Mobile App: Remove Sidebar & Implement Web-Identical Floating Bottom Navbar (2026-09-10)**:
+  - **1. User Feedback**: "remove side bar from the mobile app and use botton navbar just like in the webapp where everpage should be access by the navbar make sure color , style , color , theme , layout , behavior , animation , transition , backend logic , query etc eveything should be 100% identical to the web app".
+  - **2. Root Cause & Requirements**:
+    - The mobile app relied on an outdated sidebar drawer (`MobileDrawer.tsx`) toggled by a hamburger menu icon in `MobileHeader.tsx`, creating an inconsistent navigation experience with the web app (`apps/web/components/layout/MobileBottomNav.tsx`).
+    - The mobile bottom bar was either hidden or only rendered sub-item pills (`CustomBottomTabBar.tsx`), preventing quick access to core and secondary modules.
+  - **3. Decommissioned Sidebar Drawer & Hamburger Menu**:
+    - Removed `Menu` hamburger button and `useDrawer` call from `MobileHeader.tsx`. Cleanly renders brand emblem (`R`), name, and live sync status on the left (or `ChevronLeft` when `showBack` is active), with theme switchers and action buttons on the right.
+    - Converted `DrawerContext.tsx` into a lightweight, safe no-op pass-through and deprecated `MobileDrawer.tsx`.
+  - **4. Floating Bottom Navigation Bar (`MobileBottomNav.tsx`)**:
+    - Built `apps/mobile/components/navigation/MobileBottomNav.tsx` with 100% parity to `apps/web/components/layout/MobileBottomNav.tsx`.
+    - Floating pill container (`borderRadius: 9999`, max-width `480px`, elevated card background `#171717` dark / `#ffffff` light, hairline border `#262626` dark / `#ebebeb` light, elevation shadow) pinned above device safe area (`useSafeAreaInsets()`).
+    - Role-based tabs:
+      - **Operator**: Operations (`Gauge`), Search (`Search`), Profile (`User`).
+      - **Admin / Super Admin**: Machines (`Wrench`), Operations (`Gauge`), Search (`Search`), Alerts (`Bell`), Users (`Users`), Profile (`User`).
+      - **Managers / Supervisors / Others**: Machines (`Wrench`), Operations (`Gauge`), Search (`Search`), Alerts (`Bell`), Profile (`User`).
+    - Dynamic active click dot indicator (`width: 5, height: 5, borderRadius: 2.5, backgroundColor: theme.colors.ink`) under the active item label matching web.
+  - **5. Mobile Command Palette (`MobileCommandPalette.tsx`)**:
+    - Built `apps/mobile/components/navigation/MobileCommandPalette.tsx` providing 1-tap navigation to every single page in the platform.
+    - Real-time search across Navigation (Machines, Operations, Logs, Assignments, Clients, CRM, Users, Alerts, Complaints, FSR, Rentals, Tasks, Inventory, HR, Finance, Dashboard, My Work, Profile), Quick Actions (Add Machine, Assign Operator), and System Preferences (Theme toggle, Sign Out) with keyword and role permission filtering.
+  - **6. Mobile Profile Slide-Up Sheet (`MobileProfileSheet.tsx`)**:
+    - Built `apps/mobile/components/navigation/MobileProfileSheet.tsx` matching `MobileBottomNav.tsx` lines 255–428.
+    - Slide-up bottom sheet with handle bar, user avatar circle, full name, email, role badge, theme toggle, and close button.
+    - Operational cards: Shift Schedule, Mobile Phone, Address, Aadhaar & Licence (2-col grid).
+    - Edit Profile button opening `EditProfileModal`.
+    - All Platform Modules quick-navigation grid (Clients, CRM, Tasks, Complaints, FSR, Rentals, Finance, Inventory, HR, Dashboard).
+    - Red destructive "Sign out of account" button with secure session termination.
+  - **7. Layout Architecture Update (`apps/mobile/app/(app)/_layout.tsx`)**:
+    - Removed `DrawerProvider`. Registered all 16 `(app)` screens with `options={{ headerShown: false, href: null }}`.
+    - Rendered `tabBar={() => <MobileBottomNav />}` so floating navbar persists across every route.
+    - Exported `MobileBottomNav`, `MobileCommandPalette`, and `MobileProfileSheet` in `apps/mobile/components/navigation/index.ts` and `apps/mobile/components/ui/index.ts`. Fixed `MobileMachineCardSkeleton.tsx` token usage.
+  - **8. Verification**: Verified with `node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit` in `apps/mobile` (0 errors) and monorepo `pnpm turbo run typecheck` across all 7 workspace packages (0 errors).
+
+- **Page Feedback: /machines — Instant Open & Close with Smooth Animation for Filter & Sort Selectors (2026-09-10)**:
+  - **1. User Feedback**: Viewport: 1536×695. Feedback: "when i click it then instant open with smooth animation the filter and sort option, when i click it instant close with smooth animatin" on `[Toggle filter selectors]`.
+  - **2. Root Cause Analysis**:
+    - Conflicting animations on Web: React Native's `Animated.timing` was running a JavaScript `requestAnimationFrame` loop updating inline `maxHeight` and `opacity` on every 16ms frame, while the DOM element concurrently had CSS `transition: max-height 0.26s ...`. This caused the browser to continually restart transitions every 16ms, creating lag, stutter, and frame drops.
+    - The fallback height interpolated `maxHeight` from 0 to 360px (`outputRange: [0, panelContentHeight > 0 ? panelContentHeight + 10 : 360]`). Since the 4 filter/sort buttons take only ~52px on desktop and ~90px on phone, closing required `maxHeight` to drop from 360px to 52px (~215ms) before any visual collapse started, giving the impression of an unresponsive click followed by a sudden snap shut.
+  - **3. GPU-Accelerated CSS Grid Animation on Web (`machines.tsx`)**:
+    - Implemented native CSS Grid accordion on web: `display: 'grid'`, `gridTemplateRows: filterPanelOpen ? '1fr' : '0fr'`, `opacity: filterPanelOpen ? 1 : 0`, and `transition: 'grid-template-rows 220ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms cubic-bezier(0.16, 1, 0.3, 1)'` with `pointerEvents: filterPanelOpen ? 'auto' : 'none'`.
+    - Wrapped inner content in `<View style={{ minHeight: 0, overflow: 'hidden' }}>`. When closing, the collapse begins on frame 1 directly from the exact current content height, eliminating dead zones and lag.
+  - **4. Instant Chevron & Button State Transitions**:
+    - Added 180ms background/border color transition on the Filter toggle button.
+    - Synchronized ChevronDown rotation with matching 220ms cubic-bezier curve (`0deg` -> `180deg`).
+  - **5. Calibrated Native Animation (`Platform.OS !== 'web'`)**:
+    - Guarded `Animated.timing` to native mobile platforms only. Calibrated fallback height to 140px so native iOS/Android devices also close immediately without dead time.
+  - **6. Verification**: Verified with `node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit` in `apps/mobile` (0 errors) and monorepo `pnpm turbo run typecheck` across all 7 workspace packages (0 errors).
+
+- **Page Feedback: /machines — Rounded Search Area, Web Border Focus Parity, Sort Search Removal, Default Closed Filter & Smooth Animation (2026-09-10)**:
+  - **1. User Feedback**: Viewport: 1536×695. Feedback: "in the mobile app use properly seach seach area with round, remove seach bar from the sort, use proper padding , seach behavior , when i click tot he seach tab it select all the border properly just like web app, also bydefaylt close the filter, also make the smooth filter opern and close animation".
+  - **2. Root Cause Analysis**:
+    - React Native's `<TextInput>` rendered as an HTML `<input>` on web without `outlineStyle: 'none'`, causing browsers to draw a default orange focus ring directly around the inner text box rather than highlighting the outer container.
+    - The search container lacked a pill/rounded shape and had tight padding (`height: 38`, `paddingHorizontal: 8`).
+    - `DropdownFilterSelector.tsx` automatically injected an inline search input when `options.length > 6`, which triggered on the 7-item `SORT_OPTIONS` list.
+    - `filterPanelOpen` was hardcoded to `true` on screen mount.
+    - The filter panel was mounted conditionally (`{filterPanelOpen && ...}`) with no enter/exit transitions.
+  - **3. Capsule Search Bar & Full Border Focus (`machines.tsx`)**:
+    - Redesigned `searchBarBox` as a rounded capsule pill (`height: 40`, `borderRadius: radiusNumeric.full` [9999], `paddingHorizontal: 14`).
+    - Added `isSearchFocused` state tracking and `searchInputRef` so clicking anywhere on the capsule focuses the text input.
+    - Suppressed inner browser focus outline using `outlineStyle: 'none'`.
+    - Highlighted the entire container border with `theme.colors.ink` and a subtle 1px ring (`boxShadow`) on focus, matching the web app.
+    - Aligned the Filter toggle and Reset buttons to matching `height: 40` and `radiusNumeric.full` pills for balanced toolbar alignment.
+  - **4. Sort Search Bar Removal (`DropdownFilterSelector.tsx`)**:
+    - Updated `hasSearch` logic to strictly check `Boolean(showSearch)` and passed `showSearch={false}` on Sort dropdown, removing the search input while preserving it on Supervisor.
+    - Added web focus outline suppression to `menuSearchInput`.
+  - **5. Default Closed Filter & Smooth Accordion Animation**:
+    - Initialized `filterPanelOpen` to `false` by default.
+    - Implemented `filterAnim` using `Animated.Value` with cubic-bezier easing (`Easing.bezier(0.16, 1, 0.3, 1)`), smoothly animating `maxHeight` and `opacity` with `overflow: 'hidden'`.
+    - Added smooth `0deg` -> `180deg` rotation animation to the `ChevronDown` icon on the Filter button.
+  - **6. Verification**: Verified `node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit` in `apps/mobile` (0 errors) and monorepo `pnpm turbo run typecheck` across all 7 workspace packages (0 errors).
+
+- **Page Feedback: /machines?tab=inventory — Replace Filter Dialog Modals with Anchored Dropdown Selectors (2026-09-10)**:
+  - **1. User Feedback**: Viewport: 1536×695. Feedback: "for rental , supervisor , helth , sort etc use dropdown selector instead of dialogue box".
+  - **2. Root Cause & Requirements**: The previous implementation opened full-screen centered `<Modal>` dialogue boxes with dark backdrops whenever a user tapped any filter button. This felt like heavy dialog popups rather than the slick, anchored dropdown menus expected on web and modern mobile apps.
+  - **3. Anchored Dropdown Selector Component (`DropdownFilterSelector.tsx`)**:
+    - Created `apps/mobile/components/machines/DropdownFilterSelector.tsx` measuring anchor coordinates dynamically via `getBoundingClientRect` on web and `measureInWindow` on native.
+    - Positions menu directly below the trigger (`top = rect.bottom + 4`), with automatic upward flip if close to bottom of screen and clamping to avoid screen edge clipping.
+    - Integrated status dot indicators (emerald, sky, cyan, amber, danger rose), active checkmarks, and inline search bar for lists with >6 options (such as the supervisor directory).
+    - Added outside-tap dismissal via transparent full-screen backdrop and Escape key listener on web.
+  - **4. Integration into Machine Screen (`machines.tsx`)**: Replaced all 4 modal triggers with `<DropdownFilterSelector>` for Rental Status, Health Status, Supervisor, and Sort dimensions. Removed obsolete state (`activePickerModal`) and styles.
+  - **5. Verification**: Verified `node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit` in `apps/mobile` (0 errors) and monorepo `pnpm turbo run typecheck` across all 7 packages (0 errors).
+
+- **Page Feedback: /machines — Search, Filter UI/UX and Backend DB Logic Web Parity (2026-09-10)**:
+  - **1. User Feedback**: Viewport: 1536×695. Feedback: "use the same web apps seach and filter ui/ux and backend , db logic".
+  - **2. Root Cause & Requirements**: The mobile machinery screen used a simple text input and a horizontal pill scroll strip that opened full-screen modals, lacking the web app's unified `FilterToolbar` card container, interactive 4-card KPI metric grid, and filter chips. In addition, role-based data scoping for operators/supervisors and active shift assignment hydration were missing, while the header contained an obsolete `machine_categories` modal button.
+  - **3. Interactive 4-Card KPI Metric Grid**: Replicated web's 4 interactive KPI cards (`Total Machines`, `Available Fleet`, `On Rent`, `Breakdown Events`) with active highlight borders and tap-to-filter support.
+  - **4. FilterToolbar Container & Filter Selectors**: Replicated web's `FilterToolbar` with elevated canvas background, hairline border, rounded-xl corners, search bar (search icon, clear `X` button), expandable Filter button with active count badge pill, quick Reset button (`RotateCcw`), 4 custom filter selector dropdowns (`Rental`, `Health`, `Supervisor`, `Sort`) with colored dot indicators, and an active filter badge chips strip with individual removal and "Reset all".
+  - **5. Backend DB Logic & Role Scoping**: Added role scoping matching Web DAL (`operator`: `current_operator_id.eq.user.id,operator_ids.cs.{user.id}`, `supervisor`: `current_supervisor_id.eq.user.id,supervisor_ids.cs.{user.id}`). Hydrated active assignments from `operator_machine_assignments` (`is_active = true`, ordered by `shift_start_time` ascending). Pruned obsolete `FolderTree` category button from mobile header.
+  - **6. Verification**: `node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit` in `apps/mobile` (0 errors) and monorepo `pnpm turbo run typecheck` (7/7 packages successful, 0 errors).
+
+- **Bug Fix: Fix Machine Fetching & Visibility on Mobile React Native App (2026-09-10)**:
+  - **1. User Feedback**: "there is no machine are visible, fix this and make sure all the machine data should be visible in the mobile apps(react native) properly fetch all the data from the supabase machine table". Mobile displayed 0 of 0 machine assets.
+  - **2. Root Cause Analysis**: In `apps/mobile/app/(app)/machines.tsx`, the Supabase query projection in `.from('machines').select(...)` included `customer_name`. The PostgreSQL `public.machines` table does not contain a `customer_name` column (client data is linked relationally via `client_id`). PostgREST rejected the query with error code `42703 (column machines.customer_name does not exist)`. Because errors were caught without fallback, `machines` remained `[]`.
+  - **3. Resilient Query Architecture & Parity**:
+    - Removed `customer_name` from `.from('machines').select(...)` in `machines.tsx`.
+    - Added a resilient two-stage fallback query: if the primary relational join ever encounters an error, the screen automatically executes a base `machines` query and hydrates client and user objects independently.
+    - Added `fetchError` state and high-contrast error card with a "Retry Fetch" button (`AlertCircle` icon) so users are never left with a silent empty state.
+    - Decoupled `fetchMachines` dependency array using functional `setSelectedMachine(prev => ...)`.
+    - Expanded search to match against `client.city` and `client.state`.
+    - Fixed `MachineModal.tsx` payload to remove `customer_name` so updates/inserts do not fail.
+    - Fixed `MachineExportModal.tsx` to support `status || rental_status` and `hour_meter`.
+  - **4. Automated QA Verification**: Built and passed `supabase/tests/test_mobile_machines_query.mjs` (16/16 test assertions passing across Admin, Supervisor, and Operator roles, verifying all 19 machines loaded). Verified TypeScript across mobile (`tsc --noEmit`, 0 errors) and monorepo (`pnpm turbo run typecheck`, 7/7 packages successful, 0 errors).
+
+- **Page Feedback: /machines — Remove Redundant Header Elements & KPI Grid on Mobile (2026-09-10)**:
+  - **1. User Feedback**: Requested removal of role badge from header, eyebrow/subtitle text, manual reload icon (given swipe-to-refresh is implemented), and the 4-card KPI metric grid to declutter the mobile screen.
+  - **2. Mobile Header Decluttering (`MobileHeader.tsx`)**: Made role `<Badge>` optional via `showRoleBadge?: boolean` defaulting to `false`.
+  - **3. Screen Simplification (`machines.tsx`)**: Removed `eyebrow` ("FLEET ASSETS") and `subtitle` props from `<MobileHeader>`. Removed `RefreshCw` icon button from `headerActions` in favor of native pull-to-refresh. Removed `<View style={styles.kpiGrid}>` with its `statsSummary` calculation and styles.
+  - **4. Verification**: Verified `node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit` in `apps/mobile` (0 errors) and monorepo `turbo run typecheck` (7/7 packages successful, 0 errors).
+
+- **Bug Fix: Fix 'BackHandler is not supported on web' in Mobile App (2026-09-10)**:
+  - **1. Root Cause**: `BackHandler.addEventListener` was invoked unconditionally without verifying `Platform.OS !== 'android'` in `apps/mobile/app/(app)/machines.tsx`. When running the mobile app in web mode (`pnpm web`), `react-native-web` logged a console error / crash.
+  - **2. Platform Guard**: Added `Platform` import and guarded hardware back button handler with `if (Platform.OS !== 'android') return;`.
+  - **3. Verification**: Mobile typecheck passed with 0 errors and monorepo `turbo run typecheck` passed (7/7 packages successful).
+
+- **Bug Fix: Fix 'column clients_1.email does not exist' in React Native Mobile (2026-09-10)**:
+  - **1. Root Cause**: PostgreSQL table `public.clients` dropped the redundant `email` column in Migration 029 (contact email for equipment resides directly on `machines.customer_email`). `apps/mobile/app/(app)/machines.tsx` and `operations.tsx` still included `email` in PostgREST relation projections for `clients`.
+  - **2. Query Projection Alignment**: Removed `email` from `client:clients!machines_client_id_fkey` in `machines.tsx` and from `.from('clients').select(...)` / `client:clients!machine_hour_logs_client_id_fkey` in `operations.tsx`.
+  - **3. Verification**: Verified mobile typecheck `pnpm --filter @reachinternational/mobile typecheck` (0 errors) and monorepo `turbo run typecheck` (7/7 packages successful).
+
+- **Bug Fix: Resolve 'lucide-react-native' Resolution Error in Expo Mobile App (2026-09-10)**:
+  - **1. Root Cause**: While Metro was running, `pnpm add` updated dependencies and re-established NTFS junctions in `apps/mobile/node_modules`, causing Metro's in-memory cache to miss the new junctions on Windows. Additionally, `metro.config.js` was using legacy pre-SDK 52 manual `watchFolders` overrides (`watchFolders = [workspaceRoot]`) that caused slow indexing.
+  - **2. Metro Configuration Modernization**: Updated `apps/mobile/metro.config.js` to use standard Expo SDK 57 monorepo configuration (`getDefaultConfig(__dirname)`). This eliminated manual watch path conflicts and improved bundling performance by >14x (down from 33.5s to 2.3s).
+  - **3. Verification**: Verified full bundling with `npx expo export --platform android` (0 errors, 3,177 modules), `pnpm --filter @reachinternational/mobile typecheck` (0 errors), and monorepo `turbo run typecheck` (7/7 packages passing).
+
 - **Feature: Web → React Native Complete Parity Audit & P0/P1 Implementation (2026-09-10)**:
   - **1. Profile Data Source Fix (P0)**: Updated `apps/mobile/app/(app)/profile.tsx` to read authoritative user details directly from PostgreSQL `users` table instead of stale `user.user_metadata`. Added pending review banner displaying status of `profile_change_requests` with target approver role and capability to withdraw/cancel request directly from mobile.
   - **2. Edit Profile Server-Side Validation Parity (P0)**: Integrated `ProfileUpdateSchema` from `@reachinternational/validation` into `apps/mobile/components/profile/EditProfileModal.tsx`. Added database uniqueness checks for mobile phone, 12-digit Aadhaar, and driving licence against all other users in PostgreSQL. Added Indian States searchable selector modal with `state_id` mapping.

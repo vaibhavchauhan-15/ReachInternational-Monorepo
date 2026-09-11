@@ -10,6 +10,7 @@ import {
   TextInput,
   StyleSheet,
   TouchableOpacity,
+  Platform,
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
@@ -187,6 +188,7 @@ const styles = StyleSheet.create({
     height: '100%',
     fontSize: 14,
     paddingVertical: 0,
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {}),
   },
   errorText: {
     fontSize: 12,

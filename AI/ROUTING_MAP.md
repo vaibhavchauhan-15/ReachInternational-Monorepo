@@ -7,6 +7,8 @@
 | `/login` | `app/login/page.tsx` | Public | User authentication login page |
 | `/signup` | `app/signup/page.tsx` | Public | User registration & onboarding |
 | `/forgot-password` | `app/forgot-password/page.tsx` | Public | Password recovery request & link generation |
+| `/privacy` | `app/privacy/page.tsx` | Public | Enterprise data protection & privacy policy |
+| `/terms` | `app/terms/page.tsx` | Public | Fleet operations terms of service & equipment custody |
 
 ## Authenticated App Routes `(app)`
 All routes inside `(app)` require an active session and inherit layout from `app/(app)/layout.tsx`.

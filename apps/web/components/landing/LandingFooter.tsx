@@ -98,6 +98,11 @@ export function LandingFooter() {
                     Sign In
                   </Link>
                 </li>
+                <li>
+                  <a href="mailto:info@reachinternational.co.in" className="hover:text-[var(--color-ink)] transition-colors">
+                    info@reachinternational.co.in
+                  </a>
+                </li>
               </ul>
             </div>
           </div>
@@ -105,14 +110,17 @@ export function LandingFooter() {
 
         {/* Bottom Copyright Row */}
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[var(--color-mute)]">
-          <p>© {year} REACH INTERNATIONAL. All rights reserved.</p>
+          <p>© {year} REACH INTERNATIONAL • <a href="https://www.reachinternational.co.in" className="hover:text-[var(--color-ink)] transition-colors">www.reachinternational.co.in</a>. All rights reserved.</p>
           <div className="flex items-center gap-6">
-            <a href="#features" className="hover:text-[var(--color-ink)] transition-colors">
+            <Link href="/privacy" className="hover:text-[var(--color-ink)] transition-colors">
               Privacy Policy
-            </a>
-            <a href="#security" className="hover:text-[var(--color-ink)] transition-colors">
+            </Link>
+            <Link href="/terms" className="hover:text-[var(--color-ink)] transition-colors">
               Terms of Service
-            </a>
+            </Link>
+            <Link href="/account-deletion" className="hover:text-[var(--color-ink)] transition-colors">
+              Account Deletion
+            </Link>
           </div>
         </div>
       </div>

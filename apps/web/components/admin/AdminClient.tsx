@@ -9,7 +9,6 @@ import {
   AnimatedSlidersHorizontal,
   AnimatedFileText,
   AnimatedShoppingBag,
-  AnimatedBell,
   AnimatedScrollText,
   AnimatedArrowRight,
   AnimatedLock,
@@ -52,7 +51,7 @@ export function AdminClient({ user }: AdminClientProps) {
       id: "employees", 
       label: "Employees", 
       icon: AnimatedUsers, 
-      href: "/hr", 
+      href: "/users", 
       desc: "Staff directory & designation management", 
       superAdminOnly: false 
     },
@@ -78,14 +77,6 @@ export function AdminClient({ user }: AdminClientProps) {
       icon: AnimatedShoppingBag, 
       href: "#", 
       desc: "PO approval limits & Terms & Conditions", 
-      superAdminOnly: false 
-    },
-    { 
-      id: "notification_settings", 
-      label: "Notification Settings", 
-      icon: AnimatedBell, 
-      href: "/notifications", 
-      desc: "In-app alerts & operational notification preferences", 
       superAdminOnly: false 
     },
     { 

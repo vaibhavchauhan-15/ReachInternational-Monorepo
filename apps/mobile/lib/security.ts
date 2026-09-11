@@ -49,16 +49,13 @@ export function sanitizeDeepLinkRoute(incomingRoute: string): string {
     '/(app)/dashboard',
     '/(app)/my-work',
     '/(app)/machines',
-    '/(app)/complaints',
-    '/(app)/fsr',
     '/(app)/operations',
-    '/(app)/inventory',
-    '/(app)/rentals',
-    '/(app)/crm',
-    '/(app)/finance',
-    '/(app)/hr',
     '/(app)/users',
-    '/(app)/notifications',
+    '/(app)/settings',
+    '/(app)/profile',
+    '/(app)/privacy',
+    '/(app)/terms',
+    '/(app)/account-deletion',
   ];
 
   if (ALLOWED_ROUTES.includes(incomingRoute)) {

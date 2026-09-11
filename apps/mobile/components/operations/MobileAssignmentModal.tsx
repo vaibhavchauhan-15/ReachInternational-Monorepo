@@ -18,13 +18,15 @@ import {
 } from 'react-native';
 import { Button, Input, useTheme } from '../ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { X, UserCheck, AlertCircle, Check, Sun, Moon, Users, ChevronDown } from 'lucide-react-native';
+import { X, UserCheck, AlertCircle, Check, Sun, Moon, Users, ChevronDown, ShieldAlert, AlertTriangle } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
+import { notifyOperatorAssigned, notifyShiftConflictDetected } from '../../lib/notifications';
 import {
   parseTimeToMinutes,
   parseProfileShiftTime,
   minutesTo24HourTime,
   formatTo12Hour,
+  parseConflictReason,
 } from '@reachinternational/utils';
 import type { MachineWithAssignments } from '../../app/(app)/operations';
 
@@ -137,6 +139,27 @@ export const MobileAssignmentModal: React.FC<MobileAssignmentModalProps> = ({
     return `${h}h${m > 0 ? ` ${m}m` : ''}`;
   }, [shiftStartTime, shiftEndTime]);
 
+  const isConflictError = Boolean(
+    error &&
+      (error.toLowerCase().includes('conflict') ||
+        error.toLowerCase().includes('overlapping') ||
+        error.toLowerCase().includes('already assigned') ||
+        error.toLowerCase().includes('capacity') ||
+        error.toLowerCase().includes('max_operators'))
+  );
+
+  const parsedConflictError = useMemo(() => {
+    if (!isConflictError || !error) return null;
+    const op = activeOperators.find((o) => o.id === selectedOperatorId);
+    return parseConflictReason(error, {
+      machineCode: effectiveMachineCode,
+      machineModel: effectiveMachineModel,
+      operatorName: op?.full_name,
+      startTime: shiftStartTime,
+      endTime: shiftEndTime,
+    });
+  }, [isConflictError, error, activeOperators, selectedOperatorId, effectiveMachineCode, effectiveMachineModel, shiftStartTime, shiftEndTime]);
+
   const handleSubmit = async () => {
     if (!selectedMachineId) {
       setError('Please select an equipment to assign.');
@@ -184,6 +207,7 @@ export const MobileAssignmentModal: React.FC<MobileAssignmentModalProps> = ({
 
       if (rpcError) {
         if (rpcError.code === '23P01') {
+          notifyShiftConflictDetected(effectiveMachineCode, 'Operator already has an active overlapping shift window on another machine.');
           setError('SHIFT CONFLICT: This operator already has an overlapping shift window active on another machine.');
         } else if (rpcError.message?.includes('MAX_OPERATORS_REACHED')) {
           setError('Maximum capacity of 3 active operators reached for this equipment.');
@@ -192,6 +216,19 @@ export const MobileAssignmentModal: React.FC<MobileAssignmentModalProps> = ({
         }
         return;
       }
+
+      if (data && !(data as any).success) {
+        const d = data as any;
+        const msg = d.error || d.message || 'Failed to assign operator.';
+        if (msg.toLowerCase().includes('conflict')) {
+          notifyShiftConflictDetected(effectiveMachineCode, msg);
+        }
+        setError(msg);
+        return;
+      }
+
+      const assignedOp = activeOperators.find((o) => o.id === selectedOperatorId);
+      notifyOperatorAssigned(effectiveMachineCode, assignedOp?.full_name || 'Operator', `${shiftStartTime} - ${shiftEndTime}`);
 
       onSuccess();
       onClose();
@@ -320,12 +357,12 @@ export const MobileAssignmentModal: React.FC<MobileAssignmentModalProps> = ({
                     },
                   ]}
                 >
-                  <Users size={14} color={currentCapacityCount >= 3 ? '#dc2626' : '#0284c7'} />
+                  <Users size={14} color={currentCapacityCount >= 3 ? (isDark ? '#f87171' : '#dc2626') : (isDark ? '#38bdf8' : '#0284c7')} />
                   <Text
                     style={{
                       fontSize: 11,
                       fontWeight: '700',
-                      color: currentCapacityCount >= 3 ? '#b91c1c' : '#0369a1',
+                      color: currentCapacityCount >= 3 ? (isDark ? '#f87171' : '#b91c1c') : (isDark ? '#38bdf8' : '#0369a1'),
                     }}
                   >
                     Shift Roster Capacity: {currentCapacityCount} / 3 Operators Assigned
@@ -333,10 +370,61 @@ export const MobileAssignmentModal: React.FC<MobileAssignmentModalProps> = ({
                 </View>
 
                 {error ? (
-                  <View style={[styles.errorBox, { backgroundColor: '#fef2f2', borderColor: '#fca5a5' }]}>
-                    <AlertCircle size={14} color="#dc2626" style={{ marginTop: 1 }} />
-                    <Text style={{ color: '#b91c1c', fontSize: 11, fontWeight: '600', flex: 1 }}>{error}</Text>
-                  </View>
+                  isConflictError && parsedConflictError ? (
+                    <View
+                      style={[
+                        styles.conflictAlertCard,
+                        {
+                          backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fef2f2',
+                          borderColor: isDark ? '#b91c1c' : '#fca5a5',
+                        },
+                      ]}
+                    >
+                      <View style={styles.conflictAlertHeader}>
+                        <ShieldAlert size={16} color={isDark ? '#f87171' : '#dc2626'} />
+                        <Text style={[styles.conflictAlertTitle, { color: isDark ? '#f87171' : '#991b1b' }]}>{parsedConflictError.title}</Text>
+                        <View style={[styles.conflictAlertBadge, { backgroundColor: isDark ? '#dc2626' : '#dc2626' }]}>
+                          <Text style={styles.conflictAlertBadgeText}>{parsedConflictError.badgeText}</Text>
+                        </View>
+                      </View>
+                      <Text style={[styles.conflictAlertDesc, { color: isDark ? '#fca5a5' : '#991b1b' }]}>
+                        {parsedConflictError.description}
+                      </Text>
+                      {parsedConflictError.bulletWarnings.map((w, i) => (
+                        <View key={i} style={styles.conflictBulletRow}>
+                          <Text style={[styles.conflictBulletDot, { color: isDark ? '#f87171' : '#dc2626' }]}>•</Text>
+                          <Text style={[styles.conflictBulletText, { color: isDark ? '#fca5a5' : '#7f1d1d' }]}>{w}</Text>
+                        </View>
+                      ))}
+                      <View
+                        style={[
+                          styles.conflictGuidanceBox,
+                          {
+                            backgroundColor: isDark ? 'rgba(0,0,0,0.25)' : '#ffffff',
+                            borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#fecaca',
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.conflictGuidanceText, { color: isDark ? '#fecaca' : '#7f1d1d' }]}>
+                          💡 <Text style={{ fontWeight: '800' }}>Action Required:</Text>{' '}
+                          {parsedConflictError.resolutionGuidance.adjustAdvice}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <View
+                      style={[
+                        styles.errorBox,
+                        {
+                          backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fef2f2',
+                          borderColor: isDark ? 'rgba(239, 68, 68, 0.25)' : '#fca5a5',
+                        },
+                      ]}
+                    >
+                      <AlertCircle size={14} color={isDark ? '#f87171' : '#dc2626'} style={{ marginTop: 1 }} />
+                      <Text style={{ color: isDark ? '#f87171' : '#b91c1c', fontSize: 11, fontWeight: '600', flex: 1 }}>{error}</Text>
+                    </View>
+                  )
                 ) : null}
 
                 <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false}>
@@ -372,16 +460,32 @@ export const MobileAssignmentModal: React.FC<MobileAssignmentModalProps> = ({
                   {/* Profile Shift Feedback Banner */}
                   {selectedOperatorId ? (
                     hasProfileShift === true ? (
-                      <View style={[styles.shiftBanner, { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' }]}>
-                        <Check size={12} color="#059669" />
-                        <Text style={{ fontSize: 10, color: '#047857', fontWeight: '600' }}>
+                      <View
+                        style={[
+                          styles.shiftBanner,
+                          {
+                            backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : '#ecfdf5',
+                            borderColor: isDark ? 'rgba(16, 185, 129, 0.25)' : '#a7f3d0',
+                          },
+                        ]}
+                      >
+                        <Check size={12} color={isDark ? '#34d399' : '#059669'} />
+                        <Text style={{ fontSize: 10, color: isDark ? '#34d399' : '#047857', fontWeight: '600' }}>
                           Timings auto-filled from operator profile ({shiftStartTime} – {shiftEndTime}). You may adjust below.
                         </Text>
                       </View>
                     ) : hasProfileShift === false ? (
-                      <View style={[styles.shiftBanner, { backgroundColor: '#fffbeb', borderColor: '#fde68a' }]}>
-                        <AlertCircle size={12} color="#d97706" />
-                        <Text style={{ fontSize: 10, color: '#b45309', fontWeight: '600' }}>
+                      <View
+                        style={[
+                          styles.shiftBanner,
+                          {
+                            backgroundColor: isDark ? 'rgba(245, 158, 11, 0.12)' : '#fffbeb',
+                            borderColor: isDark ? 'rgba(245, 158, 11, 0.25)' : '#fde68a',
+                          },
+                        ]}
+                      >
+                        <AlertCircle size={12} color={isDark ? '#fbbf24' : '#d97706'} />
+                        <Text style={{ fontSize: 10, color: isDark ? '#fbbf24' : '#b45309', fontWeight: '600' }}>
                           No profile shift found. Please select start and end times below.
                         </Text>
                       </View>
@@ -575,6 +679,68 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.md,
     borderWidth: 1,
     marginBottom: spacingNumeric.sm,
+  },
+  conflictAlertCard: {
+    padding: spacingNumeric.sm,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    marginBottom: spacingNumeric.sm,
+    gap: 4,
+  },
+  conflictAlertHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  conflictAlertTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#b91c1c',
+    flex: 1,
+  },
+  conflictAlertBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  conflictAlertBadgeText: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#ffffff',
+    letterSpacing: 0.5,
+  },
+  conflictAlertDesc: {
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: '500',
+  },
+  conflictBulletRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  conflictBulletDot: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#dc2626',
+    lineHeight: 15,
+  },
+  conflictBulletText: {
+    fontSize: 10.5,
+    color: '#991b1b',
+    lineHeight: 14,
+    flex: 1,
+  },
+  conflictGuidanceBox: {
+    padding: 8,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    marginTop: 2,
+  },
+  conflictGuidanceText: {
+    fontSize: 10.5,
+    lineHeight: 14,
   },
   formScroll: {
     maxHeight: 380,

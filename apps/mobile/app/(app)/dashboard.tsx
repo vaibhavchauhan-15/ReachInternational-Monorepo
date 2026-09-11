@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
-import { Card, Badge, useTheme, MobileHeader } from '../../components/ui';
-import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { formatDate } from '@reachinternational/utils';
+import { Card, useTheme, MobileHeader, Skeleton, HeaderActionItem } from '../../components/ui';
+import { spacingNumeric } from '@reachinternational/design-tokens';
 import { supabase } from '../../lib/supabase';
 import {
   Wrench,
@@ -13,10 +12,11 @@ import {
   ArrowRight,
   Gauge,
   Users,
-  Bell,
-  CheckCircle2,
   Building2,
   Calendar,
+  Truck,
+  RefreshCw,
+  Search,
 } from 'lucide-react-native';
 
 export default function DashboardScreen() {
@@ -33,31 +33,15 @@ export default function DashboardScreen() {
     rentedMachines: 0,
     breakdownMachines: 0,
     maintenanceMachines: 0,
-    activeTasks: 0,
-    unreadAlerts: 0,
   });
-
-  const [recentAlerts, setRecentAlerts] = useState<any[]>([]);
 
   const userName = userProfile?.full_name || (user?.email ? user.email.split('@')[0] : 'Operator');
 
   const fetchDashboardData = useCallback(async () => {
     try {
-      const [machinesRes, tasksRes, notifsRes] = await Promise.all([
-        supabase
-          .from('machines')
-          .select('id, status, health_status'),
-        supabase
-          .from('tasks')
-          .select('id, status')
-          .eq('status', 'pending')
-          .limit(20),
-        supabase
-          .from('notifications')
-          .select('id, alert_type, status, created_at, error_message, machine:machines(model, serial_number)')
-          .order('created_at', { ascending: false })
-          .limit(3),
-      ]);
+      const machinesRes = await supabase
+        .from('machines')
+        .select('id, status, health_status');
 
       const machineList = machinesRes.data || [];
       let rented = 0;
@@ -77,11 +61,7 @@ export default function DashboardScreen() {
         rentedMachines: rented,
         breakdownMachines: breakdown,
         maintenanceMachines: maintenance,
-        activeTasks: (tasksRes.data || []).length,
-        unreadAlerts: (notifsRes.data || []).filter((n) => n.status !== 'sent').length,
       });
-
-      setRecentAlerts(notifsRes.data || []);
     } catch (err) {
       console.warn('[DashboardScreen] Error fetching dashboard data:', err);
     } finally {
@@ -99,12 +79,40 @@ export default function DashboardScreen() {
     setRefreshing(false);
   }, [fetchDashboardData]);
 
+  const headerActions = useMemo<HeaderActionItem[]>(() => {
+    const list: HeaderActionItem[] = [];
+
+    list.push({
+      id: 'view-machines',
+      label: 'View Machine Directory',
+      icon: <Truck size={16} color={theme.colors.ink} />,
+      onPress: () => router.push('/(app)/machines' as any),
+    });
+
+    list.push({
+      id: 'view-operations',
+      label: 'View Fleet Operations',
+      icon: <Gauge size={16} color={theme.colors.ink} />,
+      onPress: () => router.push('/(app)/operations' as any),
+    });
+
+    list.push({
+      id: 'refresh-dashboard',
+      label: 'Refresh Dashboard Data',
+      icon: <RefreshCw size={16} color={theme.colors.ink} />,
+      onPress: () => onRefresh(),
+    });
+
+    return list;
+  }, [theme.colors.ink, router, onRefresh]);
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
+      {/* Top Standardized Mobile Header: [Logo] + [Page Title] + [Search] + [3-Dot Actions] */}
       <MobileHeader
-        eyebrow="FIELD OPERATIONS"
         title={`Welcome, ${userName}`}
-        subtitle="Real-time machinery status, fleet telemetry & shift dispatch"
+        searchPlaceholder="Search anything across platform..."
+        actions={headerActions}
       />
 
       <ScrollView
@@ -121,9 +129,13 @@ export default function DashboardScreen() {
             activeOpacity={0.7}
           >
             <Card variant="elevated" style={styles.kpiCard}>
-              <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
-                {isLoading ? '—' : metrics.totalMachines}
-              </Text>
+              {isLoading ? (
+                <Skeleton width={44} height={26} borderRadius={4} style={{ marginVertical: 1 }} />
+              ) : (
+                <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
+                  {metrics.totalMachines}
+                </Text>
+              )}
               <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Total Fleet</Text>
             </Card>
           </TouchableOpacity>
@@ -134,9 +146,13 @@ export default function DashboardScreen() {
             activeOpacity={0.7}
           >
             <Card variant="elevated" style={styles.kpiCard}>
-              <Text style={[styles.kpiValue, { color: theme.colors.link }]}>
-                {isLoading ? '—' : metrics.rentedMachines}
-              </Text>
+              {isLoading ? (
+                <Skeleton width={44} height={26} borderRadius={4} style={{ marginVertical: 1 }} />
+              ) : (
+                <Text style={[styles.kpiValue, { color: theme.colors.link }]}>
+                  {metrics.rentedMachines}
+                </Text>
+              )}
               <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>On Rent</Text>
             </Card>
           </TouchableOpacity>
@@ -147,9 +163,13 @@ export default function DashboardScreen() {
             activeOpacity={0.7}
           >
             <Card variant="elevated" style={styles.kpiCard}>
-              <Text style={[styles.kpiValue, { color: '#dc2626' }]}>
-                {isLoading ? '—' : metrics.breakdownMachines}
-              </Text>
+              {isLoading ? (
+                <Skeleton width={44} height={26} borderRadius={4} style={{ marginVertical: 1 }} />
+              ) : (
+                <Text style={[styles.kpiValue, { color: '#dc2626' }]}>
+                  {metrics.breakdownMachines}
+                </Text>
+              )}
               <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Breakdowns</Text>
             </Card>
           </TouchableOpacity>
@@ -160,9 +180,13 @@ export default function DashboardScreen() {
             activeOpacity={0.7}
           >
             <Card variant="elevated" style={styles.kpiCard}>
-              <Text style={[styles.kpiValue, { color: '#d97706' }]}>
-                {isLoading ? '—' : metrics.maintenanceMachines}
-              </Text>
+              {isLoading ? (
+                <Skeleton width={44} height={26} borderRadius={4} style={{ marginVertical: 1 }} />
+              ) : (
+                <Text style={[styles.kpiValue, { color: '#d97706' }]}>
+                  {metrics.maintenanceMachines}
+                </Text>
+              )}
               <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Maintenance</Text>
             </Card>
           </TouchableOpacity>
@@ -229,53 +253,6 @@ export default function DashboardScreen() {
             <ArrowRight size={16} color={theme.colors.mute} />
           </Card>
         </TouchableOpacity>
-
-        {/* Priority Field Dispatches Feed */}
-        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute, marginTop: spacingNumeric.md }]}>
-          RECENT DISPATCH ALERTS
-        </Text>
-
-        {isLoading ? (
-          <View style={{ padding: 20, alignItems: 'center' }}>
-            <ActivityIndicator size="small" color={theme.colors.link} />
-          </View>
-        ) : recentAlerts.length === 0 ? (
-          <Card variant="base" style={styles.emptyCard}>
-            <CheckCircle2 size={24} color={theme.colors.success} style={{ marginBottom: 6 }} />
-            <Text style={[styles.emptyCardText, { color: theme.colors.ink }]}>All Dispatches Cleared</Text>
-            <Text style={[styles.emptyCardSub, { color: theme.colors.mute }]}>
-              No outstanding automated alert failures or pending maintenance notices.
-            </Text>
-          </Card>
-        ) : (
-          recentAlerts.map((alert) => (
-            <TouchableOpacity
-              key={alert.id}
-              onPress={() => router.push('/(app)/notifications' as any)}
-              activeOpacity={0.8}
-            >
-              <Card variant="elevated" style={styles.alertCard}>
-                <View style={styles.alertHeader}>
-                  <Badge
-                    status={alert.status === 'sent' ? 'active' : alert.status === 'failed' ? 'breakdown' : 'pending'}
-                    customLabel={(alert.status || 'PENDING').toUpperCase()}
-                  />
-                  <Text style={[styles.alertTime, { color: theme.colors.mute }]}>
-                    {formatDate(alert.created_at)}
-                  </Text>
-                </View>
-                <Text style={[styles.alertTitle, { color: theme.colors.ink }]}>
-                  {(alert.alert_type || 'System Dispatch').replace(/_/g, ' ').toUpperCase()}
-                </Text>
-                {alert.machine && (
-                  <Text style={[styles.alertMeta, { color: theme.colors.mute }]}>
-                    Machine: {alert.machine.model || 'Equipment'} ({alert.machine.serial_number || '—'})
-                  </Text>
-                )}
-              </Card>
-            </TouchableOpacity>
-          ))
-        )}
       </ScrollView>
     </View>
   );
@@ -344,41 +321,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginTop: 2,
     lineHeight: 15,
-  },
-  alertCard: {
-    marginBottom: 8,
-    padding: spacingNumeric.md,
-  },
-  alertHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  alertTime: {
-    fontSize: 11,
-  },
-  alertTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  alertMeta: {
-    fontSize: 11,
-  },
-  emptyCard: {
-    padding: 24,
-    alignItems: 'center',
-    borderRadius: radiusNumeric.md,
-  },
-  emptyCardText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  emptyCardSub: {
-    fontSize: 11,
-    textAlign: 'center',
-    marginTop: 2,
   },
 });
 

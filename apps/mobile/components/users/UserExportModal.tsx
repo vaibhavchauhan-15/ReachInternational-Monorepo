@@ -12,9 +12,10 @@ import {
 import { useTheme } from '../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { formatDate, maskAadhaar, formatLicenseNumber } from '@reachinternational/utils';
-import { FileSpreadsheet, FileText, Download, Check, X } from 'lucide-react-native';
+import { FileSpreadsheet, X, FileText, Download, Check } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import { notifyUserExported } from '../../lib/notifications';
 import type { UserRecord } from './UserDetailModal';
 
 export interface UserExportModalProps {
@@ -183,8 +184,10 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
           dialogTitle: `Export ${targetUsers.length} Users`,
           UTI: 'public.comma-separated-values-text',
         });
+        notifyUserExported('csv', targetUsers.length);
         onClose();
       } else {
+        notifyUserExported('csv', targetUsers.length);
         Alert.alert('Sharing Unavailable', 'Native sharing is not available on this device.');
       }
     } catch (err: any) {

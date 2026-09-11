@@ -1,4 +1,4 @@
-# Project Memory — ReachInternational (reachinternation.com)
+# Project Memory — ReachInternational (reachinternational.co.in)
 
 ## Core Overview
 **ReachInternational** is an enterprise-grade industrial machine service, maintenance tracking, and notification management platform built for Service Managers, Engineers, and Clients.

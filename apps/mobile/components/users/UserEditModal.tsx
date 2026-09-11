@@ -24,6 +24,7 @@ import {
   getStateByName,
 } from '@reachinternational/utils';
 import { isSupervisedRole } from '@reachinternational/permissions';
+import { notifyUserUpdated } from '../../lib/notifications';
 import {
   X,
   User,
@@ -250,6 +251,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
         // ignore
       }
 
+      notifyUserUpdated(fullName.trim(), role);
       Alert.alert('Account Updated', `Account details for ${fullName} have been saved successfully.`);
       onSuccess();
       onClose();

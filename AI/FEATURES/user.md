@@ -78,6 +78,23 @@ Manages user accounts, profile details, company branch assignments, and Role-Bas
 - **Context-Aware Empty States ("No users found") (`apps/web/app/(app)/users/users-client.tsx`, `apps/mobile/app/(app)/users.tsx`)**:
   - Dynamic explanation clearly distinguishes between search query terms vs active filter criteria.
   - Single-click "Clear Search & Filters" CTA resets search, role, status, state, kyc, dateRange, and pagination back to defaults.
+- **Infinite Pagination on Scroll & FlatList Virtualization (`apps/web/app/(app)/users/users-client.tsx`, `apps/mobile/app/(app)/users.tsx`, `apps/web/app/actions/users.ts`)**:
+  - **Infinite Scroll on Touch Card Views**:
+    - Replaced monolithic, all-at-once user loading with paginated infinite loading on scroll for touch card lists (25 cards per batch on React Native, 10 on Web Mobile).
+    - React Native utilizes `<FlatList<UserRecord>>` with `onEndReachedThreshold={0.35}` and `onMomentumScrollBegin` guard to seamlessly fetch subsequent pages.
+    - Web mobile view utilizes an `IntersectionObserver` sentinel div placed after the card stream to trigger `handleLoadMoreMobile()`.
+  - **Card Deduplication & Anti-Replacement**:
+    - Appends newly fetched batches to existing list using Set-based ID deduplication (`new Set(prev.map(u => u.id))`), guaranteeing cards are never duplicated or overwritten.
+  - **Non-Blocking Load More & Inline Error Retry**:
+    - Non-blocking bottom micro-spinner and status caption while fetching next pages, keeping already-rendered cards interactive.
+    - Inline error retry banner with retry action on network errors, preventing full page reloads.
+  - **Subtle End of List State**:
+    - When `hasMore` reaches `false`, renders subtle "All users have been displayed" divider and halts further pagination requests.
+  - **High-Performance Virtualization & Native Scroll Physics**:
+    - Extracted memoized `UserTouchCard` (`React.memo`) to eliminate re-renders of existing cards on batch appends.
+    - Native vertical scrollbar enabled via `showsVerticalScrollIndicator={true}`.
+    - Concurrency lock (`isFetchingRef`) and request cancellation versioning (`requestVersionRef`) prevent duplicate fetches and race conditions.
+    - Filter, search, and pull-to-refresh interactions smoothly reset pagination state back to Page 1.
 ## Key Functions & Workflows
 - `updateMyProfile(formData)`: Allows users to update their own full name, phone, shift schedule, street address, city/state, Aadhaar, and driving licence. Instant database updates for Super Admin; automatically creates a `profile_change_requests` record for lower roles routed according to role approval hierarchy.
 - **Profile Approval Hierarchy Matrix**:

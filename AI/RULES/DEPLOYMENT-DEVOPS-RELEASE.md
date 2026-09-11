@@ -22,7 +22,7 @@ ReachInternational establishes authoritative canonical sources of truth for depl
 2. **Build Pipeline & Caching**: Turborepo configuration `turbo.json` managing monorepo tasks (`build`, `typecheck`, `lint`).
 3. **Root Build & Verification Scripts**: `package.json` specifying `pnpm build` (`turbo run build`) and `pnpm typecheck` (`turbo run typecheck`).
 4. **Database Migration Stack**: Supabase PostgreSQL 35 SQL migrations in `supabase/migrations/` and `node supabase/verify_seed.mjs`.
-5. **Production Base Domain**: Environment variable `NEXT_PUBLIC_APP_URL` defaulting to `https://reachinternation.com`.
+5. **Production Base Domain**: Environment variable `NEXT_PUBLIC_APP_URL` defaulting to `https://www.reachinternational.co.in`.
 
 ---
 
@@ -66,7 +66,7 @@ ENVIRONMENT     PURPOSE & DB BOUNDARY                      CONFIG & SECRET SOURC
 ──────────────────────────────────────────────────────────────────────────────────────────
 • Local Dev     Local Supabase container / seed data       .env.local (never committed)
 • Preview       Vercel PR previews / staging Supabase DB   Environment dashboard secrets
-• Production    https://reachinternation.com / Prod DB     Production secret store
+• Production    https://www.reachinternational.co.in / Prod DB     Production secret store
 ```
 
 ---
@@ -123,7 +123,7 @@ Staging validation MUST verify multi-tenant organizational data isolation and br
 
 ## 15. Production Environment Governance
 
-Production releases MUST target `https://reachinternation.com` with `NEXT_PUBLIC_APP_URL` correctly configured in production deployment settings.
+Production releases MUST target `https://www.reachinternational.co.in` with `NEXT_PUBLIC_APP_URL` correctly configured in production deployment settings.
 
 ---
 
@@ -167,13 +167,13 @@ Static assets in `public/` (favicons, manifests, icons) MUST be cache-busted or 
 
 ## 22. Domain & DNS Governance
 
-Production deployment MUST use the canonical domain `https://reachinternation.com`. Modifying domain configurations through client code is FORBIDDEN.
+Production deployment MUST use the canonical domain `https://www.reachinternational.co.in`. Modifying domain configurations through client code is FORBIDDEN.
 
 ---
 
 ## 23. Authentication Deployment Configuration
 
-Production authentication callbacks in Supabase Auth MUST be configured with exact production redirect URLs (`https://reachinternation.com/auth/callback`). Staging or localhost URLs MUST NOT be set as primary production auth redirects.
+Production authentication callbacks in Supabase Auth MUST be configured with exact production redirect URLs (`https://www.reachinternational.co.in/auth/callback`). Staging or localhost URLs MUST NOT be set as primary production auth redirects.
 
 ---
 
@@ -191,7 +191,7 @@ Production deployment settings MUST configure production credentials for SendGri
 
 ## 26. Production Secrets Inventory
 
-* `NEXT_PUBLIC_APP_URL`: `https://reachinternation.com`
+* `NEXT_PUBLIC_APP_URL`: `https://www.reachinternational.co.in`
 * `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase Anonymous Public Key
 * `SUPABASE_SERVICE_ROLE_KEY`: Supabase Admin Service Role Key (Server Only)
 
@@ -254,7 +254,7 @@ If a production build or deployment step fails:
 
 Immediately following a production deployment release, the following smoke test sequence MUST be verified:
 ```text
-1. Domain Load Audit     → Verify https://reachinternation.com returns HTTP 200 OK
+1. Domain Load Audit     → Verify https://www.reachinternational.co.in returns HTTP 200 OK
 2. Health Check Probe    → Verify /api/health returns { status: "ok" }
 3. Authentication Flow   → Verify login page loads and session cookies set cleanly
 4. Core Dashboard Load   → Verify /dashboard renders 5-zone vertical composition
@@ -337,7 +337,7 @@ Production environments MUST NEVER render development banners, mock test data, l
 
 ## 47. SEO Deployment Requirements
 
-Deployments MUST observe `AI/RULES/SEO-METADATA-DISCOVERABILITY.md`, ensuring canonical domains point to `https://reachinternation.com` and preview environments inject `noindex, nofollow` headers.
+Deployments MUST observe `AI/RULES/SEO-METADATA-DISCOVERABILITY.md`, ensuring canonical domains point to `https://www.reachinternational.co.in` and preview environments inject `noindex, nofollow` headers.
 
 ---
 
@@ -389,7 +389,7 @@ Before deploying code, every AI agent MUST complete this mental checklist:
 * [ ] Are all new environment variables documented and partitioned into public vs server-only?
 * [ ] Are database schema changes placed in `supabase/migrations/` with RLS enabled?
 * [ ] Are production secret keys isolated from client JavaScript bundles?
-* [ ] Is `NEXT_PUBLIC_APP_URL` configured to `https://reachinternation.com`?
+* [ ] Is `NEXT_PUBLIC_APP_URL` configured to `https://www.reachinternational.co.in`?
 
 ---
 
@@ -404,3 +404,36 @@ After completing code or configuration modifications, every AI agent MUST perfor
 5. **Memory Synchronization**: Update `AI/STATE.md`, `AI/CURRENT_TASK.md`, `AI/CHANGELOG_AI.md`, and `README.md`.
 
 ---
+
+## 55. Mobile Application Release & Over-The-Air (OTA) Update Pipeline
+
+The mobile application (`apps/mobile`, package: `com.reachinternational.app`) release lifecycle is orchestrated via Expo Application Services (EAS):
+
+```text
+Commit Push → Quality Gate (pnpm typecheck) ──┬── [Native / Release / [build]] ──> EAS Build (.aab) ──> Internal Track Submit
+                                               └── [JS / UI / Bugfix]           ──> EAS Update (OTA)  ──> Production Channel
+```
+
+### 1. Build & Submission Profiles (`eas.json`)
+* **`build.production`**: Builds signed Android App Bundle (`.aab`) with `autoIncrement: true`, `channel: "production"`, `node: "22.22.3"`, and `pnpm: "11.21.0"`.
+* **`build.preview`**: Builds internal APK for direct field distribution.
+* **`submit.production`**: Submits directly to Google Play **Internal testing** track with `"changesNotSentForReview": false`.
+* **`submit.production-play`**: Promotes verified builds to Google Play **Production** track.
+
+### 2. EAS Workflows (`apps/mobile/.eas/workflows/`)
+* **`deploy-android.yml`**: Triggered on push to `main` (for `apps/mobile/**`, `packages/**`, `pnpm-lock.yaml`) and `workflow_dispatch`. Chains `quality_gate` (`pnpm typecheck`) → `build_android` (`production` profile) → `submit_android` (internal track).
+* **`publish-update.yml`**: Triggered on push to `main` and `workflow_dispatch`. Chains `quality_gate` → `publish_update` (`channel: production`).
+
+### 3. Over-The-Air (OTA) Governance (`expo-updates`)
+* **Runtime Version Policy**: Enforces `"runtimeVersion": { "policy": "appVersion" }` in `app.json`. OTA payloads only execute on binary releases with matching `appVersion`, preventing incompatible native crashes.
+* **Version Code Ownership**: Owned and auto-incremented remotely by EAS (`autoIncrement: true`, `appVersionSource: remote`). Never hardcode or manually mutate `versionCode` in source control.
+
+### 4. Deterministic Routing Rules
+* **Binary Release**: Any change touching native dependencies, native Android permissions (`app.json`), app version (`version`), or Android manifest configuration MUST be deployed via the Phase B binary pipeline (`deploy-android.yml`, `release/*` branches, or `[build]` tag).
+* **OTA Release**: Pure JavaScript, TypeScript, styling, and UI fixes are deployed via EAS Update to the `production` channel.
+
+### 5. Secret & Credential Isolation
+* **Zero Service Account Keys in Git**: Committing `google-service-account.json` or referencing local paths in `eas.json` is **STRICTLY FORBIDDEN**. Google Play submission keys are stored securely in the EAS cloud vault via `eas credentials -p android`.
+
+---
+

@@ -15,7 +15,6 @@ export const CACHE_TAGS = {
   dashboardActivity: TAGS.dashboardActivity,
   machines: TAGS.machines,
   machineMeta: TAGS.machinesMeta,
-  notifications: TAGS.notifications,
   users: TAGS.users,
   settings: TAGS.settings,
   services: TAGS.services,

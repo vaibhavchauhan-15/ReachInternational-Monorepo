@@ -1,8 +1,8 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
-import { Card, Badge, Button, useTheme, MobileHeader } from '../../components/ui';
+import { Card, Badge, Button, useTheme, MobileHeader, ReachInternationalLogo, HeaderActionItem } from '../../components/ui';
 import { EditProfileModal } from '../../components/profile/EditProfileModal';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { formatDate } from '@reachinternational/utils';
@@ -23,7 +23,22 @@ import {
   Edit,
   AlertTriangle,
   XCircle,
+  RefreshCw,
+  Globe,
+  Wifi,
+  Bell,
+  CheckCircle2,
+  Settings,
+  ChevronRight,
+  Trash2,
 } from 'lucide-react-native';
+import {
+  getNotificationPermissionStatus,
+  type PermissionStatus,
+} from '../../lib/permissions';
+import { NotificationPermissionModal } from '../../components/permissions';
+import { notifyProfileRequestCancelled, notifyThemeToggled } from '../../lib/notifications';
+import { PostNotificationFeedModal } from '../../components/notifications';
 
 export default function ProfileScreen() {
   const { user, role, signOut, refreshSession, userProfile: authProfile } = useAuth();
@@ -34,11 +49,14 @@ export default function ProfileScreen() {
   const [dbUser, setDbUser] = useState<any>(authProfile || null);
   const [pendingRequest, setPendingRequest] = useState<any>(null);
   const [isCancellingRequest, setIsCancellingRequest] = useState(false);
+  const [notificationStatus, setNotificationStatus] = useState<PermissionStatus>('undetermined');
+  const [permissionModalVisible, setPermissionModalVisible] = useState(false);
+  const [feedModalVisible, setFeedModalVisible] = useState(false);
 
   const fetchProfileData = useCallback(async () => {
     if (!user?.id) return;
     try {
-      const [userRes, reqRes] = await Promise.all([
+      const [userRes, reqRes, notifRes] = await Promise.all([
         supabase
           .from('users')
           .select('id, full_name, phone, role, status, complete_profile, shift_time, city, district, state, state_id, address, aadhaar_number, license_number, email')
@@ -51,12 +69,14 @@ export default function ProfileScreen() {
           .eq('status', 'pending')
           .order('created_at', { ascending: false })
           .maybeSingle(),
+        getNotificationPermissionStatus(),
       ]);
 
       if (userRes.data) {
         setDbUser(userRes.data);
       }
       setPendingRequest(reqRes.data || null);
+      setNotificationStatus(notifRes);
     } catch (err) {
       console.warn('[ProfileScreen] Error fetching profile record:', err);
     }
@@ -78,6 +98,8 @@ export default function ProfileScreen() {
         await refreshSession();
       }
       await fetchProfileData();
+      const notifState = await getNotificationPermissionStatus();
+      setNotificationStatus(notifState);
     } catch (e) {
       console.error('[ProfileScreen] Refresh error:', e);
     } finally {
@@ -108,6 +130,7 @@ export default function ProfileScreen() {
                 .eq('id', pendingRequest.id);
 
               if (error) throw error;
+              notifyProfileRequestCancelled();
               Alert.alert('Request Withdrawn', 'Your profile change request has been cancelled.');
               await fetchProfileData();
             } catch (err: any) {
@@ -150,12 +173,56 @@ export default function ProfileScreen() {
   const licenceDisplay = profile.license_number || metadata.license_number || 'Not Provided';
   const currentRole = (profile.role || role || metadata.role || 'operator').replace(/_/g, ' ').toUpperCase();
 
+  const headerActions = useMemo<HeaderActionItem[]>(() => {
+    const list: HeaderActionItem[] = [];
+
+    list.push({
+      id: 'edit-profile',
+      label: 'Edit Profile & Shift Details',
+      icon: <Edit size={16} color={theme.colors.ink} />,
+      onPress: () => setEditModalVisible(true),
+    });
+
+    list.push({
+      id: 'refresh-profile',
+      label: 'Refresh Profile Data',
+      icon: <RefreshCw size={16} color={theme.colors.ink} />,
+      onPress: () => onRefresh(),
+    });
+
+    list.push({
+      id: 'settings',
+      label: 'Settings & Preferences',
+      icon: <Settings size={16} color={theme.colors.ink} />,
+      onPress: () => router.push('/(app)/settings' as any),
+    });
+
+    list.push({
+      id: 'theme-toggle',
+      label: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
+      icon: isDark ? <Sun size={16} color={theme.colors.ink} /> : <Moon size={16} color={theme.colors.ink} />,
+      onPress: () => setMode(isDark ? 'light' : 'dark'),
+    });
+
+    list.push({
+      id: 'sign-out',
+      label: 'Sign Out of Account',
+      icon: <LogOut size={16} color="#ef4444" />,
+      destructive: true,
+      onPress: () => handleLogout(),
+    });
+
+    return list;
+  }, [theme.colors.ink, isDark, setMode, onRefresh, handleLogout]);
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
+      {/* Top Standardized Mobile Header: [Logo] + [Page Title] + [Search] + [3-Dot Actions] */}
       <MobileHeader
-        eyebrow="USER ACCOUNT"
-        title="Field Staff Profile"
-        subtitle="Account credentials, field operational scope & system preferences"
+        title="Profile"
+        showBack={true}
+        searchPlaceholder="Search profile details..."
+        actions={headerActions}
       />
 
       <ScrollView
@@ -295,6 +362,106 @@ export default function ProfileScreen() {
           />
         </Card>
 
+        {/* App Permissions & System Telemetry Card */}
+        <Card variant="elevated" style={styles.card}>
+          <Text style={[styles.sectionEyebrow, { color: theme.colors.mute }]}>APP PERMISSIONS & TELEMETRY</Text>
+          
+          {/* INTERNET */}
+          <View style={styles.permissionItemRow}>
+            <View style={[styles.permIconBox, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#d1fae5' }]}>
+              <Globe size={16} color={isDark ? '#34d399' : '#059669'} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.permHeaderLine}>
+                <Text style={[styles.permName, { color: theme.colors.ink }]}>INTERNET</Text>
+                <Badge status="active" customLabel="ACTIVE" />
+              </View>
+              <Text style={[styles.permSub, { color: theme.colors.mute }]}>
+                Supabase database sync & API communication
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* ACCESS_NETWORK_STATE */}
+          <View style={styles.permissionItemRow}>
+            <View style={[styles.permIconBox, { backgroundColor: isDark ? 'rgba(14, 165, 233, 0.15)' : '#e0f2fe' }]}>
+              <Wifi size={16} color={isDark ? '#38bdf8' : '#0284c7'} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.permHeaderLine}>
+                <Text style={[styles.permName, { color: theme.colors.ink }]}>ACCESS_NETWORK_STATE</Text>
+                <Badge status="active" customLabel="ACTIVE" />
+              </View>
+              <Text style={[styles.permSub, { color: theme.colors.mute }]}>
+                Real-time online/offline reachability detection
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* POST_NOTIFICATIONS */}
+          <View style={styles.permissionItemRow}>
+            <View
+              style={[
+                styles.permIconBox,
+                {
+                  backgroundColor:
+                    notificationStatus === 'granted'
+                      ? isDark ? 'rgba(16, 185, 129, 0.15)' : '#d1fae5'
+                      : isDark ? 'rgba(245, 158, 11, 0.15)' : '#fef3c7',
+                },
+              ]}
+            >
+              <Bell
+                size={16}
+                color={
+                  notificationStatus === 'granted'
+                    ? isDark ? '#34d399' : '#059669'
+                    : isDark ? '#fbbf24' : '#d97706'
+                }
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.permHeaderLine}>
+                <Text style={[styles.permName, { color: theme.colors.ink }]}>POST_NOTIFICATIONS</Text>
+                {notificationStatus === 'granted' ? (
+                  <Badge status="active" customLabel="ENABLED" />
+                ) : (
+                  <Badge status="pending" customLabel="NOT ENABLED" />
+                )}
+              </View>
+              <Text style={[styles.permSub, { color: theme.colors.mute }]}>
+                Shift conflict warnings & urgent fleet dispatch
+              </Text>
+            </View>
+          </View>
+
+          {notificationStatus !== 'granted' ? (
+            <Button
+              label="Enable Notifications"
+              onPress={() => setPermissionModalVisible(true)}
+              variant="outline"
+              size="sm"
+              icon={<Bell size={14} color={theme.colors.link} />}
+              fullWidth
+              style={{ marginTop: spacingNumeric.sm }}
+            />
+          ) : null}
+
+          <Button
+            label="Recent Notifications Feed"
+            onPress={() => setFeedModalVisible(true)}
+            variant="outline"
+            size="sm"
+            icon={<Bell size={14} color={theme.colors.ink} />}
+            fullWidth
+            style={{ marginTop: spacingNumeric.sm }}
+          />
+        </Card>
+
         {/* System Preferences Card */}
         <Card variant="elevated" style={styles.card}>
           <Text style={[styles.sectionEyebrow, { color: theme.colors.mute }]}>SYSTEM PREFERENCES</Text>
@@ -302,12 +469,40 @@ export default function ProfileScreen() {
 
           <Button
             label={isDark ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
-            onPress={() => setMode(isDark ? 'light' : 'dark')}
+            onPress={() => {
+              const nextMode = isDark ? 'light' : 'dark';
+              setMode(nextMode);
+              notifyThemeToggled(nextMode === 'dark');
+            }}
             variant="outline"
             size="sm"
             icon={isDark ? <Sun size={14} color={theme.colors.warning} /> : <Moon size={14} color={theme.colors.ink} />}
             style={{ marginTop: spacingNumeric.xs }}
           />
+        </Card>
+
+        {/* Account Deletion Entry Card */}
+        <Card variant="elevated" style={styles.card}>
+          <Text style={[styles.sectionEyebrow, { color: theme.colors.mute }]}>ACCOUNT MANAGEMENT</Text>
+          <TouchableOpacity
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 }}
+            onPress={() => router.push('/(app)/account-deletion' as any)}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(220, 38, 38, 0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                <Trash2 size={16} color="#dc2626" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.ink }}>
+                  Request Account Deletion
+                </Text>
+                <Text style={{ fontSize: 11, color: theme.colors.mute }}>
+                  Permanent de-provisioning & personal data erasure
+                </Text>
+              </View>
+            </View>
+            <ChevronRight size={16} color={theme.colors.mute} />
+          </TouchableOpacity>
         </Card>
 
         {/* Sign Out Button */}
@@ -320,6 +515,14 @@ export default function ProfileScreen() {
           fullWidth
           style={{ marginTop: spacingNumeric.md }}
         />
+
+        {/* Brand Footer with Light/Dark Theme Polarity */}
+        <View style={styles.brandFooter}>
+          <ReachInternationalLogo size={18} showTagline={false} />
+          <Text style={[styles.brandFooterText, { color: theme.colors.mute }]}>
+            Reach International v1.0.0 • Reaching All Heights
+          </Text>
+        </View>
       </ScrollView>
 
       <EditProfileModal
@@ -330,6 +533,17 @@ export default function ProfileScreen() {
           fetchProfileData();
           if (refreshSession) refreshSession();
         }}
+      />
+
+      <NotificationPermissionModal
+        visible={permissionModalVisible}
+        onClose={() => setPermissionModalVisible(false)}
+        onResolved={(status) => setNotificationStatus(status)}
+      />
+
+      <PostNotificationFeedModal
+        visible={feedModalVisible}
+        onClose={() => setFeedModalVisible(false)}
       />
     </View>
   );
@@ -419,4 +633,43 @@ const styles = StyleSheet.create({
   label: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3 },
   value: { fontSize: 13, fontWeight: '700', flex: 1 },
   divider: { height: 1, backgroundColor: 'rgba(150,150,150,0.15)', marginVertical: spacingNumeric.xs + 2 },
+  brandFooter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacingNumeric.lg,
+    gap: 6,
+  },
+  brandFooterText: {
+    fontSize: 10,
+    fontWeight: '500',
+    letterSpacing: 0.5,
+  },
+  permissionItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  permIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: radiusNumeric.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permHeaderLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  permName: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  permSub: {
+    fontSize: 11,
+    lineHeight: 14,
+  },
 });

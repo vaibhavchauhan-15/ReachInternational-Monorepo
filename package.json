@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
+    "build:mobile": "pnpm --filter @reachinternational/mobile exec eas build --platform android --profile production",
+    "build:mobile:preview": "pnpm --filter @reachinternational/mobile exec eas build --platform android --profile preview",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "verify:seed": "node supabase/verify_seed.mjs"

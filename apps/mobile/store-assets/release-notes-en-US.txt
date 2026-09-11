@@ -1,0 +1,8 @@
+Initial Production Release (v1.0.0):
+• Complete Fleet Machinery Directory with real-time status and telemetry
+• Daily Hour Meter Readings (HMR) shift logging and handover verification
+• Intelligent real-time Shift Conflict & Overtime Overrun detection
+• Pre-shift mechanical inspection checklists for aerial work platforms
+• Operator workforce directory and statutory KYC credential tracking
+• High-performance offline caching and automatic cloud sync
+• Full dark and light theme support adhering to Vercel Geist design

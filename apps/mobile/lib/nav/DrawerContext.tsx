@@ -1,10 +1,9 @@
 /**
- * ServiceCentric Mobile — Drawer Context
- * Provides global openDrawer callback for MobileHeader.
+ * ReachInternational Mobile — Drawer Context (Deprecated)
+ * Safe no-op pass-through retained for backwards compatibility without rendering any sidebar drawer.
  */
 
-import React, { createContext, useContext, useState } from 'react';
-import { MobileDrawer } from '../../components/navigation/MobileDrawer';
+import React, { createContext, useContext } from 'react';
 
 export interface DrawerContextType {
   openDrawer: () => void;
@@ -19,15 +18,9 @@ const DrawerContext = createContext<DrawerContextType>({
 });
 
 export const DrawerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-
-  const openDrawer = () => setIsDrawerOpen(true);
-  const closeDrawer = () => setIsDrawerOpen(false);
-
   return (
-    <DrawerContext.Provider value={{ openDrawer, closeDrawer, isDrawerOpen }}>
+    <DrawerContext.Provider value={{ openDrawer: () => {}, closeDrawer: () => {}, isDrawerOpen: false }}>
       {children}
-      <MobileDrawer isOpen={isDrawerOpen} onClose={closeDrawer} />
     </DrawerContext.Provider>
   );
 };

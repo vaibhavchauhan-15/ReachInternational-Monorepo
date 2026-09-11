@@ -12,7 +12,10 @@ import {
   FlatList,
   TextInput,
 } from 'react-native';
-import { Input, Button, TimeInput, useTheme } from '../ui';
+import { Input } from '../ui/Input';
+import { Button } from '../ui/Button';
+import { TimeInput } from '../ui/TimeInput';
+import { useTheme } from '../ui/ThemeProvider';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -24,6 +27,7 @@ import {
   validateLicenseNumber,
 } from '@reachinternational/utils';
 import { ProfileUpdateSchema } from '@reachinternational/validation';
+import { notifyProfileUpdated, notifyProfileRequestSubmitted } from '../../lib/notifications';
 import {
   X,
   Clock,
@@ -277,6 +281,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
           },
         });
 
+        notifyProfileUpdated(payload.full_name);
         Alert.alert('Success', 'Your profile details have been updated directly.');
       } else {
         // Submit profile change request
@@ -336,6 +341,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
           if (insErr) throw insErr;
         }
 
+        notifyProfileRequestSubmitted(targetApprover);
         Alert.alert(
           'Request Submitted',
           `Your profile update request has been routed to your ${approverLabel} for review.`

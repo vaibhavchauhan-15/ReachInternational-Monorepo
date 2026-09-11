@@ -66,8 +66,6 @@ export const TAGS = {
 
   // Class D / User Scoped
   users: "users",
-  notifications: "notifications",
-  userNotifications: (userId: string) => `notifications:user:${userId}`,
 } as const;
 
 export type TagName = string;

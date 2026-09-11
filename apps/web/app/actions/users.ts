@@ -1475,3 +1475,54 @@ export async function exportUsersFilteredAction(params: Omit<UserListParams, "pa
 
   return result.users;
 }
+
+import { canViewUsers } from "@reachinternational/permissions";
+
+export async function getPaginatedUsersAction(params: UserListParams): Promise<{
+  users: any[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  error?: string;
+}> {
+  try {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) throw new Error("Unauthorized");
+
+    const isSupervisor = currentUser.role === "supervisor";
+    const isAuthorized =
+      currentUser.role === "admin" ||
+      currentUser.role === "super_admin" ||
+      currentUser.role === "service_manager" ||
+      currentUser.role === "hr_manager" ||
+      currentUser.role === "manager" ||
+      isSupervisor ||
+      canViewUsers(currentUser.role);
+
+    if (!isAuthorized) {
+      return {
+        users: [],
+        total: 0,
+        page: params.page || 1,
+        pageSize: params.pageSize || 10,
+        totalPages: 0,
+        error: "Access Denied",
+      };
+    }
+
+    const result = await getUserList(params);
+    return result;
+  } catch (err: any) {
+    return {
+      users: [],
+      total: 0,
+      page: params.page || 1,
+      pageSize: params.pageSize || 10,
+      totalPages: 0,
+      error: err?.message || "Failed to fetch users",
+    };
+  }
+}
+
+

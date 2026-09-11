@@ -158,7 +158,7 @@ export function LoginFormClient() {
           type="email"
           value={email}
           onChange={(e) => handleEmailChange(e.target.value)}
-          placeholder="vaibhav@company.com"
+          placeholder="user@reachinternational.co.in"
           required
           autoComplete="email"
           error={fieldErrors.email}

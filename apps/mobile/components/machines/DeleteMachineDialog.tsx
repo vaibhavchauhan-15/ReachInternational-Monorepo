@@ -13,6 +13,7 @@ import { useTheme } from '../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { Trash2 } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
+import { notifyMachineDeleted } from '../../lib/notifications';
 
 export interface DeleteMachineDialogProps {
   visible: boolean;
@@ -60,6 +61,7 @@ export const DeleteMachineDialog: React.FC<DeleteMachineDialogProps> = ({
       if (error) {
         Alert.alert('Error', error.message || 'Failed to delete machine');
       } else {
+        notifyMachineDeleted(displayId);
         onDeleted?.();
         onClose();
       }

@@ -27,6 +27,7 @@ import {
 } from '@reachinternational/utils';
 import { useNetworkStatus } from '../../lib/offline/useNetworkStatus';
 import { offlineQueueManager } from '../../lib/offline/OfflineQueueManager';
+import { notifyLogEntryCreated, notifyMachineStatusChanged } from '../../lib/notifications';
 
 export interface MeterLogModalProps {
   visible: boolean;
@@ -369,6 +370,10 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
 
       if (isOffline) {
         const queuedItem = await offlineQueueManager.enqueue('SUBMIT_HOUR_LOG', logPayload);
+        notifyLogEntryCreated(machineCode || 'Machine', runningHours, shiftStats.overtimeHours);
+        if (isBreakdown) {
+          notifyMachineStatusChanged(machineCode || 'Machine', 'breakdown');
+        }
         setSuccess('Working Offline: Shift log queued locally for auto-sync!');
         setTimeout(() => {
           if (onSubmit) {
@@ -509,6 +514,11 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
             .update(mUpdate)
             .eq('id', machineId);
         }
+      }
+
+      notifyLogEntryCreated(machineCode || 'Machine', runningHours, shiftStats.overtimeHours);
+      if (isBreakdown) {
+        notifyMachineStatusChanged(machineCode || 'Machine', 'breakdown');
       }
 
       setSuccess('Daily machine log recorded successfully!');

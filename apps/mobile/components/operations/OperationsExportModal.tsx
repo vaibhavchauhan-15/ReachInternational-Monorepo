@@ -18,6 +18,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { formatDate, formatExactTimestamp, formatTo12Hour, getISTDateString } from '@reachinternational/utils';
+import { notifyLogsPdfExported, notifyLogsCsvExported } from '../../lib/notifications';
 import type { HourLogRecord } from '../../app/(app)/operations';
 
 export interface OperationsExportModalProps {
@@ -296,6 +297,7 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
       } else {
         Alert.alert('PDF Created', `Report saved to device cache:\n${targetUri}`);
       }
+      notifyLogsPdfExported(logs.length, new Set(logs.map((l) => l.machine_id || l.machine_code)).size);
       onClose();
     } catch (err: any) {
       console.error('Error generating PDF report:', err);
@@ -392,6 +394,7 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
       } else {
         Alert.alert('CSV Created', `Spreadsheet saved to device cache:\n${targetUri}`);
       }
+      notifyLogsCsvExported(logs.length);
       onClose();
     } catch (err: any) {
       console.error('Error generating CSV report:', err);

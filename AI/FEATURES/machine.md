@@ -9,7 +9,9 @@ Manages machine fleet registry, serial numbers, client assignments, supervisor a
 - **Mobile Screen**: `apps/mobile/app/(app)/machines.tsx` (Supports Fleet Directory list with 4 KPI cards, filters, and detail view switcher)
 - **Mobile Components (`apps/mobile/components/machines/*`)**:
   - `MobileMachineCard.tsx`: Touch card with status accent borders, copy ID, specs well, personnel, and action buttons
+  - `MobileMachineCardSkeleton.tsx`: Native pulsing skeleton placeholder for cards and lists during page load and search
   - `MachineDetailView.tsx`: Full specifications view with `< Back to Machines`, scissor-lift hero card, segmented tabs, CRM client card, and running logs tab
+
   - `MachineDetailModal.tsx`: Full-screen modal presentation of `MachineDetailView`
   - `MachineModal.tsx`: Add / Edit modal matching Screenshot 1 with Section 0 specs, Section 1 personnel & meter, Section 2 status
   - `MultiUserSelectModal.tsx`: Multi-user picker sheet for shift supervisors and operators

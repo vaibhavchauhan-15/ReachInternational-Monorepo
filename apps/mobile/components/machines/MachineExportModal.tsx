@@ -18,6 +18,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { formatDate, formatTo12Hour } from '@reachinternational/utils';
+import { notifyMachineExported } from '../../lib/notifications';
 
 export interface MachineExportModalProps {
   visible: boolean;
@@ -80,7 +81,7 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
   const filteredMachines = useMemo(() => {
     if (activeFilter === 'all') return machines;
     return machines.filter((m) => {
-      const rental = (m.rental_status || '').toLowerCase();
+      const rental = (m.status || m.rental_status || '').toLowerCase();
       const health = (m.health_status || '').toLowerCase();
       if (activeFilter === 'available') return rental === 'available';
       if (activeFilter === 'rented') return rental === 'rented';
@@ -100,13 +101,13 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
     let totalHmr = 0;
 
     machines.forEach((m) => {
-      const r = (m.rental_status || '').toLowerCase();
+      const r = (m.status || m.rental_status || '').toLowerCase();
       const h = (m.health_status || '').toLowerCase();
       if (r === 'available') available++;
       if (r === 'rented') rented++;
       if (h === 'breakdown') breakdown++;
       if (h === 'under_maintenance' || r === 'maintenance') maintenance++;
-      const hmr = Number(m.total_run_hours ?? m.hmr ?? 0);
+      const hmr = Number(m.hour_meter ?? m.total_run_hours ?? m.hmr ?? 0);
       if (!isNaN(hmr)) totalHmr += hmr;
     });
 
@@ -136,13 +137,13 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
         const serial = m.serial_number || '—';
         const category = m.category?.name || m.category_name || 'Industrial';
         const clientName = m.client?.company_name || m.customer_name || 'In Yard / Depo';
-        const site = m.current_location || m.site_address || '—';
-        const hmr = m.total_run_hours ?? m.hmr ?? 0;
-        const rentalStatus = formatRentalStatus(m.rental_status);
+        const site = m.client?.address || m.current_location || m.site_address || '—';
+        const hmr = m.hour_meter ?? m.total_run_hours ?? m.hmr ?? 0;
+        const rentalStatus = formatRentalStatus(m.status || m.rental_status);
         const healthStatus = formatHealthStatus(m.health_status);
 
         const statusColor =
-          m.rental_status === 'rented'
+          (m.status || m.rental_status) === 'rented'
             ? '#0284c7'
             : m.health_status === 'breakdown'
             ? '#dc2626'
@@ -334,6 +335,7 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
         margins: { top: 20, bottom: 20, left: 20, right: 20 },
       });
 
+      notifyMachineExported('pdf', filteredMachines.length);
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, {
           UTI: '.pdf',
@@ -385,12 +387,12 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
         `"${(m.model || '').replace(/"/g, '""')}"`,
         `"${(m.serial_number || '').replace(/"/g, '""')}"`,
         `"${(m.category?.name || m.category_name || '').replace(/"/g, '""')}"`,
-        `"${formatRentalStatus(m.rental_status)}"`,
+        `"${formatRentalStatus(m.status || m.rental_status)}"`,
         `"${formatHealthStatus(m.health_status)}"`,
         `"${(m.client?.company_name || m.customer_name || 'In Yard').replace(/"/g, '""')}"`,
-        `"${(m.current_location || m.site_address || '').replace(/"/g, '""')}"`,
-        String(m.total_run_hours ?? m.hmr ?? 0),
-        String(m.manufacture_year || '—'),
+        `"${(m.client?.address || m.current_location || m.site_address || '').replace(/"/g, '""')}"`,
+        String(m.hour_meter ?? m.total_run_hours ?? m.hmr ?? 0),
+        String(m.year_of_mfg || m.manufacture_year || '—'),
       ]);
 
       const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
@@ -402,6 +404,7 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
         encoding: FileSystem.EncodingType.UTF8,
       });
 
+      notifyMachineExported('csv', filteredMachines.length);
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri, {
           UTI: 'public.comma-separated-values-text',

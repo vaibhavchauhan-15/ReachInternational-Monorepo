@@ -1,0 +1,36 @@
+# =============================================================================
+# EAS Build Ignore File — Exclude Test, Docs & Store Files from Production Build
+# =============================================================================
+
+# Test Suites & Verification Scripts
+run-tests.mjs
+**/__tests__/**
+**/*.test.ts
+**/*.test.tsx
+**/*.test.js
+**/*.test.jsx
+**/*.spec.ts
+**/*.spec.tsx
+**/*.spec.js
+**/*.spec.jsx
+coverage/
+
+# Documentation & Google Play Store Submission Assets (Not needed in binary)
+docs/
+store-assets/
+
+# Local Environment & Logs
+.env*.local
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Git & IDE Files
+.git/
+.github/
+.vscode/
+.idea/
+*.swp
+*.swo

@@ -16,7 +16,7 @@ import {
   AnimatedTrash2,
   AnimatedChevronDown,
 } from "@/components/ui/animated-icons";
-import { LayoutGrid, Table as TableIcon, Check, X, Plus, Copy, Download, FileSpreadsheet, FileText, Trash2, Mail, Phone, MapPin, Clock } from "lucide-react";
+import { LayoutGrid, Table as TableIcon, Check, X, Plus, Copy, Download, FileSpreadsheet, FileText, Trash2, Mail, Phone, MapPin, Clock, RotateCcw } from "lucide-react";
 import {
   Button,
   Card,
@@ -45,6 +45,7 @@ import {
   bulkApproveUsers,
   bulkRejectUsers,
   editUser,
+  getPaginatedUsersAction,
 } from "@/app/actions/users";
 import { getSupervisorsAction, getWorkingLocationsAction } from "@/app/actions/auth";
 import {
@@ -53,16 +54,21 @@ import {
   bulkApproveProfileChangeRequests,
   bulkRejectProfileChangeRequests,
 } from "@/app/actions/profile";
+import {
+  approveAccountDeletionRequestAction,
+  rejectAccountDeletionRequestAction,
+} from "@/app/actions/account-deletion";
 import { formatDateTime, formatTimeAgo, formatTinyRelativeTime } from "@reachinternational/utils";
 import { UserRow } from "./UserRow";
 import { MobileUserCard } from "./MobileUserCard";
 import dynamic from "next/dynamic";
-import type { User, UserRole, ProfileChangeRequest } from "@/lib/types/database";
+import type { User, UserRole, ProfileChangeRequest, AccountDeletionRequest } from "@/lib/types/database";
 
 const UserCreateModal = dynamic(() => import("./UserCreateModal").then(mod => mod.UserCreateModal), { ssr: false });
 const UserEditModal = dynamic(() => import("./UserEditModal").then(mod => mod.UserEditModal), { ssr: false });
 const UserDetailSheet = dynamic(() => import("./UserDetailSheet").then(mod => mod.UserDetailSheet), { ssr: false });
 const ProfileChangeRequestsSection = dynamic(() => import("./ProfileChangeRequestsSection").then(mod => mod.ProfileChangeRequestsSection), { ssr: false });
+const AccountDeletionRequestsSection = dynamic(() => import("./AccountDeletionRequestsSection").then(mod => mod.AccountDeletionRequestsSection), { ssr: false });
 
 function getPendingRoleBadge(role: string) {
   switch (role) {
@@ -466,6 +472,7 @@ interface UsersPageClientProps {
   users: User[];
   pendingUsers: User[];
   profileChangeRequests?: ProfileChangeRequest[];
+  accountDeletionRequests?: AccountDeletionRequest[];
   currentUser: User;
   isSuperAdmin: boolean;
   totalPages: number;
@@ -479,6 +486,7 @@ export function UsersPageClient({
   users,
   pendingUsers,
   profileChangeRequests = [],
+  accountDeletionRequests = [],
   currentUser,
   isSuperAdmin,
   totalPages,
@@ -496,6 +504,7 @@ export function UsersPageClient({
   const [usersList, setUsersList] = useState<User[]>(users);
   const [pendingUsersList, setPendingUsersList] = useState<User[]>(pendingUsers);
   const [profileRequestsList, setProfileRequestsList] = useState<ProfileChangeRequest[]>(profileChangeRequests);
+  const [deletionRequestsList, setDeletionRequestsList] = useState<AccountDeletionRequest[]>(accountDeletionRequests);
 
   useEffect(() => {
     setUsersList(users);
@@ -509,8 +518,13 @@ export function UsersPageClient({
     setProfileRequestsList(profileChangeRequests);
   }, [profileChangeRequests]);
 
+  useEffect(() => {
+    setDeletionRequestsList(accountDeletionRequests);
+  }, [accountDeletionRequests]);
+
   const [loading, setLoading] = useState<{ type: "approve" | "reject" | "create" | "reset" | "toggle" | "role" | "supervisor" | "delete" | "edit"; id: string } | null>(null);
   const [profileLoading, setProfileLoading] = useState<{ type: "approve" | "reject"; id: string } | null>(null);
+  const [deletionLoading, setDeletionLoading] = useState<{ type: "approve" | "reject"; id: string } | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const currentRoleOptions = readOnly ? SUPERVISOR_ROLE_OPTIONS : ROLE_OPTIONS;
@@ -616,6 +630,106 @@ export function UsersPageClient({
       setSearchTerm(urlSearch);
     }
   }, [searchParams]);
+
+  // Mobile Infinite Scroll State for Cards View (Viewport 418x930 and below)
+  const [mobileUsersList, setMobileUsersList] = useState<User[]>(users);
+  const [mobilePage, setMobilePage] = useState(currentPage);
+  const [mobileHasMore, setMobileHasMore] = useState(currentPage < totalPages);
+  const [isLoadingMoreMobile, setIsLoadingMoreMobile] = useState(false);
+  const [loadMoreMobileError, setLoadMoreMobileError] = useState<string | null>(null);
+  const mobileSentinelRef = useRef<HTMLDivElement>(null);
+  const isFetchingMobileRef = useRef(false);
+
+  useEffect(() => {
+    setMobileUsersList(users);
+    setMobilePage(currentPage);
+    setMobileHasMore(currentPage < totalPages);
+    setLoadMoreMobileError(null);
+  }, [users, currentPage, totalPages]);
+
+  useEffect(() => {
+    setMobileUsersList((prevMobile) => {
+      const usersMap = new Map(usersList.map((u) => [u.id, u]));
+      return prevMobile
+        .map((mu) => usersMap.get(mu.id) || mu)
+        .filter((mu) => {
+          const inInitialPage = users.some((u) => u.id === mu.id);
+          if (inInitialPage && !usersMap.has(mu.id)) {
+            return false;
+          }
+          return true;
+        });
+    });
+  }, [usersList, users]);
+
+  const handleLoadMoreMobile = useCallback(async () => {
+    if (isFetchingMobileRef.current || !mobileHasMore || isLoadingMoreMobile) {
+      return;
+    }
+    isFetchingMobileRef.current = true;
+    setIsLoadingMoreMobile(true);
+    setLoadMoreMobileError(null);
+
+    try {
+      const nextPage = mobilePage + 1;
+      const result = await getPaginatedUsersAction({
+        search: searchParams?.get("search") || undefined,
+        role: searchParams?.get("role") || undefined,
+        status: searchParams?.get("status") || undefined,
+        kyc: searchParams?.get("kyc") || undefined,
+        state: searchParams?.get("state") || undefined,
+        dateRange: searchParams?.get("dateRange") || undefined,
+        sort: searchParams?.get("sort") || undefined,
+        page: nextPage,
+        pageSize: PAGE_SIZE,
+      });
+
+      if (result.error) {
+        setLoadMoreMobileError(result.error);
+      } else {
+        setMobileUsersList((prev) => {
+          const existingIds = new Set(prev.map((u) => u.id));
+          const newItems = (result.users || []).filter((u) => !existingIds.has(u.id));
+          return [...prev, ...newItems];
+        });
+        setMobilePage(nextPage);
+        setMobileHasMore(nextPage < result.totalPages);
+      }
+    } catch (err: any) {
+      setLoadMoreMobileError(err?.message || "Failed to load more users.");
+    } finally {
+      setIsLoadingMoreMobile(false);
+      isFetchingMobileRef.current = false;
+    }
+  }, [mobileHasMore, isLoadingMoreMobile, mobilePage, searchParams, PAGE_SIZE]);
+
+  useEffect(() => {
+    const sentinel = mobileSentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first && first.isIntersecting) {
+          handleLoadMoreMobile();
+        }
+      },
+      {
+        root: null,
+        rootMargin: "300px",
+        threshold: 0.1,
+      }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [handleLoadMoreMobile]);
+
+  const handleMobileRetry = useCallback(() => {
+    setLoadMoreMobileError(null);
+    handleLoadMoreMobile();
+  }, [handleLoadMoreMobile]);
+
 
   const updateFilter = useCallback((key: string, value: string) => {
     const params = new URLSearchParams(searchParams?.toString() || "");
@@ -924,6 +1038,64 @@ export function UsersPageClient({
       toast("error", err?.message || "Failed to bulk reject profile requests.");
     }
   }, [profileRequestsList, router, toast]);
+
+  // Handlers for Account Deletion Requests with Optimistic Feedback
+  const handleApproveDeletion = useCallback(
+    async (request: AccountDeletionRequest, notes?: string) => {
+      const prevList = deletionRequestsList;
+      const targetUserId = request.user_id;
+
+      setDeletionRequestsList((prev) => prev.filter((r) => r.id !== request.id));
+      if (targetUserId) {
+        setUsersList((prev) =>
+          prev.map((u) => (u.id === targetUserId ? { ...u, status: "inactive" as const } : u))
+        );
+      }
+      setDeletionLoading({ type: "approve", id: request.id });
+
+      try {
+        const res = await approveAccountDeletionRequestAction(request.id, targetUserId || undefined, notes);
+        setDeletionLoading(null);
+        if (!res.success) {
+          setDeletionRequestsList(prevList);
+          toast("error", res.error || "Failed to approve account deletion.");
+        } else {
+          toast("success", res.message || "Account deletion approved and user de-provisioned.");
+          router.refresh();
+        }
+      } catch (err: any) {
+        setDeletionLoading(null);
+        setDeletionRequestsList(prevList);
+        toast("error", err?.message || "Failed to approve account deletion.");
+      }
+    },
+    [deletionRequestsList, router, toast]
+  );
+
+  const handleRejectDeletion = useCallback(
+    async (request: AccountDeletionRequest, notes?: string) => {
+      const prevList = deletionRequestsList;
+      setDeletionRequestsList((prev) => prev.filter((r) => r.id !== request.id));
+      setDeletionLoading({ type: "reject", id: request.id });
+
+      try {
+        const res = await rejectAccountDeletionRequestAction(request.id, notes);
+        setDeletionLoading(null);
+        if (!res.success) {
+          setDeletionRequestsList(prevList);
+          toast("error", res.error || "Failed to decline deletion request.");
+        } else {
+          toast("success", res.message || "Account deletion request declined.");
+          router.refresh();
+        }
+      } catch (err: any) {
+        setDeletionLoading(null);
+        setDeletionRequestsList(prevList);
+        toast("error", err?.message || "Failed to decline deletion request.");
+      }
+    },
+    [deletionRequestsList, router, toast]
+  );
 
   const handleCreateUser = useCallback(
     async (formData: FormData) => {
@@ -1717,7 +1889,44 @@ export function UsersPageClient({
             </div>
           </motion.div>
         )}
+
+        {!readOnly && (
+          <motion.div
+            whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              if (deletionRequestsList.length > 0) {
+                const el = document.getElementById("account-deletion-requests-section");
+                if (el) el.scrollIntoView({ behavior: "smooth" });
+              }
+            }}
+            className={`cursor-pointer p-4 rounded-[var(--radius-md)] border transition-all ${
+              deletionRequestsList.length > 0
+                ? "bg-rose-50/40 border-rose-500 shadow-xs ring-1 ring-rose-500/20 dark:bg-rose-950/20"
+                : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-rose-500/40"
+            }`}
+          >
+            <div className="flex items-center justify-between text-[var(--color-mute)]">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+                Account Deletions
+              </span>
+              <Trash2 size={16} className="text-rose-600 dark:text-rose-400" />
+            </div>
+            <div className="text-2xl font-extrabold text-rose-700 dark:text-rose-300 mt-1">
+              <AnimatedCounter value={deletionRequestsList.length} />
+            </div>
+          </motion.div>
+        )}
       </div>
+
+      {/* Dedicated Account Deletion Requests Section */}
+      {!readOnly && deletionRequestsList.length > 0 && (
+        <AccountDeletionRequestsSection
+          requests={deletionRequestsList}
+          onApprove={handleApproveDeletion}
+          onReject={handleRejectDeletion}
+          loadingState={deletionLoading}
+        />
+      )}
 
       {/* Dedicated Profile Change Requests Section */}
       {!readOnly && profileRequestsList.length > 0 && (
@@ -2179,7 +2388,7 @@ export function UsersPageClient({
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <AnimatePresence mode="popLayout">
-                  {usersList.map((u) => (
+                  {mobileUsersList.map((u) => (
                     <MobileUserCard
                       key={u.id}
                       user={u}
@@ -2195,8 +2404,48 @@ export function UsersPageClient({
                   ))}
                 </AnimatePresence>
               </div>
-              {totalCount > 0 && (
-                <div className="pt-2">
+
+              {/* Infinite Scroll Sentinel for Mobile View */}
+              {mobileHasMore && !loadMoreMobileError && !isQueryLoading && (
+                <div ref={mobileSentinelRef} className="h-6 w-full pointer-events-none" />
+              )}
+
+              {/* Loading More Indicator */}
+              {isLoadingMoreMobile && (
+                <div className="py-4 flex items-center justify-center gap-2 text-xs text-[var(--color-mute)]">
+                  <AnimatedSearch className="animate-spin text-[var(--color-link)]" size={15} />
+                  <span>Loading more staff...</span>
+                </div>
+              )}
+
+              {/* Pagination Load More Error with Retry */}
+              {loadMoreMobileError && (
+                <div className="p-3 my-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] flex items-center justify-between gap-3 text-xs shadow-xs">
+                  <span className="text-[var(--color-error)] font-medium">{loadMoreMobileError}</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleMobileRetry}
+                    className="h-7 px-3 text-xs font-semibold rounded-md border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)] flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    Retry
+                  </Button>
+                </div>
+              )}
+
+              {/* End-of-List Indicator */}
+              {!mobileHasMore && mobileUsersList.length > 0 && !isQueryLoading && (
+                <div className="py-6 flex items-center justify-center gap-3 text-xs text-[var(--color-mute)] select-none">
+                  <div className="h-[1px] flex-1 bg-[var(--color-hairline)]" />
+                  <span className="font-medium text-[var(--color-mute)]">All users have been displayed</span>
+                  <div className="h-[1px] flex-1 bg-[var(--color-hairline)]" />
+                </div>
+              )}
+
+              {/* Fallback pagination controls when explicitly in desktop cards view */}
+              {viewMode === "cards" && totalCount > 0 && (
+                <div className="pt-2 hidden sm:block">
                   <Pagination
                     page={currentPage}
                     pageSize={PAGE_SIZE}

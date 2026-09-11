@@ -10,7 +10,7 @@ import {
   Platform,
   TextInput,
 } from 'react-native';
-import { Badge, useTheme } from '../ui';
+import { Badge, useTheme, SharedLinkPreviewCard } from '../ui';
 import { ScissorLiftLogoIcon } from '../branding/ReachInternationalLogo';
 import { supabase } from '../../lib/supabase';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   Edit2,
   Trash2,
+  Share2,
   Copy,
   Check,
   Clock,
@@ -58,7 +59,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   onMachineDeleted,
   userRole,
 }) => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
 
   const normalizedRole = (userRole || '').toLowerCase();
   const isAdminOrManager =
@@ -83,6 +84,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   // Modals
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
+  const [shareModalVisible, setShareModalVisible] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Running Logs State (Lazy loaded)
@@ -340,9 +342,17 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
           ]}
         >
           <View style={styles.heroMainRow}>
-            {/* Scissor Lift Logo Icon in Dark Squircle */}
-            <View style={styles.scissorSquircle}>
-              <ScissorLiftLogoIcon size={22} color="#0ea5e9" />
+            {/* Scissor Lift Logo Icon in Theme-Adaptive Squircle */}
+            <View
+              style={[
+                styles.scissorSquircle,
+                {
+                  backgroundColor: isDark ? '#18181b' : '#f1f5f9',
+                  borderColor: theme.colors.hairline,
+                },
+              ]}
+            >
+              <ScissorLiftLogoIcon size={24} />
             </View>
 
             {/* Title & Status Badges */}
@@ -372,8 +382,22 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               </View>
             </View>
 
-            {/* Action Buttons: Edit & Red Delete (Screenshot 2 Match) */}
+            {/* Action Buttons: Share, Edit & Red Delete */}
             <View style={styles.heroActionBtns}>
+              <TouchableOpacity
+                onPress={() => setShareModalVisible(true)}
+                style={[
+                  styles.circleEditBtn,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+                activeOpacity={0.7}
+                accessibilityLabel="Share Machine Link"
+              >
+                <Share2 size={15} color={theme.colors.ink} />
+              </TouchableOpacity>
               {canEdit && (
                 <TouchableOpacity
                   onPress={() => setEditModalVisible(true)}
@@ -1236,6 +1260,16 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
           setLogSortBy(val as any);
           setLogPage(1);
         }}
+      />
+
+      {/* Shared Link Preview Modal */}
+      <SharedLinkPreviewCard
+        asModal={true}
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        url={`https://www.reachinternational.co.in/machines?id=${machine.id}`}
+        title={`${machine.machine_id} — ${machine.model || 'Equipment'}`}
+        description={`Serial No: ${machine.serial_number || 'N/A'} • Status: ${machine.health_status || 'Active'} • Operational Fleet Asset`}
       />
     </View>
   );

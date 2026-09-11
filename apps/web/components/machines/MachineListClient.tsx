@@ -714,7 +714,70 @@ const SORT_OPTIONS = [
   { id: "lowest_hmr", label: "Lowest HMR" },
 ];
 
+function MobileMachineCardSkeletonList() {
+  return (
+    <div className="space-y-3" aria-label="Loading machine assets...">
+      {[1, 2, 3, 4].map((i) => (
+        <div
+          key={i}
+          className="p-4 rounded-2xl border border-[var(--color-hairline)] border-l-[3px] border-l-neutral-300 dark:border-l-neutral-700 bg-[var(--color-canvas-elevated)] shadow-xs animate-pulse flex flex-col gap-3"
+        >
+          {/* Header Row */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="h-6 w-20 rounded bg-[var(--color-hairline)] shrink-0" />
+              <div className="h-4 w-16 rounded bg-[var(--color-hairline)]/70" />
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="h-5 w-14 rounded-full bg-[var(--color-hairline)]" />
+              <div className="h-5 w-14 rounded-full bg-[var(--color-hairline)]" />
+            </div>
+          </div>
+
+          {/* Sub Metadata Row */}
+          <div className="h-3 w-44 rounded bg-[var(--color-hairline)]/60" />
+
+          {/* Inset Specs Well */}
+          <div className="p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2.5">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <div className="h-2.5 w-16 rounded bg-[var(--color-hairline)]/70" />
+                <div className="h-4 w-14 rounded bg-[var(--color-hairline)]" />
+              </div>
+              <div className="space-y-1">
+                <div className="h-2.5 w-20 rounded bg-[var(--color-hairline)]/70" />
+                <div className="h-3.5 w-24 rounded bg-[var(--color-hairline)]" />
+              </div>
+            </div>
+            <div className="h-px bg-[var(--color-hairline)]" />
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <div className="h-2.5 w-14 rounded bg-[var(--color-hairline)]/70" />
+                <div className="h-3 w-20 rounded bg-[var(--color-hairline)]" />
+              </div>
+              <div className="space-y-1">
+                <div className="h-2.5 w-16 rounded bg-[var(--color-hairline)]/70" />
+                <div className="h-3 w-20 rounded bg-[var(--color-hairline)]" />
+              </div>
+            </div>
+          </div>
+
+          {/* Footer Row */}
+          <div className="pt-2 border-t border-[var(--color-hairline)] flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <div className="h-7 w-14 rounded bg-[var(--color-hairline)]" />
+              <div className="h-7 w-16 rounded bg-[var(--color-hairline)]" />
+            </div>
+            <div className="h-7 w-20 rounded bg-[var(--color-hairline)]" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function MachineListClient({
+
   machines,
   total,
   page,
@@ -1252,7 +1315,9 @@ export function MachineListClient({
             activeFilterCount={activeFilterCount}
             onResetFilters={handleResetAllFilters}
             onSubmitSearch={handleSearchSubmit}
+            isLoading={isPending}
             actions={
+
               <div className="flex items-center gap-2">
                 {/* View Switcher is strictly hidden on mobile viewports (≤640px) per feedback #1 */}
                 <div className="hidden sm:flex items-center bg-[var(--color-hairline-soft-surface)] p-0.5 rounded-lg border border-[var(--color-hairline)] text-xs h-9 shrink-0">
@@ -1444,23 +1509,27 @@ export function MachineListClient({
 
           {/* Main Table / Grid Display */}
           {viewMode === "cards" ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
-              <AnimatePresence mode="popLayout">
-                {filteredAndSortedMachines.map((m) => (
-                  <MobileMachineCard
-                    key={m.id}
-                    machine={m}
-                    isAdmin={isAdmin}
-                    isSupervisor={isSupervisor}
-                    onEdit={(mach: Machine) => {
-                      setEditingMachine(mach);
-                      setModalOpen(true);
-                    }}
-                    onDelete={(mach: Machine) => setDeletingMachine(mach)}
-                  />
-                ))}
-              </AnimatePresence>
-            </div>
+            isPending ? (
+              <MobileMachineCardSkeletonList />
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-4">
+                <AnimatePresence mode="popLayout">
+                  {filteredAndSortedMachines.map((m) => (
+                    <MobileMachineCard
+                      key={m.id}
+                      machine={m}
+                      isAdmin={isAdmin}
+                      isSupervisor={isSupervisor}
+                      onEdit={(mach: Machine) => {
+                        setEditingMachine(mach);
+                        setModalOpen(true);
+                      }}
+                      onDelete={(mach: Machine) => setDeletingMachine(mach)}
+                    />
+                  ))}
+                </AnimatePresence>
+              </div>
+            )
           ) : viewMode === "table" ? (
             <>
               {/* Desktop Table View (hidden sm:block) */}
@@ -1497,21 +1566,25 @@ export function MachineListClient({
 
               {/* Mobile Card Grid View for viewMode=table */}
               <div className="block sm:hidden space-y-3">
-                <AnimatePresence mode="popLayout">
-                  {filteredAndSortedMachines.map((m) => (
-                    <MobileMachineCard
-                      key={m.id}
-                      machine={m}
-                      isAdmin={isAdmin}
-                      isSupervisor={isSupervisor}
-                      onEdit={(mach: Machine) => {
-                        setEditingMachine(mach);
-                        setModalOpen(true);
-                      }}
-                      onDelete={(mach: Machine) => setDeletingMachine(mach)}
-                    />
-                  ))}
-                </AnimatePresence>
+                {isPending ? (
+                  <MobileMachineCardSkeletonList />
+                ) : (
+                  <AnimatePresence mode="popLayout">
+                    {filteredAndSortedMachines.map((m) => (
+                      <MobileMachineCard
+                        key={m.id}
+                        machine={m}
+                        isAdmin={isAdmin}
+                        isSupervisor={isSupervisor}
+                        onEdit={(mach: Machine) => {
+                          setEditingMachine(mach);
+                          setModalOpen(true);
+                        }}
+                        onDelete={(mach: Machine) => setDeletingMachine(mach)}
+                      />
+                    ))}
+                  </AnimatePresence>
+                )}
               </div>
             </>
           ) : (
@@ -1549,24 +1622,29 @@ export function MachineListClient({
               </div>
 
               <div className="block sm:hidden space-y-3">
-                <AnimatePresence mode="popLayout">
-                  {filteredAndSortedMachines.map((m) => (
-                    <MobileMachineCard
-                      key={m.id}
-                      machine={m}
-                      isAdmin={isAdmin}
-                      isSupervisor={isSupervisor}
-                      onEdit={(mach: Machine) => {
-                        setEditingMachine(mach);
-                        setModalOpen(true);
-                      }}
-                      onDelete={(mach: Machine) => setDeletingMachine(mach)}
-                    />
-                  ))}
-                </AnimatePresence>
+                {isPending ? (
+                  <MobileMachineCardSkeletonList />
+                ) : (
+                  <AnimatePresence mode="popLayout">
+                    {filteredAndSortedMachines.map((m) => (
+                      <MobileMachineCard
+                        key={m.id}
+                        machine={m}
+                        isAdmin={isAdmin}
+                        isSupervisor={isSupervisor}
+                        onEdit={(mach: Machine) => {
+                          setEditingMachine(mach);
+                          setModalOpen(true);
+                        }}
+                        onDelete={(mach: Machine) => setDeletingMachine(mach)}
+                      />
+                    ))}
+                  </AnimatePresence>
+                )}
               </div>
             </>
           )}
+
 
           {/* Pagination */}
           {totalPages > 1 && (

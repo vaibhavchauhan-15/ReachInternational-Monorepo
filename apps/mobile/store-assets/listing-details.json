@@ -1,0 +1,22 @@
+{
+  "title": "Reach International",
+  "shortDescription": "Industrial machine fleet tracking, HMR logging, shifts & maintenance operations.",
+  "fullDescription": "Reach International is an enterprise-grade industrial machinery fleet management, field service tracking, and equipment maintenance platform built for equipment owners, service managers, field engineers, and machine operators.\n\nFrom scissor lifts and boom lifts to aerial work platforms (AWPs), cranes, and material handling equipment, Reach International digitizes end-to-end heavy equipment workflows to maximize uptime, enforce safety compliance, and eliminate scheduling collisions.\n\nKEY CAPABILITIES:\n\n• FLEET MACHINERY DIRECTORY\nAccess comprehensive equipment inventories with real-time operational status, serial telemetry, model specifications, assigned base yards, and active operator custody.\n\n• DAILY HOUR METER READINGS (HMR) & LOGGING\nLog shift start and closing hour meter readings with built-in validation to track machine runtime accurately, monitor engine wear, and eliminate manual logbook discrepancies.\n\n• SHIFT SCHEDULING & CONFLICT DETECTION\nPrevent dangerous operator fatigue and dual-machine custody collisions. The intelligent shift validation engine detects schedule overlaps, overtime overruns, and multi-machine conflicts in real time.\n\n• PRE-SHIFT SAFETY INSPECTION CHECKLISTS\nEmpower operators to conduct standardized pre-operational safety inspections (hydraulic fluids, emergency lowering, structural chassis, tires/tracks) before machinery operation.\n\n• FIELD SERVICE & PREVENTATIVE MAINTENANCE\nTrack scheduled preventative maintenance cycles, component overhauls, and breakdown service tickets driven by actual machine running hours.\n\n• WORKFORCE & OPERATOR CREDENTIALS (KYC)\nManage operator assignments, statutory operating certifications, and driver licences with role-based access control (RBAC) and enterprise data security.\n\n• OFFLINE RESILIENCE\nContinue logging shift hours and equipment checks in remote job sites or areas with limited cellular connectivity. Data syncs automatically once back online.\n\nDesigned for construction companies, equipment rental providers, infrastructure contractors, and industrial plants.",
+  "category": "BUSINESS",
+  "defaultLanguage": "en-US",
+  "contactEmail": "info@reachinternational.co.in",
+  "contactPhone": "+91 98765 43210",
+  "contactWebsite": "https://www.reachinternational.co.in",
+  "privacyPolicyUrl": "https://www.reachinternational.co.in/privacy",
+  "accountDeletionUrl": "https://www.reachinternational.co.in/account-deletion",
+  "termsOfServiceUrl": "https://www.reachinternational.co.in/terms",
+  "targetAudience": [
+    "18 and older"
+  ],
+  "containsAds": false,
+  "appType": "App",
+  "price": "Free",
+  "package": "com.reachinternational.app",
+  "versionName": "1.0.0",
+  "versionCode": 1
+}

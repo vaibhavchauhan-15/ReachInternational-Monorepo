@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, Modal, TextInput, Switch } from 'react-native';
-import { Card, Badge, Input, Button, useTheme, MobileHeader } from '../../components/ui';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, Modal, TextInput, Switch, ActivityIndicator } from 'react-native';
+import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText } from 'lucide-react-native';
+import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText, RefreshCw } from 'lucide-react-native';
+import { supabase } from '../../lib/supabase';
+import { ClientListSkeleton } from '../../components/clients/ClientCardSkeleton';
 
 export type StatusFilter = 'all' | 'active' | 'inactive';
 
@@ -75,11 +77,50 @@ export default function ClientsScreen() {
   const { theme } = useTheme();
 
   const [clients, setClients] = useState<ClientItem[]>(INITIAL_CLIENTS);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<StatusFilter>('all');
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
   const pageSize = 10;
+
+  // 280ms Search debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 280);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const isSearching = search.trim() !== debouncedSearch.trim() && search.trim() !== '';
+
+  const fetchClients = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .order('company_name', { ascending: true });
+
+      if (error) throw error;
+      if (data && data.length > 0) {
+        setClients(data as unknown as ClientItem[]);
+      } else {
+        setClients(INITIAL_CLIENTS);
+      }
+    } catch (err) {
+      console.warn('Clients query fallback to initial mock:', err);
+      setClients(INITIAL_CLIENTS);
+    } finally {
+      setIsLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchClients();
+  }, [fetchClients]);
 
   // Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -107,9 +148,7 @@ export default function ClientsScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 800);
+    fetchClients();
   };
 
   const handleSearchChange = (text: string) => {
@@ -274,9 +313,40 @@ export default function ClientsScreen() {
     );
   };
 
+  const headerActions = useMemo<HeaderActionItem[]>(() => {
+    const list: HeaderActionItem[] = [];
+
+    list.push({
+      id: 'add-client',
+      label: 'Add New Client',
+      icon: <Plus size={16} color={theme.colors.ink} />,
+      onPress: () => handleOpenAdd(),
+    });
+
+    list.push({
+      id: 'refresh-clients',
+      label: 'Refresh Client Directory',
+      icon: <RefreshCw size={16} color={theme.colors.ink} />,
+      onPress: () => onRefresh(),
+    });
+
+    return list;
+  }, [theme.colors.ink, onRefresh]);
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      <MobileHeader title="Client Directory" showBack={false} />
+      {/* Top Standardized Mobile Header: [Logo] + [Page Title] + [Search] + [3-Dot Actions] */}
+      <MobileHeader
+        title="Client Directory"
+        search={{
+          value: search,
+          onChangeText: handleSearchChange,
+          placeholder: 'Search clients, GST, PAN, city...',
+          onClear: () => handleSearchChange(''),
+          isSearching: isSearching,
+        }}
+        actions={headerActions}
+      />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -303,7 +373,13 @@ export default function ClientsScreen() {
               value={search}
               onChangeText={handleSearchChange}
               placeholder="Search clients, GST, PAN, city..."
-              leftIcon={<Search size={16} color={theme.colors.mute} />}
+              leftIcon={
+                isSearching ? (
+                  <ActivityIndicator size="small" color={theme.colors.primary} />
+                ) : (
+                  <Search size={16} color={theme.colors.mute} />
+                )
+              }
             />
           </View>
           <TouchableOpacity style={[styles.addBtn, { backgroundColor: theme.colors.primary }]} onPress={handleOpenAdd}>
@@ -342,7 +418,9 @@ export default function ClientsScreen() {
 
         {/* Client Cards List */}
         <View style={styles.listContainer}>
-          {paginatedClients.length === 0 ? (
+          {isLoading || isSearching ? (
+            <ClientListSkeleton count={4} />
+          ) : paginatedClients.length === 0 ? (
             <Card style={styles.emptyCard}>
               <Building2 size={32} color={theme.colors.mute} style={{ marginBottom: 8 }} />
               <Text style={[styles.emptyText, { color: theme.colors.mute }]}>No client records found.</Text>

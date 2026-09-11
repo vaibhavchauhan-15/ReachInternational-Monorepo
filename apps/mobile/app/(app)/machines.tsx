@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,18 +8,26 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   BackHandler,
+  Platform,
   StatusBar,
+  TextInput,
+  Animated,
+  Easing,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Input, useTheme, MobileHeader } from '../../components/ui';
+import { useTheme, MobileHeader, Skeleton, HeaderActionItem } from '../../components/ui';
 import { MobileMachineCard } from '../../components/machines/MobileMachineCard';
 import { MachineModal } from '../../components/machines/MachineModal';
 import { MachineDetailView } from '../../components/machines/MachineDetailView';
-import { DeleteMachineDialog } from '../../components/machines/DeleteMachineDialog';
-import { MachineImportModal } from '../../components/machines/MachineImportModal';
-import { CustomFilterSelectorModal, type FilterOption } from '../../components/machines/CustomFilterSelectorModal';
-import { MachineExportModal } from '../../components/machines/MachineExportModal';
-import { MachineCategoryModal } from '../../components/machines/MachineCategoryModal';
+import {
+  DropdownFilterSelector,
+  MachineImportModal,
+  MachineExportModal,
+  DeleteMachineDialog,
+  MobileMachineListSkeleton,
+  type FilterOption,
+} from '../../components/machines';
+
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
@@ -29,12 +37,13 @@ import {
   Plus,
   X,
   ChevronDown,
-  RefreshCw,
   FileSpreadsheet,
   Wrench,
   RotateCcw,
   Printer,
-  FolderTree,
+  SlidersHorizontal,
+  AlertCircle,
+  RefreshCw,
 } from 'lucide-react-native';
 
 export type RentalFilterType = 'all' | 'available' | 'rented';
@@ -72,9 +81,51 @@ const SORT_OPTIONS: FilterOption[] = [
   { id: 'lowest_hmr', label: 'Lowest HMR' },
 ];
 
+const MACHINE_SELECT_COLUMNS = `
+  id,
+  machine_id,
+  model,
+  serial_number,
+  year_of_mfg,
+  manufacturer,
+  status,
+  health_status,
+  hour_meter,
+  client_id,
+  current_supervisor_id,
+  supervisor_ids,
+  current_operator_id,
+  operator_ids,
+  created_at,
+  updated_at,
+  client:clients!machines_client_id_fkey(
+    id,
+    code,
+    company_name,
+    contact_person,
+    phone,
+    address,
+    city,
+    district,
+    state,
+    pincode,
+    gstin,
+    pan_number,
+    is_billing_address_different,
+    billing_address,
+    billing_city,
+    billing_district,
+    billing_state,
+    billing_pincode,
+    status
+  ),
+  current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email, shift_time, role),
+  current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email, shift_time, role)
+`;
+
 export default function MachinesScreen() {
   const { theme, isDark } = useTheme();
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const params = useLocalSearchParams<{ id?: string; machineId?: string }>();
 
   // Data states
@@ -82,18 +133,71 @@ export default function MachinesScreen() {
   const [supervisorsList, setSupervisorsList] = useState<Array<{ id: string; full_name: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   // Filter & Search states
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const searchInputRef = useRef<TextInput>(null);
   const [rentalFilter, setRentalFilter] = useState<RentalFilterType>('all');
   const [healthFilter, setHealthFilter] = useState<HealthFilterType>('all');
   const [supervisorFilter, setSupervisorFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<SortOptionType>('machine_id_asc');
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const filterAnim = useRef(new Animated.Value(0)).current;
+  const [panelContentHeight, setPanelContentHeight] = useState(0);
+  const isWeb = Platform.OS === 'web';
 
-  // Filter Selector Modal states
-  const [activePickerModal, setActivePickerModal] = useState<
-    'rental' | 'health' | 'supervisor' | 'sort' | null
-  >(null);
+  // Snappy 280ms search debounce for fluid typing and instant skeleton loading
+  useEffect(() => {
+    const trimmed = search.trim();
+    if (trimmed === debouncedSearch.trim()) {
+      setIsSearching(false);
+      return;
+    }
+
+    if (trimmed === '') {
+      setDebouncedSearch('');
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(trimmed);
+      setIsSearching(false);
+    }, 280);
+
+    return () => clearTimeout(timer);
+  }, [search, debouncedSearch]);
+
+  const handleSearchSubmit = () => {
+    const trimmed = search.trim();
+    setDebouncedSearch(trimmed);
+    setIsSearching(false);
+  };
+
+  const handleClearSearch = () => {
+    setSearch('');
+    setDebouncedSearch('');
+    setIsSearching(false);
+    searchInputRef.current?.focus();
+  };
+
+
+  // Smooth filter open & close animation for native platforms (web uses GPU-accelerated CSS Grid)
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    Animated.timing(filterAnim, {
+      toValue: filterPanelOpen ? 1 : 0,
+      duration: 220,
+      easing: Easing.bezier(0.16, 1, 0.3, 1),
+      useNativeDriver: false,
+    }).start();
+  }, [filterPanelOpen, filterAnim]);
+
 
   // Selection & Details view
   const [selectedMachine, setSelectedMachine] = useState<any | null>(null);
@@ -104,7 +208,6 @@ export default function MachinesScreen() {
   const [deleteMachine, setDeleteMachine] = useState<any | null>(null);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [meterMachine, setMeterMachine] = useState<any | null>(null);
 
   // Role permissions
@@ -117,60 +220,73 @@ export default function MachinesScreen() {
   const isSupervisor = normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor';
   const canCreate = isAdminOrManager;
 
-  // Fetch machines with full hydration
+  // Fetch machines with full hydration, role scoping and resilient fallback
   const fetchMachines = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('machines')
-        .select(`
-          id,
-          machine_id,
-          model,
-          serial_number,
-          year_of_mfg,
-          manufacturer,
-          status,
-          health_status,
-          hour_meter,
-          customer_name,
-          client_id,
-          current_supervisor_id,
-          supervisor_ids,
-          current_operator_id,
-          operator_ids,
-          client:clients!machines_client_id_fkey(
-            id,
-            code,
-            company_name,
-            contact_person,
-            phone,
-            email,
-            address,
-            city,
-            district,
-            state,
-            pincode,
-            gstin,
-            pan_number,
-            is_billing_address_different,
-            billing_address,
-            billing_city,
-            billing_district,
-            billing_state,
-            billing_pincode,
-            status
-          ),
-          current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email, shift_time, role),
-          current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email, shift_time, role)
-        `)
-        .order('created_at', { ascending: false });
+      setFetchError(null);
 
+      let query = supabase
+        .from('machines')
+        .select(MACHINE_SELECT_COLUMNS);
+
+      // Role scoping matching web DAL
+      if (normalizedRole === 'operator' && user?.id) {
+        query = query.or(`current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}}`);
+      } else if ((normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor') && user?.id) {
+        query = query.or(`current_supervisor_id.eq.${user.id},supervisor_ids.cs.{${user.id}}`);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
+
+      let machinesData: any[] | null = data;
+
+      // Resilient fallback if primary relational join query fails
       if (error) {
-        console.warn('Error fetching machines:', error);
-      } else if (data) {
-        // Collect all distinct user IDs for supervisors and operators
+        console.warn('Primary machines relational query encountered error, falling back to base machines fetch:', error);
+        let fallbackQuery = supabase
+          .from('machines')
+          .select(`
+            id,
+            machine_id,
+            model,
+            serial_number,
+            year_of_mfg,
+            manufacturer,
+            status,
+            health_status,
+            hour_meter,
+            client_id,
+            current_supervisor_id,
+            supervisor_ids,
+            current_operator_id,
+            operator_ids,
+            created_at,
+            updated_at
+          `);
+
+        if (normalizedRole === 'operator' && user?.id) {
+          fallbackQuery = fallbackQuery.or(`current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}}`);
+        } else if ((normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor') && user?.id) {
+          fallbackQuery = fallbackQuery.or(`current_supervisor_id.eq.${user.id},supervisor_ids.cs.{${user.id}}`);
+        }
+
+        const { data: fallbackData, error: fallbackError } = await fallbackQuery.order('created_at', { ascending: false });
+
+        if (fallbackError) {
+          console.error('Fallback machines query failed:', fallbackError);
+          setFetchError(fallbackError.message || error.message || 'Failed to fetch machines from server.');
+          return;
+        }
+        machinesData = fallbackData;
+      }
+
+      if (machinesData) {
+        // Collect all distinct user IDs and client IDs
         const allUserIds = new Set<string>();
-        data.forEach((m: any) => {
+        const allClientIds = new Set<string>();
+        const machineIds = machinesData.map((m: any) => m.id).filter(Boolean);
+
+        machinesData.forEach((m: any) => {
           if (Array.isArray(m.supervisor_ids)) {
             m.supervisor_ids.forEach((id: string) => id && allUserIds.add(id));
           }
@@ -179,63 +295,161 @@ export default function MachinesScreen() {
             m.operator_ids.forEach((id: string) => id && allUserIds.add(id));
           }
           if (m.current_operator_id) allUserIds.add(m.current_operator_id);
+          if (m.client_id && !m.client) allClientIds.add(m.client_id);
         });
 
+        // Hydrate users
         let usersMap = new Map<string, any>();
         if (allUserIds.size > 0) {
-          const { data: usersData } = await supabase
-            .from('users')
-            .select('id, full_name, phone, email, shift_time, role')
-            .in('id', Array.from(allUserIds));
+          try {
+            const { data: usersData } = await supabase
+              .from('users')
+              .select('id, full_name, phone, email, shift_time, role')
+              .in('id', Array.from(allUserIds));
 
-          (usersData || []).forEach((u: any) => {
-            usersMap.set(u.id, u);
-          });
+            (usersData || []).forEach((u: any) => {
+              usersMap.set(u.id, u);
+            });
+          } catch (uErr) {
+            console.warn('Failed to hydrate machine personnel users:', uErr);
+          }
         }
 
-        const hydrated = data.map((m: any) => {
-          const sups =
+        // Hydrate clients fallback
+        let clientsMap = new Map<string, any>();
+        if (allClientIds.size > 0) {
+          try {
+            const { data: clientsData } = await supabase
+              .from('clients')
+              .select(`
+                id,
+                code,
+                company_name,
+                contact_person,
+                phone,
+                address,
+                city,
+                district,
+                state,
+                pincode,
+                gstin,
+                pan_number,
+                is_billing_address_different,
+                billing_address,
+                billing_city,
+                billing_district,
+                billing_state,
+                billing_pincode,
+                status
+              `)
+              .in('id', Array.from(allClientIds));
+
+            (clientsData || []).forEach((c: any) => {
+              clientsMap.set(c.id, c);
+            });
+          } catch (cErr) {
+            console.warn('Failed to hydrate fallback machine clients:', cErr);
+          }
+        }
+
+        // Hydrate active assignments from operator_machine_assignments
+        const assignmentsByMachine = new Map<string, any[]>();
+        if (machineIds.length > 0) {
+          try {
+            const { data: assignmentsData } = await supabase
+              .from('operator_machine_assignments')
+              .select(`
+                id,
+                machine_id,
+                operator_id,
+                shift_start_time,
+                shift_end_time,
+                crosses_midnight,
+                is_active,
+                assigned_by,
+                assigned_at,
+                ended_at,
+                ended_by,
+                end_reason,
+                created_at,
+                updated_at
+              `)
+              .in('machine_id', machineIds)
+              .eq('is_active', true)
+              .order('shift_start_time', { ascending: true });
+
+            if (assignmentsData && assignmentsData.length > 0) {
+              assignmentsData.forEach((a: any) => {
+                const list = assignmentsByMachine.get(a.machine_id) || [];
+                list.push({
+                  ...a,
+                  operator: usersMap.get(a.operator_id) || null,
+                });
+                assignmentsByMachine.set(a.machine_id, list);
+              });
+            }
+          } catch (assignErr) {
+            console.warn('Could not hydrate operator assignments:', assignErr);
+          }
+        }
+
+        const hydrated = machinesData.map((m: any) => {
+          const activeAssignments = assignmentsByMachine.get(m.id) || [];
+
+          const supIds =
             Array.isArray(m.supervisor_ids) && m.supervisor_ids.length > 0
               ? m.supervisor_ids
-                  .map((id: string) => usersMap.get(id) || (m.current_supervisor?.id === id ? m.current_supervisor : null))
-                  .filter(Boolean)
-              : m.current_supervisor
-              ? [m.current_supervisor]
+              : m.current_supervisor_id
+              ? [m.current_supervisor_id]
               : [];
 
-          const ops =
-            Array.isArray(m.operator_ids) && m.operator_ids.length > 0
+          const opIds =
+            activeAssignments.length > 0
+              ? activeAssignments.map((a: any) => a.operator_id)
+              : Array.isArray(m.operator_ids) && m.operator_ids.length > 0
               ? m.operator_ids
-                  .map((id: string) => usersMap.get(id) || (m.current_operator?.id === id ? m.current_operator : null))
-                  .filter(Boolean)
-              : m.current_operator
-              ? [m.current_operator]
+              : m.current_operator_id
+              ? [m.current_operator_id]
               : [];
+
+          const sups = supIds
+            .map((id: string) => usersMap.get(id) || (m.current_supervisor?.id === id ? m.current_supervisor : null))
+            .filter(Boolean);
+
+          const ops = opIds
+            .map((id: string) => usersMap.get(id) || (m.current_operator?.id === id ? m.current_operator : null))
+            .filter(Boolean);
+
+          const clientObj = m.client || (m.client_id ? clientsMap.get(m.client_id) : null) || null;
 
           return {
             ...m,
+            client: clientObj,
             supervisors: sups,
             operators: ops,
+            active_assignments: activeAssignments,
+            current_supervisor: sups[0] || m.current_supervisor || null,
+            current_operator: ops[0] || m.current_operator || null,
           };
         });
 
         setMachines(hydrated);
+        setFetchError(null);
 
         // Keep selectedMachine updated if it's currently selected
-        if (selectedMachine) {
-          const refreshedMatch = hydrated.find((item: any) => item.id === selectedMachine.id);
-          if (refreshedMatch) {
-            setSelectedMachine(refreshedMatch);
-          }
-        }
+        setSelectedMachine((prev: any) => {
+          if (!prev) return null;
+          return hydrated.find((item: any) => item.id === prev.id) || prev;
+        });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching live machines:', err);
+      setFetchError(err?.message || 'Network error occurred while fetching fleet machines.');
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
-  }, [selectedMachine]);
+  }, [normalizedRole, user?.id]);
 
   // Fetch active supervisors for filter dropdown
   useEffect(() => {
@@ -258,10 +472,11 @@ export default function MachinesScreen() {
 
   useEffect(() => {
     fetchMachines();
-  }, []);
+  }, [fetchMachines]);
 
   // Hardware Back Button handling on Android
   useEffect(() => {
+    if (Platform.OS !== 'android') return;
     const onBackPress = () => {
       if (selectedMachine) {
         setSelectedMachine(null);
@@ -290,34 +505,7 @@ export default function MachinesScreen() {
     fetchMachines();
   }, [fetchMachines]);
 
-  // Statistics calculation
-  const statsSummary = useMemo(() => {
-    let availableCount = 0;
-    let rentedCount = 0;
-    let breakdownCount = 0;
-    let maintenanceCount = 0;
-    let spareCount = 0;
-
-    machines.forEach((m) => {
-      if (m.status === 'rented') rentedCount++;
-      else availableCount++;
-
-      if (m.health_status === 'breakdown') breakdownCount++;
-      if (m.health_status === 'under_maintenance') maintenanceCount++;
-      if (m.health_status === 'spare') spareCount++;
-    });
-
-    return {
-      total: machines.length,
-      availableCount,
-      rentedCount,
-      breakdownCount,
-      maintenanceCount,
-      spareCount,
-    };
-  }, [machines]);
-
-  // Dynamic Supervisor Options for CustomFilterSelectorModal
+  // Dynamic Supervisor Options for DropdownFilterSelector
   const supervisorFilterOptions = useMemo<FilterOption[]>(() => {
     const map = new Map<string, string>();
     supervisorsList.forEach((s) => {
@@ -335,19 +523,48 @@ export default function MachinesScreen() {
     return [{ id: 'all', label: 'All Supervisors' }, ...items];
   }, [supervisorsList, machines]);
 
+  // Interactive KPI Metrics Summary
+  const statsSummary = useMemo(() => {
+    let availableCount = 0;
+    let rentedCount = 0;
+    let breakdownCount = 0;
+    let maintenanceCount = 0;
+    let spareCount = 0;
+
+    machines.forEach((m) => {
+      if (m.status === 'rented') rentedCount++;
+      else availableCount++;
+
+      if (m.health_status === 'breakdown') breakdownCount++;
+      if (m.health_status === 'under_maintenance') maintenanceCount++;
+      if (m.health_status === 'spare') spareCount++;
+    });
+
+    return {
+      totalCount: machines.length,
+      availableCount,
+      rentedCount,
+      breakdownCount,
+      maintenanceCount,
+      spareCount,
+    };
+  }, [machines]);
+
   // Active filter count
   const activeFilterCount = useMemo(() => {
     let count = 0;
     if (rentalFilter !== 'all') count++;
     if (healthFilter !== 'all') count++;
     if (supervisorFilter !== 'all') count++;
-    if (search.trim() !== '') count++;
+    if (debouncedSearch.trim() !== '') count++;
     if (sortBy !== 'machine_id_asc') count++;
     return count;
-  }, [rentalFilter, healthFilter, supervisorFilter, search, sortBy]);
+  }, [rentalFilter, healthFilter, supervisorFilter, debouncedSearch, sortBy]);
 
   const handleResetAllFilters = () => {
     setSearch('');
+    setDebouncedSearch('');
+    setIsSearching(false);
     setRentalFilter('all');
     setHealthFilter('all');
     setSupervisorFilter('all');
@@ -358,8 +575,8 @@ export default function MachinesScreen() {
   const filteredAndSortedMachines = useMemo(() => {
     let list = [...machines];
 
-    // Search query
-    const q = search.toLowerCase().trim();
+    // Search query matching web logic using debouncedSearch
+    const q = debouncedSearch.toLowerCase().trim();
     if (q) {
       list = list.filter((m) => {
         return (
@@ -370,7 +587,8 @@ export default function MachinesScreen() {
           m.year_of_mfg?.toLowerCase().includes(q) ||
           m.client?.company_name?.toLowerCase().includes(q) ||
           m.client?.code?.toLowerCase().includes(q) ||
-          m.customer_name?.toLowerCase().includes(q) ||
+          m.client?.city?.toLowerCase().includes(q) ||
+          m.client?.state?.toLowerCase().includes(q) ||
           (Array.isArray(m.supervisors) &&
             m.supervisors.some((s: any) => s.full_name?.toLowerCase().includes(q))) ||
           (Array.isArray(m.operators) &&
@@ -413,13 +631,70 @@ export default function MachinesScreen() {
     });
 
     return list;
-  }, [machines, search, rentalFilter, healthFilter, supervisorFilter, sortBy]);
+  }, [machines, debouncedSearch, rentalFilter, healthFilter, supervisorFilter, sortBy]);
 
-  // If a machine is selected, render the full-featured MachineDetailView directly
-  if (selectedMachine) {
-    return (
-      <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+
+  // Get current filter label helpers
+  const currentRentalLabel =
+    RENTAL_FILTER_OPTIONS.find((opt) => opt.id === rentalFilter)?.label || 'Rental Status';
+  const currentHealthLabel =
+    HEALTH_FILTER_OPTIONS.find((opt) => opt.id === healthFilter)?.label || 'Health Status';
+  const currentSupervisorLabel =
+    supervisorFilterOptions.find((opt) => opt.id === supervisorFilter)?.label || 'Supervisor';
+  const currentSortLabel =
+    SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label || 'Sort';
+
+  const headerActions = useMemo<HeaderActionItem[]>(() => {
+    const list: HeaderActionItem[] = [];
+
+    if (canCreate) {
+      list.push({
+        id: 'add-machine',
+        label: 'Add New Machine',
+        icon: <Plus size={16} color={theme.colors.ink} />,
+        onPress: () => {
+          setMachineToEdit(null);
+          setMachineModalOpen(true);
+        },
+      });
+    }
+
+    list.push({
+      id: 'export-fleet',
+      label: 'Export Fleet Directory',
+      icon: <Printer size={16} color={theme.colors.ink} />,
+      onPress: () => setExportModalOpen(true),
+    });
+
+    list.push({
+      id: 'import-excel',
+      label: 'Bulk Excel Import Guide',
+      icon: <FileSpreadsheet size={16} color={theme.colors.ink} />,
+      onPress: () => setImportModalOpen(true),
+    });
+
+    list.push({
+      id: 'reset-filters',
+      label: 'Reset Active Filters',
+      icon: <RotateCcw size={16} color={theme.colors.ink} />,
+      onPress: () => handleResetAllFilters(),
+    });
+
+    list.push({
+      id: 'refresh-fleet',
+      label: 'Refresh Fleet Machinery',
+      icon: <RefreshCw size={16} color={theme.colors.ink} />,
+      onPress: () => fetchMachines(),
+    });
+
+    return list;
+  }, [canCreate, theme.colors.ink, handleResetAllFilters, fetchMachines]);
+
+  return (
+    <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
+
+      {selectedMachine ? (
         <MachineDetailView
           machine={selectedMachine}
           onBack={() => setSelectedMachine(null)}
@@ -432,106 +707,13 @@ export default function MachinesScreen() {
           }}
           userRole={role}
         />
-      </View>
-    );
-  }
-
-  // Get current filter label helpers
-  const currentRentalLabel =
-    RENTAL_FILTER_OPTIONS.find((opt) => opt.id === rentalFilter)?.label || 'Rental Status';
-  const currentHealthLabel =
-    HEALTH_FILTER_OPTIONS.find((opt) => opt.id === healthFilter)?.label || 'Health Status';
-  const currentSupervisorLabel =
-    supervisorFilterOptions.find((opt) => opt.id === supervisorFilter)?.label || 'Supervisor';
-  const currentSortLabel =
-    SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label || 'Sort';
-
-  return (
-    <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
-
-      {/* Top Mobile Header */}
-      <MobileHeader
-        eyebrow="FLEET ASSETS"
-        title="Machine Directory"
-        subtitle="Industrial machinery assets, HMR meter readings & personnel assignments"
-        rightAction={
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              onPress={() => setExportModalOpen(true)}
-              style={[
-                styles.headerIconBtn,
-                {
-                  borderColor: theme.colors.hairline,
-                  backgroundColor: theme.colors.canvasElevated,
-                },
-              ]}
-              accessibilityLabel="Export Fleet Directory"
-            >
-              <Printer size={15} color={theme.colors.mute} />
-            </TouchableOpacity>
-
-            {isAdminOrManager && (
-              <TouchableOpacity
-                onPress={() => setCategoryModalOpen(true)}
-                style={[
-                  styles.headerIconBtn,
-                  {
-                    borderColor: theme.colors.hairline,
-                    backgroundColor: theme.colors.canvasElevated,
-                  },
-                ]}
-                accessibilityLabel="Manage Categories"
-              >
-                <FolderTree size={15} color={theme.colors.mute} />
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              onPress={() => setImportModalOpen(true)}
-              style={[
-                styles.headerIconBtn,
-                {
-                  borderColor: theme.colors.hairline,
-                  backgroundColor: theme.colors.canvasElevated,
-                },
-              ]}
-              accessibilityLabel="Bulk Excel Import Guide"
-            >
-              <FileSpreadsheet size={16} color={theme.colors.mute} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={onRefresh}
-              style={[
-                styles.headerIconBtn,
-                {
-                  borderColor: theme.colors.hairline,
-                  backgroundColor: theme.colors.canvasElevated,
-                },
-              ]}
-              accessibilityLabel="Refresh Fleet Data"
-            >
-              <RefreshCw size={15} color={theme.colors.mute} />
-            </TouchableOpacity>
-
-            {canCreate && (
-              <TouchableOpacity
-                onPress={() => {
-                  setMachineToEdit(null);
-                  setMachineModalOpen(true);
-                }}
-                style={[styles.addBtn, { backgroundColor: theme.colors.ink }]}
-                activeOpacity={0.8}
-                accessibilityLabel="Add Machine"
-              >
-                <Plus size={14} color={theme.colors.canvas} />
-                <Text style={[styles.addBtnText, { color: theme.colors.canvas }]}>Add</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        }
-      />
+      ) : (
+        <>
+          {/* Top Standardized Mobile Header: [Logo] + [Page Title] + [Quick Access] + [3-Dot Actions] */}
+          <MobileHeader
+            title="Machine Directory"
+            actions={headerActions}
+          />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
@@ -544,367 +726,681 @@ export default function MachinesScreen() {
           />
         }
       >
-        {/* Interactive KPI Statistic Cards Grid (2x2 matching Web & Tokens) */}
+        {/* Interactive 4-Card KPI Metric Grid */}
         <View style={styles.kpiGrid}>
-          {/* 1. Total Machines Card */}
+          {/* Total Machines Card */}
           <TouchableOpacity
-            onPress={() => setRentalFilter('all')}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
+            onPress={() => {
+              setRentalFilter('all');
+              setHealthFilter('all');
+            }}
             style={[
               styles.kpiCard,
               {
                 backgroundColor: theme.colors.canvasElevated,
                 borderColor:
-                  rentalFilter === 'all' ? theme.colors.ink : theme.colors.hairline,
-                borderWidth: rentalFilter === 'all' ? 1.5 : 1,
+                  rentalFilter === 'all' && healthFilter === 'all'
+                    ? theme.colors.ink
+                    : theme.colors.hairline,
               },
             ]}
           >
-            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>
-              TOTAL MACHINES
-            </Text>
-            <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
-              {statsSummary.total}
-            </Text>
+            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>TOTAL MACHINES</Text>
+            <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>{statsSummary.totalCount}</Text>
           </TouchableOpacity>
 
-          {/* 2. Available Fleet Card */}
+          {/* Available Fleet Card */}
           <TouchableOpacity
-            onPress={() => setRentalFilter(rentalFilter === 'available' ? 'all' : 'available')}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
+            onPress={() => {
+              setRentalFilter((prev) => (prev === 'available' ? 'all' : 'available'));
+            }}
             style={[
               styles.kpiCard,
               {
                 backgroundColor:
                   rentalFilter === 'available'
-                    ? isDark
-                      ? 'rgba(16, 185, 129, 0.12)'
-                      : '#ecfdf5'
+                    ? isDark ? '#064e3b26' : '#ecfdf5'
                     : theme.colors.canvasElevated,
-                borderColor:
-                  rentalFilter === 'available' ? '#10b981' : theme.colors.hairline,
-                borderWidth: rentalFilter === 'available' ? 1.5 : 1,
+                borderColor: rentalFilter === 'available' ? '#10b981' : theme.colors.hairline,
               },
             ]}
           >
-            <Text style={[styles.kpiLabel, { color: '#10b981' }]}>
-              AVAILABLE FLEET
-            </Text>
-            <Text style={[styles.kpiValue, { color: isDark ? '#34d399' : '#059669' }]}>
-              {statsSummary.availableCount}
-            </Text>
+            <Text style={[styles.kpiLabel, { color: '#10b981' }]}>AVAILABLE FLEET</Text>
+            <Text style={[styles.kpiValue, { color: '#059669' }]}>{statsSummary.availableCount}</Text>
           </TouchableOpacity>
 
-          {/* 3. On Rent Card */}
+          {/* On Rent Card */}
           <TouchableOpacity
-            onPress={() => setRentalFilter(rentalFilter === 'rented' ? 'all' : 'rented')}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
+            onPress={() => {
+              setRentalFilter((prev) => (prev === 'rented' ? 'all' : 'rented'));
+            }}
             style={[
               styles.kpiCard,
               {
                 backgroundColor:
                   rentalFilter === 'rented'
-                    ? isDark
-                      ? 'rgba(14, 165, 233, 0.12)'
-                      : '#f0f9ff'
+                    ? isDark ? '#0c4a6e26' : '#f0f9ff'
                     : theme.colors.canvasElevated,
-                borderColor:
-                  rentalFilter === 'rented' ? '#0ea5e9' : theme.colors.hairline,
-                borderWidth: rentalFilter === 'rented' ? 1.5 : 1,
+                borderColor: rentalFilter === 'rented' ? '#0ea5e9' : theme.colors.hairline,
               },
             ]}
           >
-            <Text style={[styles.kpiLabel, { color: '#0ea5e9' }]}>
-              ON RENT
-            </Text>
-            <Text style={[styles.kpiValue, { color: isDark ? '#38bdf8' : '#0284c7' }]}>
-              {statsSummary.rentedCount}
-            </Text>
+            <Text style={[styles.kpiLabel, { color: '#0ea5e9' }]}>ON RENT</Text>
+            <Text style={[styles.kpiValue, { color: '#0284c7' }]}>{statsSummary.rentedCount}</Text>
           </TouchableOpacity>
 
-          {/* 4. Breakdown Events Card */}
+          {/* Breakdown Events Card */}
           <TouchableOpacity
-            onPress={() => setHealthFilter(healthFilter === 'breakdown' ? 'all' : 'breakdown')}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
+            onPress={() => {
+              setHealthFilter((prev) => (prev === 'breakdown' ? 'all' : 'breakdown'));
+            }}
             style={[
               styles.kpiCard,
               {
                 backgroundColor:
                   healthFilter === 'breakdown'
-                    ? isDark
-                      ? 'rgba(239, 68, 68, 0.12)'
-                      : '#fef2f2'
+                    ? isDark ? '#7f1d1d26' : '#fff1f2'
                     : theme.colors.canvasElevated,
-                borderColor:
-                  healthFilter === 'breakdown' ? '#ef4444' : theme.colors.hairline,
-                borderWidth: healthFilter === 'breakdown' ? 1.5 : 1,
+                borderColor: healthFilter === 'breakdown' ? '#ef4444' : theme.colors.hairline,
               },
             ]}
           >
-            <Text style={[styles.kpiLabel, { color: '#ef4444' }]}>
-              BREAKDOWN EVENTS
-            </Text>
-            <Text style={[styles.kpiValue, { color: isDark ? '#f87171' : '#dc2626' }]}>
-              {statsSummary.breakdownCount}
-            </Text>
+            <Text style={[styles.kpiLabel, { color: '#ef4444' }]}>BREAKDOWN EVENTS</Text>
+            <Text style={[styles.kpiValue, { color: '#dc2626' }]}>{statsSummary.breakdownCount}</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Search Input */}
-        <View style={styles.searchSection}>
-          <Input
-            placeholder="Search Machine ID, Model, Serial Number..."
-            value={search}
-            onChangeText={setSearch}
-            leftIcon={<Search size={16} color={theme.colors.mute} />}
-            rightIcon={
-              search ? (
-                <TouchableOpacity onPress={() => setSearch('')}>
-                  <X size={16} color={theme.colors.mute} />
-                </TouchableOpacity>
-              ) : undefined
-            }
-            containerStyle={styles.searchInput}
-          />
-
-          {/* Filter Trigger Chips Strip */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterStrip}
-          >
-            {/* Rental Trigger */}
+        {/* FilterToolbar Card Wrapper */}
+        <View
+          style={[
+            styles.filterToolbar,
+            {
+              backgroundColor: theme.colors.canvasElevated,
+              borderColor: theme.colors.hairline,
+            },
+          ]}
+        >
+          {/* Top Search & Filter Action Row */}
+          <View style={styles.toolbarTopRow}>
+            {/* Search Input Bar (Capsule Pill with Web outline suppression & Focus Ring) */}
             <TouchableOpacity
-              onPress={() => setActivePickerModal('rental')}
+              activeOpacity={1}
+              onPress={() => searchInputRef.current?.focus()}
               style={[
-                styles.filterDropdownBtn,
+                styles.searchBarBox,
+                {
+                  backgroundColor: theme.colors.canvas,
+                  borderColor: isSearchFocused ? theme.colors.ink : theme.colors.hairline,
+                },
+                isSearchFocused && Platform.OS === 'web' && ({
+                  boxShadow: isDark
+                    ? '0 0 0 1px rgba(255, 255, 255, 0.35)'
+                    : '0 0 0 1px rgba(0, 0, 0, 0.22)',
+                } as any),
+              ]}
+            >
+              {isSearching ? (
+                <ActivityIndicator
+                  size="small"
+                  color={theme.colors.mute}
+                  style={styles.searchIcon}
+                />
+              ) : (
+                <Search
+                  size={15}
+                  color={isSearchFocused ? theme.colors.ink : theme.colors.mute}
+                  style={styles.searchIcon}
+                />
+              )}
+              <TextInput
+                ref={searchInputRef}
+                placeholder="Search Machine ID, Model, Serial Number..."
+                placeholderTextColor={theme.colors.mute}
+                value={search}
+                onChangeText={setSearch}
+                onSubmitEditing={handleSearchSubmit}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setIsSearchFocused(false)}
+                style={[
+                  styles.searchInputText,
+                  { color: theme.colors.ink },
+                  Platform.OS === 'web' && ({ outlineStyle: 'none' } as any),
+                ]}
+                returnKeyType="search"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              {search.length > 0 && (
+                <TouchableOpacity
+                  onPress={handleClearSearch}
+                  style={styles.searchClearBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Clear search"
+                >
+                  <X size={14} color={theme.colors.mute} />
+                </TouchableOpacity>
+              )}
+            </TouchableOpacity>
+
+
+            {/* Filter Toggle Button */}
+            <TouchableOpacity
+              onPress={() => setFilterPanelOpen((prev) => !prev)}
+              activeOpacity={0.8}
+              style={[
+                styles.filterToggleBtn,
                 {
                   backgroundColor:
-                    rentalFilter !== 'all'
+                    filterPanelOpen || activeFilterCount > 0
                       ? theme.colors.ink
-                      : theme.colors.canvasElevated,
+                      : theme.colors.canvas,
                   borderColor:
-                    rentalFilter !== 'all'
+                    filterPanelOpen || activeFilterCount > 0
                       ? theme.colors.ink
                       : theme.colors.hairline,
                 },
+                isWeb && ({
+                  transition: 'background-color 180ms ease, border-color 180ms ease',
+                } as any),
               ]}
+              accessibilityLabel="Toggle filter selectors"
             >
-              {rentalFilter === 'available' && <View style={[styles.dot, { backgroundColor: '#10b981' }]} />}
-              {rentalFilter === 'rented' && <View style={[styles.dot, { backgroundColor: '#0ea5e9' }]} />}
+              <SlidersHorizontal
+                size={13}
+                color={
+                  filterPanelOpen || activeFilterCount > 0
+                    ? theme.colors.canvas
+                    : theme.colors.ink
+                }
+              />
               <Text
                 style={[
-                  styles.filterDropdownText,
+                  styles.filterToggleBtnText,
                   {
                     color:
-                      rentalFilter !== 'all'
+                      filterPanelOpen || activeFilterCount > 0
                         ? theme.colors.canvas
                         : theme.colors.ink,
                   },
                 ]}
-                numberOfLines={1}
               >
-                {rentalFilter === 'all' ? 'Rental' : currentRentalLabel}
+                Filter
               </Text>
-              <ChevronDown
-                size={13}
-                color={rentalFilter !== 'all' ? theme.colors.canvas : theme.colors.mute}
-              />
-            </TouchableOpacity>
-
-            {/* Health Trigger */}
-            <TouchableOpacity
-              onPress={() => setActivePickerModal('health')}
-              style={[
-                styles.filterDropdownBtn,
-                {
-                  backgroundColor:
-                    healthFilter !== 'all'
-                      ? theme.colors.ink
-                      : theme.colors.canvasElevated,
-                  borderColor:
-                    healthFilter !== 'all'
-                      ? theme.colors.ink
-                      : theme.colors.hairline,
-                },
-              ]}
-            >
-              {healthFilter === 'active' && <View style={[styles.dot, { backgroundColor: '#10b981' }]} />}
-              {healthFilter === 'spare' && <View style={[styles.dot, { backgroundColor: '#06b6d4' }]} />}
-              {healthFilter === 'under_maintenance' && <View style={[styles.dot, { backgroundColor: '#f59e0b' }]} />}
-              {healthFilter === 'breakdown' && <View style={[styles.dot, { backgroundColor: '#ef4444' }]} />}
-              <Text
-                style={[
-                  styles.filterDropdownText,
-                  {
-                    color:
-                      healthFilter !== 'all'
+              {activeFilterCount > 0 && (
+                <View
+                  style={[
+                    styles.activeCountBadge,
+                    {
+                      backgroundColor:
+                        filterPanelOpen || activeFilterCount > 0
+                          ? theme.colors.canvas
+                          : theme.colors.ink,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.activeCountBadgeText,
+                      {
+                        color:
+                          filterPanelOpen || activeFilterCount > 0
+                            ? theme.colors.ink
+                            : theme.colors.canvas,
+                      },
+                    ]}
+                  >
+                    {activeFilterCount}
+                  </Text>
+                </View>
+              )}
+              {isWeb ? (
+                <View
+                  style={{
+                    transform: [{ rotate: filterPanelOpen ? '180deg' : '0deg' }],
+                    transition: 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1)',
+                  } as any}
+                >
+                  <ChevronDown
+                    size={13}
+                    color={
+                      filterPanelOpen || activeFilterCount > 0
                         ? theme.colors.canvas
-                        : theme.colors.ink,
-                  },
-                ]}
-                numberOfLines={1}
-              >
-                {healthFilter === 'all' ? 'Health' : currentHealthLabel}
-              </Text>
-              <ChevronDown
-                size={13}
-                color={healthFilter !== 'all' ? theme.colors.canvas : theme.colors.mute}
-              />
-            </TouchableOpacity>
-
-            {/* Supervisor Trigger */}
-            <TouchableOpacity
-              onPress={() => setActivePickerModal('supervisor')}
-              style={[
-                styles.filterDropdownBtn,
-                {
-                  backgroundColor:
-                    supervisorFilter !== 'all'
-                      ? theme.colors.ink
-                      : theme.colors.canvasElevated,
-                  borderColor:
-                    supervisorFilter !== 'all'
-                      ? theme.colors.ink
-                      : theme.colors.hairline,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.filterDropdownText,
-                  {
-                    color:
-                      supervisorFilter !== 'all'
+                        : theme.colors.mute
+                    }
+                  />
+                </View>
+              ) : (
+                <Animated.View
+                  style={{
+                    transform: [
+                      {
+                        rotate: filterAnim.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ['0deg', '180deg'],
+                        }),
+                      },
+                    ],
+                  }}
+                >
+                  <ChevronDown
+                    size={13}
+                    color={
+                      filterPanelOpen || activeFilterCount > 0
                         ? theme.colors.canvas
-                        : theme.colors.ink,
-                  },
-                ]}
-                numberOfLines={1}
-              >
-                {supervisorFilter === 'all' ? 'Supervisor' : currentSupervisorLabel}
-              </Text>
-              <ChevronDown
-                size={13}
-                color={supervisorFilter !== 'all' ? theme.colors.canvas : theme.colors.mute}
-              />
+                        : theme.colors.mute
+                    }
+                  />
+                </Animated.View>
+              )}
             </TouchableOpacity>
 
-            {/* Sort Trigger */}
-            <TouchableOpacity
-              onPress={() => setActivePickerModal('sort')}
-              style={[
-                styles.filterDropdownBtn,
-                {
-                  backgroundColor:
-                    sortBy !== 'machine_id_asc'
-                      ? theme.colors.ink
-                      : theme.colors.canvasElevated,
-                  borderColor:
-                    sortBy !== 'machine_id_asc'
-                      ? theme.colors.ink
-                      : theme.colors.hairline,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.filterDropdownText,
-                  {
-                    color:
-                      sortBy !== 'machine_id_asc'
-                        ? theme.colors.canvas
-                        : theme.colors.ink,
-                  },
-                ]}
-                numberOfLines={1}
-              >
-                {sortBy === 'machine_id_asc' ? 'Sort' : currentSortLabel}
-              </Text>
-              <ChevronDown
-                size={13}
-                color={sortBy !== 'machine_id_asc' ? theme.colors.canvas : theme.colors.mute}
-              />
-            </TouchableOpacity>
-          </ScrollView>
-
-          {/* Active Filter Badges Strip */}
-          {activeFilterCount > 0 && (
-            <View style={styles.activeFiltersRow}>
-              {search.trim() !== '' && (
-                <TouchableOpacity
-                  onPress={() => setSearch('')}
-                  style={[styles.activeBadge, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
-                >
-                  <Text style={[styles.activeBadgeText, { color: theme.colors.ink }]}>
-                    Search: "{search}"
-                  </Text>
-                  <X size={11} color={theme.colors.mute} />
-                </TouchableOpacity>
-              )}
-
-              {rentalFilter !== 'all' && (
-                <TouchableOpacity
-                  onPress={() => setRentalFilter('all')}
-                  style={[styles.activeBadge, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
-                >
-                  <Text style={[styles.activeBadgeText, { color: theme.colors.ink }]}>
-                    Rental: {currentRentalLabel}
-                  </Text>
-                  <X size={11} color={theme.colors.mute} />
-                </TouchableOpacity>
-              )}
-
-              {healthFilter !== 'all' && (
-                <TouchableOpacity
-                  onPress={() => setHealthFilter('all')}
-                  style={[styles.activeBadge, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
-                >
-                  <Text style={[styles.activeBadgeText, { color: theme.colors.ink }]}>
-                    Health: {currentHealthLabel}
-                  </Text>
-                  <X size={11} color={theme.colors.mute} />
-                </TouchableOpacity>
-              )}
-
-              {supervisorFilter !== 'all' && (
-                <TouchableOpacity
-                  onPress={() => setSupervisorFilter('all')}
-                  style={[styles.activeBadge, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
-                >
-                  <Text style={[styles.activeBadgeText, { color: theme.colors.ink }]}>
-                    Supervisor: {currentSupervisorLabel}
-                  </Text>
-                  <X size={11} color={theme.colors.mute} />
-                </TouchableOpacity>
-              )}
-
-              {sortBy !== 'machine_id_asc' && (
-                <TouchableOpacity
-                  onPress={() => setSortBy('machine_id_asc')}
-                  style={[styles.activeBadge, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
-                >
-                  <Text style={[styles.activeBadgeText, { color: theme.colors.ink }]}>
-                    Sort: {currentSortLabel}
-                  </Text>
-                  <X size={11} color={theme.colors.mute} />
-                </TouchableOpacity>
-              )}
-
+            {/* Quick Reset Filters Button */}
+            {activeFilterCount > 0 && (
               <TouchableOpacity
                 onPress={handleResetAllFilters}
-                style={[styles.resetAllBtn, { borderColor: theme.colors.hairline }]}
+                activeOpacity={0.8}
+                style={[
+                  styles.quickResetBtn,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+                accessibilityLabel="Reset all filters"
               >
-                <RotateCcw size={11} color={theme.colors.link} />
-                <Text style={[styles.resetAllText, { color: theme.colors.link }]}>
-                  Reset all
+                <RotateCcw size={13} color={theme.colors.mute} />
+                <Text style={[styles.quickResetBtnText, { color: theme.colors.mute }]}>
+                  Reset
                 </Text>
               </TouchableOpacity>
-            </View>
-          )}
+            )}
+          </View>
 
-          {/* Results Count Line */}
-          <View style={styles.resultsCountRow}>
+          {/* Instant & Smooth Animated Expandable Filter & Sort Selectors Section */}
+          {isWeb ? (
+            <View
+              style={[
+                styles.filterPanelWebContainer,
+                {
+                  display: 'grid',
+                  gridTemplateRows: filterPanelOpen ? '1fr' : '0fr',
+                  opacity: filterPanelOpen ? 1 : 0,
+                  transition:
+                    'grid-template-rows 220ms cubic-bezier(0.16, 1, 0.3, 1), opacity 180ms cubic-bezier(0.16, 1, 0.3, 1)',
+                  pointerEvents: filterPanelOpen ? 'auto' : 'none',
+                } as any,
+              ]}
+            >
+              <View style={{ minHeight: 0, overflow: 'hidden' } as any}>
+                <View
+                  onLayout={(e) => {
+                    const h = e.nativeEvent.layout.height;
+                    if (h > 0 && Math.abs(h - panelContentHeight) > 2) {
+                      setPanelContentHeight(h);
+                    }
+                  }}
+                  style={[styles.filterPanelContent, { borderTopColor: theme.colors.hairline }]}
+                >
+                  {/* 4 Dimension Filter Selector Dropdowns */}
+                  <View style={styles.filterSelectorsGrid}>
+                    {/* 1. Rental Status Dropdown */}
+                    <DropdownFilterSelector
+                      label="Rental"
+                      value={rentalFilter}
+                      options={RENTAL_FILTER_OPTIONS}
+                      onChange={(val) => setRentalFilter(val as RentalFilterType)}
+                    />
+
+                    {/* 2. Health Status Dropdown */}
+                    <DropdownFilterSelector
+                      label="Health"
+                      value={healthFilter}
+                      options={HEALTH_FILTER_OPTIONS}
+                      onChange={(val) => setHealthFilter(val as HealthFilterType)}
+                    />
+
+                    {/* 3. Supervisor Dropdown */}
+                    <DropdownFilterSelector
+                      label="Supervisor"
+                      value={supervisorFilter}
+                      options={supervisorFilterOptions}
+                      onChange={(val) => setSupervisorFilter(val)}
+                      showSearch
+                    />
+
+                    {/* 4. Sort By Dropdown (search bar explicitly removed) */}
+                    <DropdownFilterSelector
+                      label="Sort"
+                      value={sortBy}
+                      options={SORT_OPTIONS}
+                      onChange={(val) => setSortBy(val as SortOptionType)}
+                      align="right"
+                      showSearch={false}
+                    />
+                  </View>
+
+                  {/* Active Filter Chips Strip */}
+                  {activeFilterCount > 0 && (
+                    <View style={[styles.activeBadgesRow, { borderTopColor: theme.colors.hairline }]}>
+                      <Text style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
+                        Active Filters:
+                      </Text>
+                      {debouncedSearch.trim() !== '' && (
+                        <TouchableOpacity
+                          onPress={handleClearSearch}
+                          style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
+                        >
+                          <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
+                            Search: "{debouncedSearch}"
+                          </Text>
+                          <X size={12} color={theme.colors.mute} />
+                        </TouchableOpacity>
+                      )}
+
+
+                      {rentalFilter !== 'all' && (
+                        <TouchableOpacity
+                          onPress={() => setRentalFilter('all')}
+                          style={[
+                            styles.badgeChip,
+                            {
+                              backgroundColor: isDark ? '#0c4a6e26' : '#f0f9ff',
+                              borderColor: '#0ea5e933',
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.badgeChipText, { color: '#0284c7' }]}>
+                            Rental: {currentRentalLabel}
+                          </Text>
+                          <X size={12} color="#0284c7" />
+                        </TouchableOpacity>
+                      )}
+
+                      {healthFilter !== 'all' && (
+                        <TouchableOpacity
+                          onPress={() => setHealthFilter('all')}
+                          style={[
+                            styles.badgeChip,
+                            {
+                              backgroundColor:
+                                healthFilter === 'spare'
+                                  ? isDark ? '#164e6326' : '#ecfeff'
+                                  : healthFilter === 'breakdown'
+                                  ? isDark ? '#7f1d1d26' : '#fff1f2'
+                                  : isDark ? '#78350f26' : '#fffbeb',
+                              borderColor:
+                                healthFilter === 'spare'
+                                  ? '#06b6d433'
+                                  : healthFilter === 'breakdown'
+                                  ? '#ef444433'
+                                  : '#f59e0b33',
+                            },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.badgeChipText,
+                              {
+                                color:
+                                  healthFilter === 'spare'
+                                    ? '#0891b2'
+                                    : healthFilter === 'breakdown'
+                                    ? '#dc2626'
+                                    : '#d97706',
+                              },
+                            ]}
+                          >
+                            Health: {currentHealthLabel}
+                          </Text>
+                          <X
+                            size={12}
+                            color={
+                              healthFilter === 'spare'
+                                ? '#0891b2'
+                                : healthFilter === 'breakdown'
+                                ? '#dc2626'
+                                : '#d97706'
+                            }
+                          />
+                        </TouchableOpacity>
+                      )}
+
+                      {supervisorFilter !== 'all' && (
+                        <TouchableOpacity
+                          onPress={() => setSupervisorFilter('all')}
+                          style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
+                        >
+                          <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
+                            Supervisor: {currentSupervisorLabel}
+                          </Text>
+                          <X size={12} color={theme.colors.mute} />
+                        </TouchableOpacity>
+                      )}
+
+                      {sortBy !== 'machine_id_asc' && (
+                        <TouchableOpacity
+                          onPress={() => setSortBy('machine_id_asc')}
+                          style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
+                        >
+                          <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
+                            Sort: {currentSortLabel}
+                          </Text>
+                          <X size={12} color={theme.colors.mute} />
+                        </TouchableOpacity>
+                      )}
+
+                      <TouchableOpacity
+                        onPress={handleResetAllFilters}
+                        style={styles.resetAllLink}
+                      >
+                        <RotateCcw size={11} color={theme.colors.link} />
+                        <Text style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
+                          Reset all
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </View>
+          ) : (
+            <Animated.View
+              style={[
+                styles.filterPanelAnimatedContainer,
+                {
+                  maxHeight: filterAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, panelContentHeight > 0 ? panelContentHeight : 140],
+                  }),
+                  opacity: filterAnim.interpolate({
+                    inputRange: [0, 0.2, 1],
+                    outputRange: [0, 0.4, 1],
+                  }),
+                },
+              ]}
+            >
+              <View
+                onLayout={(e) => {
+                  const h = e.nativeEvent.layout.height;
+                  if (h > 0 && Math.abs(h - panelContentHeight) > 2) {
+                    setPanelContentHeight(h);
+                  }
+                }}
+                style={[styles.filterPanelContent, { borderTopColor: theme.colors.hairline }]}
+              >
+                {/* 4 Dimension Filter Selector Dropdowns */}
+                <View style={styles.filterSelectorsGrid}>
+                  {/* 1. Rental Status Dropdown */}
+                  <DropdownFilterSelector
+                    label="Rental"
+                    value={rentalFilter}
+                    options={RENTAL_FILTER_OPTIONS}
+                    onChange={(val) => setRentalFilter(val as RentalFilterType)}
+                  />
+
+                  {/* 2. Health Status Dropdown */}
+                  <DropdownFilterSelector
+                    label="Health"
+                    value={healthFilter}
+                    options={HEALTH_FILTER_OPTIONS}
+                    onChange={(val) => setHealthFilter(val as HealthFilterType)}
+                  />
+
+                  {/* 3. Supervisor Dropdown */}
+                  <DropdownFilterSelector
+                    label="Supervisor"
+                    value={supervisorFilter}
+                    options={supervisorFilterOptions}
+                    onChange={(val) => setSupervisorFilter(val)}
+                    showSearch
+                  />
+
+                  {/* 4. Sort By Dropdown (search bar explicitly removed) */}
+                  <DropdownFilterSelector
+                    label="Sort"
+                    value={sortBy}
+                    options={SORT_OPTIONS}
+                    onChange={(val) => setSortBy(val as SortOptionType)}
+                    align="right"
+                    showSearch={false}
+                  />
+                </View>
+
+                {/* Active Filter Chips Strip */}
+                {activeFilterCount > 0 && (
+                  <View style={[styles.activeBadgesRow, { borderTopColor: theme.colors.hairline }]}>
+                    <Text style={[styles.activeBadgesHeader, { color: theme.colors.mute }]}>
+                      Active Filters:
+                    </Text>
+                    {debouncedSearch.trim() !== '' && (
+                      <TouchableOpacity
+                        onPress={handleClearSearch}
+                        style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
+                      >
+                        <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
+                          Search: "{debouncedSearch}"
+                        </Text>
+                        <X size={12} color={theme.colors.mute} />
+                      </TouchableOpacity>
+                    )}
+
+
+                    {rentalFilter !== 'all' && (
+                      <TouchableOpacity
+                        onPress={() => setRentalFilter('all')}
+                        style={[
+                          styles.badgeChip,
+                          {
+                            backgroundColor: isDark ? '#0c4a6e26' : '#f0f9ff',
+                            borderColor: '#0ea5e933',
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.badgeChipText, { color: '#0284c7' }]}>
+                          Rental: {currentRentalLabel}
+                        </Text>
+                        <X size={12} color="#0284c7" />
+                      </TouchableOpacity>
+                    )}
+
+                    {healthFilter !== 'all' && (
+                      <TouchableOpacity
+                        onPress={() => setHealthFilter('all')}
+                        style={[
+                          styles.badgeChip,
+                          {
+                            backgroundColor:
+                              healthFilter === 'spare'
+                                ? isDark ? '#164e6326' : '#ecfeff'
+                                : healthFilter === 'breakdown'
+                                ? isDark ? '#7f1d1d26' : '#fff1f2'
+                                : isDark ? '#78350f26' : '#fffbeb',
+                            borderColor:
+                              healthFilter === 'spare'
+                                ? '#06b6d433'
+                                : healthFilter === 'breakdown'
+                                ? '#ef444433'
+                                : '#f59e0b33',
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.badgeChipText,
+                            {
+                              color:
+                                healthFilter === 'spare'
+                                  ? '#0891b2'
+                                  : healthFilter === 'breakdown'
+                                  ? '#dc2626'
+                                  : '#d97706',
+                            },
+                          ]}
+                        >
+                          Health: {currentHealthLabel}
+                        </Text>
+                        <X
+                          size={12}
+                          color={
+                            healthFilter === 'spare'
+                              ? '#0891b2'
+                              : healthFilter === 'breakdown'
+                              ? '#dc2626'
+                              : '#d97706'
+                          }
+                        />
+                      </TouchableOpacity>
+                    )}
+
+                    {supervisorFilter !== 'all' && (
+                      <TouchableOpacity
+                        onPress={() => setSupervisorFilter('all')}
+                        style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
+                      >
+                        <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
+                          Supervisor: {currentSupervisorLabel}
+                        </Text>
+                        <X size={12} color={theme.colors.mute} />
+                      </TouchableOpacity>
+                    )}
+
+                    {sortBy !== 'machine_id_asc' && (
+                      <TouchableOpacity
+                        onPress={() => setSortBy('machine_id_asc')}
+                        style={[styles.badgeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
+                      >
+                        <Text style={[styles.badgeChipText, { color: theme.colors.ink }]}>
+                          Sort: {currentSortLabel}
+                        </Text>
+                        <X size={12} color={theme.colors.mute} />
+                      </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity
+                      onPress={handleResetAllFilters}
+                      style={styles.resetAllLink}
+                    >
+                      <RotateCcw size={11} color={theme.colors.link} />
+                      <Text style={[styles.resetAllLinkText, { color: theme.colors.link }]}>
+                        Reset all
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </Animated.View>
+          )}
+        </View>
+
+        {/* Results Count Line */}
+        <View style={styles.resultsCountRow}>
+          {isLoading || isSearching ? (
+            <Skeleton width={160} height={14} borderRadius={radiusNumeric.sm} style={{ marginVertical: 0 }} />
+          ) : (
             <Text style={[styles.resultsCountText, { color: theme.colors.mute }]}>
               Showing{' '}
               <Text style={{ fontWeight: '700', color: theme.colors.ink }}>
@@ -912,16 +1408,43 @@ export default function MachinesScreen() {
               </Text>{' '}
               of {machines.length} machine assets
             </Text>
-          </View>
+          )}
         </View>
 
         {/* Machine Cards List */}
         {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.link} />
-            <Text style={[styles.loadingText, { color: theme.colors.mute }]}>
-              Loading fleet machinery...
+          <MobileMachineListSkeleton count={4} />
+        ) : isSearching ? (
+          <MobileMachineListSkeleton count={3} />
+        ) : fetchError ? (
+
+          <View
+            style={[
+              styles.emptyContainer,
+              {
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            <AlertCircle size={36} color={theme.colors.error} />
+            <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>
+              Unable to load fleet machines
             </Text>
+            <Text style={[styles.emptySubtext, { color: theme.colors.mute }]}>
+              {fetchError}
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                setIsLoading(true);
+                fetchMachines();
+              }}
+              style={[styles.emptyResetBtn, { backgroundColor: theme.colors.ink }]}
+            >
+              <Text style={[styles.emptyResetBtnText, { color: theme.colors.canvas }]}>
+                Retry Fetch
+              </Text>
+            </TouchableOpacity>
           </View>
         ) : filteredAndSortedMachines.length === 0 ? (
           <View
@@ -971,55 +1494,9 @@ export default function MachinesScreen() {
           </View>
         )}
       </ScrollView>
+        </>
+      )}
 
-      {/* Filter Selector Modals */}
-      <CustomFilterSelectorModal
-        visible={activePickerModal === 'rental'}
-        onClose={() => setActivePickerModal(null)}
-        title="Filter by Rental Status"
-        options={RENTAL_FILTER_OPTIONS}
-        selectedValue={rentalFilter}
-        onSelect={(val) => {
-          setRentalFilter(val as RentalFilterType);
-          setActivePickerModal(null);
-        }}
-      />
-
-      <CustomFilterSelectorModal
-        visible={activePickerModal === 'health'}
-        onClose={() => setActivePickerModal(null)}
-        title="Filter by Health Status"
-        options={HEALTH_FILTER_OPTIONS}
-        selectedValue={healthFilter}
-        onSelect={(val) => {
-          setHealthFilter(val as HealthFilterType);
-          setActivePickerModal(null);
-        }}
-      />
-
-      <CustomFilterSelectorModal
-        visible={activePickerModal === 'supervisor'}
-        onClose={() => setActivePickerModal(null)}
-        title="Filter by Supervisor"
-        options={supervisorFilterOptions}
-        selectedValue={supervisorFilter}
-        onSelect={(val) => {
-          setSupervisorFilter(val);
-          setActivePickerModal(null);
-        }}
-      />
-
-      <CustomFilterSelectorModal
-        visible={activePickerModal === 'sort'}
-        onClose={() => setActivePickerModal(null)}
-        title="Sort Machines"
-        options={SORT_OPTIONS}
-        selectedValue={sortBy}
-        onSelect={(val) => {
-          setSortBy(val as SortOptionType);
-          setActivePickerModal(null);
-        }}
-      />
 
       {/* Add / Edit Machine Modal */}
       <MachineModal
@@ -1055,13 +1532,6 @@ export default function MachinesScreen() {
         visible={exportModalOpen}
         onClose={() => setExportModalOpen(false)}
         machines={machines}
-      />
-
-      {/* Machine Categories Modal */}
-      <MachineCategoryModal
-        visible={categoryModalOpen}
-        onClose={() => setCategoryModalOpen(false)}
-        onCategoriesChanged={() => fetchMachines()}
       />
 
       {/* Log Meter Modal */}
@@ -1121,13 +1591,19 @@ const styles = StyleSheet.create({
   kpiGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacingNumeric.sm,
+    gap: 10,
   },
   kpiCard: {
-    width: '48%',
-    flexGrow: 1,
+    flex: 1,
+    minWidth: '47%',
     padding: spacingNumeric.md,
-    borderRadius: radiusNumeric.md,
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
   kpiLabel: {
     fontSize: 10,
@@ -1140,75 +1616,141 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: 4,
   },
-  searchSection: {
-    gap: spacingNumeric.xs,
+  filterToolbar: {
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    padding: spacingNumeric.sm,
+    gap: spacingNumeric.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  searchInput: {
-    marginBottom: 0,
-  },
-  filterStrip: {
+  toolbarTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingVertical: 4,
   },
-  filterDropdownBtn: {
+  searchBarBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 40,
+    borderRadius: radiusNumeric.full,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInputText: {
+    flex: 1,
+    fontSize: 13,
+    paddingVertical: 0,
+    height: '100%',
+  },
+  searchClearBtn: {
+    padding: 3,
+    marginLeft: 4,
+  },
+  filterToggleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
+    height: 40,
+    paddingHorizontal: 12,
     borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
-  filterDropdownText: {
+  filterToggleBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  activeCountBadge: {
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  activeCountBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  quickResetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 40,
+    paddingHorizontal: 11,
+    borderRadius: radiusNumeric.full,
+    borderWidth: 1,
+  },
+  quickResetBtnText: {
     fontSize: 12,
     fontWeight: '600',
   },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+  filterPanelWebContainer: {
+    overflow: 'hidden',
   },
-  activeFiltersRow: {
+  filterPanelAnimatedContainer: {
+    overflow: 'hidden',
+  },
+  filterPanelContent: {
+    paddingTop: 10,
+    borderTopWidth: 1,
+    gap: spacingNumeric.sm,
+  },
+  filterSelectorsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  activeBadgesRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 6,
-    marginTop: 4,
+    paddingTop: spacingNumeric.xs,
+    borderTopWidth: 1,
   },
-  activeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radiusNumeric.sm,
-    borderWidth: 1,
-  },
-  activeBadgeText: {
+  activeBadgesHeader: {
     fontSize: 11,
-    fontWeight: '500',
+    fontWeight: '600',
+    marginRight: 2,
   },
-  resetAllBtn: {
+  badgeChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
   },
-  resetAllText: {
+  badgeChipText: {
     fontSize: 11,
     fontWeight: '600',
   },
+  resetAllLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  resetAllLinkText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
   resultsCountRow: {
     paddingHorizontal: 2,
-    paddingTop: 2,
+    marginTop: -4,
   },
   resultsCountText: {
-    fontSize: 11,
+    fontSize: 12,
   },
   cardsContainer: {
     gap: spacingNumeric.md,

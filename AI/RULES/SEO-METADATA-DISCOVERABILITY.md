@@ -23,7 +23,7 @@ ReachInternational establishes authoritative canonical sources of truth for meta
 1. **Next.js Metadata API**: Root metadata configuration in `apps/web/app/layout.tsx`.
 2. **Sitemap Generation**: Dynamic sitemap builder in `apps/web/app/sitemap.ts`.
 3. **Edge Route Protection**: Edge Auth Proxy (`apps/web/proxy.ts`) blocking unauthenticated access to protected routes.
-4. **Canonical Production Domain**: `NEXT_PUBLIC_APP_URL` environment variable defaulting to `https://reachinternation.com`.
+4. **Canonical Production Domain**: `NEXT_PUBLIC_APP_URL` environment variable defaulting to `https://www.reachinternational.co.in`.
 5. **Design System Icons**: Bimodal favicon assets (`/light-favicon.ico`, `/dark-favicon.ico`, `/site.webmanifest`).
 
 ---
@@ -142,7 +142,7 @@ Disallow: /dashboard/
 Disallow: /machines/
 Disallow: /service/
 Disallow: /finance/
-Sitemap: https://reachinternation.com/sitemap.xml
+Sitemap: https://www.reachinternational.co.in/sitemap.xml
 ```
 
 ---
@@ -166,7 +166,7 @@ Public pages MUST declare Open Graph tags for social media sharing:
 openGraph: {
   title: "REACH INTERNATIONAL — Reaching All Heights",
   description: "Enterprise heavy machinery fleet management & field service platform.",
-  url: "https://reachinternation.com",
+  url: "https://www.reachinternational.co.in",
   siteName: "Reach International",
   images: [{ url: "/og-image.png", width: 1200, height: 630, alt: "Reach International" }],
   locale: "en_US",
@@ -211,8 +211,8 @@ Public marketing pages SHOULD embed structured JSON-LD scripts (`<script type="a
   "@context": "https://schema.org",
   "@type": "Organization",
   "name": "Reach International",
-  "url": "https://reachinternation.com",
-  "logo": "https://reachinternation.com/light-favicon.png"
+  "url": "https://www.reachinternational.co.in",
+  "logo": "https://www.reachinternational.co.in/light-favicon.png"
 }
 ```
 
@@ -348,7 +348,7 @@ Before modifying public route structures or `sitemap.ts`:
 
 ## 41. Environment-Aware SEO
 
-1. **Production Domain**: Production metadata MUST use `https://reachinternation.com`.
+1. **Production Domain**: Production metadata MUST use `https://www.reachinternational.co.in`.
 2. **Preview & Staging Environments**: Non-production environments (Vercel previews, local dev) MUST inject `noindex, nofollow` headers to prevent indexing duplicate staging sites.
 
 ---

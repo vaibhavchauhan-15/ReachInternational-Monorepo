@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, Tou
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { Button, Input, Card, useTheme } from '../../components/ui';
+import { ReachInternationalLogo } from '../../components/branding';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { Mail, ArrowLeft } from 'lucide-react-native';
 
@@ -64,12 +65,7 @@ export default function ForgotPasswordScreen() {
             <ArrowLeft size={16} color={theme.colors.ink} />
           </TouchableOpacity>
 
-          <View style={styles.brandRow}>
-            <View style={[styles.logoEmblem, { backgroundColor: theme.colors.ink }]}>
-              <Text style={[styles.logoLetter, { color: theme.colors.canvas }]}>R</Text>
-            </View>
-            <Text style={[styles.brandTitle, { color: theme.colors.ink }]}>Reach International</Text>
-          </View>
+          <ReachInternationalLogo size={24} showTagline={false} />
 
           <TouchableOpacity
             onPress={() => setMode(isDark ? 'light' : 'dark')}
@@ -106,7 +102,7 @@ export default function ForgotPasswordScreen() {
 
           <Input
             label="Email Address"
-            placeholder="engineer@reachinternation.com"
+            placeholder="engineer@reachinternational.co.in"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"
@@ -167,27 +163,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  brandRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  logoEmblem: {
-    width: 32,
-    height: 32,
-    borderRadius: radiusNumeric.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoLetter: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  brandTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: -0.3,
   },
   themeBtn: {
     paddingHorizontal: 10,

@@ -12,7 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
-import { Button, Input, Card, TimeInput, useTheme } from '../../components/ui';
+import { Button, Input, Card, TimeInput, useTheme, ReachInternationalLogo } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
   validateAadhaarNumber,
@@ -251,6 +251,7 @@ export default function OnboardingScreen() {
       >
         {/* Header Banner */}
         <View style={styles.header}>
+          <ReachInternationalLogo size={26} style={{ marginBottom: 14 }} />
           <View style={[styles.badge, { backgroundColor: theme.colors.link + '18', borderColor: theme.colors.link + '30' }]}>
             <Text style={[styles.badgeText, { color: theme.colors.link }]}>Setup Required</Text>
           </View>

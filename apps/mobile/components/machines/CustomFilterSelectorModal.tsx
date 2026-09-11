@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ScrollView,
   TouchableWithoutFeedback,
+  TextInput,
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -37,6 +38,19 @@ export const CustomFilterSelectorModal: React.FC<CustomFilterSelectorModalProps>
   onSelect,
 }) => {
   const { theme } = useTheme();
+  const [modalSearch, setModalSearch] = React.useState('');
+
+  React.useEffect(() => {
+    if (visible) {
+      setModalSearch('');
+    }
+  }, [visible]);
+
+  const filteredOptions = React.useMemo(() => {
+    if (!modalSearch.trim()) return options;
+    const q = modalSearch.toLowerCase().trim();
+    return options.filter((opt) => opt.label.toLowerCase().includes(q));
+  }, [options, modalSearch]);
 
   return (
     <Modal
@@ -69,63 +83,100 @@ export const CustomFilterSelectorModal: React.FC<CustomFilterSelectorModalProps>
                 </TouchableOpacity>
               </View>
 
+              {/* Optional Search Bar for longer lists (e.g. Supervisors) */}
+              {options.length > 5 && (
+                <View style={[styles.searchWrapper, { borderBottomColor: theme.colors.hairline }]}>
+                  <TextInput
+                    placeholder={`Search ${title.toLowerCase()}...`}
+                    placeholderTextColor={theme.colors.mute}
+                    value={modalSearch}
+                    onChangeText={setModalSearch}
+                    style={[
+                      styles.searchInput,
+                      {
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                        color: theme.colors.ink,
+                      },
+                    ]}
+                  />
+                  {modalSearch.length > 0 && (
+                    <TouchableOpacity
+                      onPress={() => setModalSearch('')}
+                      style={styles.searchClearBtn}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <X size={14} color={theme.colors.mute} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
               {/* Options List */}
               <ScrollView
                 style={styles.optionsList}
                 showsVerticalScrollIndicator={false}
               >
-                {options.map((opt) => {
-                  const isSelected = opt.id === selectedValue;
-                  return (
-                    <TouchableOpacity
-                      key={opt.id}
-                      onPress={() => {
-                        onSelect(opt.id);
-                        onClose();
-                      }}
-                      activeOpacity={0.7}
-                      style={[
-                        styles.optionRow,
-                        {
-                          backgroundColor: isSelected
-                            ? theme.colors.ink
-                            : theme.colors.canvasElevated,
-                          borderColor: isSelected
-                            ? theme.colors.ink
-                            : theme.colors.hairline,
-                        },
-                      ]}
-                    >
-                      <View style={styles.optionLeft}>
-                        {opt.dotColor && (
-                          <View
+                {filteredOptions.length === 0 ? (
+                  <View style={styles.noResults}>
+                    <Text style={[styles.noResultsText, { color: theme.colors.mute }]}>
+                      No matching options found
+                    </Text>
+                  </View>
+                ) : (
+                  filteredOptions.map((opt) => {
+                    const isSelected = opt.id === selectedValue;
+                    return (
+                      <TouchableOpacity
+                        key={opt.id}
+                        onPress={() => {
+                          onSelect(opt.id);
+                          onClose();
+                        }}
+                        activeOpacity={0.7}
+                        style={[
+                          styles.optionRow,
+                          {
+                            backgroundColor: isSelected
+                              ? theme.colors.ink
+                              : theme.colors.canvasElevated,
+                            borderColor: isSelected
+                              ? theme.colors.ink
+                              : theme.colors.hairline,
+                          },
+                        ]}
+                      >
+                        <View style={styles.optionLeft}>
+                          {opt.dotColor && (
+                            <View
+                              style={[
+                                styles.dot,
+                                {
+                                  backgroundColor: isSelected ? theme.colors.canvas : opt.dotColor,
+                                },
+                              ]}
+                            />
+                          )}
+                          <Text
                             style={[
-                              styles.dot,
+                              styles.optionLabel,
                               {
-                                backgroundColor: isSelected ? theme.colors.canvas : opt.dotColor,
+                                color: isSelected ? theme.colors.canvas : theme.colors.ink,
+                                fontWeight: isSelected ? '700' : '500',
                               },
                             ]}
-                          />
-                        )}
-                        <Text
-                          style={[
-                            styles.optionLabel,
-                            {
-                              color: isSelected ? theme.colors.canvas : theme.colors.ink,
-                              fontWeight: isSelected ? '700' : '500',
-                            },
-                          ]}
-                        >
-                          {opt.label}
-                        </Text>
-                      </View>
+                          >
+                            {opt.label}
+                          </Text>
+                        </View>
 
-                      {isSelected && (
-                        <Check size={16} color={theme.colors.canvas} strokeWidth={2.5} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
+                        {isSelected && (
+                          <Check size={16} color={theme.colors.canvas} strokeWidth={2.5} />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
               </ScrollView>
             </View>
           </TouchableWithoutFeedback>
@@ -204,5 +255,34 @@ const styles = StyleSheet.create({
   },
   optionLabel: {
     fontSize: 13,
+  },
+  searchWrapper: {
+    paddingHorizontal: spacingNumeric.md,
+    paddingVertical: spacingNumeric.sm,
+    borderBottomWidth: 1,
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  searchInput: {
+    height: 38,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    paddingHorizontal: spacingNumeric.sm,
+    paddingRight: 32,
+    fontSize: 13,
+  },
+  searchClearBtn: {
+    position: 'absolute',
+    right: 22,
+    top: 18,
+  },
+  noResults: {
+    padding: spacingNumeric.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noResultsText: {
+    fontSize: 13,
+    fontStyle: 'italic',
   },
 });

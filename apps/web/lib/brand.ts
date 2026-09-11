@@ -4,6 +4,9 @@
  */
 export const BRAND_NAME = "REACH INTERNATIONAL";
 export const BRAND_TAGLINE = "REACHING ALL HEIGHTS";
+export const BRAND_WEBSITE = "https://www.reachinternational.co.in";
+export const BRAND_WEBSITE_DISPLAY = "www.reachinternational.co.in";
+export const BRAND_EMAIL = "info@reachinternational.co.in";
 
 export const BRAND_ASSETS = {
   // SVG Vector Brand Marks

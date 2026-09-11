@@ -20,6 +20,7 @@ import {
   INDIAN_STATES,
 } from '@reachinternational/utils';
 import { isSupervisedRole } from '@reachinternational/permissions';
+import { notifyUserCreated } from '../../lib/notifications';
 import {
   X,
   UserPlus,
@@ -231,6 +232,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
         }
       }
 
+      notifyUserCreated(fullName.trim(), role);
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -294,7 +296,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
 
             <Input
               label="Email Address *"
-              placeholder="e.g. ramesh@reachinternation.com"
+              placeholder="e.g. ramesh@reachinternational.co.in"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"

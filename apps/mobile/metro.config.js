@@ -1,19 +1,42 @@
-const { getDefaultConfig } = require('expo/metro-config');
 const path = require('path');
+const { getDefaultConfig } = require('expo/metro-config');
 
-// Find the project and workspace root paths
-const projectRoot = __dirname;
-const workspaceRoot = path.resolve(projectRoot, '../..');
+const config = getDefaultConfig(__dirname);
 
-const config = getDefaultConfig(projectRoot);
+const originalResolveRequest = config.resolver?.resolveRequest;
 
-// 1. Watch all files within the monorepo
-config.watchFolders = [workspaceRoot];
+const existingBlockList = Array.isArray(config.resolver?.blockList)
+  ? config.resolver.blockList
+  : config.resolver?.blockList
+  ? [config.resolver.blockList]
+  : [];
 
-// 2. Let Metro know where to resolve packages and in what order
-config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, 'node_modules'),
-  path.resolve(workspaceRoot, 'node_modules'),
-];
+config.resolver = {
+  ...config.resolver,
+  blockList: [
+    ...existingBlockList,
+    /__tests__\/.*$/,
+    /.*\.test\.[jt]sx?$/,
+    /.*\.spec\.[jt]sx?$/,
+    /run-tests\.mjs$/,
+    /store-assets\/.*$/,
+    /docs\/.*$/,
+  ],
+  resolveRequest: (context, moduleName, platform) => {
+    // Intercept @expo-google-fonts/material-symbols to prevent bundling the unused 964KB MaterialSymbols_400Regular.ttf
+    // ServiceCentric Mobile exclusively uses lucide-react-native for all iconography.
+    if (moduleName.startsWith('@expo-google-fonts/material-symbols')) {
+      return {
+        filePath: path.resolve(__dirname, 'stubs/empty-material-symbols.js'),
+        type: 'sourceFile',
+      };
+    }
+    if (originalResolveRequest) {
+      return originalResolveRequest(context, moduleName, platform);
+    }
+    return context.resolveRequest(context, moduleName, platform);
+  },
+};
 
 module.exports = config;
+

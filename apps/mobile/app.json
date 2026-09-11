@@ -1,46 +1,90 @@
 {
   "expo": {
     "name": "ReachInternational",
-    "slug": "reachinternational",
+    "slug": "reachinternational-monorepo",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "reachinternational",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#0a0a0a"
-    },
     "assetBundlePatterns": [
-      "**/*"
+      "assets/**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.reachinternational.app",
-      "infoPlist": {
-        "NSCameraUsageDescription": "ReachInternational requires camera access to take machine inspection photos and scan serial barcodes.",
-        "NSPhotoLibraryUsageDescription": "ReachInternational requires photo library access to upload maintenance receipts and equipment documentation."
-      }
+      "bundleIdentifier": "com.reachinternational.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0a0a0a"
+        "backgroundColor": "#09090b"
       },
       "package": "com.reachinternational.app",
+      "versionCode": 1,
+      "allowBackup": false,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "POST_NOTIFICATIONS"
+      ],
+      "blockedPermissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.READ_CONTACTS"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "www.reachinternational.co.in"
+            },
+            {
+              "scheme": "https",
+              "host": "reachinternational.co.in"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
       ]
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "favicon": "./public/light-favicon-96x96.png"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/40432ac1-55a2-4bfa-985e-a51562398743",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     },
     "plugins": [
-      "expo-router"
-    ]
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#09090b"
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "40432ac1-55a2-4bfa-985e-a51562398743"
+      }
+    }
   }
 }

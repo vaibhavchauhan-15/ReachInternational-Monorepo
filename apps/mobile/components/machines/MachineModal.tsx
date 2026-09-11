@@ -235,7 +235,6 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           operator_ids: operatorIds,
           current_operator_id: operatorIds[0] || null,
           client_id: rentalStatus === 'rented' ? selectedClient?.id || null : null,
-          customer_name: rentalStatus === 'rented' ? selectedClient?.company_name || null : null,
           updated_at: new Date().toISOString(),
         };
 
@@ -260,7 +259,6 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           operator_ids: operatorIds,
           current_operator_id: operatorIds[0] || null,
           client_id: rentalStatus === 'rented' ? selectedClient?.id || null : null,
-          customer_name: rentalStatus === 'rented' ? selectedClient?.company_name || null : null,
           updated_at: new Date().toISOString(),
         };
 

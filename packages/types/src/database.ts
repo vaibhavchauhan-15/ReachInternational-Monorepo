@@ -155,6 +155,27 @@ export interface ProfileChangeRequest {
   user?: Pick<User, "id" | "full_name" | "email" | "role" | "phone"> | null;
 }
 
+export type AccountDeletionSource = "web" | "mobile" | "public_web";
+export type AccountDeletionStatus = "pending" | "approved" | "rejected" | "cancelled";
+
+export interface AccountDeletionRequest {
+  id: string;
+  user_id?: string | null;
+  email: string;
+  full_name?: string | null;
+  phone?: string | null;
+  role?: string | null;
+  reason?: string | null;
+  source: AccountDeletionSource;
+  status: AccountDeletionStatus;
+  admin_notes?: string | null;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  user?: Pick<User, "id" | "full_name" | "email" | "role" | "phone"> | null;
+}
+
 export interface Employee {
   id: string;
   employee_code: string;

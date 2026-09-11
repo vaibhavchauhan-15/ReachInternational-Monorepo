@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.reachinternational.app",
+      "sha256_cert_fingerprints": [
+        "14:6D:E9:01:C8:2F:E1:80:5F:CE:29:9B:4E:09:90:1D:34:19:D4:63:BE:78:F3:70:96:4B:3A:59:5E:90:E9:50"
+      ]
+    }
+  }
+]

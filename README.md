@@ -58,6 +58,7 @@
 - **Multi-Selection & Bulk Actions**: Select individual or all filtered user accounts with a master checkbox and floating bulk actions bar. Perform instant formatted Excel (`.xlsx`) or CSV (`.csv`) export downloads and high-concurrency Bulk Deletions with safety self-delete guards, super admin protection, optimistic UI removals, and audit logging.
 - **Full React Native Mobile Parity (`apps/mobile/app/(app)/users.tsx`, `apps/mobile/components/users/*`)**: Complete mobile replication across iOS and Android with 100% feature parity: 4 interactive KPI metric cards (Total, Active, Engineers, Pending), 6-dimension custom filter modal selector (Role, Status, State covering all 36 Indian states & UTs, KYC, Joined Date, Sort By), mobile touch card feed with role-accent left borders, User Detail bottom sheet with quick contact CTAs (`Email User` & `Call Phone`), ACCOUNT DETAILS well (ID, Email, Phone, Shift, Address, Location, Aadhaar with eye reveal toggle, Licence, Registered Date with relative time), MANAGEMENT ACTIONS well (Role selector, Supervisor selector, Edit Account, Reset Password, Activate/Deactivate, Delete Account), User Edit sheet, Password Reset modal with temporary credential generator, Reject Reason modal, native CSV export via `expo-file-system/legacy` & `expo-sharing`, Profile Change Requests diff review, and floating bulk actions bar.
 - **Mobile Profile Screen & Validation Parity (`apps/mobile/app/(app)/profile.tsx`, `apps/mobile/components/profile/EditProfileModal.tsx`)**: Reads authoritative account data directly from the PostgreSQL `users` table, renders real-time pending profile modification request banners with withdrawal capabilities, and enforces Zod `ProfileUpdateSchema` alongside strict database uniqueness validation for mobile phone, 12-digit Aadhaar, and driving licence.
+- **Mobile Permissions & Real-Time Telemetry (`apps/mobile/app.json`, `apps/mobile/lib/permissions/*`)**: Strictly scoped production permission matrix (`INTERNET` for Supabase API sync, `ACCESS_NETWORK_STATE` for NetInfo offline/online detection, `POST_NOTIFICATIONS` for runtime critical shift alerts). Obsolete camera and legacy storage permissions removed. Features a value-first notification permission primer modal (`NotificationPermissionModal.tsx`), 7-day soft dismissal cooldown in `AsyncStorage`, and a live "APP PERMISSIONS & TELEMETRY" card on the Profile screen (`/profile`) and Profile Sheet with 1-tap configuration.
 - **Account Actions**: Create new user accounts, edit employee profiles, activate/deactivate accounts, and delete user accounts with full structured audit logging.
 
 ### 3. ⏱️ Operations Hub (`/operations`)
@@ -73,6 +74,9 @@
   - Full mobile viewport parity with 4 interactive fleet KPI metric cards, searchable bottom sheet filters (Machine, Client, Location, Operator, Month), machine overview summary card (Manufacturer, Model, Serial, Run Hours, Breakdowns), client overview card, and operator KPI cards.
   - Native PDF document generation (`expo-print`) with AirPrint & Android Print Spooler integration (`Print.printAsync`), CSV spreadsheet export (`expo-file-system/legacy`), and native OS sharing sheet (`expo-sharing`).
   - Native Operator Machine Assignment workflow with 3-shift roster tracking (`0/3`, `1-2/3`, `3/3`), overnight shift badges, and atomic PostgreSQL conflict resolution (`assign_operator_machine_atomic`).
+- **Overtime Shift Conflict Detection & Supervisor Resolution System (Web & Mobile Parity)**:
+  - **Shared Conflict Parsing Engine (`@reachinternational/utils`)**: Intelligently parses technical database strings into human-readable warnings, severity pills (`DUAL MACHINE CUSTODY CONFLICT`, `SHIFT OVERRUN CONFLICT`), overtime claimed badges, colliding equipment codes, and concrete supervisor guidance (`acknowledgeAdvice` vs `adjustAdvice`).
+  - **Comprehensive Touchpoint Warnings**: Active warnings across the Top Overtime Conflict Alert Banner (with expand/collapse toggles), individual daily running log cards/rows (with visual amber/green accents, conflict status badges, and inline advisory wells), the Shift Assignment Modal (rich conflict alert cards with action required instructions), and the Overtime Conflict Resolution Modal (incident breakdown, compliance warning bullet points, and live interactive recalculated running/overtime hours).
 
 ### 4. 🛡️ Centralized Audit Logs Module (`/audit`)
 - **First-Class Sidebar Navigation**: Promoted from nested operations tabs to a dedicated, top-level sidebar route (`/audit`) accessible to authorized staff (`super_admin`, `admin`, `manager`, `service_manager`, `supervisor`, `engineer`, etc.).
@@ -133,6 +137,24 @@
 - **Tables & Data Display**: `<DataTable>`, `<EnterpriseTable>`, `<Pagination>` with page size controls (`10`, `25`, `50`, `100`), `<EmptyState>`, and `<SkeletonTable>`.
 - **Export Controls**: `<ExportButton>` and `<ExportDropdown>` supporting Excel (`.xlsx`), CSV (`.csv`), PDF (`.pdf`), and Print actions with tooltips and mobile responsiveness.
 - **Feedback & Navigation**: `<Alert>`, `<Drawer>`, `<Modal>`, `<ConfirmationDialog>`, `<Tabs>`, `<Breadcrumb>`, `<PageContainer>`, and `<Section>`.
+
+### 9. ⚙️ Settings & System Preferences (`/settings`)
+- **Differentiated Cross-Platform Experience**:
+  - **Web Settings (`apps/web/app/(app)/settings`)**: Built for administration and enterprise configuration.
+    - **Account**: User profile overview card (Avatar, role, KYC badges, contact info, shift timing, yard & street address), Edit Profile modal trigger, and Change Password form with length/match validation and `changePasswordAction` server action.
+    - **Appearance**: Interactive 3-card preview system for Light, Dark, and System appearance adhering to Vercel Geist tokens (`#171717`, `#fafafa`, `#ffffff`, `#ebebeb`, `#0070f3`).
+    - **About & Support**: 6 modular cards: Help & FAQ (modal), Operator Guide & pre-shift machinery checklist (modal), direct Contact Support email (`info@reachinternational.co.in`), Privacy Policy modal, Terms of Service modal, and system version telemetry (`v1.2.0 Build 2026.09`).
+    - **Sign Out**: Red destructive confirmation modal and direct server action call to `logout()`.
+    - **Navigation**: Integrated into `mainNavItems` in `AppSidebar.tsx` and user profile dropdown in `UserProfileDropdown.tsx`.
+  - **Mobile Settings (`apps/mobile/app/(app)/settings`)**: Tailored for field operators and mobile device behavior.
+    - **Bottom Floating Navbar**: Promoted Settings to the 4th primary bottom navigation tab in `MobileBottomNav.tsx`, replacing Profile.
+    - **My Account Touch Card**: Compact card with Avatar, Name, Role badge, and email; tapping opens `AccountSettingsModal` containing shift schedule, assigned yard, KYC compliance, Edit Profile launcher, Change Password modal trigger, and link to full Profile screen.
+    - **Notifications Touch Card**: Compact card with active alert count badge; tapping opens `NotificationSettingsModal` with switches for Push Notifications, Shift Reminders, Breakdown Alerts, Assignment Alerts, and Overtime Alerts.
+    - **App Appearance**: Dedicated theme selector for `Light`, `Dark`, and `System` appearance.
+    - **App Permissions**: Push notification permission status badge and `NotificationPermissionModal` launcher.
+    - **About & Legal**: App version `v1.0.0 (Build 1)`, Expo SDK 57 runtime, dedicated Privacy Policy (`/(app)/privacy`), Terms of Service (`/(app)/terms`), and official brand footer (`BRAND_NAME`, `BRAND_TAGLINE`).
+    - **Google Play Store Compliance**: Full Play Store submission suite: production AAB configuration (`eas.json`), `versionCode: 1`, blocked transitive permissions (`app.json`), public web compliance endpoints (`/privacy`, `/terms`, `/account-deletion`), store listing copy and visual assets (`apps/mobile/store-assets/`), Data Safety declaration (`PLAY_STORE_DATA_SAFETY.md`), Content Rating guide (`PLAY_STORE_CONTENT_RATING.md`), and end-to-end AAB build checklist (`PLAY_STORE_SUBMISSION_CHECKLIST.md`).
+    - **Sign Out**: Red pill button with confirmation alert calling `signOut()` and navigating to login.
 
 ---
 
@@ -278,14 +300,39 @@ ReachInternational enforces a multi-layered security architecture conforming to 
 13. **DOM XSS Sanitization (`packages/utils/src/sanitize.ts` & `NotificationPreviewModal.tsx`)**: Raw HTML email previews pass through `sanitizeHtml()` before DOM injection, stripping script tags, iframe embeds, event handlers (`onerror`, `onload`), and pseudo-protocols (`javascript:`).
 14. **Hardware-Backed Mobile Session Persistence (`apps/mobile/lib/supabase.ts`)**: Mobile auth storage utilizes `expo-secure-store` on native iOS (Keychain) and Android (Keystore) for hardware-encrypted token persistence across app lifecycles.
 15. **Strict Content-Security-Policy (`apps/web/next.config.ts`)**: Production CSP enforces `upgrade-insecure-requests`, `form-action 'self'`, `frame-ancestors 'none'`, `object-src 'none'`, and `base-uri 'self'`.
+16. **Public Legal & Compliance Endpoints (`apps/web/app/privacy`, `apps/web/app/terms`, `apps/web/app/account-deletion`)**:
+    - `/privacy`: Enterprise Data Protection & Privacy Policy covering 13 structured sections (DPDP Act 2023, IT Act 2000, UIDAI Aadhaar masking, HMR telemetry, Kernel RLS, Zero Data Sale guarantee, 7-year statutory equipment retention, and Google Play Data Safety compliance) with interactive topic search, quick-jump pill navigation, and print optimization.
+    - `/terms`: Official Terms of Service and Heavy Equipment Custody conditions.
+    - `/account-deletion`: Dedicated Google Play compliant account erasure request portal with 14-day SLA.
 
 ---
 
 ## 🧪 Verification & Quality Gate
 
-Run full typecheck across all 9 monorepo workspace packages:
+Run full typecheck across all 7 monorepo workspace packages:
 
 ```bash
 pnpm typecheck
 ```
 Guarantees 0 TypeScript errors across `apps/web`, `apps/mobile`, and `packages/*`.
+
+---
+
+## 📱 Mobile CI/CD, EAS Workflows & OTA Updates
+
+The ReachInternational mobile application (`apps/mobile`, package: `com.reachinternational.app`, SDK 57) is automated via Expo Application Services (EAS):
+
+### 1. Build & Release Profiles (`apps/mobile/eas.json`)
+- **`production` Build**: Signed Android App Bundle (`.aab`) with `autoIncrement: true`, Node 22, and pnpm 11 for Play Store distribution.
+- **`preview` Build**: Internal test APK with distribution for rapid field testing.
+- **`production` Submit**: Automated upload directly to Google Play **Internal testing** track.
+- **`production-play` Submit**: Automated promotion of approved releases to Google Play **Production** track (`eas submit -p android --profile production-play`).
+
+### 2. EAS Workflows (`apps/mobile/.eas/workflows/`)
+- **`deploy-android.yml`**: Full release pipeline triggered on `push` to `main` (for `apps/mobile/**`, `packages/**`, `pnpm-lock.yaml`) and manual `workflow_dispatch`. Runs quality gate (`pnpm typecheck`) → compiles production `.aab` → submits directly to Google Play internal track.
+- **`publish-update.yml`**: Over-The-Air (OTA) pipeline triggered on `main`. Runs quality gate (`pnpm typecheck`) → publishes JS/UI updates to the `production` channel via EAS Update.
+
+### 3. EAS Update (OTA) Governance
+- **`runtimeVersion`**: Enforces `{"policy": "appVersion"}`. EAS Update guarantees that OTA updates only land on installed binaries with matching `appVersion` (`1.0.0`), preventing binary incompatibility crashes.
+- **Deterministic Routing**: Native changes (dependencies, Android manifest, permissions, `appVersion`) are routed through binary builds (`deploy-android.yml` / `[build]` tag / `release/*`). Non-native JS and styling fixes are published immediately via OTA update.
+- **Zero Secrets in Git**: Google Play Service Account JSON keys are securely stored in the EAS credential vault via `eas credentials -p android`, with 0 credentials committed to source control.

@@ -1,0 +1,35 @@
+name: Deploy Android to Play Store (Internal Track)
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - apps/mobile/**
+      - packages/**
+      - pnpm-lock.yaml
+  workflow_dispatch: {}
+
+jobs:
+  quality_gate:
+    name: Quality Gate & Typecheck
+    steps:
+      - uses: eas/checkout
+      - uses: eas/install_node_modules
+      - run: pnpm typecheck
+
+  build_android:
+    name: Build Production Android AAB
+    needs: [quality_gate]
+    type: build
+    params:
+      platform: android
+      profile: production
+
+  submit_android:
+    name: Submit to Play Store (Internal Track)
+    needs: [build_android]
+    type: submit
+    params:
+      build_id: ${{ needs.build_android.outputs.build_id }}
+      profile: production
