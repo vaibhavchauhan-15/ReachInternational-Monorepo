@@ -6,7 +6,7 @@ import { TAGS, CACHE_TIERS } from "@/lib/cache";
 import type { CRMClient } from "@/lib/types/database";
 
 const CLIENT_SELECT_COLUMNS =
-  "id, code, company_name, contact_person, phone, gstin, pan_number, address, city, district, state, pincode, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode, status, deleted_at, created_at, updated_at";
+  "id, code, company_name, contact_person, phone, gstin, pan_number, street, city, district, state, pincode, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode, status, deleted_at, created_at, updated_at";
 
 const getCachedClients = unstable_cache(
   async (includeDeleted: boolean = false): Promise<CRMClient[]> => {
@@ -27,13 +27,24 @@ const getCachedClients = unstable_cache(
       return [];
     }
 
-    return ((data as CRMClient[]) ?? []).map((client) => ({
-      ...client,
-      client_name: client.company_name,
-      machine_count: client.machine_count ?? 0,
-      open_complaints: client.open_complaints ?? 0,
-      status: client.status ?? "active",
-    }));
+    return ((data as CRMClient[]) ?? []).map((client) => {
+      const street = (client.street || "").trim();
+      const fullAddress =
+        [street, client.city, client.district, client.state, client.pincode]
+          .filter(Boolean)
+          .map((s) => String(s).trim())
+          .filter(Boolean)
+          .join(", ");
+      return {
+        ...client,
+        street,
+        address: fullAddress,
+        client_name: client.company_name,
+        machine_count: client.machine_count ?? 0,
+        open_complaints: client.open_complaints ?? 0,
+        status: client.status ?? "active",
+      };
+    });
   },
   ["clients-directory-list-v4"],
   {
@@ -68,23 +79,31 @@ export const getClientOptions = unstable_cache(
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase
       .from("clients")
-      .select("id, code, company_name, city, state, address, phone")
+      .select("id, code, company_name, city, district, state, pincode, street, phone")
       .is("deleted_at", null)
       .order("company_name", { ascending: true });
 
-    if (error || !data) return [];
-
-    return data.map((c: any) => ({
-      id: c.id,
-      label: c.company_name || c.code || "Unknown Client",
-      company_name: c.company_name || c.code || "Unknown Client",
-      client_name: c.company_name,
-      code: c.code || undefined,
-      city: c.city || undefined,
-      state: c.state || undefined,
-      address: c.address || undefined,
-      phone: c.phone || undefined,
-    }));
+    if (!error && data) {
+      return data.map((c: any) => {
+        const fullAddress = [c.street, c.city, c.district, c.state, c.pincode]
+          .filter(Boolean)
+          .map((s: any) => String(s).trim())
+          .filter(Boolean)
+          .join(", ");
+        return {
+          id: c.id,
+          label: c.company_name || c.code || "Unknown Client",
+          company_name: c.company_name || c.code || "Unknown Client",
+          client_name: c.company_name,
+          code: c.code || undefined,
+          city: c.city || undefined,
+          state: c.state || undefined,
+          address: fullAddress || undefined,
+          phone: c.phone || undefined,
+        };
+      });
+    }
+    return [];
   },
   ["client-options-v4"],
   { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.clients] }
@@ -132,7 +151,7 @@ export const getPaginatedClients = cache(
     if (search) {
       const q = `%${search}%`;
       query = query.or(
-        `company_name.ilike.${q},code.ilike.${q},contact_person.ilike.${q},phone.ilike.${q},gstin.ilike.${q},pan_number.ilike.${q},city.ilike.${q},district.ilike.${q},state.ilike.${q},address.ilike.${q},billing_address.ilike.${q},billing_city.ilike.${q}`
+        `company_name.ilike.${q},code.ilike.${q},contact_person.ilike.${q},phone.ilike.${q},gstin.ilike.${q},pan_number.ilike.${q},street.ilike.${q},city.ilike.${q},district.ilike.${q},state.ilike.${q},billing_address.ilike.${q},billing_city.ilike.${q}`
       );
     }
 
@@ -145,13 +164,24 @@ export const getPaginatedClients = cache(
       return { clients: [], total: 0, page, pageSize: limit, totalPages: 0 };
     }
 
-    const clients = ((data as CRMClient[]) ?? []).map((client) => ({
-      ...client,
-      client_name: client.company_name,
-      machine_count: client.machine_count ?? 0,
-      open_complaints: client.open_complaints ?? 0,
-      status: client.status ?? "active",
-    }));
+    const clients = ((data as CRMClient[]) ?? []).map((client) => {
+      const street = (client.street || "").trim();
+      const fullAddress =
+        [street, client.city, client.district, client.state, client.pincode]
+          .filter(Boolean)
+          .map((s) => String(s).trim())
+          .filter(Boolean)
+          .join(", ");
+      return {
+        ...client,
+        street,
+        address: fullAddress,
+        client_name: client.company_name,
+        machine_count: client.machine_count ?? 0,
+        open_complaints: client.open_complaints ?? 0,
+        status: client.status ?? "active",
+      };
+    });
 
     return {
       clients,

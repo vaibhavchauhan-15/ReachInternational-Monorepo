@@ -6,6 +6,8 @@ import React, {
   useEffect,
   useMemo,
 } from "react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Calendar,
   ChevronLeft,
@@ -14,6 +16,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { formatDate } from "@reachinternational/utils";
+import { useDynamicDropdownPosition } from "@/lib/hooks/useDynamicDropdownPosition";
 
 export interface CustomDatePickerProps {
   value: string; // Format: "YYYY-MM-DD"
@@ -91,6 +94,8 @@ export function CustomDatePicker({
 }: CustomDatePickerProps) {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
 
   // Today reference at midnight
   const today = useMemo(() => {
@@ -130,20 +135,15 @@ export function CustomDatePicker({
     }
   }, [value]);
 
-  // Close calendar popover on click outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsCalendarOpen(false);
-      }
-    };
-    if (isCalendarOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isCalendarOpen]);
+  const { mounted, position, isPositioned, updatePosition } = useDynamicDropdownPosition({
+    isOpen: isCalendarOpen,
+    triggerRef,
+    popoverRef,
+    onClose: () => setIsCalendarOpen(false),
+    minWidth: 280,
+    maxHeightCap: 400,
+    matchTriggerWidth: false,
+  });
 
   // Close calendar popover on Escape key
   useEffect(() => {
@@ -317,6 +317,15 @@ export function CustomDatePicker({
     setIsCalendarOpen(false);
   };
 
+  const handleOpenToggle = () => {
+    if (disabled) return;
+    const nextState = !isCalendarOpen;
+    if (nextState) {
+      updatePosition();
+    }
+    setIsCalendarOpen(nextState);
+  };
+
   const formattedDisplayValue = useMemo(() => {
     if (!value) return placeholder;
     try {
@@ -348,9 +357,10 @@ export function CustomDatePicker({
         )}
 
         <button
+          ref={triggerRef}
           type="button"
           disabled={disabled}
-          onClick={() => setIsCalendarOpen((prev) => !prev)}
+          onClick={handleOpenToggle}
           className={`w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)] flex items-center justify-between transition-all cursor-pointer shadow-2xs min-h-[42px] ${
             isCalendarOpen
               ? "border-sky-500 ring-2 ring-sky-500/20 bg-[var(--color-canvas-elevated)]"
@@ -389,117 +399,153 @@ export function CustomDatePicker({
       )}
 
       {/* ========================================================================= */}
-      {/* FULL MONTH CALENDAR POPOVER DIALOG                                        */}
+      {/* FULL MONTH CALENDAR POPOVER DIALOG (PORTALED WITH DYNAMIC VIEWPORT POS)   */}
       {/* ========================================================================= */}
-      {isCalendarOpen && (
-        <div
-          className={`absolute z-50 top-full mt-1.5 w-full sm:w-[310px] max-w-[calc(100vw-2rem)] rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden flex flex-col backdrop-blur-md animate-in fade-in zoom-in-95 slide-in-from-top-2 duration-150 ${
-            align === "right" ? "right-0" : "left-0"
-          }`}
-          role="dialog"
-          aria-label="Date Picker Calendar"
-        >
-          {/* Month Header & Switcher Navigation */}
-          <div className="p-3 border-b border-[var(--color-hairline)] flex items-center justify-between bg-[var(--color-canvas-elevated)]">
-            <button
-              type="button"
-              disabled={!canGoPrevMonth}
-              onClick={handlePrevMonth}
-              aria-label="Previous Month"
-              className={`p-1.5 rounded-lg border border-[var(--color-hairline)] text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-all cursor-pointer ${
-                !canGoPrevMonth ? "opacity-30 cursor-not-allowed hover:bg-transparent" : ""
-              }`}
+      {mounted && createPortal(
+        <AnimatePresence>
+          {isCalendarOpen && isPositioned && (
+            <motion.div
+              ref={popoverRef}
+              key="custom-datepicker-popover"
+              initial={{
+                opacity: 0,
+                scale: 0.97,
+                y: position.placement === "top" ? 6 : -6,
+              }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+                y: 0,
+              }}
+              exit={{
+                opacity: 0,
+                scale: 0.97,
+                y: position.placement === "top" ? 4 : -4,
+              }}
+              transition={{
+                duration: 0.16,
+                ease: [0.16, 1, 0.3, 1],
+              }}
+              style={{
+                position: "fixed",
+                top: position.top !== undefined ? `${position.top}px` : "auto",
+                bottom: position.bottom !== undefined ? `${position.bottom}px` : "auto",
+                left: `${position.left}px`,
+                width: `${position.width}px`,
+                maxHeight: `${position.maxHeight}px`,
+                zIndex: 99999,
+                transformOrigin: position.placement === "top" ? "bottom center" : "top center",
+              }}
+              className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden flex flex-col backdrop-blur-md"
+              role="dialog"
+              aria-label="Date Picker Calendar"
             >
-              <ChevronLeft size={16} />
-            </button>
-
-            <div className="text-center">
-              <span className="text-xs sm:text-sm font-extrabold text-[var(--color-ink)]">
-                {MONTH_NAMES[viewDate.getMonth()]} {viewDate.getFullYear()}
-              </span>
-            </div>
-
-            <button
-              type="button"
-              disabled={!canGoNextMonth}
-              onClick={handleNextMonth}
-              aria-label="Next Month"
-              className={`p-1.5 rounded-lg border border-[var(--color-hairline)] text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-all cursor-pointer ${
-                !canGoNextMonth ? "opacity-30 cursor-not-allowed hover:bg-transparent" : ""
-              }`}
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-
-          {/* Weekday Column Headers */}
-          <div className="grid grid-cols-7 gap-1 px-2.5 pt-2.5 text-center">
-            {WEEKDAY_NAMES.map((name) => (
-              <span
-                key={name}
-                className="text-[10px] sm:text-[11px] font-mono font-extrabold text-[var(--color-mute)] uppercase tracking-wider py-0.5"
-              >
-                {name}
-              </span>
-            ))}
-          </div>
-
-          {/* Month Grid Cells */}
-          <div className="grid grid-cols-7 gap-1 p-2.5">
-            {calendarDays.map((cell) => {
-              const isCellDisabled = !cell.isSelectable;
-              const isSelected = cell.isSelected;
-              const isToday = cell.isToday;
-
-              return (
+              {/* Month Header & Switcher Navigation */}
+              <div className="p-3 border-b border-[var(--color-hairline)] flex items-center justify-between bg-[var(--color-canvas-elevated)] shrink-0">
                 <button
-                  key={cell.dateStr}
                   type="button"
-                  disabled={isCellDisabled}
-                  onClick={() => handleSelectDate(cell.dateStr)}
-                  title={
-                    isCellDisabled
-                      ? cell.diffDays < 0
-                        ? "Future dates are disabled"
-                        : "Dates older than 7 days are locked"
-                      : cell.isToday
-                      ? "Today"
-                      : `${cell.diffDays} day${cell.diffDays === 1 ? "" : "s"} ago`
-                  }
-                  className={`relative h-8 sm:h-9 w-full rounded-xl text-xs flex flex-col items-center justify-center transition-all ${
-                    isSelected
-                      ? "bg-sky-600 text-white font-extrabold shadow-md ring-2 ring-sky-500/30 scale-105 z-10"
-                      : isCellDisabled
-                      ? "text-[var(--color-mute)] opacity-20 cursor-not-allowed"
-                      : "text-[var(--color-ink)] font-bold hover:bg-sky-500/15 hover:text-sky-600 dark:hover:text-sky-400 cursor-pointer"
-                  } ${!cell.isCurrentMonth && !isSelected ? "opacity-30" : ""}`}
+                  disabled={!canGoPrevMonth}
+                  onClick={handlePrevMonth}
+                  aria-label="Previous Month"
+                  className={`p-1.5 rounded-lg border border-[var(--color-hairline)] text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-all cursor-pointer ${
+                    !canGoPrevMonth ? "opacity-30 cursor-not-allowed hover:bg-transparent" : ""
+                  }`}
                 >
-                  <span className="leading-none">{cell.dayNumber}</span>
-                  {/* Today subtle indicator dot */}
-                  {isToday && !isSelected && (
-                    <span className="absolute bottom-1 w-1 h-1 rounded-full bg-emerald-500" />
-                  )}
+                  <ChevronLeft size={16} />
                 </button>
-              );
-            })}
-          </div>
 
-          {/* Calendar Footer Info & Reset */}
-          <div className="p-2.5 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 flex items-center justify-between text-[10px] text-[var(--color-mute)]">
-            <span className="font-medium flex items-center gap-1">
-              <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              Green dot: Today
-            </span>
+                <div className="text-center">
+                  <span className="text-xs sm:text-sm font-extrabold text-[var(--color-ink)]">
+                    {MONTH_NAMES[viewDate.getMonth()]} {viewDate.getFullYear()}
+                  </span>
+                </div>
 
-            <button
-              type="button"
-              onClick={() => handleSelectDate(todayStr)}
-              className="font-bold text-sky-600 dark:text-sky-400 hover:underline cursor-pointer flex items-center gap-1"
-            >
-              <RotateCcw className="h-3 w-3" /> Select Today
-            </button>
-          </div>
-        </div>
+                <button
+                  type="button"
+                  disabled={!canGoNextMonth}
+                  onClick={handleNextMonth}
+                  aria-label="Next Month"
+                  className={`p-1.5 rounded-lg border border-[var(--color-hairline)] text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-all cursor-pointer ${
+                    !canGoNextMonth ? "opacity-30 cursor-not-allowed hover:bg-transparent" : ""
+                  }`}
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto flex-1 min-h-0 custom-scrollbar">
+                {/* Weekday Column Headers */}
+                <div className="grid grid-cols-7 gap-1 px-2.5 pt-2.5 text-center">
+                  {WEEKDAY_NAMES.map((name) => (
+                    <span
+                      key={name}
+                      className="text-[10px] sm:text-[11px] font-mono font-extrabold text-[var(--color-mute)] uppercase tracking-wider py-0.5"
+                    >
+                      {name}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Month Grid Cells */}
+                <div className="grid grid-cols-7 gap-1 p-2.5">
+                  {calendarDays.map((cell) => {
+                    const isCellDisabled = !cell.isSelectable;
+                    const isSelected = cell.isSelected;
+                    const isToday = cell.isToday;
+
+                    return (
+                      <button
+                        key={cell.dateStr}
+                        type="button"
+                        disabled={isCellDisabled}
+                        onClick={() => handleSelectDate(cell.dateStr)}
+                        title={
+                          isCellDisabled
+                            ? cell.diffDays < 0
+                              ? "Future dates are disabled"
+                              : "Dates older than 7 days are locked"
+                            : cell.isToday
+                            ? "Today"
+                            : `${cell.diffDays} day${cell.diffDays === 1 ? "" : "s"} ago`
+                        }
+                        className={`relative h-8 sm:h-9 w-full rounded-xl text-xs flex flex-col items-center justify-center transition-all ${
+                          isSelected
+                            ? "bg-sky-600 text-white font-extrabold shadow-md ring-2 ring-sky-500/30 scale-105 z-10"
+                            : isCellDisabled
+                            ? "text-[var(--color-mute)] opacity-20 cursor-not-allowed"
+                            : "text-[var(--color-ink)] font-bold hover:bg-sky-500/15 hover:text-sky-600 dark:hover:text-sky-400 cursor-pointer"
+                        } ${!cell.isCurrentMonth && !isSelected ? "opacity-30" : ""}`}
+                      >
+                        <span className="leading-none">{cell.dayNumber}</span>
+                        {/* Today subtle indicator dot */}
+                        {isToday && !isSelected && (
+                          <span className="absolute bottom-1 w-1 h-1 rounded-full bg-emerald-500" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Calendar Footer Info & Reset */}
+              <div className="p-2.5 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 flex items-center justify-between text-[10px] text-[var(--color-mute)] shrink-0">
+                <span className="font-medium flex items-center gap-1">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  Green dot: Today
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => handleSelectDate(todayStr)}
+                  className="font-bold text-sky-600 dark:text-sky-400 hover:underline cursor-pointer flex items-center gap-1"
+                >
+                  <RotateCcw className="h-3 w-3" /> Select Today
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
       )}
     </div>
   );

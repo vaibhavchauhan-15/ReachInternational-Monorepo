@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   AnimatedChevronDown,
   AnimatedCheck,
   AnimatedX,
 } from "./animated-icons";
 import { Search } from "lucide-react";
+import { useDynamicDropdownPosition } from "@/lib/hooks/useDynamicDropdownPosition";
 
 export interface SelectOption {
   value: string;
@@ -24,6 +27,7 @@ export interface SearchableSelectProps {
   onChange: (value: string, option?: SelectOption | null) => void;
   placeholder?: string;
   label?: ReactNode;
+  count?: number | string;
   disabled?: boolean;
   required?: boolean;
   clearable?: boolean;
@@ -42,6 +46,7 @@ export function SearchableSelect({
   onChange,
   placeholder = "Select option...",
   label,
+  count,
   disabled = false,
   required = false,
   clearable = false,
@@ -56,7 +61,20 @@ export function SearchableSelect({
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const { mounted, position, isPositioned, updatePosition } = useDynamicDropdownPosition({
+    isOpen,
+    triggerRef,
+    popoverRef,
+    onClose: () => {
+      setIsOpen(false);
+    },
+    minWidth: 240,
+    maxHeightCap: 300,
+  });
 
   const isAllSelected = allowAll && (value === "all" || value === "");
 
@@ -77,25 +95,15 @@ export function SearchableSelect({
     );
   }, [options, search]);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-        setSearch("");
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   const handleOpenToggle = () => {
     if (disabled) return;
     const nextState = !isOpen;
+    if (nextState) {
+      updatePosition();
+    }
     setIsOpen(nextState);
     if (nextState) {
       setTimeout(() => searchInputRef.current?.focus(), 50);
-    } else {
-      setSearch("");
     }
   };
 
@@ -131,15 +139,21 @@ export function SearchableSelect({
       onKeyDown={handleKeyDown}
     >
       {label && (
-        <label className="block text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] mb-1 flex items-center justify-between select-none">
-          <span>
+        <label className="block text-[12px] sm:text-[13px] font-semibold text-[var(--color-ink)] mb-1 flex items-center justify-between select-none">
+          <span className="flex items-center gap-1.5">
             {label} {required && <span className="text-rose-500 font-semibold">*</span>}
           </span>
+          {count !== undefined && (
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-[var(--color-canvas)] text-[var(--color-mute)] border border-[var(--color-hairline)] font-medium">
+              {count} Total
+            </span>
+          )}
         </label>
       )}
 
       {/* Trigger Button */}
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
         onClick={handleOpenToggle}
@@ -219,102 +233,135 @@ export function SearchableSelect({
         </p>
       )}
 
-      {/* Popover Menu */}
-      {isOpen && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden max-h-72 flex flex-col backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-150">
-          {/* Search Header */}
-          <div className="p-2 border-b border-[var(--color-hairline)] flex items-center gap-2 bg-[var(--color-canvas)]">
-            <Search className="h-3.5 w-3.5 text-[var(--color-mute)] shrink-0 ml-1" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search..."
-              className="w-full bg-transparent text-xs text-[var(--color-ink)] focus:outline-none placeholder:text-[var(--color-mute)] py-1"
-            />
-            {search && (
-              <button
-                type="button"
-                onClick={() => setSearch("")}
-                className="text-[var(--color-mute)] hover:text-[var(--color-ink)] p-1 cursor-pointer"
-              >
-                <AnimatedX size={12} />
-              </button>
-            )}
-          </div>
-
-          {/* Options List */}
-          <div className="overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
-            {allowAll && !search.trim() && (
-              <button
-                type="button"
-                onClick={() => handleSelect("all")}
-                className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
-                  isAllSelected
-                    ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold"
-                    : "hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="font-bold">{allLabel}</span>
-                  <span className="text-[10px] text-[var(--color-mute)] font-mono">
-                    ({options.length} options)
-                  </span>
-                </div>
-                {isAllSelected && (
-                  <AnimatedCheck size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
-                )}
-              </button>
-            )}
-
-            {filteredOptions.length === 0 ? (
-              <div className="py-4 text-center text-xs text-[var(--color-mute)]">
-                No matching options found
-              </div>
-            ) : (
-              filteredOptions.map((opt) => {
-                const isSelected = opt.value === value;
-                return (
+      {/* Popover Menu rendered via Portal with Dynamic Viewport Positioning & Smooth Transitions */}
+      {mounted && createPortal(
+        <AnimatePresence onExitComplete={() => setSearch("")}>
+          {isOpen && isPositioned && (
+            <motion.div
+              ref={popoverRef}
+              key="searchable-select-popover"
+              initial={{
+                opacity: 0,
+                scale: 0.97,
+                y: position.placement === "top" ? 6 : -6,
+              }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+                y: 0,
+              }}
+              exit={{
+                opacity: 0,
+                scale: 0.97,
+                y: position.placement === "top" ? 4 : -4,
+              }}
+              transition={{
+                duration: 0.16,
+                ease: [0.16, 1, 0.3, 1],
+              }}
+              style={{
+                position: "fixed",
+                top: position.top !== undefined ? `${position.top}px` : "auto",
+                bottom: position.bottom !== undefined ? `${position.bottom}px` : "auto",
+                left: `${position.left}px`,
+                width: `${position.width}px`,
+                maxHeight: `${position.maxHeight}px`,
+                zIndex: 99999,
+                transformOrigin: position.placement === "top" ? "bottom center" : "top center",
+              }}
+              className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden flex flex-col backdrop-blur-md"
+            >
+              {/* Search Header */}
+              <div className="p-2 border-b border-[var(--color-hairline)] flex items-center gap-2 bg-[var(--color-canvas)] shrink-0">
+                <Search className="h-3.5 w-3.5 text-[var(--color-mute)] shrink-0 ml-1" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Search..."
+                  className="w-full bg-transparent text-xs text-[var(--color-ink)] focus:outline-none placeholder:text-[var(--color-mute)] py-1"
+                />
+                {search && (
                   <button
-                    key={opt.value}
                     type="button"
-                    onClick={() => handleSelect(opt.value)}
+                    onClick={() => setSearch("")}
+                    className="text-[var(--color-mute)] hover:text-[var(--color-ink)] p-1 cursor-pointer"
+                  >
+                    <AnimatedX size={12} />
+                  </button>
+                )}
+              </div>
+
+              {/* Options List */}
+              <div className="overflow-y-auto p-1.5 space-y-1 custom-scrollbar flex-1 min-h-0">
+                {allowAll && !search.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelect("all")}
                     className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
-                      isSelected
+                      isAllSelected
                         ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold"
                         : "hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
                     }`}
                   >
-                    <div className="min-w-0 pr-2 flex-1">
-                      <div className="font-bold flex items-center gap-2 truncate">
-                        {opt.icon}
-                        <span className="truncate">{opt.label}</span>
-                        {opt.badge && (
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-mono shrink-0 ${
-                              opt.badgeClassName || "bg-sky-500/10 text-sky-600 dark:text-sky-400"
-                            }`}
-                          >
-                            {opt.badge}
-                          </span>
-                        )}
-                      </div>
-                      {opt.description && (
-                        <div className="text-[10px] text-[var(--color-mute)] truncate mt-0.5">
-                          {opt.description}
-                        </div>
-                      )}
-                    </div>
-                    {isSelected && (
+                    <span className="font-bold">{allLabel}</span>
+                    {isAllSelected && (
                       <AnimatedCheck size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
                     )}
                   </button>
-                );
-              })
-            )}
-          </div>
-        </div>
+                )}
+
+                {filteredOptions.length === 0 ? (
+                  <div className="py-4 text-center text-xs text-[var(--color-mute)]">
+                    No matching options found
+                  </div>
+                ) : (
+                  filteredOptions.map((opt) => {
+                    const isSelected = opt.value === value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => handleSelect(opt.value)}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
+                          isSelected
+                            ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold"
+                            : "hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
+                        }`}
+                      >
+                        <div className="min-w-0 pr-2 flex-1">
+                          <div className="font-bold flex items-center gap-2 truncate">
+                            {opt.icon}
+                            <span className="truncate">{opt.label}</span>
+                            {opt.badge && (
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-mono shrink-0 ${
+                                  opt.badgeClassName || "bg-sky-500/10 text-sky-600 dark:text-sky-400"
+                                }`}
+                              >
+                                {opt.badge}
+                              </span>
+                            )}
+                          </div>
+                          {opt.description && (
+                            <div className="text-[10px] text-[var(--color-mute)] truncate mt-0.5">
+                              {opt.description}
+                            </div>
+                          )}
+                        </div>
+                        {isSelected && (
+                          <AnimatedCheck size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
       )}
     </div>
   );

@@ -2,6 +2,14 @@ import * as XLSX from "xlsx";
 import type { Machine } from "@/lib/types/database";
 import { formatDate } from "@reachinternational/utils";
 
+// ─── Re-exports from centralized pdf-config ──────────────────────────────────
+// Backward-compatible: all consumers importing from this file continue to work.
+export { buildMachinesExportFileName } from "@/lib/pdf/pdf-config";
+// Alias for backward compat (same function, different name)
+export { formatExportDateTimeSlug as formatMachinesExportDateTimeSlug } from "@/lib/pdf/pdf-config";
+
+import { formatExportDateTimeSlug, buildMachinesExportFileName } from "@/lib/pdf/pdf-config";
+
 function formatRentalStatus(status?: string): string {
   switch (status) {
     case "rented":
@@ -32,30 +40,6 @@ function formatHealthStatus(health?: string): string {
   }
 }
 
-// Generate formatted date & time slug for filename & reports
-export function formatMachinesExportDateTimeSlug(dateObj: Date = new Date()): {
-  displayDateTime: string;
-  slugDateTime: string;
-} {
-  const day = String(dateObj.getDate()).padStart(2, "0");
-  const month = String(dateObj.getMonth() + 1).padStart(2, "0");
-  const year = dateObj.getFullYear();
-  const hours = String(dateObj.getHours()).padStart(2, "0");
-  const minutes = String(dateObj.getMinutes()).padStart(2, "0");
-
-  const displayDateTime = `${day}-${month}-${year} ${hours}:${minutes}`;
-  const slugDateTime = `${day}-${month}-${year}-${hours}-${minutes}`;
-  return { displayDateTime, slugDateTime };
-}
-
-export function buildMachinesExportFileName(
-  prefix: string = "Machine-Directory",
-  extension: "xlsx" | "csv" | "pdf"
-): string {
-  const { slugDateTime } = formatMachinesExportDateTimeSlug();
-  const cleanPrefix = prefix.replace(/[^a-zA-Z0-9-_]+/g, "-");
-  return `${cleanPrefix}-${slugDateTime}.${extension}`;
-}
 
 export function exportMachinesToExcel(
   machines: Machine[],
@@ -63,7 +47,7 @@ export function exportMachinesToExcel(
 ) {
   if (!machines || machines.length === 0) return;
 
-  const { displayDateTime } = formatMachinesExportDateTimeSlug();
+  const { displayDateTime } = formatExportDateTimeSlug();
 
   // Top Title & Metadata
   const titleRow = ["REACH INTERNATIONAL — MACHINE FLEET INVENTORY REPORT"];

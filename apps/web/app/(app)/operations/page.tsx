@@ -9,6 +9,7 @@ export interface OperationsPageSearchParams {
   view?: "machine" | "client" | "operator";
   machine?: string;
   client?: string;
+  site?: string;
   operator?: string;
   month?: string;
   start?: string;
@@ -43,15 +44,30 @@ export default async function OperationsPage(props: {
   const effectiveTab = tab || (user?.role === "operator" ? "entry" : "logs");
 
   const page = searchParams?.page ? Math.max(1, parseInt(searchParams.page, 10)) : 1;
-  const viewMode = searchParams?.view || "machine";
+  const rawView = searchParams?.view;
   const machineId = searchParams?.machine;
   const clientId = searchParams?.client;
+  const site = searchParams?.site;
   const operatorId = searchParams?.operator;
-  const month = searchParams?.month;
+  const rawMonth = searchParams?.month;
+  const currentMonthNumber = String(new Date().getMonth() + 1).padStart(2, "0");
+  // Default to current month unless explicitly provided (e.g. 'all', specific month '01'-'12', or 'custom')
+  const month = rawMonth && rawMonth.trim() !== "" ? rawMonth : currentMonthNumber;
   const customStart = searchParams?.start;
   const customEnd = searchParams?.end;
   const search = searchParams?.search;
   const sort = searchParams?.sort;
+
+  const viewMode: "machine" | "client" | "operator" =
+    rawView === "client" || rawView === "operator" || rawView === "machine"
+      ? rawView
+      : clientId
+      ? "client"
+      : operatorId
+      ? "operator"
+      : machineId
+      ? "machine"
+      : "client";
 
   const data = await getOperationsHubData(user!, effectiveTab, {
     page,
@@ -59,6 +75,7 @@ export default async function OperationsPage(props: {
     viewMode,
     machineId,
     clientId,
+    site,
     operatorId,
     month,
     customStart,
@@ -66,6 +83,9 @@ export default async function OperationsPage(props: {
     search,
     sort,
   });
+
+  const effectiveInitialClientId =
+    clientId || (data as any).effectiveClientId || (data as any).mostRecentClientId;
 
   return (
     <OperationsClient
@@ -86,7 +106,9 @@ export default async function OperationsPage(props: {
       logsSummary={data.logsSummary}
       initialViewMode={viewMode}
       initialMachineId={machineId}
-      initialClientId={clientId}
+      initialClientId={effectiveInitialClientId}
+      mostRecentClientId={(data as any).mostRecentClientId}
+      initialSite={site}
       initialOperatorId={operatorId}
       initialMonth={month}
       initialCustomStart={customStart}

@@ -590,7 +590,11 @@ export function computeShiftTiming(params: {
 
   const breakHours = 0.0;
   const autoOvertime = Math.max(0, Math.round((durationHours - 8.0) * 10) / 10);
-  const overtimeHours = manualOvertime !== undefined && !isNaN(manualOvertime) ? manualOvertime : autoOvertime;
+  // Manual overtime cannot be negative and cannot exceed total shift duration or an unreasonable threshold (>16h)
+  const clampedManualOt = manualOvertime !== undefined && !isNaN(manualOvertime)
+    ? Math.min(Math.max(0, Math.round(manualOvertime * 10) / 10), durationHours, 16.0)
+    : undefined;
+  const overtimeHours = clampedManualOt !== undefined ? clampedManualOt : autoOvertime;
   const normalWorkingHours = Math.max(0, Math.round((durationHours - overtimeHours) * 10) / 10);
 
   if (diffMinutes > 24 * 60) {

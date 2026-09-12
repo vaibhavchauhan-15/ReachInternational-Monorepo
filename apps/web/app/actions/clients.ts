@@ -40,13 +40,19 @@ export async function createClientAction(state: ClientFormState, formData: FormD
 
     const isBillingDiff = formData.get("isBillingAddressDifferent") === "true" || formData.get("isBillingAddressDifferent") === "on";
 
+    const rawStreet =
+      (formData.get("street") as string)?.trim() ||
+      (formData.get("address") as string)?.trim() ||
+      "";
+
     const payload = {
       companyName: (formData.get("companyName") as string)?.trim() || (formData.get("clientName") as string)?.trim() || "",
       contactPerson: (formData.get("contactPerson") as string)?.trim() || "",
       phone: (formData.get("phone") as string)?.trim() || "",
       gstin: ((formData.get("gstin") as string)?.trim() || "").toUpperCase(),
       panNumber: ((formData.get("panNumber") as string)?.trim() || "").toUpperCase(),
-      address: (formData.get("address") as string)?.trim() || "",
+      street: rawStreet,
+      address: rawStreet,
       city: (formData.get("city") as string)?.trim() || "",
       district: (formData.get("district") as string)?.trim() || "",
       state: (formData.get("state") as string)?.trim() || "",
@@ -75,6 +81,16 @@ export async function createClientAction(state: ClientFormState, formData: FormD
     }
 
     const data = parsed.data;
+    const resolvedStreet = (data.street || data.address || rawStreet).trim();
+    const fullUnifiedAddress = [
+      resolvedStreet,
+      data.city.trim(),
+      data.district?.trim(),
+      data.state.trim(),
+      data.pincode?.trim(),
+    ]
+      .filter(Boolean)
+      .join(", ");
 
     const insertPayload = {
       company_name: data.companyName,
@@ -82,7 +98,7 @@ export async function createClientAction(state: ClientFormState, formData: FormD
       phone: data.phone || null,
       gstin: data.gstin || null,
       pan_number: data.panNumber || null,
-      address: data.address.trim(),
+      street: resolvedStreet,
       city: data.city.trim(),
       district: data.district || null,
       state: data.state.trim(),
@@ -144,6 +160,11 @@ export async function updateClientAction(state: ClientFormState, formData: FormD
       return { error: "Valid Client ID is required for update." };
     }
 
+    const rawStreet =
+      (formData.get("street") as string)?.trim() ||
+      (formData.get("address") as string)?.trim() ||
+      "";
+
     const isBillingDiff = formData.get("isBillingAddressDifferent") === "true" || formData.get("isBillingAddressDifferent") === "on";
 
     const payload = {
@@ -153,7 +174,8 @@ export async function updateClientAction(state: ClientFormState, formData: FormD
       phone: (formData.get("phone") as string)?.trim() || "",
       gstin: ((formData.get("gstin") as string)?.trim() || "").toUpperCase(),
       panNumber: ((formData.get("panNumber") as string)?.trim() || "").toUpperCase(),
-      address: (formData.get("address") as string)?.trim() || "",
+      street: rawStreet,
+      address: rawStreet,
       city: (formData.get("city") as string)?.trim() || "",
       district: (formData.get("district") as string)?.trim() || "",
       state: (formData.get("state") as string)?.trim() || "",
@@ -182,6 +204,16 @@ export async function updateClientAction(state: ClientFormState, formData: FormD
     }
 
     const data = parsed.data;
+    const resolvedStreet = (data.street || data.address || rawStreet).trim();
+    const fullUnifiedAddress = [
+      resolvedStreet,
+      data.city.trim(),
+      data.district?.trim(),
+      data.state.trim(),
+      data.pincode?.trim(),
+    ]
+      .filter(Boolean)
+      .join(", ");
 
     const updatePayload = {
       company_name: data.companyName,
@@ -189,7 +221,7 @@ export async function updateClientAction(state: ClientFormState, formData: FormD
       phone: data.phone || null,
       gstin: data.gstin || null,
       pan_number: data.panNumber || null,
-      address: data.address.trim(),
+      street: resolvedStreet,
       city: data.city.trim(),
       district: data.district || null,
       state: data.state.trim(),

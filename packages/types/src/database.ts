@@ -866,7 +866,9 @@ export interface CRMClient {
   phone: string | null;
   gstin?: string | null;
   pan_number?: string | null;
-  address: string;
+  street: string;
+  /** Dynamically formatted full address: street + city + district + state + pincode */
+  address?: string;
   city: string;
   district?: string | null;
   state: string;

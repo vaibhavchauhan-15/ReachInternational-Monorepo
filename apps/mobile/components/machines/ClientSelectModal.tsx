@@ -21,9 +21,11 @@ export interface SelectableClient {
   company_name: string;
   contact_person?: string;
   phone?: string;
+  street?: string;
   city?: string;
   district?: string;
   state?: string;
+  pincode?: string;
   address?: string;
 }
 
@@ -123,7 +125,7 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
               <Search size={14} color={theme.colors.mute} />
               <TextInput
                 style={[styles.searchInput, { color: theme.colors.ink }]}
-                placeholder="Search client by name, code (CLI-0001), city..."
+                placeholder="Search client by name, city, address..."
                 placeholderTextColor={theme.colors.mute}
                 value={search}
                 onChangeText={setSearch}
@@ -173,7 +175,8 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
             ) : (
               filteredClients.map((c) => {
                 const isSelected = selectedClientId === c.id;
-                const location = [c.city, c.district, c.state].filter(Boolean).join(', ');
+                const parts = [c.street, c.city, c.district, c.state, c.pincode].filter(Boolean).map((s) => String(s).trim()).filter(Boolean);
+                const location = parts.length > 0 ? parts.join(', ') : (c.address ? String(c.address).trim() : '');
                 return (
                   <TouchableOpacity
                     key={c.id}
@@ -202,21 +205,6 @@ export const ClientSelectModal: React.FC<ClientSelectModalProps> = ({
                         >
                           {c.company_name}
                         </Text>
-                        {c.code && (
-                          <View
-                            style={[
-                              styles.codeBadge,
-                              {
-                                backgroundColor: theme.colors.link + '18',
-                                borderColor: theme.colors.link + '40',
-                              },
-                            ]}
-                          >
-                            <Text style={[styles.codeText, { color: theme.colors.link }]}>
-                              {c.code}
-                            </Text>
-                          </View>
-                        )}
                       </View>
 
                       {location ? (

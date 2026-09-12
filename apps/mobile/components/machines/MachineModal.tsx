@@ -155,7 +155,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           .order('full_name', { ascending: true }),
         supabase
           .from('clients')
-          .select('id, code, company_name, contact_person, phone, city, district, state, address')
+          .select('id, code, company_name, contact_person, phone, street, city, district, state, pincode')
           .is('deleted_at', null)
           .order('company_name', { ascending: true }),
       ]);

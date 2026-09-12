@@ -4,22 +4,23 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Modal } from "@/components/ui";
 import type { Machine } from "@/lib/types/database";
-import { formatDate } from "@reachinternational/utils";
+import {
+  handleBrowserPrint,
+  PDFReportHeader,
+  PDFKPIStrip,
+  PDFSignatureBlock,
+  PDFTableWrapper,
+} from "@/components/pdf";
+import { formatExportDateTimeSlug, buildMachinesExportFileName } from "@/lib/pdf/pdf-config";
+import { getPrintStylesheet } from "@/lib/pdf/pdf-print-styles";
 import {
   exportMachinesToExcel,
   exportMachinesToCSV,
-  formatMachinesExportDateTimeSlug,
-  buildMachinesExportFileName,
 } from "@/lib/utils/machines-export";
 import { Printer, FileSpreadsheet, FileText, SlidersHorizontal } from "lucide-react";
 
-interface PrintableMachineDirectoryModalProps {
-  open: boolean;
-  onClose: () => void;
-  machines: Machine[];
-  selectedIds?: (string | number)[];
-  title?: string;
-}
+// ─── Constants ───────────────────────────────────────────────────────────────
+const PRINT_DOC_ID = "printable-machines-document";
 
 const FILTER_TABS = [
   { value: "all", label: "All Fleet" },
@@ -29,6 +30,28 @@ const FILTER_TABS = [
   { value: "breakdown", label: "Breakdown" },
   { value: "under_maintenance", label: "Maintenance" },
 ];
+
+// ─── Interfaces ──────────────────────────────────────────────────────────────
+interface PrintableMachineDirectoryModalProps {
+  open: boolean;
+  onClose: () => void;
+  machines: Machine[];
+  selectedIds?: (string | number)[];
+  title?: string;
+}
+
+interface ReportContentProps {
+  machines: Machine[];
+  totalAvailable: number;
+  totalRented: number;
+  totalBreakdowns: number;
+  totalMaintenance: number;
+  totalHmr: number;
+  activeFilter: string;
+  isSelectionOnly: boolean;
+}
+
+// ─── Status Formatters ───────────────────────────────────────────────────────
 
 function formatRentalStatus(status?: string): string {
   switch (status) {
@@ -60,16 +83,7 @@ function formatHealthStatus(health?: string): string {
   }
 }
 
-interface ReportContentProps {
-  machines: Machine[];
-  totalAvailable: number;
-  totalRented: number;
-  totalBreakdowns: number;
-  totalMaintenance: number;
-  totalHmr: number;
-  activeFilter: string;
-  isSelectionOnly: boolean;
-}
+// ─── Report Content ──────────────────────────────────────────────────────────
 
 function MachineDirectoryReportContent({
   machines,
@@ -81,7 +95,7 @@ function MachineDirectoryReportContent({
   activeFilter,
   isSelectionOnly,
 }: ReportContentProps) {
-  const { displayDateTime } = formatMachinesExportDateTimeSlug();
+  const { displayDateTime } = formatExportDateTimeSlug();
 
   let filterLabel = "All Fleet Assets";
   if (isSelectionOnly) {
@@ -91,81 +105,53 @@ function MachineDirectoryReportContent({
     if (tab) filterLabel = `Filtered: ${tab.label}`;
   }
 
+  // ─── Signature Columns ─────────────────────────────────────────────
+  const signatureColumns = [
+    {
+      heading: "Prepared By",
+      name: "Fleet Supervisor",
+      role: "(Machinery Operations)",
+    },
+    {
+      heading: "Site Verification",
+      name: "Client Representative",
+      role: "(Equipment Acceptance)",
+    },
+    {
+      heading: "Verified & Approved By",
+      name: "REACH INTERNATIONAL",
+      role: "(Service & Fleet Manager)",
+      nameUppercase: true,
+    },
+  ];
+
   return (
     <div className="bg-white text-black p-2.5 sm:p-4 rounded-xl border border-neutral-300 shadow-sm flex flex-col justify-between text-xs font-sans max-w-[210mm] mx-auto space-y-2 sm:space-y-2.5 w-full">
-      {/* 1. TOP HEADING & METADATA STRIP */}
-      <div className="pb-2 border-b-2 border-neutral-900 space-y-1.5">
-        <div className="grid grid-cols-[110px_1fr_110px] sm:grid-cols-[140px_1fr_140px] items-center gap-2">
-          {/* Top Left Logo */}
-          <div className="flex items-center justify-start shrink-0">
-            {/* eslint-disable-next-html-element-suppress */}
-            <img
-              src="/pdf-logo.png"
-              alt="Reach International"
-              className="h-10 sm:h-12 w-auto object-contain"
-            />
-          </div>
+      {/* 1. HEADER */}
+      <PDFReportHeader
+        title="MACHINE FLEET DIRECTORY REPORT"
+        subtitle="Enterprise Machinery Inventory, Meter Telemetry & Site Allocations"
+        metadataItems={[
+          { label: "Report Scope", value: filterLabel },
+          { label: "Total Machines", value: `${machines.length} Units` },
+          { label: "Export Date", value: displayDateTime },
+          { label: "Authorized By", value: "Operations Division" },
+        ]}
+      />
 
-          {/* Report Title */}
-          <div className="text-center min-w-0">
-            <h2 className="text-sm sm:text-base font-black uppercase text-neutral-900 tracking-wider text-center">
-              MACHINE FLEET DIRECTORY REPORT
-            </h2>
-            <p className="text-[9.5px] sm:text-[10.5px] text-neutral-600 font-semibold uppercase tracking-tight text-center">
-              Enterprise Machinery Inventory, Meter Telemetry & Site Allocations
-            </p>
-          </div>
+      {/* 2. KPI STRIP */}
+      <PDFKPIStrip
+        variant="dark"
+        items={[
+          { label: "Total Fleet", value: `${machines.length} Units` },
+          { label: "Available Fleet", value: `${totalAvailable} Avail`, valueColor: "text-emerald-400" },
+          { label: "On Rent", value: `${totalRented} Rented`, valueColor: "text-sky-400" },
+          { label: "Total Fleet HMR", value: `${Math.round(totalHmr * 10) / 10} hrs`, valueColor: "text-amber-400" },
+        ]}
+      />
 
-          {/* Right Spacer for Balance */}
-          <div className="hidden sm:block w-[110px] sm:w-[140px] shrink-0"></div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-center sm:justify-between gap-x-4 sm:gap-x-5 gap-y-1 text-[9.5px] sm:text-[10px] text-neutral-800 font-medium leading-tight pt-1 border-t border-neutral-200">
-          <div><strong>Report Scope:</strong> {filterLabel}</div>
-          <div><strong>Total Machines:</strong> {machines.length} Units</div>
-          <div><strong>Export Date:</strong> {displayDateTime}</div>
-          <div><strong>Authorized By:</strong> Operations Division</div>
-        </div>
-      </div>
-
-      {/* 2. KPI SUMMARY STRIP */}
-      <div className="grid grid-cols-4 gap-1 sm:gap-1.5 bg-neutral-900 text-white p-1.5 rounded-lg text-center font-mono">
-        <div>
-          <span className="text-[7.5px] sm:text-[8.5px] text-neutral-400 block font-sans font-extrabold uppercase truncate">
-            Total Fleet
-          </span>
-          <span className="text-[10px] sm:text-[11px] font-black">
-            {machines.length} Units
-          </span>
-        </div>
-        <div>
-          <span className="text-[7.5px] sm:text-[8.5px] text-neutral-400 block font-sans font-extrabold uppercase truncate">
-            Available Fleet
-          </span>
-          <span className="text-[10px] sm:text-[11px] font-black text-emerald-400">
-            {totalAvailable} Avail
-          </span>
-        </div>
-        <div>
-          <span className="text-[7.5px] sm:text-[8.5px] text-neutral-400 block font-sans font-extrabold uppercase truncate">
-            On Rent
-          </span>
-          <span className="text-[10px] sm:text-[11px] font-black text-sky-400">
-            {totalRented} Rented
-          </span>
-        </div>
-        <div>
-          <span className="text-[7.5px] sm:text-[8.5px] text-neutral-400 block font-sans font-extrabold uppercase truncate">
-            Total Fleet HMR
-          </span>
-          <span className="text-[10px] sm:text-[11px] font-black text-amber-400">
-            {Math.round(totalHmr * 10) / 10} hrs
-          </span>
-        </div>
-      </div>
-
-      {/* 3. DETAILED MACHINES TABLE */}
-      <div className="w-full overflow-x-auto custom-scrollbar print-table-wrap">
+      {/* 3. TABLE */}
+      <PDFTableWrapper>
         <table className="w-full text-left border border-neutral-900 border-collapse print-table min-w-[700px] sm:min-w-0">
           <thead>
             <tr className="bg-neutral-900 text-white font-bold text-[8px] uppercase tracking-wider">
@@ -272,58 +258,15 @@ function MachineDirectoryReportContent({
             )}
           </tbody>
         </table>
-      </div>
+      </PDFTableWrapper>
 
-      {/* 4. VERIFICATION SIGNATURES SECTION */}
-      <div className="grid grid-cols-3 gap-3 sm:gap-4 pt-3 border-t border-neutral-300 text-center text-[9.5px] text-neutral-600 print-signature-block">
-        {/* Column 1: Fleet Supervisor */}
-        <div className="flex flex-col items-center space-y-0.5">
-          <span className="font-extrabold text-neutral-900 text-[9.5px] uppercase">Prepared By</span>
-          <div className="w-28 sm:w-36 border-b border-neutral-400 mb-0.5 h-6 flex items-end justify-center font-sans text-neutral-900 text-[9.5px] font-bold">
-            Fleet Supervisor
-          </div>
-          <span className="font-bold text-neutral-800 text-[8.5px]">
-            (Machinery Operations)
-          </span>
-          <div className="flex items-center justify-between w-full max-w-[135px] text-[8px] text-neutral-700 pt-1 font-mono">
-            <span>Sign: _______</span>
-            <span>Date: _______</span>
-          </div>
-        </div>
-
-        {/* Column 2: Site Sign-Off */}
-        <div className="flex flex-col items-center space-y-0.5">
-          <span className="font-extrabold text-neutral-900 text-[9.5px] uppercase">Site Verification</span>
-          <div className="w-28 sm:w-36 border-b border-neutral-400 mb-0.5 h-6 flex items-end justify-center font-sans text-neutral-900 text-[9.5px] font-bold">
-            Client Representative
-          </div>
-          <span className="font-bold text-neutral-800 text-[8.5px]">
-            (Equipment Acceptance)
-          </span>
-          <div className="flex items-center justify-between w-full max-w-[135px] text-[8px] text-neutral-700 pt-1 font-mono">
-            <span>Sign: _______</span>
-            <span>Date: _______</span>
-          </div>
-        </div>
-
-        {/* Column 3: Approved By */}
-        <div className="flex flex-col items-center space-y-0.5">
-          <span className="font-extrabold text-neutral-900 text-[9.5px] uppercase">Verified & Approved By</span>
-          <div className="w-28 sm:w-36 border-b border-neutral-400 mb-0.5 h-6 flex items-end justify-center font-sans text-neutral-900 text-[9.5px] font-extrabold tracking-wider">
-            REACH INTERNATIONAL
-          </div>
-          <span className="font-bold text-neutral-800 text-[8.5px]">
-            (Service & Fleet Manager)
-          </span>
-          <div className="flex items-center justify-between w-full max-w-[135px] text-[8px] text-neutral-700 pt-1 font-mono">
-            <span>Sign: _______</span>
-            <span>Date: _______</span>
-          </div>
-        </div>
-      </div>
+      {/* 4. SIGNATURES */}
+      <PDFSignatureBlock columns={signatureColumns} />
     </div>
   );
 }
+
+// ─── Main Modal ──────────────────────────────────────────────────────────────
 
 export function PrintableMachineDirectoryModal({
   open,
@@ -348,7 +291,7 @@ export function PrintableMachineDirectoryModal({
     }
   }, [selectedIds]);
 
-  // Base pool of machines: selected machines or all machines
+  // Base pool of machines: selected or all
   const baseMachines = useSelectionOnly && selectedIds.length > 0
     ? machines.filter((m) => selectedIds.includes(m.id))
     : machines;
@@ -380,15 +323,10 @@ export function PrintableMachineDirectoryModal({
     totalHmr += Number(m.hour_meter) || 0;
   });
 
-  const handlePrint = () => {
-    const originalTitle = document.title;
+  const doPrint = () => {
     const prefix = useSelectionOnly ? `Machines-Selected-${filteredMachines.length}` : "Machine-Fleet-Directory";
     const pdfFileName = buildMachinesExportFileName(prefix, "pdf");
-    document.title = pdfFileName.replace(/\.pdf$/, "");
-    window.print();
-    setTimeout(() => {
-      document.title = originalTitle;
-    }, 1000);
+    handleBrowserPrint(pdfFileName);
   };
 
   const handleExportExcel = () => {
@@ -414,88 +352,18 @@ export function PrintableMachineDirectoryModal({
 
   return (
     <>
-      {/* Screen & Print Media Stylesheet */}
-      <style>{`
-        @media screen {
-          #printable-machines-document {
-            display: none !important;
-          }
-        }
-        @media print {
-          @page {
-            size: portrait;
-            margin: 5mm 8mm 5mm 8mm;
-          }
-          html, body {
-            background: #ffffff !important;
-            color: #000000 !important;
-            height: auto !important;
-            min-height: 0 !important;
-            overflow: visible !important;
-            position: static !important;
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-          body > *:not(#printable-machines-document) {
-            display: none !important;
-          }
-          #printable-machines-document,
-          #printable-machines-document * {
-            visibility: visible !important;
-          }
-          #printable-machines-document {
-            display: block !important;
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            height: auto !important;
-            min-height: 0 !important;
-            overflow: visible !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            border: none !important;
-            box-shadow: none !important;
-            background: white !important;
-            color: black !important;
-            z-index: 999999 !important;
-          }
-          .print-table-wrap {
-            overflow: visible !important;
-            width: 100% !important;
-          }
-          .print-table {
-            min-width: 0 !important;
-            width: 100% !important;
-            table-layout: fixed !important;
-          }
-          tr {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-          thead {
-            display: table-header-group !important;
-          }
-          .print-signature-block {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-          .no-print {
-            display: none !important;
-          }
-        }
-      `}</style>
+      {/* Centralized Print Stylesheet */}
+      <style>{getPrintStylesheet(PRINT_DOC_ID)}</style>
 
-      {/* Render Portal to document.body for clean print rendering */}
+      {/* Print Portal */}
       {mounted && open && createPortal(
-        <div id="printable-machines-document">
+        <div id={PRINT_DOC_ID}>
           <MachineDirectoryReportContent {...reportProps} />
         </div>,
         document.body
       )}
 
-      {/* Modal for Interactive Preview */}
+      {/* Preview Modal */}
       <Modal
         open={open}
         onClose={onClose}
@@ -534,7 +402,7 @@ export function PrintableMachineDirectoryModal({
               </button>
               <button
                 type="button"
-                onClick={handlePrint}
+                onClick={doPrint}
                 className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <Printer className="h-4 w-4" /> Print / Save as PDF

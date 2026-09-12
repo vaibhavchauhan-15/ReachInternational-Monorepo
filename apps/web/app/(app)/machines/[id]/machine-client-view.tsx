@@ -331,7 +331,7 @@ export function MachineClientView({
   const clientEmail = (client as any)?.email || machine.customer_email || "";
   const clientGstin = client?.gstin || "";
   const clientPan = client?.pan_number || "";
-  const clientAddress = client?.address || machine.customer_address || "";
+  const clientAddress = client?.street || client?.address || machine.customer_address || "";
   const clientCity = client?.city || machine.city || "";
   const clientDistrict = client?.district || "";
   const clientState = client?.state || machine.state || "";

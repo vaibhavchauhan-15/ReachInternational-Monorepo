@@ -5,50 +5,40 @@ import { createPortal } from "react-dom";
 import { Modal } from "@/components/ui";
 import type { User, Machine } from "@/lib/types/database";
 import type { OperatorHourLog } from "./OperatorDashboard";
-import { formatDate, formatExactTimestamp, splitExactTimestamp, formatTo12Hour, parseBreakdownString, getISTDateString } from "@reachinternational/utils";
+import { formatDate, formatExactTimestamp, splitExactTimestamp, parseBreakdownString } from "@reachinternational/utils";
 import {
-  exportOperatorLogsToExcel,
+  formatCompactTiming,
+  computeDurationHours,
+  resolvePeriodLabel,
+  handleBrowserPrint,
+  PDFReportHeader,
+  PDFKPIStrip,
+  PDFSignatureBlock,
+  PDFTableWrapper,
+} from "@/components/pdf";
+import {
   MONTH_NAMES,
-  getLogMonthNumber,
   getCurrentMonthNumber,
+  getLogMonthNumber,
   buildExportFileName,
-} from "@/lib/utils/operator-logs-export";
-import { CustomDatePicker } from "@/components/ui/CustomDatePicker";
+} from "@/lib/pdf/pdf-config";
+import { getPrintStylesheet } from "@/lib/pdf/pdf-print-styles";
+import { exportOperatorLogsToExcel } from "@/lib/utils/operator-logs-export";
+import { DateRangePicker } from "@/components/ui/DateRangePicker";
 import { Printer, FileSpreadsheet, Calendar } from "lucide-react";
+import { getISTDateString } from "@reachinternational/utils";
 
+// ─── Constants ───────────────────────────────────────────────────────────────
+const PRINT_DOC_ID = "printable-operator-logs-document";
+const PREVIEW_ID = "printable-operator-logs-document-preview";
+
+// ─── Interfaces ──────────────────────────────────────────────────────────────
 interface PrintableOperatorLogsModalProps {
   open: boolean;
   onClose: () => void;
   logs: OperatorHourLog[];
   user: User;
   assignedMachine?: Machine | null;
-}
-
-// Compute operating duration fallback
-function computeDurationHours(startStr?: string, endStr?: string): number {
-  const parseMins = (t?: string) => {
-    if (!t) return null;
-    const match = t.trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
-    if (!match) return null;
-    let h = parseInt(match[1], 10);
-    const m = parseInt(match[2], 10);
-    if (match[3] === "PM" && h < 12) h += 12;
-    if (match[3] === "AM" && h === 12) h = 0;
-    return h * 60 + m;
-  };
-  const sMins = parseMins(startStr);
-  const eMins = parseMins(endStr);
-  if (sMins === null || eMins === null) return 8;
-  let diff = eMins - sMins;
-  if (diff <= 0) diff += 24 * 60;
-  return Math.round((diff / 60) * 10) / 10;
-}
-
-// Compact timing range formatter with zero spaces (e.g. "06:00AM-06:00PM")
-function formatCompactTiming(startStr?: string, endStr?: string): string {
-  const formattedStart = formatTo12Hour(startStr) || "06:00 AM";
-  const formattedEnd = formatTo12Hour(endStr) || "02:00 PM";
-  return `${formattedStart.replace(/\s+/g, "")}-${formattedEnd.replace(/\s+/g, "")}`;
 }
 
 interface ReportContentProps {
@@ -63,6 +53,8 @@ interface ReportContentProps {
   totalBreakdowns: number;
 }
 
+// ─── Report Content ──────────────────────────────────────────────────────────
+
 function OperatorLogsReportContent({
   logs,
   user,
@@ -75,93 +67,76 @@ function OperatorLogsReportContent({
   totalBreakdowns,
 }: ReportContentProps) {
   const operatorName = user.full_name || "Operator";
-  const operatorEmail = user.email || "—";
   const operatorPhone = user.phone || "—";
+  const periodLabel = resolvePeriodLabel(selectedMonth, customStartDate, customEndDate);
 
-  let periodLabel = "All Months";
+  // ─── Metadata Items ───────────────────────────────────────────────
+  const metadataItems: { label: string; value: string }[] = [
+    { label: "Operator", value: operatorName },
+    { label: "Number", value: operatorPhone },
+  ];
   if (selectedMonth === "custom") {
-    if (customStartDate && customEndDate) {
-      periodLabel = `${formatDate(customStartDate)} to ${formatDate(customEndDate)}`;
-    } else if (customStartDate) {
-      periodLabel = `From ${formatDate(customStartDate)}`;
-    } else if (customEndDate) {
-      periodLabel = `Up to ${formatDate(customEndDate)}`;
-    } else {
-      periodLabel = "Custom Range";
-    }
+    metadataItems.push({ label: "Date Range", value: periodLabel });
   } else if (selectedMonth !== "all") {
-    const mObj = MONTH_NAMES.find((m) => m.value === selectedMonth);
-    if (mObj) periodLabel = mObj.label;
+    metadataItems.push({ label: "Month", value: periodLabel });
   }
+  if (assignedMachine) {
+    metadataItems.push({ label: "Machine", value: `${assignedMachine.machine_name} (${assignedMachine.machine_code})` });
+  }
+
+  // ─── Signature Columns ─────────────────────────────────────────────
+  const clientDisplayName =
+    (logs[0] as any)?.client?.client_name ||
+    (logs[0]?.machine as any)?.customer_name ||
+    assignedMachine?.customer_name ||
+    "Client Representative";
+
+  const clientLocationText =
+    logs[0]?.location ||
+    (assignedMachine as any)?.customer_address ||
+    (assignedMachine as any)?.city ||
+    "(Client Representative)";
+
+  const signatureColumns = [
+    {
+      heading: "Prepared By",
+      name: operatorName,
+      role: "(Machine Operator)",
+    },
+    {
+      heading: "Client Details & Sign-off",
+      name: clientDisplayName,
+      role: clientLocationText,
+    },
+    {
+      heading: "Verified & Approved By",
+      name: "REACH INTERNATIONAL",
+      role: "(Operations / Service Manager)",
+      nameUppercase: true,
+    },
+  ];
 
   return (
     <div className="bg-white text-black p-2.5 sm:p-4 rounded-xl border border-neutral-300 shadow-sm flex flex-col justify-between text-xs font-sans max-w-[210mm] mx-auto space-y-2 sm:space-y-2.5 w-full">
-      {/* ========================================================= */}
-      {/* 1. TOP HEADING & CONSOLIDATED METADATA STRIP              */}
-      {/* ========================================================= */}
-      <div className="pb-2 border-b-2 border-neutral-900 space-y-1.5">
-        <div className="grid grid-cols-[110px_1fr_110px] sm:grid-cols-[140px_1fr_140px] items-center gap-2">
-          {/* Top Left Logo */}
-          <div className="flex items-center justify-start shrink-0">
-            {/* eslint-disable-next-html-element-suppress */}
-            <img
-              src="/pdf-logo.png"
-              alt="Reach International"
-              className="h-10 sm:h-12 w-auto object-contain"
-            />
-          </div>
+      {/* 1. HEADER */}
+      <PDFReportHeader
+        title="OPERATOR DAILY MACHINE LOG REPORT"
+        metadataItems={metadataItems}
+      />
 
-          {/* Report Title (Middle/Center Aligned) */}
-          <div className="text-center min-w-0">
-            <h2 className="text-sm sm:text-base font-black uppercase text-neutral-900 tracking-wider text-center">
-              OPERATOR DAILY MACHINE LOG REPORT
-            </h2>
-          </div>
+      {/* 2. KPI STRIP */}
+      <PDFKPIStrip
+        variant="dark"
+        items={[
+          { label: "Total Logs", value: `${logs.length} Logs` },
+          { label: "Total Operating Hrs", value: `${Math.round(totalOpHours * 10) / 10} hrs`, valueColor: "text-sky-400" },
+          { label: "Total Overtime Hrs", value: `${Math.round(totalOtHours * 10) / 10} hrs`, valueColor: "text-amber-400" },
+          { label: "Breakdown Incidents", value: `${totalBreakdowns} Events`, valueColor: "text-rose-400" },
+        ]}
+      />
 
-          {/* Right Spacer for Perfect Centering Balance */}
-          <div className="hidden sm:block w-[110px] sm:w-[140px] shrink-0"></div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-center sm:justify-between gap-x-4 sm:gap-x-5 gap-y-1 text-[9.5px] sm:text-[10px] text-neutral-800 font-medium leading-tight pt-1 border-t border-neutral-200">
-          <div><strong>Operator:</strong> {operatorName}</div>
-          <div><strong>Number:</strong> {operatorPhone}</div>
-          {selectedMonth === "custom" ? (
-            <div><strong>Date Range:</strong> {periodLabel}</div>
-          ) : selectedMonth !== "all" ? (
-            <div><strong>Month:</strong> {periodLabel}</div>
-          ) : null}
-          {assignedMachine && (
-            <div><strong>Machine:</strong> {assignedMachine.machine_name} ({assignedMachine.machine_code})</div>
-          )}
-        </div>
-      </div>
-
-      {/* ========================================================= */}
-      {/* 2. LOGS KPI SUMMARY STRIP                                */}
-      {/* ========================================================= */}
-      <div className="grid grid-cols-4 gap-1 sm:gap-1.5 bg-neutral-900 text-white p-1.5 rounded-lg text-center font-mono">
-        <div>
-          <span className="text-[7.5px] sm:text-[8.5px] text-neutral-400 block font-sans font-extrabold uppercase truncate">Total Logs</span>
-          <span className="text-[10px] sm:text-[11px] font-black">{logs.length} Logs</span>
-        </div>
-        <div>
-          <span className="text-[7.5px] sm:text-[8.5px] text-neutral-400 block font-sans font-extrabold uppercase truncate">Total Operating Hrs</span>
-          <span className="text-[10px] sm:text-[11px] font-black text-sky-400">{Math.round(totalOpHours * 10) / 10} hrs</span>
-        </div>
-        <div>
-          <span className="text-[7.5px] sm:text-[8.5px] text-neutral-400 block font-sans font-extrabold uppercase truncate">Total Overtime Hrs</span>
-          <span className="text-[10px] sm:text-[11px] font-black text-amber-400">{Math.round(totalOtHours * 10) / 10} hrs</span>
-        </div>
-        <div>
-          <span className="text-[7.5px] sm:text-[8.5px] text-neutral-400 block font-sans font-extrabold uppercase truncate">Breakdown Incidents</span>
-          <span className="text-[10px] sm:text-[11px] font-black text-rose-400">{totalBreakdowns} Events</span>
-        </div>
-      </div>
-
-      {/* ========================================================= */}
-      {/* 3. DETAILED MACHINE LOGS RESPONSIVE TABLE                 */}
-      {/* ========================================================= */}
-      <div className="w-full overflow-x-auto custom-scrollbar print-table-wrap">
+      {/* 3. TABLE */}
+      <PDFTableWrapper>
         <table className="w-full text-left border border-neutral-900 border-collapse print-table min-w-[660px] sm:min-w-0">
           <thead>
             <tr className="bg-neutral-900 text-white font-bold text-[8px] uppercase tracking-wider">
@@ -269,76 +244,15 @@ function OperatorLogsReportContent({
             )}
           </tbody>
         </table>
-      </div>
+      </PDFTableWrapper>
 
-      {/* ========================================================= */}
-      {/* 4. VERIFICATION & SIGNATURES SECTION                      */}
-      {/* ========================================================= */}
-      {(() => {
-        const clientDisplayName =
-          (logs[0] as any)?.client?.client_name ||
-          (logs[0]?.machine as any)?.customer_name ||
-          assignedMachine?.customer_name ||
-          "Client Representative";
-
-        const clientLocationText =
-          logs[0]?.location ||
-          (assignedMachine as any)?.customer_address ||
-          (assignedMachine as any)?.city ||
-          "(Client Representative)";
-
-        return (
-          <div className="grid grid-cols-3 gap-3 sm:gap-4 pt-3 border-t border-neutral-300 text-center text-[9.5px] text-neutral-600 print-signature-block">
-            {/* Column 1: Prepared By */}
-            <div className="flex flex-col items-center space-y-0.5">
-              <span className="font-extrabold text-neutral-900 text-[9.5px] uppercase">Prepared By</span>
-              <div className="w-28 sm:w-36 border-b border-neutral-400 mb-0.5 h-6 flex items-end justify-center font-serif text-neutral-800 text-[10.5px] italic font-bold">
-                {operatorName}
-              </div>
-              <span className="font-bold text-neutral-800 text-[8.5px]">
-                (Machine Operator)
-              </span>
-              <div className="flex items-center justify-between w-full max-w-[135px] text-[8px] text-neutral-700 pt-1 font-mono">
-                <span>Sign: _______</span>
-                <span>Date: _______</span>
-              </div>
-            </div>
-
-            {/* Column 2: Client Details & Sign-Off */}
-            <div className="flex flex-col items-center space-y-0.5">
-              <span className="font-extrabold text-neutral-900 text-[9.5px] uppercase">Client Details & Sign-off</span>
-              <div className="w-28 sm:w-36 border-b border-neutral-400 mb-0.5 h-6 flex items-end justify-center font-sans text-neutral-900 text-[9.5px] font-bold truncate px-1">
-                {clientDisplayName}
-              </div>
-              <span className="font-bold text-neutral-800 text-[8.5px] truncate max-w-[150px]">
-                {clientLocationText}
-              </span>
-              <div className="flex items-center justify-between w-full max-w-[135px] text-[8px] text-neutral-700 pt-1 font-mono">
-                <span>Sign: _______</span>
-                <span>Date: _______</span>
-              </div>
-            </div>
-
-            {/* Column 3: Verified & Approved By */}
-            <div className="flex flex-col items-center space-y-0.5">
-              <span className="font-extrabold text-neutral-900 text-[9.5px] uppercase">Verified & Approved By</span>
-              <div className="w-28 sm:w-36 border-b border-neutral-400 mb-0.5 h-6 flex items-end justify-center font-sans text-neutral-900 text-[9.5px] font-extrabold tracking-wider">
-                REACH INTERNATIONAL
-              </div>
-              <span className="font-bold text-neutral-800 text-[8.5px]">
-                (Operations / Service Manager)
-              </span>
-              <div className="flex items-center justify-between w-full max-w-[135px] text-[8px] text-neutral-700 pt-1 font-mono">
-                <span>Sign: _______</span>
-                <span>Date: _______</span>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {/* 4. SIGNATURES */}
+      <PDFSignatureBlock columns={signatureColumns} />
     </div>
   );
 }
+
+// ─── Main Modal ──────────────────────────────────────────────────────────────
 
 export function PrintableOperatorLogsModal({
   open,
@@ -353,14 +267,14 @@ export function PrintableOperatorLogsModal({
     try {
       const today = getISTDateString();
       return today.slice(0, 7) + "-01";
-    } catch (e) {
+    } catch {
       return "";
     }
   });
   const [customEndDate, setCustomEndDate] = useState<string>(() => {
     try {
       return getISTDateString();
-    } catch (e) {
+    } catch {
       return "";
     }
   });
@@ -382,7 +296,7 @@ export function PrintableOperatorLogsModal({
     return getLogMonthNumber(log.log_date) === selectedMonth;
   });
 
-  // Aggregate KPI Metrics for filtered logs
+  // Aggregate KPI Metrics
   let totalOpHours = 0;
   let totalOtHours = 0;
   let totalBreakdowns = 0;
@@ -396,7 +310,7 @@ export function PrintableOperatorLogsModal({
     totalOtHours += ot;
   });
 
-  const handlePrint = () => {
+  const doPrint = () => {
     const pdfFileName = buildExportFileName(
       user.full_name || "Operator",
       selectedMonth,
@@ -404,12 +318,7 @@ export function PrintableOperatorLogsModal({
       customStartDate,
       customEndDate
     );
-    const originalTitle = document.title;
-    document.title = pdfFileName.replace(/\.pdf$/, "");
-    window.print();
-    setTimeout(() => {
-      document.title = originalTitle;
-    }, 1000);
+    handleBrowserPrint(pdfFileName);
   };
 
   const handleExportExcel = () => {
@@ -437,88 +346,18 @@ export function PrintableOperatorLogsModal({
 
   return (
     <>
-      {/* Screen & Print Media Stylesheet */}
-      <style>{`
-        @media screen {
-          #printable-operator-logs-document {
-            display: none !important;
-          }
-        }
-        @media print {
-          @page {
-            size: portrait;
-            margin: 5mm 8mm 5mm 8mm;
-          }
-          html, body {
-            background: #ffffff !important;
-            color: #000000 !important;
-            height: auto !important;
-            min-height: 0 !important;
-            overflow: visible !important;
-            position: static !important;
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-          body > *:not(#printable-operator-logs-document) {
-            display: none !important;
-          }
-          #printable-operator-logs-document,
-          #printable-operator-logs-document * {
-            visibility: visible !important;
-          }
-          #printable-operator-logs-document {
-            display: block !important;
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            height: auto !important;
-            min-height: 0 !important;
-            overflow: visible !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            border: none !important;
-            box-shadow: none !important;
-            background: white !important;
-            color: black !important;
-            z-index: 999999 !important;
-          }
-          .print-table-wrap {
-            overflow: visible !important;
-            width: 100% !important;
-          }
-          .print-table {
-            min-width: 0 !important;
-            width: 100% !important;
-            table-layout: fixed !important;
-          }
-          tr {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-          thead {
-            display: table-header-group !important;
-          }
-          .print-signature-block {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-          .no-print {
-            display: none !important;
-          }
-        }
-      `}</style>
+      {/* Centralized Print Stylesheet */}
+      <style>{getPrintStylesheet(PRINT_DOC_ID)}</style>
 
-      {/* Render Portal to document.body for clean, unconstrained print rendering */}
+      {/* Print Portal */}
       {mounted && open && createPortal(
-        <div id="printable-operator-logs-document">
+        <div id={PRINT_DOC_ID}>
           <OperatorLogsReportContent {...reportProps} />
         </div>,
         document.body
       )}
 
-      {/* Render Modal for On-Screen Interactive Preview */}
+      {/* Preview Modal */}
       <Modal
         open={open}
         onClose={onClose}
@@ -545,7 +384,7 @@ export function PrintableOperatorLogsModal({
               </button>
               <button
                 type="button"
-                onClick={handlePrint}
+                onClick={doPrint}
                 className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
               >
                 <Printer className="h-4 w-4" /> Print / Save as PDF
@@ -580,44 +419,27 @@ export function PrintableOperatorLogsModal({
               </div>
             </div>
 
-            {/* Collapsible Custom Date Range Picker */}
             {selectedMonth === "custom" && (
-              <div className="pt-2.5 border-t border-[var(--color-hairline)] grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-[11px] font-bold text-[var(--color-ink)] mb-1">
-                    Start Date
-                  </label>
-                  <CustomDatePicker
-                    value={customStartDate}
-                    onChange={(val) => setCustomStartDate(val)}
-                    allowAnyPast
-                    allowAnyFuture
-                    showWindowBadge={false}
-                    showRelativeBadge={false}
-                    placeholder="Select start date"
-                    className="w-full"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-[var(--color-ink)] mb-1">
-                    End Date
-                  </label>
-                  <CustomDatePicker
-                    value={customEndDate}
-                    onChange={(val) => setCustomEndDate(val)}
-                    allowAnyPast
-                    allowAnyFuture
-                    showWindowBadge={false}
-                    showRelativeBadge={false}
-                    placeholder="Select end date"
-                    className="w-full"
-                  />
-                </div>
+              <div className="pt-2.5 border-t border-[var(--color-hairline)]">
+                <DateRangePicker
+                  label="Select Date Range"
+                  value={{
+                    startDate: customStartDate,
+                    endDate: customEndDate,
+                  }}
+                  onChange={({ startDate, endDate }) => {
+                    setCustomStartDate(startDate);
+                    setCustomEndDate(endDate);
+                  }}
+                  allowAnyPast
+                  allowAnyFuture
+                  className="w-full"
+                />
               </div>
             )}
           </div>
 
-          <div id="printable-operator-logs-document-preview" className="max-w-full overflow-x-auto custom-scrollbar">
+          <div id={PREVIEW_ID} className="max-w-full overflow-x-auto custom-scrollbar">
             <OperatorLogsReportContent {...reportProps} />
           </div>
         </div>
@@ -625,5 +447,3 @@ export function PrintableOperatorLogsModal({
     </>
   );
 }
-
-

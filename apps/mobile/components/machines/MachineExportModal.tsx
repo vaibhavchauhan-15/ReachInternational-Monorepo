@@ -19,6 +19,12 @@ import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { formatDate, formatTo12Hour } from '@reachinternational/utils';
 import { notifyMachineExported } from '../../lib/notifications';
+import {
+  buildPdfHtmlHeader,
+  buildPdfHtmlKpiStrip,
+  buildPdfHtmlSignatureBlock,
+  buildPdfHtmlWrapper,
+} from '../../lib/pdf-html-templates';
 
 export interface MachineExportModalProps {
   visible: boolean;
@@ -137,7 +143,7 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
         const serial = m.serial_number || '—';
         const category = m.category?.name || m.category_name || 'Industrial';
         const clientName = m.client?.company_name || m.customer_name || 'In Yard / Depo';
-        const site = m.client?.address || m.current_location || m.site_address || '—';
+        const site = [m.client?.street, m.client?.city, m.client?.district, m.client?.state, m.client?.pincode].filter(Boolean).join(', ') || m.client?.address || m.current_location || m.site_address || '—';
         const hmr = m.hour_meter ?? m.total_run_hours ?? m.hmr ?? 0;
         const rentalStatus = formatRentalStatus(m.status || m.rental_status);
         const healthStatus = formatHealthStatus(m.health_status);
@@ -174,156 +180,69 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
       })
       .join('');
 
-    return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>MACHINE FLEET DIRECTORY REPORT</title>
-          <style>
-            @page {
-              size: A4 landscape;
-              margin: 8mm;
-            }
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-              margin: 0;
-              padding: 12px;
-              color: #171717;
-              background: #ffffff;
-            }
-            .header-strip {
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              border-bottom: 2px solid #171717;
-              padding-bottom: 10px;
-              margin-bottom: 12px;
-            }
-            .title {
-              font-size: 18px;
-              font-weight: 900;
-              text-transform: uppercase;
-              letter-spacing: 0.5px;
-              margin: 0;
-            }
-            .subtitle {
-              font-size: 10px;
-              color: #737373;
-              margin-top: 2px;
-            }
-            .meta-strip {
-              display: flex;
-              gap: 16px;
-              font-size: 10px;
-              color: #525252;
-              margin-top: 6px;
-            }
-            .kpi-strip {
-              display: flex;
-              gap: 8px;
-              background: #171717;
-              color: #ffffff;
-              padding: 8px 12px;
-              border-radius: 6px;
-              margin-bottom: 12px;
-            }
-            .kpi-box {
-              flex: 1;
-              text-align: center;
-              border-right: 1px solid #333;
-            }
-            .kpi-box:last-child {
-              border-right: none;
-            }
-            .kpi-label {
-              font-size: 8px;
-              text-transform: uppercase;
-              color: #a3a3a3;
-              font-weight: 800;
-            }
-            .kpi-value {
-              font-size: 13px;
-              font-weight: 800;
-              margin-top: 2px;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-            }
-            th {
-              background: #f5f5f5;
-              padding: 8px;
-              font-size: 10px;
-              font-weight: 800;
-              text-transform: uppercase;
-              border-bottom: 2px solid #e5e5e5;
-              color: #404040;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header-strip">
-            <div>
-              <h1 class="title">MACHINE FLEET DIRECTORY REPORT</h1>
-              <div class="subtitle">ReachInternational Enterprise Machinery Inventory & Telemetry</div>
-              <div class="meta-strip">
-                <span><strong>Scope:</strong> ${filterLabel} (${filteredMachines.length} Units)</span>
-                <span><strong>Export Date:</strong> ${exportDateTime}</span>
-                <span><strong>Authorized:</strong> Operations Management</span>
-              </div>
-            </div>
-          </div>
+    const headerHtml = buildPdfHtmlHeader({
+      title: 'MACHINE FLEET DIRECTORY REPORT',
+      subtitle: 'ReachInternational Enterprise Machinery Inventory & Telemetry',
+      metaItems: [
+        { label: 'Scope', value: `${filterLabel} (${filteredMachines.length} Units)` },
+        { label: 'Export Date', value: exportDateTime },
+        { label: 'Authorized', value: 'Operations Management' },
+      ],
+    });
 
-          <div class="kpi-strip">
-            <div class="kpi-box">
-              <div class="kpi-label">Total Fleet</div>
-              <div class="kpi-value">${metrics.total} Units</div>
-            </div>
-            <div class="kpi-box">
-              <div class="kpi-label">Available</div>
-              <div class="kpi-value" style="color: #4ade80;">${metrics.available}</div>
-            </div>
-            <div class="kpi-box">
-              <div class="kpi-label">On Rent</div>
-              <div class="kpi-value" style="color: #38bdf8;">${metrics.rented}</div>
-            </div>
-            <div class="kpi-box">
-              <div class="kpi-label">Breakdown</div>
-              <div class="kpi-value" style="color: #f87171;">${metrics.breakdown}</div>
-            </div>
-            <div class="kpi-box">
-              <div class="kpi-label">Maintenance</div>
-              <div class="kpi-value" style="color: #fbbf24;">${metrics.maintenance}</div>
-            </div>
-            <div class="kpi-box">
-              <div class="kpi-label">Total Fleet Hours</div>
-              <div class="kpi-value">${metrics.totalHmr} hrs</div>
-            </div>
-          </div>
+    const kpiStripHtml = buildPdfHtmlKpiStrip([
+      { label: 'Total Fleet', value: `${metrics.total} Units` },
+      { label: 'Available', value: String(metrics.available), color: '#15803d' },
+      { label: 'On Rent', value: String(metrics.rented), color: '#0369a1' },
+      { label: 'Breakdown', value: String(metrics.breakdown), color: '#be123c' },
+      { label: 'Maintenance', value: String(metrics.maintenance), color: '#b45309' },
+      { label: 'Total Fleet Hours', value: `${metrics.totalHmr} hrs` },
+    ]);
 
-          <table>
-            <thead>
-              <tr>
-                <th style="width: 30px; text-align: center;">#</th>
-                <th style="text-align: left;">Code</th>
-                <th style="text-align: left;">Model</th>
-                <th style="text-align: left;">Serial No</th>
-                <th style="text-align: left;">Category</th>
-                <th style="text-align: left;">Client & Location</th>
-                <th style="text-align: center;">Meter (HMR)</th>
-                <th style="text-align: center;">Rental</th>
-                <th style="text-align: center;">Health</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml}
-            </tbody>
-          </table>
-        </body>
-      </html>
+    const tableHtml = `
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 32px; text-align: center;">#</th>
+            <th style="text-align: left;">Code</th>
+            <th style="text-align: left;">Model</th>
+            <th style="text-align: left;">Serial No</th>
+            <th style="text-align: left;">Category</th>
+            <th style="text-align: left;">Client & Location</th>
+            <th style="text-align: center;">Meter (HMR)</th>
+            <th style="text-align: center;">Rental</th>
+            <th style="text-align: center;">Health</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml || '<tr><td colspan="9" style="text-align:center; padding: 20px; color:#737373;">No machines found matching criteria.</td></tr>'}
+        </tbody>
+      </table>
     `;
+
+    const signaturesHtml = buildPdfHtmlSignatureBlock([
+      {
+        title: 'Prepared By',
+        name: 'FLEET SUPERVISOR',
+        subtitle: '(Machine Fleet Management)',
+      },
+      {
+        title: 'Inventory Scope',
+        name: filterLabel.toUpperCase(),
+        subtitle: `Total: ${filteredMachines.length} Machinery Units`,
+      },
+      {
+        title: 'Verified &amp; Approved By',
+        name: 'REACH INTERNATIONAL',
+        subtitle: '(Operations / Service Manager)',
+      },
+    ]);
+
+    return buildPdfHtmlWrapper({
+      title: 'MACHINE FLEET DIRECTORY REPORT',
+      bodyContent: `${headerHtml}\n${kpiStripHtml}\n${tableHtml}\n${signaturesHtml}`,
+      orientation: 'landscape',
+    });
   };
 
   const handleExportPdf = async () => {
@@ -390,7 +309,7 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
         `"${formatRentalStatus(m.status || m.rental_status)}"`,
         `"${formatHealthStatus(m.health_status)}"`,
         `"${(m.client?.company_name || m.customer_name || 'In Yard').replace(/"/g, '""')}"`,
-        `"${(m.client?.address || m.current_location || m.site_address || '').replace(/"/g, '""')}"`,
+        `"${([m.client?.street, m.client?.city, m.client?.district, m.client?.state, m.client?.pincode].filter(Boolean).join(', ') || m.client?.address || m.current_location || m.site_address || '').replace(/"/g, '""')}"`,
         String(m.hour_meter ?? m.total_run_hours ?? m.hmr ?? 0),
         String(m.year_of_mfg || m.manufacture_year || '—'),
       ]);

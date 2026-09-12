@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useTransition, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   AnimatedClock,
   AnimatedMapPin,
@@ -43,8 +44,8 @@ import {
   calculateAdjustedHours,
   formatShiftTimingRange,
 } from "@reachinternational/utils";
-import { CustomDatePicker } from "@/components/ui/CustomDatePicker";
-import { Printer, Clock, ShieldAlert, Check, UserPlus, AlertCircle, AlertTriangle, Info, Sun, Moon, Users, Filter, ChevronDown, RefreshCw, Phone, UserCheck, Search, X, User as UserIcon, Truck, Calendar } from "lucide-react";
+import { DateRangePicker } from "@/components/ui/DateRangePicker";
+import { Printer, Clock, ShieldAlert, Check, UserPlus, AlertCircle, AlertTriangle, Info, Sun, Moon, Users, Filter, ChevronDown, RefreshCw, Phone, UserCheck, Search, X, User as UserIcon, Truck, Calendar, Building2, MapPin, Mail, Zap, FileText, Loader2 } from "lucide-react";
 
 export interface OperationsClientProps {
   machines: Machine[];
@@ -70,11 +71,13 @@ export interface OperationsClientProps {
   initialViewMode?: "machine" | "client" | "operator";
   initialMachineId?: string;
   initialClientId?: string;
+  mostRecentClientId?: string;
   initialOperatorId?: string;
   initialMonth?: string;
   initialCustomStart?: string;
   initialCustomEnd?: string;
   initialSearch?: string;
+  initialSite?: string;
   initialSort?: "date-desc" | "date-asc";
 }
 
@@ -93,6 +96,21 @@ export function formatMachineSelectLabel(m: {
   const serial = m.serial_number && m.serial_number !== code ? `S/N: ${m.serial_number}` : null;
   const details = [model, serial].filter(Boolean).join(" — ");
   return details ? `${code} (${details})` : code;
+}
+
+/**
+ * Format client full address: street + city + district + state + pincode.
+ * Treats these 5 fields as the single canonical address of the client site.
+ */
+export function formatClientFullAddress(c?: any): string {
+  if (!c) return "";
+  const street = (c.street || "").trim();
+  const city = (c.city || "").trim();
+  const district = (c.district || "").trim();
+  const state = (c.state || "").trim();
+  const pincode = (c.pincode || "").trim();
+  const parts = [street, city, district, state, pincode].filter(Boolean);
+  return parts.join(", ");
 }
 
 function OperationsLogTableSkeletonRows({ colSpan = 8, count = 5 }: { colSpan?: number; count?: number }) {
@@ -193,11 +211,13 @@ export function OperationsClient({
   initialViewMode,
   initialMachineId,
   initialClientId,
+  mostRecentClientId,
   initialOperatorId,
   initialMonth,
   initialCustomStart,
   initialCustomEnd,
   initialSearch,
+  initialSite,
   initialSort,
 }: OperationsClientProps) {
   const router = useRouter();
@@ -299,13 +319,13 @@ export function OperationsClient({
   const [logsSelectedClientId, setLogsSelectedClientId] = useState<string>(
     initialClientId || ""
   );
-  const [logsSelectedSite, setLogsSelectedSite] = useState<string>("all");
+  const [logsSelectedSite, setLogsSelectedSite] = useState<string>(initialSite || "");
   const [logsSelectedClientMachineId, setLogsSelectedClientMachineId] = useState<string>("all");
   const [logsSelectedOperatorId, setLogsSelectedOperatorId] = useState<string>(
     initialOperatorId || ""
   );
   const [logsSelectedMonth, setLogsSelectedMonth] = useState<string>(
-    initialMonth !== undefined ? initialMonth : getCurrentMonthValue()
+    initialMonth ? initialMonth : getCurrentMonthValue()
   );
   const [logsCustomStartDate, setLogsCustomStartDate] = useState<string>(() => {
     if (initialCustomStart) return initialCustomStart;
@@ -327,6 +347,62 @@ export function OperationsClient({
   const [searchInput, setSearchInput] = useState<string>(initialSearch || "");
   const [showSupervisorPrintModal, setShowSupervisorPrintModal] = useState(false);
 
+  // Synchronize state with URL props when route navigation updates
+  useEffect(() => {
+    if (initialViewMode) {
+      setLogsViewMode(initialViewMode);
+    }
+  }, [initialViewMode]);
+
+  useEffect(() => {
+    setLogsSelectedClientId(initialClientId || "");
+  }, [initialClientId]);
+
+  useEffect(() => {
+    if (initialMachineId) {
+      setLogsSelectedMachineId(initialMachineId);
+      setLogsSelectedClientMachineId(initialMachineId);
+    } else {
+      setLogsSelectedClientMachineId("all");
+    }
+  }, [initialMachineId]);
+
+  useEffect(() => {
+    if (initialMonth !== undefined) {
+      setLogsSelectedMonth(initialMonth || getCurrentMonthValue());
+    }
+  }, [initialMonth]);
+
+  useEffect(() => {
+    if (initialSite !== undefined) {
+      setLogsSelectedSite(initialSite || "");
+    }
+  }, [initialSite]);
+
+  useEffect(() => {
+    if (initialOperatorId) {
+      setLogsSelectedOperatorId(initialOperatorId);
+    }
+  }, [initialOperatorId]);
+
+  useEffect(() => {
+    if (initialCustomStart) {
+      setLogsCustomStartDate(initialCustomStart);
+    }
+  }, [initialCustomStart]);
+
+  useEffect(() => {
+    if (initialCustomEnd) {
+      setLogsCustomEndDate(initialCustomEnd);
+    }
+  }, [initialCustomEnd]);
+
+  // Collapsible section states (Default: COLLAPSED condition per user feedback)
+  const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
+  const [isClientSummaryExpanded, setIsClientSummaryExpanded] = useState(false);
+  const [isMachineSummaryExpanded, setIsMachineSummaryExpanded] = useState(false);
+  const [isOperatorSummaryExpanded, setIsOperatorSummaryExpanded] = useState(false);
+
   // URL-driven query param synchronizer
   const handleFilterChange = (updates: Record<string, string | number | undefined>) => {
     const current = new URLSearchParams(Array.from(searchParams.entries()));
@@ -336,7 +412,11 @@ export function OperationsClient({
     }
 
     Object.entries(updates).forEach(([key, val]) => {
-      if (val === undefined || val === "" || (key !== "tab" && val === "all")) {
+      if (
+        val === undefined ||
+        val === "" ||
+        (key !== "tab" && key !== "month" && val === "all")
+      ) {
         current.delete(key);
       } else {
         current.set(key, String(val));
@@ -357,15 +437,29 @@ export function OperationsClient({
     handleFilterChange({ page: newPage });
   };
 
+  // Search loading & debounce state
+  const [isSearchPending, setIsSearchPending] = useState(false);
+
   // Debounced search effect (300ms)
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchInput !== (initialSearch || "")) {
+    if (searchInput !== (initialSearch || "")) {
+      setIsSearchPending(true);
+      const timer = setTimeout(() => {
         handleFilterChange({ search: searchInput || undefined, page: 1 });
-      }
-    }, 300);
-    return () => clearTimeout(timer);
+      }, 300);
+      return () => clearTimeout(timer);
+    } else if (!isPending) {
+      setIsSearchPending(false);
+    }
   }, [searchInput]);
+
+  useEffect(() => {
+    if (!isPending && searchInput === (initialSearch || "")) {
+      setIsSearchPending(false);
+    }
+  }, [isPending, initialSearch]);
+
+  const isSearching = isSearchPending || searchInput !== (initialSearch || "");
 
   // Derived ordered machines list (ordered by most recent activity in logs)
   const logMachineIdsInOrder = Array.from(new Set(hourLogs.map((l) => l.machine_id).filter(Boolean)));
@@ -385,6 +479,12 @@ export function OperationsClient({
     (hourLogs.find((l) => l.machine_id === activeMachineId)?.machine as any) ||
     orderedMachines[0];
 
+  const activeMachineName =
+    activeMachineObj?.machine_name ||
+    activeMachineObj?.model ||
+    activeMachineObj?.machine_code ||
+    "";
+
   // Derived active operators list (strictly role=operator and status=active)
   const activeOperators = useMemo(
     () => operators.filter((op) => op.role === "operator" && (op.status === "active" || !op.status)),
@@ -402,6 +502,16 @@ export function OperationsClient({
       ? logsSelectedOperatorId
       : orderedOperators[0]?.id || "";
 
+  const activeOperatorObj =
+    orderedOperators.find((op) => op.id === activeOperatorId) ||
+    operators.find((op) => op.id === activeOperatorId) ||
+    (hourLogs.find((l) => l.operator_id === activeOperatorId)?.operator as any);
+
+  const activeOperatorName =
+    activeOperatorObj?.full_name ||
+    activeOperatorObj?.name ||
+    "";
+
   // Comprehensive clients list derived from dbClients and hourLogs/machines
   const allClientsList = useMemo(() => {
     const clientsMap = new Map<string, any>();
@@ -409,8 +519,11 @@ export function OperationsClient({
     // 1. Seed with database clients
     (dbClients || []).forEach((c) => {
       const name = c.company_name || c.client_name || (c as any).name || "Client";
+      const fullAddr = formatClientFullAddress(c);
       clientsMap.set(c.id, {
         ...c,
+        street: c.street || "",
+        address: fullAddr,
         client_name: name,
         company_name: name,
         name,
@@ -422,15 +535,19 @@ export function OperationsClient({
       const c = (l as any).client;
       if (c && c.id && !clientsMap.has(c.id)) {
         const name = c.company_name || c.client_name || "Client";
+        const fullAddr = formatClientFullAddress(c);
         clientsMap.set(c.id, {
           id: c.id,
           code: c.code,
+          street: c.street || "",
           client_name: name,
           company_name: name,
           name: name,
           city: c.city,
+          district: c.district,
           state: c.state,
-          address: c.address,
+          pincode: c.pincode,
+          address: fullAddr,
           phone: c.phone,
         });
       }
@@ -441,15 +558,19 @@ export function OperationsClient({
       const c = (m as any).client;
       if (c && c.id && !clientsMap.has(c.id)) {
         const name = c.company_name || c.client_name || "Client";
+        const fullAddr = formatClientFullAddress(c);
         clientsMap.set(c.id, {
           id: c.id,
           code: c.code,
+          street: c.street || "",
           client_name: name,
           company_name: name,
           name: name,
           city: c.city,
+          district: c.district,
           state: c.state,
-          address: c.address,
+          pincode: c.pincode,
+          address: fullAddr,
           phone: c.phone,
         });
       }
@@ -473,6 +594,12 @@ export function OperationsClient({
       if (found) return found;
     }
 
+    // Default to the most recent used client
+    if (mostRecentClientId) {
+      const recent = allClientsList.find((c) => c.id === mostRecentClientId);
+      if (recent) return recent;
+    }
+
     // Default to the client that has active hour logs, so supervisor immediately sees records
     const clientWithLogs = allClientsList.find((c) =>
       hourLogs.some(
@@ -484,7 +611,7 @@ export function OperationsClient({
       )
     );
     return clientWithLogs || allClientsList[0];
-  }, [allClientsList, logsSelectedClientId, hourLogs]);
+  }, [allClientsList, logsSelectedClientId, mostRecentClientId, hourLogs]);
 
   const activeClientId = activeClient?.id || "";
   const activeClientName = activeClient?.company_name || activeClient?.client_name || activeClient?.name || "";
@@ -524,44 +651,105 @@ export function OperationsClient({
     });
   }, [machines, activeClientId, activeClientName, clientMachineIdsFromLogs]);
 
-  // Derived unique site locations for active selected client
+  // Derived unique site locations for active selected client (Unified Address: Street + City + District + State + Pincode)
   const clientSites = useMemo(() => {
     const sites = new Set<string>();
-    if (activeClient?.city && activeClient?.state) {
-      sites.add(`${activeClient.city}, ${activeClient.state}`);
-    } else if (activeClient?.city) {
-      sites.add(activeClient.city);
-    } else if (activeClient?.address) {
-      sites.add(activeClient.address);
+
+    // 0. Include precomputed distinct sites for this client from database and logs
+    if (activeClient?.sites && Array.isArray(activeClient.sites)) {
+      activeClient.sites.forEach((s: string) => {
+        if (s && s.trim()) sites.add(s.trim());
+      });
     }
 
-    clientMachines.forEach((m) => {
-      const addr = (m as any)?.customer_address;
-      const city = (m as any)?.city;
-      if (addr && city) sites.add(`${addr}, ${city}`);
-      else if (addr) sites.add(addr);
-      else if (city) sites.add(city);
+    // 1. Gather all site locations from all client records matching this company name
+    // (Supports multi-site architecture: same client company, distinct site location per client record)
+    const matchingClients = allClientsList.filter(
+      (c) =>
+        (activeClientId && c.id === activeClientId) ||
+        (activeClientName &&
+          ((c.company_name && c.company_name.toLowerCase().trim() === activeClientName.toLowerCase().trim()) ||
+           (c.client_name && c.client_name.toLowerCase().trim() === activeClientName.toLowerCase().trim())))
+    );
+
+    matchingClients.forEach((c) => {
+      const fullAddr = formatClientFullAddress(c);
+      if (fullAddr) sites.add(fullAddr);
     });
 
+    if (activeDbClient || activeClient) {
+      const primaryAddr = formatClientFullAddress(activeDbClient || activeClient);
+      if (primaryAddr) sites.add(primaryAddr);
+    }
+
+    // 2. Locations from matching client logs
     hourLogs.forEach((l) => {
       const isClientLog =
         (activeClientId && (l.client_id === activeClientId || (l as any)?.client?.id === activeClientId)) ||
         (activeClientName && ((l as any)?.client?.client_name || (l as any)?.client?.company_name || "").toLowerCase().trim() === activeClientName.toLowerCase().trim()) ||
         clientMachines.some((m) => m.id === l.machine_id);
 
-      if (isClientLog && l.location) {
-        sites.add(l.location);
+      if (isClientLog && l.location && l.location.trim()) {
+        const loc = l.location.trim();
+        // Do not add raw partial fragments if already covered by known canonical site addresses
+        const isFragmentOfKnownSite = Array.from(sites).some(
+          (site) => site.toLowerCase().includes(loc.toLowerCase()) || loc.toLowerCase().includes(site.toLowerCase())
+        );
+        if (!isFragmentOfKnownSite) {
+          sites.add(loc);
+        }
       }
     });
 
-    return Array.from(sites).filter(Boolean);
-  }, [activeClient, clientMachines, hourLogs, activeClientId, activeClientName]);
+    // 3. Deduplicate and collapse partial sub-fragments into the full canonical address
+    const normalizedSites: string[] = [];
+    Array.from(sites).forEach((s) => {
+      const existingIdx = normalizedSites.findIndex((item) =>
+        item.toLowerCase().includes(s.toLowerCase()) || s.toLowerCase().includes(item.toLowerCase())
+      );
+      if (existingIdx === -1) {
+        normalizedSites.push(s);
+      } else if (s.length > normalizedSites[existingIdx].length) {
+        normalizedSites[existingIdx] = s;
+      }
+    });
 
-  // Effective selected site location (default to "all")
-  const effectiveSelectedSite =
-    logsSelectedSite && logsSelectedSite !== "all"
-      ? (clientSites.includes(logsSelectedSite) ? logsSelectedSite : "all")
-      : "all";
+    return normalizedSites.filter(Boolean);
+  }, [activeDbClient, activeClient, clientMachines, hourLogs, activeClientId, activeClientName, allClientsList]);
+
+  // Most recent used location for active client from logs, fallback to primary client site
+  const mostRecentClientLocation = useMemo(() => {
+    // 1. Look for the latest log of this client with a valid location
+    const recentLog = hourLogs.find((l) => {
+      const isClient =
+        (activeClientId && (l.client_id === activeClientId || (l as any)?.client?.id === activeClientId)) ||
+        (activeClientName && ((l as any)?.client?.client_name || (l as any)?.client?.company_name || "").toLowerCase().trim() === activeClientName.toLowerCase().trim()) ||
+        clientMachines.some((m) => m.id === l.machine_id);
+      return isClient && l.location && l.location.trim();
+    });
+
+    const recentLoc = recentLog?.location?.trim();
+    if (recentLoc) {
+      const matched = clientSites.find(
+        (s) => s.toLowerCase().trim() === recentLoc.toLowerCase() ||
+               s.toLowerCase().includes(recentLoc.toLowerCase()) ||
+               recentLoc.toLowerCase().includes(s.toLowerCase().trim())
+      );
+      if (matched) return matched;
+      return recentLoc;
+    }
+
+    return clientSites.length > 0 ? clientSites[0] : "";
+  }, [hourLogs, activeClientId, activeClientName, clientMachines, clientSites]);
+
+  // Effective selected site location (defaults to "all" so all logs across client sites are visible unless a specific site is chosen)
+  const effectiveSelectedSite = useMemo(() => {
+    if (!logsSelectedSite || logsSelectedSite === "all") return "all";
+    if (clientSites.includes(logsSelectedSite)) {
+      return logsSelectedSite;
+    }
+    return logsSelectedSite;
+  }, [logsSelectedSite, clientSites]);
 
   // Effective selected client machine ID (By default select "all" per feedback #2)
   const effectiveSelectedClientMachineId = useMemo(() => {
@@ -577,10 +765,7 @@ export function OperationsClient({
   // Active selected client details (for Client Header Card)
   const clientMobile = activeDbClient?.phone || "—";
   const clientEmail = activeDbClient?.email || "—";
-  const clientCityState = activeDbClient?.city
-    ? `${activeDbClient.city}${activeDbClient.state ? `, ${activeDbClient.state}` : ""}`
-    : "—";
-  const clientAddress = activeDbClient?.address || "—";
+  const clientAddress = formatClientFullAddress(activeDbClient || activeClient) || "—";
   const clientFleetCount = clientMachines.length;
 
   // On server-paginated logs tab, hourLogs is the paged slice from server
@@ -605,7 +790,11 @@ export function OperationsClient({
   const loggedDaysCount = logsSummary ? logsSummary.loggedDaysCount : new Set(filteredHourLogs.map((l) => l.log_date)).size;
   const totalMatchingLogs = totalLogsCount ?? hourLogs.length;
 
-  const selectedMonthLabel = MONTH_NAMES.find((m) => m.value === logsSelectedMonth)?.label || "August";
+  const currentMonthValue = getCurrentMonthValue();
+  const selectedMonthLabel =
+    MONTH_NAMES.find((m) => m.value === logsSelectedMonth)?.label ||
+    MONTH_NAMES.find((m) => m.value === currentMonthValue)?.label ||
+    "September";
   const displayWorkingDays = loggedDaysCount > 0 ? loggedDaysCount : 26;
 
   const currentSelectedMachine = useMemo(
@@ -957,21 +1146,23 @@ export function OperationsClient({
       {/* SUPERVISOR / MANAGEMENT HEADER */}
       {userRole !== "operator" && (
         <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-3">
             <div>
               <h1 className="text-xl font-extrabold text-[var(--color-ink)]">
                 Fleet Operations
               </h1>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <Button
                 variant="primary"
                 onClick={() => handleOpenAssignModal()}
-                className="h-9 px-3.5 font-bold inline-flex items-center gap-2 whitespace-nowrap cursor-pointer"
+                className="h-9 px-2.5 sm:px-3.5 font-bold inline-flex items-center justify-center gap-1.5 sm:gap-2 text-xs sm:text-sm whitespace-nowrap cursor-pointer shadow-xs"
+                title="Assign Operator"
+                aria-label="Assign Operator"
               >
                 <AnimatedUserCheck size={16} className="shrink-0" />
-                <span>Assign Operator</span>
+                <span className="hidden sm:inline">Assign Operator</span>
               </Button>
             </div>
           </div>
@@ -1160,75 +1351,147 @@ export function OperationsClient({
             </div>
           )}
           {/* FILTER & EXPORT TOOLBAR */}
-          <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 space-y-3 shadow-sm">
-            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-              {/* Left: View Mode Pill Switcher */}
-              <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar p-1 bg-[var(--color-canvas)] rounded-xl border border-[var(--color-hairline)] shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLogsViewMode("machine");
-                    const targetMachine = logsSelectedMachineId && logsSelectedMachineId !== "all" ? logsSelectedMachineId : (orderedMachines[0]?.id || "");
-                    setLogsSelectedMachineId(targetMachine);
-                    handleFilterChange({ view: "machine", machine: targetMachine, client: undefined, operator: undefined, page: 1 });
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                    logsViewMode === "machine"
-                      ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
-                      : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-                  }`}
+          <div
+            onClick={() => {
+              if (!isFiltersExpanded) {
+                setIsFiltersExpanded(true);
+              }
+            }}
+            className={`rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 shadow-sm transition-all duration-200 ${
+              !isFiltersExpanded ? "cursor-pointer" : ""
+            }`}
+          >
+            {/* Header: Mode Switcher (Left) | Search Input (Desktop Center) | Action Controls (Right) */}
+            <div
+              onClick={() => setIsFiltersExpanded((prev) => !prev)}
+              className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 cursor-pointer select-none"
+            >
+              <div className="flex items-center justify-between gap-2 shrink-0">
+                {/* Left: View Mode Pill Switcher */}
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex items-center gap-1 overflow-x-auto custom-scrollbar p-1 bg-[var(--color-canvas)] rounded-xl border border-[var(--color-hairline)] shrink-0"
                 >
-                  Machine
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLogsViewMode("client");
-                    const targetClient = logsSelectedClientId && logsSelectedClientId !== "all" ? logsSelectedClientId : (activeClientId || "");
-                    setLogsSelectedClientId(targetClient);
-                    handleFilterChange({ view: "client", client: targetClient, machine: undefined, operator: undefined, page: 1 });
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                    logsViewMode === "client"
-                      ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
-                      : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-                  }`}
-                >
-                  Clients
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setLogsViewMode("operator");
-                    const targetOperator = logsSelectedOperatorId && logsSelectedOperatorId !== "all" ? logsSelectedOperatorId : (orderedOperators[0]?.id || "");
-                    setLogsSelectedOperatorId(targetOperator);
-                    handleFilterChange({ view: "operator", operator: targetOperator, machine: undefined, client: undefined, page: 1 });
-                  }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                    logsViewMode === "operator"
-                      ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
-                      : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
-                  }`}
-                >
-                  Operator
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLogsViewMode("machine");
+                      const targetMachine = logsSelectedMachineId && logsSelectedMachineId !== "all" ? logsSelectedMachineId : (orderedMachines[0]?.id || "");
+                      setLogsSelectedMachineId(targetMachine);
+                      handleFilterChange({ view: "machine", machine: targetMachine, client: undefined, operator: undefined, page: 1 });
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      logsViewMode === "machine"
+                        ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
+                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                    }`}
+                  >
+                    Machine
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLogsViewMode("client");
+                      const targetClient = logsSelectedClientId && logsSelectedClientId !== "all" ? logsSelectedClientId : (activeClientId || "");
+                      setLogsSelectedClientId(targetClient);
+                      handleFilterChange({ view: "client", client: targetClient, machine: undefined, operator: undefined, page: 1 });
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      logsViewMode === "client"
+                        ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
+                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                    }`}
+                  >
+                    Clients
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLogsViewMode("operator");
+                      const targetOperator = logsSelectedOperatorId && logsSelectedOperatorId !== "all" ? logsSelectedOperatorId : (orderedOperators[0]?.id || "");
+                      setLogsSelectedOperatorId(targetOperator);
+                      handleFilterChange({ view: "operator", operator: targetOperator, machine: undefined, client: undefined, page: 1 });
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                      logsViewMode === "operator"
+                        ? "bg-[var(--color-ink)] text-[var(--color-canvas)] shadow-2xs"
+                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                    }`}
+                  >
+                    Operator
+                  </button>
+                </div>
+
+                {/* Mobile-only action triggers (Print + Arrow) on top right */}
+                <div className="flex sm:hidden items-center gap-1.5 shrink-0 ml-auto">
+                  <TooltipWrapper content="Export / Print Report">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowSupervisorPrintModal(true);
+                      }}
+                      className="h-8.5 w-8.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-xs transition-all flex items-center justify-center cursor-pointer shrink-0"
+                      aria-label="Export / Print Report"
+                    >
+                      <Printer className="h-4 w-4 shrink-0" />
+                    </button>
+                  </TooltipWrapper>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsFiltersExpanded((prev) => !prev);
+                    }}
+                    className="h-8.5 w-8.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-canvas-subtle)] text-[var(--color-ink)] transition-colors flex items-center justify-center cursor-pointer shrink-0"
+                    aria-label={isFiltersExpanded ? "Collapse Filters" : "Expand Filters"}
+                  >
+                    <ChevronDown className={`h-4 w-4 text-[var(--color-mute)] transition-transform duration-300 ${isFiltersExpanded ? "rotate-180" : ""}`} />
+                  </button>
+                </div>
               </div>
 
-              {/* Middle: Debounced Global Search Input */}
-              <div className="relative flex-1 min-w-[220px] max-w-lg">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--color-mute)] pointer-events-none" />
+              {/* Middle: Debounced Search Input (In Header on Web/Tablet/Desktop, Full-Width below on Mobile) */}
+              <div
+                onClick={(e) => {
+                  if (!isFiltersExpanded) {
+                    setIsFiltersExpanded(true);
+                  }
+                }}
+                className="relative flex-1 min-w-[200px] max-w-none sm:max-w-md lg:max-w-xl mx-0 sm:mx-2"
+              >
+                {isSearching ? (
+                  <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-sky-600 dark:text-sky-400 animate-spin pointer-events-none" />
+                ) : (
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--color-mute)] pointer-events-none" />
+                )}
                 <input
                   type="text"
                   placeholder="Search machine, operator, remarks, location..."
                   value={searchInput}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (searchInput !== (initialSearch || "")) {
+                        setIsSearchPending(true);
+                        handleFilterChange({ search: searchInput || undefined, page: 1 });
+                      }
+                    }
+                  }}
                   onChange={(e) => setSearchInput(e.target.value)}
-                  className="w-full pl-9 pr-8 py-1.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-xs text-[var(--color-ink)] placeholder:text-[var(--color-mute)] focus:outline-hidden focus:border-sky-500 transition-colors"
+                  className="w-full pl-9 pr-8 py-1.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-xs text-[var(--color-ink)] placeholder:text-[var(--color-mute)] focus:outline-hidden focus:border-sky-500 transition-colors h-8.5"
                 />
                 {searchInput && (
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       setSearchInput("");
+                      setIsSearchPending(true);
                       handleFilterChange({ search: undefined, page: 1 });
                     }}
                     className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-[var(--color-canvas-subtle)] text-[var(--color-mute)] hover:text-[var(--color-ink)] cursor-pointer"
@@ -1239,228 +1502,241 @@ export function OperationsClient({
                 )}
               </div>
 
-              {/* Right: Export CTA Buttons & isPending loader */}
-              <div className="flex items-center gap-2 shrink-0">
-                {isPending && (
-                  <div className="flex items-center gap-1.5 text-xs text-sky-600 dark:text-sky-400 font-medium mr-1">
-                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                    <span className="hidden md:inline">Loading...</span>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowSupervisorPrintModal(true)}
-                  className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Printer className="h-4 w-4" /> Export / Print
-                </button>
+              {/* Desktop-only action triggers (Print + Arrow) on top right */}
+              <div className="hidden sm:flex items-center gap-1.5 shrink-0 ml-auto">
+                <TooltipWrapper content="Export / Print Report">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowSupervisorPrintModal(true);
+                    }}
+                    className="h-8.5 w-8.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold shadow-xs transition-all flex items-center justify-center cursor-pointer shrink-0"
+                    aria-label="Export / Print Report"
+                  >
+                    <Printer className="h-4 w-4 shrink-0" />
+                  </button>
+                </TooltipWrapper>
+
+                <TooltipWrapper content={isFiltersExpanded ? "Collapse Filters" : "Expand Filters"}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsFiltersExpanded((prev) => !prev);
+                    }}
+                    className="h-8.5 w-8.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-canvas-subtle)] text-[var(--color-ink)] transition-colors flex items-center justify-center cursor-pointer shrink-0"
+                    aria-label={isFiltersExpanded ? "Collapse Filters" : "Expand Filters"}
+                  >
+                    <ChevronDown className={`h-4 w-4 text-[var(--color-mute)] transition-transform duration-300 ${isFiltersExpanded ? "rotate-180" : ""}`} />
+                  </button>
+                </TooltipWrapper>
               </div>
             </div>
 
-            {/* SECOND ROW: Filter Dropdowns (Horizontally Aligned) */}
-            {logsViewMode === "client" ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1 border-t border-[var(--color-hairline)]">
-                <div>
-                  <ClientSelect
-                    label="Select Client"
-                    value={activeClientId}
-                    onChange={(val, clientObj) => {
-                      const nextId = clientObj?.id || val;
-                      setLogsSelectedClientId(nextId);
-                      setLogsSelectedSite("all");
-                      setLogsSelectedClientMachineId("all");
-                      handleFilterChange({ client: nextId, machine: undefined, page: 1 });
-                    }}
-                    clients={allClientsList}
-                    placeholder="Select Client..."
-                  />
-                </div>
+            {/* Collapsible Filter Dropdowns Section */}
+            <AnimatePresence initial={false}>
+              {isFiltersExpanded && (
+                <motion.div
+                  key="operations-filters"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                  className="overflow-hidden"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="pt-3 mt-3 border-t border-[var(--color-hairline)] space-y-3">
+                    {/* SECOND ROW: Filter Dropdowns (Horizontally Aligned) */}
+                    {logsViewMode === "client" ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div>
+                          <ClientSelect
+                            label="Select Client"
+                            count={allClientsList.length}
+                            value={activeClientId}
+                            onChange={(val, clientObj) => {
+                              const nextId = clientObj?.id || val;
+                              setLogsSelectedClientId(nextId);
+                              setLogsSelectedSite("");
+                              setLogsSelectedClientMachineId("all");
+                              handleFilterChange({ view: "client", client: nextId, machine: undefined, site: undefined, page: 1 });
+                            }}
+                            clients={allClientsList}
+                            placeholder="Select Client..."
+                          />
+                        </div>
 
-                <div>
-                  <SearchableSelect
-                    label="Select Location"
-                    value={effectiveSelectedSite}
-                    onChange={(val) => setLogsSelectedSite(val)}
-                    options={
-                      clientSites.length === 1
-                        ? clientSites.map((s) => ({ value: s, label: s }))
-                        : [
-                            { value: "all", label: "All Sites & Locations" },
-                            ...clientSites.map((s) => ({ value: s, label: s })),
-                          ]
-                    }
-                  />
-                </div>
+                        <div>
+                          <SearchableSelect
+                            label="Select Location"
+                            count={clientSites.length}
+                            value={effectiveSelectedSite}
+                            onChange={(val) => {
+                              const nextSite = val === "all" ? "" : val;
+                              setLogsSelectedSite(nextSite);
+                              handleFilterChange({ site: nextSite || undefined, page: 1 });
+                            }}
+                            options={[
+                              { value: "all", label: "All Sites & Locations" },
+                              ...clientSites.map((s) => ({ value: s, label: s })),
+                            ]}
+                          />
+                        </div>
 
-                <div>
-                  <MachineSelect
-                    label="Select Machine"
-                    value={effectiveSelectedClientMachineId}
-                    onChange={(mId) => {
-                      const next = mId || "all";
-                      setLogsSelectedClientMachineId(next);
-                      handleFilterChange({ machine: next === "all" ? undefined : next, page: 1 });
-                    }}
-                    machines={clientMachines}
-                    allowAll={true}
-                    allLabel="All Machines"
-                  />
-                </div>
+                        <div>
+                          <MachineSelect
+                            label="Select Machine"
+                            count={clientMachines.length}
+                            value={effectiveSelectedClientMachineId}
+                            onChange={(mId) => {
+                              const next = mId || "all";
+                              setLogsSelectedClientMachineId(next);
+                              handleFilterChange({ machine: next === "all" ? undefined : next, page: 1 });
+                            }}
+                            machines={clientMachines}
+                            allowAll={true}
+                            allLabel="All Machines"
+                          />
+                        </div>
 
-                <div>
-                  <SearchableSelect
-                    label="Select Month"
-                    value={logsSelectedMonth}
-                    onChange={(val) => {
-                      setLogsSelectedMonth(val);
-                      if (val === "custom") {
-                        handleFilterChange({ month: val, start: logsCustomStartDate, end: logsCustomEndDate, page: 1 });
-                      } else {
-                        handleFilterChange({ month: val, start: undefined, end: undefined, page: 1 });
-                      }
-                    }}
-                    options={MONTH_NAMES.map((m) => ({
-                      value: m.value,
-                      label: m.label,
-                    }))}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1 border-t border-[var(--color-hairline)]">
-                <div>
-                  {logsViewMode === "machine" && (
-                    <MachineSelect
-                      label="Select Machine"
-                      value={activeMachineId}
-                      onChange={(mId) => {
-                        setLogsSelectedMachineId(mId);
-                        handleFilterChange({ machine: mId, page: 1 });
-                      }}
-                      machines={orderedMachines}
-                    />
-                  )}
+                        <div>
+                          <SearchableSelect
+                            label="Select Month"
+                            value={logsSelectedMonth}
+                            onChange={(val) => {
+                              setLogsSelectedMonth(val);
+                              if (val === "custom") {
+                                handleFilterChange({ month: val, start: logsCustomStartDate, end: logsCustomEndDate, page: 1 });
+                              } else {
+                                handleFilterChange({ month: val, start: undefined, end: undefined, page: 1 });
+                              }
+                            }}
+                            options={MONTH_NAMES.map((m) => ({
+                              value: m.value,
+                              label: m.label,
+                            }))}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          {logsViewMode === "machine" && (
+                            <MachineSelect
+                              label="Select Machine"
+                              count={orderedMachines.length}
+                              value={activeMachineId}
+                              onChange={(mId) => {
+                                setLogsSelectedMachineId(mId);
+                                handleFilterChange({ machine: mId, page: 1 });
+                              }}
+                              machines={orderedMachines}
+                            />
+                          )}
 
-                  {logsViewMode === "operator" && (
-                    <UserSelect
-                      label="Select Operator"
-                      value={activeOperatorId}
-                      onChange={(opId) => {
-                        setLogsSelectedOperatorId(opId);
-                        handleFilterChange({ operator: opId, page: 1 });
-                      }}
-                      users={orderedOperators}
-                    />
-                  )}
-                </div>
+                          {logsViewMode === "operator" && (
+                            <UserSelect
+                              label="Select Operator"
+                              count={orderedOperators.length}
+                              value={activeOperatorId}
+                              onChange={(opId) => {
+                                setLogsSelectedOperatorId(opId);
+                                handleFilterChange({ operator: opId, page: 1 });
+                              }}
+                              users={orderedOperators}
+                            />
+                          )}
+                        </div>
 
-                <div>
-                  <SearchableSelect
-                    label="Select Month"
-                    value={logsSelectedMonth}
-                    onChange={(val) => {
-                      setLogsSelectedMonth(val);
-                      if (val === "custom") {
-                        handleFilterChange({ month: val, start: logsCustomStartDate, end: logsCustomEndDate, page: 1 });
-                      } else {
-                        handleFilterChange({ month: val, start: undefined, end: undefined, page: 1 });
-                      }
-                    }}
-                    options={MONTH_NAMES.map((m) => ({
-                      value: m.value,
-                      label: m.label,
-                    }))}
-                  />
-                </div>
-              </div>
-            )}
+                        <div>
+                          <SearchableSelect
+                            label="Select Month"
+                            value={logsSelectedMonth}
+                            onChange={(val) => {
+                              setLogsSelectedMonth(val);
+                              if (val === "custom") {
+                                handleFilterChange({ month: val, start: logsCustomStartDate, end: logsCustomEndDate, page: 1 });
+                              } else {
+                                handleFilterChange({ month: val, start: undefined, end: undefined, page: 1 });
+                              }
+                            }}
+                            options={MONTH_NAMES.map((m) => ({
+                              value: m.value,
+                              label: m.label,
+                            }))}
+                          />
+                        </div>
+                      </div>
+                    )}
 
-            {/* Custom Date Range Pickers (Collapsible when logsSelectedMonth === 'custom') */}
-            {logsSelectedMonth === "custom" && (
-              <div className="pt-2 border-t border-[var(--color-hairline)] grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-[var(--color-ink)] mb-1">
-                    Start Date
-                  </label>
-                  <CustomDatePicker
-                    value={logsCustomStartDate}
-                    onChange={(val) => {
-                      setLogsCustomStartDate(val);
-                      if (val && logsCustomEndDate) {
-                        handleFilterChange({ month: "custom", start: val, end: logsCustomEndDate, page: 1 });
-                      }
-                    }}
-                    allowAnyPast
-                    allowAnyFuture
-                    showWindowBadge={false}
-                    showRelativeBadge={false}
-                    placeholder="Select start date"
-                    className="w-full"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-[var(--color-ink)] mb-1">
-                    End Date
-                  </label>
-                  <CustomDatePicker
-                    value={logsCustomEndDate}
-                    onChange={(val) => {
-                      setLogsCustomEndDate(val);
-                      if (logsCustomStartDate && val) {
-                        handleFilterChange({ month: "custom", start: logsCustomStartDate, end: val, page: 1 });
-                      }
-                    }}
-                    allowAnyPast
-                    allowAnyFuture
-                    showWindowBadge={false}
-                    showRelativeBadge={false}
-                    placeholder="Select end date"
-                    className="w-full"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* KPI METRICS SUMMARY STRIP (Operator View Mode Only) */}
-            {logsViewMode === "operator" && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
-                <div className="p-2.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-0.5">
-                  <span className="text-[10px] font-extrabold uppercase text-[var(--color-mute)] block">Total Run Hours</span>
-                  <span className="text-base font-extrabold font-mono text-sky-600 dark:text-sky-400">
-                    {Math.round(totalFilteredRunHours * 10) / 10} hrs
-                  </span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-0.5">
-                  <span className="text-[10px] font-extrabold uppercase text-[var(--color-mute)] block">Total Overtime</span>
-                  <span className="text-base font-extrabold font-mono text-amber-600 dark:text-amber-400">
-                    {Math.round(totalFilteredOtHours * 10) / 10} hrs
-                  </span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-0.5">
-                  <span className="text-[10px] font-extrabold uppercase text-[var(--color-mute)] block">Breakdown Events</span>
-                  <span className="text-base font-extrabold font-mono text-rose-600 dark:text-rose-400">
-                    {totalFilteredBreakdowns} Events
-                  </span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-0.5">
-                  <span className="text-[10px] font-extrabold uppercase text-[var(--color-mute)] block">Matching Logs</span>
-                  <span className="text-base font-extrabold font-mono text-[var(--color-ink)]">
-                    {totalMatchingLogs} Records
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
+                    {/* Custom Date Range Picker (Collapsible when logsSelectedMonth === 'custom') */}
+                    {logsSelectedMonth === "custom" && (
+                      <div className="pt-2 border-t border-[var(--color-hairline)] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        <div className="col-span-1 sm:col-span-2">
+                          <DateRangePicker
+                            label="Select Date Range"
+                            value={{
+                              startDate: logsCustomStartDate,
+                              endDate: logsCustomEndDate,
+                            }}
+                            onChange={({ startDate, endDate }) => {
+                              setLogsCustomStartDate(startDate);
+                              setLogsCustomEndDate(endDate);
+                              if (startDate && endDate) {
+                                handleFilterChange({
+                                  month: "custom",
+                                  start: startDate,
+                                  end: endDate,
+                                  page: 1,
+                                });
+                              } else if (!startDate && !endDate) {
+                                const curMonth = getCurrentMonthValue();
+                                setLogsSelectedMonth(curMonth);
+                                handleFilterChange({
+                                  month: curMonth,
+                                  start: undefined,
+                                  end: undefined,
+                                  page: 1,
+                                });
+                              }
+                            }}
+                            allowAnyPast
+                            allowAnyFuture
+                            className="w-full"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+      </div>
 
           {/* MACHINE DETAILS SUMMARY HEADER CARD (By Machine Mode) */}
           {logsViewMode === "machine" && activeMachineObj && (
-            <div className="p-3.5 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-2.5 shadow-2xs">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-[var(--color-hairline)] pb-2.5">
-                <h3 className="text-base font-extrabold text-[var(--color-ink)]">
-                  {activeMachineObj.machine_name}
-                </h3>
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="font-semibold text-[var(--color-mute)]">Current Status:</span>
+            <div
+              onClick={() => {
+                if (!isMachineSummaryExpanded) {
+                  setIsMachineSummaryExpanded(true);
+                }
+              }}
+              className={`p-3.5 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xs transition-all duration-200 ${
+                !isMachineSummaryExpanded ? "cursor-pointer" : ""
+              }`}
+            >
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMachineSummaryExpanded((prev) => !prev);
+                }}
+                className="flex items-center justify-between gap-2 cursor-pointer select-none"
+              >
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-extrabold text-[var(--color-ink)]">
+                    {activeMachineObj.machine_name}
+                  </h3>
                   <Badge
                     variant={
                       activeMachineObj.status === "active"
@@ -1471,121 +1747,358 @@ export function OperationsClient({
                         ? "warning"
                         : "neutral"
                     }
-                    className="font-bold"
+                    className="font-bold text-[10px]"
                   >
                     {activeMachineObj.status ? activeMachineObj.status.replace("_", " ").toUpperCase() : "ACTIVE"}
                   </Badge>
                 </div>
+
+                <div className="flex items-center gap-2 text-xs">
+                  <div className="p-1 rounded-lg hover:bg-[var(--color-canvas)] text-[var(--color-mute)] transition-colors">
+                    <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isMachineSummaryExpanded ? "rotate-180" : ""}`} />
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 text-xs pt-0.5">
-                <div>
-                  <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Manufacturer</span>
-                  <span className="font-bold text-[var(--color-ink)]">
-                    {activeMachineObj.manufacturer || "—"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Model</span>
-                  <span className="font-bold text-[var(--color-ink)]">
-                    {activeMachineObj.model || "—"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Serial No / Code</span>
-                  <span className="font-bold font-mono text-[var(--color-ink)]">
-                    {activeMachineObj.serial_number || activeMachineObj.machine_code || "—"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Total Run Hours</span>
-                  <span className="font-bold font-mono text-sky-600 dark:text-sky-400">
-                    {Math.round(totalFilteredRunHours * 10) / 10} hrs
-                  </span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Breakdown Events</span>
-                  <span className="font-bold font-mono text-rose-600 dark:text-rose-400">
-                    {totalFilteredBreakdowns} Events
-                  </span>
-                </div>
-              </div>
+              <AnimatePresence initial={false}>
+                {isMachineSummaryExpanded && (
+                  <motion.div
+                    key="machine-summary-details"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                    className="overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="pt-2.5 mt-2.5 border-t border-[var(--color-hairline)]">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 text-xs">
+                        <div>
+                          <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Manufacturer</span>
+                          <span className="font-bold text-[var(--color-ink)]">
+                            {activeMachineObj.manufacturer || "—"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Model</span>
+                          <span className="font-bold text-[var(--color-ink)]">
+                            {activeMachineObj.model || "—"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Serial No / Code</span>
+                          <span className="font-bold font-mono text-[var(--color-ink)]">
+                            {activeMachineObj.serial_number || activeMachineObj.machine_code || "—"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Total Run Hours</span>
+                          <span className="font-bold font-mono text-sky-600 dark:text-sky-400">
+                            {Math.round(totalFilteredRunHours * 10) / 10} hrs
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Breakdown Events</span>
+                          <span className="font-bold font-mono text-rose-600 dark:text-rose-400">
+                            {totalFilteredBreakdowns} Events
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
 
           {/* CLIENT DETAILS SUMMARY HEADER CARD (By Client Mode) */}
           {logsViewMode === "client" && activeClientName && (
-            <div className="p-3.5 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] space-y-3 shadow-2xs">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-[var(--color-hairline)] pb-2.5">
-                <h3 className="text-base font-extrabold text-[var(--color-ink)]">
-                  {activeClientName}
-                </h3>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {clientFleetCount > 0 && (
-                    <Badge variant="info" className="font-bold">
-                      {clientFleetCount} Rented Machine{clientFleetCount > 1 ? "s" : ""}
+            <div
+              onClick={() => {
+                if (!isClientSummaryExpanded) {
+                  setIsClientSummaryExpanded(true);
+                }
+              }}
+              className={`p-3.5 sm:p-4 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-sm transition-all duration-200 ${
+                !isClientSummaryExpanded ? "cursor-pointer" : ""
+              }`}
+            >
+              {/* Header (always visible & clickable to toggle) */}
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsClientSummaryExpanded((prev) => !prev);
+                }}
+                className="flex items-center justify-between gap-3 cursor-pointer select-none"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                    <h3 className="text-sm sm:text-base font-extrabold text-[var(--color-ink)] tracking-tight truncate max-w-full">
+                      {activeClientName}
+                    </h3>
+                    {activeClient?.code && (
+                      <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-[var(--color-canvas)] text-[var(--color-mute)] border border-[var(--color-hairline)] font-mono text-[10px] sm:text-[11px] font-bold shrink-0">
+                        {activeClient.code}
+                      </span>
+                    )}
+                    <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 font-mono text-[10px] sm:text-[11px] font-bold border border-sky-500/20 shrink-0">
+                      {clientMachines.length} {clientMachines.length === 1 ? "Machine" : "Machines"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="hidden sm:block">
+                    <Badge variant="success" className="font-bold flex items-center gap-1.5 py-0.5 px-2.5 text-xs">
+                      <Calendar className="h-3.5 w-3.5" />
+                      <span>{displayWorkingDays} Days ({selectedMonthLabel})</span>
                     </Badge>
-                  )}
-                  {clientSites.length > 0 && (
-                    <Badge variant="neutral" className="font-bold">
-                      {clientSites.length} Active Site Location{clientSites.length > 1 ? "s" : ""}
-                    </Badge>
-                  )}
-                  <Badge variant="info" className="font-bold">
-                    Working Hours: 8:00 AM to 8:00 PM
-                  </Badge>
-                  <Badge variant="success" className="font-bold">
-                    Working Days: {displayWorkingDays} Days ({selectedMonthLabel})
-                  </Badge>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="p-1 rounded-lg hover:bg-[var(--color-canvas)] text-[var(--color-mute)] transition-colors">
+                      <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isClientSummaryExpanded ? "rotate-180" : ""}`} />
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs pt-0.5">
-                <div>
-                  <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Customer Phone</span>
-                  <span className="font-bold font-mono text-[var(--color-ink)]">{clientMobile}</span>
+              {/* Collapsible details & KPI grid */}
+              <AnimatePresence initial={false}>
+                {isClientSummaryExpanded && (
+                  <motion.div
+                    key="client-summary-details"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                    className="overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="mt-3 pt-3 border-t border-[var(--color-hairline)] space-y-3">
+                      {/* Clean Location & Contact Meta Strip */}
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-x-4 gap-y-1 text-xs text-[var(--color-mute)] flex-wrap">
+                          {clientAddress && clientAddress !== "—" && (
+                            <div className="flex items-center gap-1.5">
+                              <MapPin className="h-3.5 w-3.5 text-sky-500 shrink-0" />
+                              <span className="text-[var(--color-ink)] font-medium">
+                                {clientAddress}
+                              </span>
+                            </div>
+                          )}
+                          {clientMobile && clientMobile !== "—" && (
+                            <div className="flex items-center gap-1.5 font-mono">
+                              <Phone className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                              <span className="text-[var(--color-ink)]">{clientMobile}</span>
+                            </div>
+                          )}
+                          {clientEmail && clientEmail !== "—" && (
+                            <div className="flex items-center gap-1.5">
+                              <Mail className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                              <span className="text-[var(--color-ink)]">{clientEmail}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Mobile Working Days Badge */}
+                        <div className="sm:hidden">
+                          <Badge variant="success" className="font-bold flex items-center gap-1.5 py-0.5 px-2 text-[10px]">
+                            <Calendar className="h-3 w-3" />
+                            <span>{displayWorkingDays} Days ({selectedMonthLabel})</span>
+                          </Badge>
+                        </div>
+                      </div>
+
+                      {/* 4 Summary Metrics Cards Grid in Client Detail Box */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 pt-0.5">
+                        <div className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-1">
+                          <div className="flex items-center gap-1.5 text-[var(--color-mute)]">
+                            <Clock className="h-3.5 w-3.5 text-sky-500 shrink-0" />
+                            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
+                              <span className="sm:hidden">Run</span>
+                              <span className="hidden sm:inline">Run Hours</span>
+                            </span>
+                          </div>
+                          <div className="text-base sm:text-lg font-extrabold font-mono text-sky-600 dark:text-sky-400">
+                            {Math.round(totalFilteredRunHours * 10) / 10} <span className="text-[11px] sm:text-xs font-semibold text-[var(--color-mute)]">hrs</span>
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-1">
+                          <div className="flex items-center gap-1.5 text-[var(--color-mute)]">
+                            <Zap className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
+                              <span className="sm:hidden">OT</span>
+                              <span className="hidden sm:inline">Overtime</span>
+                            </span>
+                          </div>
+                          <div className="text-base sm:text-lg font-extrabold font-mono text-amber-600 dark:text-amber-400">
+                            {Math.round(totalFilteredOtHours * 10) / 10} <span className="text-[11px] sm:text-xs font-semibold text-[var(--color-mute)]">hrs</span>
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-1">
+                          <div className="flex items-center gap-1.5 text-[var(--color-mute)]">
+                            <AlertTriangle className="h-3.5 w-3.5 text-rose-500 shrink-0" />
+                            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
+                              <span className="sm:hidden">Breakdown</span>
+                              <span className="hidden sm:inline">Breakdowns</span>
+                            </span>
+                          </div>
+                          <div className="text-base sm:text-lg font-extrabold font-mono text-rose-600 dark:text-rose-400">
+                            {totalFilteredBreakdowns} <span className="text-[11px] sm:text-xs font-semibold text-[var(--color-mute)]">{totalFilteredBreakdowns === 1 ? "Event" : "Events"}</span>
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-1">
+                          <div className="flex items-center gap-1.5 text-[var(--color-mute)]">
+                            <FileText className="h-3.5 w-3.5 text-[var(--color-mute)] shrink-0" />
+                            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
+                              Logs
+                            </span>
+                          </div>
+                          <div className="text-base sm:text-lg font-extrabold font-mono text-[var(--color-ink)]">
+                            {totalMatchingLogs} <span className="text-[11px] sm:text-xs font-semibold text-[var(--color-mute)]">{totalMatchingLogs === 1 ? "Record" : "Records"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {/* OPERATOR DETAILS SUMMARY HEADER CARD (By Operator Mode) */}
+          {logsViewMode === "operator" && activeOperatorName && (
+            <div
+              onClick={() => {
+                if (!isOperatorSummaryExpanded) {
+                  setIsOperatorSummaryExpanded(true);
+                }
+              }}
+              className={`p-3.5 sm:p-4 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-sm transition-all duration-200 ${
+                !isOperatorSummaryExpanded ? "cursor-pointer" : ""
+              }`}
+            >
+              {/* Header (always visible & clickable to toggle) */}
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsOperatorSummaryExpanded((prev) => !prev);
+                }}
+                className="flex items-center justify-between gap-3 cursor-pointer select-none"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                    <h3 className="text-sm sm:text-base font-extrabold text-[var(--color-ink)] tracking-tight truncate max-w-full">
+                      {activeOperatorName}
+                    </h3>
+                    <span className="px-1.5 sm:px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 font-mono text-[10px] sm:text-[11px] font-bold border border-sky-500/20 shrink-0">
+                      OPERATOR
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Email Address</span>
-                  <span className="font-bold text-[var(--color-ink)] truncate block" title={clientEmail}>{clientEmail}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">City / State</span>
-                  <span className="font-bold text-[var(--color-ink)]">{clientCityState}</span>
-                </div>
-                <div>
-                  <span className="text-[10px] font-semibold text-[var(--color-mute)] block uppercase">Primary Address</span>
-                  <span className="font-bold text-[var(--color-ink)] truncate block" title={clientAddress}>{clientAddress}</span>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono font-extrabold text-sky-600 dark:text-sky-400 text-xs sm:text-sm">
+                      {Math.round(totalFilteredRunHours * 10) / 10} hrs
+                    </span>
+                    <div className="p-1 rounded-lg hover:bg-[var(--color-canvas)] text-[var(--color-mute)] transition-colors">
+                      <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isOperatorSummaryExpanded ? "rotate-180" : ""}`} />
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* Summary Metrics Cards Grid in Client Detail Box */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-[var(--color-hairline)]">
-                <div className="p-2.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-0.5">
-                  <span className="text-[10px] font-extrabold uppercase text-[var(--color-mute)] block">Total Run Hours</span>
-                  <span className="text-base font-extrabold font-mono text-sky-600 dark:text-sky-400">
-                    {Math.round(totalFilteredRunHours * 10) / 10} hrs
-                  </span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-0.5">
-                  <span className="text-[10px] font-extrabold uppercase text-[var(--color-mute)] block">Total Overtime</span>
-                  <span className="text-base font-extrabold font-mono text-amber-600 dark:text-amber-400">
-                    {Math.round(totalFilteredOtHours * 10) / 10} hrs
-                  </span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-0.5">
-                  <span className="text-[10px] font-extrabold uppercase text-[var(--color-mute)] block">Breakdown Events</span>
-                  <span className="text-base font-extrabold font-mono text-rose-600 dark:text-rose-400">
-                    {totalFilteredBreakdowns} Events
-                  </span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-0.5">
-                  <span className="text-[10px] font-extrabold uppercase text-[var(--color-mute)] block">Matching Logs</span>
-                  <span className="text-base font-extrabold font-mono text-[var(--color-ink)]">
-                    {totalMatchingLogs} Records
-                  </span>
-                </div>
-              </div>
+              {/* Collapsible details & KPI grid */}
+              <AnimatePresence initial={false}>
+                {isOperatorSummaryExpanded && (
+                  <motion.div
+                    key="operator-summary-details"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.24, ease: [0.16, 1, 0.3, 1] }}
+                    className="overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="mt-3 pt-3 border-t border-[var(--color-hairline)] space-y-3">
+                      {(activeOperatorObj?.phone || activeOperatorObj?.email) && (
+                        <div className="flex items-center gap-x-4 gap-y-1 text-xs text-[var(--color-mute)] flex-wrap">
+                          {activeOperatorObj?.phone && (
+                            <div className="flex items-center gap-1.5 font-mono">
+                              <Phone className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                              <span className="text-[var(--color-ink)]">{activeOperatorObj.phone}</span>
+                            </div>
+                          )}
+                          {activeOperatorObj?.email && (
+                            <div className="flex items-center gap-1.5">
+                              <Mail className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                              <span className="text-[var(--color-ink)]">{activeOperatorObj.email}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* 4 Summary Metrics Cards Grid in Operator Detail Box */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 pt-0.5">
+                        <div className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-1">
+                          <div className="flex items-center gap-1.5 text-[var(--color-mute)]">
+                            <Clock className="h-3.5 w-3.5 text-sky-500 shrink-0" />
+                            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
+                              <span className="sm:hidden">Run</span>
+                              <span className="hidden sm:inline">Run Hours</span>
+                            </span>
+                          </div>
+                          <div className="text-base sm:text-lg font-extrabold font-mono text-sky-600 dark:text-sky-400">
+                            {Math.round(totalFilteredRunHours * 10) / 10} <span className="text-[11px] sm:text-xs font-semibold text-[var(--color-mute)]">hrs</span>
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-1">
+                          <div className="flex items-center gap-1.5 text-[var(--color-mute)]">
+                            <Zap className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
+                              <span className="sm:hidden">OT</span>
+                              <span className="hidden sm:inline">Overtime</span>
+                            </span>
+                          </div>
+                          <div className="text-base sm:text-lg font-extrabold font-mono text-amber-600 dark:text-amber-400">
+                            {Math.round(totalFilteredOtHours * 10) / 10} <span className="text-[11px] sm:text-xs font-semibold text-[var(--color-mute)]">hrs</span>
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-1">
+                          <div className="flex items-center gap-1.5 text-[var(--color-mute)]">
+                            <AlertTriangle className="h-3.5 w-3.5 text-rose-500 shrink-0" />
+                            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
+                              <span className="sm:hidden">Breakdown</span>
+                              <span className="hidden sm:inline">Breakdowns</span>
+                            </span>
+                          </div>
+                          <div className="text-base sm:text-lg font-extrabold font-mono text-rose-600 dark:text-rose-400">
+                            {totalFilteredBreakdowns} <span className="text-[11px] sm:text-xs font-semibold text-[var(--color-mute)]">{totalFilteredBreakdowns === 1 ? "Event" : "Events"}</span>
+                          </div>
+                        </div>
+
+                        <div className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-1">
+                          <div className="flex items-center gap-1.5 text-[var(--color-mute)]">
+                            <FileText className="h-3.5 w-3.5 text-[var(--color-mute)] shrink-0" />
+                            <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
+                              Logs
+                            </span>
+                          </div>
+                          <div className="text-base sm:text-lg font-extrabold font-mono text-[var(--color-ink)]">
+                            {totalMatchingLogs} <span className="text-[11px] sm:text-xs font-semibold text-[var(--color-mute)]">{totalMatchingLogs === 1 ? "Record" : "Records"}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
 
@@ -1746,7 +2259,7 @@ export function OperationsClient({
                       const mObj = log.machine as any;
                       const opObj = log.operator as any;
                       const clientName = (log as any)?.client?.client_name || mObj?.customer_name || "Unassigned Client";
-                      const locationStr = log.location || ((log as any)?.client?.city ? `${(log as any).client.city}, ${(log as any).client.state || ""}` : mObj?.customer_address ? `${mObj.customer_address}${mObj.city ? `, ${mObj.city}` : ""}` : mObj?.city || "—");
+                      const locationStr = log.location || ((log as any)?.client?.city ? [(log as any).client.city, (log as any).client.district, (log as any).client.state].filter(Boolean).join(", ") : "—");
 
                       const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*([^\]]+)\]/i) || (log.remarks || "").match(/Breakdown\s*(?:Duration)?:?\s*(\d+h?\s*\d*m?)/i);
                       const bkdDetails = bkdMatch ? bkdMatch[1].trim() : log.is_breakdown ? "Breakdown" : null;
@@ -1886,7 +2399,7 @@ export function OperationsClient({
                                   {(log as any)?.client?.client_name || mObj?.customer_name || "Unassigned Client"}
                                 </div>
                                 <div className="text-[10px] text-[var(--color-mute)]">
-                                  {log.location || ((log as any)?.client?.city ? `${(log as any).client.city}, ${(log as any).client.state || ""}` : mObj?.city ? `${mObj.city}, ${mObj.state || ""}` : "—")}
+                                  {log.location || ((log as any)?.client?.city ? [(log as any).client.city, (log as any).client.district, (log as any).client.state].filter(Boolean).join(", ") : "—")}
                                 </div>
                               </td>
                               <td className="px-4 py-3 font-semibold whitespace-nowrap">
@@ -2060,7 +2573,7 @@ export function OperationsClient({
                             {(log as any)?.client?.client_name || mObj?.customer_name || "Unassigned Client"}
                           </span>
                           <span className="text-[10px] text-[var(--color-mute)] block truncate">
-                            {log.location || ((log as any)?.client?.city ? `${(log as any).client.city}, ${(log as any).client.state || ""}` : mObj?.customer_address ? `${mObj.customer_address}${mObj.city ? `, ${mObj.city}` : ""}` : mObj?.city || "—")}
+                            {log.location || ((log as any)?.client?.city ? [(log as any).client.city, (log as any).client.district, (log as any).client.state].filter(Boolean).join(", ") : "—")}
                           </span>
                         </div>
                         <div className="grid grid-cols-2 gap-2 pt-1 border-t border-[var(--color-hairline)]">
@@ -2244,13 +2757,27 @@ export function OperationsClient({
               logsViewMode === "machine"
                 ? activeMachineId
                 : logsViewMode === "client"
-                ? activeClientName
+                ? activeClientId || activeClientName
                 : activeOperatorId
             }
+            selectedEntityName={
+              logsViewMode === "machine"
+                ? activeMachineName
+                : logsViewMode === "client"
+                ? activeClientName
+                : activeOperatorName
+            }
+            selectedClientId={activeClientId}
+            selectedClientName={activeClientName}
+            selectedMachineId={activeMachineId}
+            selectedOperatorId={activeOperatorId}
+            search={searchInput}
             selectedMonthValue={logsSelectedMonth}
             selectedSite={effectiveSelectedSite}
             selectedClientMachineId={effectiveSelectedClientMachineId}
             machines={machines}
+            clientSites={clientSites}
+            clientMachines={clientMachines}
             customStartDate={logsCustomStartDate}
             customEndDate={logsCustomEndDate}
           />

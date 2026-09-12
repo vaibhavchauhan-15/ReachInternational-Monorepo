@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   AnimatedChevronDown,
   AnimatedCheck,
   AnimatedX,
 } from "./animated-icons";
 import { Search } from "lucide-react";
+import { useDynamicDropdownPosition } from "@/lib/hooks/useDynamicDropdownPosition";
 
 export interface ClientSelectItem {
   id: string;
@@ -14,8 +17,11 @@ export interface ClientSelectItem {
   name?: string | null;
   company_name?: string | null;
   code?: string | null;
+  street?: string | null;
   city?: string | null;
+  district?: string | null;
   state?: string | null;
+  pincode?: string | null;
   address?: string | null;
   phone?: string | null;
   email?: string | null;
@@ -28,6 +34,7 @@ export interface ClientSelectProps {
   value?: string;
   onChange: (clientId: string, client?: ClientSelectItem | null) => void;
   label?: ReactNode;
+  count?: number;
   placeholder?: string;
   disabled?: boolean;
   required?: boolean;
@@ -41,8 +48,12 @@ export interface ClientSelectProps {
 
 function getFormattedClientLocation(client?: ClientSelectItem | null): string {
   if (!client) return "";
-  const parts = [client.address, client.city, client.state].filter(Boolean);
-  return parts.join(", ");
+  const parts = [client.street, client.city, client.district, client.state, client.pincode]
+    .filter(Boolean)
+    .map((s) => String(s).trim())
+    .filter(Boolean);
+  if (parts.length > 0) return parts.join(", ");
+  return client.address ? String(client.address).trim() : "";
 }
 
 export function ClientSelect({
@@ -50,6 +61,7 @@ export function ClientSelect({
   value = "",
   onChange,
   label,
+  count,
   placeholder = "Search or select client...",
   disabled = false,
   required = false,
@@ -63,7 +75,22 @@ export function ClientSelect({
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const { mounted, position, isPositioned, updatePosition } = useDynamicDropdownPosition({
+    isOpen,
+    triggerRef,
+    popoverRef,
+    onClose: () => {
+      setIsOpen(false);
+      setSearchQuery("");
+    },
+    minWidth: 320,
+    maxHeightCap: 380,
+    matchTriggerWidth: true,
+  });
 
   const isAllSelected = allowAll && (value === "all" || value === "");
 
@@ -97,31 +124,21 @@ export function ClientSelect({
       const codeMatch = c.code?.toLowerCase().includes(q);
       const cityMatch = c.city?.toLowerCase().includes(q);
       const stateMatch = c.state?.toLowerCase().includes(q);
-      const addressMatch = c.address?.toLowerCase().includes(q);
-      return nameMatch || companyMatch || codeMatch || cityMatch || stateMatch || addressMatch;
+      const addressMatch = (c.street || c.address)?.toLowerCase().includes(q);
+      const districtMatch = c.district?.toLowerCase().includes(q);
+      return nameMatch || companyMatch || codeMatch || cityMatch || stateMatch || districtMatch || addressMatch;
     });
   }, [clients, searchQuery]);
-
-  // Click outside listener
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-        setSearchQuery("");
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
   const handleOpenToggle = () => {
     if (disabled) return;
     const nextState = !isOpen;
+    if (nextState) {
+      updatePosition();
+    }
     setIsOpen(nextState);
     if (nextState) {
       setTimeout(() => searchInputRef.current?.focus(), 50);
-    } else {
-      setSearchQuery("");
     }
   };
 
@@ -159,15 +176,21 @@ export function ClientSelect({
       onKeyDown={handleKeyDown}
     >
       {label && (
-        <label className="block text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] mb-1 flex items-center justify-between select-none">
-          <span>
+        <label className="block text-[12px] sm:text-[13px] font-semibold text-[var(--color-ink)] mb-1 flex items-center justify-between select-none">
+          <span className="flex items-center gap-1.5">
             {label} {required && <span className="text-rose-500 font-semibold">*</span>}
           </span>
+          {count !== undefined && (
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-[var(--color-canvas)] text-[var(--color-mute)] border border-[var(--color-hairline)] font-medium">
+              {count} Total
+            </span>
+          )}
         </label>
       )}
 
       {/* Trigger Button */}
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
         onClick={handleOpenToggle}
@@ -183,7 +206,7 @@ export function ClientSelect({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
       >
-        <span className="truncate flex items-center gap-2 pr-1">
+        <span className="truncate flex items-center gap-1.5 min-w-0 pr-1 flex-1">
           {isAllSelected ? (
             <span className="font-bold text-[var(--color-ink)] flex items-center gap-2">
               <span>{allLabel}</span>
@@ -192,21 +215,16 @@ export function ClientSelect({
               </span>
             </span>
           ) : selectedClient ? (
-            <>
-              <span className="truncate font-extrabold">
+            <span className="truncate flex items-center gap-1.5 min-w-0">
+              <span className="truncate font-bold text-[var(--color-ink)] shrink-0 max-w-[55%] sm:max-w-[60%]">
                 {clientDisplayName}
               </span>
-              {selectedClient.code && (
-                <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 font-mono text-[10px] shrink-0 font-bold">
-                  {selectedClient.code}
+              {clientLocationStr && (
+                <span className="text-[11px] sm:text-xs text-[var(--color-mute)] font-normal truncate">
+                  • {clientLocationStr}
                 </span>
               )}
-              {!compact && clientLocationStr && (
-                <span className="text-[10px] text-[var(--color-mute)] font-normal truncate hidden md:inline">
-                  📍 {clientLocationStr}
-                </span>
-              )}
-            </>
+            </span>
           ) : (
             <span className="text-[var(--color-mute)] font-normal">{placeholder}</span>
           )}
@@ -239,102 +257,135 @@ export function ClientSelect({
       )}
 
       {/* Popover Menu */}
-      {isOpen && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden max-h-72 flex flex-col backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-150">
-          {/* Search Header */}
-          <div className="p-2 border-b border-[var(--color-hairline)] flex items-center gap-2 bg-[var(--color-canvas)]">
-            <Search className="h-3.5 w-3.5 text-[var(--color-mute)] shrink-0 ml-1" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by Client Name, Code, City, Location..."
-              className="w-full bg-transparent text-xs text-[var(--color-ink)] focus:outline-none placeholder:text-[var(--color-mute)] py-1"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="text-[var(--color-mute)] hover:text-[var(--color-ink)] p-1 cursor-pointer"
-              >
-                <AnimatedX size={12} />
-              </button>
-            )}
-          </div>
-
-          {/* Listbox */}
-          <div className="overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
-            {allowAll && !searchQuery.trim() && (
-              <button
-                type="button"
-                onClick={() => handleSelect("all")}
-                className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
-                  isAllSelected
-                    ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold"
-                    : "hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="font-bold">{allLabel}</span>
-                  <span className="text-[10px] text-[var(--color-mute)] font-mono">
-                    ({clients.length} clients)
-                  </span>
-                </div>
-                {isAllSelected && (
-                  <AnimatedCheck size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
-                )}
-              </button>
-            )}
-
-            {filteredClients.length === 0 ? (
-              <div className="py-4 text-center text-xs text-[var(--color-mute)]">
-                No matching clients found
-              </div>
-            ) : (
-              filteredClients.map((c) => {
-                const isSelected =
-                  c.id === value ||
-                  (selectedClient ? c.id === selectedClient.id : false) ||
-                  (c.client_name && c.client_name.toLowerCase().trim() === value.toLowerCase().trim()) ||
-                  (c.company_name && c.company_name.toLowerCase().trim() === value.toLowerCase().trim());
-                const cName = c.company_name || c.client_name || c.name || "Client";
-                const cLoc = getFormattedClientLocation(c);
-                return (
+      {mounted && createPortal(
+        <AnimatePresence onExitComplete={() => setSearchQuery("")}>
+          {isOpen && isPositioned && (
+            <motion.div
+              ref={popoverRef}
+              key="client-select-popover"
+              initial={{
+                opacity: 0,
+                scale: 0.97,
+                y: position.placement === "top" ? 6 : -6,
+              }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+                y: 0,
+              }}
+              exit={{
+                opacity: 0,
+                scale: 0.97,
+                y: position.placement === "top" ? 4 : -4,
+              }}
+              transition={{
+                duration: 0.16,
+                ease: [0.16, 1, 0.3, 1],
+              }}
+              style={{
+                position: "fixed",
+                top: position.top !== undefined ? `${position.top}px` : "auto",
+                bottom: position.bottom !== undefined ? `${position.bottom}px` : "auto",
+                left: `${position.left}px`,
+                width: `${position.width}px`,
+                maxHeight: `${position.maxHeight}px`,
+                zIndex: 99999,
+                transformOrigin: position.placement === "top" ? "bottom center" : "top center",
+              }}
+              className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden flex flex-col backdrop-blur-md"
+            >
+              {/* Search Header */}
+              <div className="p-2 border-b border-[var(--color-hairline)] flex items-center gap-2 bg-[var(--color-canvas)] shrink-0">
+                <Search className="h-3.5 w-3.5 text-[var(--color-mute)] shrink-0 ml-1" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by Client Name, Location..."
+                  className="w-full bg-transparent text-xs text-[var(--color-ink)] focus:outline-none placeholder:text-[var(--color-mute)] py-1"
+                />
+                {searchQuery && (
                   <button
-                    key={c.id}
                     type="button"
-                    onClick={() => handleSelect(c.id)}
+                    onClick={() => setSearchQuery("")}
+                    className="text-[var(--color-mute)] hover:text-[var(--color-ink)] p-1 cursor-pointer"
+                  >
+                    <AnimatedX size={12} />
+                  </button>
+                )}
+              </div>
+
+              {/* Listbox */}
+              <div className="overflow-y-auto p-1.5 space-y-1 custom-scrollbar flex-1 min-h-0">
+                {allowAll && !searchQuery.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelect("all")}
                     className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
-                      isSelected
+                      isAllSelected
                         ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold"
                         : "hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
                     }`}
                   >
-                    <div className="min-w-0 pr-2 flex-1">
-                      <div className="font-bold flex items-center gap-2 truncate">
-                        <span className="truncate">{cName}</span>
-                        {c.code && (
-                          <span className="font-mono text-[10px] text-sky-600 dark:text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded shrink-0">
-                            {c.code}
-                          </span>
-                        )}
-                      </div>
-                      {cLoc && (
-                        <div className="text-[10px] text-[var(--color-mute)] font-normal truncate mt-0.5">
-                          📍 {cLoc}
-                        </div>
-                      )}
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">{allLabel}</span>
+                      <span className="text-[10px] text-[var(--color-mute)] font-mono">
+                        ({clients.length} clients)
+                      </span>
                     </div>
-                    {isSelected && (
+                    {isAllSelected && (
                       <AnimatedCheck size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
                     )}
                   </button>
-                );
-              })
-            )}
-          </div>
-        </div>
+                )}
+
+                {filteredClients.length === 0 ? (
+                  <div className="py-4 text-center text-xs text-[var(--color-mute)]">
+                    No matching clients found
+                  </div>
+                ) : (
+                  filteredClients.map((c) => {
+                    const isSelected =
+                      c.id === value ||
+                      (selectedClient ? c.id === selectedClient.id : false) ||
+                      (c.client_name && c.client_name.toLowerCase().trim() === value.toLowerCase().trim()) ||
+                      (c.company_name && c.company_name.toLowerCase().trim() === value.toLowerCase().trim());
+                    const cName = c.company_name || c.client_name || c.name || "Client";
+                    const cLoc = getFormattedClientLocation(c);
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => handleSelect(c.id)}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
+                          isSelected
+                            ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold"
+                            : "hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
+                        }`}
+                      >
+                        <div className="min-w-0 pr-2 flex-1">
+                          <div className="font-bold text-[var(--color-ink)] truncate text-xs sm:text-[13px]">
+                            {cName}
+                          </div>
+                          {cLoc && (
+                            <div className="text-[11px] text-[var(--color-mute)] font-normal truncate mt-0.5">
+                              {cLoc}
+                            </div>
+                          )}
+                        </div>
+                        {isSelected && (
+                          <AnimatedCheck size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
       )}
     </div>
   );

@@ -17,8 +17,14 @@ import { Printer, FileSpreadsheet, X, CheckCircle, ShieldAlert, Clock, Sparkles 
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
-import { formatDate, formatExactTimestamp, formatTo12Hour, getISTDateString } from '@reachinternational/utils';
+import { formatDate, formatExactTimestamp, formatTo12Hour, parseBreakdownString, getISTDateString } from '@reachinternational/utils';
 import { notifyLogsPdfExported, notifyLogsCsvExported } from '../../lib/notifications';
+import {
+  buildPdfHtmlHeader,
+  buildPdfHtmlKpiStrip,
+  buildPdfHtmlSignatureBlock,
+  buildPdfHtmlWrapper,
+} from '../../lib/pdf-html-templates';
 import type { HourLogRecord } from '../../app/(app)/operations';
 
 export interface OperationsExportModalProps {
@@ -69,6 +75,36 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
       `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
     )}`;
 
+    const isUuid = (val?: string | null): boolean =>
+      Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim()));
+
+    // Resolve client name cleanly (never a UUID)
+    let cleanClientName = !isUuid(selectedEntityName) ? selectedEntityName : '';
+    if (!cleanClientName) {
+      const logWithClient = logs.find(
+        (l) =>
+          (l.client?.company_name && !isUuid(l.client.company_name)) ||
+          (l.client?.client_name && !isUuid(l.client.client_name)) ||
+          (l.client?.name && !isUuid(l.client.name))
+      );
+      cleanClientName =
+        logWithClient?.client?.company_name ||
+        logWithClient?.client?.client_name ||
+        logWithClient?.client?.name ||
+        'Client Representative';
+    }
+
+    cleanClientName = cleanClientName.trim().replace(/^['":\s]+|['":\s]+$/g, '');
+    const cleanLocationLabel = (selectedLocationLabel || '')
+      .trim()
+      .replace(/[,:\s]+$/, '');
+
+    const formatCompactTiming = (startStr?: string | null, endStr?: string | null): string => {
+      const formattedStart = formatTo12Hour(startStr) || '06:00 AM';
+      const formattedEnd = formatTo12Hour(endStr) || '02:00 PM';
+      return `${formattedStart.replace(/\s+/g, '')}-${formattedEnd.replace(/\s+/g, '')}`;
+    };
+
     const rowsHtml = logs
       .map((log, index) => {
         const startMtr = log.start_meter ?? 0;
@@ -77,196 +113,133 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
         const otHrs = log.overtime_hours ?? 0;
         const mModel = log.machine?.model || log.machine_code || '—';
         const mSerial = log.machine?.serial_number || '—';
-        const clientName = log.client?.name || 'Unassigned';
+        const logClientName = log.client?.company_name || log.client?.client_name || log.client?.name || 'Unassigned';
         const opName = log.operator?.full_name || 'Unassigned';
-        const shiftTimes = log.start_time && log.end_time
-          ? `${formatTo12Hour(log.start_time)} - ${formatTo12Hour(log.end_time)}`
-          : '—';
-        const breakdownText = log.is_breakdown ? 'Breakdown' : '0';
-        const cleanRemarks = (log.remarks || '—').replace(/\[Breakdown Duration:[^\]]+\]/gi, '').trim();
+        const shiftTimes = formatCompactTiming(log.start_time, log.end_time);
+
+        const isBkd = log.is_breakdown;
+        const bkdMatch = (log.remarks || '').match(/\[Breakdown Duration:\s*([^\]]+)\]/i) || (log.remarks || '').match(/Breakdown\s*(?:Duration)?:?\s*(\d+h?\s*\d*m?)/i);
+        const bkdRaw = (log as any).breakdown_duration || (bkdMatch ? bkdMatch[1].trim() : null);
+        const bkdParsed = parseBreakdownString(bkdRaw || log.remarks);
+        const bkdStartTime = (log as any).breakdown_start_time || bkdParsed?.startTime || null;
+        const bkdEndTime = (log as any).breakdown_end_time || bkdParsed?.endTime || null;
+        const bkdDurationOnly = bkdParsed?.durationFormatted || bkdParsed?.durationText || bkdRaw || (isBkd ? 'Breakdown' : null);
+
+        let cleanRemarks = (log.remarks || '—').replace(/\[Breakdown Duration:[^\]]+\]/gi, '').trim();
+        if (cleanRemarks.toLowerCase() === 'breakdown' || cleanRemarks.toLowerCase() === 'machine breakdown') {
+          cleanRemarks = '—';
+        }
+        cleanRemarks = cleanRemarks || '—';
+
+        let breakdownCellHtml = '<span style="font-weight: 700; color: #525252; font-family: monospace;">0</span>';
+        if (isBkd) {
+          if (bkdStartTime && bkdEndTime) {
+            breakdownCellHtml = `
+              <div style="color: #be123c; font-family: monospace; text-align: center; line-height: 1.2;">
+                <div style="font-weight: 800; font-size: 9px; white-space: nowrap;">${formatCompactTiming(bkdStartTime, bkdEndTime)}</div>
+                <div style="font-weight: 700; font-size: 8.5px;">(${bkdDurationOnly})</div>
+              </div>
+            `;
+          } else {
+            breakdownCellHtml = `
+              <div style="color: #be123c; font-family: monospace; text-align: center; line-height: 1.2; word-break: break-word;">
+                <span style="font-weight: 800; font-size: 9px;">${bkdDurationOnly && bkdDurationOnly.toLowerCase() !== 'breakdown' ? bkdDurationOnly : 'Breakdown'}</span>
+              </div>
+            `;
+          }
+        }
 
         return `
-          <tr style="border-bottom: 1px solid #e5e5e5; font-size: 11px;">
-            <td style="padding: 6px 8px; text-align: center; font-weight: bold; color: #737373;">${index + 1}</td>
-            <td style="padding: 6px 8px; white-space: nowrap; font-family: monospace; font-weight: 600;">${formatDate(log.log_date)}</td>
-            <td style="padding: 6px 8px; font-weight: bold;">${mModel}</td>
-            <td style="padding: 6px 8px; font-family: monospace; color: #525252;">${mSerial}</td>
-            <td style="padding: 6px 8px;">
-              <div style="font-weight: 600;">${clientName}</div>
-              <div style="font-size: 10px; color: #737373;">${log.location || '—'}</div>
+          <tr style="border-bottom: 1px solid #e5e5e5; font-size: 10px;">
+            <td style="padding: 5px 4px; text-align: center; font-weight: bold; color: #171717;">${index + 1}</td>
+            <td style="padding: 5px 4px; text-align: center; white-space: nowrap; font-family: monospace; font-weight: 600;">${formatDate(log.log_date)}</td>
+            <td style="padding: 5px 4px; text-align: center; font-weight: bold; font-family: monospace;">${mModel}</td>
+            <td style="padding: 5px 4px; text-align: center; font-family: monospace; color: #171717; font-weight: bold;">${mSerial}</td>
+            <td style="padding: 5px 4px; text-align: center;">
+              <div style="font-weight: 700; font-size: 9.5px; text-align: center;">${logClientName}</div>
+              <div style="font-size: 8.5px; color: #737373; text-align: center;">${log.location || '—'}</div>
             </td>
-            <td style="padding: 6px 8px;">${opName}</td>
-            <td style="padding: 6px 8px; text-align: center; font-family: monospace;">${shiftTimes}</td>
-            <td style="padding: 6px 8px; text-align: center; font-family: monospace; font-weight: 700; color: #0284c7;">${runningHrs} hrs</td>
-            <td style="padding: 6px 8px; text-align: center; font-family: monospace; font-weight: 700; color: #d97706;">${otHrs > 0 ? `${otHrs} hrs` : '0h'}</td>
-            <td style="padding: 6px 8px; text-align: center; font-weight: 700; color: ${log.is_breakdown ? '#e11d48' : '#737373'};">${breakdownText}</td>
-            <td style="padding: 6px 8px; font-style: italic; color: #737373; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${cleanRemarks}</td>
+            <td style="padding: 5px 4px; text-align: center; font-weight: 600;">
+              <div style="text-align: center;">${opName}</div>
+            </td>
+            <td style="padding: 5px 4px; text-align: center; font-family: monospace; font-size: 9px; white-space: nowrap;">${shiftTimes}</td>
+            <td style="padding: 5px 4px; text-align: center; font-family: monospace; font-weight: 800; color: #0284c7;">${runningHrs}h</td>
+            <td style="padding: 5px 4px; text-align: center; font-family: monospace; font-weight: 800; color: #d97706;">${otHrs > 0 ? `${otHrs}h` : '0h'}</td>
+            <td style="padding: 5px 4px; text-align: center;">${breakdownCellHtml}</td>
+            <td style="padding: 5px 4px; text-align: center; font-style: italic; color: #525252; word-break: break-word;">${cleanRemarks}</td>
           </tr>
         `;
       })
       .join('');
 
-    return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>${reportTitle}</title>
-          <style>
-            @page {
-              size: A4 portrait;
-              margin: 10mm;
-            }
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-              color: #171717;
-              background-color: #ffffff;
-              margin: 0;
-              padding: 10px;
-            }
-            .header {
-              border-bottom: 2px solid #171717;
-              padding-bottom: 10px;
-              margin-bottom: 12px;
-            }
-            .title {
-              font-size: 18px;
-              font-weight: 900;
-              text-align: center;
-              margin: 0 0 6px 0;
-              letter-spacing: 0.5px;
-            }
-            .subtitle {
-              font-size: 12px;
-              font-weight: 700;
-              text-align: center;
-              color: #525252;
-              margin-bottom: 8px;
-            }
-            .meta-grid {
-              display: flex;
-              justify-content: space-between;
-              flex-wrap: wrap;
-              gap: 8px;
-              font-size: 10.5px;
-              background: #f5f5f5;
-              padding: 8px 12px;
-              border-radius: 6px;
-              margin-top: 8px;
-            }
-            .kpi-strip {
-              display: grid;
-              grid-template-columns: repeat(4, 1fr);
-              gap: 8px;
-              background: #171717;
-              color: #ffffff;
-              padding: 10px;
-              border-radius: 8px;
-              margin: 12px 0;
-              text-align: center;
-            }
-            .kpi-label {
-              font-size: 9px;
-              text-transform: uppercase;
-              font-weight: 700;
-              color: #a3a3a3;
-              margin-bottom: 2px;
-            }
-            .kpi-value {
-              font-size: 14px;
-              font-weight: 800;
-              font-family: monospace;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 10px;
-            }
-            th {
-              background-color: #f5f5f5;
-              border-bottom: 2px solid #171717;
-              padding: 8px 6px;
-              font-size: 10px;
-              text-transform: uppercase;
-              font-weight: 800;
-              text-align: left;
-              color: #171717;
-            }
-            .footer {
-              margin-top: 20px;
-              padding-top: 10px;
-              border-top: 1px solid #e5e5e5;
-              font-size: 9px;
-              color: #737373;
-              display: flex;
-              justify-content: space-between;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1 class="title">${reportTitle}</h1>
-            <div class="subtitle">
-              ${viewMode === 'client' ? `CLIENT: ${selectedEntityName}` : viewMode === 'machine' ? `EQUIPMENT: ${selectedEntityName}` : `OPERATOR: ${selectedEntityName}`}
-              ${selectedLocationLabel && selectedLocationLabel !== 'all' ? ` | LOCATION: ${selectedLocationLabel}` : ''}
-              ${selectedMachineLabel && selectedMachineLabel !== 'all' ? ` | MACHINE: ${selectedMachineLabel}` : ''}
-            </div>
-            <div class="meta-grid">
-              <div><strong>Period:</strong> ${selectedMonthLabel}</div>
-              <div><strong>Supervisor:</strong> ${supervisorName}</div>
-              <div><strong>Export Date:</strong> ${exportDateTime}</div>
-              <div><strong>Total Records:</strong> ${logs.length}</div>
-            </div>
-          </div>
+    const headerHtml = buildPdfHtmlHeader({
+      title: reportTitle,
+      subtitle:
+        viewMode === 'client'
+          ? `<span style="display: inline-block;">CLIENT: <strong>${cleanClientName.toUpperCase()}</strong></span>${cleanLocationLabel && cleanLocationLabel !== 'all' ? ` <span style="color:#a3a3a3; font-weight: normal; margin: 0 4px;">|</span> <span style="display: inline;">LOCATION: <strong>${cleanLocationLabel.toUpperCase()}</strong></span>` : ''}`
+          : viewMode === 'machine'
+          ? `<span style="display: inline-block;">EQUIPMENT: <strong>${selectedEntityName.toUpperCase()}</strong></span>${cleanLocationLabel && cleanLocationLabel !== 'all' ? ` <span style="color:#a3a3a3; font-weight: normal; margin: 0 4px;">|</span> <span style="display: inline;">LOCATION: <strong>${cleanLocationLabel.toUpperCase()}</strong></span>` : ''}`
+          : `<span style="display: inline-block;">OPERATOR: <strong>${selectedEntityName.toUpperCase()}</strong></span>${cleanLocationLabel && cleanLocationLabel !== 'all' ? ` <span style="color:#a3a3a3; font-weight: normal; margin: 0 4px;">|</span> <span style="display: inline;">LOCATION: <strong>${cleanLocationLabel.toUpperCase()}</strong></span>` : ''}`,
+      metaItems: [
+        { label: 'Period', value: selectedMonthLabel },
+        { label: 'Supervisor', value: supervisorName },
+        { label: 'Export Date', value: exportDateTime },
+        { label: 'Total Records', value: String(logs.length) },
+      ],
+    });
 
-          <div class="kpi-strip">
-            <div>
-              <div class="kpi-label">Total Logs</div>
-              <div class="kpi-value">${logs.length}</div>
-            </div>
-            <div>
-              <div class="kpi-label">Operating Hours</div>
-              <div class="kpi-value" style="color: #38bdf8;">${Math.round(totalRunningHours * 10) / 10} hrs</div>
-            </div>
-            <div>
-              <div class="kpi-label">Overtime Hours</div>
-              <div class="kpi-value" style="color: #fbbf24;">${Math.round(totalOtHours * 10) / 10} hrs</div>
-            </div>
-            <div>
-              <div class="kpi-label">Breakdown Events</div>
-              <div class="kpi-value" style="color: #fb7185;">${totalBreakdowns}</div>
-            </div>
-          </div>
+    const kpiStripHtml = buildPdfHtmlKpiStrip([
+      { label: 'Total Logs', value: String(logs.length) },
+      { label: 'Operating Hours', value: `${Math.round(totalRunningHours * 10) / 10} hrs`, color: '#0369a1' },
+      { label: 'Overtime Hours', value: `${Math.round(totalOtHours * 10) / 10} hrs`, color: '#b45309' },
+      { label: 'Breakdown Events', value: String(totalBreakdowns), color: '#be123c' },
+    ]);
 
-          <table>
-            <thead>
-              <tr>
-                <th style="text-align: center;">#</th>
-                <th>Date</th>
-                <th>Model</th>
-                <th>Serial No</th>
-                <th>Client / Site</th>
-                <th>Operator</th>
-                <th style="text-align: center;">Shift Timings</th>
-                <th style="text-align: center;">Run Hrs</th>
-                <th style="text-align: center;">OT</th>
-                <th style="text-align: center;">Breakdown</th>
-                <th>Remarks</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml || '<tr><td colspan="11" style="text-align:center; padding: 20px; color:#737373;">No daily running hour logs found.</td></tr>'}
-            </tbody>
-          </table>
-
-          <div class="footer">
-            <div>Reach International · Industrial Fleet Operations Management</div>
-            <div>Generated securely via Reach Mobile Application</div>
-          </div>
-        </body>
-      </html>
+    const tableHtml = `
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 4%;">#</th>
+            <th style="width: 9%;">DATE</th>
+            <th style="width: 10%;">MODEL</th>
+            <th style="width: 11%;">SERIAL NO</th>
+            <th style="width: 17%;">CLIENT / SITE</th>
+            <th style="width: 14%;">OPERATOR</th>
+            <th style="width: 12%;">TIMINGS</th>
+            <th style="width: 6%;">WT (H)</th>
+            <th style="width: 5%;">OT</th>
+            <th style="width: 12%;">BREAKDOWN</th>
+            <th style="width: 14%;">REMARKS</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml || '<tr><td colspan="11" style="text-align:center; padding: 20px; color:#737373;">No daily running hour logs found.</td></tr>'}
+        </tbody>
+      </table>
     `;
+
+    const signaturesHtml = buildPdfHtmlSignatureBlock([
+      {
+        title: 'Prepared By',
+        name: `<span style="font-style: italic; font-weight: bold;">${viewMode === 'operator' ? selectedEntityName : supervisorName}</span>`,
+        subtitle: viewMode === 'operator' ? '(Machine Operator)' : '(Operations Supervisor)',
+      },
+      {
+        title: 'Client Details &amp; Sign-off',
+        name: cleanClientName,
+        subtitle: cleanLocationLabel && cleanLocationLabel !== 'all' ? `Site: ${cleanLocationLabel}` : 'Site Representative',
+      },
+      {
+        title: 'Verified &amp; Approved By',
+        name: 'REACH INTERNATIONAL',
+        subtitle: '(Operations / Service Manager)',
+      },
+    ]);
+
+    return buildPdfHtmlWrapper({
+      title: reportTitle,
+      bodyContent: `${headerHtml}\n${kpiStripHtml}\n${tableHtml}\n${signaturesHtml}`,
+    });
   };
 
   const getExportFilename = (extension: 'pdf' | 'csv'): string => {
@@ -364,7 +337,7 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
           `"${log.machine?.model || ''}"`,
           `"${log.machine?.serial_number || ''}"`,
           `"${log.machine_code || ''}"`,
-          `"${log.client?.name || ''}"`,
+          `"${log.client?.company_name || log.client?.client_name || log.client?.name || ''}"`,
           `"${log.location || ''}"`,
           `"${log.operator?.full_name || ''}"`,
           `"${shiftTimes}"`,

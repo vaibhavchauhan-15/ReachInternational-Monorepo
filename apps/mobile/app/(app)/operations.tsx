@@ -12,6 +12,8 @@ import {
   Platform,
   TextInput,
   StatusBar,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem } from '../../components/ui';
@@ -73,7 +75,13 @@ import {
   MapPin,
   ChevronLeft,
   ChevronRight,
+  Zap,
+  FileText,
 } from 'lucide-react-native';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export type OpsTab = 'logs' | 'assignments' | 'entry' | 'history';
 export type LogsViewMode = 'machine' | 'client' | 'operator';
@@ -124,8 +132,12 @@ export interface HourLogRecord {
     name?: string;
     company_name?: string;
     client_name?: string;
+    street?: string;
+    Street?: string;
     city?: string;
+    district?: string;
     state?: string;
+    pincode?: string;
     phone?: string;
     email?: string;
     address?: string;
@@ -165,9 +177,13 @@ export interface ClientRecord {
   company_name: string;
   phone?: string;
   email?: string;
+  street?: string;
+  Street?: string;
   address?: string;
   city?: string;
+  district?: string;
   state?: string;
+  pincode?: string;
 }
 
 export const MONTH_OPTIONS = [
@@ -211,7 +227,7 @@ export default function OperationsScreen() {
   const [machinesList, setMachinesList] = useState<MachineWithAssignments[]>([]);
   const [clientsList, setClientsList] = useState<ClientRecord[]>([]);
   const [activeOperators, setActiveOperators] = useState<
-    { id: string; full_name: string; phone?: string; shift_time?: string }[]
+    { id: string; full_name: string; phone?: string; shift_time?: string; email?: string }[]
   >([]);
 
   // Daily Running Hours Sub-tab View Mode
@@ -225,7 +241,7 @@ export default function OperationsScreen() {
 
   const [selectedMachineId, setSelectedMachineId] = useState<string>('');
   const [selectedClientId, setSelectedClientId] = useState<string>('');
-  const [selectedSiteLocation, setSelectedSiteLocation] = useState<string>('all');
+  const [selectedSiteLocation, setSelectedSiteLocation] = useState<string>('');
   const [selectedClientMachineId, setSelectedClientMachineId] = useState<string>('all');
   const [selectedOperatorId, setSelectedOperatorId] = useState<string>('');
   const [selectedMonth, setSelectedMonth] = useState<string>(getCurrentMonthValue());
@@ -253,6 +269,17 @@ export default function OperationsScreen() {
   const [selectedConflictLog, setSelectedConflictLog] = useState<HourLogRecord | null>(null);
   const [showAllConflicts, setShowAllConflicts] = useState<boolean>(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
+
+  // Collapsible section states (Default: COLLAPSED per feedback)
+  const [isFiltersExpanded, setIsFiltersExpanded] = useState<boolean>(false);
+  const [isClientSummaryExpanded, setIsClientSummaryExpanded] = useState<boolean>(false);
+  const [isMachineSummaryExpanded, setIsMachineSummaryExpanded] = useState<boolean>(false);
+  const [isOperatorSummaryExpanded, setIsOperatorSummaryExpanded] = useState<boolean>(false);
+
+  const toggleWithAnimation = (setter: React.Dispatch<React.SetStateAction<boolean>>) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setter((prev) => !prev);
+  };
 
   // Reusable Selector Modal State
   const [selectorModalConfig, setSelectorModalConfig] = useState<{
@@ -300,8 +327,8 @@ export default function OperationsScreen() {
     return () => clearTimeout(timer);
   }, [assignmentSearch]);
 
-  const isSearchingLogs = search.trim() !== debouncedSearch.trim() && search.trim() !== '';
-  const isSearchingAssignments = assignmentSearch.trim() !== debouncedAssignmentSearch.trim() && assignmentSearch.trim() !== '';
+  const isSearchingLogs = search.trim() !== debouncedSearch.trim();
+  const isSearchingAssignments = assignmentSearch.trim() !== debouncedAssignmentSearch.trim();
 
   // Expand / Collapse Single Machine Card
   const toggleMachineExpanded = (machineId: string) => {
@@ -391,7 +418,7 @@ export default function OperationsScreen() {
           .order('full_name'),
         supabase
           .from('clients')
-          .select('id, code, company_name, phone, address, city, state')
+          .select('id, code, company_name, phone, street, city, district, state, pincode')
           .order('company_name'),
         supabase
           .from('machine_hour_logs')
@@ -420,7 +447,7 @@ export default function OperationsScreen() {
             conflict_resolution_notes,
             machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number, manufacturer, status),
             operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone),
-            client:clients!machine_hour_logs_client_id_fkey(id, company_name, phone, address, city, state)
+            client:clients!machine_hour_logs_client_id_fkey(id, company_name, phone, street, city, district, state, pincode)
           `)
           .order('log_date', { ascending: false })
           .order('created_at', { ascending: false })
@@ -451,7 +478,14 @@ export default function OperationsScreen() {
       }
 
       if (clientsRes.data && clientsRes.data.length > 0 && !selectedClientId) {
-        setSelectedClientId(clientsRes.data[0].id);
+        // Default to the client with the most recent log, or first client as fallback
+        const rawLogs = (logsRes.data || []) as any[];
+        const recentLog = rawLogs.find((l) => l.client_id || (Array.isArray(l.client) ? l.client[0]?.id : l.client?.id));
+        const recentClient = Array.isArray(recentLog?.client) ? recentLog?.client[0] : recentLog?.client;
+        const recentId = recentLog?.client_id || recentClient?.id || null;
+        const cList = clientsRes.data as any[];
+        const validRecent = recentId && cList.some((c: any) => c.id === recentId);
+        setSelectedClientId(validRecent ? recentId : cList[0]?.id);
       }
 
       if (opsRes.data && opsRes.data.length > 0 && !selectedOperatorId) {
@@ -459,11 +493,14 @@ export default function OperationsScreen() {
       }
 
       if (logsRes.data) {
-        const formattedLogs: HourLogRecord[] = logsRes.data.map((l: any) => ({
-          ...l,
-          machine_code: l.machine?.machine_id || l.machine_id || 'Equipment',
-          client: l.client ? { ...l.client, name: l.client.company_name || l.client.client_name } : null,
-        }));
+        const formattedLogs: HourLogRecord[] = logsRes.data.map((l: any) => {
+          const clientData = Array.isArray(l.client) ? l.client[0] : l.client;
+          return {
+            ...l,
+            machine_code: l.machine?.machine_id || l.machine_id || 'Equipment',
+            client: clientData ? { ...clientData, name: clientData.company_name || clientData.client_name } : null,
+          };
+        });
         setLogs(formattedLogs);
       }
     } catch (err) {
@@ -488,6 +525,88 @@ export default function OperationsScreen() {
     return logs.filter((l) => l.conflict_flag && l.conflict_status !== 'resolved');
   }, [logs]);
 
+  // Client Specific Locations and Machines (Unified Address: Street, City, District, State, Pincode)
+  const clientLocations = useMemo(() => {
+    if (!selectedClientId) return [];
+    const sites = new Set<string>();
+    const activeClient = clientsList.find((c) => c.id === selectedClientId);
+    const activeClientName = activeClient?.company_name?.trim().toLowerCase();
+
+    // 1. Collect address from all client records matching this company name
+    const matchingClients = clientsList.filter(
+      (c) => c.id === selectedClientId || (activeClientName && c.company_name?.trim().toLowerCase() === activeClientName)
+    );
+    const matchingClientIds = new Set(matchingClients.map((c) => c.id));
+
+    matchingClients.forEach((c) => {
+      const fullAddr = [
+        c.street,
+        c.city,
+        c.district,
+        c.state,
+        c.pincode,
+      ]
+        .filter(Boolean)
+        .map((s) => String(s).trim())
+        .filter(Boolean)
+        .join(', ');
+      if (fullAddr) sites.add(fullAddr);
+    });
+
+    // 2. Add log locations for matching clients
+    logs.forEach((l) => {
+      const isClientMatch =
+        (l.client_id && matchingClientIds.has(l.client_id)) ||
+        (activeClientName && l.client?.company_name?.trim().toLowerCase() === activeClientName);
+      if (isClientMatch && l.location && l.location.trim()) {
+        sites.add(l.location.trim());
+      }
+    });
+
+    // 3. Normalize & deduplicate: collapse partial fragments into full canonical addresses
+    const normalized: string[] = [];
+    Array.from(sites).forEach((s) => {
+      const existingIdx = normalized.findIndex(
+        (item) => item.toLowerCase().includes(s.toLowerCase()) || s.toLowerCase().includes(item.toLowerCase())
+      );
+      if (existingIdx === -1) {
+        normalized.push(s);
+      } else if (s.length > normalized[existingIdx].length) {
+        normalized[existingIdx] = s;
+      }
+    });
+    return normalized.filter(Boolean);
+  }, [logs, selectedClientId, clientsList]);
+
+  // Default to the most recent location used instead of 'all' (unselected)
+  const mostRecentClientLocation = useMemo(() => {
+    if (!selectedClientId) return '';
+    const activeClient = clientsList.find((c) => c.id === selectedClientId);
+    const activeClientName = activeClient?.company_name?.trim().toLowerCase();
+    const matchingClientIds = new Set(
+      clientsList
+        .filter((c) => c.id === selectedClientId || (activeClientName && c.company_name?.trim().toLowerCase() === activeClientName))
+        .map((c) => c.id)
+    );
+    const clientLogs = logs.filter(
+      (l) => (l.client_id && matchingClientIds.has(l.client_id)) || (activeClientName && l.client?.company_name?.trim().toLowerCase() === activeClientName)
+    );
+    const recentWithLoc = clientLogs.find((l) => (l.location || '').trim().length > 0);
+    const recentLoc = recentWithLoc?.location?.trim();
+    if (recentLoc) {
+      const match = clientLocations.find(
+        (site) => site.toLowerCase() === recentLoc.toLowerCase() ||
+                  recentLoc.toLowerCase().includes(site.toLowerCase()) ||
+                  site.toLowerCase().includes(recentLoc.toLowerCase())
+      );
+      return match || recentLoc;
+    }
+    return clientLocations[0] || '';
+  }, [selectedClientId, logs, clientLocations, clientsList]);
+
+  // Effective location selection (defaults to "all" so all logs across client sites are visible unless a specific site is chosen)
+  const effectiveSiteLocation = selectedSiteLocation || 'all';
+
   // Filtered Logs for Supervisor View
   const filteredLogs = useMemo(() => {
     return logs.filter((log) => {
@@ -499,12 +618,28 @@ export default function OperationsScreen() {
       } else if (logsViewMode === 'client') {
         if (selectedClientId && selectedClientId !== 'all') {
           const mObj = machinesList.find((m) => m.id === log.machine_id);
-          const matchesClientId = log.client_id === selectedClientId || (mObj && mObj.client_id === selectedClientId);
+          const activeClient = clientsList.find((c) => c.id === selectedClientId);
+          const activeClientName = activeClient?.company_name?.trim().toLowerCase();
+          const matchingClientIds = new Set(
+            clientsList
+              .filter((c) => c.id === selectedClientId || (activeClientName && c.company_name?.trim().toLowerCase() === activeClientName))
+              .map((c) => c.id)
+          );
+          const matchesClientId =
+            (log.client_id && matchingClientIds.has(log.client_id)) ||
+            (mObj && mObj.client_id && matchingClientIds.has(mObj.client_id)) ||
+            (activeClientName && log.client?.company_name?.trim().toLowerCase() === activeClientName);
           if (!matchesClientId) return false;
         }
-        if (selectedSiteLocation && selectedSiteLocation !== 'all') {
+        if (effectiveSiteLocation && effectiveSiteLocation !== 'all') {
           const locStr = (log.location || '').toLowerCase();
-          if (!locStr.includes(selectedSiteLocation.toLowerCase())) return false;
+          const targetLoc = effectiveSiteLocation.toLowerCase();
+          let matches = locStr.includes(targetLoc) || targetLoc.includes(locStr);
+          if (!matches) {
+            const tokens = targetLoc.split(',').map((t) => t.trim()).filter((t) => t.length >= 3);
+            matches = tokens.some((t) => locStr.includes(t));
+          }
+          if (!matches) return false;
         }
         if (selectedClientMachineId && selectedClientMachineId !== 'all') {
           if (log.machine_id !== selectedClientMachineId) return false;
@@ -550,7 +685,7 @@ export default function OperationsScreen() {
     logsViewMode,
     selectedMachineId,
     selectedClientId,
-    selectedSiteLocation,
+    effectiveSiteLocation,
     selectedClientMachineId,
     selectedOperatorId,
     selectedMonth,
@@ -603,22 +738,19 @@ export default function OperationsScreen() {
     return activeOperators.find((o) => o.id === selectedOperatorId) || activeOperators[0] || null;
   }, [activeOperators, selectedOperatorId]);
 
-  // Client Specific Locations and Machines
-  const clientLocations = useMemo(() => {
-    if (!selectedClientId) return [];
-    const sites = new Set<string>();
-    logs.forEach((l) => {
-      if (l.client_id === selectedClientId && l.location) {
-        sites.add(l.location.trim());
-      }
-    });
-    return Array.from(sites);
-  }, [logs, selectedClientId]);
+
 
   const clientMachines = useMemo(() => {
     if (!selectedClientId) return [];
-    return machinesList.filter((m) => m.client_id === selectedClientId);
-  }, [machinesList, selectedClientId]);
+    const activeClient = clientsList.find((c) => c.id === selectedClientId);
+    const activeClientName = activeClient?.company_name?.trim().toLowerCase();
+    const matchingClientIds = new Set(
+      clientsList
+        .filter((c) => c.id === selectedClientId || (activeClientName && c.company_name?.trim().toLowerCase() === activeClientName))
+        .map((c) => c.id)
+    );
+    return machinesList.filter((m) => m.client_id && matchingClientIds.has(m.client_id));
+  }, [machinesList, selectedClientId, clientsList]);
 
   // Assignments Tab Metrics & Filtered List
   const activeAssignmentsList = useMemo(() => {
@@ -697,12 +829,24 @@ export default function OperationsScreen() {
   };
 
   const openClientSelector = () => {
-    const options: FilterSelectOption[] = clientsList.map((c) => ({
-      id: c.id,
-      label: c.company_name,
-      subLabel: [c.city, c.state].filter(Boolean).join(', ') || undefined,
-      code: c.code,
-    }));
+    const options: FilterSelectOption[] = clientsList.map((c) => {
+      const machineCount = machinesList.filter((m) => m.client_id === c.id).length;
+      const parts = [(c as any).street, c.city, (c as any).district, c.state, (c as any).pincode]
+        .filter(Boolean)
+        .map((s) => String(s).trim())
+        .filter(Boolean);
+      const fullLoc =
+        parts.length > 0
+          ? parts.join(', ')
+          : ((c as any).address ? String((c as any).address).trim() : undefined);
+      return {
+        id: c.id,
+        label: c.company_name,
+        subLabel: fullLoc,
+        badge: machineCount > 0 ? `${machineCount} ${machineCount === 1 ? 'M/C' : 'M/Cs'}` : undefined,
+        badgeVariant: 'info',
+      };
+    });
 
     setSelectorModalConfig({
       visible: true,
@@ -711,7 +855,7 @@ export default function OperationsScreen() {
       selectedValue: selectedClientId,
       onSelect: (val) => {
         setSelectedClientId(val);
-        setSelectedSiteLocation('all');
+        setSelectedSiteLocation('');
         setSelectedClientMachineId('all');
         setLogsPage(1);
       },
@@ -731,7 +875,7 @@ export default function OperationsScreen() {
       visible: true,
       title: 'Select Location',
       options,
-      selectedValue: selectedSiteLocation,
+      selectedValue: effectiveSiteLocation,
       onSelect: (val) => {
         setSelectedSiteLocation(val);
         setLogsPage(1);
@@ -1259,39 +1403,77 @@ export default function OperationsScreen() {
 
           {/* Sub-Tabs Toolbar Box */}
           <Card variant="elevated" style={styles.filterCard}>
-            {/* Sub-Tabs Pill Switcher: Machine | Clients | Operator */}
-            <View style={[styles.subTabPillsRow, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-              {(['machine', 'clients', 'operator'] as const).map((mode) => {
-                const isSelected = logsViewMode === (mode === 'clients' ? 'client' : mode);
-                const label = mode === 'machine' ? 'Machine' : mode === 'clients' ? 'Clients' : 'Operator';
-                return (
-                  <TouchableOpacity
-                    key={mode}
-                    onPress={() => {
-                      setLogsViewMode(mode === 'clients' ? 'client' : mode);
-                      setLogsPage(1);
-                    }}
-                    style={[
-                      styles.subTabPill,
-                      isSelected && [styles.subTabPillActive, { backgroundColor: theme.colors.ink }],
-                    ]}
-                  >
-                    <Text
+            {/* Top Row: Sub-Tabs Switcher & Print Icon Button + Filters Toggle */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: spacingNumeric.sm }}>
+              <View style={[styles.subTabPillsRow, { flex: 1, marginBottom: 0, backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                {(['machine', 'clients', 'operator'] as const).map((mode) => {
+                  const isSelected = logsViewMode === (mode === 'clients' ? 'client' : mode);
+                  const label = mode === 'machine' ? 'Machine' : mode === 'clients' ? 'Clients' : 'Operator';
+                  return (
+                    <TouchableOpacity
+                      key={mode}
+                      onPress={() => {
+                        setLogsViewMode(mode === 'clients' ? 'client' : mode);
+                        setLogsPage(1);
+                      }}
                       style={[
-                        styles.subTabPillText,
-                        { color: isSelected ? theme.colors.canvas : theme.colors.mute },
-                        isSelected && { fontWeight: '700' },
+                        styles.subTabPill,
+                        isSelected && [styles.subTabPillActive, { backgroundColor: theme.colors.ink }],
                       ]}
                     >
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+                      <Text
+                        style={[
+                          styles.subTabPillText,
+                          { color: isSelected ? theme.colors.canvas : theme.colors.mute },
+                          isSelected && { fontWeight: '700' },
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Top-Right Print Icon Button */}
+              <TouchableOpacity
+                onPress={() => setShowExportModal(true)}
+                activeOpacity={0.7}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: radiusNumeric.lg,
+                  backgroundColor: '#0284c7',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                accessibilityLabel="Export / Print Report"
+              >
+                <Printer size={16} color="#ffffff" />
+              </TouchableOpacity>
+
+              {/* Expand / Collapse Filters Button */}
+              <TouchableOpacity
+                onPress={() => toggleWithAnimation(setIsFiltersExpanded)}
+                activeOpacity={0.7}
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: radiusNumeric.lg,
+                  backgroundColor: theme.colors.canvas,
+                  borderWidth: 1,
+                  borderColor: theme.colors.hairline,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                accessibilityLabel="Toggle Filters"
+              >
+                {isFiltersExpanded ? <ChevronUp size={16} color={theme.colors.mute} /> : <ChevronDown size={16} color={theme.colors.mute} />}
+              </TouchableOpacity>
             </View>
 
             {/* Search Input Bar */}
-            <View style={[styles.searchBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+            <View style={[styles.searchBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, marginBottom: spacingNumeric.sm }]}>
               {isSearchingLogs ? (
                 <ActivityIndicator size="small" color={theme.colors.link} style={{ marginRight: 8 }} />
               ) : (
@@ -1312,31 +1494,13 @@ export default function OperationsScreen() {
               )}
             </View>
 
-            {/* Export / Print Button */}
-            <View style={styles.exportBarRow}>
-              <TouchableOpacity
-                onPress={() => setShowExportModal(true)}
-                activeOpacity={0.8}
-                style={[
-                  styles.exportBtn,
-                  {
-                    backgroundColor: theme.colors.canvas,
-                    borderColor: theme.colors.hairline,
-                    borderWidth: 1,
-                  },
-                ]}
-              >
-                <Printer size={14} color={theme.colors.ink} style={{ marginRight: 6 }} />
-                <Text style={[styles.exportBtnText, { color: theme.colors.ink }]}>Export / Print</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Dropdowns depending on logsViewMode */}
+            {/* Dropdowns depending on logsViewMode (Collapsible) */}
+            {isFiltersExpanded && (
             <View style={styles.dropdownsContainer}>
               {logsViewMode === 'machine' && (
                 <>
                   <View style={styles.dropdownField}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.mute }]}>Select Machine</Text>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.mute }]}>Select Machine ({machinesList.length} Total)</Text>
                     <TouchableOpacity
                       onPress={openMachineSelector}
                       style={[styles.selectorTrigger, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
@@ -1366,33 +1530,66 @@ export default function OperationsScreen() {
               {logsViewMode === 'client' && (
                 <>
                   <View style={styles.dropdownField}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.mute }]}>Select Client</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={[styles.fieldLabel, { color: theme.colors.mute, marginBottom: 0 }]}>Select Client</Text>
+                      <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline }}>
+                        <Text style={{ fontSize: 10, fontFamily: 'monospace', color: theme.colors.mute }}>{clientsList.length} Total</Text>
+                      </View>
+                    </View>
                     <TouchableOpacity
                       onPress={openClientSelector}
                       style={[styles.selectorTrigger, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
                     >
-                      <Text style={[styles.selectorTriggerText, { color: theme.colors.ink }]} numberOfLines={1}>
-                        {selectedClientObj?.company_name || 'Select Client...'}
-                      </Text>
+                      {selectedClientObj ? (
+                        <Text style={[styles.selectorTriggerText, { color: theme.colors.ink, flex: 1 }]} numberOfLines={1}>
+                          <Text style={{ fontWeight: '700' }}>{selectedClientObj.company_name}</Text>
+                          {(() => {
+                            const parts = [(selectedClientObj as any).street, selectedClientObj.city, (selectedClientObj as any).district, selectedClientObj.state, (selectedClientObj as any).pincode]
+                              .filter(Boolean)
+                              .map((s) => String(s).trim())
+                              .filter(Boolean);
+                            const loc = parts.length > 0 ? parts.join(', ') : ((selectedClientObj as any).address ? String((selectedClientObj as any).address).trim() : '');
+                            return loc ? (
+                              <Text style={{ color: theme.colors.mute, fontWeight: '400', fontSize: 11 }}>
+                                {` • ${loc}`}
+                              </Text>
+                            ) : null;
+                          })()}
+                        </Text>
+                      ) : (
+                        <Text style={[styles.selectorTriggerText, { color: theme.colors.mute }]}>
+                          Select Client...
+                        </Text>
+                      )}
                       <ChevronDown size={16} color={theme.colors.mute} />
                     </TouchableOpacity>
                   </View>
 
                   <View style={styles.dropdownField}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.mute }]}>Select Location</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={[styles.fieldLabel, { color: theme.colors.mute, marginBottom: 0 }]}>Select Location</Text>
+                      <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline }}>
+                        <Text style={{ fontSize: 10, fontFamily: 'monospace', color: theme.colors.mute }}>{clientLocations.length} Total</Text>
+                      </View>
+                    </View>
                     <TouchableOpacity
                       onPress={openLocationSelector}
                       style={[styles.selectorTrigger, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
                     >
                       <Text style={[styles.selectorTriggerText, { color: theme.colors.ink }]} numberOfLines={1}>
-                        {selectedSiteLocation === 'all' ? 'All Sites & Locations' : selectedSiteLocation}
+                        {effectiveSiteLocation === 'all' ? 'All Sites & Locations' : effectiveSiteLocation}
                       </Text>
                       <ChevronDown size={16} color={theme.colors.mute} />
                     </TouchableOpacity>
                   </View>
 
                   <View style={styles.dropdownField}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.mute }]}>Select Machine</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={[styles.fieldLabel, { color: theme.colors.mute, marginBottom: 0 }]}>Select Machine</Text>
+                      <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline }}>
+                        <Text style={{ fontSize: 10, fontFamily: 'monospace', color: theme.colors.mute }}>{clientMachines.length} Total</Text>
+                      </View>
+                    </View>
                     <TouchableOpacity
                       onPress={openClientMachineSelector}
                       style={[styles.selectorTrigger, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
@@ -1424,7 +1621,7 @@ export default function OperationsScreen() {
               {logsViewMode === 'operator' && (
                 <>
                   <View style={styles.dropdownField}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.mute }]}>Select Operator</Text>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.mute }]}>Select Operator ({activeOperators.length} Total)</Text>
                     <TouchableOpacity
                       onPress={openOperatorSelector}
                       style={[styles.selectorTrigger, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
@@ -1451,163 +1648,273 @@ export default function OperationsScreen() {
                 </>
               )}
             </View>
+            )}
           </Card>
 
           {/* 3. DYNAMIC SUMMARY HEADER CARDS */}
-          {/* A. MACHINE VIEW SUMMARY CARD (Matches Screenshot 1) */}
+          {/* A. MACHINE VIEW SUMMARY CARD */}
           {logsViewMode === 'machine' && selectedMachineObj && (
             <Card variant="elevated" style={styles.summaryHeaderCard}>
-              <View style={[styles.summaryHeaderTitleRow, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.summaryHeaderTitle, { color: theme.colors.ink }]}>
-                  {selectedMachineObj.machine_id} {selectedMachineObj.model ? `(${selectedMachineObj.model})` : ''}
-                </Text>
-                <View style={styles.statusBadgeRow}>
-                  <Text style={[styles.statusPrefix, { color: theme.colors.mute }]}>Current Status:</Text>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => toggleWithAnimation(setIsMachineSummaryExpanded)}
+                style={[
+                  styles.summaryHeaderTitleRow,
+                  { borderBottomColor: theme.colors.hairline, borderBottomWidth: isMachineSummaryExpanded ? 1 : 0 },
+                ]}
+              >
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <Text style={[styles.summaryHeaderTitle, { color: theme.colors.ink }]}>
+                    {selectedMachineObj.machine_id} {selectedMachineObj.model ? `(${selectedMachineObj.model})` : ''}
+                  </Text>
                   <View style={[styles.statusBadgePill, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : '#e0f2fe' }]}>
                     <Text style={[styles.statusBadgeText, { color: theme.colors.link }]}>
                       {selectedMachineObj.status ? selectedMachineObj.status.toUpperCase() : 'RENTED'}
                     </Text>
                   </View>
                 </View>
-              </View>
 
-              <View style={styles.machineSpecsGrid}>
-                <View style={styles.specItem}>
-                  <Text style={[styles.specLabel, { color: theme.colors.mute }]}>MANUFACTURER</Text>
-                  <Text style={[styles.specValue, { color: theme.colors.ink }]}>{selectedMachineObj.manufacturer || '—'}</Text>
-                </View>
-                <View style={styles.specItem}>
-                  <Text style={[styles.specLabel, { color: theme.colors.mute }]}>MODEL</Text>
-                  <Text style={[styles.specValue, { color: theme.colors.ink }]}>{selectedMachineObj.model || '—'}</Text>
-                </View>
-                <View style={styles.specItem}>
-                  <Text style={[styles.specLabel, { color: theme.colors.mute }]}>SERIAL NO / CODE</Text>
-                  <Text style={[styles.specValueMono, { color: theme.colors.ink }]}>{selectedMachineObj.serial_number || selectedMachineObj.machine_id}</Text>
-                </View>
-                <View style={styles.specItem}>
-                  <Text style={[styles.specLabel, { color: theme.colors.mute }]}>TOTAL RUN HOURS</Text>
-                  <Text style={[styles.specValueMono, { color: theme.colors.link }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: '800', color: theme.colors.link }}>
                     {Math.round(activeMetrics.runHours * 10) / 10} hrs
                   </Text>
+                  {isMachineSummaryExpanded ? (
+                    <ChevronUp size={16} color={theme.colors.mute} />
+                  ) : (
+                    <ChevronDown size={16} color={theme.colors.mute} />
+                  )}
                 </View>
-                <View style={styles.specItem}>
-                  <Text style={[styles.specLabel, { color: theme.colors.mute }]}>BREAKDOWN EVENTS</Text>
-                  <Text style={[styles.specValueMono, { color: isDark ? '#fb7185' : '#f43f5e' }]}>
-                    {activeMetrics.breakdowns} Events
-                  </Text>
+              </TouchableOpacity>
+
+              {isMachineSummaryExpanded && (
+                <View style={[styles.machineSpecsGrid, { marginTop: 8 }]}>
+                  <View style={styles.specItem}>
+                    <Text style={[styles.specLabel, { color: theme.colors.mute }]}>MANUFACTURER</Text>
+                    <Text style={[styles.specValue, { color: theme.colors.ink }]}>{selectedMachineObj.manufacturer || '—'}</Text>
+                  </View>
+                  <View style={styles.specItem}>
+                    <Text style={[styles.specLabel, { color: theme.colors.mute }]}>MODEL</Text>
+                    <Text style={[styles.specValue, { color: theme.colors.ink }]}>{selectedMachineObj.model || '—'}</Text>
+                  </View>
+                  <View style={styles.specItem}>
+                    <Text style={[styles.specLabel, { color: theme.colors.mute }]}>SERIAL NO / CODE</Text>
+                    <Text style={[styles.specValueMono, { color: theme.colors.ink }]}>{selectedMachineObj.serial_number || selectedMachineObj.machine_id}</Text>
+                  </View>
+                  <View style={styles.specItem}>
+                    <Text style={[styles.specLabel, { color: theme.colors.mute }]}>TOTAL RUN HOURS</Text>
+                    <Text style={[styles.specValueMono, { color: theme.colors.link }]}>
+                      {Math.round(activeMetrics.runHours * 10) / 10} hrs
+                    </Text>
+                  </View>
+                  <View style={styles.specItem}>
+                    <Text style={[styles.specLabel, { color: theme.colors.mute }]}>BREAKDOWN EVENTS</Text>
+                    <Text style={[styles.specValueMono, { color: isDark ? '#fb7185' : '#f43f5e' }]}>
+                      {activeMetrics.breakdowns} Events
+                    </Text>
+                  </View>
                 </View>
-              </View>
+              )}
             </Card>
           )}
 
-          {/* B. CLIENT VIEW SUMMARY CARD (Matches Screenshot 2) */}
+          {/* B. CLIENT VIEW SUMMARY CARD */}
           {logsViewMode === 'client' && selectedClientObj && (
             <Card variant="elevated" style={styles.summaryHeaderCard}>
-              <View style={[styles.summaryHeaderTitleRow, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.summaryHeaderTitle, { color: theme.colors.ink }]}>
-                  {selectedClientObj.company_name}
-                </Text>
-                <View style={styles.clientBadgesWrap}>
-                  <View style={[styles.infoPill, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : '#e0f2fe' }]}>
-                    <Text style={[styles.infoPillText, { color: theme.colors.link }]}>
-                      {clientMachines.length} Rented Machines
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => toggleWithAnimation(setIsClientSummaryExpanded)}
+                style={[
+                  styles.summaryHeaderTitleRow,
+                  { borderBottomColor: theme.colors.hairline, borderBottomWidth: isClientSummaryExpanded ? 1 : 0 },
+                ]}
+              >
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <Text style={[styles.summaryHeaderTitle, { color: theme.colors.ink }]}>
+                      {selectedClientObj.company_name}
                     </Text>
-                  </View>
-                  <View style={[styles.infoPill, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : '#f3f4f6' }]}>
-                    <Text style={[styles.infoPillText, { color: theme.colors.ink }]}>
-                      {clientLocations.length || 1} Active Site Locations
-                    </Text>
-                  </View>
-                  <View style={[styles.infoPill, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#eff6ff' }]}>
-                    <Text style={[styles.infoPillText, { color: theme.colors.link }]}>
-                      Working Hours: 8:00 AM to 8:00 PM
-                    </Text>
-                  </View>
-                  <View style={[styles.infoPill, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.2)' : '#ecfdf5' }]}>
-                    <Text style={[styles.infoPillText, { color: isDark ? '#34d399' : '#059669' }]}>
-                      Working Days: 30 Days ({MONTH_OPTIONS.find((m) => m.id === selectedMonth)?.label || 'Month'})
-                    </Text>
+                    {selectedClientObj.code ? (
+                      <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline }}>
+                        <Text style={{ fontSize: 10, fontFamily: 'monospace', color: theme.colors.mute, fontWeight: '700' }}>
+                          {selectedClientObj.code}
+                        </Text>
+                      </View>
+                    ) : null}
+                    <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#e0f2fe' }}>
+                      <Text style={{ fontSize: 10, fontFamily: 'monospace', color: theme.colors.link, fontWeight: '700' }}>
+                        {clientMachines.length} {clientMachines.length === 1 ? 'Machine' : 'Machines'}
+                      </Text>
+                    </View>
                   </View>
                 </View>
-              </View>
 
-              <View style={styles.clientContactGrid}>
-                <View style={styles.specItem}>
-                  <Text style={[styles.specLabel, { color: theme.colors.mute }]}>CUSTOMER PHONE</Text>
-                  <TouchableOpacity
-                    onPress={() => selectedClientObj.phone && Linking.openURL(`tel:${selectedClientObj.phone}`)}
-                  >
-                    <Text style={[styles.specValueMono, { color: theme.colors.link }]}>
-                      {selectedClientObj.phone || '—'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.specItem}>
-                  <Text style={[styles.specLabel, { color: theme.colors.mute }]}>CITY / STATE</Text>
-                  <Text style={[styles.specValue, { color: theme.colors.ink }]}>
-                    {[selectedClientObj.city, selectedClientObj.state].filter(Boolean).join(', ') || '—'}
-                  </Text>
-                </View>
-              </View>
-
-              {/* 4 Summary Metric Cards in Client Detail View */}
-              <View style={styles.metricsGrid4}>
-                <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                  <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>TOTAL RUN HOURS</Text>
-                  <Text style={[styles.kpiValue, { color: theme.colors.link }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: '800', color: theme.colors.link }}>
                     {Math.round(activeMetrics.runHours * 10) / 10} hrs
                   </Text>
+                  {isClientSummaryExpanded ? (
+                    <ChevronUp size={16} color={theme.colors.mute} />
+                  ) : (
+                    <ChevronDown size={16} color={theme.colors.mute} />
+                  )}
                 </View>
-                <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                  <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>TOTAL OVERTIME</Text>
-                  <Text style={[styles.kpiValue, { color: isDark ? '#fbbf24' : '#d97706' }]}>
-                    {Math.round(activeMetrics.otHours * 10) / 10} hrs
-                  </Text>
-                </View>
-                <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                  <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>BREAKDOWN EVENTS</Text>
-                  <Text style={[styles.kpiValue, { color: isDark ? '#fb7185' : '#f43f5e' }]}>
-                    {activeMetrics.breakdowns} Events
-                  </Text>
-                </View>
-                <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                  <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>MATCHING LOGS</Text>
-                  <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
-                    {activeMetrics.totalLogs} Records
-                  </Text>
-                </View>
-              </View>
+              </TouchableOpacity>
+
+              {isClientSummaryExpanded && (
+                <>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 8, marginBottom: 8 }}>
+                    <Text style={{ fontSize: 11, color: theme.colors.mute }} numberOfLines={2}>
+                      📍 {[selectedClientObj.street, selectedClientObj.city, selectedClientObj.district, selectedClientObj.state, selectedClientObj.pincode].filter(Boolean).map((s) => String(s).trim()).filter(Boolean).join(', ') || '—'}
+                    </Text>
+                    {selectedClientObj.phone ? (
+                      <TouchableOpacity onPress={() => Linking.openURL(`tel:${selectedClientObj.phone}`)}>
+                        <Text style={{ fontSize: 11, color: theme.colors.link, fontFamily: 'monospace' }}>
+                          📞 {selectedClientObj.phone}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+
+                  {/* 4 Summary Metric Cards in Client Detail View */}
+                  <View style={styles.metricsGrid4}>
+                    <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Clock size={12} color={theme.colors.link} />
+                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>RUN</Text>
+                      </View>
+                      <Text style={[styles.kpiValue, { color: theme.colors.link }]}>
+                        {Math.round(activeMetrics.runHours * 10) / 10} hrs
+                      </Text>
+                    </View>
+                    <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Zap size={12} color={isDark ? '#fbbf24' : '#d97706'} />
+                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>OT</Text>
+                      </View>
+                      <Text style={[styles.kpiValue, { color: isDark ? '#fbbf24' : '#d97706' }]}>
+                        {Math.round(activeMetrics.otHours * 10) / 10} hrs
+                      </Text>
+                    </View>
+                    <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <AlertTriangle size={12} color={isDark ? '#fb7185' : '#f43f5e'} />
+                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>BREAKDOWN</Text>
+                      </View>
+                      <Text style={[styles.kpiValue, { color: isDark ? '#fb7185' : '#f43f5e' }]}>
+                        {activeMetrics.breakdowns} {activeMetrics.breakdowns === 1 ? 'Event' : 'Events'}
+                      </Text>
+                    </View>
+                    <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <FileText size={12} color={theme.colors.mute} />
+                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>LOGS</Text>
+                      </View>
+                      <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
+                        {activeMetrics.totalLogs} {activeMetrics.totalLogs === 1 ? 'Record' : 'Records'}
+                      </Text>
+                    </View>
+                  </View>
+                </>
+              )}
             </Card>
           )}
 
-          {/* C. OPERATOR VIEW SUMMARY CARD (Matches Screenshot 3) */}
+          {/* C. OPERATOR VIEW SUMMARY CARD */}
           {logsViewMode === 'operator' && (
-            <View style={styles.metricsGrid4}>
-              <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>TOTAL RUN HOURS</Text>
-                <Text style={[styles.kpiValue, { color: theme.colors.link }]}>
-                  {Math.round(activeMetrics.runHours * 10) / 10} hrs
-                </Text>
-              </View>
-              <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>TOTAL OVERTIME</Text>
-                <Text style={[styles.kpiValue, { color: isDark ? '#fbbf24' : '#d97706' }]}>
-                  {Math.round(activeMetrics.otHours * 10) / 10} hrs
-                </Text>
-              </View>
-              <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>BREAKDOWN EVENTS</Text>
-                <Text style={[styles.kpiValue, { color: isDark ? '#fb7185' : '#f43f5e' }]}>
-                  {activeMetrics.breakdowns} Events
-                </Text>
-              </View>
-              <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>MATCHING LOGS</Text>
-                <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
-                  {activeMetrics.totalLogs} Records
-                </Text>
-              </View>
-            </View>
+            <Card variant="elevated" style={styles.summaryHeaderCard}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => toggleWithAnimation(setIsOperatorSummaryExpanded)}
+                style={[
+                  styles.summaryHeaderTitleRow,
+                  { borderBottomColor: theme.colors.hairline, borderBottomWidth: isOperatorSummaryExpanded ? 1 : 0 },
+                ]}
+              >
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <Text style={[styles.summaryHeaderTitle, { color: theme.colors.ink }]}>
+                      {selectedOperatorObj?.full_name || 'Operator'}
+                    </Text>
+                    <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#e0f2fe' }}>
+                      <Text style={{ fontSize: 10, fontFamily: 'monospace', color: theme.colors.link, fontWeight: '700' }}>
+                        OPERATOR
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: '800', color: theme.colors.link }}>
+                    {Math.round(activeMetrics.runHours * 10) / 10} hrs
+                  </Text>
+                  {isOperatorSummaryExpanded ? (
+                    <ChevronUp size={16} color={theme.colors.mute} />
+                  ) : (
+                    <ChevronDown size={16} color={theme.colors.mute} />
+                  )}
+                </View>
+              </TouchableOpacity>
+
+              {isOperatorSummaryExpanded && (
+                <>
+                  {(selectedOperatorObj?.phone || selectedOperatorObj?.email) ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 8, marginBottom: 8 }}>
+                      {selectedOperatorObj?.phone ? (
+                        <TouchableOpacity onPress={() => Linking.openURL(`tel:${selectedOperatorObj.phone}`)}>
+                          <Text style={{ fontSize: 11, color: theme.colors.link, fontFamily: 'monospace' }}>
+                            📞 {selectedOperatorObj.phone}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : null}
+                      {selectedOperatorObj?.email ? (
+                        <Text style={{ fontSize: 11, color: theme.colors.mute }}>
+                          ✉️ {selectedOperatorObj.email}
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
+
+                  <View style={[styles.metricsGrid4, { marginTop: (selectedOperatorObj?.phone || selectedOperatorObj?.email) ? 0 : 8 }]}>
+                    <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Clock size={12} color={theme.colors.link} />
+                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>RUN</Text>
+                      </View>
+                      <Text style={[styles.kpiValue, { color: theme.colors.link }]}>
+                        {Math.round(activeMetrics.runHours * 10) / 10} hrs
+                      </Text>
+                    </View>
+                    <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Zap size={12} color={isDark ? '#fbbf24' : '#d97706'} />
+                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>OT</Text>
+                      </View>
+                      <Text style={[styles.kpiValue, { color: isDark ? '#fbbf24' : '#d97706' }]}>
+                        {Math.round(activeMetrics.otHours * 10) / 10} hrs
+                      </Text>
+                    </View>
+                    <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <AlertTriangle size={12} color={isDark ? '#fb7185' : '#f43f5e'} />
+                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>BREAKDOWN</Text>
+                      </View>
+                      <Text style={[styles.kpiValue, { color: isDark ? '#fb7185' : '#f43f5e' }]}>
+                        {activeMetrics.breakdowns} Events
+                      </Text>
+                    </View>
+                    <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <FileText size={12} color={theme.colors.mute} />
+                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>LOGS</Text>
+                      </View>
+                      <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
+                        {activeMetrics.totalLogs} Records
+                      </Text>
+                    </View>
+                  </View>
+                </>
+              )}
+            </Card>
           )}
 
           {/* 4. DAILY RUNNING LOG CARDS LIST */}

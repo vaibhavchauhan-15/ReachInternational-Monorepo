@@ -4,32 +4,57 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Modal } from "@/components/ui";
 import type { User, MachineHourLog } from "@/lib/types/database";
-import { formatDate, formatTo12Hour, getISTDateString } from "@reachinternational/utils";
+import { formatDate, parseBreakdownString } from "@reachinternational/utils";
+import {
+  isUuid,
+  formatCompactTiming,
+  resolveCleanClientName,
+  resolvePeriodLabel,
+  resolveClientLocation,
+  handleBrowserPrint,
+  PDFReportHeader,
+  PDFKPIStrip,
+  PDFSignatureBlock,
+  PDFTableWrapper,
+} from "@/components/pdf";
 import {
   MONTH_NAMES,
-  getLogMonthNumber,
   getCurrentMonthNumber,
   formatExportDateTimeSlug,
   buildExportFileName,
   buildMachineExportFileName,
-} from "@/lib/utils/operator-logs-export";
+} from "@/lib/pdf/pdf-config";
+import { getPrintStylesheet } from "@/lib/pdf/pdf-print-styles";
 import { exportSupervisorRunningLogsToExcel } from "@/lib/utils/supervisor-logs-export";
-import { CustomDatePicker } from "@/components/ui/CustomDatePicker";
-import { Printer, FileSpreadsheet, Calendar } from "lucide-react";
+import { getOperationsExportLogsAction } from "@/app/actions/operators";
+import { Printer, FileSpreadsheet, Loader2 } from "lucide-react";
 
+// ─── Constants ───────────────────────────────────────────────────────────────
+const PRINT_DOC_ID = "printable-supervisor-logs-document";
+const PREVIEW_ID = "printable-supervisor-logs-document-preview";
+
+// ─── Interfaces ──────────────────────────────────────────────────────────────
 interface PrintableSupervisorLogsModalProps {
   open: boolean;
   onClose: () => void;
-  logs: MachineHourLog[];
+  logs?: MachineHourLog[];
   user: User;
   viewMode: "all" | "machine" | "client" | "operator";
   selectedEntityId: string;
+  selectedEntityName?: string;
+  selectedClientId?: string;
+  selectedClientName?: string;
+  selectedMachineId?: string;
+  selectedOperatorId?: string;
   selectedMonthValue: string;
   selectedSite?: string;
   selectedClientMachineId?: string;
   machines?: any[];
+  clientSites?: string[];
+  clientMachines?: any[];
   customStartDate?: string;
   customEndDate?: string;
+  search?: string;
 }
 
 interface SupervisorReportContentProps {
@@ -37,6 +62,9 @@ interface SupervisorReportContentProps {
   user: User;
   viewMode: "all" | "machine" | "client" | "operator";
   selectedEntityId: string;
+  selectedEntityName?: string;
+  selectedClientId?: string;
+  selectedClientName?: string;
   selectedMonth: string;
   customStartDate?: string;
   customEndDate?: string;
@@ -48,18 +76,16 @@ interface SupervisorReportContentProps {
   machines?: any[];
 }
 
-// Compact timing range formatter with zero spaces (e.g. "06:00AM-06:00PM")
-function formatCompactTiming(startStr?: string | null, endStr?: string | null): string {
-  const formattedStart = formatTo12Hour(startStr) || "06:00 AM";
-  const formattedEnd = formatTo12Hour(endStr) || "02:00 PM";
-  return `${formattedStart.replace(/\s+/g, "")}-${formattedEnd.replace(/\s+/g, "")}`;
-}
+// ─── Report Content ──────────────────────────────────────────────────────────
 
 function SupervisorLogsReportContent({
   logs,
   user,
   viewMode,
   selectedEntityId,
+  selectedEntityName,
+  selectedClientId,
+  selectedClientName,
   selectedMonth,
   customStartDate,
   customEndDate,
@@ -74,21 +100,18 @@ function SupervisorLogsReportContent({
   const supervisorPhone = user.phone || "—";
   const { displayDateTime } = formatExportDateTimeSlug();
 
-  let periodLabel = "All Months";
-  if (selectedMonth === "custom") {
-    if (customStartDate && customEndDate) {
-      periodLabel = `${formatDate(customStartDate)} to ${formatDate(customEndDate)}`;
-    } else if (customStartDate) {
-      periodLabel = `From ${formatDate(customStartDate)}`;
-    } else if (customEndDate) {
-      periodLabel = `Up to ${formatDate(customEndDate)}`;
-    } else {
-      periodLabel = "Custom Range";
-    }
-  } else if (selectedMonth !== "all") {
-    const mObj = MONTH_NAMES.find((m) => m.value === selectedMonth);
-    if (mObj) periodLabel = mObj.label;
-  }
+  // Resolve client name (never a UUID)
+  const cleanClientName = resolveCleanClientName({
+    selectedClientName,
+    selectedEntityName,
+    selectedClientId,
+    selectedEntityId,
+    machines,
+    logs,
+  });
+
+  const periodLabel = resolvePeriodLabel(selectedMonth, customStartDate, customEndDate);
+  const resolvedClientLocation = resolveClientLocation(selectedSite, logs);
 
   const firstLogOp = logs[0]?.operator as any;
   const operatorName = firstLogOp?.full_name || "Operator";
@@ -98,217 +121,198 @@ function SupervisorLogsReportContent({
     machines?.find((m) => m.id === selectedEntityId) ||
     (logs[0]?.machine as any);
 
-  let scopeLabel = "All Operations Fleet";
-  if (viewMode === "machine" && selectedEntityId !== "all") {
-    const mMfr = selectedMachineObj?.manufacturer || (logs[0]?.machine as any)?.manufacturer || "";
-    const mModel = selectedMachineObj?.model || (logs[0]?.machine as any)?.model || "Machine";
-    scopeLabel = `Machine: ${mMfr ? `${mMfr} ` : ""}${mModel}`;
-  } else if (viewMode === "client" && selectedEntityId !== "all") {
-    const siteText = selectedSite && selectedSite !== "all" ? ` | Site: ${selectedSite}` : "";
-    const machineText = selectedClientMachineId && selectedClientMachineId !== "all"
-      ? ` | Machine: ${logs.find((l) => l.machine_id === selectedClientMachineId)?.machine?.machine_name || selectedClientMachineId}`
-      : "";
-    const cObj =
-      machines?.find((m) => m.client_id === selectedEntityId)?.client ||
-      logs.find((l) => l.client_id === selectedEntityId || (l as any)?.client?.id === selectedEntityId)?.client;
-    const resolvedClientName = (cObj as any)?.company_name || (cObj as any)?.client_name || selectedEntityId;
-    scopeLabel = `Client: ${resolvedClientName}${siteText}${machineText}`;
-  } else if (viewMode === "operator" && selectedEntityId !== "all") {
-    scopeLabel = `Operator: ${operatorName}`;
-  }
-
   const isOperatorView = viewMode === "operator";
 
-  // Resolve client location for Client View Mode or general report header
-  let resolvedClientLocation = "—";
-  if (selectedSite && selectedSite !== "all") {
-    resolvedClientLocation = selectedSite;
-  } else {
-    const logWithLocation = logs.find(
-      (l) =>
-        l.location ||
-        (l as any)?.client?.city ||
-        (l.machine as any)?.customer_address ||
-        (l.machine as any)?.city
-    );
+  // ─── Report Title ─────────────────────────────────────────────────
+  const reportTitle = isOperatorView
+    ? "OPERATOR DAILY MACHINE LOG REPORT"
+    : viewMode === "client"
+    ? "SITE MACHINE RUNNING HOURS REPORT"
+    : viewMode === "machine"
+    ? "MACHINE RUNNING HOURS REPORT"
+    : "SUPERVISOR MACHINE RUNNING HOURS REPORT";
 
-    if (logWithLocation) {
-      const cObj = (logWithLocation as any)?.client;
-      const mObj = logWithLocation.machine as any;
-      if (logWithLocation.location) {
-        resolvedClientLocation = logWithLocation.location;
-      } else if (cObj?.city) {
-        resolvedClientLocation = `${cObj.city}${cObj.state ? `, ${cObj.state}` : ""}`;
-      } else if (mObj?.customer_address) {
-        resolvedClientLocation = `${mObj.customer_address}${mObj.city ? `, ${mObj.city}` : ""}`;
-      } else if (mObj?.city) {
-        resolvedClientLocation = `${mObj.city}${mObj.state ? `, ${mObj.state}` : ""}`;
+  // ─── Subtitle Parts (pipe-separated, single line) ─────────────────
+  const subtitleParts: string[] = [];
+  if (viewMode === "client") {
+    subtitleParts.push(`CLIENT: ${(cleanClientName || "ALL CLIENTS").toUpperCase()}`);
+    if (selectedClientMachineId && selectedClientMachineId !== "all") {
+      const cMachine = machines?.find((m) => m.id === selectedClientMachineId) || logs.find((l) => l.machine_id === selectedClientMachineId)?.machine;
+      const cMachName = (cMachine as any)?.machine_name || (cMachine as any)?.model || selectedClientMachineId;
+      subtitleParts.push(`MACHINE: ${cMachName.toUpperCase()}`);
+      subtitleParts.push(`LOCATION: ${(resolvedClientLocation !== "—" ? resolvedClientLocation : "ALL SITES").toUpperCase()}`);
+    } else {
+      subtitleParts.push(`LOCATION: ${(resolvedClientLocation !== "—" ? resolvedClientLocation : "ALL SITES").toUpperCase()}`);
+    }
+  } else if (viewMode === "machine") {
+    const mMfr = selectedMachineObj?.manufacturer || (logs[0]?.machine as any)?.manufacturer || "";
+    const mModel = selectedMachineObj?.model || (logs[0]?.machine as any)?.model || "MACHINE";
+    const mSerial = selectedMachineObj?.serial_number || selectedMachineObj?.machine_code || (logs[0]?.machine as any)?.serial_number || (logs[0]?.machine as any)?.machine_code || "—";
+    const machDisplay = selectedEntityId !== "all" ? `${mMfr ? `${mMfr} ` : ""}${mModel}` : "ALL FLEET MACHINES";
+    subtitleParts.push(`EQUIPMENT: ${machDisplay.toUpperCase()}`);
+    if (selectedEntityId !== "all") {
+      subtitleParts.push(`SERIAL NO.: ${mSerial.toUpperCase()}`);
+      subtitleParts.push(`LOCATION: ${(resolvedClientLocation !== "—" ? resolvedClientLocation : "ALL SITES").toUpperCase()}`);
+    } else {
+      subtitleParts.push(`LOCATION: ${(resolvedClientLocation !== "—" ? resolvedClientLocation : "ALL SITES").toUpperCase()}`);
+    }
+  } else if (isOperatorView) {
+    const opDisplay = selectedEntityId !== "all" ? operatorName : "ALL OPERATORS";
+    subtitleParts.push(`OPERATOR: ${opDisplay.toUpperCase()}`);
+    if (selectedEntityId !== "all" && operatorPhone && operatorPhone !== "—") {
+      subtitleParts.push(`CONTACT: ${operatorPhone}`);
+      subtitleParts.push(`LOCATION: ${(resolvedClientLocation !== "—" ? resolvedClientLocation : "ALL SITES").toUpperCase()}`);
+    } else {
+      subtitleParts.push(`LOCATION: ${(resolvedClientLocation !== "—" ? resolvedClientLocation : "ALL SITES").toUpperCase()}`);
+    }
+  } else {
+    subtitleParts.push("SCOPE: ALL FLEET OPERATIONS");
+    subtitleParts.push(`LOCATION: ${(resolvedClientLocation !== "—" ? resolvedClientLocation : "ALL SITES").toUpperCase()}`);
+  }
+
+  // ─── Metadata Items ───────────────────────────────────────────────
+  const metadataItems: { label: string; value: string }[] = [];
+  if (isOperatorView) {
+    metadataItems.push({ label: "Operator", value: operatorName });
+    metadataItems.push({ label: "Number", value: operatorPhone });
+    metadataItems.push({ label: "Supervisor", value: supervisorName });
+    metadataItems.push({ label: "Supervisor Number", value: supervisorPhone });
+    if (selectedMonth !== "all") {
+      metadataItems.push({ label: selectedMonth === "custom" ? "Date Range" : "Month", value: periodLabel });
+    }
+    metadataItems.push({ label: "Export Date", value: displayDateTime });
+  } else if (viewMode !== "machine") {
+    metadataItems.push({ label: "Supervisor", value: supervisorName });
+    metadataItems.push({ label: "Number", value: supervisorPhone });
+  }
+
+  if (!isOperatorView) {
+    if (viewMode === "client" && selectedEntityId !== "all") {
+      if (selectedMonth !== "all") {
+        metadataItems.push({ label: selectedMonth === "custom" ? "Date Range" : "Month", value: periodLabel });
       }
+      metadataItems.push({ label: "Export Date", value: displayDateTime });
+    } else if (viewMode === "machine" && selectedEntityId !== "all") {
+      metadataItems.push({ label: "Manufacturer", value: selectedMachineObj?.manufacturer || (logs[0]?.machine as any)?.manufacturer || "—" });
+      metadataItems.push({ label: "Model", value: selectedMachineObj?.model || (logs[0]?.machine as any)?.model || "—" });
+      metadataItems.push({ label: "Serial No.", value: selectedMachineObj?.serial_number || (logs[0]?.machine as any)?.serial_number || "—" });
+      metadataItems.push({ label: "Total Run", value: `${Math.round(totalRunningHours * 10) / 10} hrs` });
+      if (selectedMonth !== "all") {
+        metadataItems.push({ label: selectedMonth === "custom" ? "Date Range" : "Month", value: periodLabel });
+      }
+      metadataItems.push({ label: "Export Date", value: displayDateTime });
+    } else {
+      const scopeLabel = viewMode === "machine" && selectedEntityId !== "all"
+        ? `Machine: ${selectedMachineObj?.manufacturer ? `${selectedMachineObj.manufacturer} ` : ""}${selectedMachineObj?.model || "Machine"}`
+        : viewMode === "client" && selectedEntityId !== "all"
+        ? `Client: ${cleanClientName}`
+        : "All Operations Fleet";
+      metadataItems.push({ label: "Scope", value: scopeLabel });
+      metadataItems.push({ label: selectedMonth === "custom" ? "Date Range" : "Month", value: periodLabel });
+      metadataItems.push({ label: "Export Date", value: displayDateTime });
     }
   }
 
+  // ─── Signature Columns ─────────────────────────────────────────────
+  const clientLocationText =
+    selectedSite && selectedSite !== "all"
+      ? `Site: ${selectedSite}`
+      : resolvedClientLocation !== "—" && resolvedClientLocation !== "ALL SITES"
+      ? `Site: ${resolvedClientLocation}`
+      : "All Operational Sites";
+
+  const signatureColumns = [
+    {
+      heading: "Prepared By",
+      name: isOperatorView ? operatorName : supervisorName,
+      role: isOperatorView ? "(Machine Operator)" : "(Operations Supervisor)",
+    },
+    {
+      heading: "Client Details & Sign-off",
+      name: cleanClientName,
+      role: clientLocationText,
+      nameUppercase: true,
+    },
+    {
+      heading: "Verified & Approved By",
+      name: "REACH INTERNATIONAL",
+      role: "(Operations / Service Manager)",
+      nameUppercase: true,
+    },
+  ];
+
   return (
-    <div className="bg-white text-black p-2.5 sm:p-4 rounded-xl border border-neutral-300 shadow-sm flex flex-col justify-between text-xs font-sans max-w-[210mm] mx-auto space-y-2 sm:space-y-2.5 w-full">
-      {/* 1. TOP HEADER & METADATA STRIP */}
-      <div className="pb-2 border-b-2 border-neutral-900 space-y-1.5">
-        <div className="grid grid-cols-[110px_1fr_110px] sm:grid-cols-[140px_1fr_140px] items-center gap-2">
-          {/* Top Left Logo */}
-          <div className="flex items-center justify-start shrink-0">
-            {/* eslint-disable-next-html-element-suppress */}
-            <img
-              src="/pdf-logo.png"
-              alt="Reach International"
-              className="h-10 sm:h-12 w-auto object-contain"
-            />
-          </div>
+    <div className="bg-white text-black p-2.5 sm:p-4 rounded-xl border border-neutral-300 shadow-sm flex flex-col justify-between text-xs font-sans max-w-[210mm] mx-auto space-y-2 sm:space-y-2.5 w-full print-document-container">
+      {/* 1. HEADER */}
+      <PDFReportHeader
+        title={reportTitle}
+        subtitleParts={subtitleParts}
+        metadataItems={metadataItems}
+        centeredLayout
+      />
 
-          {/* Report Title & Subheading (Middle/Center Aligned) */}
-          <div className="text-center min-w-0">
-            <h2 className="text-sm sm:text-base font-black uppercase text-neutral-900 tracking-wider text-center">
-              {isOperatorView
-                ? "OPERATOR DAILY MACHINE LOG REPORT"
-                : viewMode === "client"
-                ? "SITE MACHINE RUNNING HOURS REPORT"
-                : viewMode === "machine"
-                ? "MACHINE RUNNING HOURS REPORT"
-                : "SUPERVISOR MACHINE RUNNING HOURS REPORT"}
-            </h2>
+      {/* 2. KPI STRIP */}
+      <PDFKPIStrip
+        variant="light"
+        items={[
+          { label: "Total Logs", value: `${logs.length} Logs` },
+          { label: "Operating Hours", value: `${Math.round(totalRunningHours * 10) / 10} hrs`, valueColor: "text-sky-700" },
+          { label: "Overtime Hours", value: `${Math.round(totalOtHours * 10) / 10} hrs`, valueColor: "text-amber-700" },
+          { label: "Breakdown Incidents", value: `${totalBreakdowns} Events`, valueColor: "text-rose-700" },
+        ]}
+      />
 
-            {/* Client Name & Client Location Subheading (Proper Format) */}
-            {viewMode === "client" && selectedEntityId !== "all" && (
-              <div className="text-xs sm:text-sm font-extrabold uppercase text-neutral-900 tracking-tight pt-1 text-center flex flex-wrap items-center justify-center gap-1.5 sm:gap-2">
-                <span>CLIENT: <span className="text-neutral-900 font-black">{selectedEntityId}</span></span>
-                <span className="text-neutral-400 font-normal">|</span>
-                <span>LOCATION: <span className="text-neutral-900 font-black">{resolvedClientLocation}</span></span>
-              </div>
-            )}
-          </div>
-
-          {/* Right Spacer for Perfect Centering Balance */}
-          <div className="hidden sm:block w-[110px] sm:w-[140px] shrink-0"></div>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-center sm:justify-between gap-x-4 sm:gap-x-5 gap-y-1 text-[9.5px] sm:text-[10px] text-neutral-800 font-medium leading-tight pt-1 border-t border-neutral-200">
-          {isOperatorView ? (
-            <>
-              <div><strong>Operator:</strong> {operatorName}</div>
-              <div><strong>Number:</strong> {operatorPhone}</div>
-              <div><strong>Supervisor:</strong> {supervisorName}</div>
-              <div><strong>Supervisor Number:</strong> {supervisorPhone}</div>
-              {selectedMonth !== "all" && (
-                <div><strong>{selectedMonth === "custom" ? "Date Range" : "Month"}:</strong> {periodLabel}</div>
-              )}
-              <div><strong>Export Date:</strong> {displayDateTime}</div>
-            </>
-          ) : (
-            <>
-              {viewMode !== "machine" && (
-                <>
-                  <div><strong>Supervisor:</strong> {supervisorName}</div>
-                  <div><strong>Number:</strong> {supervisorPhone}</div>
-                </>
-              )}
-              {viewMode === "client" && selectedEntityId !== "all" ? (
-                <>
-                  {selectedMonth !== "all" && (
-                    <div><strong>{selectedMonth === "custom" ? "Date Range" : "Month"}:</strong> {periodLabel}</div>
-                  )}
-                  <div><strong>Export Date:</strong> {displayDateTime}</div>
-                </>
-              ) : viewMode === "machine" && selectedEntityId !== "all" ? (
-                <>
-                  <div><strong>Manufacturer:</strong> {selectedMachineObj?.manufacturer || (logs[0]?.machine as any)?.manufacturer || "—"}</div>
-                  <div><strong>Model:</strong> {selectedMachineObj?.model || (logs[0]?.machine as any)?.model || "—"}</div>
-                  <div><strong>Serial No.:</strong> {selectedMachineObj?.serial_number || (logs[0]?.machine as any)?.serial_number || "—"}</div>
-                  <div><strong>Total Run:</strong> {Math.round(totalRunningHours * 10) / 10} hrs</div>
-                  {selectedMonth !== "all" && (
-                    <div><strong>{selectedMonth === "custom" ? "Date Range" : "Month"}:</strong> {periodLabel}</div>
-                  )}
-                  <div><strong>Export Date:</strong> {displayDateTime}</div>
-                </>
-              ) : (
-                <>
-                  <div><strong>Scope:</strong> {scopeLabel}</div>
-                  <div><strong>{selectedMonth === "custom" ? "Date Range" : "Month"}:</strong> {periodLabel}</div>
-                  <div><strong>Export Date:</strong> {displayDateTime}</div>
-                </>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* 2. KPI SUMMARY STRIP */}
-      <div className="grid grid-cols-4 gap-1 sm:gap-1.5 bg-neutral-900 text-white p-1.5 rounded-lg text-center font-mono">
-        <div>
-          <span className="text-[7.5px] sm:text-[8.5px] text-neutral-400 block font-sans font-extrabold uppercase truncate">Total Logs</span>
-          <span className="text-[10px] sm:text-[11px] font-black">{logs.length} Logs</span>
-        </div>
-        <div>
-          <span className="text-[7.5px] sm:text-[8.5px] text-neutral-400 block font-sans font-extrabold uppercase truncate">Total Operating Hrs</span>
-          <span className="text-[10px] sm:text-[11px] font-black text-sky-400">{Math.round(totalRunningHours * 10) / 10} hrs</span>
-        </div>
-        <div>
-          <span className="text-[7.5px] sm:text-[8.5px] text-neutral-400 block font-sans font-extrabold uppercase truncate">Total Overtime Hrs</span>
-          <span className="text-[10px] sm:text-[11px] font-black text-amber-400">{Math.round(totalOtHours * 10) / 10} hrs</span>
-        </div>
-        <div>
-          <span className="text-[7.5px] sm:text-[8.5px] text-neutral-400 block font-sans font-extrabold uppercase truncate">Breakdown Incidents</span>
-          <span className="text-[10px] sm:text-[11px] font-black text-rose-400">{totalBreakdowns} Events</span>
-        </div>
-      </div>
-
-      {/* 3. LOGS HIGH-DENSITY TABLE */}
-      <div className="w-full overflow-x-auto custom-scrollbar print-table-wrap">
-        <table className="w-full text-left border border-neutral-900 border-collapse print-table min-w-[700px] sm:min-w-0">
+      {/* 3. LOGS TABLE */}
+      <PDFTableWrapper>
+        <table className="w-full text-center border border-neutral-900 border-collapse print-table table-fixed min-w-[700px] sm:min-w-0 mx-auto">
           <thead>
-            <tr className="bg-neutral-900 text-white font-bold text-[8px] uppercase tracking-wider">
+            <tr className="bg-neutral-100 text-black font-black text-[8.5px] uppercase tracking-wider border-b-2 border-neutral-900">
               {isOperatorView ? (
                 <>
-                  <th className="p-0.5 border border-neutral-800 w-[4%] sm:w-[20px] text-center align-middle">S.N</th>
-                  <th className="p-0.5 border border-neutral-800 w-[8%] sm:w-[50px] font-mono text-center align-middle whitespace-nowrap">DATE</th>
-                  <th className="p-1 border border-neutral-800 w-[10%] sm:w-[70px] align-middle font-mono">MODEL</th>
-                  <th className="p-1 border border-neutral-800 w-[12%] sm:w-[85px] align-middle font-mono">SERIAL NO.</th>
-                  <th className="p-1 border border-neutral-800 w-[20%] sm:w-[135px] align-middle">CLIENT & LOCATION</th>
-                  <th className="p-0.5 border border-neutral-800 w-[11%] sm:w-[70px] font-mono text-center align-middle whitespace-nowrap">TIMINGS</th>
-                  <th className="p-0.5 border border-neutral-800 text-center w-[5%] sm:w-[28px] align-middle whitespace-nowrap">OP</th>
-                  <th className="p-0.5 border border-neutral-800 text-center w-[5%] sm:w-[28px] align-middle whitespace-nowrap">OT</th>
-                  <th className="p-0.5 border border-neutral-800 text-center w-[7%] sm:w-[45px] align-middle whitespace-nowrap">BREAKDOWN</th>
-                  <th className="p-1 border border-neutral-800 w-[15%] sm:auto align-middle">REMARKS</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[4%]">S.N</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[8%] font-mono whitespace-nowrap">DATE</th>
+                  <th className="py-1.5 px-1 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[10%] font-mono">MODEL</th>
+                  <th className="py-1.5 px-1 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[11%] font-mono">SERIAL NO.</th>
+                  <th className="py-1.5 px-1 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[18%]">CLIENT & LOCATION</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[11%] font-mono whitespace-nowrap">TIMINGS</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[6%] whitespace-nowrap">OP</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[6%] whitespace-nowrap">OT</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[12%] whitespace-nowrap">BREAKDOWN</th>
+                  <th className="py-1.5 px-1 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[14%]">REMARKS</th>
                 </>
               ) : viewMode === "client" ? (
                 <>
-                  <th className="p-0.5 border border-neutral-800 w-[4%] text-center align-middle">S.N</th>
-                  <th className="p-0.5 border border-neutral-800 w-[10%] font-mono text-center align-middle whitespace-nowrap">DATE</th>
-                  <th className="p-1 border border-neutral-800 w-[12%] align-middle font-mono">MODEL</th>
-                  <th className="p-1 border border-neutral-800 w-[16%] align-middle font-mono">SERIAL NO.</th>
-                  <th className="p-1 border border-neutral-800 w-[18%] align-middle">OPERATOR</th>
-                  <th className="p-1 border border-neutral-800 w-[14%] font-mono text-center align-middle whitespace-nowrap">TIMINGS</th>
-                  <th className="p-0.5 border border-neutral-800 text-center w-[8%] align-middle whitespace-nowrap">WT(h)</th>
-                  <th className="p-0.5 border border-neutral-800 text-center w-[8%] align-middle whitespace-nowrap">BREAKDOWN</th>
-                  <th className="p-1 border border-neutral-800 w-[10%] align-middle">REMARKS</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[4%]">S.N</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[9%] font-mono whitespace-nowrap">DATE</th>
+                  <th className="py-1.5 px-1 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[10%] font-mono">MODEL</th>
+                  <th className="py-1.5 px-1 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[13%] font-mono">SERIAL NO.</th>
+                  <th className="py-1.5 px-1 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[16%]">OPERATOR</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[13%] font-mono whitespace-nowrap">TIMINGS</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[7%] whitespace-nowrap">WT (H)</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[13%] whitespace-nowrap">BREAKDOWN</th>
+                  <th className="py-1.5 px-1 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[15%]">REMARKS</th>
                 </>
               ) : viewMode === "machine" ? (
                 <>
-                  <th className="p-0.5 border border-neutral-800 w-[4%] text-center align-middle">S.N</th>
-                  <th className="p-0.5 border border-neutral-800 w-[10%] font-mono text-center align-middle whitespace-nowrap">DATE</th>
-                  <th className="p-1 border border-neutral-800 w-[20%] align-middle">CLIENT & LOCATION</th>
-                  <th className="p-1 border border-neutral-800 w-[18%] align-middle">OPERATOR</th>
-                  <th className="p-0.5 border border-neutral-800 w-[14%] font-mono text-center align-middle whitespace-nowrap">HMR</th>
-                  <th className="p-0.5 border border-neutral-800 text-center w-[8%] align-middle whitespace-nowrap">RT(h)</th>
-                  <th className="p-0.5 border border-neutral-800 text-center w-[10%] align-middle whitespace-nowrap">BREAKDOWN</th>
-                  <th className="p-1 border border-neutral-800 w-[16%] align-middle">REMARKS</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[4%]">S.N</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[9%] font-mono whitespace-nowrap">DATE</th>
+                  <th className="py-1.5 px-1 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[22%]">CLIENT & LOCATION</th>
+                  <th className="py-1.5 px-1 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[16%]">OPERATOR</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[12%] font-mono whitespace-nowrap">HMR</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[8%] whitespace-nowrap">RT (H)</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[13%] whitespace-nowrap">BREAKDOWN</th>
+                  <th className="py-1.5 px-1 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[16%]">REMARKS</th>
                 </>
               ) : (
                 <>
-                  <th className="p-0.5 border border-neutral-800 w-[4%] text-center align-middle">S.N</th>
-                  <th className="p-0.5 border border-neutral-800 w-[10%] font-mono text-center align-middle whitespace-nowrap">DATE</th>
-                  <th className="p-1 border border-neutral-800 w-[20%] align-middle">MACHINE</th>
-                  <th className="p-1 border border-neutral-800 w-[20%] align-middle">CLIENT & LOCATION</th>
-                  <th className="p-1 border border-neutral-800 w-[16%] align-middle">OPERATOR</th>
-                  <th className="p-0.5 border border-neutral-800 w-[14%] font-mono text-center align-middle whitespace-nowrap">HMR</th>
-                  <th className="p-0.5 border border-neutral-800 text-center w-[8%] align-middle whitespace-nowrap">RT(h)</th>
-                  <th className="p-0.5 border border-neutral-800 text-center w-[8%] align-middle whitespace-nowrap">BREAKDOWN</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[4%]">S.N</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[9%] font-mono whitespace-nowrap">DATE</th>
+                  <th className="py-1.5 px-1 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[18%]">MACHINE</th>
+                  <th className="py-1.5 px-1 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[20%]">CLIENT & LOCATION</th>
+                  <th className="py-1.5 px-1 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[16%]">OPERATOR</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[12%] font-mono whitespace-nowrap">HMR</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[8%] whitespace-nowrap">RT (H)</th>
+                  <th className="py-1.5 px-0.5 border border-neutral-900 bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider w-[13%] whitespace-nowrap">BREAKDOWN</th>
                 </>
               )}
             </tr>
@@ -324,60 +328,86 @@ function SupervisorLogsReportContent({
 
                 const mObj = log.machine as any;
                 const logOp = log.operator as any;
-                const clientName = (log as any)?.client?.client_name || mObj?.customer_name || "Unassigned Client";
+                const logClientName = (log as any)?.client?.company_name || (log as any)?.client?.client_name || mObj?.customer_name || "Unassigned Client";
                 const locationStr = log.location || ((log as any)?.client?.city ? `${(log as any).client.city}, ${(log as any).client.state || ""}` : mObj?.customer_address ? `${mObj.customer_address}${mObj.city ? `, ${mObj.city}` : ""}` : mObj?.city || "—");
 
                 const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*([^\]]+)\]/i) || (log.remarks || "").match(/Breakdown\s*(?:Duration)?:?\s*(\d+h?\s*\d*m?)/i);
-                const bkdDetails = (log as any).breakdown_duration || (bkdMatch ? bkdMatch[1].trim() : isBkd ? "Breakdown" : null);
-                const cleanRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim() || "—";
-                let bkdDurationOnly = bkdDetails;
-                if (bkdDurationOnly) {
-                  bkdDurationOnly = bkdDurationOnly.replace(/^Breakdown\s*\((.*)\)$/i, "$1").replace(/^Machine Breakdown\s*\((.*)\)$/i, "$1").replace(/^Breakdown\s*/i, "").replace(/\s*duration$/i, "").trim();
+                const bkdRaw = (log as any).breakdown_duration || (bkdMatch ? bkdMatch[1].trim() : null);
+                const bkdParsed = parseBreakdownString(bkdRaw || log.remarks);
+                const bkdStartTime = (log as any).breakdown_start_time || bkdParsed?.startTime || null;
+                const bkdEndTime = (log as any).breakdown_end_time || bkdParsed?.endTime || null;
+                const bkdDurationOnly = bkdParsed?.durationFormatted || bkdParsed?.durationText || bkdRaw || (isBkd ? "Breakdown" : null);
+
+                let cleanRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim();
+                if (cleanRemarks.toLowerCase() === "breakdown" || cleanRemarks.toLowerCase() === "machine breakdown") {
+                  cleanRemarks = "—";
                 }
-                const displayBkdText = isBkd ? (bkdDurationOnly && bkdDurationOnly.toLowerCase() !== "breakdown" ? bkdDurationOnly : "Breakdown") : "0";
+                cleanRemarks = cleanRemarks || "—";
+
+                const displayBkdText = isBkd
+                  ? (bkdDurationOnly && bkdDurationOnly.toLowerCase() !== "breakdown" ? bkdDurationOnly : "Breakdown")
+                  : "0";
+
+                // Breakdown cell renderer (shared across all view modes)
+                const breakdownCell = (
+                  <td className="p-0.5 border border-neutral-300 text-center align-middle text-[8px]">
+                    {isBkd ? (
+                      bkdStartTime && bkdEndTime ? (
+                        <div className="text-rose-700 font-mono text-center flex flex-col items-center justify-center leading-tight py-0.5">
+                          <span className="font-extrabold text-[8px] leading-tight whitespace-nowrap text-center">
+                            {formatCompactTiming(bkdStartTime, bkdEndTime)}
+                          </span>
+                          <span className="text-[7.5px] font-bold text-rose-700/90 leading-tight pt-0.5 text-center">
+                            ({bkdDurationOnly})
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="text-rose-700 font-mono text-center flex flex-col items-center justify-center leading-tight py-0.5">
+                          <span className="font-extrabold text-[8px] leading-tight break-words max-w-full text-center">
+                            {displayBkdText}
+                          </span>
+                        </div>
+                      )
+                    ) : (
+                      <span className="font-bold text-neutral-800 block text-[8px] text-center font-mono">
+                        0
+                      </span>
+                    )}
+                  </td>
+                );
 
                 if (isOperatorView) {
                   return (
                     <tr key={log.id || idx} className="bg-white">
-                      <td className="p-0.5 border border-neutral-300 text-center align-middle font-bold text-[8.5px]">{idx + 1}</td>
-                      <td className="p-0.5 border border-neutral-300 font-mono text-neutral-800 text-center align-middle text-[8px] whitespace-nowrap">
+                      <td className="p-0.5 border border-neutral-300 text-center align-middle font-bold text-[8.5px] text-neutral-900">{idx + 1}</td>
+                      <td className="p-0.5 border border-neutral-300 font-mono text-neutral-900 text-center align-middle text-[8px] whitespace-nowrap font-medium">
                         {formatDate(log.log_date)}
                       </td>
-                      <td className="p-1 border border-neutral-300 font-bold text-neutral-900 align-middle text-[8.5px] font-mono whitespace-nowrap">
+                      <td className="p-1 border border-neutral-300 font-bold text-neutral-900 align-middle text-[8.5px] font-mono text-center whitespace-nowrap">
                         {mObj?.model || "—"}
                       </td>
-                      <td className="p-1 border border-neutral-300 font-bold text-neutral-900 align-middle text-[8.5px] font-mono whitespace-nowrap">
+                      <td className="p-1 border border-neutral-300 font-bold text-neutral-900 align-middle text-[8.5px] font-mono text-center whitespace-nowrap">
                         {mObj?.serial_number || mObj?.machine_code || "—"}
                       </td>
-                      <td className="p-1 border border-neutral-300 text-neutral-900 align-middle text-[8.5px] leading-tight font-medium">
-                        <div className="font-bold">{clientName}</div>
-                        <div className="text-[7.5px] text-neutral-600 font-normal">{locationStr}</div>
+                      <td className="p-1 border border-neutral-300 text-neutral-900 align-middle text-[8.5px] leading-tight font-medium text-center">
+                        <div className="font-bold truncate text-center">{logClientName}</div>
+                        <div className="text-[7.5px] text-neutral-600 font-normal truncate text-center">{locationStr}</div>
                       </td>
                       <td className="p-0.5 border border-neutral-300 font-mono text-[8px] text-neutral-800 text-center align-middle whitespace-nowrap">
-                        <div>{formatCompactTiming(log.start_time, log.end_time)}</div>
-                        <div className="text-[7.5px] text-sky-700 font-bold">
+                        <div className="text-center">{formatCompactTiming(log.start_time, log.end_time)}</div>
+                        <div className="text-[7.5px] text-sky-700 font-bold text-center">
                           {(log as any).normal_working_hours ?? 8}h normal
                         </div>
                       </td>
-                      <td className="p-0.5 border border-neutral-300 text-center align-middle font-mono font-bold text-[8.5px] whitespace-nowrap">
+                      <td className="p-0.5 border border-neutral-300 text-center align-middle font-mono font-bold text-[8.5px] text-neutral-900 whitespace-nowrap">
                         {runningHrs}h
                       </td>
                       <td className="p-0.5 border border-neutral-300 text-center align-middle font-mono font-bold text-[8.5px] text-amber-700 whitespace-nowrap">
                         {otHrs > 0 ? `${otHrs}h` : "0h"}
                       </td>
-                      <td className="p-0.5 border border-neutral-300 text-[8px] text-center align-middle whitespace-nowrap">
-                        {isBkd ? (
-                          <span className="font-extrabold text-rose-700 block text-[8px] font-mono text-center whitespace-nowrap">
-                            {displayBkdText}
-                          </span>
-                        ) : (
-                          <span className="font-bold text-neutral-800 block text-[8px] text-center font-mono whitespace-nowrap">
-                            0
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-1 border border-neutral-300 text-neutral-700 align-middle text-[8.5px] italic">
-                        {cleanRemarks}
+                      {breakdownCell}
+                      <td className="p-1 border border-neutral-300 text-neutral-700 align-middle text-[8.5px] italic text-center break-words">
+                        <div className="text-center">{cleanRemarks}</div>
                       </td>
                     </tr>
                   );
@@ -385,79 +415,59 @@ function SupervisorLogsReportContent({
 
                 return (
                   <tr key={log.id || idx} className="bg-white">
-                    <td className="p-0.5 border border-neutral-300 text-center align-middle font-bold text-[8.5px]">{idx + 1}</td>
-                    <td className="p-0.5 border border-neutral-300 font-mono text-neutral-800 text-center align-middle text-[8px] whitespace-nowrap">
+                    <td className="p-0.5 border border-neutral-300 text-center align-middle font-bold text-[8.5px] text-neutral-900">{idx + 1}</td>
+                    <td className="p-0.5 border border-neutral-300 font-mono text-neutral-900 text-center align-middle text-[8px] whitespace-nowrap font-medium">
                       {formatDate(log.log_date)}
                     </td>
                     {viewMode === "client" ? (
                       <>
-                        <td className="p-1 border border-neutral-300 align-middle font-mono text-[8.5px] font-bold text-neutral-900">
+                        <td className="p-1 border border-neutral-300 align-middle font-mono text-[8.5px] font-bold text-neutral-900 text-center">
                           {mObj?.model || "—"}
                         </td>
-                        <td className="p-1 border border-neutral-300 align-middle font-mono text-[8.5px] font-bold text-neutral-900">
+                        <td className="p-1 border border-neutral-300 align-middle font-mono text-[8.5px] font-bold text-neutral-900 text-center">
                           {mObj?.serial_number || mObj?.machine_code || "—"}
                         </td>
                       </>
                     ) : viewMode !== "machine" ? (
-                      <td className="p-1 border border-neutral-300 align-middle text-[8.5px] leading-tight">
-                        <div className="font-bold text-neutral-900">{mObj?.machine_name || "Machine"}</div>
-                        <div className="font-mono text-[7.5px] text-neutral-600">{mObj?.machine_code || "—"}</div>
+                      <td className="p-1 border border-neutral-300 align-middle text-[8.5px] leading-tight text-center">
+                        <div className="font-bold text-neutral-900 truncate text-center">{mObj?.machine_name || "Machine"}</div>
+                        <div className="font-mono text-[7.5px] text-neutral-600 text-center">{mObj?.machine_code || "—"}</div>
                       </td>
                     ) : null}
                     {viewMode !== "client" && (
-                      <td className="p-1 border border-neutral-300 align-middle text-[8.5px] leading-tight">
-                        <div className="font-bold text-neutral-900">{(log as any)?.client?.client_name || mObj?.customer_name || "Unassigned Client"}</div>
-                        <div className="text-[7.5px] text-neutral-600">{log.location || ((log as any)?.client?.city ? `${(log as any).client.city}, ${(log as any).client.state || ""}` : mObj?.city ? `${mObj.city}, ${mObj.state || ""}` : "—")}</div>
+                      <td className="p-1 border border-neutral-300 align-middle text-[8.5px] leading-tight text-center">
+                        <div className="font-bold text-neutral-900 truncate text-center">{logClientName}</div>
+                        <div className="text-[7.5px] text-neutral-600 truncate text-center">{locationStr}</div>
                       </td>
                     )}
-                    <td className="p-1 border border-neutral-300 font-semibold text-neutral-800 align-middle text-[8.5px]">
-                      {logOp?.full_name || "Unassigned"}
+                    <td className="p-1 border border-neutral-300 font-semibold text-neutral-900 align-middle text-[8.5px] text-center leading-tight">
+                      <div className="text-center leading-tight">{logOp?.full_name || "Unassigned"}</div>
                     </td>
                     {viewMode === "client" ? (
                       <>
-                        <td className="p-1 border border-neutral-300 font-mono text-[8px] font-semibold text-neutral-900 text-center align-middle whitespace-nowrap">
-                          {formatCompactTiming(log.start_time, log.end_time)}
+                        <td className="p-0.5 border border-neutral-300 font-mono text-[8px] font-semibold text-neutral-900 text-center align-middle whitespace-nowrap">
+                          <div className="text-center">{formatCompactTiming(log.start_time, log.end_time)}</div>
                         </td>
-                        <td className="p-0.5 border border-neutral-300 text-center align-middle font-mono font-bold text-[8.5px] whitespace-nowrap">
+                        <td className="p-0.5 border border-neutral-300 text-center align-middle font-mono font-bold text-[8.5px] text-neutral-900 whitespace-nowrap">
                           {runningHrs}h
                         </td>
-                        <td className="p-0.5 border border-neutral-300 text-[8px] text-center align-middle whitespace-nowrap">
-                          {isBkd ? (
-                            <span className="font-extrabold text-rose-700 block text-[8px] font-mono text-center whitespace-nowrap">
-                              {displayBkdText}
-                            </span>
-                          ) : (
-                            <span className="font-bold text-neutral-800 block text-[8px] text-center font-mono whitespace-nowrap">
-                              0
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-1 border border-neutral-300 align-middle text-[8px] italic text-neutral-700">
-                          {cleanRemarks}
+                        {breakdownCell}
+                        <td className="p-1 border border-neutral-300 align-middle text-[8px] italic text-neutral-700 text-center break-words">
+                          <div className="text-center">{cleanRemarks}</div>
                         </td>
                       </>
                     ) : (
                       <>
                         <td className="p-0.5 border border-neutral-300 font-mono text-[8px] font-bold text-neutral-900 text-center align-middle whitespace-nowrap">
-                          {startMtr} → {endMtr}
+                          <div className="text-center">{startMtr} → {endMtr}</div>
                         </td>
-                        <td className="p-0.5 border border-neutral-300 text-center align-middle font-mono font-bold text-[8.5px] whitespace-nowrap">
+                        <td className="p-0.5 border border-neutral-300 text-center align-middle font-mono font-bold text-[8.5px] text-neutral-900 whitespace-nowrap">
                           {runningHrs}h
                         </td>
-                        <td className="p-0.5 border border-neutral-300 text-[8px] text-center align-middle whitespace-nowrap">
-                          {isBkd ? (
-                            <span className="font-extrabold text-rose-700 block text-[8px] font-mono text-center whitespace-nowrap">
-                              {displayBkdText}
-                            </span>
-                          ) : (
-                            <span className="font-bold text-neutral-800 block text-[8px] text-center font-mono whitespace-nowrap">
-                              0
-                            </span>
-                          )}
-                        </td>
+                        {breakdownCell}
                         {viewMode === "machine" && (
-                          <td className="p-1 border border-neutral-300 align-middle text-[8px] italic text-neutral-700">
-                            {cleanRemarks}
+                          <td className="p-1 border border-neutral-300 align-middle text-[8px] italic text-neutral-700 text-center break-words">
+                            <div className="text-center">{cleanRemarks}</div>
                           </td>
                         )}
                       </>
@@ -474,221 +484,215 @@ function SupervisorLogsReportContent({
             )}
           </tbody>
         </table>
-      </div>
+      </PDFTableWrapper>
 
-      {/* 4. VERIFICATION SIGNATURES & CLIENT DETAILS */}
-      {(() => {
-        const clientDisplayName =
-          viewMode === "client" && selectedEntityId !== "all"
-            ? selectedEntityId
-            : (logs[0]?.machine as any)?.customer_name || "Client Representative";
-
-        const clientLocationText =
-          selectedSite && selectedSite !== "all"
-            ? `Site: ${selectedSite}`
-            : logs[0]?.location ||
-              ((logs[0]?.machine as any)?.customer_address
-                ? `${(logs[0]?.machine as any).customer_address}${(logs[0]?.machine as any).city ? `, ${(logs[0]?.machine as any).city}` : ""}`
-                : (logs[0]?.machine as any)?.city) ||
-              "(Client Representative)";
-
-        return (
-          <div className="grid grid-cols-3 gap-3 sm:gap-4 pt-3 border-t border-neutral-300 text-center text-[9.5px] text-neutral-600 print-signature-block">
-            {/* Column 1: Prepared By */}
-            <div className="flex flex-col items-center space-y-0.5">
-              <span className="font-extrabold text-neutral-900 text-[9.5px] uppercase">Prepared By</span>
-              <div className="w-28 sm:w-36 border-b border-neutral-400 mb-0.5 h-6 flex items-end justify-center font-serif text-neutral-800 text-[10.5px] italic font-bold">
-                {isOperatorView ? operatorName : supervisorName}
-              </div>
-              <span className="font-bold text-neutral-800 text-[8.5px]">
-                {isOperatorView ? "(Machine Operator)" : "(Operations Supervisor)"}
-              </span>
-              <div className="flex items-center justify-between w-full max-w-[135px] text-[8px] text-neutral-700 pt-1 font-mono">
-                <span>Sign: _______</span>
-                <span>Date: _______</span>
-              </div>
-            </div>
-
-            {/* Column 2: Client Details & Sign-Off */}
-            <div className="flex flex-col items-center space-y-0.5">
-              <span className="font-extrabold text-neutral-900 text-[9.5px] uppercase">Client Details & Sign-off</span>
-              <div className="w-28 sm:w-36 border-b border-neutral-400 mb-0.5 h-6 flex items-end justify-center font-sans text-neutral-900 text-[9.5px] font-bold truncate px-1">
-                {clientDisplayName}
-              </div>
-              <span className="font-bold text-neutral-800 text-[8.5px] truncate max-w-[150px]">
-                {clientLocationText}
-              </span>
-              <div className="flex items-center justify-between w-full max-w-[135px] text-[8px] text-neutral-700 pt-1 font-mono">
-                <span>Sign: _______</span>
-                <span>Date: _______</span>
-              </div>
-            </div>
-
-            {/* Column 3: Verified & Approved By */}
-            <div className="flex flex-col items-center space-y-0.5">
-              <span className="font-extrabold text-neutral-900 text-[9.5px] uppercase">Verified & Approved By</span>
-              <div className="w-28 sm:w-36 border-b border-neutral-400 mb-0.5 h-6 flex items-end justify-center font-sans text-neutral-900 text-[9.5px] font-extrabold tracking-wider">
-                REACH INTERNATIONAL
-              </div>
-              <span className="font-bold text-neutral-800 text-[8.5px]">
-                (Operations / Service Manager)
-              </span>
-              <div className="flex items-center justify-between w-full max-w-[135px] text-[8px] text-neutral-700 pt-1 font-mono">
-                <span>Sign: _______</span>
-                <span>Date: _______</span>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+      {/* 4. SIGNATURES */}
+      <PDFSignatureBlock columns={signatureColumns} />
     </div>
   );
 }
 
+// ─── Skeleton ────────────────────────────────────────────────────────────────
+
+function SupervisorLogsReportSkeleton() {
+  return (
+    <div className="bg-white text-black p-2.5 sm:p-4 rounded-xl border border-neutral-300 shadow-sm flex flex-col justify-between text-xs font-sans max-w-[210mm] mx-auto space-y-3 w-full animate-pulse select-none">
+      <div className="pb-2 border-b-2 border-neutral-900 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="w-28 sm:w-36 h-9 rounded bg-neutral-200" />
+          <div className="flex-1 text-center flex flex-col items-center gap-1.5">
+            <div className="w-56 sm:w-80 h-4.5 rounded bg-neutral-300" />
+            <div className="w-40 sm:w-60 h-3 rounded bg-neutral-200" />
+          </div>
+          <div className="w-28 sm:w-36 hidden sm:block" />
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-neutral-200">
+          <div className="h-3 rounded bg-neutral-200 w-3/4" />
+          <div className="h-3 rounded bg-neutral-200 w-2/3" />
+          <div className="h-3 rounded bg-neutral-200 w-1/2" />
+          <div className="h-3 rounded bg-neutral-200 w-4/5" />
+        </div>
+      </div>
+      <div className="grid grid-cols-4 gap-2 p-2 rounded-lg border border-neutral-200 bg-neutral-100">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="flex flex-col items-center gap-1">
+            <div className="w-16 h-2 rounded bg-neutral-300" />
+            <div className="w-12 h-4 rounded bg-neutral-300" />
+          </div>
+        ))}
+      </div>
+      <div className="border border-neutral-900 rounded overflow-hidden">
+        <div className="grid grid-cols-9 bg-neutral-100 border-b border-neutral-900 py-1.5 px-1">
+          {[...Array(9)].map((_, idx) => (
+            <div key={idx} className="h-3 rounded bg-neutral-300 mx-1" />
+          ))}
+        </div>
+        <div className="divide-y divide-neutral-200">
+          {[...Array(8)].map((_, rIdx) => (
+            <div key={rIdx} className="grid grid-cols-9 py-2 px-1 items-center bg-white">
+              <div className="h-2.5 rounded bg-neutral-200 mx-2 w-4" />
+              <div className="h-2.5 rounded bg-neutral-200 mx-1 w-12" />
+              <div className="h-2.5 rounded bg-neutral-200 mx-1 w-16" />
+              <div className="h-2.5 rounded bg-neutral-200 mx-1 w-14" />
+              <div className="h-2.5 rounded bg-neutral-200 mx-1 w-16" />
+              <div className="h-2.5 rounded bg-neutral-200 mx-1 w-14" />
+              <div className="h-2.5 rounded bg-neutral-200 mx-1 w-8" />
+              <div className="h-2.5 rounded bg-neutral-200 mx-1 w-12" />
+              <div className="h-2.5 rounded bg-neutral-200 mx-1 w-16" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-3 pt-3 border-t border-neutral-300">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="flex flex-col items-center gap-1.5">
+            <div className="w-24 h-3 rounded bg-neutral-300" />
+            <div className="w-32 h-4 border-b border-neutral-300" />
+            <div className="w-20 h-2.5 rounded bg-neutral-200" />
+            <div className="w-28 h-2 rounded bg-neutral-200 mt-1" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Modal ──────────────────────────────────────────────────────────────
+
 export function PrintableSupervisorLogsModal({
   open,
   onClose,
-  logs = [],
+  logs: _fallbackLogs = [],
   user,
   viewMode,
   selectedEntityId,
+  selectedEntityName,
+  selectedClientId,
+  selectedClientName,
+  selectedMachineId,
+  selectedOperatorId,
   selectedMonthValue,
   selectedSite = "all",
   selectedClientMachineId = "all",
   machines = [],
+  clientSites = [],
+  clientMachines = [],
   customStartDate: initialCustomStartDate,
   customEndDate: initialCustomEndDate,
+  search,
 }: PrintableSupervisorLogsModalProps) {
   const [mounted, setMounted] = useState(false);
-  const [activeMonth, setActiveMonth] = useState<string>(
-    () => selectedMonthValue || getCurrentMonthNumber()
-  );
-  const [customStartDate, setCustomStartDate] = useState<string>(() => {
-    if (initialCustomStartDate) return initialCustomStartDate;
-    try {
-      const today = getISTDateString();
-      return today.slice(0, 7) + "-01";
-    } catch (e) {
-      return "";
-    }
-  });
-  const [customEndDate, setCustomEndDate] = useState<string>(() => {
-    if (initialCustomEndDate) return initialCustomEndDate;
-    try {
-      return getISTDateString();
-    } catch (e) {
-      return "";
-    }
+  const activeMonth = selectedMonthValue || getCurrentMonthNumber();
+  const activeSite = selectedSite && selectedSite !== "" ? selectedSite : "all";
+  const activeMachineId = selectedClientMachineId && selectedClientMachineId !== "" ? selectedClientMachineId : "all";
+  const customStartDate = initialCustomStartDate || "";
+  const customEndDate = initialCustomEndDate || "";
+
+  const [fetchedLogs, setFetchedLogs] = useState<MachineHourLog[]>([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState<boolean>(true);
+  const [fetchedMetrics, setFetchedMetrics] = useState({
+    totalRunningHours: 0,
+    totalOtHours: 0,
+    totalBreakdowns: 0,
+    loggedDaysCount: 0,
   });
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Fetch complete dataset for export (not paginated)
   useEffect(() => {
-    if (selectedMonthValue) {
-      setActiveMonth(selectedMonthValue);
-    }
-  }, [selectedMonthValue]);
+    if (!open) return;
+    setIsLoadingLogs(true);
+    let isCancelled = false;
 
-  useEffect(() => {
-    if (initialCustomStartDate) setCustomStartDate(initialCustomStartDate);
-  }, [initialCustomStartDate]);
+    getOperationsExportLogsAction({
+      viewMode: viewMode === "all" ? "client" : viewMode,
+      entityId: selectedEntityId,
+      clientId: selectedClientId || (viewMode === "client" ? selectedEntityId : undefined),
+      clientName: selectedClientName,
+      machineId: selectedMachineId || (viewMode === "machine" ? selectedEntityId : undefined),
+      operatorId: selectedOperatorId || (viewMode === "operator" ? selectedEntityId : undefined),
+      site: activeSite,
+      clientMachineId: activeMachineId,
+      month: activeMonth,
+      customStartDate,
+      customEndDate,
+      search,
+    })
+      .then((res) => {
+        if (!isCancelled) {
+          if (res.success && res.logs) {
+            setFetchedLogs(res.logs);
+            if (res.summary) {
+              setFetchedMetrics(res.summary);
+            }
+          } else {
+            console.error("Failed to load operational logs for export:", res.error);
+            setFetchedLogs([]);
+          }
+        }
+      })
+      .catch((err) => {
+        if (!isCancelled) {
+          console.error("Exception fetching operational logs for export:", err);
+          setFetchedLogs([]);
+        }
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsLoadingLogs(false);
+        }
+      });
 
-  useEffect(() => {
-    if (initialCustomEndDate) setCustomEndDate(initialCustomEndDate);
-  }, [initialCustomEndDate]);
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    open,
+    viewMode,
+    selectedEntityId,
+    selectedClientId,
+    selectedClientName,
+    selectedMachineId,
+    selectedOperatorId,
+    activeSite,
+    activeMachineId,
+    activeMonth,
+    customStartDate,
+    customEndDate,
+    search,
+  ]);
 
-  // Apply Month, Custom Date Range & Entity Filters
-  let filteredLogs = logs.filter((log) => {
-    if (activeMonth === "custom") {
-      if (!customStartDate && !customEndDate) return true;
-      const logDate = log.log_date?.split("T")[0] || "";
-      if (customStartDate && logDate < customStartDate) return false;
-      if (customEndDate && logDate > customEndDate) return false;
-      return true;
-    }
-    if (activeMonth === "all") return true;
-    return getLogMonthNumber(log.log_date) === activeMonth;
-  });
+  const exportLogs = fetchedLogs;
+  const totalRunningHours = fetchedMetrics.totalRunningHours;
+  const totalOtHours = fetchedMetrics.totalOtHours;
+  const totalBreakdowns = fetchedMetrics.totalBreakdowns;
 
-  if (viewMode === "machine" && selectedEntityId !== "all") {
-    filteredLogs = filteredLogs.filter((log) => log.machine_id === selectedEntityId);
-  } else if (viewMode === "client" && selectedEntityId !== "all") {
-    filteredLogs = filteredLogs.filter((log) => {
-      const matchesId =
-        log.client_id === selectedEntityId || (log as any)?.client?.id === selectedEntityId;
-      const clientName =
-        (log as any)?.client?.client_name ||
-        (log as any)?.client?.company_name ||
-        (log.machine as any)?.customer_name ||
-        "";
-      const matchesName =
-        clientName.toLowerCase().trim() === selectedEntityId.toLowerCase().trim();
-      const isClientMch = machines?.some(
-        (m) =>
-          (m.client_id === selectedEntityId ||
-            (m as any).client?.id === selectedEntityId ||
-            ((m as any).client?.company_name || (m as any).customer_name || "").toLowerCase().trim() === selectedEntityId.toLowerCase().trim()) &&
-          m.id === log.machine_id
-      );
-
-      if (!matchesId && !matchesName && !isClientMch) return false;
-
-      if (selectedSite && selectedSite !== "all") {
-        const mObj = log.machine as any;
-        const siteStr = log.location || (mObj?.customer_address ? `${mObj.customer_address}${mObj.city ? `, ${mObj.city}` : ""}` : mObj?.city || "");
-        if (!siteStr.toLowerCase().includes(selectedSite.toLowerCase())) return false;
-      }
-
-      if (selectedClientMachineId && selectedClientMachineId !== "all") {
-        if (log.machine_id !== selectedClientMachineId) return false;
-      }
-
-      return true;
-    });
-  } else if (viewMode === "operator" && selectedEntityId !== "all") {
-    filteredLogs = filteredLogs.filter((log) => log.operator_id === selectedEntityId);
-  }
-
-  // Aggregate Metrics
-  let totalRunningHours = 0;
-  let totalOtHours = 0;
-  let totalBreakdowns = 0;
-
-  filteredLogs.forEach((log) => {
-    const startMtr = log.start_meter ?? 0;
-    const endMtr = log.end_meter ?? startMtr;
-    const run = log.running_hours ?? Math.max(0, Math.round((endMtr - startMtr) * 10) / 10);
-    const ot = log.overtime_hours || 0;
-    totalRunningHours += run;
-    totalOtHours += ot;
-    if (log.is_breakdown) totalBreakdowns++;
-  });
-
-  const handlePrint = () => {
-    const originalTitle = document.title;
+  const doPrint = () => {
+    if (isLoadingLogs || exportLogs.length === 0) return;
     let pdfFileName = "";
 
     if (viewMode === "operator") {
-      const firstOpObj = filteredLogs[0]?.operator as any;
-      const opName = firstOpObj?.full_name || "Operator";
+      const firstOpObj = exportLogs[0]?.operator as any;
+      const opName = selectedEntityName || firstOpObj?.full_name || "Operator";
       pdfFileName = buildExportFileName(opName, activeMonth, "pdf", customStartDate, customEndDate);
     } else if (viewMode === "machine") {
-      const selectedMachineObj =
+      const machineObj =
         machines?.find((m) => m.id === selectedEntityId) ||
-        (filteredLogs[0]?.machine as any);
+        (exportLogs[0]?.machine as any);
       const mSerial =
-        selectedMachineObj?.serial_number ||
-        selectedMachineObj?.machine_code ||
-        (filteredLogs[0]?.machine as any)?.serial_number ||
-        (filteredLogs[0]?.machine as any)?.machine_code ||
+        machineObj?.serial_number ||
+        machineObj?.machine_code ||
+        (exportLogs[0]?.machine as any)?.serial_number ||
+        (exportLogs[0]?.machine as any)?.machine_code ||
         "Machine";
       pdfFileName = buildMachineExportFileName(mSerial, "pdf", customStartDate, customEndDate);
-    } else if (viewMode === "client" && selectedClientMachineId && selectedClientMachineId !== "all") {
+    } else if (viewMode === "client" && activeMachineId && activeMachineId !== "all") {
       const clientMachine =
-        machines?.find((m) => m.id === selectedClientMachineId) ||
-        filteredLogs.find((l) => l.machine_id === selectedClientMachineId)?.machine;
+        machines?.find((m) => m.id === activeMachineId) ||
+        exportLogs.find((l) => l.machine_id === activeMachineId)?.machine;
       const mSerial =
         (clientMachine as any)?.serial_number ||
         (clientMachine as any)?.machine_code ||
@@ -696,11 +700,14 @@ export function PrintableSupervisorLogsModal({
       pdfFileName = buildMachineExportFileName(mSerial, "pdf", customStartDate, customEndDate);
     } else if (viewMode === "client") {
       const { slugDateTime } = formatExportDateTimeSlug();
-      const clientSlug = (selectedEntityId || "Client").split(/[^a-zA-Z0-9]+/).filter(Boolean).join("-") || "Client";
-      const rangeSlug = activeMonth === "custom" && customStartDate && customEndDate
-        ? `-${formatDate(customStartDate).replace(/\s+/g, "")}-to-${formatDate(customEndDate).replace(/\s+/g, "")}`
-        : "";
-      pdfFileName = `${clientSlug}${rangeSlug}-${slugDateTime}.pdf`;
+      const rawClientName = selectedEntityName || selectedClientName || (selectedEntityId && !selectedEntityId.includes("-") ? selectedEntityId : (exportLogs[0]?.client as any)?.company_name || (exportLogs[0]?.client as any)?.client_name || "Client");
+      const clientSlug = rawClientName.split(/[^a-zA-Z0-9]+/).filter(Boolean).join("-") || "Client";
+      const monthSlug = activeMonth === "custom" && customStartDate && customEndDate
+        ? `${formatDate(customStartDate).replace(/\s+/g, "")}-to-${formatDate(customEndDate).replace(/\s+/g, "")}`
+        : activeMonth !== "all"
+        ? (MONTH_NAMES.find((m) => m.value === activeMonth)?.short || activeMonth)
+        : "AllMonths";
+      pdfFileName = `${clientSlug}-${monthSlug}-${slugDateTime}.pdf`;
     } else {
       const { slugDateTime } = formatExportDateTimeSlug();
       const rangeSlug = activeMonth === "custom" && customStartDate && customEndDate
@@ -709,22 +716,23 @@ export function PrintableSupervisorLogsModal({
       pdfFileName = `Supervisor-Running-Logs-${viewMode}${rangeSlug}-${slugDateTime}.pdf`;
     }
 
-    document.title = pdfFileName.replace(/\.pdf$/, "");
-    window.print();
-    setTimeout(() => {
-      document.title = originalTitle;
-    }, 1000);
+    handleBrowserPrint(pdfFileName);
   };
 
   const handleExportExcel = () => {
+    if (isLoadingLogs || exportLogs.length === 0) return;
     exportSupervisorRunningLogsToExcel({
-      logs,
+      logs: exportLogs,
       viewMode,
       selectedEntityId,
+      selectedClientId,
+      selectedClientName,
+      selectedMachineId,
+      selectedOperatorId,
       selectedMonthValue: activeMonth,
       supervisorName: user.full_name,
-      selectedSite,
-      selectedClientMachineId,
+      selectedSite: activeSite,
+      selectedClientMachineId: activeMachineId,
       machines,
       customStartDate,
       customEndDate,
@@ -732,102 +740,41 @@ export function PrintableSupervisorLogsModal({
   };
 
   const reportProps: SupervisorReportContentProps = {
-    logs: filteredLogs,
+    logs: exportLogs,
     user,
     viewMode,
     selectedEntityId,
+    selectedEntityName,
+    selectedClientId,
+    selectedClientName,
     selectedMonth: activeMonth,
     customStartDate,
     customEndDate,
     totalRunningHours,
     totalOtHours,
     totalBreakdowns,
-    selectedSite,
-    selectedClientMachineId,
+    selectedSite: activeSite,
+    selectedClientMachineId: activeMachineId,
     machines,
   };
 
   return (
     <>
-      <style>{`
-        @media screen {
-          #printable-supervisor-logs-document {
-            display: none !important;
-          }
-        }
-        @media print {
-          @page {
-            size: portrait;
-            margin: 5mm 8mm 5mm 8mm;
-          }
-          html, body {
-            background: #ffffff !important;
-            color: #000000 !important;
-            height: auto !important;
-            min-height: 0 !important;
-            overflow: visible !important;
-            position: static !important;
-            margin: 0 !important;
-            padding: 0 !important;
-          }
-          body > *:not(#printable-supervisor-logs-document) {
-            display: none !important;
-          }
-          #printable-supervisor-logs-document,
-          #printable-supervisor-logs-document * {
-            visibility: visible !important;
-          }
-          #printable-supervisor-logs-document {
-            display: block !important;
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            max-width: 100% !important;
-            height: auto !important;
-            min-height: 0 !important;
-            overflow: visible !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            border: none !important;
-            box-shadow: none !important;
-            background: white !important;
-            color: black !important;
-            z-index: 999999 !important;
-          }
-          .print-table-wrap {
-            overflow: visible !important;
-            width: 100% !important;
-          }
-          .print-table {
-            min-width: 0 !important;
-            width: 100% !important;
-            table-layout: fixed !important;
-          }
-          tr {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-          thead {
-            display: table-header-group !important;
-          }
-          .print-signature-block {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-          }
-          .no-print {
-            display: none !important;
-          }
-        }
-      `}</style>
+      {/* Centralized Print Stylesheet */}
+      <style>{getPrintStylesheet(PRINT_DOC_ID, PREVIEW_ID, {
+        includePreviewStyles: true,
+        includeKpiStrip: true,
+      })}</style>
 
+      {/* Print Portal */}
       {mounted && open && createPortal(
-        <div id="printable-supervisor-logs-document">
+        <div id={PRINT_DOC_ID}>
           <SupervisorLogsReportContent {...reportProps} />
         </div>,
         document.body
       )}
 
+      {/* Preview Modal */}
       <Modal
         open={open}
         onClose={onClose}
@@ -841,93 +788,54 @@ export function PrintableSupervisorLogsModal({
         size="xl"
         footer={
           <div className="flex flex-wrap items-center justify-between gap-3 w-full pt-2 no-print">
-            <div className="text-xs text-[var(--color-mute)] font-medium">
-              Showing <strong>{filteredLogs.length}</strong> filtered log entries.
+            <div className="text-xs text-[var(--color-mute)] font-medium flex items-center gap-1.5">
+              {isLoadingLogs ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 text-sky-500 animate-spin" />
+                  <span>Fetching complete operational records...</span>
+                </>
+              ) : (
+                <span>Showing <strong>{exportLogs.length}</strong> operational log entries as per selected time.</span>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleExportExcel}
-                className="px-4 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold text-xs hover:bg-emerald-500/20 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                disabled={isLoadingLogs || exportLogs.length === 0}
+                className="px-4 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold text-xs hover:bg-emerald-500/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
               >
-                <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Export Excel (.xlsx)
+                {isLoadingLogs ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-emerald-600 dark:text-emerald-400" />
+                ) : (
+                  <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                )}
+                Export Excel (.xlsx)
               </button>
               <button
                 type="button"
-                onClick={handlePrint}
-                className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                onClick={doPrint}
+                disabled={isLoadingLogs || exportLogs.length === 0}
+                className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                <Printer className="h-4 w-4" /> Print / Save as PDF
+                {isLoadingLogs ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-white" />
+                ) : (
+                  <Printer className="h-4 w-4" />
+                )}
+                Print / Save as PDF
               </button>
             </div>
           </div>
         }
       >
-        <div className="space-y-4 max-w-full">
-          {/* Month Selector Strip */}
-          <div className="flex flex-col gap-2.5 p-2.5 sm:p-4 max-w-[210mm] mx-auto w-full rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] no-print">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 text-xs font-bold text-[var(--color-ink)] shrink-0">
-                <Calendar className="h-4 w-4 text-sky-500" />
-                <span>Select Period Filter:</span>
-              </div>
-              <div className="flex items-center gap-1 overflow-x-auto custom-scrollbar flex-nowrap w-full sm:w-auto p-1 bg-[var(--color-canvas-elevated)] rounded-lg border border-[var(--color-hairline)]">
-                {MONTH_NAMES.map((m) => (
-                  <button
-                    key={m.value}
-                    type="button"
-                    onClick={() => setActiveMonth(m.value)}
-                    className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer whitespace-nowrap ${
-                      activeMonth === m.value
-                        ? "bg-sky-600 text-white shadow-2xs"
-                        : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-                    }`}
-                  >
-                    {m.short}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Collapsible Custom Date Range Picker */}
-            {activeMonth === "custom" && (
-              <div className="pt-2.5 border-t border-[var(--color-hairline)] grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-[11px] font-bold text-[var(--color-ink)] mb-1">
-                    Start Date
-                  </label>
-                  <CustomDatePicker
-                    value={customStartDate}
-                    onChange={(val) => setCustomStartDate(val)}
-                    allowAnyPast
-                    allowAnyFuture
-                    showWindowBadge={false}
-                    showRelativeBadge={false}
-                    placeholder="Select start date"
-                    className="w-full"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-[var(--color-ink)] mb-1">
-                    End Date
-                  </label>
-                  <CustomDatePicker
-                    value={customEndDate}
-                    onChange={(val) => setCustomEndDate(val)}
-                    allowAnyPast
-                    allowAnyFuture
-                    showWindowBadge={false}
-                    showRelativeBadge={false}
-                    placeholder="Select end date"
-                    className="w-full"
-                  />
-                </div>
-              </div>
+        <div className="max-w-full">
+          <div id={PREVIEW_ID} className="max-w-full overflow-x-auto custom-scrollbar flex justify-center py-2">
+            {isLoadingLogs ? (
+              <SupervisorLogsReportSkeleton />
+            ) : (
+              <SupervisorLogsReportContent {...reportProps} />
             )}
-          </div>
-
-          <div id="printable-supervisor-logs-document-preview" className="max-w-full overflow-x-auto custom-scrollbar">
-            <SupervisorLogsReportContent {...reportProps} />
           </div>
         </div>
       </Modal>

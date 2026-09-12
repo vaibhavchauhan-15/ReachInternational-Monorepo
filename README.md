@@ -64,8 +64,12 @@
 ### 3. ⏱️ Operations Hub (`/operations`)
 - **Running Hours Logs (`/operations?tab=logs`)**:
   - **3 View Modes**: Machine View (group by equipment), Client View (group by client site), and Operator View (group by operator).
-  - **A4 PDF Reports**: 1-click printable PDF report exports featuring official top-left company branding, centered titles (`MACHINE RUNNING HOURS REPORT`), and client location sub-headers (`CLIENT: SAINT GOBAIN | LOCATION: JHAJJAR, HARYANA`).
-  - **Excel Exports**: Export formatted Excel spreadsheets capturing daily logs, HMR totals, operating hours, overtime, and breakdown durations.
+  - **A4 PDF Reports**: 1-click printable PDF report exports with official company branding, centered titles (`MACHINE RUNNING HOURS REPORT`), client/site location sub-headers, and complete unpaginated dataset retrieval exporting all records for the selected month or custom date range across Client, Machine, and Operator views.
+  - **Excel Exports**: Export formatted Excel workbooks (`.xlsx` with readable company filenames) capturing daily logs, HMR totals, operating hours, overtime, and breakdown durations for the complete selected period.
+  - **Sub-Millisecond On-Demand Query Engine**: Composite B-tree indexed server action (`getOperationsExportLogsAction`) executing in ~0.45 ms in PostgreSQL, allowing fast server-side 10-row pagination for web browsing while fetching hundreds of complete operational records on-demand for export.
+  - **Dynamic Viewport Selector Popovers & Clean Date Range Picker**: All filter dropdown selectors (`MachineSelect`, `SearchableSelect`, `ClientSelect`, `UserSelect`, `CustomDatePicker`, `DateRangePicker`) utilize fixed portaling (`createPortal` to `document.body`) with intelligent boundary detection, auto-flipping upward when space below is constrained, dynamic `maxHeight` clamping, and zero clipping across desktop and mobile viewports. The custom `<DateRangePicker>` features an ultra-clean, minimal calendar interface without cluttered preset pills or header banners, opening directly to month navigation and allowing users to select any month's start and end date directly on the month grid with zero inner scrollbars.
+  - **Optimized Client Selector & Dynamic Fleet Cascade**: Client selector surfaces rich client profiles directly from the database (Company Name, Client Code, Fleet Size, Status, Full Address / Site Location, and Contact/GST details). Defaults automatically to the most recently active client via sub-millisecond indexed query (`idx_machine_hour_logs_date_created` at 0.105 ms), dynamically cascading to filter equipment fleets (`clientMachines`) and location sites (`clientSites`).
+  - **Client Canonical Address & Multi-Site Operational Sites**: Treats `client.street + client.city + client.district + client.state + client.pincode` as the single authoritative address of the client across frontend (web and mobile), backend queries, and database functions. The database maintains a single clean `street text NOT NULL` column (dropping duplicate `"Street"` and separate `address` columns), formatting full address dynamically on the fly. Supports multi-site client deployments where projects operating under the same client company name at different project sites are cleanly aggregated under the company and filtered by distinct site locations without dropped or split logs.
 - **Fleet Operator Machine Assignments (`/operations?tab=assignments`)**:
   - **Accordion-Based Machine Cards**: Default-closed summary cards displaying machine ID, model, serial, meter hours, status badge, operator capacity pill (`X / 3 Operators`), quick-reference operator chips, and direct `+ Assign` button.
   - **Expanded Slot Details & Actions**: Multi-shift slot view with shift time badges (☀️ morning / 🌙 night), assigned operator name, 1-click telephone calling (`tel:`), supervisor assigner attribution (`Assigned by: [Supervisor] • [Date]`), and 3 inline action triggers ("Change Operator", "End Shift", "Unassign").
@@ -132,7 +136,7 @@
 - **Single Canonical UI Architecture**: One centralized reusable UI system across buttons, form controls, date & time pickers, search & filtering controls, enterprise tables, export controls, modals, and layouts.
 - **Buttons**: Canonical `<Button>` supporting variants (`primary`, `secondary`, `outline`, `ghost`, `danger`, `destructive`, `success`, `link`, `primary-sm`, `ghost-sm`, `danger-sm`, `success-sm`), sizes (`sm`, `md`, `lg`, `icon`), `fullWidth`, `responsive` / `mobileIconOnly` (auto icon collapse on ≤640px), and `<IconButton>`.
 - **Form Controls**: `<Input>`, `<PasswordInput>`, `<NumberInput>`, `<Textarea>`, `<Select>`, `<MultiSelect>`, `<Checkbox>`, `<Radio>`, `<Switch>`, and `<FormField>` layout wrappers.
-- **Date & Time**: `<DatePicker>`, `<DateRangePicker>` (with presets: Today, Yesterday, Last 7d, Last 30d, This Month, Custom), `<TimeInput>` / `<TimePicker>` (manual Hours 1-12, Minutes 0-60, AM/PM toggle with inline validation), and `<DateTimePicker>`.
+- **Date & Time**: `<CustomDatePicker>`, `<DateRangePicker>` (custom calendar with connected ribbon range selection, provisional hover preview, presets: Today, Yesterday, Last 7d, Last 30d, This Month, and dynamic viewport positioning), `<TimeInput>` / `<TimePicker>` (manual Hours 1-12, Minutes 0-60, AM/PM toggle with inline validation), `<CustomTimePicker>`, and `<DateTimePicker>`.
 - **Search & Filtering**: `<SearchBox>`, `<FilterToolbar>`, `<FilterDropdown>`, `<SortControl>`, and `<FilterChips>` with 1-click reset.
 - **Tables & Data Display**: `<DataTable>`, `<EnterpriseTable>`, `<Pagination>` with page size controls (`10`, `25`, `50`, `100`), `<EmptyState>`, and `<SkeletonTable>`.
 - **Export Controls**: `<ExportButton>` and `<ExportDropdown>` supporting Excel (`.xlsx`), CSV (`.csv`), PDF (`.pdf`), and Print actions with tooltips and mobile responsiveness.
@@ -346,4 +350,20 @@ The ReachInternational mobile application (`apps/mobile`, package: `com.reachint
 ### 3. EAS Update (OTA) Governance
 - **`runtimeVersion`**: Enforces `{"policy": "appVersion"}`. EAS Update guarantees that OTA updates only land on installed binaries with matching `appVersion` (`1.0.0`), preventing binary incompatibility crashes.
 - **Deterministic Routing**: Native changes (dependencies, Android manifest, permissions, `appVersion`) are routed through binary builds (`deploy-android.yml` / `[build]` tag / `release/*`). Non-native JS and styling fixes are published immediately via OTA update.
-- **Zero Secrets in Git**: Google Play Service Account JSON keys are securely stored in the EAS credential vault via `eas credentials -p android`, with 0 credentials committed to source control.
+- **Zero Secrets in Git**: Google Play Service Account JSON keys are securely stored in the EAS credential vault via `eas credentials -p android`, with 0 credentials committed to source control.
+
+---
+
+## Centralized PDF Generation & Export Architecture
+
+The monorepo provides a centralized, lightweight PDF generation architecture ensuring standardized typography, branding, page breaks, and verification blocks across Web (`window.print()`) and Mobile (`expo-print`):
+
+### Web Architecture (`apps/web`)
+- **`apps/web/lib/pdf/pdf-config.ts`**: Centralized configuration for A4 dimensions, margins, company branding (`REACH INTERNATIONAL`), month mappings, and filename builders (`buildExportFileName`, `buildMachineExportFileName`, `buildMachinesExportFileName`).
+- **`apps/web/lib/pdf/pdf-print-styles.ts`**: Centralized print CSS generator (`getPrintStylesheet`) for clean `@page` rules, `@media print`, table layout, and `page-break-inside: avoid`.
+- **`apps/web/lib/pdf/pdf-utils.ts`**: Shared utility functions (`isUuid`, `formatCompactTiming`, `computeDurationHours`, `resolveCleanClientName`, `resolvePeriodLabel`, `resolveClientLocation`, `handleBrowserPrint`).
+- **`apps/web/components/pdf/`**: Reusable print components (`<PDFReportHeader>`, `<PDFKPIStrip>`, `<PDFSignatureBlock>`, `<PDFTableWrapper>`, `index.ts`).
+
+### Mobile Architecture (`apps/mobile`)
+- **`apps/mobile/lib/pdf-html-templates.ts`**: Standardized HTML template builders (`buildPdfHtmlStyles`, `buildPdfHtmlHeader`, `buildPdfHtmlKpiStrip`, `buildPdfHtmlSignatureBlock`, `buildPdfHtmlWrapper`) consumed by `OperationsExportModal.tsx` and `MachineExportModal.tsx`.
+

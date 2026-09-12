@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   AnimatedChevronDown,
   AnimatedCheck,
   AnimatedX,
 } from "./animated-icons";
 import { Search } from "lucide-react";
+import { useDynamicDropdownPosition } from "@/lib/hooks/useDynamicDropdownPosition";
 
 export interface UserSelectItem {
   id: string;
@@ -26,6 +29,7 @@ export interface UserSelectProps {
   value?: string;
   onChange: (userId: string, user?: UserSelectItem | null) => void;
   label?: ReactNode;
+  count?: number | string;
   placeholder?: string;
   disabled?: boolean;
   required?: boolean;
@@ -58,15 +62,11 @@ function getRoleBadgeStyle(role?: string | null): string {
     case "engineer":
       return "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20";
     case "supervisor":
-      return "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20";
-    case "operator":
-    case "mechanic":
       return "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20";
-    case "store_manager":
-    case "hr_manager":
-      return "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20";
+    case "operator":
+      return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20";
     default:
-      return "bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] border-[var(--color-hairline)]";
+      return "bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border-zinc-500/20";
   }
 }
 
@@ -75,6 +75,7 @@ export function UserSelect({
   value = "",
   onChange,
   label,
+  count,
   placeholder = "Search or select user / employee...",
   disabled = false,
   required = false,
@@ -89,7 +90,20 @@ export function UserSelect({
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const { mounted, position, isPositioned, updatePosition } = useDynamicDropdownPosition({
+    isOpen,
+    triggerRef,
+    popoverRef,
+    onClose: () => {
+      setIsOpen(false);
+    },
+    minWidth: 260,
+    maxHeightCap: 320,
+  });
 
   const isAllSelected = allowAll && (value === "all" || value === "");
 
@@ -121,26 +135,15 @@ export function UserSelect({
     });
   }, [eligibleUsers, searchQuery]);
 
-  // Click outside listener
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-        setSearchQuery("");
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
   const handleOpenToggle = () => {
     if (disabled) return;
     const nextState = !isOpen;
+    if (nextState) {
+      updatePosition();
+    }
     setIsOpen(nextState);
     if (nextState) {
       setTimeout(() => searchInputRef.current?.focus(), 50);
-    } else {
-      setSearchQuery("");
     }
   };
 
@@ -178,15 +181,21 @@ export function UserSelect({
       onKeyDown={handleKeyDown}
     >
       {label && (
-        <label className="block text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] mb-1 flex items-center justify-between select-none">
-          <span>
+        <label className="block text-[12px] sm:text-[13px] font-semibold text-[var(--color-ink)] mb-1 flex items-center justify-between select-none">
+          <span className="flex items-center gap-1.5">
             {label} {required && <span className="text-rose-500 font-semibold">*</span>}
           </span>
+          {count !== undefined && (
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-[var(--color-canvas)] text-[var(--color-mute)] border border-[var(--color-hairline)] font-medium">
+              {count} Total
+            </span>
+          )}
         </label>
       )}
 
       {/* Trigger Button */}
       <button
+        ref={triggerRef}
         type="button"
         disabled={disabled}
         onClick={handleOpenToggle}
@@ -261,102 +270,140 @@ export function UserSelect({
         </p>
       )}
 
-      {/* Popover Menu */}
-      {isOpen && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden max-h-72 flex flex-col backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-150">
-          {/* Search Header */}
-          <div className="p-2 border-b border-[var(--color-hairline)] flex items-center gap-2 bg-[var(--color-canvas)]">
-            <Search className="h-3.5 w-3.5 text-[var(--color-mute)] shrink-0 ml-1" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by Name, Role, Phone, Email..."
-              className="w-full bg-transparent text-xs text-[var(--color-ink)] focus:outline-none placeholder:text-[var(--color-mute)] py-1"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="text-[var(--color-mute)] hover:text-[var(--color-ink)] p-1 cursor-pointer"
-              >
-                <AnimatedX size={12} />
-              </button>
-            )}
-          </div>
-
-          {/* Listbox */}
-          <div className="overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
-            {allowAll && !searchQuery.trim() && (
-              <button
-                type="button"
-                onClick={() => handleSelect("all")}
-                className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
-                  isAllSelected
-                    ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold"
-                    : "hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="font-bold">{allLabel}</span>
-                  <span className="text-[10px] text-[var(--color-mute)] font-mono">
-                    ({eligibleUsers.length} staff)
-                  </span>
-                </div>
-                {isAllSelected && (
-                  <AnimatedCheck size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
-                )}
-              </button>
-            )}
-
-            {filteredUsers.length === 0 ? (
-              <div className="py-4 text-center text-xs text-[var(--color-mute)]">
-                No matching users found
-              </div>
-            ) : (
-              filteredUsers.map((u) => {
-                const isSelected = u.id === value;
-                const name = u.full_name || u.name || "User";
-                return (
+      {/* Popover Menu rendered via Portal with Dynamic Viewport Positioning & Smooth Transitions */}
+      {mounted && createPortal(
+        <AnimatePresence onExitComplete={() => setSearchQuery("")}>
+          {isOpen && isPositioned && (
+            <motion.div
+              ref={popoverRef}
+              key="user-select-popover"
+              initial={{
+                opacity: 0,
+                scale: 0.97,
+                y: position.placement === "top" ? 6 : -6,
+              }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+                y: 0,
+              }}
+              exit={{
+                opacity: 0,
+                scale: 0.97,
+                y: position.placement === "top" ? 4 : -4,
+              }}
+              transition={{
+                duration: 0.16,
+                ease: [0.16, 1, 0.3, 1],
+              }}
+              style={{
+                position: "fixed",
+                top: position.top !== undefined ? `${position.top}px` : "auto",
+                bottom: position.bottom !== undefined ? `${position.bottom}px` : "auto",
+                left: `${position.left}px`,
+                width: `${position.width}px`,
+                maxHeight: `${position.maxHeight}px`,
+                zIndex: 99999,
+                transformOrigin: position.placement === "top" ? "bottom center" : "top center",
+              }}
+              className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden flex flex-col backdrop-blur-md"
+            >
+              {/* Search Header */}
+              <div className="p-2 border-b border-[var(--color-hairline)] flex items-center gap-2 bg-[var(--color-canvas)] shrink-0">
+                <Search className="h-3.5 w-3.5 text-[var(--color-mute)] shrink-0 ml-1" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by Name, Role, Phone, Email..."
+                  className="w-full bg-transparent text-xs text-[var(--color-ink)] focus:outline-none placeholder:text-[var(--color-mute)] py-1"
+                />
+                {searchQuery && (
                   <button
-                    key={u.id}
                     type="button"
-                    onClick={() => handleSelect(u.id)}
+                    onClick={() => setSearchQuery("")}
+                    className="text-[var(--color-mute)] hover:text-[var(--color-ink)] p-1 cursor-pointer"
+                  >
+                    <AnimatedX size={12} />
+                  </button>
+                )}
+              </div>
+
+              {/* Listbox */}
+              <div className="overflow-y-auto p-1.5 space-y-1 custom-scrollbar flex-1 min-h-0">
+                {allowAll && !searchQuery.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelect("all")}
                     className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
-                      isSelected
+                      isAllSelected
                         ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold"
                         : "hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
                     }`}
                   >
-                    <div className="min-w-0 pr-2 flex-1">
-                      <div className="font-bold flex items-center gap-2 truncate">
-                        <span className="truncate">{name}</span>
-                        {u.role && (
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shrink-0 border ${getRoleBadgeStyle(
-                              u.role
-                            )}`}
-                          >
-                            {formatRoleLabel(u.role)}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 text-[10px] text-[var(--color-mute)] font-mono truncate mt-0.5">
-                        {u.phone && <span>{u.phone}</span>}
-                        {u.email && <span className="truncate">• {u.email}</span>}
-                        {u.city && <span className="truncate">• {u.city}</span>}
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">{allLabel}</span>
+                      <span className="text-[10px] text-[var(--color-mute)] font-mono">
+                        ({eligibleUsers.length} staff)
+                      </span>
                     </div>
-                    {isSelected && (
+                    {isAllSelected && (
                       <AnimatedCheck size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
                     )}
                   </button>
-                );
-              })
-            )}
-          </div>
-        </div>
+                )}
+
+                {filteredUsers.length === 0 ? (
+                  <div className="py-4 text-center text-xs text-[var(--color-mute)]">
+                    No matching users found
+                  </div>
+                ) : (
+                  filteredUsers.map((u) => {
+                    const isSelected = u.id === value;
+                    const name = u.full_name || u.name || "User";
+                    return (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() => handleSelect(u.id)}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
+                          isSelected
+                            ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold"
+                            : "hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
+                        }`}
+                      >
+                        <div className="min-w-0 pr-2 flex-1">
+                          <div className="font-bold flex items-center gap-2 truncate">
+                            <span className="truncate">{name}</span>
+                            {u.role && (
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shrink-0 border ${getRoleBadgeStyle(
+                                  u.role
+                                )}`}
+                              >
+                                {formatRoleLabel(u.role)}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] text-[var(--color-mute)] font-mono truncate mt-0.5">
+                            {u.phone && <span>{u.phone}</span>}
+                            {u.email && <span className="truncate">• {u.email}</span>}
+                            {u.city && <span className="truncate">• {u.city}</span>}
+                          </div>
+                        </div>
+                        {isSelected && (
+                          <AnimatedCheck size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                        )}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
       )}
     </div>
   );

@@ -76,13 +76,22 @@ import { HmrSchema, RemarksSchema } from "@reachinternational/validation";
 const DRAFT_STORAGE_KEY = "reach_operator_daily_log_draft";
 
 
-// Helper to format client location string
+// Helper to format client location string (Street, City, District, State, Pincode)
 function getClientFormattedLocation(client?: CRMClient | null, fallbackLocation?: string | null): string {
   if (client) {
-    const parts = [client.address, client.city, client.state].filter(Boolean);
+    const parts = [
+      client.street,
+      client.city,
+      client.district,
+      client.state,
+      client.pincode,
+    ]
+      .filter(Boolean)
+      .map((s) => String(s).trim())
+      .filter(Boolean);
     if (parts.length > 0) return parts.join(", ");
   }
-  return fallbackLocation || "";
+  return fallbackLocation?.trim() || "Base Yard";
 }
 
 
@@ -1463,9 +1472,15 @@ export function OperatorDashboard({
                       type="number"
                       step="0.1"
                       min="0"
+                      max="16"
                       value={overtimeHours}
                       onChange={(e) => {
-                        setOvertimeHours(e.target.value);
+                        const val = parseFloat(e.target.value);
+                        if (!isNaN(val) && val > 16) {
+                          setOvertimeHours("16");
+                        } else {
+                          setOvertimeHours(e.target.value);
+                        }
                         setIsManualOvertime(true);
                       }}
                       onPaste={(e) =>
@@ -1473,13 +1488,15 @@ export function OperatorDashboard({
                           event: e,
                           schema: HmrSchema as any,
                           onSuccess: (val) => {
-                            setOvertimeHours(String(val));
+                            const num = Math.min(Math.max(0, Number(val)), 16);
+                            setOvertimeHours(String(num));
                             setIsManualOvertime(true);
                           },
                           onError: (msg) => toast("error", "Validation Error", msg),
                         })
                       }
-                      placeholder="e.g. 0.0"
+                      title="Hours worked beyond normal 8h shift (0.0 for standard shift)"
+                      placeholder="0.0"
                       className="w-24 xs:w-28 sm:w-32 max-w-[130px] px-2.5 sm:px-3.5 py-1.5 sm:py-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs sm:text-sm font-mono font-bold text-center text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 min-h-[38px] sm:min-h-[42px] h-9.5 sm:h-[42px]"
                     />
                   </div>
@@ -2461,8 +2478,17 @@ export function OperatorDashboard({
                   type="number"
                   step="0.1"
                   min="0"
+                  max="16"
                   value={editOvertime}
-                  onChange={(e) => setEditOvertime(e.target.value)}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if (!isNaN(val) && val > 16) {
+                      setEditOvertime("16");
+                    } else {
+                      setEditOvertime(e.target.value);
+                    }
+                  }}
+                  title="Hours worked beyond normal 8h shift (0.0 for standard shift)"
                   placeholder="0.0"
                   className="w-24 xs:w-28 sm:w-32 max-w-[130px] px-3 py-2 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-mono font-bold text-center text-[var(--color-ink)] focus:ring-2 focus:ring-sky-500/20 focus:border-sky-500 min-h-[38px] sm:min-h-[42px] h-9.5 sm:h-[42px]"
                 />

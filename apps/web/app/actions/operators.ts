@@ -25,6 +25,7 @@ import {
   getISTDateString,
   isShiftEndInFuture,
 } from "@reachinternational/utils";
+import { formatHourLogsData } from "@/lib/queries/operators";
 
 function isValidUuid(id?: string | null): boolean {
   if (!id) return false;
@@ -327,12 +328,16 @@ export async function submitOperatorHourLogAction(payload: {
   }
 
   // Compute shift timing details
+  const safeOvertime = payload.overtimeHours !== undefined && !isNaN(Number(payload.overtimeHours))
+    ? Math.min(Math.max(0, Number(payload.overtimeHours)), 16.0)
+    : undefined;
+
   const timing = computeShiftTiming({
     startDate: effectiveStartDate,
     startTime: payload.startTime,
     endDate: payload.endDate,
     endTime: payload.endTime,
-    manualOvertime: payload.overtimeHours,
+    manualOvertime: safeOvertime,
   });
 
   if (!timing.isValid || !timing.startDateTime || !timing.endDateTime) {
@@ -440,12 +445,12 @@ export async function submitOperatorHourLogAction(payload: {
     if (!targetLocation && targetClientId) {
       const { data: cData } = await supabase
         .from("clients")
-        .select("address, city, state")
+        .select("address, city, district, state")
         .eq("id", targetClientId)
         .single();
 
       if (cData) {
-        const parts = [cData.address, cData.city, cData.state].filter(Boolean);
+        const parts = [cData.city, (cData as any).district, cData.state].filter(Boolean);
         if (parts.length > 0) targetLocation = parts.join(", ");
       }
     }
@@ -701,12 +706,16 @@ export async function updateOperatorHourLogAction(payload: {
   const targetStartDate = payload.startDate || existingLog.log_date;
   const targetEndDate = payload.endDate || existingLog.end_date;
 
+  const safeEditOvertime = payload.overtimeHours !== undefined && !isNaN(Number(payload.overtimeHours))
+    ? Math.min(Math.max(0, Number(payload.overtimeHours)), 16.0)
+    : undefined;
+
   const timing = computeShiftTiming({
     startDate: targetStartDate,
     startTime: targetStartTime,
     endDate: targetEndDate,
     endTime: targetEndTime,
-    manualOvertime: payload.overtimeHours,
+    manualOvertime: safeEditOvertime,
   });
 
   if (!timing.isValid || !timing.startDateTime || !timing.endDateTime) {
@@ -1111,4 +1120,275 @@ export async function recordMachineSiteMovementAction(payload: {
   revalidateTag(CACHE_TAGS.machines, "max");
   return { success: true, data: { machineId: payload.machineId } };
 }
+
+export interface GetOperationsExportLogsParams {
+  viewMode: "machine" | "client" | "operator";
+  entityId?: string;
+  clientId?: string;
+  clientName?: string;
+  machineId?: string;
+  operatorId?: string;
+  site?: string;
+  clientMachineId?: string;
+  month?: string; // "all", "01".."12", "custom"
+  customStartDate?: string;
+  customEndDate?: string;
+  search?: string;
+  sort?: "date-asc" | "date-desc";
+}
+
+const EXPORT_LOG_FULL_PROJECTION = `
+  id,
+  machine_id,
+  operator_id,
+  supervisor_id,
+  client_id,
+  log_date,
+  end_date,
+  start_datetime,
+  end_datetime,
+  start_meter,
+  end_meter,
+  running_hours,
+  start_time,
+  end_time,
+  overtime_hours,
+  normal_working_hours,
+  is_breakdown,
+  shift,
+  machine_condition,
+  location,
+  remarks,
+  idempotency_key,
+  conflict_flag,
+  conflict_reason,
+  conflict_status,
+  created_at,
+  machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number, hour_meter, status, manufacturer),
+  client:clients!machine_hour_logs_client_id_fkey(id, code, company_name, street, city, district, state, pincode, phone),
+  operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone, email)
+`;
+
+const EXPORT_LOG_BASE_PROJECTION = `
+  id,
+  machine_id,
+  operator_id,
+  supervisor_id,
+  client_id,
+  log_date,
+  start_meter,
+  end_meter,
+  running_hours,
+  start_time,
+  end_time,
+  overtime_hours,
+  normal_working_hours,
+  is_breakdown,
+  shift,
+  machine_condition,
+  location,
+  remarks,
+  created_at,
+  machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number, status, manufacturer),
+  client:clients!machine_hour_logs_client_id_fkey(id, code, company_name, street, city, district, state, pincode),
+  operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone)
+`;
+
+/**
+ * Dedicated, unpaginated operational logs fetcher for PDF and Excel export.
+ * Retrieves all matching logs for the selected time period and entity, leveraging
+ * composite B-tree indexes for sub-millisecond execution.
+ */
+export async function getOperationsExportLogsAction(params: GetOperationsExportLogsParams) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Unauthorized" };
+    }
+
+    const supabase = createSupabaseAdminClient();
+
+    // 1. Resolve entity filter
+    let resolvedClientId = params.clientId;
+    if (!resolvedClientId && params.viewMode === "client") {
+      if (params.entityId && isValidUuid(params.entityId)) {
+        resolvedClientId = params.entityId;
+      } else if (params.clientName || (params.entityId && params.entityId !== "all")) {
+        const searchName = params.clientName || params.entityId!;
+        const clientRes = await supabase
+          .from("clients")
+          .select("id, company_name")
+          .or(`company_name.ilike.%${searchName}%,code.ilike.%${searchName}%`)
+          .limit(1)
+          .maybeSingle();
+        if (clientRes.data) {
+          resolvedClientId = clientRes.data.id;
+        }
+      }
+    }
+
+    const resolvedMachineId = params.machineId || (params.viewMode === "machine" && params.entityId !== "all" ? params.entityId : undefined);
+    const resolvedOperatorId = params.operatorId || (params.viewMode === "operator" && params.entityId !== "all" ? params.entityId : undefined);
+
+    // 2. Pre-compute search relation lookups if search filter is provided
+    let searchOrClause: string | null = null;
+    if (params.search) {
+      const s = params.search.replace(/[,()"\n\r\\]/g, "").trim();
+      if (s) {
+        const [machRes, opRes, clientRes] = await Promise.all([
+          supabase
+            .from("machines")
+            .select("id")
+            .or(`machine_id.ilike.%${s}%,model.ilike.%${s}%,serial_number.ilike.%${s}%`)
+            .limit(50),
+          supabase.from("users").select("id").ilike("full_name", `%${s}%`).limit(50),
+          supabase.from("clients").select("id").ilike("company_name", `%${s}%`).limit(50),
+        ]);
+
+        const orClauses: string[] = [
+          `remarks.ilike.%${s}%`,
+          `location.ilike.%${s}%`,
+        ];
+        if (machRes.data && machRes.data.length > 0) {
+          orClauses.push(`machine_id.in.(${machRes.data.map((m) => m.id).join(",")})`);
+        }
+        if (opRes.data && opRes.data.length > 0) {
+          orClauses.push(`operator_id.in.(${opRes.data.map((u) => u.id).join(",")})`);
+        }
+        if (clientRes.data && clientRes.data.length > 0) {
+          orClauses.push(`client_id.in.(${clientRes.data.map((c) => c.id).join(",")})`);
+        }
+        searchOrClause = orClauses.join(",");
+      }
+    }
+
+    // 3. Build query with index-aligned filters
+    const applyExportFilters = (q: any) => {
+      let query = q;
+
+      // Entity filter
+      if (params.viewMode === "machine" && resolvedMachineId && resolvedMachineId !== "all") {
+        query = query.eq("machine_id", resolvedMachineId);
+      } else if (params.viewMode === "client" && resolvedClientId && resolvedClientId !== "all") {
+        query = query.eq("client_id", resolvedClientId);
+        if (params.clientMachineId && params.clientMachineId !== "all") {
+          query = query.eq("machine_id", params.clientMachineId);
+        }
+        if (params.site && params.site !== "all") {
+          // Extract safe alphanumeric search tokens from the selected site
+          const siteTokens = params.site
+            .split(",")
+            .map((t) => t.replace(/[^a-zA-Z0-9\s-]/g, " ").trim())
+            .filter((t) => t.length >= 3);
+
+          // Find the most distinctive geographical token (e.g. city or district, avoiding generic words)
+          const primaryToken = siteTokens.find(
+            (t) =>
+              !t.toLowerCase().includes("mill") &&
+              !t.toLowerCase().includes("plot") &&
+              !t.toLowerCase().includes("centre") &&
+              !t.toLowerCase().includes("industrial")
+          ) || siteTokens[0];
+
+          if (primaryToken) {
+            query = query.ilike("location", `%${primaryToken}%`);
+          } else {
+            query = query.ilike("location", `%${params.site.replace(/[%_\\]/g, "").trim()}%`);
+          }
+        }
+      } else if (params.viewMode === "operator" && resolvedOperatorId && resolvedOperatorId !== "all") {
+        query = query.eq("operator_id", resolvedOperatorId);
+      }
+
+      // Time filter (Selected Time)
+      if (params.month === "custom") {
+        if (params.customStartDate) query = query.gte("log_date", params.customStartDate);
+        if (params.customEndDate) query = query.lte("log_date", params.customEndDate);
+      } else if (params.month && params.month !== "all") {
+        const year = new Date().getFullYear();
+        const monthNum = parseInt(params.month, 10);
+        if (!isNaN(monthNum) && monthNum >= 1 && monthNum <= 12) {
+          const mStr = String(monthNum).padStart(2, "0");
+          const startDate = `${year}-${mStr}-01`;
+          const lastDay = new Date(year, monthNum, 0).getDate();
+          const endDate = `${year}-${mStr}-${String(lastDay).padStart(2, "0")}`;
+          query = query.gte("log_date", startDate).lte("log_date", endDate);
+        }
+      }
+
+      // Search filter
+      if (searchOrClause) {
+        query = query.or(searchOrClause);
+      }
+
+      return query;
+    };
+
+    const sortAsc = params.sort !== "date-desc"; // Default chronological ASC for exports & reports
+    let rawQuery = supabase
+      .from("machine_hour_logs")
+      .select(EXPORT_LOG_FULL_PROJECTION)
+      .order("log_date", { ascending: sortAsc })
+      .order("created_at", { ascending: sortAsc })
+      .order("id", { ascending: sortAsc })
+      .limit(5000);
+
+    rawQuery = applyExportFilters(rawQuery);
+
+    let rawLogs: any[] = [];
+    const res = await rawQuery;
+
+    if (!res.error && res.data) {
+      rawLogs = res.data;
+    } else {
+      console.warn("[getOperationsExportLogsAction] Primary projection failed, using baseline fallback:", res.error?.message);
+      let fallbackQuery = supabase
+        .from("machine_hour_logs")
+        .select(EXPORT_LOG_BASE_PROJECTION)
+        .order("log_date", { ascending: sortAsc })
+        .order("created_at", { ascending: sortAsc })
+        .order("id", { ascending: sortAsc })
+        .limit(5000);
+      fallbackQuery = applyExportFilters(fallbackQuery);
+      const fallbackRes = await fallbackQuery;
+      if (!fallbackRes.error && fallbackRes.data) {
+        rawLogs = fallbackRes.data;
+      }
+    }
+
+    const formattedLogs = formatHourLogsData(rawLogs);
+
+    // Calculate accurate aggregate totals across all exported logs
+    let totalRunningHours = 0;
+    let totalOtHours = 0;
+    let totalBreakdowns = 0;
+    const loggedDates = new Set<string>();
+
+    for (const log of formattedLogs) {
+      const startMtr = log.start_meter ?? 0;
+      const endMtr = log.end_meter ?? startMtr;
+      const run = log.running_hours ?? Math.max(0, Math.round((endMtr - startMtr) * 10) / 10);
+      totalRunningHours += run;
+      totalOtHours += log.overtime_hours || 0;
+      if (log.is_breakdown) totalBreakdowns++;
+      if (log.log_date) loggedDates.add(log.log_date);
+    }
+
+    return {
+      success: true,
+      logs: formattedLogs,
+      totalCount: formattedLogs.length,
+      summary: {
+        totalRunningHours: Math.round(totalRunningHours * 10) / 10,
+        totalOtHours: Math.round(totalOtHours * 10) / 10,
+        totalBreakdowns,
+        loggedDaysCount: loggedDates.size,
+      },
+    };
+  } catch (err: any) {
+    console.error("[getOperationsExportLogsAction] Exception:", err);
+    return { success: false, error: err?.message || "Failed to fetch export operational logs" };
+  }
+}
+
 

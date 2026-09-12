@@ -5,15 +5,19 @@ import {
   MONTH_NAMES,
   getLogMonthNumber,
   formatExportDateTimeSlug,
-  formatCompactTiming,
   buildExportFileName,
   buildMachineExportFileName,
-} from "./operator-logs-export";
+} from "@/lib/pdf/pdf-config";
+import { formatCompactTiming } from "@/lib/pdf/pdf-utils";
 
 export interface ExportSupervisorLogsOptions {
   logs: MachineHourLog[];
   viewMode: "all" | "machine" | "client" | "operator";
   selectedEntityId: string;
+  selectedClientId?: string;
+  selectedClientName?: string;
+  selectedMachineId?: string;
+  selectedOperatorId?: string;
   selectedMonthValue: string;
   supervisorName?: string;
   selectedSite?: string;
@@ -27,6 +31,10 @@ export function exportSupervisorRunningLogsToExcel({
   logs,
   viewMode,
   selectedEntityId,
+  selectedClientId,
+  selectedClientName,
+  selectedMachineId,
+  selectedOperatorId,
   selectedMonthValue,
   supervisorName = "Supervisor",
   selectedSite = "all",
@@ -50,27 +58,35 @@ export function exportSupervisorRunningLogsToExcel({
 
   // 2. Entity filtering (by machine, client, or operator)
   if (viewMode === "machine" && selectedEntityId !== "all") {
-    filtered = filtered.filter((log) => log.machine_id === selectedEntityId);
+    const targetMachId = selectedMachineId || selectedEntityId;
+    filtered = filtered.filter((log) => log.machine_id === targetMachId);
   } else if (viewMode === "client" && selectedEntityId !== "all") {
+    const targetClientId = selectedClientId || (selectedEntityId.includes("-") ? selectedEntityId : undefined);
+    const targetClientName = selectedClientName || selectedEntityId;
     filtered = filtered.filter((log) => {
-      const matchesId =
-        log.client_id === selectedEntityId || (log as any)?.client?.id === selectedEntityId;
+      const matchesId = targetClientId
+        ? log.client_id === targetClientId || (log as any)?.client?.id === targetClientId
+        : false;
       const clientName =
         (log as any)?.client?.client_name ||
         (log as any)?.client?.company_name ||
         (log.machine as any)?.customer_name ||
         "";
-      const matchesName =
-        clientName.toLowerCase().trim() === selectedEntityId.toLowerCase().trim();
+      const matchesName = targetClientName
+        ? clientName.toLowerCase().trim() === targetClientName.toLowerCase().trim()
+        : false;
       const isClientMch = machines?.some(
         (m) =>
-          (m.client_id === selectedEntityId ||
-            (m as any).client?.id === selectedEntityId ||
-            ((m as any).client?.company_name || (m as any).customer_name || "").toLowerCase().trim() === selectedEntityId.toLowerCase().trim()) &&
+          ((targetClientId && (m.client_id === targetClientId || (m as any).client?.id === targetClientId)) ||
+            (targetClientName && ((m as any).client?.company_name || (m as any).customer_name || "").toLowerCase().trim() === targetClientName.toLowerCase().trim())) &&
           m.id === log.machine_id
       );
 
-      if (!matchesId && !matchesName && !isClientMch) return false;
+      // If logs were already pre-filtered by client on the server, keep them
+      if (!matchesId && !matchesName && !isClientMch && !targetClientId && !targetClientName) return false;
+      if (targetClientId || targetClientName) {
+        if (!matchesId && !matchesName && !isClientMch) return false;
+      }
 
       if (selectedSite && selectedSite !== "all") {
         const mObj = log.machine as any;
@@ -85,7 +101,8 @@ export function exportSupervisorRunningLogsToExcel({
       return true;
     });
   } else if (viewMode === "operator" && selectedEntityId !== "all") {
-    filtered = filtered.filter((log) => log.operator_id === selectedEntityId);
+    const targetOpId = selectedOperatorId || selectedEntityId;
+    filtered = filtered.filter((log) => log.operator_id === targetOpId);
   }
 
   const { displayDateTime, slugDateTime } = formatExportDateTimeSlug();
@@ -116,11 +133,18 @@ export function exportSupervisorRunningLogsToExcel({
     const mCode = (filtered[0]?.machine as any)?.machine_code || "";
     filterLabel = `Machine: ${mName} (${mCode})`;
   } else if (viewMode === "client" && selectedEntityId !== "all") {
+    const isUuid = (val?: string | null) =>
+      Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim()));
+    const resolvedClientName =
+      (selectedClientName && !isUuid(selectedClientName) ? selectedClientName : null) ||
+      (filtered[0]?.client as any)?.company_name ||
+      (filtered[0]?.client as any)?.client_name ||
+      (selectedEntityId && !isUuid(selectedEntityId) ? selectedEntityId : "Client");
     const siteText = selectedSite && selectedSite !== "all" ? ` | Site: ${selectedSite}` : "";
     const machineText = selectedClientMachineId && selectedClientMachineId !== "all"
       ? ` | Machine: ${filtered.find((l) => l.machine_id === selectedClientMachineId)?.machine?.machine_name || selectedClientMachineId}`
       : "";
-    filterLabel = `Client: ${selectedEntityId}${siteText}${machineText}`;
+    filterLabel = `Client: ${resolvedClientName}${siteText}${machineText}`;
   } else if (viewMode === "operator" && selectedEntityId !== "all") {
     filterLabel = `Operator: ${opName}`;
   }
@@ -139,13 +163,20 @@ export function exportSupervisorRunningLogsToExcel({
 
   let filterScopeText = `Filter Scope: ${filterLabel}`;
   if (viewMode === "client" && selectedEntityId !== "all") {
+    const isUuid = (val?: string | null) =>
+      Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim()));
+    const resolvedClientName =
+      (selectedClientName && !isUuid(selectedClientName) ? selectedClientName : null) ||
+      (filtered[0]?.client as any)?.company_name ||
+      (filtered[0]?.client as any)?.client_name ||
+      (selectedEntityId && !isUuid(selectedEntityId) ? selectedEntityId : "Client");
     const siteText = selectedSite && selectedSite !== "all"
       ? selectedSite
       : filtered[0]?.location ||
         ((filtered[0]?.client as any)?.city ? `${(filtered[0]?.client as any).city}${(filtered[0]?.client as any).state ? `, ${(filtered[0]?.client as any).state}` : ""}` : "") ||
         ((filtered[0]?.machine as any)?.customer_address ? `${(filtered[0]?.machine as any).customer_address}${(filtered[0]?.machine as any).city ? `, ${(filtered[0]?.machine as any).city}` : ""}` : (filtered[0]?.machine as any)?.city) ||
         "—";
-    filterScopeText = `Client: ${selectedEntityId} | Location: ${siteText}`;
+    filterScopeText = `Client: ${resolvedClientName} | Location: ${siteText}`;
   } else if (viewMode === "machine" && selectedEntityId !== "all") {
     const mMfr = (filtered[0]?.machine as any)?.manufacturer || "—";
     const mModel = (filtered[0]?.machine as any)?.model || "—";
@@ -438,18 +469,24 @@ export function exportSupervisorRunningLogsToExcel({
 
   let fileName = "";
   if (isOperatorView) {
-    fileName = buildExportFileName(opName, selectedMonthValue, "xlsx");
+    fileName = buildExportFileName(opName, selectedMonthValue, "xlsx", customStartDate, customEndDate);
   } else if (viewMode === "machine") {
-    const selectedMachine = machines?.find((m) => m.id === selectedEntityId) || (filtered[0]?.machine as any);
+    const selectedMachine = machines?.find((m) => m.id === (selectedMachineId || selectedEntityId)) || (filtered[0]?.machine as any);
     const mSerial = selectedMachine?.serial_number || selectedMachine?.machine_code || (filtered[0]?.machine as any)?.serial_number || (filtered[0]?.machine as any)?.machine_code || "Machine";
-    fileName = buildMachineExportFileName(mSerial, "xlsx");
+    fileName = buildMachineExportFileName(mSerial, "xlsx", customStartDate, customEndDate);
   } else if (viewMode === "client" && selectedClientMachineId && selectedClientMachineId !== "all") {
     const clientMachine = machines?.find((m) => m.id === selectedClientMachineId) || filtered.find((l) => l.machine_id === selectedClientMachineId)?.machine;
     const mSerial = (clientMachine as any)?.serial_number || (clientMachine as any)?.machine_code || "Machine";
-    fileName = buildMachineExportFileName(mSerial, "xlsx");
+    fileName = buildMachineExportFileName(mSerial, "xlsx", customStartDate, customEndDate);
   } else if (viewMode === "client") {
-    const clientSlug = (selectedEntityId || "Client").split(/[^a-zA-Z0-9]+/).filter(Boolean).join("-") || "Client";
-    fileName = `${clientSlug}-${slugDateTime}.xlsx`;
+    const rawClientName = selectedClientName || (selectedEntityId && !selectedEntityId.includes("-") ? selectedEntityId : (filtered[0]?.client as any)?.company_name || (filtered[0]?.client as any)?.client_name || "Client");
+    const clientSlug = rawClientName.split(/[^a-zA-Z0-9]+/).filter(Boolean).join("-") || "Client";
+    const monthSlug = selectedMonthValue === "custom" && customStartDate && customEndDate
+      ? `${formatDate(customStartDate).replace(/\s+/g, "")}-to-${formatDate(customEndDate).replace(/\s+/g, "")}`
+      : selectedMonthValue !== "all"
+      ? (MONTH_NAMES.find((m) => m.value === selectedMonthValue)?.short || selectedMonthValue)
+      : "AllMonths";
+    fileName = `${clientSlug}-${monthSlug}-${slugDateTime}.xlsx`;
   } else {
     const modeSlug = viewMode.charAt(0).toUpperCase() + viewMode.slice(1);
     fileName = `Supervisor-Running-Logs-${modeSlug}-${slugDateTime}.xlsx`;

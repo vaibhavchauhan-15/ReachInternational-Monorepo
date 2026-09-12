@@ -41,7 +41,7 @@ const MACHINE_LIST_COLUMNS = `
   updated_at,
   current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email, shift_time),
   current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email, shift_time),
-  client:clients!machines_client_id_fkey(id, code, company_name, city, district, state, pincode, phone, contact_person, address, gstin, pan_number, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode, status)
+  client:clients!machines_client_id_fkey(id, code, company_name, city, district, state, pincode, phone, contact_person, street, gstin, pan_number, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode, status)
 `;
 
 async function hydrateMachinesPersonnel(machines: any[], supabase: any): Promise<any[]> {
@@ -233,7 +233,7 @@ export const getMachines = cache(async (params: MachineListParams = {}) => {
       updated_at,
       current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email),
       current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email),
-      client:clients!machines_client_id_fkey(id, code, company_name, city, district, state, pincode, phone, contact_person, address, gstin, pan_number, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode, status)
+      client:clients!machines_client_id_fkey(id, code, company_name, city, district, state, pincode, phone, contact_person, street, gstin, pan_number, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode, status)
     `;
 
     let fallbackQuery = supabase
@@ -337,7 +337,7 @@ const getCachedMachineById = unstable_cache(
         updated_at,
         current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email, shift_time),
         current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email, shift_time),
-        client:clients!machines_client_id_fkey(id, code, company_name, city, district, state, pincode, phone, contact_person, address, gstin, pan_number, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode, status)
+        client:clients!machines_client_id_fkey(id, code, company_name, city, district, state, pincode, phone, contact_person, street, gstin, pan_number, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode, status)
       `;
 
       const fallbackRes = await supabase

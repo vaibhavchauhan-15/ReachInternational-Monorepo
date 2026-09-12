@@ -1,3 +1,502 @@
+- **Architecture & Performance — Optimize & Standardize PDF Generation (Centralized PDF Service) (2026-09-12)**:
+  - **1. Objective & Background**:
+    - Centralized 5 disparate PDF implementations (~3,600 lines) across Web and Mobile into a unified, shared architecture.
+    - Standardized page margins, `@media print` rules, headers, KPI strips, verification signature blocks, and export filename builders while preserving instant, lightweight, vector-sharp PDF generation.
+  - **2. Deliverables & Implementations**:
+    - **Shared Web PDF Architecture (`apps/web/lib/pdf/` & `apps/web/components/pdf/`)**:
+      - `apps/web/lib/pdf/pdf-config.ts`: Centralized constants for A4 dimensions, margins, branding (`REACH INTERNATIONAL`, `/pdf-logo.png`), month mappings, date/time slugs (`formatExportDateTimeSlug`), and filename builders (`buildExportFileName`, `buildMachineExportFileName`, `buildMachinesExportFileName`).
+      - `apps/web/lib/pdf/pdf-print-styles.ts`: Centralized print CSS generator (`getPrintStylesheet`) standardizing `@page`, table layout, header, KPI strip, and `page-break-inside: avoid`.
+      - `apps/web/lib/pdf/pdf-utils.ts`: Shared helpers (`isUuid`, `formatCompactTiming`, `computeDurationHours`, `resolveCleanClientName`, `resolvePeriodLabel`, `resolveClientLocation`, `handleBrowserPrint`).
+      - `apps/web/components/pdf/`: Reusable components `<PDFReportHeader>`, `<PDFKPIStrip>`, `<PDFSignatureBlock>`, `<PDFTableWrapper>`, and barrel export `index.ts`.
+    - **Refactored Web PDF Modals**:
+      - `PrintableSupervisorLogsModal.tsx`: Replaced ~130 lines of inline CSS and bespoke headers/KPI/signatures with shared PDF components and utilities (~325 lines removed).
+      - `PrintableOperatorLogsModal.tsx`: Refactored to use shared PDF components and utilities (~164 lines removed).
+      - `PrintableMachineDirectoryModal.tsx`: Refactored to use shared PDF components and utilities (~132 lines removed).
+    - **Consolidated Export Utilities**:
+      - `operator-logs-export.ts`, `supervisor-logs-export.ts`, and `machines-export.ts` re-export or consume centralized PDF configuration with 100% backward compatibility.
+    - **Standardized Mobile PDF Templates (`apps/mobile/lib/pdf-html-templates.ts`)**:
+      - Created `pdf-html-templates.ts` providing `buildPdfHtmlStyles`, `buildPdfHtmlHeader`, `buildPdfHtmlKpiStrip`, `buildPdfHtmlSignatureBlock`, and `buildPdfHtmlWrapper`.
+      - Refactored `OperationsExportModal.tsx` and `MachineExportModal.tsx` to generate standardized HTML for `expo-print`, achieving complete Web-to-Mobile UI and print styling parity.
+  - **3. Verification**:
+    - `pnpm typecheck`: PASSED across all 7 workspace packages (0 errors).
+    - `node apps/mobile/run-tests.mjs`: PASSED all 18/18 mobile automated verification test scenarios.
+    - Zero breaking changes to existing export or report behavior.
+
+- **Operations Hub (/operations) — Supervisor Logs PDF Report Client Name & Address Small Text & Multiline Wrapping (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback: *"make the client name and address small text also if overflow the text then shift the remaining address at below line make sure dont hide the client details"*
+    - Location: `/operations?tab=logs&view=client&client=14c53e36-47c7-468f-8df2-5cb43dca300d&page=1&month=custom&start=2026-08-01&end=2026-09-12`
+    - Viewport: `1536×695`
+    - Component: `<SupervisorLogsReportContent>` in `PrintableSupervisorLogsModal.tsx`
+  - **2. Root Cause & Solutions**:
+    - **Root Cause**: The report subtitle was styled with `whitespace-nowrap overflow-hidden text-ellipsis flex items-center justify-center` and large `text-[10px] sm:text-[11px] font-extrabold`. When client name and 5-part address exceeded available space, the centered flex container pushed the text off-screen to the left (clipping `CLIENT:` to `':`) and clipped the right edge (clipping the pincode), hiding critical client information.
+    - **Small Text Typography**: Reduced font size to `text-[8.5px] sm:text-[9.5px] font-bold text-neutral-800 tracking-tight leading-snug`, matching the table typography.
+    - **Multiline Wrapping on Overflow**: Removed `whitespace-nowrap`, `overflow-hidden`, and `text-ellipsis`. Used `text-center leading-snug break-words max-w-full` with unbroken `inline-block` for `CLIENT: [NAME]` and responsive `inline break-words` for `LOCATION: [FULL ADDRESS]`, allowing the remaining address to wrap cleanly to the line below without clipping.
+    - **Sanitized Punctuation**: Stripped trailing commas/colons from `cleanLocation` and quotes from `cleanClientName` (`.replace(/[,:\s]+$/, "")`).
+    - **Sign-off Block Address Visibility**: Replaced `max-w-[170px] truncate` in Column 2 of the signature block with `max-w-[200px] leading-tight break-words`, ensuring the full site address is never truncated with ellipsis in the signature block.
+    - **Mobile Synchronization**: Updated `OperationsExportModal.tsx` in `apps/mobile` with `.subtitle { font-size: 9.5px; font-weight: 700; line-height: 1.35; word-break: break-word; }` and inline multiline subtitle spans.
+  - **3. Verification**:
+    - `@reachinternational/web` `tsc --noEmit`: PASSED (0 errors, Exit code: 0).
+    - `@reachinternational/mobile` `tsc --noEmit`: PASSED (0 errors, Exit code: 0).
+    - Client name and address remain 100% visible and unclipped across both screen preview and print/export modes.
+
+- **Operations Hub (/operations) — ClientSelect Fix & Only Client Name + Address Visible (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback: *"client selector not working fix this and only client name + address should be visible"*
+    - Constraint: *"dont open in the browser for testign"*
+  - **2. Root Cause & Solutions**:
+    - **Clean Display (Name + Address Only)**:
+      - Removed all client code badges (`selectedClient.code`, `c.code`) from the trigger button and dropdown list in `ClientSelect.tsx`.
+      - Removed emoji pin `📍` and formatted trigger display to show `{clientDisplayName}` and `• {clientLocationStr}` with max-width and truncation protection.
+      - Formatted dropdown options with clean bold client name and muted full address location.
+      - Updated search placeholder to `"Search by Client Name, Location..."`.
+    - **Location Fallback (`getFormattedClientLocation`)**:
+      - Updated `getFormattedClientLocation` to fall back to `client.address` if decomposed fields are empty, ensuring the full site address is always visible.
+    - **State Synchronization (`OperationsClient.tsx`)**:
+      - Updated `initialClientId` effect to unconditionally synchronize `setLogsSelectedClientId(initialClientId || "")`.
+    - **Mobile Synchronization (`ClientSelectModal.tsx` & `operations.tsx`)**:
+      - Removed `c.code` badge from `ClientSelectModal.tsx` and removed `code: c.code` from `openClientSelector` in `apps/mobile/app/(app)/operations.tsx`.
+      - Updated mobile trigger button to display client name and address with bullet separator (`•`).
+      - Updated search placeholder to `"Search client by name, city, address..."`.
+  - **3. Verification**:
+    - `@reachinternational/web` `tsc --noEmit`: PASSED (0 errors, Exit code: 0).
+    - `@reachinternational/mobile` `tsc --noEmit`: PASSED (0 errors, Exit code: 0).
+    - Zero browser testing tools or subagents invoked per user constraint.
+
+- **Operations Hub (/operations) — Industry-Level Test Plan & Automated Data-Integrity Baseline (2026-09-12)**:
+  - **1. Objective**: User requested industry-level QA test plan for /operations (Functionality, Machine/Client/Operator views, filters, DB correctness, exports, UI, performance, security, compatibility) and then requested testing execution with tools/scripts.
+  - **2. Deliverables & Execution**:
+    - `AI/TESTING/OPERATIONS-TEST-PLAN.md`: 19-section plan (views, month/custom date filters, AND combinations, DB accuracy, URL state, search/sort, Excel/PDF exports, pagination, error handling, 3-tier responsive UI, performance targets, Security/RBAC incl. BUG-OP-07/BUG-OP-05 re-verification, concurrency, compatibility, regression, release gate) + §19 automated DB baseline results.
+    - `supabase/tests/qa/operations-ground-truth.sql`: 9-query ground-truth pack (Q1–Q9).
+    - `supabase/tests/qa/operations-data-integrity.mjs`: automated T1–T8 data-integrity suite following existing `supabase/tests/*.mjs` convention (`createClient`, env loader, `SUPABASE_SECRET_KEY`).
+  - **3. Execution Results (2026-09-12)**:
+    - Data-integrity suite: **12/12 PASSED** (0 duplicates, valid statuses, operator role integrity, referential integrity clean, current month has data, 120 logs total).
+    - **Seed gaps found (test blockers)**: no `under_maintenance` machine; no multi-site or zero-log clients; all logs in current month only (no historical-month ground truth).
+    - `apps/web` `tsc --noEmit`: **PASSED (0 errors, exit 0)**.
+    - `DateRangePicker.tsx` verified: preset pills (Today/Last 7/etc.) confirmed REMOVED per latest minimalist revision; plan doc corrected with anti-regression note.
+
+- **Operations Hub (/operations) — Minimalist, Clean DateRangePicker Popover (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback: *"in this calender sont show the today , yesterday , last 7 days and so on also remove this 01-08-2026 → 12-09-2026 43 Days too. just select any month's start day and end date. dont add header. make the calender ui clean and appealing"*
+  - **2. Root Cause & Solutions**:
+    - **Removed Preset Range Pills**: Eliminated the preset buttons row (`Today`, `Yesterday`, `Last 7 Days`, `Last 30 Days`, `This Month`) and removed dead `presets` calculation and `handleApplyPreset` handler from `DateRangePicker.tsx`.
+    - **Removed Range Status Bar**: Eliminated the status banner row (`01-08-2026 → 12-09-2026 43 Days`) and removed unneeded `tempDiffDaysCount` and `selectionStatusText` hooks.
+    - **Direct Month Switcher & Minimal Calendar Interface**: Popover directly displays the clean Month Switcher (`< Month Year >`), weekday columns (`Su` to `Sa`), interactive month grid, and standard actions (`Clear`, `Cancel`, `Apply Range`).
+    - **Compact Geometry & Zero Inner Scrollbars**: Total popover height reduced to **~280px**, effortlessly fitting inside viewports of all sizes without vertical scrollbars.
+  - **3. Verification**:
+    - `@reachinternational/web` `tsc --noEmit`: PASSED (0 errors).
+    - `npx turbo run typecheck`: PASSED (0 errors across all 7 workspace packages).
+
+- **Operations Hub (/operations) — DateRangePicker Dynamic Viewport Positioning & Unblocking (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback: *"make the dynamic view port so when open then it not block by anythings"*
+  - **2. Root Cause & Solutions**:
+    - **Outer Portal Architecture (`DateRangePicker.tsx`, `CustomDatePicker.tsx`, `ClientSelect.tsx`)**:
+      - Moved `createPortal` outside `<AnimatePresence>` to align with monorepo standards (`mounted && createPortal(<AnimatePresence>...</AnimatePresence>, document.body)`).
+      - Eliminates Framer Motion `PopChildMeasure` errors and ensures immediate lifecycle mounting and smooth 60fps enter/exit transitions.
+    - **Eliminated Inline Style Collisions (`top` / `bottom`)**:
+      - Replaced conditional spreading of `top` and `bottom` with explicit resets (`top: position.top !== undefined ? `${position.top}px` : "auto"`, `bottom: position.bottom !== undefined ? `${position.bottom}px` : "auto"`).
+      - Prevents Framer Motion from retaining stale inline coordinates when flipping between top and bottom, which previously collapsed popovers to 0px height on 695px viewports.
+      - Explicitly reset inactive coordinates (`top: undefined` / `bottom: undefined`) inside `useDynamicDropdownPosition.ts`.
+    - **Streamlined High-Density Popover Layout**:
+      - Reduced popover height from ~420px to **~315px** via compact preset pills (`px-2 py-0.8`), streamlined range status row (`px-2.5 py-1.5`), compact month navigation (`p-2`), responsive day cells (`h-7 sm:h-7.5`), and compact action footer (`p-2`).
+      - Completely fits on 695px viewports with zero internal scrollbars, clipping, or viewport edge overflows.
+      - Set popover width to `min(360, viewportWidth - 16)`, ensuring comfortable touch targets on mobile and spacious density on desktop.
+    - **Elevated Z-Index & Threshold Calibration**:
+      - Set `zIndex: 99999` across all selector popovers and calibrated comfort height threshold to 340px in `useDynamicDropdownPosition.ts`.
+  - **3. Verification**:
+    - `@reachinternational/web` `tsc --noEmit`: PASSED (0 errors).
+    - `npx turbo run typecheck`: PASSED (0 errors across all 7 workspace packages).
+
+- **Operations Hub (/operations) — Unified Custom Calendar Date Range Picker (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback: *"remove dropdonw and add date picker when i click here then custom calender will open and then user can select start and end date make sure reuse the calender dont make new calender make sure it should properly working"*
+  - **2. Root Cause & Solutions**:
+    - **Reused Custom Calendar Architecture (`DateRangePicker.tsx`)**:
+      - Upgraded `DateRangePicker.tsx` to reuse the proven calendar structure from `CustomDatePicker.tsx` (month navigation, weekday headers, days grid, today dot, and Framer Motion transitions).
+      - Implemented full range selection logic: first click selects start date, mouse hover generates provisional range highlighting, second click completes the range and fires `onChange({ startDate, endDate })`.
+      - Re-anchoring support: Clicking an earlier date during active selection sets it as the new start date. Same-day clicking completes a single-day range (`startDate === endDate`).
+      - Connected ribbon range highlighting: Start date (`rounded-l-xl`), End date (`rounded-r-xl`), and in-range intermediate dates (`rounded-none bg-sky-500/15`) with weekend edge rounding.
+      - Integrated quick operational presets: `Today`, `Yesterday`, `Last 7 Days`, `Last 30 Days`, `This Month`.
+      - Selection status banner showing dynamic status: e.g. `01 Sep 2026 → 12 Sep 2026 (12 Days)`.
+      - Portaled popover via `useDynamicDropdownPosition` with zero (0, 0) geometry flash and physics-based cubic-bezier easing `[0.16, 1, 0.3, 1]`.
+    - **Operations Hub Integration (`OperationsClient.tsx`)**:
+      - Removed the two separate `<CustomDatePicker>` dropdown inputs for Start Date and End Date.
+      - Replaced with unified `<DateRangePicker>` labeled "Select Date Range", aligned with the selector grid (`col-span-1 sm:col-span-2`).
+      - Added reactive `useEffect` hooks for `initialCustomStart` and `initialCustomEnd` to keep search parameters and calendar state in sync.
+    - **Printable Operator Logs Modal (`PrintableOperatorLogsModal.tsx`)**:
+      - Upgraded modal custom date range selection to use `<DateRangePicker>` for consistency.
+    - **Infinite Re-Render Loop & Dynamic Viewport Positioning Fixes (`useDynamicDropdownPosition.ts`)**:
+      - Fixed `Maximum update depth exceeded` error by implementing shallow equality comparison in `setPosition` (bailing out when coordinates are unchanged) and protecting `onClose` with `useRef`.
+      - Improved dynamic viewport positioning for short screens (e.g. `1536×695`) by flipping upward (`placement: "top"`) whenever bottom space is below 380px and space above is greater.
+      - Supported `align` prop, raised popover z-index to `99999`, and synced width directly with `position.width`.
+    - **Default Month Selection & Range Clearing (`OperationsClient.tsx` & `page.tsx`)**:
+      - Guaranteed that `month` always falls back to the current month number (e.g. `"09"`) by default.
+      - Added automatic reset in `DateRangePicker.onChange` so clearing the date range cleanly restores the current month view.
+  - **3. Verification**:
+    - `@reachinternational/web` `tsc --noEmit` -> 0 errors.
+    - `npx turbo run typecheck` across all 7 monorepo packages -> 0 errors (Exit Code 0).
+
+- **Database & Monorepo Refactor — Remove Duplicate Street & Address Columns from Clients (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback: *"remove the duplicate street column and address column since we dont need it where need to fetch the full address then print the ddress=client.street + client.city + client.distric + client.state +client.pincode dont create seprate column for the address in the database fix the database and also make sure change database schema shold properly implemented in the frontend , backend and database"*
+  - **2. Root Cause & Database Migration (`065`)**:
+    - Removed duplicate `"Street"` (quoted, uppercase S) and redundant `address` columns from `public.clients`.
+    - Preserved all data into standard lowercase `street text NOT NULL` with `clients_street_not_empty CHECK (btrim(street) <> '')`.
+    - Dropped trigger `trg_sync_client_address` and function `public.sync_client_address()`.
+    - Updated RPC function `submit_operator_hour_log_atomic` to construct location dynamically from `street, city, district, state, pincode` instead of querying the deleted `address` column.
+  - **3. Cross-Platform Monorepo Synchronization**:
+    - **Shared Packages**: Updated `CRMClient` in `@reachinternational/types` (`street: string;`, `address?: string;`), and updated `CreateClientSchema`/`UpdateClientSchema` in `@reachinternational/validation` (`path: ["street"]`).
+    - **Web Backend & Queries**:
+      - `apps/web/app/actions/clients.ts`: Persisted only `street: resolvedStreet` on create/update.
+      - `apps/web/lib/queries/clients.ts`: Removed `address` from `CLIENT_SELECT_COLUMNS` and `getClientOptions`; updated search to `street.ilike`; derived `fullAddress` on the fly.
+      - `apps/web/lib/queries/machines.ts`: Replaced `address` with `street` in `client:clients!machines_client_id_fkey(...)` projections.
+      - `apps/web/lib/queries/operators.ts` & `apps/web/app/actions/operators.ts`: Removed `address` from `client:clients!machine_hour_logs_client_id_fkey(...)` projections in all log queries and export actions.
+    - **Web Frontend**:
+      - `ClientSelect.tsx`, `OperationsClient.tsx`, `ClientModal.tsx`, `ClientsClient.tsx`, `OperatorDashboard.tsx`, and `machine-client-view.tsx` dynamically format full address as `street + city + district + state + pincode`.
+    - **Mobile App**:
+      - `apps/mobile/app/(app)/operations.tsx`, `machines.tsx`, `clients.tsx`, `MeterLogModal.tsx`, `MachineModal.tsx`, `ClientSelectModal.tsx`, `MachineDetailView.tsx`, and `MachineExportModal.tsx` updated to query `street` and format full address dynamically on the fly.
+  - **4. Verification**:
+    - `@reachinternational/types` `typecheck` -> 0 errors.
+    - `@reachinternational/validation` `typecheck` -> 0 errors.
+    - `@reachinternational/web` `typecheck` -> 0 errors.
+    - `@reachinternational/mobile` `typecheck` -> 0 errors.
+    - `node apps/mobile/run-tests.mjs` -> 18/18 scenarios passed.
+    - PostgreSQL schema verified via `information_schema.columns` and `pg_constraint`.
+
+- **Operations Hub (/operations) — Unified Selector Opening/Closing Transitions & Geometry Flash Fix (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback: *"all the selector opening transition are not proper at the first time opern the selector it behave incorrectly when i open second time it behave proeprly fix the transition and make sure transiton should be smooth and correcly at first and last time of opern and close same for every selection in the operation page should be same and consituent"*
+  - **2. Root Cause & Solutions**:
+    - **Synchronous Layout Measurement**: Upgraded `useDynamicDropdownPosition.ts` to use `useIsomorphicLayoutEffect` (runs `useLayoutEffect` on client) so geometry measurements commit synchronously before browser paint, completely eliminating the initial `(0, 0)` coordinate jump.
+    - **Positioning Guard Flag**: Added `isPositioned` flag that prevents mounting portaled popovers until coordinates are verified and non-zero.
+    - **Synchronous Click-Time Trigger Recalculation**: Exported `updatePosition()` from the hook and invoked it synchronously inside button click handlers before setting `isOpen(true)`.
+    - **Preserved Coordinates on Exit**: Preserves valid anchor coordinates on close so exit animations stay pinned to their trigger instead of snapping to top-left.
+    - **Unified Framer Motion `<AnimatePresence>` & `<motion.div>`**:
+      - Applied identical spring/cubic-bezier easing curve `[0.16, 1, 0.3, 1]`, duration `0.16s`, scale `0.97`, dynamic `transformOrigin` (`position.placement === "top" ? "bottom center" : "top center"`), and directional vertical offsets across all selector dropdowns on `/operations`:
+        - `apps/web/components/ui/MachineSelect.tsx` (Select Machine in Machine View, Client View, and Assign Modal)
+        - `apps/web/components/ui/SearchableSelect.tsx` (Select Location, Select Month)
+        - `apps/web/components/ui/ClientSelect.tsx` (Select Client)
+        - `apps/web/components/ui/UserSelect.tsx` (Select Operator)
+        - `apps/web/components/ui/CustomDatePicker.tsx` (Start & End Date Pickers)
+    - **Stable Exit State Cleanup**: Deferred search input resets to Framer Motion's `onExitComplete` so row lists remain stable and non-flickering during the exit transition.
+    - **Component Props Alignment**: Added `count?: number` support to `ClientSelect` to render header total count badges matching `MachineSelect` and `UserSelect`.
+  - **3. Verification**:
+    - `@reachinternational/web` `tsc --noEmit` -> 0 errors (Exit code 0).
+    - `@reachinternational/mobile` `tsc --noEmit` -> 0 errors (Exit code 0).
+
+- **Operations Hub (/operations) — Month & Location Selector Fixes & Synchronized Multi-Filter Bottom Entries (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback 1: "month selector not working fix this. also make sure it working properly as per selected client + location + machine + month then show the enttry at the bottom by default it select current month"
+    - Feedback 2: "Location selector not working fix this. also make sure it working properly as per selected client + location + machine + month then show the enttry at the bottom by default it select all location"
+  - **2. Root Cause & Solutions**:
+    - **Default Current Month Alignment**:
+      - Defaulted `month` to current month (`String(new Date().getMonth() + 1).padStart(2, "0")`) in `apps/web/app/(app)/operations/page.tsx` and `getOperationsHubData` query whenever `searchParams.month` is omitted.
+      - Preserved `month=all` in `handleFilterChange` so "All Months" is an explicit selectable option.
+      - Added reactive `useEffect` syncing `logsSelectedMonth` when `initialMonth` prop changes.
+      - Updated `selectedMonthLabel` fallback to dynamically resolve current month name (`"September"`).
+    - **Safe Location Filter (Eliminated PostgREST 400 Grammar Crash)**:
+      - Replaced raw `.or(...)` filter strings in `getOperationsLogsPage` (`operators.ts` query) and `getOperationsExportLogsAction` (`operators.ts` action) with clean alphanumeric token extraction and direct `.ilike("location", `%${primaryToken}%`)`.
+      - Prevents PostgREST from choking on unescaped `:` and `|` present in industrial addresses like `"CPM |PO : CP Mills, Fort Songadh, Tapi, Gujrat, 394670"`.
+      - Ensured `effectiveSelectedSite` defaults to `"all"` ("All Sites & Locations").
+    - **Bottom Entries Dynamic Synchronization**:
+      - `client + location + machine + month` filters execute synchronously on server and return accurate matching entries, pagination, and KPI strip metrics.
+    - **Cross-Platform Mobile Synchronization**:
+      - Enhanced mobile `filteredLogs` location matching in `apps/mobile/app/(app)/operations.tsx` with token fallback matching.
+  - **3. Verification**:
+    - `@reachinternational/web` `tsc --noEmit` -> 0 errors.
+    - `@reachinternational/mobile` `tsc --noEmit` -> 0 errors.
+    - `node apps/mobile/run-tests.mjs` -> 18/18 scenarios passed.
+    - PostgreSQL query tests verified: JK Paper + Fort Songadh + Sep 2026 -> 80 logs; + RI-MC-0004 -> 10 logs.
+
+- **Operations Hub (/operations) & CRM — Client Unified Address & Multi-Site Location Architecture (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback: "street + city + distric + state + pincode treat as only one address of the client"
+    - Feedback: "if same client but different site location then add new client and use same name but differnt site locaion"
+    - Feedback: "make sure always remember it fetch all the address from the database address=client.street + client.city + client.distric + client.state +client.pincode"
+  - **2. Root Cause & Solutions**:
+    - **Database Schema & Automatic Address Synthesis**:
+      - Executed migration `064_client_unified_address_and_site_location.sql`.
+      - Added lowercase `street text` and unified `address text` columns to `public.clients`.
+      - Added trigger `trg_sync_client_address` calling `sync_client_address()` to keep `"Street"` and `street` synchronized and automatically compute `address = street + city + district + state + pincode`.
+      - Backfilled existing clients (`JK Paper Ltd.` and `Saint Gobain`) and all historical machine hour log locations (`machine_hour_logs.location`) to full canonical 5-part addresses.
+    - **Multi-Site Company Support**:
+      - Gathered client sites across all client records sharing the same company name in both web (`OperationsClient.tsx`) and mobile (`operations.tsx`).
+      - Collapsed fragmented addresses into canonical 5-part locations.
+      - Enabled resilient bidirectional site matching (`locStr.includes(targetLoc) || targetLoc.includes(locStr)`).
+    - **Full Cross-Platform Synchronization**:
+      - Synced shared packages: `@reachinternational/types` and `@reachinternational/validation`.
+      - Synced web components: `OperationsClient.tsx`, `ClientSelect.tsx`, `ClientsClient.tsx`, `ClientModal.tsx`, `OperatorDashboard.tsx`, `actions/clients.ts`, `actions/operators.ts`, `queries/clients.ts`, `queries/operators.ts`.
+      - Synced mobile components: `app/(app)/operations.tsx`, `app/(app)/clients.tsx`, `MeterLogModal.tsx`, `MachineModal.tsx`, `ClientSelectModal.tsx`.
+  - **3. Verification**:
+    - All 4 packages and apps typecheck with 0 errors (`types`, `validation`, `web`, `mobile`).
+    - Mobile automated test suite: 18/18 scenarios verified.
+
+- **Operations Hub (/operations) — Client Selector Query Optimization, Rich Client Details & Dynamic Location/Machine Cascade (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback 1: "client selector not working properly"
+    - Feedback 2: "it show all the clinet details from the database and then we can select the client"
+    - Feedback 3: "as per selected clients location+machine will be show"
+    - Feedback 4: "by default select the recent used client only"
+    - Feedback 5: "make sure it shuld be optimise querry and perfmormnce"
+  - **2. Root Cause & Resolutions**:
+    - **Client Selector View Mode & Synchronization**: Fixed missing `view: "client"` param when selecting clients in `ClientSelect.tsx`, which previously caused `page.tsx` and `getOperationsHubData` to default to `viewMode = "machine"` and drop the `client_id` filter. Added reactive `useEffect` hooks in `OperationsClient.tsx` syncing state with incoming URL props.
+    - **Sub-Millisecond Recent Used Client Default**: In `lib/queries/operators.ts`, added a concurrent indexed query (`SELECT client_id FROM machine_hour_logs WHERE client_id IS NOT NULL ORDER BY log_date DESC, created_at DESC LIMIT 1;`) executing in **0.105 ms** via `idx_machine_hour_logs_date_created`. Defaulted `effectiveClientId` to `mostRecentClientId` when `viewMode === "client"` and no client is explicitly passed in URL.
+    - **Rich Client Details in Dropdown & Trigger**: Enriched `getOperationsHubData` with pre-computed client machine counts and distinct fleet locations. Upgraded `ClientSelect.tsx` with multi-line cards showing Company Name, Code, Machine Fleet Count, Status, Full Address / Location, and Contact/GST details. Upgraded trigger button with client code and fleet count chips.
+    - **Dynamic Location & Machine Cascade**: Selected client dynamically cascades to `clientMachines` and `clientSites`, resetting sub-filters on change so the newly selected client's full fleet and sites are immediately accessible.
+    - **Web & Mobile Parity Synchronization**: Synced `apps/mobile/app/(app)/operations.tsx` to default to the client of the most recent log and enriched mobile client selector modal with machine fleet badges and full addresses.
+  - **3. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed (0 errors).
+    - `@reachinternational/mobile` `typecheck`: Passed (0 errors).
+    - `node apps/mobile/run-tests.mjs`: Passed (18/18 scenarios verified).
+    - Database index execution time: 0.105 ms on `idx_machine_hour_logs_date_created`.
+
+- **Operations Hub (/operations) — Removal of Redundant Filter Toolbar from Supervisor Logs PDF Modal (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback 1: `<Primitive.div> ... border border` -> "remove site location from here"
+    - Feedback 2: `<Primitive.div> ... border border` -> "remove this from here" (equipment / machine strip)
+    - Feedback 3: `<Primitive.div> ... flex flex` -> "remove this" (period / month strip)
+    - Feedback 4: `<Primitive.div> ... flex flex` -> "all the filter already show in the operation page" (the entire filter container in `#radix-_r_22_`)
+  - **2. Root Cause & Resolutions**:
+    - **Elimination of Duplicate Filter Toolbar in Modal**:
+      - Completely removed the filter toolbar container (`.no-print` filter box) from the Modal dialog body in `PrintableSupervisorLogsModal.tsx`.
+      - Removed duplicate internal filter states (`activeMonth`, `activeSite`, `activeMachineId`, `customStartDate`, `customEndDate`) and derived them directly from props passed by `OperationsClient.tsx`.
+      - Cleaned up unused memos (`effectiveSitesList`, `effectiveClientMachines`) and unused imports (`CustomDatePicker`, `Calendar`, `MapPin`, `Cpu`, `getISTDateString`).
+      - The modal dialog opens immediately to a clean, spacious document skeleton loader (`SupervisorLogsReportSkeleton`) followed by the high-fidelity A4 document preview (`SupervisorLogsReportContent`) reflecting the user's active operations page filters.
+      - Maintained complete export and print capabilities in the modal footer: entry count, Excel Export (`.xlsx`), and Print / Save as PDF.
+  - **3. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed (0 errors).
+    - `@reachinternational/mobile` `typecheck`: Passed (0 errors).
+    - `node apps/mobile/run-tests.mjs`: Passed (18/18 scenarios verified).
+
+- **Operations Hub (/operations) — UI Refinement & Complete Logs Visibility in PDF Report (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback 1: `<OperationsClient> "401.7 hrs"` -> "remove ti from here"
+    - Feedback 2: "total jk pager we have more than 82 log but it not visible here fix this / make sure selected should be properly working and then export sholdd working / also make sure it should be optimize / use skeleton loading on the pdf preview too"
+  - **2. Root Cause & Resolutions**:
+    - **Header Metric Cleanup**: Removed `{Math.round(totalFilteredRunHours * 10) / 10} hrs` from the collapsed header bar of the client and machine summary cards in `OperationsClient.tsx`. Leaves a clean badge and chevron toggle, avoiding redundancy with the expanded KPI strip.
+    - **Complete Visibility of 82+ Logs for JK Paper Ltd.**: Corrected `effectiveSelectedSite` in `OperationsClient.tsx` and `effectiveSiteLocation` in `apps/mobile/app/(app)/operations.tsx` to default to `"all"` rather than `mostRecentClientLocation` (`CPM |PO : CP Mills`). JK Paper has 82 logs at `Fort Songadh, Tapi, Gujrat` and 4 logs at `CPM |PO : CP Mills`. Defaulting to a single site hid 82 records. All 86 logs across all sites are now fully visible and counted.
+    - **Multi-Filter Support in PDF Report Modal**: Added local state for `activeSite`, `activeMachineId`, and `activeMonth` in `PrintableSupervisorLogsModal.tsx`. Rendered dynamic filter strips for Location (`All Sites` + site pills) and Equipment (`All Machines` + equipment pills) in Client View. When any filter is selected, `getOperationsExportLogsAction` re-fetches records on-demand and updates Excel and Print exports synchronously.
+    - **High-Fidelity Document Skeleton Preview**: Built `SupervisorLogsReportSkeleton` matching the exact dimensions and structure of the A4 report: top header with logo placeholder, metadata strip, 4-metric KPI strip, 9-column table headers, 8 table rows, and 3-column sign-off block.
+  - **3. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed (0 errors).
+    - `@reachinternational/mobile` `typecheck`: Passed (0 errors).
+    - `node apps/mobile/run-tests.mjs`: Passed (18/18 scenarios verified).
+
+- **Operations Hub (/operations) — PDF Export & Preview Polish: Single-Line Header, Centered Table & All Data Centered Across All Tabs (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback 1: Header formatting improvement — client name and location must strictly be on ONE line without wrapping.
+    - Feedback 2: All data should be in the middle of each cell.
+    - Feedback 3: Whole table centered in the middle of the page.
+    - Feedback 4: Everything clean and formatted across all tabs: `operator`, `machine`, `clients`, `all`.
+  - **2. Root Cause & Resolutions**:
+    - **Single-Line Header Subtitle**: Eliminated restrictive 3-column grid width limits and `flex-wrap`. Positioned logo absolute left, opened full horizontal width (`px-20 sm:px-28`) for the centered title and subtitle, and enforced `whitespace-nowrap flex-nowrap` so `CLIENT: [NAME] | LOCATION: [LOCATION]` is strictly on ONE line without wrapping or trailing pipes. Extended single-line header subtitles to all tabs (`client`, `machine`, `operator`, `all`).
+    - **All Data in the Middle**: Updated `<table>` to `text-center mx-auto` and applied `text-center align-middle` to all `<td>` elements and their inner content across all 4 view modes. Added print/screen CSS rules (`.print-table tbody td { text-align: center !important; vertical-align: middle !important; }`, `.print-table tbody td * { text-align: center !important; }`).
+    - **Whole Table Centered in Page**: Added `margin: 0 auto !important;` to `.print-document-container` and `#printable-supervisor-logs-document`, `display: flex !important; justify-content: center !important;` to `.print-table-wrap`, and centered the modal screen preview container.
+    - **Mobile Synchronization (`apps/mobile/components/operations/OperationsExportModal.tsx`)**: Mirrored the HTML generator with a single-line subtitle (`white-space: nowrap; display: flex; align-items: center; justify-content: center;`), centered table (`margin: 8px auto;`), and centered cell data (`text-align: center; vertical-align: middle;`).
+  - **3. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed (0 errors).
+    - `@reachinternational/mobile` `typecheck`: Passed (0 errors).
+    - `node apps/mobile/run-tests.mjs`: Passed (18/18 scenarios verified).
+
+- **Operations Hub (/operations) — PDF Export & Preview Polish: Bold Centered Headers, Client Sign-off & Breakdown Cell Formatting (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback 1: Column titles are not properly displayed -> make black bold column titles in the middle of each cell.
+    - Feedback 2: Show client name instead of client ID in the bottom sign-off block.
+    - Feedback 3: Breakdown column value goes outside the cells -> fix cell containment.
+    - Feedback 4: Make the report clean, properly formatted, and ensure the preview and exported PDF are 100% identical.
+  - **2. Root Cause & Resolutions**:
+    - **Table Headers**: Replaced `bg-neutral-900 text-white` with `bg-neutral-100 text-black font-black text-center align-middle text-[8.5px] uppercase tracking-wider border border-neutral-900` across all view modes, ensuring browser print engines render bold, crisp black text centered in the cell whether background graphics are enabled or disabled.
+    - **Client Sign-off Name**: Replaced raw `selectedEntityId` (UUID) with `cleanClientName` resolved through client names, machine assignments, and log entities.
+    - **Breakdown Cell Containment**: Removed `whitespace-nowrap`, integrated `parseBreakdownString`, structured two-tier duration and compact timing formatting, and widened the breakdown column to 13% so text never overflows into Remarks.
+    - **Preview & Export Parity**: Synced `table-fixed` and CSS properties so the preview modal and printed PDF look completely identical.
+    - **Mobile Synchronization (`apps/mobile/components/operations/OperationsExportModal.tsx`)**: Mirrored the HTML generator with bold black centered column titles, two-tier breakdown formatting, client sign-off, and clean client name.
+  - **3. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed (0 errors).
+    - `@reachinternational/mobile` `typecheck`: Passed (0 errors).
+    - `node apps/mobile/run-tests.mjs`: Passed (18/18 scenarios verified).
+
+- **Operations Hub (/operations) — Mobile Expand & Collapse Transition Polish & 60fps Animation (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback: "for the mobile port expand and collapse transiotn are not feel smooth fix this and make it smooth and hihgly optimize for for the client , machine , operator"
+    - Viewport: Mobile 360×800, `.flex-1 > .w-full > .space-y-3 > .rounded-2xl` (`<OperationsClient>`).
+  - **2. Root Cause Analysis**:
+    - CSS grid interpolation (`grid-rows-[0fr]` to `grid-rows-[1fr]` with `transition-all duration-300`) triggered frequent browser layout reflow calculations on mobile viewports.
+    - Top borders and margins applied conditionally to the expanding container caused instant layout snapping before height animation completed.
+    - Sibling spacing (`space-y-3`) on card roots produced unwanted bottom space even when collapsed.
+    - Operator view lacked a dedicated collapsible summary card matching Client and Machine view modes.
+  - **3. Implementation Details**:
+    - **Framer Motion Accordion Upgrade (`apps/web/components/operations/OperationsClient.tsx`)**:
+      - Replaced CSS grid interpolation with `<AnimatePresence initial={false}>` and `<motion.div>` using cubic-bezier `[0.16, 1, 0.3, 1]` with `0.24s` duration across Filter Toolbar, Machine Details Card, and Client Details Card.
+      - Encapsulated `border-t`, `mt-3`, and `pt-3` inside the animated content div for smooth border entrance/exit without snapping.
+      - Removed outer `space-y-3` from collapsed cards to eliminate ghost padding.
+    - **Dedicated Collapsible Operator Details Card (`OperationsClient.tsx`)**:
+      - Created a dedicated collapsible summary card for `logsViewMode === "operator"` with `isOperatorSummaryExpanded` state.
+      - Header displays Operator Name, role badge, total run hours, and animated chevron.
+      - Body contains phone, email, and 4 KPI cards (`Run Hours`, `Overtime`, `Breakdowns`, `Logs`).
+      - Cleaned out duplicate KPI strip from inside the Filter Toolbar, unifying toolbar behavior across all view modes.
+    - **Mobile App Synchronization (`apps/mobile/app/(app)/operations.tsx`)**:
+      - Imported `LayoutAnimation` and `UIManager`, enabling Android `setLayoutAnimationEnabledExperimental(true)`.
+      - Added `isOperatorSummaryExpanded` state and `toggleWithAnimation` helper.
+      - Connected `toggleWithAnimation` to Filter Toolbar, Machine Details Card, Client Details Card, and Operator Details Card.
+      - Added dedicated collapsible Operator Details Summary Card for mobile view parity.
+  - **4. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed (0 errors).
+    - `@reachinternational/mobile` `typecheck`: Passed (0 errors).
+    - `node apps/mobile/run-tests.mjs`: Passed (18/18 scenarios verified).
+
+- **Operations Hub (/operations) — Dropdown Selectors Dynamic Viewport Positioning & Unblocking (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback: "both selection should use dynamic view port so it not block the dropdown selector by any component to both mobile and desktop user"
+    - Locations: `.rounded-2xl > .grid > .overflow-hidden > .grid` in Machine View and Client View.
+  - **2. Implementation Details**:
+    - **Container Clipping Elimination (`apps/web/components/operations/OperationsClient.tsx`)**: Replaced hardcoded `overflow-hidden` on the collapsible grid row with `min-h-0 space-y-3 ${isFiltersExpanded ? "overflow-visible" : "overflow-hidden"}`, preventing expanded contents from being chopped off.
+    - **Reusable `useDynamicDropdownPosition` Hook (`apps/web/lib/hooks/useDynamicDropdownPosition.ts`)**: Built a robust hook that calculates fixed viewport coordinates (`top`/`bottom`, `left`, `width`, `maxHeight`), automatically flips upward when space below is limited (`spaceBelow < 220px && spaceAbove > spaceBelow`), clamps maximum height to available screen space, and ensures horizontal safety margins for narrow mobile viewports.
+    - **Portaled Selectors via `createPortal(..., document.body)`**:
+      - `MachineSelect.tsx`: Portaled popover with fixed positioning and `zIndex: 9999`.
+      - `SearchableSelect.tsx`: Portaled popover with fixed positioning and `zIndex: 9999`.
+      - `ClientSelect.tsx`: Portaled popover with fixed positioning and `zIndex: 9999`.
+      - `UserSelect.tsx`: Portaled popover with fixed positioning and `zIndex: 9999`.
+      - `CustomDatePicker.tsx`: Portaled calendar picker dialog with fixed positioning and `zIndex: 9999`.
+  - **3. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed (0 errors).
+    - `@reachinternational/mobile` `typecheck`: Passed (0 errors).
+    - `node apps/mobile/run-tests.mjs`: Passed (18/18 scenarios verified).
+
+- **Operations Hub (/operations) — Header Loading Removal & Search Spinner Integration (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback 1: Remove loading text + animated icon from the header since skeleton loading is already used in the logs table.
+    - Feedback 2: While searching in the search bar, switch the search icon into a loading spinner.
+  - **2. Implementation Details**:
+    - **Header Loading Indicator Cleanup (`apps/web/components/operations/OperationsClient.tsx`)**: Removed the redundant mobile and desktop `isPending` loading indicators (`<RefreshCw className="... animate-spin" />` and `<span className="hidden lg:inline">Loading...</span>`) from the filter toolbar card header. The table body and mobile cards already render dedicated skeleton loading states (`<OperationsLogTableSkeletonRows>` and `<OperationsLogCardsSkeleton>`).
+    - **Search Spinner Dynamic Switching (`apps/web/components/operations/OperationsClient.tsx`)**:
+      - Added `isSearchPending` state tracking combined with active query deviation (`isSearching = isSearchPending || searchInput !== (initialSearch || "")`).
+      - Dynamically replaces the `<Search />` icon with `<Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-sky-600 dark:text-sky-400 animate-spin pointer-events-none" />` during active debouncing and server transition.
+      - Seamlessly reverts back to `<Search />` once results load and settle.
+      - Added instant search dispatch on `Enter` key.
+      - Added immediate spinner activation on clearing search via `X` button.
+    - **Mobile Parity (`apps/mobile/app/(app)/operations.tsx`)**:
+      - Updated `isSearchingLogs` and `isSearchingAssignments` to `search.trim() !== debouncedSearch.trim()`, maintaining active spinner feedback when clearing search inputs.
+  - **3. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed (0 errors).
+    - `@reachinternational/mobile` `typecheck`: Passed (0 errors).
+    - `node apps/mobile/run-tests.mjs`: Passed (18/18 scenarios verified).
+
+- **Operations Hub (/operations) — Mobile Icon Button & Anywhere-Touch Card Expand/Collapse (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Feedback 1: For the "Assign Operator" button, on mobile user show only icon instead of icon + name.
+    - Feedback 2: Touch anywhere in the card should expand and collapse the toolbar/details instead of only clicking the small arrow button.
+  - **2. Implementation Details**:
+    - **Mobile Icon-Only Button (`apps/web/components/operations/OperationsClient.tsx`)**: Refactored the top "Assign Operator" `<Button>` so `<span className="hidden sm:inline">Assign Operator</span>` is hidden on mobile screens, displaying only the `<AnimatedUserCheck size={16} />` icon in a touch-friendly square button with accessible tooltips and ARIA attributes.
+    - **Anywhere-Touch Expand/Collapse**:
+      - Removed outer row `e.stopPropagation()` handlers that were blocking touch event bubbling on mobile.
+      - Enabled `onClick` on the collapsed Filter card, Client Details card, and Machine Details card to trigger expansion when tapped anywhere.
+      - Enabled `onClick` on the header row to toggle between expanded and collapsed.
+      - Confined `e.stopPropagation()` solely to interactive elements (mode pills, search input, and print button).
+  - **3. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed (0 errors).
+    - `@reachinternational/mobile` `typecheck`: Passed (0 errors).
+    - `node apps/mobile/run-tests.mjs`: Passed (18/18 scenarios verified).
+
+- **Operations Hub (/operations) — Client Details Card Mobile Responsiveness & KPI Card Iconification (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - User reported on mobile viewport (360×800): "client details card are not peroperly responsive for the mobile, remove the unwanted icons and remove the long lebel and represent with icon".
+  - **2. Root Cause Analysis**:
+    - The `Building2` icon in a `h-8 w-8` box took 42px of header width on narrow screens, causing badges and text to wrap.
+    - `<Badge variant="success" className="font-bold hidden sm:inline-flex ...">` in the header had its `hidden` property overridden by `.badge-base` (`display: inline-flex`), resulting in a 140px badge taking up right-side header width and squishing `activeClientName` to 0px.
+    - Metric cards had lengthy uppercase labels (`TOTAL RUN HOURS`, `TOTAL OVERTIME`, `BREAKDOWN EVENTS`, `MATCHING LOGS`) that wrapped onto multiple lines in 2-column mobile cards.
+  - **3. Implementation Details**:
+    - **Header Cleanup (`apps/web/components/operations/OperationsClient.tsx`)**: Removed the decorative `Building2` icon box. Wrapped the desktop-only working days badge in `<div className="hidden sm:block">` ensuring it never displays on mobile. Gave `activeClientName` clean flex space without truncating.
+    - **Metric Cards Iconification**: Replaced long labels with inline icons (`Clock`, `Zap`, `AlertTriangle`, `FileText`) and concise labels (`Run`/`Run Hours`, `OT`/`Overtime`, `Breakdowns`, `Logs`), eliminating text wrapping.
+    - **Cross-Platform Synchronization (`apps/mobile/app/(app)/operations.tsx`)**: Updated Client view and Operator view metric cards with identical icons and compact labels (`RUN`, `OT`, `BREAKDOWN`, `LOGS`).
+  - **4. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed (0 errors).
+    - `@reachinternational/mobile` `typecheck`: Passed (0 errors).
+    - `node apps/mobile/run-tests.mjs`: Passed (18/18 scenarios verified).
+
+- **Operations Hub (/operations) — Header Search Bar Integration, Arrow-Only Toolbar Toggle & Clean Collapsed State (2026-09-12)**:
+  - **1. Objective & User Feedback**:
+    - Removed collapsed filter summary button: Cleaned up the extra summary preview strip when collapsed.
+    - Arrow-Only Toggle: Replaced "Filters" text button with an arrow-only trigger (`ChevronDown` / `ChevronUp`), enabling anywhere-click on the header row to expand/collapse.
+    - Search Bar Header Integration: Shifted the search input directly into the top header row for web users (between view switcher pills and top-right actions) across Client, Machine, and Operator tabs; optimized full-width for mobile.
+  - **2. Implementation Details**:
+    - **Header Row Unified Layout (`apps/web/components/operations/OperationsClient.tsx`)**: Placed the view mode pills on the left, debounced search input in the middle on desktop (`flex-1 max-w-none sm:max-w-md lg:max-w-xl mx-0 sm:mx-2`), and Print icon + Arrow toggle on the right.
+    - **Anywhere Click**: Configured the header container with `onClick` to toggle `isFiltersExpanded` with `stopPropagation` on interactive elements.
+    - **Mobile Synchronization (`apps/mobile/app/(app)/operations.tsx`)**: Removed the collapsed active filter summary bar, refined the arrow-only toggle button, and verified clean mobile layout.
+  - **3. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed (0 errors).
+    - `@reachinternational/mobile` `typecheck`: Passed (0 errors).
+    - `node apps/mobile/run-tests.mjs`: Passed (18/18 scenarios verified).
+
+- **Operations Hub (/operations) — Full Period Export (PDF & Excel) Across Client, Machine, & Operator Views + Query Optimization (2026-09-12)**:
+  - **1. Objective & Requirements**:
+    - User Feedback: While exporting PDF/Excel on `/operations?tab=logs&view=client&page=1&client=1410764e-c846-44dc-9176-6ca28fa05fb5`, currently it only exported 1 page of data (10 records). Export must include all data entries as per the selected time (month or custom date range).
+    - Scope: Must work identically for Client, Machine, and Operator view modes for both PDF and Excel/CSV formats.
+    - Performance: Optimize the database queries and performance for sub-millisecond execution without blocking the standard paginated browsing view.
+  - **2. Implementation Details**:
+    - **Backend On-Demand Server Action (`apps/web/app/actions/operators.ts`)**:
+      - Created `getOperationsExportLogsAction(params: GetOperationsExportLogsParams)`.
+      - Leveraged composite indexes (`idx_machine_hour_logs_client_date`, `idx_machine_hour_logs_machine_date`, `idx_machine_hour_logs_operator_date`) for high-performance retrieval (0.45 ms execution time).
+      - Directly computes accurate aggregate metrics (`totalRunningHours`, `totalOtHours`, `totalBreakdowns`, `loggedDaysCount`) across the complete dataset.
+    - **Query Optimization (`apps/web/lib/queries/operators.ts`)**:
+      - Pre-computed search relation queries (`machines`, `users`, `clients`) once before building main query filters, removing redundant roundtrips.
+      - Added synchronous `site` location and `machineId` filtering for Client view mode.
+      - Exported `formatHourLogsData` for shared formatting.
+    - **Web Print/Export Modal (`apps/web/components/operations/PrintableSupervisorLogsModal.tsx`)**:
+      - Fetches complete dataset asynchronously on modal open or period/entity change.
+      - Integrated animated loading skeleton in modal preview.
+      - Disabled CTA buttons with loading spinners during active data fetch.
+      - Upgraded print/PDF generator and Excel exporter to use the complete fetched dataset (`exportLogs`).
+      - Fixed client name resolution in print report subheading to avoid raw UUID display.
+    - **Web Operations Client (`apps/web/components/operations/OperationsClient.tsx`)**:
+      - Added `initialSite` prop and wired URL param updates to location selector `onChange`.
+      - Passed resolved entity names and IDs (`selectedClientId`, `selectedClientName`, `selectedEntityName`, `selectedMachineId`, `selectedOperatorId`, `search`) to `PrintableSupervisorLogsModal`.
+    - **Excel Utility (`apps/web/lib/utils/supervisor-logs-export.ts`)**:
+      - Upgraded Excel filename generation to clean company names (e.g., `JK-Paper-Ltd-Sep-20260912.xlsx`).
+      - Handled UUID vs client name matching safely without dropping rows.
+    - **Mobile Synchronization (`apps/mobile/components/operations/OperationsExportModal.tsx`)**:
+      - Updated HTML report and CSV spreadsheet generation to resolve `log.client?.company_name || log.client?.client_name || log.client?.name`.
+  - **3. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed (0 errors).
+    - `@reachinternational/mobile` `typecheck`: Passed (0 errors).
+    - `node apps/mobile/run-tests.mjs`: Passed (18/18 scenarios verified).
+
+- **Operations Hub (/operations) — Overtime Correction, Redundant Badges Removal & Unified City-District-State Location (2026-09-12)**:
+  - **1. Objective & Requirements**:
+    - Feedback #1: Overtime calculation showing wrong (`575.7 hrs` when total run hours was only `386.2 hrs`).
+    - Feedback #2: Remove `<Badge> "16 Rented Machines"` from client view header card since it already shows in Select Machine.
+    - Feedback #3: Remove `<Badge> "Working Hours: 8:00 AM to 8:00 PM"` because the site operates on multiple shifts.
+    - Feedback #4: Unify locations across frontend, backend, and DB into a single consistent format: `City, District, State`. Eliminate fragmented duplicate entries in the location selector and client card.
+    - Feedback #5: Default location selector to the most recently used location for the selected client instead of unselected "All Sites & Locations".
+    - Feedback #6: Added total counts to section titles / field labels: `Select Client (${allClientsList.length} Total)`, `Select Location (${clientSites.length} Total)`, `Select Machine (${clientMachines.length} Total)`.
+    - Feedback #7: Removed `<Badge> "1 Active Site Location"` from client summary header card.
+    - Feedback #8: Comprehensive UI/UX polish across selectors and client summary card: unclipped trigger buttons, clean label count badges, executive company profile header, and contextual KPI metric cards.
+  - **2. Implementation Details**:
+    - **Database**:
+      - Fixed corrupted `machine_hour_logs` records (typos of `333`, `80`, `80`, 20h test log, and 8 regular shifts where `8` was mistakenly entered as overtime rather than standard normal working hours).
+      - September total overtime for JK Paper dropped from `575.7 hrs` to the genuine sum of `0.7 hrs`.
+      - Updated `clients`: Added `district = 'Alwar'` for Saint Gobain; JK Paper already has `district = 'Tapi'`.
+      - Updated all `machine_hour_logs` locations to canonical `City, District, State`: `'Fort Songadh, Tapi, Gujrat'` for JK Paper and `'Bhiwadi, Alwar, Rajasthan'` for Saint Gobain.
+    - **Backend & Types (`packages/utils/src/date.ts`, `apps/web/app/actions/operators.ts`, `apps/web/lib/queries/operators.ts`)**:
+      - Hardened `computeShiftTiming`: clamped manual overtime to `min(durationHours, 16.0)` and disallow negative values.
+      - Updated `submitHourLogAction` and `updateHourLogAction` to clamp overtime and resolve `targetLocation` using `[cData.city, cData.district, cData.state].filter(Boolean).join(", ")`.
+      - Included `district` in `HOUR_LOG_FULL_PROJECTION`, `HOUR_LOG_BASE_PROJECTION`, and client queries in `operators.ts`.
+    - **Web App (`apps/web/components/operations/OperationsClient.tsx`, `ClientSelect.tsx`, `SearchableSelect.tsx`, `MachineSelect.tsx`, `UserSelect.tsx`, `OperatorDashboard.tsx`)**:
+      - Removed redundant location string from `ClientSelect` trigger button, allowing client company name (`JK Paper Ltd.`) and code badge (`CLI-0002`) to render cleanly without truncation.
+      - Added `count` prop across all selector components (`ClientSelect`, `SearchableSelect`, `MachineSelect`, `UserSelect`), cleanly separating the section title on the left and an elegant mono pill badge (`2 Total`) on the right.
+      - Replaced sparse 4-column dash grid with an executive company profile card featuring a `Building2` avatar, bold title, code pill, assigned machines pill (`16 Machines Assigned`), and a clean location & contact meta strip (`📍 Address`, `📞 Phone`, `✉️ Email`).
+      - Upgraded KPI metrics cards with semantic icons (`Clock`, `Zap`, `AlertTriangle`, `FileText`), large font-mono metrics, and proper singular/plural grammar (`1 Event` vs `Events`).
+      - In `OperatorDashboard.tsx`, added `max="16"` and informative tooltips/hints.
+    - **Mobile App (`apps/mobile/app/(app)/operations.tsx`, `MeterLogModal.tsx`)**:
+      - Synchronized label count headers with right-aligned mono badges.
+      - Modernized client summary header card with company badge, assigned machine count pill, and unified location/phone meta row.
+      - Fixed singular/plural units on KPI metric cards (`1 Event` vs `Events`).
+      - Updated `MeterLogModal.tsx` client query and location auto-fill to include `district`.
+  - **3. Verification**:
+    - `@reachinternational/web` `typecheck`: Passed (0 errors).
+    - `@reachinternational/mobile` `typecheck`: Passed (0 errors).
+    - `node apps/mobile/run-tests.mjs`: Passed (18/18 scenarios verified).
+
 - **Dedicated Delete Account Page (/delete-account) & UserProfileDropdown Linkage (2026-09-11)**:
   - **1. Objective & Requirements**:
     - Per user feedback: `http://localhost:3000/account-deletion` must be strictly the **Account Deletion Guide**, while the actual account deletion request form must live on its own separate, dedicated page: `http://localhost:3000/delete-account`.

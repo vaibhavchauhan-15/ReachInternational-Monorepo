@@ -23,6 +23,20 @@ import { ClientModal } from "./ClientModal";
 import { softDeleteClientAction } from "@/app/actions/clients";
 import { Button, PageHeader, Pagination } from "@/components/ui";
 
+function formatClientFullAddress(client: Partial<CRMClient>): string {
+  return [
+    client.street,
+    client.city,
+    client.district,
+    client.state,
+    client.pincode,
+  ]
+    .filter(Boolean)
+    .map((s) => String(s).trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
 function ClientTableSkeletonRows({ canManageClients, count = 5 }: { canManageClients: boolean; count?: number }) {
   return (
     <>
@@ -416,7 +430,7 @@ export function ClientsClient({ user, initialClients, total, page, pageSize, met
 
                   <td className="py-2.5 px-4 font-medium text-[var(--color-body)]">
                     <div>
-                      {[client.city, client.district, client.state].filter(Boolean).join(", ") || "—"}
+                      {formatClientFullAddress(client) || "—"}
                     </div>
                     {client.is_billing_address_different && (
                       <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 font-semibold mt-0.5">
@@ -539,7 +553,7 @@ export function ClientsClient({ user, initialClients, total, page, pageSize, met
                 </div>
                 <div>
                   <span className="block text-[10px] text-[var(--color-mute)]">Location</span>
-                  <span className="font-semibold text-[var(--color-ink)]">{[client.city, client.district, client.state].filter(Boolean).join(", ") || "—"}</span>
+                  <span className="font-semibold text-[var(--color-ink)]">{formatClientFullAddress(client) || "—"}</span>
                 </div>
                 {client.phone && (
                   <div className="col-span-2">

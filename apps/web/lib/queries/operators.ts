@@ -60,7 +60,7 @@ const HOUR_LOG_FULL_PROJECTION = `
   conflict_resolution_notes,
   created_at,
   machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number, hour_meter, status, manufacturer),
-  client:clients!machine_hour_logs_client_id_fkey(id, code, company_name, address, city, state, phone),
+  client:clients!machine_hour_logs_client_id_fkey(id, code, company_name, street, city, district, state, pincode, phone),
   operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone, email)
 `;
 
@@ -87,7 +87,7 @@ const HOUR_LOG_BASE_PROJECTION = `
   idempotency_key,
   created_at,
   machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number),
-  client:clients!machine_hour_logs_client_id_fkey(id, company_name),
+  client:clients!machine_hour_logs_client_id_fkey(id, company_name, city, district, state),
   operator:users!machine_hour_logs_operator_id_fkey(id, full_name)
 `;
 
@@ -215,7 +215,7 @@ async function fetchHourLogsResiliently(
   }
 }
 
-function formatHourLogsData(
+export function formatHourLogsData(
   rawLogs: any[],
   machines: Machine[] = [],
   staffUsers: User[] = [],
@@ -290,8 +290,11 @@ function formatHourLogsData(
     const breakdownStartTime = log.breakdown_start_time || (bkdInfo?.startTime || null);
     const breakdownEndTime = log.breakdown_end_time || (bkdInfo?.endTime || null);
 
+    const locStr = log.location || (formattedClient?.city ? [formattedClient.city, formattedClient.district, formattedClient.state].filter(Boolean).join(", ") : "—");
+
     return {
       ...log,
+      location: locStr,
       start_meter: startMtr,
       end_meter: endMtr,
       running_hours: running,
@@ -383,7 +386,7 @@ const PAGED_LOG_FULL_PROJECTION = `
   conflict_status,
   created_at,
   machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number, hour_meter, status),
-  client:clients!machine_hour_logs_client_id_fkey(id, code, company_name),
+  client:clients!machine_hour_logs_client_id_fkey(id, code, company_name, street, city, district, state, pincode),
   operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone)
 `;
 
@@ -442,6 +445,7 @@ export interface OperationsLogsPageParams {
   viewMode?: "machine" | "client" | "operator";
   machineId?: string;
   clientId?: string;
+  site?: string;
   operatorId?: string;
   month?: string;
   customStart?: string;
@@ -481,8 +485,40 @@ export const getOperationsLogsPage = cache(
 
     const supabase = createSupabaseAdminClient();
 
+    // Optimize: Pre-compute search relation lookups ONCE instead of duplicating across summaryQuery & dataQuery
+    let searchOrClause: string | null = null;
+    if (params.search) {
+      const s = params.search.replace(/[,()"\n\r\\]/g, "").trim();
+      if (s) {
+        const [machRes, opRes, clientRes] = await Promise.all([
+          supabase
+            .from("machines")
+            .select("id")
+            .or(`machine_id.ilike.%${s}%,model.ilike.%${s}%,serial_number.ilike.%${s}%`)
+            .limit(50),
+          supabase.from("users").select("id").ilike("full_name", `%${s}%`).limit(50),
+          supabase.from("clients").select("id").ilike("company_name", `%${s}%`).limit(50),
+        ]);
+
+        const orClauses: string[] = [
+          `remarks.ilike.%${s}%`,
+          `location.ilike.%${s}%`,
+        ];
+        if (machRes.data && machRes.data.length > 0) {
+          orClauses.push(`machine_id.in.(${machRes.data.map((m) => m.id).join(",")})`);
+        }
+        if (opRes.data && opRes.data.length > 0) {
+          orClauses.push(`operator_id.in.(${opRes.data.map((u) => u.id).join(",")})`);
+        }
+        if (clientRes.data && clientRes.data.length > 0) {
+          orClauses.push(`client_id.in.(${clientRes.data.map((c) => c.id).join(",")})`);
+        }
+        searchOrClause = orClauses.join(",");
+      }
+    }
+
     // Helper to apply filters to a query builder
-    const applyFilters = async (q: any) => {
+    const applyFilters = (q: any) => {
       let query = q;
 
       // 1. Entity Filters
@@ -490,6 +526,31 @@ export const getOperationsLogsPage = cache(
         query = query.eq("machine_id", params.machineId);
       } else if (params.viewMode === "client" && params.clientId && params.clientId !== "all") {
         query = query.eq("client_id", params.clientId);
+        if (params.machineId && params.machineId !== "all") {
+          query = query.eq("machine_id", params.machineId);
+        }
+        if (params.site && params.site !== "all") {
+          // Extract safe alphanumeric search tokens from the selected site
+          const siteTokens = params.site
+            .split(",")
+            .map((t) => t.replace(/[^a-zA-Z0-9\s-]/g, " ").trim())
+            .filter((t) => t.length >= 3);
+
+          // Find the most distinctive geographical token (e.g. city or district, avoiding generic words)
+          const primaryToken = siteTokens.find(
+            (t) =>
+              !t.toLowerCase().includes("mill") &&
+              !t.toLowerCase().includes("plot") &&
+              !t.toLowerCase().includes("centre") &&
+              !t.toLowerCase().includes("industrial")
+          ) || siteTokens[0];
+
+          if (primaryToken) {
+            query = query.ilike("location", `%${primaryToken}%`);
+          } else {
+            query = query.ilike("location", `%${params.site.replace(/[%_\\]/g, "").trim()}%`);
+          }
+        }
       } else if (params.viewMode === "operator" && params.operatorId && params.operatorId !== "all") {
         query = query.eq("operator_id", params.operatorId);
       }
@@ -511,35 +572,8 @@ export const getOperationsLogsPage = cache(
       }
 
       // 3. Search Filter across entire dataset
-      if (params.search) {
-        const s = params.search.replace(/[,()"\n\r\\]/g, "").trim();
-        if (s) {
-          const [machRes, opRes, clientRes] = await Promise.all([
-            supabase
-              .from("machines")
-              .select("id")
-              .or(`machine_id.ilike.%${s}%,model.ilike.%${s}%,serial_number.ilike.%${s}%`)
-              .limit(50),
-            supabase.from("users").select("id").ilike("full_name", `%${s}%`).limit(50),
-            supabase.from("clients").select("id").ilike("company_name", `%${s}%`).limit(50),
-          ]);
-
-          const orClauses: string[] = [
-            `remarks.ilike.%${s}%`,
-            `location.ilike.%${s}%`,
-          ];
-          if (machRes.data && machRes.data.length > 0) {
-            orClauses.push(`machine_id.in.(${machRes.data.map((m) => m.id).join(",")})`);
-          }
-          if (opRes.data && opRes.data.length > 0) {
-            orClauses.push(`operator_id.in.(${opRes.data.map((u) => u.id).join(",")})`);
-          }
-          if (clientRes.data && clientRes.data.length > 0) {
-            orClauses.push(`client_id.in.(${clientRes.data.map((c) => c.id).join(",")})`);
-          }
-
-          query = query.or(orClauses.join(","));
-        }
+      if (searchOrClause) {
+        query = query.or(searchOrClause);
       }
 
       return query;
@@ -549,7 +583,7 @@ export const getOperationsLogsPage = cache(
     let summaryQuery = supabase
       .from("machine_hour_logs")
       .select("running_hours, start_meter, end_meter, overtime_hours, is_breakdown, log_date");
-    summaryQuery = await applyFilters(summaryQuery);
+    summaryQuery = applyFilters(summaryQuery);
 
     // 2. Primary paginated query
     let pagedData: any[] = [];
@@ -562,7 +596,7 @@ export const getOperationsLogsPage = cache(
       .order("created_at", { ascending: sortAsc })
       .order("id", { ascending: sortAsc })
       .range(fromIndex, toIndex);
-    tier1Query = await applyFilters(tier1Query);
+    tier1Query = applyFilters(tier1Query);
 
     const [summaryRes, tier1Res] = await Promise.all([
       summaryQuery,
@@ -585,7 +619,7 @@ export const getOperationsLogsPage = cache(
         .order("created_at", { ascending: sortAsc })
         .order("id", { ascending: sortAsc })
         .range(fromIndex, toIndex);
-      tier2Query = await applyFilters(tier2Query);
+      tier2Query = applyFilters(tier2Query);
       const tier2Res = await tier2Query;
 
       if (!tier2Res.error && tier2Res.data) {
@@ -604,7 +638,7 @@ export const getOperationsLogsPage = cache(
           .order("created_at", { ascending: sortAsc })
           .order("id", { ascending: sortAsc })
           .range(fromIndex, toIndex);
-        tier3Query = await applyFilters(tier3Query);
+        tier3Query = applyFilters(tier3Query);
         const tier3Res = await tier3Query;
 
         pagedData = tier3Res.data || [];
@@ -667,7 +701,7 @@ export const getOperationsHubData = cache(async (
     const [assignedMachineRes, activeAssignmentRes, rawRecentLogs, clientsList, allMachinesRes] = await Promise.all([
       supabase
         .from("machines")
-        .select("id, machine_id, model, serial_number, hour_meter, status, manufacturer, client_id, current_operator_id, operator_ids, current_supervisor_id, supervisor_ids, client:clients(id, code, company_name, address, city, state, phone)")
+        .select("id, machine_id, model, serial_number, hour_meter, status, manufacturer, client_id, current_operator_id, operator_ids, current_supervisor_id, supervisor_ids, client:clients(id, code, company_name, street, address, city, district, state, phone)")
         .or(`current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}}`)
         .limit(1)
         .maybeSingle(),
@@ -731,7 +765,7 @@ export const getOperationsHubData = cache(async (
 
   // 2. Supervisor Logs Tab: Slim loader with server-side pagination & lightweight machines
   if (tab === "logs") {
-    const [machinesRes, clientsList, operatorsRes] = await Promise.all([
+    const [machinesRes, clientsList, operatorsRes, recentLogRes, clientLocationsRes] = await Promise.all([
       supabase
         .from("machines")
         .select("id, machine_id, model, serial_number, status, client_id, current_operator_id")
@@ -743,7 +777,54 @@ export const getOperationsHubData = cache(async (
         .in("role", ["operator", "supervisor", "manager", "admin", "super_admin", "service_manager"])
         .eq("status", "active")
         .order("full_name"),
+      supabase
+        .from("machine_hour_logs")
+        .select("client_id")
+        .not("client_id", "is", null)
+        .order("log_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabase
+        .from("machine_hour_logs")
+        .select("client_id, location")
+        .not("client_id", "is", null)
+        .not("location", "is", null),
     ]);
+
+    const mostRecentClientId = recentLogRes.data?.client_id || (clientsList && clientsList.length > 0 ? clientsList[0].id : "");
+
+    // Precompute machine counts per client
+    const clientMachineCount = new Map<string, number>();
+    (machinesRes.data || []).forEach((m: any) => {
+      if (m.client_id) {
+        clientMachineCount.set(m.client_id, (clientMachineCount.get(m.client_id) || 0) + 1);
+      }
+    });
+
+    // Aggregate distinct locations per client from logs
+    const clientLocationsMap = new Map<string, Set<string>>();
+    (clientLocationsRes.data || []).forEach((row: any) => {
+      if (row.client_id && row.location && row.location.trim()) {
+        if (!clientLocationsMap.has(row.client_id)) {
+          clientLocationsMap.set(row.client_id, new Set());
+        }
+        clientLocationsMap.get(row.client_id)!.add(row.location.trim());
+      }
+    });
+
+    // Enrich clients with machine counts, full details, and unique sites
+    const enrichedClients = (clientsList || []).map((c: any) => {
+      const sitesSet = clientLocationsMap.get(c.id) || new Set<string>();
+      if (c.address) sitesSet.add(c.address.trim());
+      const canonicalLoc = [c.city, c.district, c.state].filter(Boolean).join(", ");
+      if (canonicalLoc) sitesSet.add(canonicalLoc.trim());
+      return {
+        ...c,
+        machine_count: clientMachineCount.get(c.id) || 0,
+        sites: Array.from(sitesSet).filter(Boolean),
+      };
+    });
 
     const allStaffUsers = (operatorsRes.data || []) as User[];
     const operatorsList = allStaffUsers.filter((u) => u.role === "operator");
@@ -753,15 +834,31 @@ export const getOperationsHubData = cache(async (
       machine_name: m.model ? `${m.machine_id} (${m.model})` : m.machine_id,
     })) as Machine[];
 
-    const pagedResult = await getOperationsLogsPage(params, {
+    // If client view is active and no client is explicitly selected, default to the most recent used client
+    const effectiveClientId =
+      params.viewMode === "client" && (!params.clientId || params.clientId === "all")
+        ? mostRecentClientId
+        : params.clientId;
+
+    const currentMonthNumber = String(new Date().getMonth() + 1).padStart(2, "0");
+    const effectiveMonth =
+      params.month !== undefined ? params.month : currentMonthNumber;
+
+    const effectiveParams = {
+      ...params,
+      month: effectiveMonth,
+      ...(params.viewMode === "client" && effectiveClientId ? { clientId: effectiveClientId } : {}),
+    };
+
+    const pagedResult = await getOperationsLogsPage(effectiveParams, {
       machines: machineOptions,
       staffUsers: allStaffUsers,
-      clients: clientsList,
+      clients: enrichedClients,
     });
 
     return {
       machines: machineOptions,
-      dbClients: clientsList,
+      dbClients: enrichedClients,
       operators: operatorsList,
       assignments: [],
       hourLogs: pagedResult.logs,
@@ -775,6 +872,8 @@ export const getOperationsHubData = cache(async (
       logsPageSize: pagedResult.pageSize,
       logsSummary: pagedResult.summary,
       pagedResult,
+      mostRecentClientId,
+      effectiveClientId,
     };
   }
 

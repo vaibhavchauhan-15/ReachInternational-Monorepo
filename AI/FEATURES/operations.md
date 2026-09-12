@@ -64,3 +64,98 @@ Comprehensive operational logs and equipment utilization view organized across t
 - `hour_logs` table: `id`, `machine_id`, `operator_id`, `client_id`, `log_date`, `shift_id`, `start_meter`, `end_meter`, `total_hours`, `overtime_hours`, `breakdown_occurred`, `breakdown_notes`, `remarks`, `conflict_status`.
 - `clients` & `client_sites` tables: CRM client details, addresses, and site names.
 - RPC functions: `assign_operator_machine_atomic`, `resolve_hour_log_conflict_atomic`.
+
+---
+
+## 4. Client Canonical Address & Multi-Site Location Architecture
+- **Canonical Address Standard**: `address = client.street + client.city + client.district + client.state + client.pincode` (comma-delimited, non-empty components only).
+- **Database Schema**: `public.clients` contains a single canonical `street text NOT NULL` column (duplicate `"Street"` and separate `address` columns were dropped in Migration 065). All application layers compute the full address on the fly.
+- **Multi-Site Client Resolution**:
+  - When the same client company operates across different project locations, separate client rows share the same `company_name` with distinct `street`, `city`, `district`, `state`, `pincode`.
+  - The Operations Hub aggregates all site addresses for that company into `clientSites` (Web) and `clientLocations` (Mobile).
+  - Filtering by site uses bidirectional containment matching (`locStr.includes(targetLoc) || targetLoc.includes(locStr)`), ensuring historical log fragments and full canonical addresses both resolve correctly.
+
+---
+
+## 5. Operations Hub Multi-Filter Hierarchy & Dynamic Synchronization
+- **Default Multi-Filter Behavior**:
+  - **Client**: Defaults to the client with the most recent operational logs (e.g. JK Paper Ltd.).
+  - **Location**: Defaults to `"all"` ("All Sites & Locations").
+  - **Machine**: Defaults to `"all"` ("All Machines").
+  - **Month**: Defaults to the current calendar month (e.g. `"09"` / September).
+- **Synchronized Filter Hierarchy (`client + location + machine + month`)**:
+  - Selecting any filter dynamically updates server query parameters and recalculates both the aggregate KPI metrics (Run Hours, OT, Breakdowns, Working Days) and the paginated bottom entries table/touch cards.
+  - Selecting "All Months" (`month=all`) is explicitly preserved in URL and queries across all recorded time.
+  - Safe alphanumeric token resolution prevents PostgREST grammar crashes when filtering addresses containing colons or punctuation (`"CPM |PO : CP Mills"`).
+
+---
+
+## 6. Dynamic Viewport-Aware Selectors & Unified Transitions
+- **Positioning Engine (`useDynamicDropdownPosition.ts`)**:
+  - Uses `useIsomorphicLayoutEffect` for pre-paint synchronous measurement on client, eliminating the (0,0) coordinate flash on first open.
+  - Returns `isPositioned: boolean` guard ensuring portals do not render before valid non-zero bounding rect calculation.
+  - Provides `updatePosition()` callable synchronously in click handlers before toggling open state.
+  - Automatically handles viewport collisions (flipping placement between `"bottom"` and `"top"`), dynamic max-height clipping, scroll/resize tracking (`capture: true`), and click-outside dismissal.
+- **Framer Motion `<AnimatePresence>` & `<motion.div>` Standard**:
+  - Consistent across `MachineSelect`, `ClientSelect`, `SearchableSelect`, `UserSelect`, `CustomDatePicker`, and `DateRangePicker`.
+  - Spring-like easing: `ease: [0.16, 1, 0.3, 1]` with `duration: 0.16s`, scale `0.97`, dynamic `transformOrigin` (`"bottom center"` / `"top center"`), and directional `y` offset based on placement.
+  - Non-flickering exit transitions with `onExitComplete` cleanup.
+
+---
+
+## 7. Unified Custom Calendar Date Range Picker (`DateRangePicker.tsx`)
+- **Single Component Date Range Workflow**: Replaces separate Start Date and End Date dropdowns with a single, high-density, minimal `<DateRangePicker>` component.
+- **Reused Calendar Architecture**: Reuses the exact custom calendar layout, month navigation, weekday headers, and days grid from `CustomDatePicker.tsx`.
+- **Outer Portal Architecture (`createPortal` Outside `<AnimatePresence>`)**:
+  - Ensures clean React 19 / Framer Motion 12 lifecycle mounting in `document.body` without `PopChildMeasure` errors.
+  - Standardized across `DateRangePicker`, `CustomDatePicker`, `ClientSelect`, `MachineSelect`, `SearchableSelect`, and `UserSelect`.
+- **Dynamic Viewport Collision & Explicit Style Resets**:
+  - Uses explicit `top: position.top !== undefined ? `${position.top}px` : "auto"` and `bottom: position.bottom !== undefined ? `${position.bottom}px` : "auto"`.
+  - Prevents Framer Motion from retaining stale coordinates that previously collapsed popovers to 0px height when flipping between top and bottom on short screens (e.g. 1536×695).
+  - Streamlined height (~280px) ensures full calendar visibility without internal scrolling or cutoff.
+  - Elevated z-index to `99999` guarantees popover is never blocked by cards, modals, or tables.
+- **Clean, Minimal Popover Layout (No Clutter / No Presets / No Header Banner)**:
+  - Removed preset quick range pills (`Today`, `Yesterday`, etc.) and status bar (`01-08-2026 → 12-09-2026 43 Days`) inside the popover to deliver an ultra-clean, appealing UI.
+  - Popover opens directly with the Month Switcher navigation (`< Month Year >`), allowing users to browse and select any month's start and end dates directly on the calendar grid.
+- **Interactive Range Selection**:
+  - First click sets `tempStartDate`, clears `tempEndDate`, and highlights the start day.
+  - Mouse hover creates a live provisional range ribbon between start date and hovered day.
+  - Second click on or after start date completes the range, sets `tempEndDate`, and fires `onChange({ startDate, endDate })`.
+  - Re-anchoring support: Clicking an earlier date re-anchors the start date cleanly.
+  - Same-day range: Clicking the start date twice creates a single-day range (`startDate === endDate`).
+- **Connected Ribbon Highlighting**: Start cell (`rounded-l-xl`), End cell (`rounded-r-xl`), and in-range cells (`rounded-none bg-sky-500/15`) with weekend edge rounding.
+- **Trigger Button**: Displays `01-09-2026 to 12-09-2026` with `12 Days` pill badge, calendar icon, clear button (`AnimatedX`), and animated chevron.
+- **Clean Action Footer**: Compact `Clear`, `Cancel`, and `Apply Range` buttons adhering to Vercel Geist tokens.
+
+---
+
+## 10. Centralized PDF Generation & Export Architecture
+
+### Centralized Service Structure (`apps/web/lib/pdf/` & `apps/web/components/pdf/`)
+- **Configuration & Filenames (`apps/web/lib/pdf/pdf-config.ts`)**:
+  - Pinned page dimensions (A4 portrait: 210mm × 297mm, margins: 5mm top/bottom, 8mm left/right).
+  - Standardized branding tokens: `REACH INTERNATIONAL`, `/pdf-logo.png`, `PDF_PAGE`, `MONTH_NAMES`.
+  - Filename builders: `buildExportFileName`, `buildMachineExportFileName`, `buildMachinesExportFileName`.
+  - Date/time slugs: `formatExportDateTimeSlug` (display and slug format).
+- **Centralized Print Styles (`apps/web/lib/pdf/pdf-print-styles.ts`)**:
+  - `getPrintStylesheet(documentId, previewId, options)`: Single generator for `@page`, `@media print`, `page-break-inside: avoid`, and high-density centered table styling.
+- **Shared Utilities (`apps/web/lib/pdf/pdf-utils.ts`)**:
+  - `isUuid()`: Identifies raw UUIDs to prevent displaying them.
+  - `resolveCleanClientName()`: Cascade resolution for client company name falling back to "Client Representative".
+  - `resolvePeriodLabel()`: Month or custom date range label formatter.
+  - `formatCompactTiming()`: Range formatter with zero spaces.
+  - `computeDurationHours()`: Standardized duration calculator.
+  - `handleBrowserPrint()`: Browser print handler with temporary document title swap for clean saved filename.
+- **Reusable Print Components (`apps/web/components/pdf/`)**:
+  - `<PDFReportHeader>`: Reusable header with logo, title, single-line/multiline subtitle, and metadata strip.
+  - `<PDFKPIStrip>`: Reusable 4-column KPI metric summary.
+  - `<PDFSignatureBlock>`: Standardized 3-column verification block (Prepared By, Client Details & Sign-off, Verified & Approved By).
+  - `<PDFTableWrapper>`: Print-optimized table wrapper with screen scroll support.
+- **Mobile PDF Templates (`apps/mobile/lib/pdf-html-templates.ts`)**:
+  - `buildPdfHtmlStyles`, `buildPdfHtmlHeader`, `buildPdfHtmlKpiStrip`, `buildPdfHtmlSignatureBlock`, `buildPdfHtmlWrapper` used by `OperationsExportModal.tsx` and `MachineExportModal.tsx` for `expo-print`.
+
+
+
+
+
+

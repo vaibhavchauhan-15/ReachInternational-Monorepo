@@ -91,7 +91,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   }, []);
 
   // Client Selection
-  const [clients, setClients] = useState<Array<{ id: string; name: string; client_name?: string; address?: string; city?: string; state?: string }>>([]);
+  const [clients, setClients] = useState<Array<{ id: string; name: string; client_name?: string; street?: string; address?: string; city?: string; district?: string; state?: string; pincode?: string }>>([]);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [clientModalVisible, setClientModalVisible] = useState(false);
 
@@ -187,22 +187,25 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     try {
       const { data } = await supabase
         .from('clients')
-        .select('id, company_name, address, city, state')
+        .select('id, company_name, street, city, district, state, pincode')
         .order('company_name');
       if (data) {
         const clientItems = data.map((c: any) => ({
           id: c.id,
           name: c.company_name || c.client_name || 'Client',
           client_name: c.company_name || c.client_name,
-          address: c.address,
+          street: c.street,
           city: c.city,
+          district: c.district,
           state: c.state,
+          pincode: c.pincode,
         }));
         setClients(clientItems);
         if (clientItems.length > 0 && !selectedClientId && !location) {
           setSelectedClientId(clientItems[0].id);
-          const parts = [clientItems[0].address, clientItems[0].city, clientItems[0].state].filter(Boolean);
-          if (parts.length > 0) setLocation(parts.join(', '));
+          const firstClient = clientItems[0];
+          const fullAddr = [firstClient.street, firstClient.city, firstClient.district, firstClient.state, firstClient.pincode].filter(Boolean).map((s: any) => String(s).trim()).filter(Boolean).join(', ');
+          if (fullAddr) setLocation(fullAddr);
         }
       }
     } catch (e) {
@@ -234,11 +237,11 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     }
   };
 
-  const handleSelectClient = (c: { id: string; name: string; address?: string; city?: string; state?: string }) => {
+  const handleSelectClient = (c: { id: string; name: string; street?: string; address?: string; city?: string; district?: string; state?: string; pincode?: string }) => {
     setSelectedClientId(c.id);
-    const locParts = [c.address, c.city, c.state].filter(Boolean);
-    if (locParts.length > 0) {
-      setLocation(locParts.join(', '));
+    const fullAddr = [c.street, c.city, c.district, c.state, c.pincode].filter(Boolean).map((s: any) => String(s).trim()).filter(Boolean).join(', ');
+    if (fullAddr) {
+      setLocation(fullAddr);
     }
     setClientModalVisible(false);
   };
@@ -976,7 +979,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                         {c.name}
                       </Text>
                       <Text style={[styles.clientItemLoc, { color: theme.colors.mute }]}>
-                        {[c.address, c.city, c.state].filter(Boolean).join(', ') || 'No address logged'}
+                        {[c.street, c.city, c.district, c.state, c.pincode].filter(Boolean).join(', ') || 'No address logged'}
                       </Text>
                     </View>
                     {selectedClientId === c.id && <Check size={18} color={theme.colors.link} />}

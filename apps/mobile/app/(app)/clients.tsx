@@ -16,6 +16,8 @@ interface ClientItem {
   phone?: string;
   gstin?: string;
   pan_number?: string;
+  street?: string;
+  Street?: string;
   address: string;
   city: string;
   district?: string;
@@ -214,7 +216,7 @@ export default function ClientsScreen() {
     setPhone(client.phone || '');
     setGstin(client.gstin || '');
     setPanNumber(client.pan_number || '');
-    setAddress(client.address || '');
+    setAddress(client.street || client.address || '');
     setCity(client.city || '');
     setDistrict(client.district || '');
     setStateName(client.state || '');
@@ -239,6 +241,11 @@ export default function ClientsScreen() {
       return;
     }
 
+    const streetVal = address.trim();
+    const fullUnifiedAddress = [streetVal, city.trim(), district.trim(), stateName.trim(), pincode.trim()]
+      .filter(Boolean)
+      .join(', ');
+
     if (editingClient) {
       setClients((prev) =>
         prev.map((c) =>
@@ -250,7 +257,8 @@ export default function ClientsScreen() {
                 phone: phone.trim(),
                 gstin: gstin.trim().toUpperCase(),
                 pan_number: panNumber.trim().toUpperCase(),
-                address: address.trim(),
+                street: streetVal,
+                address: fullUnifiedAddress || streetVal,
                 city: city.trim(),
                 district: district.trim(),
                 state: stateName.trim(),
@@ -276,7 +284,8 @@ export default function ClientsScreen() {
         phone: phone.trim(),
         gstin: gstin.trim().toUpperCase(),
         pan_number: panNumber.trim().toUpperCase(),
-        address: address.trim(),
+        street: streetVal,
+        address: fullUnifiedAddress || streetVal,
         city: city.trim(),
         district: district.trim(),
         state: stateName.trim(),
@@ -465,7 +474,7 @@ export default function ClientsScreen() {
                     </Text>
                   )}
                   <Text style={[styles.detailRow, { color: theme.colors.ink }]}>
-                    Location: <Text style={{ fontWeight: '600' }}>{[item.city, item.district, item.state].filter(Boolean).join(', ') || '—'}</Text>
+                    Location: <Text style={{ fontWeight: '600' }}>{[item.street, item.city, item.district, item.state, item.pincode].filter(Boolean).join(', ') || item.address || '—'}</Text>
                   </Text>
                   {item.is_billing_address_different && (
                     <Text style={[styles.detailRow, { color: '#d97706', fontWeight: '600' }]}>

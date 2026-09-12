@@ -57,7 +57,7 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
       setPhone(client.phone || "");
       setGstin(client.gstin || "");
       setPanNumber(client.pan_number || "");
-      setAddress(client.address || "");
+      setAddress(client.street || "");
       setCity(client.city || "");
       setDistrict(client.district || "");
       setStateName(client.state || "");
@@ -116,6 +116,7 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
     formData.append("phone", phone);
     formData.append("gstin", gstin);
     formData.append("panNumber", panNumber);
+    formData.append("street", address);
     formData.append("address", address);
     formData.append("city", city);
     formData.append("district", district);
