@@ -65,7 +65,7 @@ export function SearchableSelect({
   const popoverRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const { mounted, position, isPositioned, updatePosition } = useDynamicDropdownPosition({
+  const { mounted, position, isPositioned, portalTarget, updatePosition } = useDynamicDropdownPosition({
     isOpen,
     triggerRef,
     popoverRef,
@@ -234,7 +234,7 @@ export function SearchableSelect({
       )}
 
       {/* Popover Menu rendered via Portal with Dynamic Viewport Positioning & Smooth Transitions */}
-      {mounted && createPortal(
+      {mounted && portalTarget && createPortal(
         <AnimatePresence onExitComplete={() => setSearch("")}>
           {isOpen && isPositioned && (
             <motion.div
@@ -267,6 +267,7 @@ export function SearchableSelect({
                 width: `${position.width}px`,
                 maxHeight: `${position.maxHeight}px`,
                 zIndex: 99999,
+                pointerEvents: "auto",
                 transformOrigin: position.placement === "top" ? "bottom center" : "top center",
               }}
               className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden flex flex-col backdrop-blur-md"
@@ -361,7 +362,7 @@ export function SearchableSelect({
             </motion.div>
           )}
         </AnimatePresence>,
-        document.body
+        portalTarget
       )}
     </div>
   );

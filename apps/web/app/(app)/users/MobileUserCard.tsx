@@ -2,6 +2,7 @@
 
 import { memo } from "react";
 import { motion } from "framer-motion";
+import { highlightText } from "./user-search";
 import {
   AnimatedMail,
   AnimatedPhone,
@@ -20,6 +21,7 @@ interface MobileUserCardProps {
   onOpenSheet: (user: User) => void;
   onResetPassword?: (userId: string) => void;
   onToggleStatus?: (userId: string) => void;
+  searchTerm?: string;
 }
 
 function getRoleBadge(role: string) {
@@ -175,6 +177,7 @@ export const MobileUserCard = memo(function MobileUserCard({
   isSelected = false,
   onToggleSelect,
   onOpenSheet,
+  searchTerm,
 }: MobileUserCardProps) {
   const canViewContactInfo = () => {
     if (currentUser.role === "super_admin") return true;
@@ -253,7 +256,7 @@ export const MobileUserCard = memo(function MobileUserCard({
 
           <div className="flex flex-col min-w-0 flex-1">
             <h3 className="text-xs font-bold text-[var(--color-ink)] truncate leading-tight group-hover:text-[var(--color-link)] transition-colors" title={user.full_name}>
-              {truncateText(user.full_name, 15)}
+              {highlightText(truncateText(user.full_name, 15), searchTerm)}
             </h3>
             {user.location && (
               <span className="text-[11px] text-[var(--color-mute)] truncate mt-0.5">
@@ -279,12 +282,12 @@ export const MobileUserCard = memo(function MobileUserCard({
             <>
               <div className="flex items-center gap-1.5 font-mono text-[11px] truncate">
                 <AnimatedMail size={12} className="flex-shrink-0 text-[var(--color-ink)] opacity-60" />
-                <span className="truncate" title={user.email}>{truncateText(user.email, 20)}</span>
+                <span className="truncate" title={user.email}>{highlightText(truncateText(user.email, 20), searchTerm)}</span>
               </div>
               {user.phone && (
                 <div className="flex items-center gap-1.5 font-mono text-[11px] truncate">
                   <AnimatedPhone size={12} className="flex-shrink-0 text-[var(--color-ink)] opacity-60" />
-                  <span>{user.phone}</span>
+                  <span>{highlightText(user.phone, searchTerm)}</span>
                 </div>
               )}
             </>

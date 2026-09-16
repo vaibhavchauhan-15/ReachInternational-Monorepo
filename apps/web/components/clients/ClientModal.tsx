@@ -11,6 +11,7 @@ import { AlertCircle, Save, Receipt } from "lucide-react";
 import type { CRMClient } from "@/lib/types/database";
 import { createClientAction, updateClientAction, type ClientFormState } from "@/app/actions/clients";
 import { Button, Input, Switch } from "@/components/ui";
+import { LocationHierarchySelector } from "./LocationHierarchySelector";
 
 interface ClientModalProps {
   isOpen: boolean;
@@ -248,62 +249,52 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
             </div>
           </div>
 
-          {/* Section 2: Site Address */}
+          {/* Section 2: Site Location */}
           <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3">
             <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-mute)] pb-1 border-b border-[var(--color-hairline)]">
               <AnimatedMapPin className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-              Site Address
+              Site Location
             </div>
 
-            <div>
-              <label className="block text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] mb-1 select-none flex items-center gap-1">
-                <span>Site Address</span>
-                <span className="text-rose-500 font-semibold">*</span>
-              </label>
-              <textarea
-                rows={2}
-                required
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                placeholder="e.g. Plot 42, Sector 18, Industrial Area"
-                className="w-full rounded-lg border border-[var(--color-hairline)] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] bg-[var(--color-canvas-elevated)] p-3 text-xs sm:text-[13px] font-medium text-[var(--color-ink)] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 [html:not(.dark)_&]:placeholder-[#626970]/70 focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 focus:ring-2 focus:ring-sky-500/15 resize-none transition-all"
-              />
-            </div>
+            {/* Progressive Location Cascade: State -> District -> City/Town */}
+            <LocationHierarchySelector
+              selectedState={stateName}
+              selectedDistrict={district}
+              selectedCity={city}
+              onStateChange={(s) => setStateName(s)}
+              onDistrictChange={(d) => setDistrict(d)}
+              onCityChange={(c) => setCity(c)}
+              errorState={formState.fieldErrors?.state}
+              errorDistrict={formState.fieldErrors?.district}
+              errorCity={formState.fieldErrors?.city}
+              required
+            />
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-              <Input
-                label="City"
-                required
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="e.g. Pune"
-                error={formState.fieldErrors?.city}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1">
+              <div className="sm:col-span-3">
+                <label className="block text-[12px] font-medium text-[var(--color-ink)] mb-1 select-none flex items-center gap-1">
+                  <span>Street / Site Address Details</span>
+                  <span className="text-rose-500 font-semibold">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="e.g. Plot 42, Sector 18, Industrial Area"
+                  className="w-full h-9 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] px-3 text-xs text-[var(--color-ink)] placeholder-[#969CA3]/60 focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                />
+              </div>
 
-              <Input
-                label="District"
-                value={district}
-                onChange={(e) => setDistrict(e.target.value)}
-                placeholder="e.g. Pune"
-                error={formState.fieldErrors?.district}
-              />
-
-              <Input
-                label="State"
-                required
-                value={stateName}
-                onChange={(e) => setStateName(e.target.value)}
-                placeholder="e.g. Maharashtra"
-                error={formState.fieldErrors?.state}
-              />
-
-              <Input
-                label="Pincode"
-                value={pincode}
-                onChange={(e) => setPincode(e.target.value)}
-                placeholder="411001"
-                error={formState.fieldErrors?.pincode}
-              />
+              <div>
+                <Input
+                  label="Pincode"
+                  value={pincode}
+                  onChange={(e) => setPincode(e.target.value)}
+                  placeholder="411001"
+                  error={formState.fieldErrors?.pincode}
+                />
+              </div>
             </div>
           </div>
 
@@ -321,62 +312,53 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
                 size="sm"
                 checked={isBillingAddressDifferent}
                 onChange={(e) => handleToggleBilling(e.target.checked)}
-                label={<span className="text-xs font-semibold">Different from Site Address</span>}
+                label={<span className="text-xs font-semibold">Different from Site Location</span>}
               />
             </div>
 
             {isBillingAddressDifferent ? (
               <div className="space-y-3 pt-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                <div>
-                  <label className="block text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] mb-1 select-none">
-                    Billing Address
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={billingAddress}
-                    onChange={(e) => setBillingAddress(e.target.value)}
-                    placeholder="e.g. Corporate HQ, 5th Floor, Tower B, Cyber City"
-                    className="w-full rounded-lg border border-[var(--color-hairline)] dark:border-[#292C2F] [html:not(.dark)_&]:border-[#E1E5E9] bg-[var(--color-canvas-elevated)] p-3 text-xs sm:text-[13px] font-medium text-[var(--color-ink)] placeholder-[#969CA3]/60 dark:placeholder-[#969CA3]/60 [html:not(.dark)_&]:placeholder-[#626970]/70 focus:outline-none focus:border-sky-500 dark:focus:border-sky-400 focus:ring-2 focus:ring-sky-500/15 resize-none transition-all"
-                  />
-                </div>
+                {/* Progressive Hierarchy for Billing */}
+                <LocationHierarchySelector
+                  selectedState={billingState}
+                  selectedDistrict={billingDistrict}
+                  selectedCity={billingCity}
+                  onStateChange={(s) => setBillingState(s)}
+                  onDistrictChange={(d) => setBillingDistrict(d)}
+                  onCityChange={(c) => setBillingCity(c)}
+                  errorState={formState.fieldErrors?.billingState}
+                  errorDistrict={formState.fieldErrors?.billingDistrict}
+                  errorCity={formState.fieldErrors?.billingCity}
+                />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
-                  <Input
-                    label="City"
-                    value={billingCity}
-                    onChange={(e) => setBillingCity(e.target.value)}
-                    placeholder="e.g. Gurugram"
-                    error={formState.fieldErrors?.billingCity}
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div className="sm:col-span-3">
+                    <label className="block text-[12px] font-medium text-[var(--color-ink)] mb-1 select-none">
+                      Billing Street Address
+                    </label>
+                    <input
+                      type="text"
+                      value={billingAddress}
+                      onChange={(e) => setBillingAddress(e.target.value)}
+                      placeholder="e.g. Corporate HQ, 5th Floor, Tower B, Cyber City"
+                      className="w-full h-9 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] px-3 text-xs text-[var(--color-ink)] placeholder-[#969CA3]/60 focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                    />
+                  </div>
 
-                  <Input
-                    label="District"
-                    value={billingDistrict}
-                    onChange={(e) => setBillingDistrict(e.target.value)}
-                    placeholder="e.g. Gurugram"
-                    error={formState.fieldErrors?.billingDistrict}
-                  />
-
-                  <Input
-                    label="State"
-                    value={billingState}
-                    onChange={(e) => setBillingState(e.target.value)}
-                    placeholder="e.g. Haryana"
-                    error={formState.fieldErrors?.billingState}
-                  />
-
-                  <Input
-                    label="Pincode"
-                    value={billingPincode}
-                    onChange={(e) => setBillingPincode(e.target.value)}
-                    placeholder="122002"
-                    error={formState.fieldErrors?.billingPincode}
-                  />
+                  <div>
+                    <Input
+                      label="Pincode"
+                      value={billingPincode}
+                      onChange={(e) => setBillingPincode(e.target.value)}
+                      placeholder="122002"
+                      error={formState.fieldErrors?.billingPincode}
+                    />
+                  </div>
                 </div>
               </div>
             ) : (
               <p className="text-[11px] text-[var(--color-mute)] italic">
-                Billing address is currently configured to match the site address.
+                Billing address is currently configured to match the site location.
               </p>
             )}
           </div>

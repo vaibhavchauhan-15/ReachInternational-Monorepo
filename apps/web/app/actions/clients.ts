@@ -1,11 +1,19 @@
 "use server";
 
-import { revalidateTag } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { logAudit } from "@/lib/audit";
-import { TAGS } from "@/lib/cache";
-import { requireRole } from "@/lib/dal";
-import { CreateClientSchema, UpdateClientSchema } from "@reachinternational/validation";
+import { getCurrentUser } from "@/lib/dal";
+import {
+  createClient,
+  updateClient,
+  deactivateClient,
+  restoreClient,
+  searchClients,
+  type SearchClientsOptions,
+  getClientList,
+  type PaginatedClientsResponse,
+} from "@/lib/data/clients";
+import type { ClientDirectoryFilter } from "@reachinternational/utils";
+import type { CRMClient } from "@/lib/types/database";
 
 export interface ClientFormState {
   error?: string;
@@ -13,22 +21,12 @@ export interface ClientFormState {
   success?: boolean;
 }
 
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function isValidUuid(id?: string | null): boolean {
-  if (!id || typeof id !== "string") return false;
-  return UUID_REGEX.test(id.trim());
-}
-
-const AUTHORIZED_ROLES = ["super_admin", "admin", "manager", "service_manager"] as const;
-
 /**
- * Create a new Client in database (public.clients)
+ * Server Action: Create a new Client in database (public.clients)
+ * Delegates core mutation, validation, audit logging, and cache invalidation to client-mutations.ts
  */
 export async function createClientAction(state: ClientFormState, formData: FormData): Promise<ClientFormState> {
   try {
-    await requireRole(...AUTHORIZED_ROLES);
-
     const supabase = await createSupabaseServerClient();
     const {
       data: { user },
@@ -38,7 +36,9 @@ export async function createClientAction(state: ClientFormState, formData: FormD
       return { error: "Authentication required. Please log in to perform this action." };
     }
 
-    const isBillingDiff = formData.get("isBillingAddressDifferent") === "true" || formData.get("isBillingAddressDifferent") === "on";
+    const isBillingDiff =
+      formData.get("isBillingAddressDifferent") === "true" ||
+      formData.get("isBillingAddressDifferent") === "on";
 
     const rawStreet =
       (formData.get("street") as string)?.trim() ||
@@ -46,7 +46,10 @@ export async function createClientAction(state: ClientFormState, formData: FormD
       "";
 
     const payload = {
-      companyName: (formData.get("companyName") as string)?.trim() || (formData.get("clientName") as string)?.trim() || "",
+      companyName:
+        (formData.get("companyName") as string)?.trim() ||
+        (formData.get("clientName") as string)?.trim() ||
+        "",
       contactPerson: (formData.get("contactPerson") as string)?.trim() || "",
       phone: (formData.get("phone") as string)?.trim() || "",
       gstin: ((formData.get("gstin") as string)?.trim() || "").toUpperCase(),
@@ -63,75 +66,18 @@ export async function createClientAction(state: ClientFormState, formData: FormD
       billingDistrict: isBillingDiff ? (formData.get("billingDistrict") as string)?.trim() || "" : "",
       billingState: isBillingDiff ? (formData.get("billingState") as string)?.trim() || "" : "",
       billingPincode: isBillingDiff ? (formData.get("billingPincode") as string)?.trim() || "" : "",
-      branchId: (formData.get("branchId") as string)?.trim() || null,
       status: ((formData.get("status") as string) || "active") as "active" | "inactive",
     };
 
-    const parsed = CreateClientSchema.safeParse(payload);
-    if (!parsed.success) {
-      const fieldErrors: Record<string, string> = {};
-      parsed.error.issues.forEach((issue) => {
-        const fieldName = issue.path[0]?.toString() || "form";
-        fieldErrors[fieldName] = issue.message;
-      });
+    const result = await createClient(payload, user.id);
+
+    if (!result.success) {
       return {
-        error: "Please correct the highlighted validation errors.",
-        fieldErrors,
+        error: result.error,
+        fieldErrors: result.fieldErrors,
       };
     }
 
-    const data = parsed.data;
-    const resolvedStreet = (data.street || data.address || rawStreet).trim();
-    const fullUnifiedAddress = [
-      resolvedStreet,
-      data.city.trim(),
-      data.district?.trim(),
-      data.state.trim(),
-      data.pincode?.trim(),
-    ]
-      .filter(Boolean)
-      .join(", ");
-
-    const insertPayload = {
-      company_name: data.companyName,
-      contact_person: data.contactPerson || null,
-      phone: data.phone || null,
-      gstin: data.gstin || null,
-      pan_number: data.panNumber || null,
-      street: resolvedStreet,
-      city: data.city.trim(),
-      district: data.district || null,
-      state: data.state.trim(),
-      pincode: data.pincode || null,
-      is_billing_address_different: data.isBillingAddressDifferent,
-      billing_address: data.isBillingAddressDifferent ? data.billingAddress || null : null,
-      billing_city: data.isBillingAddressDifferent ? data.billingCity || null : null,
-      billing_district: data.isBillingAddressDifferent ? data.billingDistrict || null : null,
-      billing_state: data.isBillingAddressDifferent ? data.billingState || null : null,
-      billing_pincode: data.isBillingAddressDifferent ? data.billingPincode || null : null,
-      status: data.status,
-    };
-
-    const { data: createdClient, error: dbError } = await supabase
-      .from("clients")
-      .insert([insertPayload])
-      .select("id, code, company_name")
-      .single();
-
-    if (dbError) {
-      console.error("Error creating client in database:", dbError);
-      return { error: `Failed to create client: ${dbError.message}` };
-    }
-
-    await logAudit({
-      user_id: user.id,
-      action: "CLIENT_CREATE",
-      entity_type: "clients",
-      entity_id: createdClient.id,
-      metadata: { client_code: createdClient.code, company_name: createdClient.company_name, gstin: data.gstin },
-    });
-
-    revalidateTag(TAGS.clients, "max");
     return { success: true };
   } catch (err: any) {
     console.error("createClientAction exception:", err);
@@ -140,12 +86,11 @@ export async function createClientAction(state: ClientFormState, formData: FormD
 }
 
 /**
- * Update existing Client in database
+ * Server Action: Update existing Client in database
+ * Delegates core mutation, validation, audit logging, and cache invalidation to client-mutations.ts
  */
 export async function updateClientAction(state: ClientFormState, formData: FormData): Promise<ClientFormState> {
   try {
-    await requireRole(...AUTHORIZED_ROLES);
-
     const supabase = await createSupabaseServerClient();
     const {
       data: { user },
@@ -156,7 +101,7 @@ export async function updateClientAction(state: ClientFormState, formData: FormD
     }
 
     const id = (formData.get("id") as string)?.trim();
-    if (!id || !isValidUuid(id)) {
+    if (!id) {
       return { error: "Valid Client ID is required for update." };
     }
 
@@ -165,11 +110,16 @@ export async function updateClientAction(state: ClientFormState, formData: FormD
       (formData.get("address") as string)?.trim() ||
       "";
 
-    const isBillingDiff = formData.get("isBillingAddressDifferent") === "true" || formData.get("isBillingAddressDifferent") === "on";
+    const isBillingDiff =
+      formData.get("isBillingAddressDifferent") === "true" ||
+      formData.get("isBillingAddressDifferent") === "on";
 
     const payload = {
       id,
-      companyName: (formData.get("companyName") as string)?.trim() || (formData.get("clientName") as string)?.trim() || "",
+      companyName:
+        (formData.get("companyName") as string)?.trim() ||
+        (formData.get("clientName") as string)?.trim() ||
+        "",
       contactPerson: (formData.get("contactPerson") as string)?.trim() || "",
       phone: (formData.get("phone") as string)?.trim() || "",
       gstin: ((formData.get("gstin") as string)?.trim() || "").toUpperCase(),
@@ -186,75 +136,18 @@ export async function updateClientAction(state: ClientFormState, formData: FormD
       billingDistrict: isBillingDiff ? (formData.get("billingDistrict") as string)?.trim() || "" : "",
       billingState: isBillingDiff ? (formData.get("billingState") as string)?.trim() || "" : "",
       billingPincode: isBillingDiff ? (formData.get("billingPincode") as string)?.trim() || "" : "",
-      branchId: (formData.get("branchId") as string)?.trim() || null,
       status: ((formData.get("status") as string) || "active") as "active" | "inactive",
     };
 
-    const parsed = UpdateClientSchema.safeParse(payload);
-    if (!parsed.success) {
-      const fieldErrors: Record<string, string> = {};
-      parsed.error.issues.forEach((issue) => {
-        const fieldName = issue.path[0]?.toString() || "form";
-        fieldErrors[fieldName] = issue.message;
-      });
+    const result = await updateClient(payload, user.id);
+
+    if (!result.success) {
       return {
-        error: "Please correct the highlighted validation errors.",
-        fieldErrors,
+        error: result.error,
+        fieldErrors: result.fieldErrors,
       };
     }
 
-    const data = parsed.data;
-    const resolvedStreet = (data.street || data.address || rawStreet).trim();
-    const fullUnifiedAddress = [
-      resolvedStreet,
-      data.city.trim(),
-      data.district?.trim(),
-      data.state.trim(),
-      data.pincode?.trim(),
-    ]
-      .filter(Boolean)
-      .join(", ");
-
-    const updatePayload = {
-      company_name: data.companyName,
-      contact_person: data.contactPerson || null,
-      phone: data.phone || null,
-      gstin: data.gstin || null,
-      pan_number: data.panNumber || null,
-      street: resolvedStreet,
-      city: data.city.trim(),
-      district: data.district || null,
-      state: data.state.trim(),
-      pincode: data.pincode || null,
-      is_billing_address_different: data.isBillingAddressDifferent,
-      billing_address: data.isBillingAddressDifferent ? data.billingAddress || null : null,
-      billing_city: data.isBillingAddressDifferent ? data.billingCity || null : null,
-      billing_district: data.isBillingAddressDifferent ? data.billingDistrict || null : null,
-      billing_state: data.isBillingAddressDifferent ? data.billingState || null : null,
-      billing_pincode: data.isBillingAddressDifferent ? data.billingPincode || null : null,
-      status: data.status,
-      updated_at: new Date().toISOString(),
-    };
-
-    const { error: dbError } = await supabase
-      .from("clients")
-      .update(updatePayload)
-      .eq("id", id);
-
-    if (dbError) {
-      console.error("Error updating client in database:", dbError);
-      return { error: `Failed to update client: ${dbError.message}` };
-    }
-
-    await logAudit({
-      user_id: user.id,
-      action: "CLIENT_UPDATE",
-      entity_type: "clients",
-      entity_id: id,
-      metadata: { company_name: data.companyName, gstin: data.gstin },
-    });
-
-    revalidateTag(TAGS.clients, "max");
     return { success: true };
   } catch (err: any) {
     console.error("updateClientAction exception:", err);
@@ -263,12 +156,10 @@ export async function updateClientAction(state: ClientFormState, formData: FormD
 }
 
 /**
- * Soft delete Client in database (deleted_at = NOW(), status = 'inactive')
+ * Server Action: Soft delete Client in database (deleted_at = NOW(), status = 'inactive')
  */
 export async function softDeleteClientAction(clientId: string): Promise<{ success?: boolean; error?: string }> {
   try {
-    await requireRole(...AUTHORIZED_ROLES);
-
     const supabase = await createSupabaseServerClient();
     const {
       data: { user },
@@ -278,36 +169,113 @@ export async function softDeleteClientAction(clientId: string): Promise<{ succes
       return { error: "Authentication required. Please log in to perform this action." };
     }
 
-    if (!clientId || !isValidUuid(clientId)) {
-      return { error: "Valid Client ID is required for soft deletion." };
+    const result = await deactivateClient(clientId, user.id);
+    if (!result.success) {
+      return { error: result.error };
     }
 
-    const { error: dbError } = await supabase
-      .from("clients")
-      .update({
-        deleted_at: new Date().toISOString(),
-        status: "inactive",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", clientId);
-
-    if (dbError) {
-      console.error("Error soft-deleting client:", dbError);
-      return { error: `Failed to soft delete client: ${dbError.message}` };
-    }
-
-    await logAudit({
-      user_id: user.id,
-      action: "CLIENT_SOFT_DELETE",
-      entity_type: "clients",
-      entity_id: clientId,
-      metadata: { deleted_at: new Date().toISOString() },
-    });
-
-    revalidateTag(TAGS.clients, "max");
     return { success: true };
   } catch (err: any) {
     console.error("softDeleteClientAction exception:", err);
     return { error: err.message || "An unexpected error occurred while soft deleting client." };
   }
 }
+
+/**
+ * Server Action: Restore a soft-deleted Client record (deleted_at = null, status = 'active')
+ */
+export async function restoreClientAction(clientId: string): Promise<{ success?: boolean; error?: string }> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { error: "Authentication required. Please log in to perform this action." };
+    }
+
+    const result = await restoreClient(clientId, user.id);
+    if (!result.success) {
+      return { error: result.error };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("restoreClientAction exception:", err);
+    return { error: err.message || "An unexpected error occurred while restoring client." };
+  }
+}
+
+const AUTHORIZED_CLIENT_ROLES = ["super_admin", "admin", "manager", "service_manager", "supervisor"] as const;
+
+/**
+ * Server Action: Search clients using server-side 8-dimension GIN trigram indexes.
+ * Returns strictly max 10 rows (configurable up to 50), cached for 60s via React cache() and unstable_cache.
+ */
+export async function searchClientsAction(
+  query: string,
+  options?: SearchClientsOptions
+): Promise<{ success: boolean; data: CRMClient[]; error?: string }> {
+  try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, data: [], error: "Authentication required." };
+    }
+
+    if (!AUTHORIZED_CLIENT_ROLES.includes(user.role as any)) {
+      return { success: false, data: [], error: "Unauthorized: Insufficient permissions to search clients." };
+    }
+
+    const clean = (query || "").trim();
+    if (!clean) {
+      return { success: true, data: [] };
+    }
+
+    const data = await searchClients(clean, {
+      ...options,
+      limit: Math.min(options?.limit ?? 10, 50),
+    });
+
+    return { success: true, data };
+  } catch (err: any) {
+    console.error("searchClientsAction exception:", err);
+    return {
+      success: false,
+      data: [],
+      error: err.message || "An unexpected error occurred while searching clients.",
+    };
+  }
+}
+
+/**
+ * Server Action: Fetch paginated and filtered client list on demand.
+ * Enables 0ms client-side cache transitions and on-demand tab loading (Milestone C9).
+ */
+export async function getClientListAction(
+  filter?: ClientDirectoryFilter
+): Promise<{ success: boolean; data?: PaginatedClientsResponse; error?: string }> {
+  try {
+    const user = await getCurrentUser();
+
+    if (!user) {
+      return { success: false, error: "Authentication required." };
+    }
+
+    if (!AUTHORIZED_CLIENT_ROLES.includes(user.role as any)) {
+      return { success: false, error: "Unauthorized: Insufficient permissions to view client directory." };
+    }
+
+    const data = await getClientList(filter);
+    return { success: true, data };
+  } catch (err: any) {
+    console.error("getClientListAction exception:", err);
+    return {
+      success: false,
+      error: err.message || "Failed to load client directory data.",
+    };
+  }
+}
+
+

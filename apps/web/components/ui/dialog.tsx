@@ -99,12 +99,16 @@ export const DialogContent = React.forwardRef<
   DialogContentProps
 >(
   (
-    { className, children, from = "center", showCloseButton = true, ...props },
+        { className, children, from = "center", showCloseButton = true, onPointerDownOutside, onInteractOutside, onEscapeKeyDown, ...props },
     ref
   ) => {
     const { open } = React.useContext(DialogContext);
     const shouldReduceMotion = useReducedMotion();
     const variants = getAnimationVariants(from);
+    /** Selector for interactive elements that live outside the dialog's scroll flow
+     *  (portaled dropdowns, popper menus, listboxes) and must not dismiss the dialog. */
+    const PORTALED_INTERACTION_SELECTOR =
+      '[data-portal-dropdown], [data-portal-select], [data-portal-menu], [data-radix-popper-content-wrapper], [role="listbox"], [role="option"], [style*="z-index: 99999"], [style*="z-index:99999"], [style*="99999"]';
 
     return (
       <AnimatePresence>
@@ -121,7 +125,38 @@ export const DialogContent = React.forwardRef<
             </DialogPrimitive.Overlay>
 
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <DialogPrimitive.Content ref={ref} asChild forceMount {...props}>
+                            <DialogPrimitive.Content
+                ref={ref}
+                asChild
+                forceMount
+                data-portal-container="true"
+                onPointerDownOutside={(e) => {
+                  const target = e.target as Element | null;
+                  if (target?.closest?.(PORTALED_INTERACTION_SELECTOR)) {
+                    e.preventDefault();
+                  }
+                  onPointerDownOutside?.(e);
+                }}
+                onInteractOutside={(e) => {
+                  const target = e.target as Element | null;
+                  if (target?.closest?.(PORTALED_INTERACTION_SELECTOR)) {
+                    e.preventDefault();
+                  }
+                  onInteractOutside?.(e);
+                }}
+                onEscapeKeyDown={(e) => {
+                  // If a dropdown popover rendered inside this dialog card is open, Escape
+                  // must close only the dropdown (handled by the dropdown itself) and never
+                  // dismiss the dialog, which would discard in-progress edits.
+                  if (
+                    typeof document !== "undefined" &&
+                    document.querySelector('[data-portal-dropdown], [data-portal-select]')
+                  ) {
+                    e.preventDefault();
+                  }
+                  onEscapeKeyDown?.(e);
+                }}
+                {...props}>
                 <motion.div
                   initial={
                     shouldReduceMotion ? { opacity: 0 } : variants.initial
@@ -133,6 +168,7 @@ export const DialogContent = React.forwardRef<
                     shouldReduceMotion ? { opacity: 0 } : variants.exit
                   }
                   transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                  data-portal-container="true"
                   className={cn(
                     "relative z-10 w-full card-elevated flex flex-col max-h-[90vh] focus:outline-none",
                     className

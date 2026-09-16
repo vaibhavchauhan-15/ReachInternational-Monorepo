@@ -141,7 +141,7 @@ export function AuditKpis({
                 {card.value.toLocaleString()}
               </span>
             </div>
-            <span className="text-[11px] text-[var(--color-mute)] mt-1 truncate">
+            <span suppressHydrationWarning className="text-[11px] text-[var(--color-mute)] mt-1 truncate">
               {card.sublabel}
             </span>
           </button>

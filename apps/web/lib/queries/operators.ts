@@ -6,9 +6,15 @@ import { getCurrentUser } from "@/lib/dal";
 import { TAGS, CACHE_TIERS } from "@/lib/cache";
 import { getMachines } from "@/lib/queries/machines";
 import { getClients } from "@/lib/queries/clients";
-import type { Machine, MachineWithEngineer, User } from "@/lib/types/database";
+import type { Machine, MachineWithEngineer, User } from "@reachinternational/types";
 import type { OperatorHourLog } from "@/components/dashboard/OperatorDashboard";
 import { parseBreakdownString, parseProfileShiftTime, parseTimeToMinutes } from "@reachinternational/utils";
+import {
+  getOperationsMachineLogsData,
+  getOperationsClientLogsData,
+  getOperationsOperatorLogsData,
+  getOperationsAssignmentsData,
+} from "@/lib/data/operations";
 
 /**
  * Format raw PostgREST / Supabase errors into human-readable strings.
@@ -318,7 +324,8 @@ export function formatHourLogsData(
   });
 }
 
-function deriveAssignmentsFromMachines(machines: Machine[], operatorsList: User[] = []): any[] {
+export function deriveAssignmentsFromMachines(machines: Machine[], operatorsList: User[] = []): any[] {
+
   return (machines || [])
     .filter((m: any) => m.current_operator_id || m.current_supervisor_id)
     .map((m: any) => {
@@ -451,7 +458,8 @@ export interface OperationsLogsPageParams {
   customStart?: string;
   customEnd?: string;
   search?: string;
-  sort?: "date-desc" | "date-asc";
+  sort?: "date-desc" | "date-asc" | "hours-desc" | "hours-asc" | "meter-desc" | "meter-asc" | string;
+  expanded?: boolean | string;
 }
 
 export interface OperationsLogsPageResult {
@@ -579,7 +587,37 @@ export const getOperationsLogsPage = cache(
       return query;
     };
 
-    // 1. Concurrent aggregate metrics query (scalar columns only)
+    // 1. Concurrent aggregate metrics query — fast-path via database RPC
+    let rpcSummaryPromise: Promise<any> | null = null;
+    if (!searchOrClause) {
+      let rpcStartDate: string | null = null;
+      let rpcEndDate: string | null = null;
+      if (params.month === "custom") {
+        rpcStartDate = params.customStart || null;
+        rpcEndDate = params.customEnd || null;
+      } else if (params.month && params.month !== "all") {
+        const year = new Date().getFullYear();
+        const monthNum = parseInt(params.month, 10);
+        if (!isNaN(monthNum) && monthNum >= 1 && monthNum <= 12) {
+          const mStr = String(monthNum).padStart(2, "0");
+          rpcStartDate = `${year}-${mStr}-01`;
+          const lastDay = new Date(year, monthNum, 0).getDate();
+          rpcEndDate = `${year}-${mStr}-${String(lastDay).padStart(2, "0")}`;
+        }
+      }
+
+      rpcSummaryPromise = Promise.resolve(
+        supabase.rpc("get_operations_summary", {
+          p_client_id: params.viewMode === "client" && params.clientId && params.clientId !== "all" ? params.clientId : null,
+          p_machine_id: params.machineId && params.machineId !== "all" ? params.machineId : null,
+          p_operator_id: params.viewMode === "operator" && params.operatorId && params.operatorId !== "all" ? params.operatorId : null,
+          p_site: params.site && params.site !== "all" ? params.site : null,
+          p_start_date: rpcStartDate,
+          p_end_date: rpcEndDate,
+        })
+      );
+    }
+
     let summaryQuery = supabase
       .from("machine_hour_logs")
       .select("running_hours, start_meter, end_meter, overtime_hours, is_breakdown, log_date");
@@ -598,8 +636,9 @@ export const getOperationsLogsPage = cache(
       .range(fromIndex, toIndex);
     tier1Query = applyFilters(tier1Query);
 
-    const [summaryRes, tier1Res] = await Promise.all([
-      summaryQuery,
+    const [rpcSummaryRes, summaryRes, tier1Res] = await Promise.all([
+      rpcSummaryPromise,
+      rpcSummaryPromise ? Promise.resolve({ data: null, error: null }) : summaryQuery,
       tier1Query,
     ]);
 
@@ -646,20 +685,30 @@ export const getOperationsLogsPage = cache(
       }
     }
 
-    // Compute aggregate summary metrics
+    // Compute aggregate summary metrics (fast-path from RPC or fallback from rows)
     let totalRunHours = 0;
     let totalOtHours = 0;
     let totalBreakdowns = 0;
-    const loggedDates = new Set<string>();
+    let loggedDaysCount = 0;
 
-    for (const row of summaryRes.data || []) {
-      const startMtr = row.start_meter ?? 0;
-      const endMtr = row.end_meter ?? startMtr;
-      const run = row.running_hours ?? Math.max(0, Math.round((endMtr - startMtr) * 10) / 10);
-      totalRunHours += run;
-      totalOtHours += row.overtime_hours || 0;
-      if (row.is_breakdown) totalBreakdowns++;
-      if (row.log_date) loggedDates.add(row.log_date);
+    if (rpcSummaryRes && !rpcSummaryRes.error && rpcSummaryRes.data) {
+      const s = rpcSummaryRes.data;
+      totalRunHours = Number(s.total_run_hours) || 0;
+      totalOtHours = Number(s.total_ot_hours) || 0;
+      totalBreakdowns = Number(s.total_breakdowns) || 0;
+      loggedDaysCount = Number(s.logged_days_count) || 0;
+    } else {
+      const loggedDates = new Set<string>();
+      for (const row of summaryRes.data || []) {
+        const startMtr = row.start_meter ?? 0;
+        const endMtr = row.end_meter ?? startMtr;
+        const run = row.running_hours ?? Math.max(0, Math.round((endMtr - startMtr) * 10) / 10);
+        totalRunHours += run;
+        totalOtHours += row.overtime_hours || 0;
+        if (row.is_breakdown) totalBreakdowns++;
+        if (row.log_date) loggedDates.add(row.log_date);
+      }
+      loggedDaysCount = loggedDates.size;
     }
 
     const formatted = formatHourLogsData(
@@ -679,7 +728,7 @@ export const getOperationsLogsPage = cache(
         totalRunHours: Math.round(totalRunHours * 10) / 10,
         totalOtHours: Math.round(totalOtHours * 10) / 10,
         totalBreakdowns,
-        loggedDaysCount: loggedDates.size,
+        loggedDaysCount,
       },
     };
   }
@@ -763,228 +812,129 @@ export const getOperationsHubData = cache(async (
     };
   }
 
-  // 2. Supervisor Logs Tab: Slim loader with server-side pagination & lightweight machines
+  // 2. Supervisor Logs Tab: Sub-tab isolated loaders with server-side pagination & GIN trigram indexes
   if (tab === "logs") {
-    const [machinesRes, clientsList, operatorsRes, recentLogRes, clientLocationsRes] = await Promise.all([
-      supabase
-        .from("machines")
-        .select("id, machine_id, model, serial_number, status, client_id, current_operator_id")
-        .order("machine_id"),
-      getClients(undefined, true),
-      supabase
-        .from("users")
-        .select("id, full_name, email, phone, role, status, shift_time, shift_start_time, shift_end_time")
-        .in("role", ["operator", "supervisor", "manager", "admin", "super_admin", "service_manager"])
-        .eq("status", "active")
-        .order("full_name"),
-      supabase
-        .from("machine_hour_logs")
-        .select("client_id")
-        .not("client_id", "is", null)
-        .order("log_date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from("machine_hour_logs")
-        .select("client_id, location")
-        .not("client_id", "is", null)
-        .not("location", "is", null),
-    ]);
+    const viewMode =
+      params.viewMode ||
+      (params.clientId ? "client" : params.operatorId ? "operator" : "machine");
 
-    const mostRecentClientId = recentLogRes.data?.client_id || (clientsList && clientsList.length > 0 ? clientsList[0].id : "");
+    if (viewMode === "machine") {
+      const res = await getOperationsMachineLogsData({
+        machineId: params.machineId,
+        month: params.month,
+        customStart: params.customStart,
+        customEnd: params.customEnd,
+        site: params.site,
+        search: params.search,
+        sort: params.sort,
+        page: params.page,
+        pageSize: params.pageSize || 20,
+      });
 
-    // Precompute machine counts per client
-    const clientMachineCount = new Map<string, number>();
-    (machinesRes.data || []).forEach((m: any) => {
-      if (m.client_id) {
-        clientMachineCount.set(m.client_id, (clientMachineCount.get(m.client_id) || 0) + 1);
-      }
-    });
-
-    // Aggregate distinct locations per client from logs
-    const clientLocationsMap = new Map<string, Set<string>>();
-    (clientLocationsRes.data || []).forEach((row: any) => {
-      if (row.client_id && row.location && row.location.trim()) {
-        if (!clientLocationsMap.has(row.client_id)) {
-          clientLocationsMap.set(row.client_id, new Set());
-        }
-        clientLocationsMap.get(row.client_id)!.add(row.location.trim());
-      }
-    });
-
-    // Enrich clients with machine counts, full details, and unique sites
-    const enrichedClients = (clientsList || []).map((c: any) => {
-      const sitesSet = clientLocationsMap.get(c.id) || new Set<string>();
-      if (c.address) sitesSet.add(c.address.trim());
-      const canonicalLoc = [c.city, c.district, c.state].filter(Boolean).join(", ");
-      if (canonicalLoc) sitesSet.add(canonicalLoc.trim());
       return {
-        ...c,
-        machine_count: clientMachineCount.get(c.id) || 0,
-        sites: Array.from(sitesSet).filter(Boolean),
+        machines: res.machines as unknown as Machine[],
+        dbClients: [],
+        operators: [],
+        assignments: [],
+        hourLogs: res.hourLogs,
+        siteMovements: [],
+        operatorPayouts: [],
+        assignedMachine: null,
+        recentLogs: [],
+        allMachines: res.machines as unknown as MachineWithEngineer[],
+        totalLogsCount: res.totalLogsCount,
+        currentPage: res.currentPage,
+        logsPageSize: res.logsPageSize,
+        logsSummary: res.logsSummary,
+        activeMachineId: res.activeMachineId,
       };
-    });
+    }
 
-    const allStaffUsers = (operatorsRes.data || []) as User[];
-    const operatorsList = allStaffUsers.filter((u) => u.role === "operator");
-    const machineOptions = (machinesRes.data || []).map((m: any) => ({
-      ...m,
-      machine_code: m.machine_id,
-      machine_name: m.model ? `${m.machine_id} (${m.model})` : m.machine_id,
-    })) as Machine[];
+    if (viewMode === "client") {
+      const res = await getOperationsClientLogsData({
+        clientId: params.clientId,
+        machineId: params.machineId,
+        site: params.site,
+        month: params.month,
+        customStart: params.customStart,
+        customEnd: params.customEnd,
+        search: params.search,
+        sort: params.sort,
+        page: params.page,
+        pageSize: params.pageSize || 20,
+        fetchLogs: true,
+      });
 
-    // If client view is active and no client is explicitly selected, default to the most recent used client
-    const effectiveClientId =
-      params.viewMode === "client" && (!params.clientId || params.clientId === "all")
-        ? mostRecentClientId
-        : params.clientId;
+      return {
+        machines: res.machines as unknown as Machine[],
+        dbClients: res.dbClients as any,
+        operators: [],
+        assignments: [],
+        hourLogs: res.hourLogs,
+        siteMovements: [],
+        operatorPayouts: [],
+        assignedMachine: null,
+        recentLogs: [],
+        allMachines: res.machines as unknown as MachineWithEngineer[],
+        totalLogsCount: res.totalLogsCount,
+        currentPage: res.currentPage,
+        logsPageSize: res.logsPageSize,
+        logsSummary: res.logsSummary,
+        activeClientId: res.activeClientId,
+        mostRecentClientId: res.mostRecentClientId,
+      };
+    }
 
-    const currentMonthNumber = String(new Date().getMonth() + 1).padStart(2, "0");
-    const effectiveMonth =
-      params.month !== undefined ? params.month : currentMonthNumber;
+    if (viewMode === "operator") {
+      const res = await getOperationsOperatorLogsData({
+        operatorId: params.operatorId,
+        month: params.month,
+        customStart: params.customStart,
+        customEnd: params.customEnd,
+        search: params.search,
+        sort: params.sort,
+        page: params.page,
+        pageSize: params.pageSize,
+      });
 
-    const effectiveParams = {
-      ...params,
-      month: effectiveMonth,
-      ...(params.viewMode === "client" && effectiveClientId ? { clientId: effectiveClientId } : {}),
-    };
-
-    const pagedResult = await getOperationsLogsPage(effectiveParams, {
-      machines: machineOptions,
-      staffUsers: allStaffUsers,
-      clients: enrichedClients,
-    });
-
-    return {
-      machines: machineOptions,
-      dbClients: enrichedClients,
-      operators: operatorsList,
-      assignments: [],
-      hourLogs: pagedResult.logs,
-      siteMovements: [],
-      operatorPayouts: [],
-      assignedMachine: null,
-      recentLogs: [],
-      allMachines: machineOptions as unknown as MachineWithEngineer[],
-      totalLogsCount: pagedResult.total,
-      currentPage: pagedResult.page,
-      logsPageSize: pagedResult.pageSize,
-      logsSummary: pagedResult.summary,
-      pagedResult,
-      mostRecentClientId,
-      effectiveClientId,
-    };
+      return {
+        machines: [],
+        dbClients: [],
+        operators: res.operators as unknown as User[],
+        assignments: [],
+        hourLogs: res.hourLogs,
+        siteMovements: [],
+        operatorPayouts: [],
+        assignedMachine: null,
+        recentLogs: [],
+        allMachines: [],
+        totalLogsCount: res.totalLogsCount,
+        currentPage: res.currentPage,
+        logsPageSize: res.logsPageSize,
+        logsSummary: res.logsSummary,
+        activeOperatorId: res.activeOperatorId,
+      };
+    }
   }
 
-  // 3. Supervisor Assignments Tab: Full machines & assignment records
-  const [
-    machinesRes,
-    clientsList,
-    operatorsRes,
-    rawHourLogs,
-    assignmentsRes,
-  ] = await Promise.all([
-    getMachines({ pageSize: 1000 }),
+  // 3. Supervisor Assignments Tab: Full machines & assignment records (Zero hour logs queried!)
+  const [assignmentsData, clientsList] = await Promise.all([
+    getOperationsAssignmentsData(),
     getClients(undefined, true),
-    supabase
-      .from("users")
-      .select("id, full_name, email, phone, role, status, shift_time, shift_start_time, shift_end_time")
-      .in("role", ["operator", "supervisor", "manager", "admin", "super_admin", "service_manager"])
-      .eq("status", "active")
-      .order("full_name"),
-    fetchHourLogsResiliently(supabase, { limit: 500 }),
-    supabase
-      .from("operator_machine_assignments")
-      .select(`
-        id,
-        machine_id,
-        operator_id,
-        shift_start_time,
-        shift_end_time,
-        crosses_midnight,
-        is_active,
-        assigned_by,
-        assigned_at,
-        ended_at,
-        ended_by,
-        end_reason,
-        created_at,
-        updated_at
-      `)
-      .eq("is_active", true)
-      .order("assigned_at", { ascending: false }),
   ]);
 
-  const allStaffUsers = (operatorsRes.data || []) as User[];
-  const operatorsList = allStaffUsers.filter((u) => u.role === "operator");
-  const staffUsersMap = new Map(allStaffUsers.map((u) => [u.id, u]));
-  const formattedLogs = formatHourLogsData(
-    rawHourLogs,
-    machinesRes.machines,
-    allStaffUsers,
-    clientsList
-  );
-
-  // Use authoritative operator_machine_assignments if populated, with fallback to derived
-  let activeAssignmentsList: any[] = [];
-  if (assignmentsRes.data && assignmentsRes.data.length > 0) {
-    activeAssignmentsList = assignmentsRes.data.map((ass: any) => {
-      const m = machinesRes.machines.find((mach: any) => mach.id === ass.machine_id);
-      const op = operatorsList.find((u) => u.id === ass.operator_id);
-      const assignerUser = ass.assigned_by ? staffUsersMap.get(ass.assigned_by) : null;
-      const code = m?.machine_id || m?.machine_code || ass.machine_id;
-      const opShift = op?.shift_time ? parseProfileShiftTime(op.shift_time) : null;
-      const startTime = ass.shift_start_time || opShift?.startTime || "08:00:00";
-      const endTime = ass.shift_end_time || opShift?.endTime || "17:00:00";
-      const startMins = parseTimeToMinutes(startTime) ?? 480;
-      const endMins = parseTimeToMinutes(endTime) ?? 1020;
-      const isOvernight = ass.crosses_midnight ?? (endMins <= startMins);
-      return {
-        ...ass,
-        shift_start_time: startTime,
-        shift_end_time: endTime,
-        crosses_midnight: isOvernight,
-        machine: m
-          ? {
-              id: m.id,
-              machine_id: code,
-              machine_code: code,
-              machine_name: m.model ? `${code} (${m.model})` : code,
-              model: m.model,
-              serial_number: m.serial_number,
-              hour_meter: m.hour_meter,
-              status: m.status,
-            }
-          : { id: ass.machine_id, machine_id: "Machine", machine_name: "Machine" },
-        operator: op || null,
-        assigner: assignerUser
-          ? {
-              id: assignerUser.id,
-              full_name: assignerUser.full_name,
-              phone: assignerUser.phone,
-              role: assignerUser.role,
-            }
-          : null,
-        status: ass.is_active ? "active" : "ended",
-      };
-    });
-  } else {
-    activeAssignmentsList = deriveAssignmentsFromMachines(machinesRes.machines, operatorsList);
-  }
-
   return {
-    machines: machinesRes.machines,
+    machines: assignmentsData.machines,
     dbClients: clientsList,
-    operators: operatorsList,
-    assignments: activeAssignmentsList,
-    hourLogs: formattedLogs,
+    operators: assignmentsData.operators,
+    assignments: assignmentsData.assignments,
+    hourLogs: [],
     siteMovements: [],
     operatorPayouts: [],
     assignedMachine: null,
     recentLogs: [],
-    allMachines: machinesRes.machines as unknown as MachineWithEngineer[],
-    totalLogsCount: formattedLogs.length,
+    allMachines: assignmentsData.machines as unknown as MachineWithEngineer[],
+    totalLogsCount: 0,
     currentPage: 1,
     logsPageSize: 10,
     logsSummary: {

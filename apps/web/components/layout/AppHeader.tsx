@@ -11,9 +11,18 @@ import {
   AnimatedShieldAlert,
 } from "@/components/ui/animated-icons";
 import type { User } from "@/lib/types/database";
+import dynamic from "next/dynamic";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
-import { CommandPalette } from "@/components/ui/CommandPalette";
-import { GlobalCreateModal } from "@/components/layout/GlobalCreateModal";
+
+const CommandPalette = dynamic(
+  () => import("@/components/ui/CommandPalette").then((mod) => mod.CommandPalette),
+  { ssr: false }
+);
+
+const GlobalCreateModal = dynamic(
+  () => import("@/components/layout/GlobalCreateModal").then((mod) => mod.GlobalCreateModal),
+  { ssr: false }
+);
 
 import { TooltipWrapper } from "@/components/ui";
 
@@ -131,12 +140,14 @@ export function AppHeader({ user }: AppHeaderProps) {
         </div>
       </header>
 
-      {/* Global Command Palette */}
-      <CommandPalette
-        isOpen={cmdOpen}
-        onClose={() => setCmdOpen(false)}
-        userRole={user.role}
-      />
+      {/* Global Command Palette (Lazy loaded strictly on shortcut or click) */}
+      {cmdOpen && (
+        <CommandPalette
+          isOpen={cmdOpen}
+          onClose={() => setCmdOpen(false)}
+          userRole={user.role}
+        />
+      )}
     </>
   );
 }

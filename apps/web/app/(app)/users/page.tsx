@@ -8,7 +8,7 @@ import {
   getUserListAggregatesCached,
   getSupervisorUserListAggregatesCached,
   USERS_PAGE_SIZE,
-} from "@/lib/queries/users";
+} from "@/lib/data/users";
 import { canViewUsers, canCreateUser } from "@reachinternational/permissions";
 import { UsersPageClient } from "./users-client";
 import { UsersSkeleton } from "@/components/ui";

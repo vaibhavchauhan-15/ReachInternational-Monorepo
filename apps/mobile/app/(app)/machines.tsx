@@ -102,22 +102,8 @@ const MACHINE_SELECT_COLUMNS = `
     id,
     code,
     company_name,
-    contact_person,
-    phone,
-    street,
     city,
-    district,
-    state,
-    pincode,
-    gstin,
-    pan_number,
-    is_billing_address_different,
-    billing_address,
-    billing_city,
-    billing_district,
-    billing_state,
-    billing_pincode,
-    status
+    state
   ),
   current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email, shift_time, role),
   current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email, shift_time, role)
@@ -220,8 +206,8 @@ export default function MachinesScreen() {
   const isSupervisor = normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor';
   const canCreate = isAdminOrManager;
 
-  // Fetch machines with full hydration, role scoping and resilient fallback
-  const fetchMachines = useCallback(async () => {
+  // Fetch machines with full hydration, role scoping, whole-DB trigram search, and resilient fallback
+  const fetchMachines = useCallback(async (searchQuery?: string) => {
     try {
       setFetchError(null);
 
@@ -236,7 +222,17 @@ export default function MachinesScreen() {
         query = query.or(`current_supervisor_id.eq.${user.id},supervisor_ids.cs.{${user.id}}`);
       }
 
-      const { data, error } = await query.order('created_at', { ascending: false });
+      // Search scope strictly machine_id, model, serial_number searching whole machine data
+      const activeSearch = typeof searchQuery === 'string' ? searchQuery : debouncedSearch;
+      const trimmed = activeSearch.trim();
+      if (trimmed) {
+        const sanitized = trimmed.replace(/[%_,()]/g, '');
+        if (sanitized) {
+          query = query.or(`machine_id.ilike.%${sanitized}%,model.ilike.%${sanitized}%,serial_number.ilike.%${sanitized}%`);
+        }
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false }).limit(100);
 
       let machinesData: any[] | null = data;
 
@@ -270,7 +266,14 @@ export default function MachinesScreen() {
           fallbackQuery = fallbackQuery.or(`current_supervisor_id.eq.${user.id},supervisor_ids.cs.{${user.id}}`);
         }
 
-        const { data: fallbackData, error: fallbackError } = await fallbackQuery.order('created_at', { ascending: false });
+        if (trimmed) {
+          const sanitized = trimmed.replace(/[%_,()]/g, '');
+          if (sanitized) {
+            fallbackQuery = fallbackQuery.or(`machine_id.ilike.%${sanitized}%,model.ilike.%${sanitized}%,serial_number.ilike.%${sanitized}%`);
+          }
+        }
+
+        const { data: fallbackData, error: fallbackError } = await fallbackQuery.order('created_at', { ascending: false }).limit(100);
 
         if (fallbackError) {
           console.error('Fallback machines query failed:', fallbackError);
@@ -449,7 +452,7 @@ export default function MachinesScreen() {
       setIsLoading(false);
       setRefreshing(false);
     }
-  }, [normalizedRole, user?.id]);
+  }, [normalizedRole, user?.id, debouncedSearch]);
 
   // Fetch active supervisors for filter dropdown
   useEffect(() => {
@@ -575,24 +578,14 @@ export default function MachinesScreen() {
   const filteredAndSortedMachines = useMemo(() => {
     let list = [...machines];
 
-    // Search query matching web logic using debouncedSearch
+    // Search query strictly scoped to machine_id, model, serial_number only
     const q = debouncedSearch.toLowerCase().trim();
     if (q) {
       list = list.filter((m) => {
         return (
           m.machine_id?.toLowerCase().includes(q) ||
           m.model?.toLowerCase().includes(q) ||
-          m.serial_number?.toLowerCase().includes(q) ||
-          m.manufacturer?.toLowerCase().includes(q) ||
-          m.year_of_mfg?.toLowerCase().includes(q) ||
-          m.client?.company_name?.toLowerCase().includes(q) ||
-          m.client?.code?.toLowerCase().includes(q) ||
-          m.client?.city?.toLowerCase().includes(q) ||
-          m.client?.state?.toLowerCase().includes(q) ||
-          (Array.isArray(m.supervisors) &&
-            m.supervisors.some((s: any) => s.full_name?.toLowerCase().includes(q))) ||
-          (Array.isArray(m.operators) &&
-            m.operators.some((o: any) => o.full_name?.toLowerCase().includes(q)))
+          m.serial_number?.toLowerCase().includes(q)
         );
       });
     }
@@ -1456,14 +1449,25 @@ export default function MachinesScreen() {
               },
             ]}
           >
-            <Wrench size={36} color={theme.colors.mute} />
+            <Search size={36} color={theme.colors.mute} />
             <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>
-              No machines found
+              {debouncedSearch.trim() ? `No machines matching "${debouncedSearch.trim()}"` : 'No machines found'}
             </Text>
             <Text style={[styles.emptySubtext, { color: theme.colors.mute }]}>
-              Try adjusting your search query or clear your active filter selections.
+              {debouncedSearch.trim()
+                ? 'No machine matches your search across Machine ID, Model, or Serial Number.'
+                : 'Try adjusting your search query or clear your active filter selections.'}
             </Text>
-            {activeFilterCount > 0 && (
+            {debouncedSearch.trim() ? (
+              <TouchableOpacity
+                onPress={handleClearSearch}
+                style={[styles.emptyResetBtn, { backgroundColor: theme.colors.ink }]}
+              >
+                <Text style={[styles.emptyResetBtnText, { color: theme.colors.canvas }]}>
+                  Clear Search
+                </Text>
+              </TouchableOpacity>
+            ) : activeFilterCount > 0 ? (
               <TouchableOpacity
                 onPress={handleResetAllFilters}
                 style={[styles.emptyResetBtn, { backgroundColor: theme.colors.ink }]}
@@ -1472,7 +1476,7 @@ export default function MachinesScreen() {
                   Reset All Filters
                 </Text>
               </TouchableOpacity>
-            )}
+            ) : null}
           </View>
         ) : (
           <View style={styles.cardsContainer}>
@@ -1482,6 +1486,7 @@ export default function MachinesScreen() {
                 machine={machine}
                 isAdmin={isAdminOrManager}
                 isSupervisor={isSupervisor}
+                searchTerm={debouncedSearch}
                 onViewDetails={(m) => setSelectedMachine(m)}
                 onEdit={(m) => {
                   setMachineToEdit(m);

@@ -152,7 +152,7 @@ export function DateRangePicker({
     }
   }, [value?.startDate]);
 
-  const { mounted, position, isPositioned, updatePosition } = useDynamicDropdownPosition({
+  const { mounted, position, isPositioned, portalTarget, updatePosition } = useDynamicDropdownPosition({
     isOpen: isCalendarOpen,
     triggerRef,
     popoverRef,
@@ -445,7 +445,7 @@ export function DateRangePicker({
       {/* ========================================================================= */}
       {/* DATE RANGE CALENDAR POPOVER (PORTALED WITH DYNAMIC VIEWPORT POSITIONING)   */}
       {/* ========================================================================= */}
-      {mounted && createPortal(
+      {mounted && portalTarget && createPortal(
         <AnimatePresence onExitComplete={() => setHoverDate("")}>
           {isCalendarOpen && isPositioned && (
             <motion.div
@@ -478,6 +478,7 @@ export function DateRangePicker({
                 width: `${position.width}px`,
                 maxHeight: `${position.maxHeight}px`,
                 zIndex: 99999,
+                pointerEvents: "auto",
                 transformOrigin: position.placement === "top" ? "bottom center" : "top center",
               }}
               className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden flex flex-col backdrop-blur-md"
@@ -649,7 +650,7 @@ export function DateRangePicker({
             </motion.div>
           )}
         </AnimatePresence>,
-        document.body
+        portalTarget
       )}
     </div>
   );

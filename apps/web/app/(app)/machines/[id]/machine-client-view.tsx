@@ -1,340 +1,335 @@
 "use client";
 
-import { useState, useTransition, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useMemo, useTransition, useEffect, useRef, lazy, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   AnimatedChevronLeft,
   AnimatedEdit,
+  AnimatedTrash,
+  AnimatedLoader,
   AnimatedCheck,
   AnimatedCopy,
   AnimatedMessageSquare,
-  AnimatedTrash,
-  AnimatedLoader,
 } from "@/components/ui/animated-icons";
 import { ScissorLiftLogoIcon } from "@/components/branding/ScissorLiftLogoIcon";
 import {
   Phone,
   Mail,
-  Check,
-  Copy,
   MapPin,
-  Building2,
-  ExternalLink,
-  RefreshCw,
-  AlertCircle,
   Clock,
-  Search,
-  X,
-  ChevronUp,
-  ChevronDown,
-  ArrowUpDown,
-  SlidersHorizontal,
-  Calendar,
-  Users,
-  UserCheck,
   Shield,
   Wrench,
+  Building2,
+  ExternalLink,
+  Check,
+  Copy,
+  ChevronDown,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Card,
-  CardHeader,
   Badge,
   Button,
-  EmptyState,
+  Card,
   FadeIn,
-  useToast,
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-  Pagination,
-  ConfirmationDialog,
+  EmptyState,
   SegmentedToggle,
+  useToast,
+  ConfirmationDialog,
+  type ClientSelectItem,
 } from "@/components/ui";
 import type { MachineWithEngineer } from "@/lib/types/database";
-import { formatDate, formatShiftTimingRange } from "@reachinternational/utils";
-import { deleteMachine, getMachineHourLogsAction } from "@/app/actions/machines";
+import type { User } from "@reachinternational/types";
+import { deleteMachine } from "@/app/actions/machines";
+import { formatDate } from "@reachinternational/utils";
+import {
+  MachineInfoModal,
+  MachinePersonnelModal,
+  MachineClientModal,
+} from "@/components/machines/MachineEditModals";
+
+// Heavy tabs — lazy loaded on demand
+const HMRTab = lazy(() => import("./tabs/HMRTab"));
+const AuditTab = lazy(() => import("./tabs/AuditTab"));
+
+// ─── Types ───
+type PersonnelPick = Pick<User, "id" | "full_name" | "phone" | "email" | "shift_time">;
 
 interface MachineClientViewProps {
   machine: MachineWithEngineer;
   activeRental?: any;
+  supervisors?: User[];
+  operators?: User[];
+  clients?: ClientSelectItem[];
   isAdmin: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
   isAssignedEngineer: boolean;
   currentUserId: string;
+  userRole?: string;
 }
 
+// ─── Skeletons ───
+function HMRSkeleton() {
+  return (
+    <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-6">
+      <div className="flex items-center gap-2 mb-4">
+        <AnimatedLoader isSpinning size={16} className="text-sky-500" />
+        <span className="text-xs font-medium text-[var(--color-mute)]">Loading hours meter logs...</span>
+      </div>
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-12 rounded-lg bg-[var(--color-hairline)] animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AuditSkeleton() {
+  return (
+    <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-6">
+      <div className="flex items-center gap-2 mb-4">
+        <AnimatedLoader isSpinning size={16} className="text-sky-500" />
+        <span className="text-xs font-medium text-[var(--color-mute)]">Loading audit trail...</span>
+      </div>
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-16 rounded-xl bg-[var(--color-hairline)] animate-pulse" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Mobile-optimized separate edit menu for the sticky Hero banner
+ */
+function MachineHeroEditMenu({
+  onEditInfo,
+  onEditPersonnel,
+  onEditClient,
+}: {
+  onEditInfo: () => void;
+  onEditPersonnel: () => void;
+  onEditClient: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [open]);
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <Button
+        variant="secondary"
+        size="sm"
+        icon={<AnimatedEdit size={14} className="text-[var(--color-ink)]" />}
+        onClick={() => setOpen((prev) => !prev)}
+        title="Edit Machine Options"
+        aria-label="Edit Machine Options"
+        aria-expanded={open}
+        className="h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1"
+      >
+        <span>Edit</span>
+        <ChevronDown size={11} className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </Button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 4 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+            className="absolute right-0 top-full mt-1.5 z-50 w-56 sm:w-64 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-1.5 shadow-xl text-xs space-y-1"
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onEditInfo();
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
+            >
+              <Wrench size={15} className="text-amber-500 shrink-0" />
+              <div className="flex flex-col min-w-0">
+                <span className="font-semibold text-xs text-[var(--color-ink)]">Edit Machine Info</span>
+                <span className="text-[10px] text-[var(--color-mute)]">Specs, HMR & Health</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onEditPersonnel();
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
+            >
+              <Shield size={15} className="text-teal-600 dark:text-teal-400 shrink-0" />
+              <div className="flex flex-col min-w-0">
+                <span className="font-semibold text-xs text-[var(--color-ink)]">Edit Personnel</span>
+                <span className="text-[10px] text-[var(--color-mute)]">Supervisors & Operators</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onEditClient();
+              }}
+              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
+            >
+              <Building2 size={15} className="text-sky-500 shrink-0" />
+              <div className="flex flex-col min-w-0">
+                <span className="font-semibold text-xs text-[var(--color-ink)]">Edit Client Assignment</span>
+                <span className="text-[10px] text-[var(--color-mute)]">Client & Rental Status</span>
+              </div>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// MAIN COMPONENT — Single Scrollable Full-Screen Page
+// ═══════════════════════════════════════════════════════
 export function MachineClientView({
   machine,
   activeRental = null,
+  supervisors = [],
+  operators = [],
+  clients = [],
   isAdmin,
   canEdit,
   canDelete,
+  userRole = "admin",
 }: MachineClientViewProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [isDeleting, startDeleteTransition] = useTransition();
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
+  const [copiedModel, setCopiedModel] = useState(false);
+  const [copiedSerial, setCopiedSerial] = useState(false);
+
+  // Tab state with dynamic URL searchParams synchronization
+  const initialTab = useMemo(() => {
+    const t = searchParams.get("tab");
+    if (t === "running_hours" || t === "logs" || t === "hmr") return "running_hours";
+    if (t === "audit_trail" || t === "audit") return "audit_trail";
+    return "overview";
+  }, [searchParams]);
+
+  const [activeTab, setActiveTab] = useState<"overview" | "running_hours" | "audit_trail">(initialTab);
+
+  useEffect(() => {
+    const t = searchParams.get("tab");
+    if (t === "running_hours" || t === "logs" || t === "hmr") setActiveTab("running_hours");
+    else if (t === "audit_trail" || t === "audit") setActiveTab("audit_trail");
+  }, [searchParams]);
+
+  // Local state representing live machine record (instantly updated on modal save)
+  const [machineData, setMachineData] = useState<MachineWithEngineer>(machine);
+  useEffect(() => {
+    setMachineData(machine);
+  }, [machine]);
+
+  // Separate Modal States
+  const [infoModalOpen, setInfoModalOpen] = useState(false);
+  const [personnelModalOpen, setPersonnelModalOpen] = useState(false);
+  const [clientModalOpen, setClientModalOpen] = useState(false);
+
+  // Global mobile header action listener
+  useEffect(() => {
+    const handleEditInfo = () => setInfoModalOpen(true);
+    const handleEditPersonnel = () => setPersonnelModalOpen(true);
+    const handleEditClient = () => setClientModalOpen(true);
+
+    window.addEventListener("reach:edit-machine-info", handleEditInfo);
+    window.addEventListener("reach:edit-machine-personnel", handleEditPersonnel);
+    window.addEventListener("reach:edit-machine-client", handleEditClient);
+
+    return () => {
+      window.removeEventListener("reach:edit-machine-info", handleEditInfo);
+      window.removeEventListener("reach:edit-machine-personnel", handleEditPersonnel);
+      window.removeEventListener("reach:edit-machine-client", handleEditClient);
+    };
+  }, []);
+
+  const handleMachineUpdated = (updatedFields: Partial<MachineWithEngineer>) => {
+    setMachineData((prev) => ({
+      ...prev,
+      ...updatedFields,
+    }));
+  };
+
+  // Client detail copy states
   const [copiedAddress, setCopiedAddress] = useState(false);
   const [copiedBillingAddress, setCopiedBillingAddress] = useState(false);
   const [copiedGstin, setCopiedGstin] = useState(false);
   const [copiedPan, setCopiedPan] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "running_hours">("overview");
-
-  // Lazy loading state for machine hour meter running logs
-  const [hourMeterLogs, setHourMeterLogs] = useState<any[] | null>(null);
-  const [isLoadingLogs, setIsLoadingLogs] = useState(false);
-  const [logsError, setLogsError] = useState<string | null>(null);
-  const [hasLoadedLogs, setHasLoadedLogs] = useState(false);
-
-  // Hour meter logs filtering, searching, sorting & pagination state
-  const [logSearchQuery, setLogSearchQuery] = useState("");
-  const [logDateFilter, setLogDateFilter] = useState<"all" | "7d" | "30d" | "month">("all");
-  const [logOperatorFilter, setLogOperatorFilter] = useState<string>("all");
-  const [logSortBy, setLogSortBy] = useState<"date" | "running_hours" | "start_meter" | "end_meter">("date");
-  const [logSortOrder, setLogSortOrder] = useState<"asc" | "desc">("desc");
-  const [showFilterSort, setShowFilterSort] = useState(false);
-  const [logPage, setLogPage] = useState(1);
-  const [logPageSize, setLogPageSize] = useState(10);
 
   const allowEdit = canEdit ?? isAdmin;
   const allowDelete = canDelete ?? isAdmin;
 
-  // Title formatting: Machine Model - Serial no (with graceful fallbacks)
+  // ─── Derived Data ───
   const machineTitle =
-    [machine.model, machine.serial_number].filter(Boolean).join(" - ") ||
-    machine.machine_id ||
+    [machineData.model, machineData.serial_number].filter(Boolean).join(" - ") ||
+    machineData.machine_id ||
     "Machine Details";
 
-  const loadHourMeterLogs = useCallback(async () => {
-    setIsLoadingLogs(true);
-    setLogsError(null);
-    try {
-      const res = await getMachineHourLogsAction(machine.id);
-      if (res.success && res.logs) {
-        setHourMeterLogs(res.logs);
-        setHasLoadedLogs(true);
-      } else {
-        setLogsError(res.error || "Failed to load hour meter running logs.");
-        setHourMeterLogs([]);
-        setHasLoadedLogs(true);
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "An unexpected network error occurred.";
-      setLogsError(msg);
-      setHourMeterLogs([]);
-      setHasLoadedLogs(true);
-    } finally {
-      setIsLoadingLogs(false);
+  const assignedSupervisors = useMemo((): PersonnelPick[] => {
+    if (Array.isArray(machineData.supervisors) && machineData.supervisors.length > 0) return machineData.supervisors;
+    if (Array.isArray(machineData.supervisor_ids) && machineData.supervisor_ids.length > 0 && supervisors.length > 0) {
+      const fromProp = supervisors.filter((s) => machineData.supervisor_ids?.includes(s.id));
+      if (fromProp.length > 0) return fromProp;
     }
-  }, [machine.id]);
-
-  const handleTabChange = (tabId: "overview" | "running_hours") => {
-    setActiveTab(tabId);
-    if (tabId === "running_hours" && !hasLoadedLogs && !isLoadingLogs) {
-      loadHourMeterLogs();
-    }
-  };
-
-  const handleDeleteMachine = () => {
-    startDeleteTransition(async () => {
-      const res = await deleteMachine(machine.id);
-      if (res?.error) {
-        toast("error", "Failed to delete machine", res.error);
-        setDeleteConfirmOpen(false);
-      } else {
-        toast("success", "Machine deleted", `${machine.machine_id} has been permanently deleted.`);
-        setDeleteConfirmOpen(false);
-        router.push("/machines");
-      }
-    });
-  };
-
-  const handleCopyMachineId = () => {
-    navigator.clipboard.writeText(machine.machine_id || machine.machine_code || "");
-    setCopiedId(true);
-    toast("success", "Copied!", `Machine ID ${machine.machine_id} copied to clipboard.`);
-    setTimeout(() => setCopiedId(false), 2000);
-  };
-
-  const assignedSupervisors = useMemo(() => {
-    if (Array.isArray(machine.supervisors) && machine.supervisors.length > 0) {
-      return machine.supervisors;
-    }
-    if (machine.current_supervisor) {
-      return [machine.current_supervisor];
-    }
+    if (machineData.current_supervisor) return [machineData.current_supervisor];
     return [];
-  }, [machine.supervisors, machine.current_supervisor]);
+  }, [machineData.supervisors, machineData.supervisor_ids, machineData.current_supervisor, supervisors]);
 
-  const assignedOperators = useMemo(() => {
-    if (Array.isArray(machine.operators) && machine.operators.length > 0) {
-      return machine.operators;
+  const assignedOperators = useMemo((): PersonnelPick[] => {
+    if (Array.isArray(machineData.operators) && machineData.operators.length > 0) return machineData.operators;
+    if (Array.isArray(machineData.operator_ids) && machineData.operator_ids.length > 0 && operators.length > 0) {
+      const fromProp = operators.filter((o) => machineData.operator_ids?.includes(o.id));
+      if (fromProp.length > 0) return fromProp;
     }
-    if (machine.current_operator) {
-      return [machine.current_operator];
-    }
+    if (machineData.current_operator) return [machineData.current_operator];
     return [];
-  }, [machine.operators, machine.current_operator]);
+  }, [machineData.operators, machineData.operator_ids, machineData.current_operator, operators]);
 
-  // Derived unique operators list for filter dropdown
-  const availableOperators = useMemo(() => {
-    if (!hourMeterLogs) return [];
-    const opsMap = new Map<string, string>();
-    hourMeterLogs.forEach((log: any) => {
-      const id = log.operator_id || log.operator?.id;
-      const name = log.operator?.full_name || log.operator_name;
-      if (id && name) opsMap.set(id, name);
-      else if (name) opsMap.set(name, name);
-    });
-    return Array.from(opsMap.entries()).map(([id, name]) => ({ id, name }));
-  }, [hourMeterLogs]);
-
-  // High-performance filter & sort pipeline
-  const filteredAndSortedLogs = useMemo(() => {
-    if (!hourMeterLogs || hourMeterLogs.length === 0) return [];
-    let list = [...hourMeterLogs];
-
-    // 1. Text Search (operator, remarks, date, meter)
-    if (logSearchQuery.trim()) {
-      const q = logSearchQuery.toLowerCase().trim();
-      list = list.filter((log: any) => {
-        const opName = (log.operator?.full_name || log.operator_name || "").toLowerCase();
-        const remarks = (log.remarks || "").toLowerCase();
-        const dateStr = log.log_date ? formatDate(log.log_date).toLowerCase() : "";
-        const startM = String(log.start_meter ?? "");
-        const endM = String(log.end_meter ?? "");
-        return (
-          opName.includes(q) ||
-          remarks.includes(q) ||
-          dateStr.includes(q) ||
-          startM.includes(q) ||
-          endM.includes(q)
-        );
-      });
-    }
-
-    // 2. Date Preset Filter
-    if (logDateFilter !== "all") {
-      const now = new Date();
-      list = list.filter((log: any) => {
-        if (!log.log_date) return false;
-        const logD = new Date(log.log_date);
-        if (isNaN(logD.getTime())) return true;
-        if (logDateFilter === "7d") {
-          const past7 = new Date(now);
-          past7.setDate(past7.getDate() - 7);
-          return logD >= past7;
-        }
-        if (logDateFilter === "30d") {
-          const past30 = new Date(now);
-          past30.setDate(past30.getDate() - 30);
-          return logD >= past30;
-        }
-        if (logDateFilter === "month") {
-          return logD.getMonth() === now.getMonth() && logD.getFullYear() === now.getFullYear();
-        }
-        return true;
-      });
-    }
-
-    // 3. Operator Filter
-    if (logOperatorFilter !== "all") {
-      list = list.filter((log: any) => {
-        const opId = log.operator_id || log.operator?.id;
-        const opName = log.operator?.full_name || log.operator_name;
-        return opId === logOperatorFilter || opName === logOperatorFilter;
-      });
-    }
-
-    // 4. Sorting
-    list.sort((a: any, b: any) => {
-      let comparison = 0;
-      if (logSortBy === "date") {
-        const dateA = new Date(a.log_date || 0).getTime();
-        const dateB = new Date(b.log_date || 0).getTime();
-        comparison = dateA - dateB;
-      } else if (logSortBy === "running_hours") {
-        comparison = (Number(a.running_hours) || 0) - (Number(b.running_hours) || 0);
-      } else if (logSortBy === "start_meter") {
-        comparison = (Number(a.start_meter) || 0) - (Number(b.start_meter) || 0);
-      } else if (logSortBy === "end_meter") {
-        comparison = (Number(a.end_meter) || 0) - (Number(b.end_meter) || 0);
-      }
-      return logSortOrder === "asc" ? comparison : -comparison;
-    });
-
-    return list;
-  }, [hourMeterLogs, logSearchQuery, logDateFilter, logOperatorFilter, logSortBy, logSortOrder]);
-
-  // Active filter count for badge indicator
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (logDateFilter !== "all") count++;
-    if (logOperatorFilter !== "all") count++;
-    if (logSortBy !== "date" || logSortOrder !== "desc") count++;
-    return count;
-  }, [logDateFilter, logOperatorFilter, logSortBy, logSortOrder]);
-
-  // Overall and filtered KPI stats
-  const logStats = useMemo(() => {
-    const totalHours = filteredAndSortedLogs.reduce((acc, log: any) => acc + (Number(log.running_hours) || 0), 0);
-    return {
-      count: filteredAndSortedLogs.length,
-      totalHours: Number(totalHours.toFixed(1)),
-    };
-  }, [filteredAndSortedLogs]);
-
-  // Paginated records
-  const paginatedLogs = useMemo(() => {
-    const start = (logPage - 1) * logPageSize;
-    return filteredAndSortedLogs.slice(start, start + logPageSize);
-  }, [filteredAndSortedLogs, logPage, logPageSize]);
-
-  const isAnyFilterActive =
-    Boolean(logSearchQuery.trim()) ||
-    logDateFilter !== "all" ||
-    logOperatorFilter !== "all" ||
-    logSortBy !== "date" ||
-    logSortOrder !== "desc";
-
-  const handleResetFilters = () => {
-    setLogSearchQuery("");
-    setLogDateFilter("all");
-    setLogOperatorFilter("all");
-    setLogSortBy("date");
-    setLogSortOrder("desc");
-    setLogPage(1);
-  };
-
-  const handleSort = (column: "date" | "running_hours" | "start_meter" | "end_meter") => {
-    if (logSortBy === column) {
-      setLogSortOrder((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setLogSortBy(column);
-      setLogSortOrder("desc");
-    }
-  };
-
-  // Linked Client Data from public.clients table (Supabase) via machine.client or activeRental.client
-  const client = machine.client || activeRental?.client || null;
-  const clientCompanyName = client?.company_name || machine.customer_name || "";
+  // Client data
+  const client = machineData.client || activeRental?.client || null;
+  const clientCompanyName = client?.company_name || machineData.customer_name || "";
   const clientCode = client?.code || "";
   const clientContactPerson = client?.contact_person || "";
-  const clientPhone = client?.phone || machine.customer_mobile || "";
-  const clientEmail = (client as any)?.email || machine.customer_email || "";
+  const clientPhone = client?.phone || machineData.customer_mobile || "";
+  const clientEmail = (client as any)?.email || machineData.customer_email || "";
   const clientGstin = client?.gstin || "";
   const clientPan = client?.pan_number || "";
-  const clientAddress = client?.street || client?.address || machine.customer_address || "";
-  const clientCity = client?.city || machine.city || "";
+  const clientAddress = (client as any)?.street || client?.address || machineData.customer_address || "";
+  const clientCity = client?.city || machineData.city || "";
   const clientDistrict = client?.district || "";
-  const clientState = client?.state || machine.state || "";
+  const clientState = client?.state || machineData.state || "";
   const clientPincode = client?.pincode || "";
   const isBillingAddressDifferent = Boolean(client?.is_billing_address_different);
   const billingAddress = client?.billing_address || "";
@@ -348,59 +343,54 @@ export function MachineClientView({
   const hasLinkedClient = Boolean(clientCompanyName || clientAddress || clientPhone || client?.id);
 
   const fullSiteAddress = [clientAddress, clientLocation, clientPincode ? `PIN: ${clientPincode}` : ""]
-    .filter(Boolean)
-    .join(", ");
-
+    .filter(Boolean).join(", ");
   const fullBillingAddress = [
-    billingAddress,
-    [billingCity, billingDistrict, billingState].filter(Boolean).join(", "),
+    billingAddress, [billingCity, billingDistrict, billingState].filter(Boolean).join(", "),
     billingPincode ? `PIN: ${billingPincode}` : "",
-  ]
-    .filter(Boolean)
-    .join(", ");
-
-  const handleCopySiteAddress = () => {
-    navigator.clipboard.writeText(fullSiteAddress || "—");
-    setCopiedAddress(true);
-    toast("info", "Address Copied!", "Site location address copied to clipboard.");
-    setTimeout(() => setCopiedAddress(false), 2000);
-  };
-
-  const handleCopyBillingAddress = () => {
-    navigator.clipboard.writeText(fullBillingAddress || "—");
-    setCopiedBillingAddress(true);
-    toast("info", "Billing Address Copied!", "Billing address copied to clipboard.");
-    setTimeout(() => setCopiedBillingAddress(false), 2000);
-  };
-
-  const handleCopyGstin = () => {
-    if (!clientGstin) return;
-    navigator.clipboard.writeText(clientGstin);
-    setCopiedGstin(true);
-    toast("info", "GSTIN Copied!", `${clientGstin} copied to clipboard.`);
-    setTimeout(() => setCopiedGstin(false), 2000);
-  };
-
-  const handleCopyPan = () => {
-    if (!clientPan) return;
-    navigator.clipboard.writeText(clientPan);
-    setCopiedPan(true);
-    toast("info", "PAN Copied!", `${clientPan} copied to clipboard.`);
-    setTimeout(() => setCopiedPan(false), 2000);
-  };
+  ].filter(Boolean).join(", ");
 
   const cleanPhone = clientPhone ? clientPhone.replace(/[^0-9+]/g, "") : "";
   const whatsappUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(
-    `Hello ${clientContactPerson || clientCompanyName || "Client"}, regarding machine ${machine.model ? `${machine.model} (${machine.machine_id})` : machine.machine_id}.`
+    `Hello ${clientContactPerson || clientCompanyName || "Client"}, regarding machine ${machineData.model ? `${machineData.model} (${machineData.machine_id})` : machineData.machine_id}.`
   )}`;
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
     `${clientCompanyName} ${clientAddress} ${clientLocation}`.trim()
   )}`;
 
+  // ─── Handlers ───
+  const handleCopyMachineId = () => {
+    navigator.clipboard.writeText(machineData.machine_id || machineData.machine_code || "");
+    setCopiedId(true);
+    setTimeout(() => setCopiedId(false), 2000);
+  };
+
+  const handleDeleteMachine = () => {
+    startDeleteTransition(async () => {
+      const res = await deleteMachine(machineData.id);
+      if (res?.error) {
+        toast("error", "Failed to delete machine", res.error);
+        setDeleteConfirmOpen(false);
+      } else {
+        toast("success", "Machine deleted", `${machineData.machine_id} has been permanently deleted.`);
+        setDeleteConfirmOpen(false);
+        router.push("/machines");
+      }
+    });
+  };
+
+  const handleCopy = (text: string, setter: (v: boolean) => void, label: string) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setter(true);
+    toast("info", `${label} Copied!`, `${label} copied to clipboard.`);
+    setTimeout(() => setter(false), 2000);
+  };
+
   return (
-    <div className="flex flex-col gap-4 sm:gap-6 pb-20 md:pb-8 max-w-7xl mx-auto px-2 sm:px-4 md:px-6 w-full">
-      {/* Top Breadcrumb Navigation */}
-      <FadeIn className="flex items-center justify-between">
+    <div className="flex flex-col gap-4 sm:gap-5 pb-20 md:pb-8 max-w-7xl mx-auto px-2 sm:px-4 md:px-6 w-full">
+
+      {/* ═══════════ BREADCRUMB ═══════════ */}
+      <FadeIn className="hidden sm:flex items-center justify-between">
         <Link
           href="/machines"
           className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-medium text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors group py-1"
@@ -412,101 +402,201 @@ export function MachineClientView({
         </Link>
       </FadeIn>
 
-      {/* Hero Machine Banner Card */}
-      <FadeIn delay={0.05}>
-        <div className="relative overflow-hidden rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-5 md:p-6 shadow-2xs transition-all">
-          <div className="absolute top-0 right-0 -mr-16 -mt-16 h-48 w-48 rounded-full bg-[var(--color-link)]/10 blur-3xl pointer-events-none" />
+      {/* ═══════════ STATIC HEADER & NAVIGATION ZONE ═══════════ */}
+      <div className="relative w-full flex flex-col gap-2.5 sm:gap-3">
+        {/* HERO MACHINE BANNER */}
+        <div className="rounded-xl sm:rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3 sm:p-4 md:p-5 shadow-2xs transition-all">
+          {/* ── Mobile Layout (≤640px): Standard Mobile Hierarchy ── */}
+          <div className="flex flex-col gap-2.5 sm:hidden">
+            {/* Row 1: Icon + Title & Machine ID + Right Actions */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <motion.div
+                  whileTap={{ scale: 0.95 }}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neutral-900 text-white shadow-2xs border border-neutral-800"
+                >
+                  <ScissorLiftLogoIcon size={20} className="text-sky-400" />
+                </motion.div>
+                <div className="flex flex-col min-w-0 flex-1">
+                  <h1
+                    className="text-[15px] font-extrabold text-[var(--color-ink)] tracking-tight truncate leading-tight"
+                    title={machineTitle}
+                  >
+                    {machineTitle}
+                  </h1>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="text-[11px] font-mono font-semibold text-[var(--color-mute)] truncate">
+                      {machineData.machine_id}
+                    </span>
+                    {machineData.manufacturer && (
+                      <>
+                        <span className="text-[10px] text-[var(--color-mute)]">•</span>
+                        <span className="text-[11px] font-medium text-[var(--color-mute)] truncate">
+                          {machineData.manufacturer}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
 
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 relative z-10">
-            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+              {/* Right: Separate Edit Menu + Delete on header (Touch-friendly 34-36px hit targets) */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                {allowEdit && (
+                  <MachineHeroEditMenu
+                    onEditInfo={() => setInfoModalOpen(true)}
+                    onEditPersonnel={() => setPersonnelModalOpen(true)}
+                    onEditClient={() => setClientModalOpen(true)}
+                  />
+                )}
+                {allowDelete && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    responsive
+                    mobileIconOnly
+                    icon={<AnimatedTrash size={14} />}
+                    onClick={() => setDeleteConfirmOpen(true)}
+                    disabled={isDeleting}
+                    title="Delete Machine"
+                    aria-label="Delete Machine"
+                    className="h-8.5 w-8.5 min-h-[34px] min-w-[34px] p-0 flex items-center justify-center rounded-lg"
+                  >
+                    Delete
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Row 2: Status Badges (Full width, side-by-side, no cramped wrapping) */}
+            <div className="flex items-center gap-2 pt-2 border-t border-[var(--color-hairline)] overflow-x-auto flex-nowrap custom-scrollbar">
+              <Badge
+                variant={
+                  machineData.health_status === "breakdown"
+                    ? "overdue"
+                    : machineData.health_status === "under_maintenance"
+                    ? "warning"
+                    : machineData.health_status === "spare"
+                    ? "spare"
+                    : "success"
+                }
+                dot
+              >
+                <span className="capitalize font-semibold text-[11px]">
+                  {machineData.health_status === "breakdown"
+                    ? "Breakdown"
+                    : machineData.health_status === "under_maintenance"
+                    ? "Under Maintenance"
+                    : machineData.health_status === "spare"
+                    ? "Spare"
+                    : "Active"}
+                </span>
+              </Badge>
+              <Badge
+                variant={
+                  machineData.status === "on_rent" || machineData.status === "rented"
+                    ? "info"
+                    : machineData.status === "under_maintenance"
+                    ? "warning"
+                    : "neutral"
+                }
+                dot
+              >
+                <span className="capitalize font-semibold text-[11px]">
+                  {machineData.status === "on_rent" || machineData.status === "rented"
+                    ? "On Rent"
+                    : machineData.status === "under_maintenance"
+                    ? "Under Maintenance"
+                    : "Available"}
+                </span>
+              </Badge>
+            </div>
+          </div>
+
+          {/* ── Desktop & Tablet Layout (≥641px): Full Width Multi-Col ── */}
+          <div className="hidden sm:flex items-center justify-between gap-4">
+            {/* Left: Scissor Lift Icon + Title + Status Badges */}
+            <div className="flex items-center gap-3.5 min-w-0 flex-1">
               <motion.div
-                whileHover={{ scale: 1.05, rotate: 2 }}
+                whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                className="flex h-11 w-11 sm:h-13 sm:w-13 shrink-0 items-center justify-center rounded-xl bg-neutral-900 text-white shadow-md border border-neutral-800"
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-neutral-900 text-white shadow-2xs border border-neutral-800"
               >
                 <ScissorLiftLogoIcon size={24} className="text-sky-400" />
               </motion.div>
-
-              <div className="flex flex-col gap-1 min-w-0 flex-1">
-                {/* Title: Machine Model - Serial no */}
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                  <h1 className="text-lg sm:text-2xl md:text-3xl font-extrabold text-[var(--color-ink)] tracking-tight">
-                    {machineTitle}
-                  </h1>
-
-                  {/* Health Status Badge */}
+              <div className="flex flex-col min-w-0 flex-1 gap-1">
+                <h1
+                  className="text-xl md:text-2xl font-extrabold text-[var(--color-ink)] tracking-tight truncate"
+                  title={machineTitle}
+                >
+                  {machineTitle}
+                </h1>
+                {/* Health Status + Rent Status Badges */}
+                <div className="flex flex-wrap items-center gap-2">
                   <Badge
                     variant={
-                      machine.health_status === "breakdown"
+                      machineData.health_status === "breakdown"
                         ? "overdue"
-                        : machine.health_status === "under_maintenance"
+                        : machineData.health_status === "under_maintenance"
                         ? "warning"
-                        : machine.health_status === "spare"
+                        : machineData.health_status === "spare"
                         ? "spare"
                         : "success"
                     }
                     dot
                   >
-                    <span className="capitalize font-semibold text-[11px] sm:text-xs">
-                      {machine.health_status === "breakdown"
+                    <span className="capitalize font-semibold text-xs">
+                      {machineData.health_status === "breakdown"
                         ? "Breakdown"
-                        : machine.health_status === "under_maintenance"
+                        : machineData.health_status === "under_maintenance"
                         ? "Under Maintenance"
-                        : machine.health_status === "spare"
+                        : machineData.health_status === "spare"
                         ? "Spare"
                         : "Active"}
                     </span>
                   </Badge>
-
-                  {/* Rental Fleet Status Badge */}
                   <Badge
                     variant={
-                      machine.status === "on_rent" || machine.status === "rented"
+                      machineData.status === "on_rent" || machineData.status === "rented"
                         ? "info"
-                        : machine.status === "active"
-                        ? "success"
-                        : machine.status === "under_maintenance"
+                        : machineData.status === "under_maintenance"
                         ? "warning"
                         : "neutral"
                     }
+                    dot
                   >
-                    <span className="capitalize font-semibold text-[11px] sm:text-xs">
-                      {machine.status === "on_rent" || machine.status === "rented"
+                    <span className="capitalize font-semibold text-xs">
+                      {machineData.status === "on_rent" || machineData.status === "rented"
                         ? "On Rent"
-                        : machine.status === "under_maintenance"
+                        : machineData.status === "under_maintenance"
                         ? "Under Maintenance"
-                        : machine.status === "available"
-                        ? "Available"
-                        : machine.status}
+                        : "Available"}
                     </span>
                   </Badge>
                 </div>
               </div>
             </div>
 
-            {/* Header Action Buttons (Icon-only on mobile, full labeled on desktop) */}
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 self-end sm:self-center">
+            {/* Right: Separate Edit Menu + Delete on header (Optimized for Desktop) */}
+            <div className="flex items-center gap-2 shrink-0">
               {allowEdit && (
-                <Button
-                  variant="secondary"
-                  icon={<AnimatedEdit size={15} className="text-[var(--color-ink)]" />}
-                  responsive
-                  mobileIconOnly
-                  title="Edit Machine Details"
-                  href={`/machines/${machine.id}/edit`}
-                >
-                  Edit Machine
-                </Button>
+                <MachineHeroEditMenu
+                  onEditInfo={() => setInfoModalOpen(true)}
+                  onEditPersonnel={() => setPersonnelModalOpen(true)}
+                  onEditClient={() => setClientModalOpen(true)}
+                />
               )}
               {allowDelete && (
                 <Button
                   variant="destructive"
-                  icon={<AnimatedTrash size={15} />}
+                  size="sm"
                   responsive
                   mobileIconOnly
-                  title="Delete Machine"
+                  icon={<AnimatedTrash size={14} />}
                   onClick={() => setDeleteConfirmOpen(true)}
                   disabled={isDeleting}
+                  title="Delete Machine"
+                  aria-label="Delete Machine"
                 >
                   Delete
                 </Button>
@@ -514,1018 +604,383 @@ export function MachineClientView({
             </div>
           </div>
         </div>
+
+        {/* TAB NAVIGATION TOGGLE / NAVBAR */}
+        <div className="flex items-center justify-between gap-2">
+          <SegmentedToggle
+            items={[
+              { id: "overview", label: "Basic Info" },
+              { id: "running_hours", label: "HMR" },
+              { id: "audit_trail", label: "Audit" },
+            ]}
+            value={activeTab}
+            onChange={setActiveTab}
+            size="sm"
+          />
+        </div>
+      </div>
+
+      {/* ═══════════ TAB 1: BASIC INFO & CLIENT (ALL LIGHT DATA ON SAME SCREEN) ═══════════ */}
+      {activeTab === "overview" && (
+        <div className="flex flex-col gap-4 sm:gap-5">
+          {/* ═══════════ SECTION 1: BASIC INFO ═══════════ */}
+          <FadeIn delay={0.1}>
+        <Card padding="md" className="card-hover-system sm:p-6">
+          <div className="flex items-center justify-between gap-2 pb-3 border-b border-[var(--color-hairline)]">
+            <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">Basic Info</h3>
+            {allowEdit && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<AnimatedEdit size={12} className="text-[var(--color-ink)]" />}
+                onClick={() => setInfoModalOpen(true)}
+                title="Edit Machine Info"
+                aria-label="Edit Machine Info"
+                className="h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1"
+              >
+                <span>Edit</span>
+              </Button>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5 mt-3.5 text-xs sm:text-sm">
+            {/* Machine ID */}
+            <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
+              <div className="flex items-center justify-between gap-1 mb-0.5">
+                <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Machine ID</span>
+                <button type="button" onClick={handleCopyMachineId} title="Copy Machine ID" className="text-[10px] text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-0.5 cursor-pointer">
+                  {copiedId ? <AnimatedCheck size={10} className="text-emerald-600" /> : <AnimatedCopy size={10} />}
+                </button>
+              </div>
+              <span className="font-bold text-[var(--color-ink)] font-mono text-xs sm:text-sm">{machineData.machine_id}</span>
+            </div>
+            {/* Model */}
+            <InfoCell
+              label="Model"
+              value={machineData.model || "—"}
+              copyable={Boolean(machineData.model)}
+              copied={copiedModel}
+              onCopy={() => handleCopy(machineData.model || "", setCopiedModel, "Model")}
+            />
+            {/* Serial No */}
+            <InfoCell
+              label="Serial No"
+              value={machineData.serial_number || "—"}
+              mono
+              copyable={Boolean(machineData.serial_number)}
+              copied={copiedSerial}
+              onCopy={() => handleCopy(machineData.serial_number || "", setCopiedSerial, "Serial Number")}
+            />
+            {/* Year of Mfg */}
+            <InfoCell label="Year Of Mfg (YUM)" value={machineData.year_of_mfg || "—"} />
+            {/* Manufacturer */}
+            <InfoCell label="Manufacturer" value={machineData.manufacturer || "—"} />
+            {/* HMR */}
+            <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
+              <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Hour Meter (HMR)</span>
+              <span className="font-bold text-sky-600 dark:text-sky-400 font-mono text-xs sm:text-sm">{machineData.hour_meter ?? 0} hrs</span>
+            </div>
+            {/* Supervisors */}
+            <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
+              <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Supervisors</span>
+              <div className="flex items-center justify-between gap-1.5 min-w-0">
+                <span
+                  className="font-bold text-[var(--color-ink)] text-xs sm:text-sm truncate"
+                  title={assignedSupervisors.length > 0 ? assignedSupervisors.map((s) => s.full_name).join(", ") : undefined}
+                >
+                  {assignedSupervisors.length > 0 ? assignedSupervisors.map((s) => s.full_name).join(", ") : "—"}
+                </span>
+                {assignedSupervisors.length > 0 && (
+                  <Badge variant="info" className="text-[10px] px-1.5 py-0 shrink-0">{assignedSupervisors.length}</Badge>
+                )}
+              </div>
+            </div>
+            {/* Operators */}
+            <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
+              <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Operators</span>
+              <div className="flex items-center justify-between gap-1.5 min-w-0">
+                <span
+                  className="font-bold text-[var(--color-ink)] text-xs sm:text-sm truncate"
+                  title={assignedOperators.length > 0 ? assignedOperators.map((o) => o.full_name).join(", ") : undefined}
+                >
+                  {assignedOperators.length > 0 ? assignedOperators.map((o) => o.full_name).join(", ") : "—"}
+                </span>
+                {assignedOperators.length > 0 && (
+                  <Badge variant="warning" className="text-[10px] px-1.5 py-0 shrink-0">{assignedOperators.length}</Badge>
+                )}
+              </div>
+            </div>
+          </div>
+        </Card>
       </FadeIn>
 
-      {/* Segmented Toggle Navigation Bar (Optimized for Mobile & Desktop) */}
-      <SegmentedToggle<"overview" | "running_hours">
-        value={activeTab}
-        onChange={handleTabChange}
-        layoutIdPrefix="machine-view-tab"
-        items={[
-          {
-            id: "overview",
-            label: (
-              <span>
-                <span className="sm:hidden">Basic Info</span>
-                <span className="hidden sm:inline">Basic Info & Client</span>
-              </span>
-            ),
-          },
-          {
-            id: "running_hours",
-            label: (
-              <span>
-                <span className="sm:hidden">Running Logs</span>
-                <span className="hidden sm:inline">Hours Meter Logs</span>
-              </span>
-            ),
-            badge: isLoadingLogs ? (
-              <span className="inline-flex items-center ml-0.5 shrink-0">
-                <AnimatedLoader isSpinning size={12} className="text-sky-500" />
-              </span>
-            ) : null,
-            count: hasLoadedLogs && hourMeterLogs !== null ? hourMeterLogs.length : undefined,
-          },
-        ]}
-      />
+      {/* ═══════════ SECTION 2: ASSIGNED SHIFT PERSONNEL ═══════════ */}
+      <FadeIn delay={0.15}>
+        <Card padding="md" className="card-hover-system sm:p-6">
+          <div className="flex items-center justify-between gap-2 pb-3 border-b border-[var(--color-hairline)]">
+            <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">
+              Assigned Shift Personnel
+            </h3>
+            {allowEdit && (
+              <Button
+                variant="secondary"
+                size="sm"
+                icon={<AnimatedEdit size={12} className="text-[var(--color-ink)]" />}
+                onClick={() => setPersonnelModalOpen(true)}
+                title="Edit Assigned Personnel"
+                aria-label="Edit Assigned Personnel"
+                className="h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1"
+              >
+                <span>Edit</span>
+              </Button>
+            )}
+          </div>
 
-      {/* Main Tab Content Panels */}
-      <AnimatePresence mode="wait">
-        {/* TAB 1: BASIC INFO & CLIENT */}
-        {activeTab === "overview" && (
-          <motion.div
-            key="overview"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.18 }}
-            className="flex flex-col gap-4 sm:gap-6"
-          >
-            {/* Basic Info Card */}
-            <Card padding="md" className="card-hover-system sm:p-6">
-              <div className="flex items-center justify-between gap-2 pb-3 border-b border-[var(--color-hairline)]">
-                <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">
-                  Basic Info
-                </h3>
-                <Badge variant={machine.status === "rented" || machine.status === "on_rent" ? "info" : "neutral"} dot>
-                  <span className="font-semibold uppercase tracking-wider text-[10px] sm:text-xs">
-                    {machine.status === "rented" || machine.status === "on_rent" ? "On Rent" : "Available"}
-                  </span>
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5 mt-3.5 text-xs sm:text-sm">
-                <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <div className="flex items-center justify-between gap-1 mb-0.5">
-                    <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Machine ID</span>
-                    <button
-                      type="button"
-                      onClick={handleCopyMachineId}
-                      title="Copy Unique Machine ID"
-                      className="text-[10px] text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-0.5 cursor-pointer"
-                    >
-                      {copiedId ? (
-                        <AnimatedCheck size={10} className="text-emerald-600" />
-                      ) : (
-                        <AnimatedCopy size={10} className="text-[var(--color-mute)]" />
-                      )}
-                    </button>
-                  </div>
-                  <span className="font-bold text-[var(--color-ink)] font-mono text-xs sm:text-sm">{machine.machine_id}</span>
-                </div>
-
-                <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Model</span>
-                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm">{machine.model || "—"}</span>
-                </div>
-
-                <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Serial No</span>
-                  <span className="font-bold text-[var(--color-ink)] font-mono text-xs sm:text-sm">{machine.serial_number || "—"}</span>
-                </div>
-
-                <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Year Of Mfg (YUM)</span>
-                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm">{machine.year_of_mfg || "—"}</span>
-                </div>
-
-                <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Manufacturer</span>
-                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm">{machine.manufacturer || "—"}</span>
-                </div>
-
-                <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Hour Meter (HMR)</span>
-                  <span className="font-bold text-sky-600 dark:text-sky-400 font-mono text-xs sm:text-sm">{machine.hour_meter ?? 0} hrs</span>
-                </div>
-
-                <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <div className="flex items-center justify-between gap-1 mb-0.5">
-                    <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Supervisors</span>
-                    {assignedSupervisors.length > 0 && (
-                      <span className="text-[10px] font-mono text-teal-600 dark:text-teal-400 font-bold">
-                        {assignedSupervisors.length}
-                      </span>
-                    )}
-                  </div>
-                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm truncate">
-                    {assignedSupervisors.length === 0
-                      ? "—"
-                      : assignedSupervisors.length === 1
-                      ? assignedSupervisors[0].full_name
-                      : `${assignedSupervisors[0].full_name} +${assignedSupervisors.length - 1} more`}
-                  </span>
-                </div>
-
-                <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <div className="flex items-center justify-between gap-1 mb-0.5">
-                    <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">Operators</span>
-                    {assignedOperators.length > 0 && (
-                      <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 font-bold">
-                        {assignedOperators.length} (24h)
-                      </span>
-                    )}
-                  </div>
-                  <span className="font-bold text-[var(--color-ink)] text-xs sm:text-sm truncate">
-                    {assignedOperators.length === 0
-                      ? "—"
-                      : assignedOperators.length === 1
-                      ? assignedOperators[0].full_name
-                      : `${assignedOperators[0].full_name} +${assignedOperators.length - 1} more`}
-                  </span>
-                </div>
-
-                <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Health Status</span>
-                  <span className="font-bold text-xs sm:text-sm capitalize text-[var(--color-ink)]">
-                    {machine.health_status === "breakdown"
-                      ? "Breakdown"
-                      : machine.health_status === "under_maintenance"
-                      ? "Under Maintenance"
-                      : machine.health_status === "spare"
-                      ? "Spare"
-                      : "Active"}
-                  </span>
-                </div>
-
-                <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-0.5">Rental Fleet Status</span>
-                  <span className="font-bold text-sky-600 dark:text-sky-400 text-xs sm:text-sm capitalize">
-                    {machine.status === "rented" || machine.status === "on_rent" ? "On Rent" : "Available"}
-                  </span>
-                </div>
-              </div>
-            </Card>
-
-            {/* Assigned Shift Personnel Card (24h Multi-Shift Coverage) */}
-            <Card padding="md" className="card-hover-system sm:p-6 border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
-              <div className="flex items-center justify-between gap-2 pb-3 border-b border-[var(--color-hairline)]">
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />
-                  <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">
-                    Assigned Shift Personnel (24h Fleet Coverage)
-                  </h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono text-[var(--color-mute)] bg-[var(--color-hairline-soft-surface)] px-2 py-0.5 rounded-md border border-[var(--color-hairline)]">
-                    <Clock size={11} className="text-sky-500" />
-                    8-Hour Shifts
-                  </span>
-                  <Link
-                    href={`/machines/${machine.id}/edit`}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-link)] hover:underline"
-                  >
-                    <AnimatedEdit size={12} />
-                    <span>Manage Staff</span>
-                  </Link>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
-                {/* 1. Supervisors Panel */}
-                <div className="flex flex-col gap-2.5 p-3 sm:p-4 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)]">
-                  <div className="flex items-center justify-between pb-2 border-b border-[var(--color-hairline)]">
-                    <div className="flex items-center gap-2">
-                      <Shield className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
-                      <span className="text-xs font-bold text-[var(--color-ink)]">
-                        Supervisors ({assignedSupervisors.length})
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-semibold text-teal-700 dark:text-teal-300 bg-teal-500/10 px-1.5 py-0.5 rounded border border-teal-500/20">
-                      Oversight & Verification
-                    </span>
-                  </div>
-
-                  {assignedSupervisors.length === 0 ? (
-                    <div className="py-4 text-center text-xs text-[var(--color-mute)] italic">
-                      No supervisors assigned to this machine.
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {assignedSupervisors.map((sup, idx) => (
-                        <div
-                          key={sup.id || idx}
-                          className="flex items-center justify-between p-2.5 rounded-lg bg-[var(--color-hairline-soft-surface)]/50 border border-[var(--color-hairline)] text-xs"
-                        >
-                          <div className="min-w-0 pr-2">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-[var(--color-ink)] truncate">
-                                {sup.full_name}
-                              </span>
-                              <span className="text-[10px] font-mono text-[var(--color-mute)]">
-                                Shift {idx + 1}
-                              </span>
-                            </div>
-                            {sup.shift_time && (
-                              <div className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
-                                <Clock size={10} />
-                                <span>{sup.shift_time}</span>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {sup.phone && (
-                              <a
-                                href={`tel:${sup.phone}`}
-                                title={`Call ${sup.full_name}`}
-                                className="p-1.5 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-mute)] hover:text-sky-600 hover:border-sky-500/40 transition-colors"
-                              >
-                                <Phone size={12} />
-                              </a>
-                            )}
-                            {sup.email && (
-                              <a
-                                href={`mailto:${sup.email}`}
-                                title={`Email ${sup.full_name}`}
-                                className="p-1.5 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-mute)] hover:text-sky-600 hover:border-sky-500/40 transition-colors"
-                              >
-                                <Mail size={12} />
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 2. Operators Panel */}
-                <div className="flex flex-col gap-2.5 p-3 sm:p-4 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)]">
-                  <div className="flex items-center justify-between pb-2 border-b border-[var(--color-hairline)]">
-                    <div className="flex items-center gap-2">
-                      <Wrench className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                      <span className="text-xs font-bold text-[var(--color-ink)]">
-                        Operators ({assignedOperators.length})
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
-                      Hour Logging & Operations
-                    </span>
-                  </div>
-
-                  {assignedOperators.length === 0 ? (
-                    <div className="py-4 text-center text-xs text-[var(--color-mute)] italic">
-                      No operators assigned. Assign operators to enable 24h shift logging.
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      {assignedOperators.map((op, idx) => (
-                        <div
-                          key={op.id || idx}
-                          className="flex items-center justify-between p-2.5 rounded-lg bg-[var(--color-hairline-soft-surface)]/50 border border-[var(--color-hairline)] text-xs"
-                        >
-                          <div className="min-w-0 pr-2">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-[var(--color-ink)] truncate">
-                                {op.full_name}
-                              </span>
-                              <span className="text-[10px] font-mono text-amber-700 dark:text-amber-300 bg-amber-500/10 px-1.5 py-0.2 rounded">
-                                Shift {idx + 1}
-                              </span>
-                            </div>
-                            {op.shift_time && (
-                              <div className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-mono mt-0.5">
-                                <Clock size={10} />
-                                <span>{op.shift_time}</span>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {op.phone && (
-                              <a
-                                href={`tel:${op.phone}`}
-                                title={`Call ${op.full_name}`}
-                                className="p-1.5 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-mute)] hover:text-amber-600 hover:border-amber-500/40 transition-colors"
-                              >
-                                <Phone size={12} />
-                              </a>
-                            )}
-                            {op.email && (
-                              <a
-                                href={`mailto:${op.email}`}
-                                title={`Email ${op.full_name}`}
-                                className="p-1.5 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-mute)] hover:text-amber-600 hover:border-amber-500/40 transition-colors"
-                              >
-                                <Mail size={12} />
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </Card>
-
-            {/* Linked Client Details Section from public.clients table (Supabase) */}
-            <Card padding="md" className="card-hover-system sm:p-6 border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)]">
-              <div className="flex items-center justify-between gap-2 pb-3 border-b border-[var(--color-hairline)]">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">
-                    Assigned Client Details
-                  </h3>
-                  {clientCode && (
-                    <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
-                      {clientCode}
-                    </span>
-                  )}
-                </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-3.5">
+            {/* Supervisors Panel */}
+            <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/40 p-3 sm:p-4">
+              <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-1.5">
-                  <Badge variant={machine.status === "on_rent" || machine.status === "rented" ? "info" : "neutral"}>
-                    <span className="text-[10px] sm:text-xs font-semibold">
-                      {machine.status === "on_rent" || machine.status === "rented" ? "On Rent Active" : "Site Deployed"}
-                    </span>
-                  </Badge>
-                  {client?.id && (
-                    <Link
-                      href={`/clients?tab=all`}
-                      className="hidden sm:inline-flex items-center gap-1 text-xs text-[var(--color-link)] hover:underline ml-1 font-medium"
-                    >
-                      <span>View Directory</span>
-                      <ExternalLink size={12} />
-                    </Link>
-                  )}
+                  <Shield className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                  <span className="text-xs font-bold text-[var(--color-ink)]">Supervisors ({assignedSupervisors.length})</span>
                 </div>
               </div>
-
-              {hasLinkedClient ? (
-                <div className="flex flex-col gap-3.5 sm:gap-4 mt-3.5 sm:mt-4 text-xs sm:text-sm">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3.5">
-                    {/* CLIENT NAME (Feedback #2) */}
-                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                      <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">
-                        CLIENT NAME
-                      </span>
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <p className="font-bold text-[var(--color-ink)] text-sm sm:text-base">
-                          {clientCompanyName}
-                        </p>
-                        {clientCode && (
-                          <span className="inline-flex sm:hidden items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
-                            {clientCode}
-                          </span>
-                        )}
-                      </div>
-                      {activeRental?.contract_number && (
-                        <span className="inline-block mt-1.5 font-mono text-[11px] text-sky-600 dark:text-sky-400 font-bold bg-sky-500/10 px-2 py-0.5 rounded self-start border border-sky-500/20">
-                          Contract: {activeRental.contract_number}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Contact Person */}
-                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                      <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">
-                        Contact Person
-                      </span>
-                      <p className="font-semibold text-[var(--color-ink)] text-xs sm:text-sm">
-                        {clientContactPerson || "—"}
-                      </p>
-                    </div>
-
-                    {/* Contact Mobile */}
-                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                      <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">
-                        Contact Mobile
-                      </span>
-                      {clientPhone ? (
-                        <a
-                          href={`tel:${clientPhone}`}
-                          className="font-semibold text-[var(--color-link)] hover:underline inline-flex items-center gap-1.5 text-xs sm:text-sm font-mono"
-                        >
-                          <Phone className="h-3.5 w-3.5 shrink-0" /> {clientPhone}
-                        </a>
-                      ) : (
-                        <p className="text-[var(--color-mute)]">—</p>
-                      )}
-                    </div>
-
-                    {/* Contact Email */}
-                    {clientEmail && (
-                      <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                        <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">
-                          Contact Email
-                        </span>
-                        <a
-                          href={`mailto:${clientEmail}`}
-                          className="font-medium text-[var(--color-link)] hover:underline inline-flex items-center gap-1.5 break-all text-xs sm:text-sm"
-                        >
-                          <Mail className="h-3.5 w-3.5 shrink-0" /> {clientEmail}
-                        </a>
-                      </div>
-                    )}
-
-                    {/* City & State */}
-                    <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                      <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">
-                        City & State
-                      </span>
-                      <p className="font-semibold text-[var(--color-ink)] text-xs sm:text-sm">
-                        {clientLocation || "—"}
-                      </p>
-                    </div>
-
-                    {/* GSTIN */}
-                    {clientGstin && (
-                      <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">
-                            GSTIN
-                          </span>
-                          <button
-                            type="button"
-                            onClick={handleCopyGstin}
-                            title={copiedGstin ? "Copied!" : "Copy GSTIN"}
-                            aria-label="Copy GSTIN"
-                            className="p-1 -mr-1 -mt-0.5 rounded-md text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] inline-flex items-center justify-center cursor-pointer transition-colors"
-                          >
-                            {copiedGstin ? <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                          </button>
-                        </div>
-                        <p className="font-mono font-semibold text-[var(--color-ink)] text-xs sm:text-sm">
-                          {clientGstin}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* PAN Number */}
-                    {clientPan && (
-                      <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">
-                            PAN Number
-                          </span>
-                          <button
-                            type="button"
-                            onClick={handleCopyPan}
-                            title={copiedPan ? "Copied!" : "Copy PAN Number"}
-                            aria-label="Copy PAN Number"
-                            className="p-1 -mr-1 -mt-0.5 rounded-md text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] inline-flex items-center justify-center cursor-pointer transition-colors"
-                          >
-                            {copiedPan ? <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                          </button>
-                        </div>
-                        <p className="font-mono font-semibold text-[var(--color-ink)] text-xs sm:text-sm">
-                          {clientPan}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* SITE LOCATION */}
-                  <div className="flex flex-col p-3 sm:p-3.5 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">
-                        SITE LOCATION
-                      </span>
-                      <button
-                        type="button"
-                        onClick={handleCopySiteAddress}
-                        title={copiedAddress ? "Copied!" : "Copy Site Address"}
-                        aria-label="Copy Site Address"
-                        className="p-1 -mr-1 -mt-0.5 rounded-md text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] inline-flex items-center justify-center cursor-pointer transition-colors"
-                      >
-                        {copiedAddress ? <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                      </button>
-                    </div>
-                    <p className="text-xs sm:text-sm text-[var(--color-ink)] leading-relaxed font-medium">
-                      {clientAddress || "—"}
-                      {clientLocation && !clientAddress.includes(clientLocation) ? `, ${clientLocation}` : ""}
-                      {clientPincode ? ` - ${clientPincode}` : ""}
-                    </p>
-                  </div>
-
-                  {/* Billing Address (if separate) */}
-                  {isBillingAddressDifferent && (billingAddress || billingCity) && (
-                    <div className="flex flex-col p-3 sm:p-3.5 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">
-                          Billing Address
-                        </span>
-                        <button
-                          type="button"
-                          onClick={handleCopyBillingAddress}
-                          title={copiedBillingAddress ? "Copied!" : "Copy Billing Address"}
-                          aria-label="Copy Billing Address"
-                          className="p-1 -mr-1 -mt-0.5 rounded-md text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] inline-flex items-center justify-center cursor-pointer transition-colors"
-                        >
-                          {copiedBillingAddress ? <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                        </button>
-                      </div>
-                      <p className="text-xs sm:text-sm text-[var(--color-ink)] leading-relaxed font-medium">
-                        {fullBillingAddress || "—"}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Rental Contract Timeline & Rate if available */}
-                  {activeRental && (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                      <div>
-                        <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block mb-0.5">Rental Start</span>
-                        <span className="font-semibold text-xs sm:text-sm text-[var(--color-ink)]">{formatDate(activeRental.start_date)}</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block mb-0.5">Rental End</span>
-                        <span className="font-semibold text-xs sm:text-sm text-[var(--color-ink)]">{formatDate(activeRental.end_date)}</span>
-                      </div>
-                      <div className="col-span-2 sm:col-span-1">
-                        <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block mb-0.5">Rental Rate</span>
-                        <span className="font-bold text-xs sm:text-sm text-emerald-600 dark:text-emerald-400">
-                          ₹{(activeRental.monthly_rate || activeRental.rental_rate || 0).toLocaleString("en-IN")} / {activeRental.rate_unit || "month"}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Quick Action Touch Buttons */}
-                  <div className="grid grid-cols-3 gap-2 pt-1">
-                    {clientPhone ? (
-                      <motion.a
-                        whileTap={{ scale: 0.96 }}
-                        href={`tel:${clientPhone}`}
-                        className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 transition-all text-center font-semibold text-xs min-h-[44px]"
-                      >
-                        <Phone className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-                        <span className="truncate">Call</span>
-                      </motion.a>
-                    ) : null}
-
-                    {clientPhone ? (
-                      <motion.a
-                        whileTap={{ scale: 0.96 }}
-                        href={whatsappUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-green-500/10 hover:bg-green-500/20 text-green-700 dark:text-green-400 border border-green-500/20 transition-all text-center font-semibold text-xs min-h-[44px]"
-                      >
-                        <AnimatedMessageSquare size={16} className="shrink-0 text-green-600 dark:text-green-400" />
-                        <span className="truncate">WhatsApp</span>
-                      </motion.a>
-                    ) : null}
-
-                    <motion.a
-                      whileTap={{ scale: 0.96 }}
-                      href={mapsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-sky-500/10 hover:bg-sky-500/20 text-sky-700 dark:text-sky-400 border border-sky-500/20 transition-all text-center font-semibold text-xs min-h-[44px]"
-                    >
-                      <MapPin className="h-4 w-4 shrink-0 text-sky-600 dark:text-sky-400" />
-                      <span className="truncate">Map Location</span>
-                    </motion.a>
-                  </div>
-                </div>
+              {assignedSupervisors.length === 0 ? (
+                <p className="text-xs text-[var(--color-mute)] italic py-4 text-center">No supervisors assigned</p>
               ) : (
-                <div className="py-8 text-center bg-[var(--color-hairline-soft-surface)]/30 rounded-xl border border-dashed border-[var(--color-hairline)] mt-3 p-4">
-                  <Building2 className="h-8 w-8 text-[var(--color-mute)] mx-auto mb-2 opacity-50" />
-                  <p className="font-bold text-[var(--color-ink)] text-xs sm:text-sm">No Client Assigned</p>
-                  <p className="text-xs text-[var(--color-mute)] mt-1 max-w-sm mx-auto">
-                    This machine is currently available in the fleet inventory and has not been linked to a client account in the CRM.
-                  </p>
-                  {allowEdit && (
-                    <div className="mt-4">
-                      <Button href={`/machines/${machine.id}/edit`} variant="secondary" size="sm">
-                        Assign Client
-                      </Button>
-                    </div>
-                  )}
+                <div className="flex flex-col gap-2">
+                  {assignedSupervisors.map((sup, idx) => (
+                    <PersonnelCard key={sup.id || idx} person={sup} shiftIndex={idx + 1} color="teal" />
+                  ))}
                 </div>
               )}
-            </Card>
-          </motion.div>
-        )}
+            </div>
 
-        {/* TAB 2: HOURS METER LOGS (Lazy Loaded on Demand & 3-Tier Responsive) */}
-        {activeTab === "running_hours" && (
-          <motion.div
-            key="running_hours"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.18 }}
-          >
-            <Card padding="md" className="sm:p-6">
-              {/* Header: Title on Left, Total Hours Run Badge at Top-Right Corner */}
-              <div className="flex items-center justify-between gap-3 pb-3.5 border-b border-[var(--color-hairline)]">
-                <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">
-                  Hours Meter Logs
-                </h3>
+            {/* Operators Panel */}
+            <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/40 p-3 sm:p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-1.5">
+                  <Wrench className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  <span className="text-xs font-bold text-[var(--color-ink)]">Operators ({assignedOperators.length})</span>
+                </div>
+              </div>
+              {assignedOperators.length === 0 ? (
+                <p className="text-xs text-[var(--color-mute)] italic py-4 text-center">No operators assigned</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {assignedOperators.map((op, idx) => (
+                    <PersonnelCard key={op.id || idx} person={op} shiftIndex={idx + 1} color="amber" />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+      </FadeIn>
 
-                {hasLoadedLogs && hourMeterLogs && hourMeterLogs.length > 0 && (
-                  <Badge variant="info" className="font-mono text-xs">
-                    <span className="font-bold">+{logStats.totalHours}</span> hrs Run
-                  </Badge>
+      {/* ═══════════ SECTION 3: CLIENT DETAILS ═══════════ */}
+      <FadeIn delay={0.2}>
+        <Card padding="md" className="card-hover-system sm:p-6">
+          <div className="flex items-center justify-between gap-2 pb-3 border-b border-[var(--color-hairline)]">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">Client Details</h3>
+              {clientCode && (
+                <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                  {clientCode}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {hasLinkedClient && (
+                <a
+                  href={mapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-1.5 py-1.5 px-2 sm:px-2.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] hover:text-sky-600 dark:hover:text-sky-400 transition-colors text-xs font-semibold"
+                  title="Open in Google Maps"
+                  aria-label="Map Location"
+                >
+                  <MapPin size={13} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                  <span className="hidden sm:inline">Map Location</span>
+                </a>
+              )}
+              {client?.id && (
+                <Link href="/clients?tab=all" className="inline-flex items-center gap-1 text-xs text-[var(--color-link)] hover:underline font-medium mr-1">
+                  <span className="hidden sm:inline">Directory</span> <ExternalLink size={12} />
+                </Link>
+              )}
+              {allowEdit && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<AnimatedEdit size={12} className="text-[var(--color-ink)]" />}
+                  onClick={() => setClientModalOpen(true)}
+                  title="Edit Client Assignment"
+                  aria-label="Edit Client Assignment"
+                  className="h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1"
+                >
+                  <span>Edit</span>
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {hasLinkedClient ? (
+            <div className="flex flex-col gap-3.5 sm:gap-4 mt-3.5 text-xs sm:text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3.5">
+                {/* Client Name */}
+                <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
+                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">CLIENT NAME</span>
+                  <p className="font-bold text-[var(--color-ink)] text-sm sm:text-base">{clientCompanyName}</p>
+                  {activeRental?.contract_number && (
+                    <span className="inline-block mt-1.5 font-mono text-[11px] text-sky-600 dark:text-sky-400 font-bold bg-sky-500/10 px-2 py-0.5 rounded self-start border border-sky-500/20">
+                      Contract: {activeRental.contract_number}
+                    </span>
+                  )}
+                </div>
+                {/* Contact Person */}
+                <InfoCell label="Contact Person" value={clientContactPerson || "—"} />
+                {/* Contact Mobile */}
+                <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
+                  <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Contact Mobile</span>
+                  {clientPhone ? (
+                    <a href={`tel:${clientPhone}`} className="font-semibold text-[var(--color-link)] hover:underline inline-flex items-center gap-1.5 text-xs sm:text-sm font-mono">
+                      <Phone className="h-3.5 w-3.5 shrink-0" /> {clientPhone}
+                    </a>
+                  ) : <p className="text-[var(--color-mute)]">—</p>}
+                </div>
+                {/* Email */}
+                {clientEmail && (
+                  <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
+                    <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Contact Email</span>
+                    <a href={`mailto:${clientEmail}`} className="font-medium text-[var(--color-link)] hover:underline inline-flex items-center gap-1.5 break-all text-xs sm:text-sm">
+                      <Mail className="h-3.5 w-3.5 shrink-0" /> {clientEmail}
+                    </a>
+                  </div>
+                )}
+                {/* City & State */}
+                <InfoCell label="City & State" value={clientLocation || "—"} />
+                {/* GSTIN */}
+                {clientGstin && (
+                  <CopyableInfoCell label="GSTIN" value={clientGstin} mono copied={copiedGstin} onCopy={() => handleCopy(clientGstin, setCopiedGstin, "GSTIN")} />
+                )}
+                {/* PAN */}
+                {clientPan && (
+                  <CopyableInfoCell label="PAN Number" value={clientPan} mono copied={copiedPan} onCopy={() => handleCopy(clientPan, setCopiedPan, "PAN")} />
                 )}
               </div>
 
-              {/* Loading Skeleton */}
-              {isLoadingLogs && (
-                <div className="mt-4 flex flex-col gap-3">
-                  <div className="flex items-center justify-between p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
-                    <div className="flex items-center gap-2">
-                      <AnimatedLoader isSpinning size={16} className="text-sky-500" />
-                      <span className="text-xs font-medium text-[var(--color-ink)]">
-                        Loading running meter history...
-                      </span>
-                    </div>
+              {/* Site Location */}
+              <CopyableInfoCell label="SITE LOCATION" value={fullSiteAddress || "—"} full copied={copiedAddress} onCopy={() => handleCopy(fullSiteAddress, setCopiedAddress, "Address")} />
+
+              {/* Billing Address */}
+              {isBillingAddressDifferent && (billingAddress || billingCity) && (
+                <CopyableInfoCell label="Billing Address" value={fullBillingAddress || "—"} full copied={copiedBillingAddress} onCopy={() => handleCopy(fullBillingAddress, setCopiedBillingAddress, "Billing Address")} />
+              )}
+
+              {/* Rental Contract */}
+              {activeRental && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
+                  <div>
+                    <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block mb-0.5">Rental Start</span>
+                    <span className="font-semibold text-xs sm:text-sm text-[var(--color-ink)]">{formatDate(activeRental.start_date)}</span>
                   </div>
-                  <div className="w-full rounded-xl border border-[var(--color-hairline)] overflow-hidden">
-                    <div className="h-10 bg-[var(--color-hairline-soft-surface)]" />
-                    {[1, 2, 3, 4].map((i) => (
-                      <div key={i} className="h-12 border-t border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] animate-pulse flex items-center px-4 gap-4">
-                        <div className="h-4 w-20 bg-[var(--color-hairline)] rounded" />
-                        <div className="h-4 w-28 bg-[var(--color-hairline)] rounded" />
-                        <div className="h-4 w-24 bg-[var(--color-hairline)] rounded" />
-                        <div className="h-4 w-20 bg-[var(--color-hairline)] rounded ml-auto" />
-                      </div>
-                    ))}
+                  <div>
+                    <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block mb-0.5">Rental End</span>
+                    <span className="font-semibold text-xs sm:text-sm text-[var(--color-ink)]">{formatDate(activeRental.end_date)}</span>
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block mb-0.5">Rental Rate</span>
+                    <span className="font-bold text-xs sm:text-sm text-emerald-600 dark:text-emerald-400">
+                      ₹{(activeRental.monthly_rate || activeRental.rental_rate || 0).toLocaleString("en-IN")} / {activeRental.rate_unit || "month"}
+                    </span>
                   </div>
                 </div>
               )}
 
-              {/* Error State */}
-              {!isLoadingLogs && logsError && (
-                <div className="mt-4 p-4 rounded-xl border border-rose-500/30 bg-rose-500/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-rose-600 dark:text-rose-400 text-xs sm:text-sm font-medium">
-                    <AlertCircle size={16} className="shrink-0" />
-                    <span>{logsError}</span>
-                  </div>
-                  <Button size="sm" variant="secondary" onClick={loadHourMeterLogs}>
-                    Retry
+              {/* Quick Action Buttons */}
+              {clientPhone && (
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <motion.a whileTap={{ scale: 0.96 }} href={`tel:${clientPhone}`} className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 transition-all text-center font-semibold text-xs min-h-[44px]">
+                    <Phone className="h-4 w-4 shrink-0" /> <span className="truncate">Call</span>
+                  </motion.a>
+                  <motion.a whileTap={{ scale: 0.96 }} href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-green-500/10 hover:bg-green-500/20 text-green-700 dark:text-green-400 border border-green-500/20 transition-all text-center font-semibold text-xs min-h-[44px]">
+                    <AnimatedMessageSquare size={16} className="shrink-0" /> <span className="truncate">WhatsApp</span>
+                  </motion.a>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="py-8 text-center bg-[var(--color-hairline-soft-surface)]/30 rounded-xl border border-dashed border-[var(--color-hairline)] mt-3 p-4">
+              <Building2 className="h-8 w-8 text-[var(--color-mute)] mx-auto mb-2 opacity-50" />
+              <p className="font-bold text-[var(--color-ink)] text-xs sm:text-sm">No Client Assigned</p>
+              <p className="text-xs text-[var(--color-mute)] mt-1 max-w-sm mx-auto">This machine is currently available in the fleet inventory.</p>
+              {allowEdit && (
+                <div className="mt-4">
+                  <Button onClick={() => setClientModalOpen(true)} variant="secondary" size="sm">
+                    Assign Client
                   </Button>
                 </div>
               )}
+            </div>
+          )}
+        </Card>
+      </FadeIn>
+        </div>
+      )}
 
-              {/* Initial Empty State (No logs ever recorded) */}
-              {!isLoadingLogs && !logsError && hasLoadedLogs && (!hourMeterLogs || hourMeterLogs.length === 0) && (
-                <div className="py-10 text-center">
-                  <EmptyState
-                    title="No Running Meter Logs Logged"
-                    description="Daily hour meter logbook entries recorded by machine operators for this machine will appear here."
-                    action={
-                      <Link href="/operations?tab=entry">
-                        <Button variant="secondary" size="sm">
-                          + Add First Meter Log
-                        </Button>
-                      </Link>
-                    }
-                  />
-                </div>
-              )}
+      {/* ═══════════ TAB 2: HOURS METER LOGS (HEAVY DATA FETCH LAZY LOADED) ═══════════ */}
+      {activeTab === "running_hours" && (
+        <FadeIn delay={0.1}>
+          <Suspense fallback={<HMRSkeleton />}>
+            <HMRTab machineId={machineData.id} />
+          </Suspense>
+        </FadeIn>
+      )}
 
-              {/* Filter & Sort Controls + Data Presentation */}
-              {!isLoadingLogs && !logsError && hourMeterLogs && hourMeterLogs.length > 0 && (
-                <div className="mt-4 space-y-4">
-                  {/* Collapsible Search & Filter Toolbar */}
-                  <div className="flex flex-col gap-2 p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/50 border border-[var(--color-hairline)]">
-                    {/* Main Row: Search Input + Filter Toggle Icon */}
-                    <div className="flex items-center gap-2">
-                      <div className="relative flex-1 min-w-0">
-                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-mute)] pointer-events-none" />
-                        <input
-                          type="text"
-                          placeholder="Search logs by operator, date, meter, remarks..."
-                          value={logSearchQuery}
-                          onChange={(e) => {
-                            setLogSearchQuery(e.target.value);
-                            setLogPage(1);
-                          }}
-                          className="w-full h-9 pl-9 pr-8 text-xs rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] placeholder:text-[var(--color-mute)] focus:outline-none focus:border-sky-500 transition-colors"
-                        />
-                        {logSearchQuery && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setLogSearchQuery("");
-                              setLogPage(1);
-                            }}
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-mute)] hover:text-[var(--color-ink)] p-0.5 rounded cursor-pointer"
-                          >
-                            <X size={13} />
-                          </button>
-                        )}
-                      </div>
+      {/* ═══════════ TAB 3: AUDIT TRAIL (LAZY LOADED ON DEMAND) ═══════════ */}
+      {activeTab === "audit_trail" && (
+        <FadeIn delay={0.1}>
+          <Suspense fallback={<AuditSkeleton />}>
+            <AuditTab machineId={machineData.id} isAdmin={isAdmin} machine={machineData} />
+          </Suspense>
+        </FadeIn>
+      )}
 
-                      <button
-                        type="button"
-                        onClick={() => setShowFilterSort((prev) => !prev)}
-                        title={showFilterSort ? "Hide filter and sorting options" : "Show filter and sorting options"}
-                        aria-label="Toggle filter and sorting options"
-                        className={`h-9 px-2.5 sm:px-3 rounded-lg text-xs font-semibold shrink-0 border transition-all cursor-pointer flex items-center gap-1.5 ${
-                          showFilterSort || activeFilterCount > 0
-                            ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30"
-                            : "bg-[var(--color-canvas-elevated)] text-[var(--color-mute)] hover:text-[var(--color-ink)] border-[var(--color-hairline)]"
-                        }`}
-                      >
-                        <SlidersHorizontal size={14} className={showFilterSort || activeFilterCount > 0 ? "text-sky-500" : ""} />
-                        <span className="hidden sm:inline">Filter & Sort</span>
-                        {activeFilterCount > 0 && (
-                          <span className="inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full text-[10px] font-bold bg-sky-500 text-white leading-none">
-                            {activeFilterCount}
-                          </span>
-                        )}
-                      </button>
-                    </div>
+      {/* ═══════════ DEDICATED SEPARATE DIALOGS ═══════════ */}
+      {allowEdit && (
+        <>
+          <MachineInfoModal
+            isOpen={infoModalOpen}
+            onClose={() => setInfoModalOpen(false)}
+            machine={machineData}
+            onMachineUpdated={handleMachineUpdated}
+          />
+          <MachinePersonnelModal
+            isOpen={personnelModalOpen}
+            onClose={() => setPersonnelModalOpen(false)}
+            machine={machineData}
+            supervisors={supervisors}
+            operators={operators}
+            userRole={userRole}
+            onMachineUpdated={handleMachineUpdated}
+          />
+          <MachineClientModal
+            isOpen={clientModalOpen}
+            onClose={() => setClientModalOpen(false)}
+            machine={machineData}
+            clients={clients}
+            onMachineUpdated={handleMachineUpdated}
+          />
+        </>
+      )}
 
-                    {/* Expandable Filter & Sort Row (Single Row) */}
-                    <AnimatePresence>
-                      {showFilterSort && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.18 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap pt-1">
-                            {/* Date Preset Filter */}
-                            <select
-                              value={logDateFilter}
-                              onChange={(e) => {
-                                setLogDateFilter(e.target.value as any);
-                                setLogPage(1);
-                              }}
-                              className="h-9 px-2.5 text-xs rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] focus:outline-none focus:border-sky-500 cursor-pointer shrink-0 font-medium flex-1 sm:flex-initial"
-                            >
-                              <option value="all">All Dates</option>
-                              <option value="7d">Last 7 Days</option>
-                              <option value="30d">Last 30 Days</option>
-                              <option value="month">This Month</option>
-                            </select>
-
-                            {/* Operator Filter (if multiple) */}
-                            {availableOperators.length > 1 && (
-                              <select
-                                value={logOperatorFilter}
-                                onChange={(e) => {
-                                  setLogOperatorFilter(e.target.value);
-                                  setLogPage(1);
-                                }}
-                                className="h-9 px-2.5 text-xs rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] focus:outline-none focus:border-sky-500 cursor-pointer shrink-0 font-medium max-w-[150px] truncate flex-1 sm:flex-initial"
-                              >
-                                <option value="all">All Operators</option>
-                                {availableOperators.map((op) => (
-                                  <option key={op.id} value={op.id}>
-                                    {op.name}
-                                  </option>
-                                ))}
-                              </select>
-                            )}
-
-                            {/* Multi-Criteria Sort Selector */}
-                            <select
-                              value={`${logSortBy}-${logSortOrder}`}
-                              onChange={(e) => {
-                                const [by, order] = e.target.value.split("-") as [any, any];
-                                setLogSortBy(by);
-                                setLogSortOrder(order);
-                                setLogPage(1);
-                              }}
-                              className="h-9 px-2.5 text-xs rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] focus:outline-none focus:border-sky-500 cursor-pointer shrink-0 font-medium flex-1 sm:flex-initial"
-                            >
-                              <option value="date-desc">Date: Newest First</option>
-                              <option value="date-asc">Date: Oldest First</option>
-                              <option value="running_hours-desc">Hours: High to Low</option>
-                              <option value="running_hours-asc">Hours: Low to High</option>
-                              <option value="start_meter-desc">Start Meter: High to Low</option>
-                              <option value="start_meter-asc">Start Meter: Low to High</option>
-                            </select>
-
-                            {/* Clear/Reset Action Button */}
-                            {isAnyFilterActive && (
-                              <button
-                                type="button"
-                                onClick={handleResetFilters}
-                                className="h-9 px-2.5 rounded-lg text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 border border-rose-500/20 shrink-0 transition-colors cursor-pointer flex items-center gap-1"
-                              >
-                                <X size={12} />
-                                <span>Reset</span>
-                              </button>
-                            )}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-
-                  {/* Filtered Empty State (No logs matched current filters) */}
-                  {filteredAndSortedLogs.length === 0 && (
-                    <div className="py-10 text-center border border-dashed border-[var(--color-hairline)] rounded-xl bg-[var(--color-hairline-soft-surface)]/20 p-6">
-                      <Search className="h-8 w-8 text-[var(--color-mute)] mx-auto mb-2 opacity-50" />
-                      <p className="font-bold text-xs sm:text-sm text-[var(--color-ink)]">No logs match your filter criteria</p>
-                      <p className="text-xs text-[var(--color-mute)] mt-1 max-w-sm mx-auto">
-                        Try adjusting your search terms, date range, or clear all filters.
-                      </p>
-                      <div className="mt-4">
-                        <Button variant="secondary" size="sm" onClick={handleResetFilters}>
-                          Clear All Filters
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Desktop High-Density Table View with Interactive Sortable Columns (hidden on mobile, visible md+) */}
-                  {filteredAndSortedLogs.length > 0 && (
-                    <>
-                      <div className="hidden md:block w-full overflow-x-auto rounded-xl border border-[var(--color-hairline)]">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead
-                                className="cursor-pointer select-none hover:text-[var(--color-ink)] transition-colors"
-                                onClick={() => handleSort("date")}
-                              >
-                                <div className="flex items-center gap-1">
-                                  <span>Log Date</span>
-                                  {logSortBy === "date" ? (
-                                    logSortOrder === "asc" ? (
-                                      <ChevronUp size={13} className="text-sky-500" />
-                                    ) : (
-                                      <ChevronDown size={13} className="text-sky-500" />
-                                    )
-                                  ) : (
-                                    <ArrowUpDown size={11} className="opacity-30" />
-                                  )}
-                                </div>
-                              </TableHead>
-
-                              <TableHead>Operator</TableHead>
-
-                              <TableHead
-                                className="cursor-pointer select-none hover:text-[var(--color-ink)] transition-colors"
-                                onClick={() => handleSort("running_hours")}
-                              >
-                                <div className="flex items-center gap-1">
-                                  <span>Operating Hours</span>
-                                  {logSortBy === "running_hours" ? (
-                                    logSortOrder === "asc" ? (
-                                      <ChevronUp size={13} className="text-sky-500" />
-                                    ) : (
-                                      <ChevronDown size={13} className="text-sky-500" />
-                                    )
-                                  ) : (
-                                    <ArrowUpDown size={11} className="opacity-30" />
-                                  )}
-                                </div>
-                              </TableHead>
-
-                              <TableHead
-                                className="cursor-pointer select-none hover:text-[var(--color-ink)] transition-colors"
-                                onClick={() => handleSort("start_meter")}
-                              >
-                                <div className="flex items-center gap-1">
-                                  <span>Meter Reading (Start → End)</span>
-                                  {logSortBy === "start_meter" || logSortBy === "end_meter" ? (
-                                    logSortOrder === "asc" ? (
-                                      <ChevronUp size={13} className="text-sky-500" />
-                                    ) : (
-                                      <ChevronDown size={13} className="text-sky-500" />
-                                    )
-                                  ) : (
-                                    <ArrowUpDown size={11} className="opacity-30" />
-                                  )}
-                                </div>
-                              </TableHead>
-
-                              <TableHead>Remarks</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {paginatedLogs.map((log: any) => (
-                              <TableRow key={log.id}>
-                                <TableCell className="font-mono text-xs font-bold whitespace-nowrap">
-                                  {formatDate(log.log_date)}
-                                </TableCell>
-                                <TableCell className="text-xs font-semibold whitespace-nowrap">
-                                  {log.operator?.full_name || log.operator_name || "Operator"}
-                                </TableCell>
-                                <TableCell className="font-mono text-xs whitespace-nowrap">
-                                  {log.start_time && log.end_time
-                                    ? formatShiftTimingRange(log.start_time, log.end_time)
-                                    : `${log.running_hours || 0} hrs`}
-                                </TableCell>
-                                <TableCell className="font-mono text-xs text-sky-600 dark:text-sky-400 font-bold whitespace-nowrap">
-                                  {log.start_meter || 0} → {log.end_meter || 0} (+{log.running_hours || 0}h)
-                                </TableCell>
-                                <TableCell className="text-xs text-[var(--color-mute)] max-w-xs truncate">
-                                  {log.remarks || "—"}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-
-                      {/* Mobile & Tablet Card View (visible on mobile < md, hidden on md+) */}
-                      <div className="block md:hidden flex flex-col gap-2.5">
-                        {paginatedLogs.map((log: any) => (
-                          <div
-                            key={log.id}
-                            className="p-3 sm:p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/50 flex flex-col gap-2 shadow-2xs"
-                          >
-                            {/* Top Row: Date & Operator */}
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-mono text-xs font-bold text-[var(--color-ink)]">
-                                {formatDate(log.log_date)}
-                              </span>
-                              <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] text-[var(--color-ink)] truncate max-w-[140px]">
-                                {log.operator?.full_name || log.operator_name || "Operator"}
-                              </span>
-                            </div>
-
-                            {/* Meter Reading Highlight */}
-                            <div className="flex items-center justify-between p-2 rounded-lg bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)]">
-                              <div className="flex flex-col">
-                                <span className="text-[10px] uppercase font-bold text-[var(--color-mute)] tracking-wider">Meter Reading</span>
-                                <span className="font-mono text-xs font-bold text-[var(--color-ink)]">
-                                  {log.start_meter || 0} → {log.end_meter || 0}
-                                </span>
-                              </div>
-                              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
-                                +{log.running_hours || 0} hrs
-                              </span>
-                            </div>
-
-                            {/* Shift Timing */}
-                            <div className="flex items-center justify-between text-xs text-[var(--color-mute)]">
-                              <div className="flex items-center gap-1 font-mono">
-                                <Clock size={12} className="shrink-0 text-[var(--color-mute)]" />
-                                <span>
-                                  {log.start_time && log.end_time
-                                    ? formatShiftTimingRange(log.start_time, log.end_time)
-                                    : `${log.running_hours || 0} hrs shift`}
-                                </span>
-                              </div>
-                            </div>
-
-                            {/* Remarks if available */}
-                            {log.remarks && (
-                              <div className="pt-1 border-t border-[var(--color-hairline)]/80 text-[11px]">
-                                <span className="text-[var(--color-mute)] italic line-clamp-2">
-                                  &ldquo;{log.remarks}&rdquo;
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Pagination Control (Desktop & Mobile) */}
-                      {filteredAndSortedLogs.length > logPageSize && (
-                        <div className="pt-2">
-                          <Pagination
-                            page={logPage}
-                            pageSize={logPageSize}
-                            total={filteredAndSortedLogs.length}
-                            onPageChange={(p) => setLogPage(p)}
-                            pageSizeOptions={[10, 25, 50]}
-                            onPageSizeChange={(sz) => {
-                              setLogPageSize(sz);
-                              setLogPage(1);
-                            }}
-                          />
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              )}
-            </Card>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Confirmation */}
       <ConfirmationDialog
         isOpen={deleteConfirmOpen}
         onClose={() => setDeleteConfirmOpen(false)}
         onConfirm={handleDeleteMachine}
         title="Delete Machine"
-        description={`Are you sure you want to permanently delete machine ${machine.machine_id} (${machine.model || "Unknown Model"})? This action cannot be undone and will remove related logs.`}
+        description={`Are you sure you want to permanently delete machine ${machineData.machine_id} (${machineData.model || "Unknown Model"})? This action cannot be undone and will remove related logs.`}
         confirmLabel="Delete Machine"
         cancelLabel="Keep Machine"
         variant="danger"
@@ -1535,3 +990,111 @@ export function MachineClientView({
   );
 }
 
+// ─── Reusable Sub-Components ───
+
+function InfoCell({
+  label,
+  value,
+  mono,
+  copyable,
+  copied,
+  onCopy,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  copyable?: boolean;
+  copied?: boolean;
+  onCopy?: () => void;
+}) {
+  return (
+    <div className="flex flex-col p-2.5 sm:p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
+      <div className="flex items-center justify-between gap-1 mb-0.5">
+        <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">{label}</span>
+        {copyable && onCopy && value && value !== "—" && (
+          <button
+            type="button"
+            onClick={onCopy}
+            title={`Copy ${label}`}
+            className="text-[10px] text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-0.5 cursor-pointer p-0.5 -mr-0.5 rounded transition-colors"
+          >
+            {copied ? <AnimatedCheck size={10} className="text-emerald-600" /> : <AnimatedCopy size={10} />}
+          </button>
+        )}
+      </div>
+      <span className={`font-bold text-[var(--color-ink)] text-xs sm:text-sm truncate ${mono ? "font-mono" : ""}`}>{value}</span>
+    </div>
+  );
+}
+
+function CopyableInfoCell({ label, value, mono, full, copied, onCopy }: { label: string; value: string; mono?: boolean; full?: boolean; copied: boolean; onCopy: () => void }) {
+  return (
+    <div className={`flex flex-col p-3 sm:p-3.5 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)] ${full ? "" : ""}`}>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider">{label}</span>
+        <button type="button" onClick={onCopy} title={copied ? "Copied!" : `Copy ${label}`} className="p-1 -mr-1 -mt-0.5 rounded-md text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] inline-flex items-center justify-center cursor-pointer transition-colors">
+          {copied ? <Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+        </button>
+      </div>
+      <p className={`font-semibold text-[var(--color-ink)] text-xs sm:text-sm leading-relaxed ${mono ? "font-mono" : ""}`}>{value}</p>
+    </div>
+  );
+}
+
+function PersonnelCard({ person, shiftIndex, color }: { person: PersonnelPick; shiftIndex: number; color: "teal" | "amber" }) {
+  const isTeal = color === "teal";
+  const badgeClasses = isTeal
+    ? "text-teal-700 dark:text-teal-300 bg-teal-500/10 border-teal-500/25"
+    : "text-amber-700 dark:text-amber-300 bg-amber-500/10 border-amber-500/25";
+
+  return (
+    <div className="flex items-center justify-between p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] gap-2.5">
+      {/* Left side: Name, Shift badge, Shift time */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="font-bold text-xs sm:text-sm text-[var(--color-ink)] truncate max-w-[170px] sm:max-w-none" title={person.full_name}>
+            {person.full_name}
+          </span>
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${badgeClasses} shrink-0`}>
+            Shift {shiftIndex}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--color-mute)] mt-1">
+          <Clock size={11} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <span className="font-mono text-[var(--color-ink)] font-semibold">
+            {person.shift_time || (isTeal ? "08:00 AM - 08:00 PM" : "08:00 AM - 04:00 PM")}
+          </span>
+        </div>
+      </div>
+
+      {/* Right side: Single compact layout for call & email */}
+      {(person.phone || person.email) && (
+        <div className="inline-flex items-center rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-0.5 shrink-0 shadow-xs">
+          {person.phone && (
+            <a
+              href={`tel:${person.phone}`}
+              title={`Call ${person.full_name} (${person.phone})`}
+              aria-label={`Call ${person.full_name}`}
+              className="p-1.5 rounded-md text-[var(--color-mute)] hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors inline-flex items-center justify-center cursor-pointer"
+            >
+              <Phone size={13} />
+            </a>
+          )}
+          {person.phone && person.email && (
+            <div className="h-3.5 w-px bg-[var(--color-hairline)] my-auto mx-0.5" />
+          )}
+          {person.email && (
+            <a
+              href={`mailto:${person.email}`}
+              title={`Email ${person.full_name} (${person.email})`}
+              aria-label={`Email ${person.full_name}`}
+              className="p-1.5 rounded-md text-[var(--color-mute)] hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-500/10 transition-colors inline-flex items-center justify-center cursor-pointer"
+            >
+              <Mail size={13} />
+            </a>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

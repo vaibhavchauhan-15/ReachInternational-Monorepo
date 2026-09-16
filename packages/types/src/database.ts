@@ -322,6 +322,7 @@ export interface Machine {
     | "pincode"
     | "phone"
     | "contact_person"
+    | "street"
     | "address"
     | "gstin"
     | "pan_number"

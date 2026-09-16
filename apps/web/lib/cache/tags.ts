@@ -15,11 +15,16 @@ export const TAGS = {
 
   // Class B: Semi-Dynamic Directories & Catalogs
   machines: "machines",
+  machinesList: "machines:list",
+  machinesKpis: "machines:kpis",
   machinesMeta: "machines-meta",
   machinesBranch: (branchId: string) => `machines:branch:${branchId}`,
   machineDetail: (id: string) => `machine:${id}`,
 
   clients: "clients",
+  clientsList: "clients:list",
+  clientsKpis: "clients:kpis",
+  clientsLocations: "clients:locations",
   clientsBranch: (branchId: string) => `clients:branch:${branchId}`,
   clientDetail: (id: string) => `client:${id}`,
 
@@ -63,6 +68,18 @@ export const TAGS = {
   assignments: "assignments",
   operatorAssignment: (operatorId: string) => `assignment:operator:${operatorId}`,
   machineAssignment: (machineId: string) => `assignment:machine:${machineId}`,
+
+  // Operations Domain (Canonical)
+  operations: "operations",
+  operationsLogs: "operations:logs",
+  operationsAssignments: "operations:assignments",
+  operationsFilters: "operations:filters",
+  operationsSummaries: "operations:summaries",
+  operationLogDetail: (id: string) => `operations:log-detail:${id}`,
+  operationAssignmentDetail: (id: string) => `operations:assignment-detail:${id}`,
+  clientOperations: (clientId: string) => `operations:client:${clientId}`,
+  machineOperations: (machineId: string) => `operations:machine:${machineId}`,
+  operatorOperations: (operatorId: string) => `operations:operator:${operatorId}`,
 
   // Class D / User Scoped
   users: "users",

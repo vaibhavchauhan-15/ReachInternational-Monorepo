@@ -24,6 +24,7 @@ export interface MachineModalProps {
   onSuccess: () => void;
   machineToEdit?: any | null;
   userRole?: string | null;
+  initialSection?: 'all' | 'info' | 'personnel' | 'client';
 }
 
 const HEALTH_OPTIONS: FilterOption[] = [
@@ -38,12 +39,27 @@ const RENTAL_OPTIONS: FilterOption[] = [
   { id: 'rented', label: 'Rented', dotColor: '#0ea5e9' },
 ];
 
+// Session cache for mobile machine modal dropdown options
+interface MobileModalOptionsCache {
+  supervisors: SelectableUser[];
+  operators: SelectableUser[];
+  clients: SelectableClient[];
+  timestamp: number;
+}
+let mobileModalOptionsCache: MobileModalOptionsCache | null = null;
+const CACHE_TTL_MS = 60_000;
+
+export function invalidateMobileModalOptionsCache() {
+  mobileModalOptionsCache = null;
+}
+
 export const MachineModal: React.FC<MachineModalProps> = ({
   visible,
   onClose,
   onSuccess,
   machineToEdit,
   userRole,
+  initialSection = 'all',
 }) => {
   const { theme } = useTheme();
 
@@ -138,7 +154,17 @@ export const MachineModal: React.FC<MachineModalProps> = ({
     }
   }, [visible, machineToEdit]);
 
+
   const fetchDropdownOptions = async () => {
+    if (
+      mobileModalOptionsCache &&
+      Date.now() - mobileModalOptionsCache.timestamp < CACHE_TTL_MS
+    ) {
+      setSupervisorsList(mobileModalOptionsCache.supervisors);
+      setOperatorsList(mobileModalOptionsCache.operators);
+      setClientsList(mobileModalOptionsCache.clients);
+      return;
+    }
     try {
       const [supsRes, opsRes, clientsRes] = await Promise.all([
         supabase
@@ -160,9 +186,20 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           .order('company_name', { ascending: true }),
       ]);
 
-      if (supsRes.data) setSupervisorsList(supsRes.data);
-      if (opsRes.data) setOperatorsList(opsRes.data);
-      if (clientsRes.data) setClientsList(clientsRes.data);
+      const sups = supsRes.data || [];
+      const ops = opsRes.data || [];
+      const cls = clientsRes.data || [];
+
+      mobileModalOptionsCache = {
+        supervisors: sups,
+        operators: ops,
+        clients: cls,
+        timestamp: Date.now(),
+      };
+
+      setSupervisorsList(sups);
+      setOperatorsList(ops);
+      setClientsList(cls);
     } catch (e) {
       console.warn('Error fetching machine dropdown options:', e);
     }
@@ -186,7 +223,9 @@ export const MachineModal: React.FC<MachineModalProps> = ({
     const cleanYum = yearOfMfg.trim();
     const cleanMfr = manufacturer.trim();
 
-    if (!isSupervisor) {
+    const shouldValidateSpecs = !isSupervisor && (initialSection === 'all' || initialSection === 'info');
+
+    if (shouldValidateSpecs) {
       if (!cleanModel) errors.model = 'Model is mandatory.';
       if (!cleanSerial) errors.serial_number = 'Serial number is mandatory.';
       if (!cleanYum) errors.year_of_mfg = 'Year of manufacture is mandatory.';
@@ -201,7 +240,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
 
     setIsSaving(true);
     try {
-      if (!isSupervisor) {
+      if (shouldValidateSpecs) {
         // Uniqueness check for Serial Number
         let duplicateQuery = supabase
           .from('machines')
@@ -226,21 +265,72 @@ export const MachineModal: React.FC<MachineModalProps> = ({
 
       const numericHmr = parseFloat(hourMeter) || 0;
 
+      const effectiveStatus = selectedClient?.id ? 'rented' : 'available';
+      const effectiveClientId = selectedClient?.id || null;
+
       if (isSupervisor && machineToEdit?.id) {
         // Supervisor limited update payload
         const supervisorPayload: any = {
           hour_meter: numericHmr,
-          status: rentalStatus,
+          status: effectiveStatus,
           health_status: healthStatus,
           operator_ids: operatorIds,
           current_operator_id: operatorIds[0] || null,
-          client_id: rentalStatus === 'rented' ? selectedClient?.id || null : null,
+          client_id: effectiveClientId,
           updated_at: new Date().toISOString(),
         };
 
         const { error } = await supabase
           .from('machines')
           .update(supervisorPayload)
+          .eq('id', machineToEdit.id);
+
+        if (error) throw error;
+      } else if (machineToEdit?.id && initialSection === 'info') {
+        // Dedicated Machine Info update payload
+        const infoPayload: any = {
+          model: cleanModel,
+          serial_number: cleanSerial,
+          manufacturer: cleanMfr || null,
+          year_of_mfg: cleanYum || null,
+          hour_meter: numericHmr,
+          health_status: healthStatus,
+          updated_at: new Date().toISOString(),
+        };
+
+        const { error } = await supabase
+          .from('machines')
+          .update(infoPayload)
+          .eq('id', machineToEdit.id);
+
+        if (error) throw error;
+      } else if (machineToEdit?.id && initialSection === 'personnel') {
+        // Dedicated Shift Personnel update payload
+        const personnelPayload: any = {
+          supervisor_ids: supervisorIds,
+          current_supervisor_id: supervisorIds[0] || null,
+          operator_ids: operatorIds,
+          current_operator_id: operatorIds[0] || null,
+          updated_at: new Date().toISOString(),
+        };
+
+        const { error } = await supabase
+          .from('machines')
+          .update(personnelPayload)
+          .eq('id', machineToEdit.id);
+
+        if (error) throw error;
+      } else if (machineToEdit?.id && initialSection === 'client') {
+        // Dedicated Client Assignment update payload
+        const clientPayload: any = {
+          client_id: effectiveClientId,
+          status: effectiveStatus,
+          updated_at: new Date().toISOString(),
+        };
+
+        const { error } = await supabase
+          .from('machines')
+          .update(clientPayload)
           .eq('id', machineToEdit.id);
 
         if (error) throw error;
@@ -252,13 +342,13 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           manufacturer: cleanMfr || null,
           year_of_mfg: cleanYum || null,
           hour_meter: numericHmr,
-          status: rentalStatus,
+          status: effectiveStatus,
           health_status: healthStatus,
           supervisor_ids: supervisorIds,
           current_supervisor_id: supervisorIds[0] || null,
           operator_ids: operatorIds,
           current_operator_id: operatorIds[0] || null,
-          client_id: rentalStatus === 'rented' ? selectedClient?.id || null : null,
+          client_id: effectiveClientId,
           updated_at: new Date().toISOString(),
         };
 
@@ -278,6 +368,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
         }
       }
 
+      invalidateMobileModalOptionsCache();
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -290,6 +381,12 @@ export const MachineModal: React.FC<MachineModalProps> = ({
 
   const modalTitle = isSupervisor
     ? `Update Status (${machineToEdit?.machine_id || ''})`
+    : initialSection === 'info'
+    ? `Edit Machine Info (${machineToEdit?.machine_id || ''})`
+    : initialSection === 'personnel'
+    ? `Manage Shift Personnel (${machineToEdit?.machine_id || ''})`
+    : initialSection === 'client'
+    ? `Edit Client Assignment (${machineToEdit?.machine_id || ''})`
     : isEdit
     ? `Edit Machine (${machineToEdit?.machine_id || ''})`
     : 'Register New Machine';
@@ -335,7 +432,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
             showsVerticalScrollIndicator={false}
           >
             {/* SECTION 0: MACHINE INFO (Shown for Add Machine or when specs editable) */}
-            {!isSupervisor && (
+            {!isSupervisor && (initialSection === 'all' || initialSection === 'info') && (
               <View style={[styles.sectionBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                 <View style={[styles.sectionTitleRow, { borderBottomColor: theme.colors.hairline }]}>
                   <Text style={[styles.sectionHeaderTitle, { color: theme.colors.ink }]}>
@@ -385,256 +482,226 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                       />
                     </View>
                   </View>
+
+                  {/* Hour Meter Reading (Shifted into Machine Info) */}
+                  <Input
+                    label="Hour Meter Reading (HMR)"
+                    placeholder="0"
+                    value={hourMeter}
+                    onChangeText={setHourMeter}
+                    keyboardType="numeric"
+                    editable={!isSaving}
+                  />
+
+                  {/* Health Status Dropdown (Shifted into Machine Info) */}
+                  <View style={styles.fieldGroup}>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Health Status</Text>
+                    <TouchableOpacity
+                      onPress={() => setHealthModalOpen(true)}
+                      activeOpacity={0.7}
+                      style={[
+                        styles.singleSelectTrigger,
+                        {
+                          backgroundColor: theme.colors.canvasElevated,
+                          borderColor: theme.colors.hairline,
+                        },
+                      ]}
+                    >
+                      <View style={styles.selectLeft}>
+                        <View
+                          style={[
+                            styles.statusDot,
+                            {
+                              backgroundColor:
+                                healthStatus === 'active'
+                                  ? '#10b981'
+                                  : healthStatus === 'spare'
+                                  ? '#06b6d4'
+                                  : healthStatus === 'under_maintenance'
+                                  ? '#f59e0b'
+                                  : '#ef4444',
+                            },
+                          ]}
+                        />
+                        <Text style={[styles.selectValueText, { color: theme.colors.ink }]}>
+                          {healthStatus === 'active'
+                            ? 'Active'
+                            : healthStatus === 'spare'
+                            ? 'Spare'
+                            : healthStatus === 'under_maintenance'
+                            ? 'Under Maintenance'
+                            : 'Breakdown'}
+                        </Text>
+                      </View>
+                      <ChevronDown size={14} color={theme.colors.mute} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             )}
 
-            {/* SECTION 1: METER READINGS & PERSONNEL ASSIGNMENT (Screenshot 1 Match) */}
-            <View style={[styles.sectionBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-              <View style={[styles.sectionTitleRow, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.sectionHeaderTitle, { color: theme.colors.ink }]}>
-                  METER READINGS & PERSONNEL ASSIGNMENT
-                </Text>
-              </View>
-
-              <View style={styles.sectionFields}>
-                {/* Hour Meter Reading */}
-                <Input
-                  label="Hour Meter Reading (HMR)"
-                  placeholder="0"
-                  value={hourMeter}
-                  onChangeText={setHourMeter}
-                  keyboardType="numeric"
-                  editable={!isSaving}
-                />
-
-                {/* Assigned Supervisors */}
-                <View style={styles.fieldGroup}>
-                  <View style={styles.labelRow}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
-                      Assigned Supervisors (Multi-Shift Oversight)
-                    </Text>
-                    <Text style={[styles.assignedCountText, { color: theme.colors.mute }]}>
-                      {supervisorIds.length} assigned
-                    </Text>
-                  </View>
-
-                  <TouchableOpacity
-                    onPress={() => setSupervisorModalOpen(true)}
-                    activeOpacity={0.7}
-                    style={[
-                      styles.multiSelectTrigger,
-                      {
-                        backgroundColor: theme.colors.canvasElevated,
-                        borderColor: theme.colors.hairline,
-                      },
-                    ]}
-                  >
-                    <View style={styles.selectedPillsWrap}>
-                      {selectedSupervisors.length === 0 ? (
-                        <Text style={[styles.placeholderText, { color: theme.colors.mute }]}>
-                          Search & assign supervisors...
-                        </Text>
-                      ) : (
-                        selectedSupervisors.map((s) => (
-                          <View
-                            key={s.id}
-                            style={[
-                              styles.userChip,
-                              {
-                                backgroundColor: theme.colors.canvas,
-                                borderColor: theme.colors.hairline,
-                              },
-                            ]}
-                          >
-                            <Text style={[styles.userChipText, { color: theme.colors.ink }]}>
-                              {s.full_name}
-                            </Text>
-                            <TouchableOpacity
-                              onPress={() => handleRemoveSupervisor(s.id)}
-                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            >
-                              <X size={11} color={theme.colors.mute} />
-                            </TouchableOpacity>
-                          </View>
-                        ))
-                      )}
-                    </View>
-
-                    <View style={styles.triggerRightActions}>
-                      {supervisorIds.length > 0 && (
-                        <TouchableOpacity
-                          onPress={() => setSupervisorIds([])}
-                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                        >
-                          <Text style={[styles.clearBtnText, { color: theme.colors.mute }]}>
-                            Clear
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                      <ChevronDown size={14} color={theme.colors.mute} />
-                    </View>
-                  </TouchableOpacity>
+            {/* SECTION 1: PERSONNEL ASSIGNMENT (SUPERVISORS & OPERATORS) */}
+            {(initialSection === 'all' || initialSection === 'personnel') && (
+              <View style={[styles.sectionBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                <View style={[styles.sectionTitleRow, { borderBottomColor: theme.colors.hairline }]}>
+                  <Text style={[styles.sectionHeaderTitle, { color: theme.colors.ink }]}>
+                    PERSONNEL ASSIGNMENT (SUPERVISORS & OPERATORS)
+                  </Text>
                 </View>
 
-                {/* Assigned Operators */}
-                <View style={styles.fieldGroup}>
-                  <View style={styles.labelRow}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
-                      Assigned Operators (24h Shift Execution)
-                    </Text>
-                    <Text style={[styles.assignedCountText, { color: theme.colors.mute }]}>
-                      {operatorIds.length} assigned
-                    </Text>
-                  </View>
-
-                  <TouchableOpacity
-                    onPress={() => setOperatorModalOpen(true)}
-                    activeOpacity={0.7}
-                    style={[
-                      styles.multiSelectTrigger,
-                      {
-                        backgroundColor: theme.colors.canvasElevated,
-                        borderColor: theme.colors.hairline,
-                      },
-                    ]}
-                  >
-                    <View style={styles.selectedPillsWrap}>
-                      {selectedOperators.length === 0 ? (
-                        <Text style={[styles.placeholderText, { color: theme.colors.mute }]}>
-                          Search & assign operators...
-                        </Text>
-                      ) : (
-                        selectedOperators.map((o) => (
-                          <View
-                            key={o.id}
-                            style={[
-                              styles.userChip,
-                              {
-                                backgroundColor: theme.colors.canvas,
-                                borderColor: theme.colors.hairline,
-                              },
-                            ]}
-                          >
-                            <Text style={[styles.userChipText, { color: theme.colors.ink }]}>
-                              {o.full_name}
-                            </Text>
-                            <TouchableOpacity
-                              onPress={() => handleRemoveOperator(o.id)}
-                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            >
-                              <X size={11} color={theme.colors.mute} />
-                            </TouchableOpacity>
-                          </View>
-                        ))
-                      )}
-                    </View>
-
-                    <View style={styles.triggerRightActions}>
-                      {operatorIds.length > 0 && (
-                        <TouchableOpacity
-                          onPress={() => setOperatorIds([])}
-                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                        >
-                          <Text style={[styles.clearBtnText, { color: theme.colors.mute }]}>
-                            Clear
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-                      <ChevronDown size={14} color={theme.colors.mute} />
-                    </View>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-
-            {/* SECTION 2: STATUS & HEALTH TRACKING (Screenshot 1 Match) */}
-            <View style={[styles.sectionBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-              <View style={[styles.sectionTitleRow, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.sectionHeaderTitle, { color: theme.colors.ink }]}>
-                  STATUS & HEALTH TRACKING
-                </Text>
-              </View>
-
-              <View style={styles.sectionFields}>
-                {/* Health Status Dropdown */}
-                <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Health Status</Text>
-                  <TouchableOpacity
-                    onPress={() => setHealthModalOpen(true)}
-                    activeOpacity={0.7}
-                    style={[
-                      styles.singleSelectTrigger,
-                      {
-                        backgroundColor: theme.colors.canvasElevated,
-                        borderColor: theme.colors.hairline,
-                      },
-                    ]}
-                  >
-                    <View style={styles.selectLeft}>
-                      <View
-                        style={[
-                          styles.statusDot,
-                          {
-                            backgroundColor:
-                              healthStatus === 'active'
-                                ? '#10b981'
-                                : healthStatus === 'spare'
-                                ? '#06b6d4'
-                                : healthStatus === 'under_maintenance'
-                                ? '#f59e0b'
-                                : '#ef4444',
-                          },
-                        ]}
-                      />
-                      <Text style={[styles.selectValueText, { color: theme.colors.ink }]}>
-                        {healthStatus === 'active'
-                          ? 'Active'
-                          : healthStatus === 'spare'
-                          ? 'Spare'
-                          : healthStatus === 'under_maintenance'
-                          ? 'Under Maintenance'
-                          : 'Breakdown'}
+                <View style={styles.sectionFields}>
+                  {/* Assigned Supervisors */}
+                  <View style={styles.fieldGroup}>
+                    <View style={styles.labelRow}>
+                      <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
+                        Assigned Supervisors (Multi-Shift Oversight)
+                      </Text>
+                      <Text style={[styles.assignedCountText, { color: theme.colors.mute }]}>
+                        {supervisorIds.length} assigned
                       </Text>
                     </View>
-                    <ChevronDown size={14} color={theme.colors.mute} />
-                  </TouchableOpacity>
-                </View>
 
-                {/* Rental Status Dropdown */}
-                <View style={styles.fieldGroup}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Rental Status</Text>
-                  <TouchableOpacity
-                    onPress={() => setRentalModalOpen(true)}
-                    activeOpacity={0.7}
-                    style={[
-                      styles.singleSelectTrigger,
-                      {
-                        backgroundColor: theme.colors.canvasElevated,
-                        borderColor: theme.colors.hairline,
-                      },
-                    ]}
-                  >
-                    <View style={styles.selectLeft}>
-                      <View
-                        style={[
-                          styles.statusDot,
-                          {
-                            backgroundColor:
-                              rentalStatus === 'available' ? '#10b981' : '#0ea5e9',
-                          },
-                        ]}
-                      />
-                      <Text style={[styles.selectValueText, { color: theme.colors.ink }]}>
-                        {rentalStatus === 'available' ? 'Available' : 'Rented'}
+                    <TouchableOpacity
+                      onPress={() => setSupervisorModalOpen(true)}
+                      activeOpacity={0.7}
+                      style={[
+                        styles.multiSelectTrigger,
+                        {
+                          backgroundColor: theme.colors.canvasElevated,
+                          borderColor: theme.colors.hairline,
+                        },
+                      ]}
+                    >
+                      <View style={styles.selectedPillsWrap}>
+                        {selectedSupervisors.length === 0 ? (
+                          <Text style={[styles.placeholderText, { color: theme.colors.mute }]}>
+                            Search & assign supervisors...
+                          </Text>
+                        ) : (
+                          selectedSupervisors.map((s) => (
+                            <View
+                              key={s.id}
+                              style={[
+                                styles.userChip,
+                                {
+                                  backgroundColor: theme.colors.canvas,
+                                  borderColor: theme.colors.hairline,
+                                },
+                              ]}
+                            >
+                              <Text style={[styles.userChipText, { color: theme.colors.ink }]}>
+                                {s.full_name}
+                              </Text>
+                              <TouchableOpacity
+                                onPress={() => handleRemoveSupervisor(s.id)}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                              >
+                                <X size={11} color={theme.colors.mute} />
+                              </TouchableOpacity>
+                            </View>
+                          ))
+                        )}
+                      </View>
+
+                      <View style={styles.triggerRightActions}>
+                        {supervisorIds.length > 0 && (
+                          <TouchableOpacity
+                            onPress={() => setSupervisorIds([])}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <Text style={[styles.clearBtnText, { color: theme.colors.mute }]}>
+                              Clear
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                        <ChevronDown size={14} color={theme.colors.mute} />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Assigned Operators */}
+                  <View style={styles.fieldGroup}>
+                    <View style={styles.labelRow}>
+                      <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
+                        Assigned Operators (24h Shift Execution)
+                      </Text>
+                      <Text style={[styles.assignedCountText, { color: theme.colors.mute }]}>
+                        {operatorIds.length} assigned
                       </Text>
                     </View>
-                    <ChevronDown size={14} color={theme.colors.mute} />
-                  </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => setOperatorModalOpen(true)}
+                      activeOpacity={0.7}
+                      style={[
+                        styles.multiSelectTrigger,
+                        {
+                          backgroundColor: theme.colors.canvasElevated,
+                          borderColor: theme.colors.hairline,
+                        },
+                      ]}
+                    >
+                      <View style={styles.selectedPillsWrap}>
+                        {selectedOperators.length === 0 ? (
+                          <Text style={[styles.placeholderText, { color: theme.colors.mute }]}>
+                            Search & assign operators...
+                          </Text>
+                        ) : (
+                          selectedOperators.map((o) => (
+                            <View
+                              key={o.id}
+                              style={[
+                                styles.userChip,
+                                {
+                                  backgroundColor: theme.colors.canvas,
+                                  borderColor: theme.colors.hairline,
+                                },
+                              ]}
+                            >
+                              <Text style={[styles.userChipText, { color: theme.colors.ink }]}>
+                                {o.full_name}
+                              </Text>
+                              <TouchableOpacity
+                                onPress={() => handleRemoveOperator(o.id)}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                              >
+                                <X size={11} color={theme.colors.mute} />
+                              </TouchableOpacity>
+                            </View>
+                          ))
+                        )}
+                      </View>
+
+                      <View style={styles.triggerRightActions}>
+                        {operatorIds.length > 0 && (
+                          <TouchableOpacity
+                            onPress={() => setOperatorIds([])}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <Text style={[styles.clearBtnText, { color: theme.colors.mute }]}>
+                              Clear
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                        <ChevronDown size={14} color={theme.colors.mute} />
+                      </View>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* SECTION 2: CLIENT ASSIGNMENT & RENTAL STATUS */}
+            {(initialSection === 'all' || initialSection === 'client') && (
+              <View style={[styles.sectionBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                <View style={[styles.sectionTitleRow, { borderBottomColor: theme.colors.hairline }]}>
+                  <Text style={[styles.sectionHeaderTitle, { color: theme.colors.ink }]}>
+                    CLIENT ASSIGNMENT & RENTAL STATUS
+                  </Text>
                 </View>
 
-                {/* Assigned Client (shown when rental status is 'rented') */}
-                {rentalStatus === 'rented' && (
+                <View style={styles.sectionFields}>
+                  {/* Assigned Client */}
                   <View style={styles.fieldGroup}>
                     <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
                       Assigned Client
@@ -666,7 +733,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                           </View>
                         ) : (
                           <Text style={[styles.placeholderText, { color: theme.colors.mute }]}>
-                            Select assigned client...
+                            Search or select client to rent...
                           </Text>
                         )}
                       </View>
@@ -674,7 +741,10 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                       <View style={styles.triggerRightActions}>
                         {selectedClient && (
                           <TouchableOpacity
-                            onPress={() => setSelectedClient(null)}
+                            onPress={() => {
+                              setSelectedClient(null);
+                              setRentalStatus('available');
+                            }}
                             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                           >
                             <X size={14} color={theme.colors.mute} />
@@ -684,9 +754,47 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                       </View>
                     </TouchableOpacity>
                   </View>
-                )}
+
+                  {/* Automatic Rental Status Indicator */}
+                  <View style={styles.fieldGroup}>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Rental Status (Auto-Linked)</Text>
+                    <View
+                      style={[
+                        styles.singleSelectTrigger,
+                        {
+                          backgroundColor: theme.colors.canvasElevated,
+                          borderColor: theme.colors.hairline,
+                        },
+                      ]}
+                    >
+                      <View style={styles.selectLeft}>
+                        <View
+                          style={[
+                            styles.statusDot,
+                            {
+                              backgroundColor: selectedClient ? '#0ea5e9' : '#10b981',
+                            },
+                          ]}
+                        />
+                        <Text style={[styles.selectValueText, { color: theme.colors.ink, fontWeight: '600' }]}>
+                          {selectedClient ? 'Rented' : 'Available'}
+                        </Text>
+                        {selectedClient && (
+                          <Text style={[styles.assignedCountText, { color: theme.colors.mute, marginLeft: 6 }]}>
+                            (Deployed)
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    <Text style={[styles.assignedCountText, { color: theme.colors.mute, marginTop: 4 }]}>
+                      {selectedClient
+                        ? `Automatically rented to ${selectedClient.company_name}.`
+                        : 'Automatically available when no client is assigned.'}
+                    </Text>
+                  </View>
+                </View>
               </View>
-            </View>
+            )}
 
             {/* Bottom Actions (Screenshot 1 Match) */}
             <View style={styles.bottomButtonsWrap}>
@@ -750,7 +858,14 @@ export const MachineModal: React.FC<MachineModalProps> = ({
             onClose={() => setClientModalOpen(false)}
             clients={clientsList}
             selectedClientId={selectedClient?.id}
-            onSelect={setSelectedClient}
+            onSelect={(client) => {
+              setSelectedClient(client);
+              if (client) {
+                setRentalStatus('rented');
+              } else {
+                setRentalStatus('available');
+              }
+            }}
           />
 
           <CustomFilterSelectorModal

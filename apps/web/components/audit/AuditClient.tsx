@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useCallback, useEffect, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { Pagination } from "@/components/ui/Table";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { RotateCcw } from "lucide-react";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
+import { getPaginatedAuditLogsAction } from "@/app/actions/audit";
 import {
   AnimatedScrollText,
   AnimatedRotateCw,
@@ -18,9 +21,14 @@ import {
   AnimatedShieldCheck,
   AnimatedActivity,
 } from "@/components/ui/animated-icons";
+import dynamic from "next/dynamic";
 import { AuditKpis } from "./AuditKpis";
 import { AuditFilters } from "./AuditFilters";
-import { AuditDetailDrawer } from "./AuditDetailDrawer";
+
+const AuditDetailDrawer = dynamic(
+  () => import("./AuditDetailDrawer").then((mod) => mod.AuditDetailDrawer),
+  { ssr: false }
+);
 import {
   formatAuditAction,
   getAuditActionStyle,
@@ -30,6 +38,58 @@ import {
 } from "@/lib/audit-helpers";
 import type { AuditLogWithUser } from "@/lib/types/database";
 import type { AuditTab, AuditTabCounts } from "@/lib/queries/audit-logs";
+
+function AuditLogMobileSkeletonList({ count = 4 }: { count?: number }) {
+  return (
+    <div className="space-y-2.5" aria-label="Loading audit logs...">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] rounded-[var(--radius-md)] p-3.5 shadow-sm space-y-2.5 animate-pulse"
+        >
+          <div className="flex items-start justify-between gap-2">
+            <div className="h-4 w-32 rounded bg-[var(--color-hairline)]" />
+            <div className="h-4 w-14 rounded-full bg-[var(--color-hairline)]" />
+          </div>
+          <div className="h-3 w-48 rounded bg-[var(--color-hairline)]/70" />
+          <div className="flex items-center justify-between pt-2 border-t border-[var(--color-hairline)]">
+            <div className="h-3 w-28 rounded bg-[var(--color-hairline)]/60" />
+            <div className="h-3 w-16 rounded bg-[var(--color-hairline)]/60" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function formatAuditTime(dateStr: string, includeSeconds = true): string {
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: includeSeconds ? "2-digit" : undefined,
+      hour12: true,
+    });
+  } catch {
+    return "—";
+  }
+}
+
+function formatAuditDate(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleDateString("en-IN", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return "—";
+  }
+}
 
 interface AuditClientProps {
   initialLogs: AuditLogWithUser[];
@@ -135,9 +195,97 @@ export function AuditClient({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
+  const isDesktop = useMediaQuery("(min-width: 641px)");
 
   // Selected log for slide-over detail drawer
   const [selectedLog, setSelectedLog] = useState<AuditLogWithUser | null>(null);
+
+  // Mobile Infinite Scroll State (Chunk-by-chunk lazy loading)
+  const [mobileLogsList, setMobileLogsList] = useState<AuditLogWithUser[]>(initialLogs);
+  const [mobilePage, setMobilePage] = useState<number>(currentPage);
+  const [mobileHasMore, setMobileHasMore] = useState<boolean>(currentPage < totalPages);
+  const [isLoadingMoreMobile, setIsLoadingMoreMobile] = useState<boolean>(false);
+  const [loadMoreMobileError, setLoadMoreMobileError] = useState<string | null>(null);
+  const mobileSentinelRef = useRef<HTMLDivElement>(null);
+  const isFetchingMobileRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    setMobileLogsList(initialLogs);
+    setMobilePage(currentPage);
+    setMobileHasMore(currentPage < totalPages);
+    setLoadMoreMobileError(null);
+  }, [initialLogs, currentPage, totalPages]);
+
+  const handleLoadMoreMobile = useCallback(async () => {
+    if (isFetchingMobileRef.current || !mobileHasMore || isLoadingMoreMobile || isPending) return;
+    isFetchingMobileRef.current = true;
+    setIsLoadingMoreMobile(true);
+    setLoadMoreMobileError(null);
+
+    try {
+      const nextPage = mobilePage + 1;
+      const res = await getPaginatedAuditLogsAction({
+        tab: activeTab,
+        search: searchParams.get("search") || undefined,
+        category: searchParams.get("category") || undefined,
+        severity: searchParams.get("severity") || undefined,
+        role: searchParams.get("role") || undefined,
+        dateRange: (searchParams.get("dateRange") as any) || undefined,
+        startDate: searchParams.get("startDate") || undefined,
+        endDate: searchParams.get("endDate") || undefined,
+        page: nextPage,
+        limit: 25,
+      });
+
+      if (res.success && res.data) {
+        const { logs: nextLogs, totalPages: fetchedTotalPages } = res.data;
+        setMobileLogsList((prev) => {
+          const existingIds = new Set(prev.map((l) => l.id));
+          const fresh = nextLogs.filter((l) => !existingIds.has(l.id));
+          return [...prev, ...fresh];
+        });
+        setMobilePage(nextPage);
+        setMobileHasMore(nextPage < fetchedTotalPages);
+      } else {
+        setLoadMoreMobileError(res.error || "Failed to load more audit logs.");
+      }
+    } catch (err: any) {
+      setLoadMoreMobileError(err?.message || "Failed to load more audit logs.");
+    } finally {
+      setIsLoadingMoreMobile(false);
+      isFetchingMobileRef.current = false;
+    }
+  }, [
+    mobileHasMore,
+    isLoadingMoreMobile,
+    isPending,
+    mobilePage,
+    activeTab,
+    searchParams,
+  ]);
+
+  useEffect(() => {
+    const sentinel = mobileSentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first && first.isIntersecting) {
+          handleLoadMoreMobile();
+        }
+      },
+      { root: null, rootMargin: "350px", threshold: 0.1 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [handleLoadMoreMobile]);
+
+  const handleMobileRetry = useCallback(() => {
+    setLoadMoreMobileError(null);
+    handleLoadMoreMobile();
+  }, [handleLoadMoreMobile]);
 
   // Sync URL query params with transitions
   const handleFilterChange = (updates: Record<string, string | number | undefined>) => {
@@ -382,20 +530,12 @@ export function AuditClient({
                         className="hover:bg-[var(--color-canvas-subtle)] cursor-pointer transition-colors group"
                       >
                         {/* Timestamp */}
-                        <td className="py-3 px-4 whitespace-nowrap">
-                          <div className="font-mono text-xs text-[var(--color-ink)] font-medium">
-                            {new Date(log.created_at).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              second: "2-digit",
-                            })}
+                        <td suppressHydrationWarning className="py-3 px-4 whitespace-nowrap">
+                          <div suppressHydrationWarning className="font-mono text-xs text-[var(--color-ink)] font-medium">
+                            {formatAuditTime(log.created_at, true)}
                           </div>
-                          <div className="text-[11px] text-[var(--color-mute)]">
-                            {new Date(log.created_at).toLocaleDateString([], {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            })}
+                          <div suppressHydrationWarning className="text-[11px] text-[var(--color-mute)]">
+                            {formatAuditDate(log.created_at)}
                           </div>
                         </td>
 
@@ -662,7 +802,7 @@ export function AuditClient({
 
           {/* Mobile Card List (block sm:hidden) */}
           <div className="block sm:hidden space-y-2.5">
-            {initialLogs.map((log) => {
+            {mobileLogsList.map((log) => {
               const actionStyle = getAuditActionStyle(log.action);
               const severityStyle = getAuditSeverityStyle(log.severity || "info");
               const description = getAuditLogDescription(log);
@@ -717,21 +857,53 @@ export function AuditClient({
                         <span>• <span className="text-[var(--color-ink)]">{log.entity_name}</span></span>
                       )}
                     </div>
-                    <div className="font-mono text-[10px]">
-                      {new Date(log.created_at).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                    <div suppressHydrationWarning className="font-mono text-[10px]">
+                      {formatAuditTime(log.created_at, false)}
                     </div>
                   </div>
                 </div>
               );
             })}
+
+            {/* Skeletons while loading more audit logs chunk-by-chunk on mobile */}
+            {isLoadingMoreMobile && (
+              <AuditLogMobileSkeletonList count={2} />
+            )}
+
+            {/* Infinite Scroll Sentinel for Mobile */}
+            {!isDesktop && mobileHasMore && !loadMoreMobileError && !isPending && (
+              <div ref={mobileSentinelRef} className="h-6 w-full pointer-events-none" />
+            )}
+
+            {/* Mobile Load More Error with Retry */}
+            {!isDesktop && loadMoreMobileError && (
+              <div className="p-3 my-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] flex items-center justify-between gap-3 text-xs shadow-xs">
+                <span className="text-[var(--color-error)] font-medium">{loadMoreMobileError}</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleMobileRetry}
+                  className="h-7 px-3 text-xs font-semibold rounded-md border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)] flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Retry
+                </Button>
+              </div>
+            )}
+
+            {/* End-of-List Indicator on Mobile */}
+            {!isDesktop && !mobileHasMore && mobileLogsList.length > 0 && !isPending && (
+              <div className="py-6 flex items-center justify-center gap-3 text-xs text-[var(--color-mute)] select-none">
+                <div className="h-[1px] flex-1 bg-[var(--color-hairline)]" />
+                <span className="font-medium text-[var(--color-mute)]">All audit logs have been displayed</span>
+                <div className="h-[1px] flex-1 bg-[var(--color-hairline)]" />
+              </div>
+            )}
           </div>
 
           {/* Pagination Controls */}
           {totalCount > 0 && (
-            <div className="pt-2">
+            <div className="pt-2 hidden sm:block">
               <Pagination
                 page={currentPage}
                 pageSize={25}
@@ -743,12 +915,14 @@ export function AuditClient({
         </div>
       )}
 
-      {/* Detail Slide-Over Drawer */}
-      <AuditDetailDrawer
-        log={selectedLog}
-        open={Boolean(selectedLog)}
-        onClose={() => setSelectedLog(null)}
-      />
+      {/* Detail Slide-Over Drawer (Lazy loaded strictly on click) */}
+      {selectedLog && (
+        <AuditDetailDrawer
+          log={selectedLog}
+          open={Boolean(selectedLog)}
+          onClose={() => setSelectedLog(null)}
+        />
+      )}
     </div>
   );
 }

@@ -42,7 +42,7 @@ export function PODetailClient({ user, poId }: PODetailClientProps) {
       {/* Top Breadcrumb */}
       <Link
         href="/purchase-orders"
-        className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors"
+        className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors"
       >
         <AnimatedChevronLeft size={16} />
         <span>Back to Purchase Orders</span>

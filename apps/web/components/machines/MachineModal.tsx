@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { Modal, Input, Select, Button, useToast, SearchableSelect, UserSelect, MultiUserSelect, ClientSelect, type ClientSelectItem } from "@/components/ui";
-import { createMachine, updateMachine, checkMachineSerialNumberAvailable } from "@/app/actions/machines";
+import { createMachine, updateMachine, checkMachineSerialNumberAvailable, getMachineModalOptionsAction } from "@/app/actions/machines";
 import type { Machine, User } from "@/lib/types/database";
 import { isManagerOrAbove } from "@reachinternational/permissions";
 import { AlertCircle } from "lucide-react";
@@ -16,6 +16,20 @@ interface MachineModalProps {
   clients?: ClientSelectItem[];
   userRole?: string;
   onSuccess: () => void;
+}
+
+// Module-level session cache for machine modal options (supervisors, operators, clients)
+interface ModalOptionsSessionCache {
+  supervisors: User[];
+  operators: User[];
+  clients: ClientSelectItem[];
+  timestamp: number;
+}
+let modalOptionsSessionCache: ModalOptionsSessionCache | null = null;
+const MODAL_OPTIONS_TTL_MS = 60_000; // 60s short TTL
+
+export function invalidateMachineModalOptionsCache() {
+  modalOptionsSessionCache = null;
 }
 
 export function MachineModal({ open, onClose, machine, supervisors = [], operators = [], clients = [], userRole, onSuccess }: MachineModalProps) {
@@ -49,6 +63,89 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
   const [rentalStatus, setRentalStatus] = useState<string>(() => machine?.status || "available");
   const [healthStatus, setHealthStatus] = useState<string>(() => machine?.health_status || "active");
   const [clientId, setClientId] = useState<string>(() => machine?.client_id || "");
+
+  // Lazy-loaded options state with session cache fallback (0ms subsequent loads)
+  const [lazySupervisors, setLazySupervisors] = useState<User[]>(() => {
+    if (supervisors.length > 0) return supervisors;
+    if (modalOptionsSessionCache && Date.now() - modalOptionsSessionCache.timestamp < MODAL_OPTIONS_TTL_MS) {
+      return modalOptionsSessionCache.supervisors;
+    }
+    return [];
+  });
+  const [lazyOperators, setLazyOperators] = useState<User[]>(() => {
+    if (operators.length > 0) return operators;
+    if (modalOptionsSessionCache && Date.now() - modalOptionsSessionCache.timestamp < MODAL_OPTIONS_TTL_MS) {
+      return modalOptionsSessionCache.operators;
+    }
+    return [];
+  });
+  const [lazyClients, setLazyClients] = useState<ClientSelectItem[]>(() => {
+    if (clients.length > 0) return clients;
+    if (modalOptionsSessionCache && Date.now() - modalOptionsSessionCache.timestamp < MODAL_OPTIONS_TTL_MS) {
+      return modalOptionsSessionCache.clients;
+    }
+    return [];
+  });
+  const [isLoadingOptions, setIsLoadingOptions] = useState(false);
+
+  // Sync props to lazy state if props update
+  useEffect(() => {
+    if (supervisors.length > 0) setLazySupervisors(supervisors);
+  }, [supervisors]);
+
+  useEffect(() => {
+    if (operators.length > 0) setLazyOperators(operators);
+  }, [operators]);
+
+  useEffect(() => {
+    if (clients.length > 0) setLazyClients(clients);
+  }, [clients]);
+
+  // On-demand lazy fetch when modal is opened and options are missing
+  useEffect(() => {
+    if (!open) return;
+    const isCacheFresh = modalOptionsSessionCache && Date.now() - modalOptionsSessionCache.timestamp < MODAL_OPTIONS_TTL_MS;
+    if (isCacheFresh && modalOptionsSessionCache) {
+      if (lazySupervisors.length === 0) setLazySupervisors(modalOptionsSessionCache.supervisors);
+      if (lazyOperators.length === 0) setLazyOperators(modalOptionsSessionCache.operators);
+      if (lazyClients.length === 0) setLazyClients(modalOptionsSessionCache.clients);
+      return;
+    }
+
+    const needsSup = lazySupervisors.length === 0;
+    const needsOp = lazyOperators.length === 0;
+    const needsCl = lazyClients.length === 0;
+    if (!needsSup && !needsOp && !needsCl) return;
+
+    let isMounted = true;
+    setIsLoadingOptions(true);
+    getMachineModalOptionsAction()
+      .then((data) => {
+        if (!isMounted) return;
+        const sups = data.supervisors || [];
+        const ops = data.operators || [];
+        const cls = (data.clients || []) as any;
+        modalOptionsSessionCache = {
+          supervisors: sups,
+          operators: ops,
+          clients: cls,
+          timestamp: Date.now(),
+        };
+        if (needsSup) setLazySupervisors(sups);
+        if (needsOp) setLazyOperators(ops);
+        if (needsCl) setLazyClients(cls);
+      })
+      .catch((err) => {
+        console.error("Failed to lazy load machine modal options", err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingOptions(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [open, lazySupervisors.length, lazyOperators.length, lazyClients.length]);
 
   // Sync state when machine prop changes
   const [prevMachine, setPrevMachine] = useState(machine);
@@ -140,6 +237,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
             : "Machine registered successfully"
         );
         setIsSaving(false);
+        invalidateMachineModalOptionsCache();
         onSuccess();
         onClose();
       }
@@ -152,7 +250,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
   };
 
   // Ensure assigned supervisors/operators are included in options if present
-  const allSupervisors: Array<{ id: string; full_name: string; phone?: string | null; email?: string | null }> = [...supervisors];
+  const allSupervisors: Array<{ id: string; full_name: string; phone?: string | null; email?: string | null }> = [...lazySupervisors];
   if (Array.isArray(machine?.supervisors)) {
     machine?.supervisors.forEach((s) => {
       if (s && !allSupervisors.some((item) => item.id === s.id)) {
@@ -166,7 +264,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
     }
   }
 
-  const allOperators: Array<{ id: string; full_name: string; phone?: string | null; email?: string | null }> = [...operators];
+  const allOperators: Array<{ id: string; full_name: string; phone?: string | null; email?: string | null }> = [...lazyOperators];
   if (Array.isArray(machine?.operators)) {
     machine?.operators.forEach((o) => {
       if (o && !allOperators.some((item) => item.id === o.id)) {
@@ -181,7 +279,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
   }
 
   // Ensure assigned client is included in options if present
-  const allClients: ClientSelectItem[] = [...clients];
+  const allClients: ClientSelectItem[] = [...lazyClients];
   if (machine?.client && machine.client_id) {
     if (!allClients.some((c) => c.id === machine.client_id)) {
       allClients.push(machine.client as ClientSelectItem);
@@ -300,7 +398,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
                 users={allSupervisors}
                 values={supervisorIds}
                 onChange={setSupervisorIds}
-                placeholder="Search & assign supervisors..."
+                placeholder={isLoadingOptions && allSupervisors.length === 0 ? "Loading supervisors..." : "Search & assign supervisors..."}
                 disabled={!canEditSupervisor || isSaving}
               />
               <input type="hidden" name="supervisor_ids" value={JSON.stringify(supervisorIds)} />
@@ -313,7 +411,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
                 users={allOperators}
                 values={operatorIds}
                 onChange={setOperatorIds}
-                placeholder="Search & assign operators..."
+                placeholder={isLoadingOptions && allOperators.length === 0 ? "Loading operators..." : "Search & assign operators..."}
                 disabled={isSaving}
               />
               <input type="hidden" name="operator_ids" value={JSON.stringify(operatorIds)} />
@@ -368,7 +466,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
                   clients={allClients}
                   value={clientId}
                   onChange={(selectedId) => setClientId(selectedId)}
-                  placeholder="Search and select client renting this machine..."
+                  placeholder={isLoadingOptions && allClients.length === 0 ? "Loading clients..." : "Search and select client renting this machine..."}
                   clearable
                   disabled={isSaving}
                   error={fieldErrors.client_id}

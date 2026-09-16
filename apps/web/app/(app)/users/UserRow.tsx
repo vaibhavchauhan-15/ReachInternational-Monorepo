@@ -2,6 +2,7 @@
 
 import { memo, useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { highlightText } from "./user-search";
 import {
   AnimatedKey,
   AnimatedUser,
@@ -44,6 +45,7 @@ interface UserRowProps {
   onUpdateRole: (userId: string, newRole: UserRole) => void;
   onUpdateSupervisor?: (userId: string, supervisorIds: string[] | string | null) => void;
   onDelete: (userId: string) => void;
+  searchTerm?: string;
 }
 
 function truncateText(str: string | null | undefined, max: number): string {
@@ -169,6 +171,7 @@ export const UserRow = memo(function UserRow({
   onUpdateRole,
   onUpdateSupervisor,
   onDelete,
+  searchTerm,
 }: UserRowProps) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -328,7 +331,7 @@ export const UserRow = memo(function UserRow({
           className="text-sm font-semibold text-[var(--color-ink)] group-hover:text-[var(--color-link)] transition-colors block max-w-full"
           title={user.full_name}
         >
-          {truncateText(user.full_name, 15)}
+          {highlightText(truncateText(user.full_name, 15), searchTerm)}
         </span>
       </td>
 
@@ -338,13 +341,13 @@ export const UserRow = memo(function UserRow({
           <div className="flex flex-col gap-0.5 text-xs">
             {user.phone ? (
               <span className="text-[var(--color-ink)] font-mono font-medium whitespace-nowrap">
-                {user.phone}
+                {highlightText(user.phone, searchTerm)}
               </span>
             ) : (
               <span className="text-[var(--color-mute)] italic">No Phone</span>
             )}
             <span className="text-[var(--color-mute)] block max-w-[220px]" title={user.email}>
-              {truncateText(user.email, 20)}
+              {highlightText(truncateText(user.email, 20), searchTerm)}
             </span>
           </div>
         ) : (

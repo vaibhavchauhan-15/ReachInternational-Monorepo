@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getUserDetailAction } from "@/app/actions/users";
 import {
   AnimatedX,
   AnimatedBuilding2,
@@ -119,7 +120,7 @@ function getRoleIcon(role: string) {
 }
 
 export function UserDetailSheet({
-  user,
+  user: propUser,
   currentUser,
   isSuperAdmin,
   loadingId,
@@ -135,6 +136,20 @@ export function UserDetailSheet({
   const { toast } = useToast();
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showFullAadhaar, setShowFullAadhaar] = useState(false);
+  const [detailedUser, setDetailedUser] = useState<User | null>(propUser);
+
+  useEffect(() => {
+    setDetailedUser(propUser);
+    if (propUser?.id && propUser.aadhaar_number === undefined && propUser.license_number === undefined && propUser.address === undefined) {
+      getUserDetailAction(propUser.id).then((res) => {
+        if (res.user) {
+          setDetailedUser(res.user);
+        }
+      }).catch(() => {});
+    }
+  }, [propUser]);
+
+  const user = detailedUser || propUser;
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);

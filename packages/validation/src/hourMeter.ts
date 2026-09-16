@@ -25,6 +25,9 @@ export const CreateHourLogSchema = z.object({
 }).refine((data) => data.end_meter >= data.start_meter, {
   message: "End meter reading cannot be less than start meter reading",
   path: ["end_meter"],
+}).refine((data) => (data.end_meter - data.start_meter) <= 24, {
+  message: "Machine running hours cannot exceed 24 hours in a single log.",
+  path: ["end_meter"],
 }).refine((data) => {
   if (!data.end_datetime) return true;
   let endMs: number;
@@ -57,3 +60,81 @@ export const CreateHourLogSchema = z.object({
 });
 
 export type CreateHourLogInput = z.infer<typeof CreateHourLogSchema>;
+
+export const SubmitHourLogSchema = z.object({
+  machineId: z.string().min(1, "Machine ID is required"),
+  operatorId: z.string().uuid("Invalid operator ID").optional().nullable(),
+  clientId: z.string().uuid("Invalid client ID").optional().nullable(),
+  startDate: z.string().max(50).optional().nullable(),
+  logDate: z.string().max(50).optional().nullable(),
+  endDate: z.string().max(50).optional().nullable(),
+  startMeter: z.number({ required_error: "Starting hour meter reading is required", invalid_type_error: "Starting hour meter reading must be a valid number" }).min(0, "Starting hour meter reading must be non-negative"),
+  endMeter: z.number({ required_error: "Ending hour meter reading is required", invalid_type_error: "Ending hour meter reading must be a valid number" }).min(0, "Ending hour meter reading must be non-negative"),
+  startTime: z.string().max(20).optional().nullable(),
+  endTime: z.string().max(20).optional().nullable(),
+  overtimeHours: z.number().min(0).max(24).optional().nullable(),
+  isBreakdown: z.boolean().optional().nullable(),
+  breakdownStartTime: z.string().max(20).optional().nullable(),
+  breakdownEndTime: z.string().max(20).optional().nullable(),
+  breakdownDuration: z.string().max(100).optional().nullable(),
+  breakdownHours: z.number().min(0).optional().nullable(),
+  shift: z.string().max(50).optional().nullable(),
+  machineCondition: z.enum(["good", "fair", "needs_attention", "breakdown"]).optional().nullable(),
+  location: z.string().max(255).optional().nullable(),
+  remarks: z.string().max(500).optional().nullable(),
+  idempotencyKey: z.string().max(128).optional().nullable(),
+}).refine((data) => data.endMeter >= data.startMeter, {
+  message: "Ending hour meter reading cannot be less than starting hour meter reading.",
+  path: ["endMeter"],
+}).refine((data) => (data.endMeter - data.startMeter) <= 24, {
+  message: "Machine running hours cannot exceed 24 hours in a single log.",
+  path: ["endMeter"],
+});
+
+export type SubmitHourLogInput = z.infer<typeof SubmitHourLogSchema>;
+
+export const UpdateHourLogSchema = z.object({
+  logId: z.string().uuid("Invalid log ID format"),
+  clientId: z.string().uuid("Invalid client ID format").optional().nullable(),
+  startDate: z.string().max(50).optional().nullable(),
+  endDate: z.string().max(50).optional().nullable(),
+  startMeter: z.number().min(0, "Start meter reading must be non-negative").optional().nullable(),
+  endMeter: z.number().min(0, "End meter reading must be non-negative").optional().nullable(),
+  startTime: z.string().max(20).optional().nullable(),
+  endTime: z.string().max(20).optional().nullable(),
+  overtimeHours: z.number().min(0).max(24).optional().nullable(),
+  isBreakdown: z.boolean().optional().nullable(),
+  breakdownStartTime: z.string().max(20).optional().nullable(),
+  breakdownEndTime: z.string().max(20).optional().nullable(),
+  breakdownDuration: z.string().max(100).optional().nullable(),
+  breakdownHours: z.number().min(0).optional().nullable(),
+  shift: z.string().max(50).optional().nullable(),
+  machineCondition: z.enum(["good", "fair", "needs_attention", "breakdown"]).optional().nullable(),
+  location: z.string().max(255).optional().nullable(),
+  remarks: z.string().max(500).optional().nullable(),
+}).refine((data) => {
+  if (data.startMeter !== undefined && data.startMeter !== null && data.endMeter !== undefined && data.endMeter !== null) {
+    return data.endMeter >= data.startMeter;
+  }
+  return true;
+}, {
+  message: "Ending hour meter reading cannot be less than starting hour meter reading.",
+  path: ["endMeter"],
+}).refine((data) => {
+  if (data.startMeter !== undefined && data.startMeter !== null && data.endMeter !== undefined && data.endMeter !== null) {
+    return (data.endMeter - data.startMeter) <= 24;
+  }
+  return true;
+}, {
+  message: "Machine running hours cannot exceed 24 hours in a single log.",
+  path: ["endMeter"],
+});
+
+export type UpdateHourLogInput = z.infer<typeof UpdateHourLogSchema>;
+
+export const DeleteHourLogSchema = z.object({
+  logId: z.string().uuid("Invalid log ID format"),
+  reason: z.string().max(255).optional().nullable(),
+});
+
+export type DeleteHourLogInput = z.infer<typeof DeleteHourLogSchema>;

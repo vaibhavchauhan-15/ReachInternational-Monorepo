@@ -135,7 +135,7 @@ export function CustomDatePicker({
     }
   }, [value]);
 
-  const { mounted, position, isPositioned, updatePosition } = useDynamicDropdownPosition({
+  const { mounted, position, isPositioned, portalTarget, updatePosition } = useDynamicDropdownPosition({
     isOpen: isCalendarOpen,
     triggerRef,
     popoverRef,
@@ -401,7 +401,7 @@ export function CustomDatePicker({
       {/* ========================================================================= */}
       {/* FULL MONTH CALENDAR POPOVER DIALOG (PORTALED WITH DYNAMIC VIEWPORT POS)   */}
       {/* ========================================================================= */}
-      {mounted && createPortal(
+      {mounted && portalTarget && createPortal(
         <AnimatePresence>
           {isCalendarOpen && isPositioned && (
             <motion.div
@@ -434,6 +434,7 @@ export function CustomDatePicker({
                 width: `${position.width}px`,
                 maxHeight: `${position.maxHeight}px`,
                 zIndex: 99999,
+                pointerEvents: "auto",
                 transformOrigin: position.placement === "top" ? "bottom center" : "top center",
               }}
               className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden flex flex-col backdrop-blur-md"
@@ -545,7 +546,7 @@ export function CustomDatePicker({
             </motion.div>
           )}
         </AnimatePresence>,
-        document.body
+        portalTarget
       )}
     </div>
   );

@@ -91,6 +91,21 @@ export default function ProfileScreen() {
     router.replace('/(auth)/login');
   };
 
+  const handleAccountDeletionPress = () => {
+    Alert.alert(
+      'Request Account Deletion',
+      'This action is for permanent account de-provisioning and personal data erasure. It will not sign you out of your current session.\n\nAre you sure you want to proceed?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Continue to Deletion',
+          style: 'destructive',
+          onPress: () => router.push('/(app)/account-deletion' as any),
+        },
+      ]
+    );
+  };
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     try {
@@ -486,7 +501,7 @@ export default function ProfileScreen() {
           <Text style={[styles.sectionEyebrow, { color: theme.colors.mute }]}>ACCOUNT MANAGEMENT</Text>
           <TouchableOpacity
             style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 }}
-            onPress={() => router.push('/(app)/account-deletion' as any)}
+            onPress={handleAccountDeletionPress}
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
               <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(220, 38, 38, 0.1)', alignItems: 'center', justifyContent: 'center' }}>

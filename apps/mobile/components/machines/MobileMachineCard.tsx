@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   Platform,
 } from 'react-native';
-import { Badge, useTheme } from '../ui';
+import { Badge, useTheme, HighlightText } from '../ui';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import {
   Copy,
@@ -21,6 +21,7 @@ export interface MobileMachineCardProps {
   machine: any;
   isAdmin: boolean;
   isSupervisor?: boolean;
+  searchTerm?: string;
   onEdit: (machine: any) => void;
   onDelete: (machine: any) => void;
   onLogMeter?: (machine: any) => void;
@@ -31,12 +32,13 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
   machine,
   isAdmin,
   isSupervisor = false,
+  searchTerm,
   onEdit,
   onDelete,
   onLogMeter,
   onViewDetails,
 }) => {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
   const [copied, setCopied] = useState(false);
 
   const handleCopyId = () => {
@@ -93,9 +95,12 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
               },
             ]}
           >
-            <Text style={[styles.codeText, { color: theme.colors.ink }]}>
-              {machine.machine_id}
-            </Text>
+            <HighlightText
+              text={machine.machine_id}
+              query={searchTerm}
+              style={[styles.codeText, { color: theme.colors.ink }]}
+              matchStyle={{ color: isDark ? '#3291ff' : '#0070f3', fontWeight: '700' }}
+            />
             {copied ? (
               <Check size={12} color={theme.colors.success} strokeWidth={2.5} />
             ) : (
@@ -104,9 +109,13 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
           </TouchableOpacity>
 
           {machine.model && (
-            <Text style={[styles.modelText, { color: theme.colors.ink }]} numberOfLines={1}>
-              {machine.model}
-            </Text>
+            <HighlightText
+              text={machine.model}
+              query={searchTerm}
+              style={[styles.modelText, { color: theme.colors.ink }]}
+              matchStyle={{ color: isDark ? '#3291ff' : '#0070f3', fontWeight: '700' }}
+              numberOfLines={1}
+            />
           )}
         </View>
 
@@ -133,23 +142,19 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
       </View>
 
       {/* Sub Metadata Row */}
-      <View style={styles.metaRow}>
-        {machine.serial_number && (
+      {machine.serial_number && (
+        <View style={styles.metaRow}>
           <Text style={[styles.metaText, { color: theme.colors.body }]}>
-            S/N: {machine.serial_number}
+            S/N:{' '}
+            <HighlightText
+              text={machine.serial_number}
+              query={searchTerm}
+              style={[styles.metaText, { color: theme.colors.body }]}
+              matchStyle={{ color: isDark ? '#3291ff' : '#0070f3', fontWeight: '700' }}
+            />
           </Text>
-        )}
-        {machine.year_of_mfg && (
-          <Text style={[styles.metaText, { color: theme.colors.mute }]}>
-            • YUM: {machine.year_of_mfg}
-          </Text>
-        )}
-        {machine.manufacturer && (
-          <Text style={[styles.metaText, { color: theme.colors.mute }]}>
-            • Mfg: {machine.manufacturer}
-          </Text>
-        )}
-      </View>
+        </View>
+      )}
 
       {/* Inset Specs Well */}
       <View
@@ -194,11 +199,6 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
               <Text style={[styles.specLabel, { color: theme.colors.mute }]}>
                 Supervisor:
               </Text>
-              {supervisors.length > 3 && (
-                <Text style={styles.moreCountBadge}>
-                  +{supervisors.length - 3}
-                </Text>
-              )}
             </View>
 
             {supervisors.length === 0 ? (
@@ -206,15 +206,44 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
                 Unassigned
               </Text>
             ) : (
-              supervisors.slice(0, 3).map((s: any, idx: number) => (
-                <Text
-                  key={s.id || idx}
-                  style={[styles.personnelName, { color: theme.colors.ink }]}
-                  numberOfLines={1}
-                >
-                  {s.full_name}
-                </Text>
-              ))
+              supervisors.slice(0, 3).map((s: any, idx: number) => {
+                const isLast = idx === Math.min(supervisors.length, 3) - 1;
+                const remaining = supervisors.length > 3 ? supervisors.length - 3 : 0;
+                return (
+                  <View key={s.id || idx} style={styles.personnelRow}>
+                    <Text
+                      style={[styles.personnelName, { color: theme.colors.ink, flexShrink: 1 }]}
+                      numberOfLines={1}
+                    >
+                      {s.full_name}
+                    </Text>
+                    {isLast && remaining > 0 && (
+                      <View
+                        style={[
+                          styles.inlineBadge,
+                          {
+                            backgroundColor: isDark
+                              ? 'rgba(20, 184, 166, 0.15)'
+                              : 'rgba(20, 184, 166, 0.1)',
+                            borderColor: isDark
+                              ? 'rgba(20, 184, 166, 0.3)'
+                              : 'rgba(20, 184, 166, 0.2)',
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.inlineBadgeText,
+                            { color: isDark ? '#2dd4bf' : '#0d9488' },
+                          ]}
+                        >
+                          +{remaining}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })
             )}
           </View>
 
@@ -224,11 +253,6 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
               <Text style={[styles.specLabel, { color: theme.colors.mute }]}>
                 Operator (24h):
               </Text>
-              {operators.length > 3 && (
-                <Text style={[styles.moreCountBadge, { color: '#f59e0b' }]}>
-                  +{operators.length - 3}
-                </Text>
-              )}
             </View>
 
             {operators.length === 0 ? (
@@ -236,15 +260,44 @@ export const MobileMachineCard: React.FC<MobileMachineCardProps> = ({
                 Unassigned
               </Text>
             ) : (
-              operators.slice(0, 3).map((o: any, idx: number) => (
-                <Text
-                  key={o.id || idx}
-                  style={[styles.personnelName, { color: theme.colors.ink }]}
-                  numberOfLines={1}
-                >
-                  {o.full_name}
-                </Text>
-              ))
+              operators.slice(0, 3).map((o: any, idx: number) => {
+                const isLast = idx === Math.min(operators.length, 3) - 1;
+                const remaining = operators.length > 3 ? operators.length - 3 : 0;
+                return (
+                  <View key={o.id || idx} style={styles.personnelRow}>
+                    <Text
+                      style={[styles.personnelName, { color: theme.colors.ink, flexShrink: 1 }]}
+                      numberOfLines={1}
+                    >
+                      {o.full_name}
+                    </Text>
+                    {isLast && remaining > 0 && (
+                      <View
+                        style={[
+                          styles.inlineBadge,
+                          {
+                            backgroundColor: isDark
+                              ? 'rgba(245, 158, 11, 0.15)'
+                              : 'rgba(245, 158, 11, 0.1)',
+                            borderColor: isDark
+                              ? 'rgba(245, 158, 11, 0.3)'
+                              : 'rgba(245, 158, 11, 0.2)',
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.inlineBadgeText,
+                            { color: isDark ? '#fbbf24' : '#d97706' },
+                          ]}
+                        >
+                          +{remaining}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })
             )}
           </View>
         </View>
@@ -436,10 +489,27 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#10b981',
   },
+  personnelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 1,
+  },
   personnelName: {
     fontSize: 11,
     fontWeight: '600',
     lineHeight: 15,
+  },
+  inlineBadge: {
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+  },
+  inlineBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    lineHeight: 11,
   },
   unassignedText: {
     fontSize: 11,

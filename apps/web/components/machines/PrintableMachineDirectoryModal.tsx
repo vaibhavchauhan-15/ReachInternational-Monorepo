@@ -13,10 +13,6 @@ import {
 } from "@/components/pdf";
 import { formatExportDateTimeSlug, buildMachinesExportFileName } from "@/lib/pdf/pdf-config";
 import { getPrintStylesheet } from "@/lib/pdf/pdf-print-styles";
-import {
-  exportMachinesToExcel,
-  exportMachinesToCSV,
-} from "@/lib/utils/machines-export";
 import { Printer, FileSpreadsheet, FileText, SlidersHorizontal } from "lucide-react";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -329,12 +325,14 @@ export function PrintableMachineDirectoryModal({
     handleBrowserPrint(pdfFileName);
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const { exportMachinesToExcel } = await import("@/lib/utils/machines-export");
     const prefix = useSelectionOnly ? `Machines-Selected-${filteredMachines.length}` : "Machine-Directory";
     exportMachinesToExcel(filteredMachines, prefix);
   };
 
-  const handleExportCSV = () => {
+  const handleExportCSV = async () => {
+    const { exportMachinesToCSV } = await import("@/lib/utils/machines-export");
     const prefix = useSelectionOnly ? `Machines-Selected-${filteredMachines.length}` : "Machine-Directory";
     exportMachinesToCSV(filteredMachines, prefix);
   };

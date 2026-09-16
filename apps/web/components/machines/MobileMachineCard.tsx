@@ -1,33 +1,53 @@
-"use client";
-
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  AnimatedEdit,
-  AnimatedTrash,
   AnimatedChevronRight,
   AnimatedCopy,
   AnimatedCheck,
 } from "@/components/ui/animated-icons";
+import { History } from "lucide-react";
 import { motion } from "framer-motion";
 import { Badge, useToast } from "@/components/ui";
+import { Highlight } from "@/components/ui/Highlight";
+import { MachineRowActionsMenu } from "./MachineRowActionsMenu";
 import type { Machine } from "@/lib/types/database";
 
 interface MobileMachineCardProps {
   machine: Machine;
   isAdmin: boolean;
   isSupervisor?: boolean;
-  onEdit: (machine: Machine) => void;
+  searchTerm?: string;
+  onEditMachine?: (machine: Machine) => void;
+  onEditPersonnel?: (machine: Machine) => void;
+  onEditClient?: (machine: Machine) => void;
+  onViewAudit?: (machine: Machine) => void;
+  onViewLogs?: (machine: Machine) => void;
   onDelete: (machine: Machine) => void;
+  // Fallbacks
+  onEdit?: (machine: Machine) => void;
+  onViewAssignments?: (machine: Machine) => void;
+  onViewHistory?: (machine: Machine) => void;
+  onViewDetails?: (machine: Machine) => void;
 }
 
 export function MobileMachineCard({
   machine,
   isAdmin,
   isSupervisor = false,
-  onEdit,
+  searchTerm = "",
+  onEditMachine,
+  onEditPersonnel,
+  onEditClient,
+  onViewAudit,
+  onViewLogs,
   onDelete,
+  onEdit,
+  onViewAssignments,
+  onViewHistory,
+  onViewDetails,
 }: MobileMachineCardProps) {
+  const router = useRouter();
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
 
@@ -80,7 +100,9 @@ export function MobileMachineCard({
               className="inline-flex items-center gap-1.5 h-7 px-2 rounded-md bg-[var(--color-hairline-soft-surface)] hover:bg-[var(--color-hairline)] border border-[var(--color-hairline)] text-xs font-mono font-bold uppercase text-[var(--color-ink)] hover:text-sky-600 dark:hover:text-sky-400 active:scale-95 transition-all cursor-pointer"
               title="Click to copy Machine ID"
             >
-              <span>{machine.machine_id}</span>
+              <span>
+                <Highlight text={machine.machine_id} query={searchTerm} />
+              </span>
               {copied ? (
                 <AnimatedCheck size={13} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
               ) : (
@@ -89,22 +111,18 @@ export function MobileMachineCard({
             </button>
             {machine.model && (
               <span className="text-xs sm:text-sm font-bold text-[var(--color-ink)] truncate tracking-tight">
-                {machine.model}
+                <Highlight text={machine.model} query={searchTerm} />
               </span>
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--color-mute)] mt-1.5 font-medium">
-            {machine.serial_number && (
-              <span className="font-mono text-[var(--color-body)]">S/N: {machine.serial_number}</span>
-            )}
-            {machine.year_of_mfg && (
-              <span className="before:content-['•'] before:mr-2">YUM: {machine.year_of_mfg}</span>
-            )}
-            {machine.manufacturer && (
-              <span className="before:content-['•'] before:mr-2">Mfg: {machine.manufacturer}</span>
-            )}
-          </div>
+          {machine.serial_number && (
+            <div className="flex items-center gap-x-2 text-[11px] text-[var(--color-mute)] mt-1.5 font-medium">
+              <span className="font-mono text-[var(--color-body)]">
+                S/N: <Highlight text={machine.serial_number} query={searchTerm} />
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Health & Status Badges */}
@@ -145,9 +163,19 @@ export function MobileMachineCard({
       {/* Structured Key Specs Inset Well */}
       <div className="p-3 rounded-xl bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] text-xs flex flex-col gap-2.5">
         <div className="grid grid-cols-2 gap-2 text-[11px]">
-          <div>
-            <span className="text-[var(--color-mute)] font-medium block">Hour Meter (HMR):</span>
-            <span className="font-mono font-bold text-xs text-[var(--color-ink)] mt-0.5 block">
+          <div
+            onClick={(e) => {
+              if (onViewHistory) {
+                e.stopPropagation();
+                e.preventDefault();
+                onViewHistory(machine);
+              }
+            }}
+            className={onViewHistory ? "cursor-pointer group select-none" : ""}
+            title={onViewHistory ? "Tap to view running logs" : undefined}
+          >
+            <span className="text-[var(--color-mute)] font-medium block group-hover:text-sky-600 transition-colors">Hour Meter (HMR):</span>
+            <span className="font-mono font-bold text-xs text-[var(--color-ink)] group-hover:text-sky-600 dark:group-hover:text-sky-400 group-hover:underline mt-0.5 block transition-colors">
               {machine.hour_meter ?? 0} hrs
             </span>
           </div>
@@ -163,15 +191,22 @@ export function MobileMachineCard({
         </div>
 
         {/* Personnel Section */}
-        <div className="pt-2 border-t border-[var(--color-hairline)] grid grid-cols-2 gap-2 text-[11px]">
+        <div
+          onClick={(e) => {
+            if (onViewAssignments) {
+              e.stopPropagation();
+              e.preventDefault();
+              onViewAssignments(machine);
+            }
+          }}
+          className={`pt-2 border-t border-[var(--color-hairline)] grid grid-cols-2 gap-2 text-[11px] ${
+            onViewAssignments ? "cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-lg p-1 -m-1 transition-colors" : ""
+          }`}
+          title={onViewAssignments ? "Tap to inspect 24h shift coverage" : undefined}
+        >
           <div>
-            <div className="flex items-center justify-between mb-0.5">
+            <div className="mb-0.5">
               <span className="text-[var(--color-mute)] font-medium">Supervisor:</span>
-              {Array.isArray(machine.supervisors) && machine.supervisors.length > 3 && (
-                <span className="text-[10px] font-bold text-teal-600 dark:text-teal-400">
-                  +{machine.supervisors.length - 3}
-                </span>
-              )}
             </div>
             {(() => {
               const sups = Array.isArray(machine.supervisors) && machine.supervisors.length > 0
@@ -214,13 +249,8 @@ export function MobileMachineCard({
             })()}
           </div>
           <div>
-            <div className="flex items-center justify-between mb-0.5">
+            <div className="mb-0.5">
               <span className="text-[var(--color-mute)] font-medium">Operator (24h):</span>
-              {Array.isArray(machine.operators) && machine.operators.length > 3 && (
-                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
-                  +{machine.operators.length - 3}
-                </span>
-              )}
             </div>
             {(() => {
               const ops = Array.isArray(machine.operators) && machine.operators.length > 0
@@ -271,50 +301,63 @@ export function MobileMachineCard({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2">
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={() => onEdit(machine)}
-              className="h-8 px-3 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-              title="Edit Machine Specifications"
-            >
-              <AnimatedEdit size={14} className="text-amber-500 shrink-0" />
-              <span>Edit</span>
-            </button>
-          )}
+          <MachineRowActionsMenu
+            machine={machine}
+            canEdit={isAdmin}
+            isSupervisor={isSupervisor}
+            isAdmin={isAdmin}
+            onEditMachine={onEditMachine}
+            onEditPersonnel={onEditPersonnel}
+            onEditClient={onEditClient}
+            onViewAudit={onViewAudit}
+            onViewLogs={onViewLogs}
+            onDelete={onDelete}
+            onEdit={onEdit}
+            onViewAssignments={onViewAssignments}
+            onViewHistory={onViewHistory}
+            onViewDetails={onViewDetails}
+            align="left"
+            triggerClassName="h-8 w-8 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center justify-center cursor-pointer shadow-2xs"
+          />
 
-          {isSupervisor && !isAdmin && (
-            <button
-              type="button"
-              onClick={() => onEdit(machine)}
-              className="h-8 px-3 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-              title="Update Status & Assignments"
-            >
-              <AnimatedEdit size={14} className="text-sky-500 shrink-0" />
-              <span>Update Status</span>
-            </button>
-          )}
-
-          {isAdmin && (
-            <button
-              type="button"
-              onClick={() => onDelete(machine)}
-              className="h-8 px-3 rounded-md text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 active:scale-95 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
-              title="Delete Machine"
-            >
-              <AnimatedTrash size={14} className="text-rose-500 shrink-0" />
-              <span>Delete</span>
-            </button>
-          )}
+          {/* Logs Button (Replacing previous Edit button per user feedback) */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onViewLogs) {
+                onViewLogs(machine);
+              } else {
+                router.push(`/machines/${machine.id}?tab=running_hours`);
+              }
+            }}
+            className="h-8 px-3 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            title="View Machine Running Logs (HMR)"
+          >
+            <History size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
+            <span>Logs</span>
+          </button>
         </div>
 
-        <Link
-          href={`/machines/${machine.id}`}
-          className="h-8 px-3 rounded-md text-xs font-bold text-[var(--color-link)] bg-sky-500/10 hover:bg-sky-500/15 active:scale-95 transition-all flex items-center gap-1 shadow-2xs"
-        >
-          <span>View Details</span>
-          <AnimatedChevronRight size={14} className="shrink-0" />
-        </Link>
+        {onViewDetails ? (
+          <button
+            type="button"
+            onClick={() => onViewDetails(machine)}
+            className="h-8 px-3 rounded-md text-xs font-bold text-[var(--color-link)] bg-sky-500/10 hover:bg-sky-500/15 active:scale-95 transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
+            title="View Machine Details"
+          >
+            <span>View Details</span>
+            <AnimatedChevronRight size={14} className="shrink-0" />
+          </button>
+        ) : (
+          <Link
+            href={`/machines/${machine.id}`}
+            className="h-8 px-3 rounded-md text-xs font-bold text-[var(--color-link)] bg-sky-500/10 hover:bg-sky-500/15 active:scale-95 transition-all flex items-center gap-1 shadow-2xs"
+          >
+            <span>View Details</span>
+            <AnimatedChevronRight size={14} className="shrink-0" />
+          </Link>
+        )}
       </div>
     </motion.div>
   );

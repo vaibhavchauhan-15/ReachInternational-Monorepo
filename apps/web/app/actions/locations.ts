@@ -1,68 +1,79 @@
 "use server";
 
-import { getStatesList, getDistrictsList, getCitiesList, searchLocations } from "@/lib/queries/locations";
-import type { MasterState, MasterDistrict, MasterCity, MasterLocation } from "@reachinternational/types";
+import {
+  getStatesList,
+  getDistrictsList,
+  getCitiesList,
+  getTownsList,
+  getVillagesList,
+  searchLocations,
+  type HierarchicalLocationSearchResult,
+} from "@/lib/queries/locations";
+import type { State, District, City, Town, Village } from "@reachinternational/types";
 
 /**
- * Server action to get all 36 Indian States and Union Territories
+ * Server action to get all 36 Indian States and Union Territories.
+ * Payload: ~1 KB (36 items).
  */
-export async function getStatesAction(): Promise<MasterState[]> {
+export async function getStatesAction(): Promise<State[]> {
   return getStatesList();
 }
 
 /**
- * Server action to fetch districts for a selected state
+ * Server action to fetch districts for a selected state (by ID or name).
+ * Payload: ~1 KB (20–45 items).
  */
-export async function getDistrictsAction(stateName: string): Promise<MasterDistrict[]> {
-  if (!stateName) return [];
-  return getDistrictsList(stateName);
+export async function getDistrictsAction(stateIdOrName: number | string): Promise<District[]> {
+  if (!stateIdOrName) return [];
+  return getDistrictsList(stateIdOrName);
 }
 
 /**
- * Server action to fetch cities & towns for a selected state and district
+ * Server action to fetch cities for a selected district (by ID or name).
+ * Payload: < 1 KB (2–15 items).
  */
-export async function getCitiesAction(stateName: string, districtName: string): Promise<MasterCity[]> {
-  if (!stateName || !districtName) return [];
-  return getCitiesList(stateName, districtName);
+export async function getCitiesAction(districtIdOrName: number | string): Promise<City[]> {
+  if (!districtIdOrName) return [];
+  return getCitiesList(districtIdOrName);
 }
 
 /**
- * Server action for high-speed instant search across state, district, and city/town
+ * Server action to fetch towns for a selected district (by ID or name).
+ * Payload: < 2 KB (5–30 items).
  */
-export async function searchLocationsAction(query: string, limit = 20): Promise<MasterLocation[]> {
+export async function getTownsAction(districtIdOrName: number | string): Promise<Town[]> {
+  if (!districtIdOrName) return [];
+  return getTownsList(districtIdOrName);
+}
+
+/**
+ * Server action to fetch villages for a selected district with optional search filter.
+ */
+export async function getVillagesAction(
+  districtIdOrName: number | string,
+  search?: string,
+  limit = 50
+): Promise<Village[]> {
+  if (!districtIdOrName) return [];
+  return getVillagesList(districtIdOrName, search, limit);
+}
+
+/**
+ * Server action for high-speed progressive search across states, districts, and cities.
+ */
+export async function searchLocationsAction(
+  query: string,
+  limit = 20
+): Promise<HierarchicalLocationSearchResult[]> {
   if (!query || query.trim().length < 2) return [];
   return searchLocations(query, limit);
 }
 
 // ---------------------------------------------------------------------------
-// Relational Hierarchy Server Actions
+// Relational Hierarchy Aliases
 // ---------------------------------------------------------------------------
-
-export async function getRelationalStatesAction() {
-  const { getRelationalStatesList } = await import("@/lib/queries/locations");
-  return getRelationalStatesList();
-}
-
-export async function getRelationalDistrictsAction(stateId: number) {
-  if (!stateId || stateId <= 0) return [];
-  const { getRelationalDistrictsList } = await import("@/lib/queries/locations");
-  return getRelationalDistrictsList(stateId);
-}
-
-export async function getRelationalCitiesAction(districtId: number) {
-  if (!districtId || districtId <= 0) return [];
-  const { getRelationalCitiesList } = await import("@/lib/queries/locations");
-  return getRelationalCitiesList(districtId);
-}
-
-export async function getRelationalTownsAction(districtId: number) {
-  if (!districtId || districtId <= 0) return [];
-  const { getRelationalTownsList } = await import("@/lib/queries/locations");
-  return getRelationalTownsList(districtId);
-}
-
-export async function getRelationalVillagesAction(districtId: number) {
-  if (!districtId || districtId <= 0) return [];
-  const { getRelationalVillagesList } = await import("@/lib/queries/locations");
-  return getRelationalVillagesList(districtId);
-}
+export const getRelationalStatesAction = getStatesAction;
+export const getRelationalDistrictsAction = getDistrictsAction;
+export const getRelationalCitiesAction = getCitiesAction;
+export const getRelationalTownsAction = getTownsAction;
+export const getRelationalVillagesAction = getVillagesAction;

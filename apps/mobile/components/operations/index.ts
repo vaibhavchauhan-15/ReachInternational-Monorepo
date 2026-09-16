@@ -1,4 +1,3 @@
-export * from './MobileAssignmentModal';
 export * from './MobileConflictResolutionModal';
 export * from './OperationsExportModal';
 export * from './OperationsFilterSelectorModal';

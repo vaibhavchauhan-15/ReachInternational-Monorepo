@@ -71,7 +71,7 @@ export default async function AuditDetailPage({ params }: AuditDetailPageProps) 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
       {/* Back to Audit Logs */}
-      <div>
+      <div className="hidden sm:block">
         <Link
           href="/audit"
           className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-subtle)] hover:text-[var(--color-ink)] transition-colors"

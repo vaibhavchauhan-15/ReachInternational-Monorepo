@@ -37,8 +37,8 @@ export interface MeterLogModalProps {
   model?: string;
   serialNumber?: string;
   onSubmit?: (log?: any) => void;
+  existingLog?: any;
 }
-
 
 export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   visible,
@@ -48,6 +48,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   model = '',
   serialNumber = '',
   onSubmit,
+  existingLog,
 }) => {
   const { theme } = useTheme();
   const { isOffline } = useNetworkStatus();
@@ -63,6 +64,29 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   const [isBreakdown, setIsBreakdown] = useState(false);
   const [breakdownStartTime, setBreakdownStartTime] = useState('02:30 PM');
   const [breakdownEndTime, setBreakdownEndTime] = useState('03:25 PM');
+
+  useEffect(() => {
+    if (visible && existingLog) {
+      if (existingLog.log_date) setLogDate(existingLog.log_date.split('T')[0]);
+      if (existingLog.start_meter !== undefined) setStartMeter(String(existingLog.start_meter));
+      if (existingLog.end_meter !== undefined) setEndMeter(String(existingLog.end_meter));
+      if (existingLog.start_time) setStartTime(formatTo12Hour(existingLog.start_time) || existingLog.start_time);
+      if (existingLog.end_time) setEndTime(formatTo12Hour(existingLog.end_time) || existingLog.end_time);
+      if (existingLog.overtime_hours !== undefined) setOvertimeHours(String(existingLog.overtime_hours));
+      if (existingLog.location) setLocation(existingLog.location);
+      if (existingLog.remarks) {
+        setRemarks(existingLog.remarks.replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, '').trim());
+      }
+      if (existingLog.is_breakdown !== undefined) setIsBreakdown(Boolean(existingLog.is_breakdown));
+      if (existingLog.breakdown_start_time) {
+        setBreakdownStartTime(formatTo12Hour(existingLog.breakdown_start_time) || existingLog.breakdown_start_time);
+      }
+      if (existingLog.breakdown_end_time) {
+        setBreakdownEndTime(formatTo12Hour(existingLog.breakdown_end_time) || existingLog.breakdown_end_time);
+      }
+      if (existingLog.client_id) setSelectedClientId(existingLog.client_id);
+    }
+  }, [visible, existingLog]);
 
   // Real-time computed breakdown duration
   const breakdownStats = React.useMemo(() => {
@@ -296,6 +320,11 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       return;
     }
 
+    if (endVal - startVal > 24) {
+      setError('Machine running hours cannot exceed 24 hours in a single log.');
+      return;
+    }
+
     if (shiftStats.isFutureEnd || !shiftStats.isValid) {
       setError(shiftStats.errorMessage || 'Cannot log before shift end.');
       return;
@@ -396,6 +425,56 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
           }
           onClose();
         }, 800);
+        return;
+      }
+
+      if (existingLog?.id) {
+        const updatePayload: any = {
+          start_meter: startVal,
+          end_meter: endVal,
+          running_hours: runningHours,
+          start_time: startTime.trim(),
+          end_time: endTime.trim(),
+          overtime_hours: shiftStats.overtimeHours,
+          normal_working_hours: shiftStats.normalWorkingHours,
+          is_breakdown: isBreakdown,
+          breakdown_start_time: bkdStart || null,
+          breakdown_end_time: bkdEnd || null,
+          breakdown_duration: bkdDurationFormatted || null,
+          breakdown_hours: bkdDecimalHours,
+          machine_condition: isBreakdown ? 'breakdown' : 'good',
+          remarks: remarksPayload || null,
+          location: location.trim() || null,
+          log_date: shiftStats.resolvedStartDate,
+          end_date: shiftStats.resolvedEndDate,
+          start_datetime: shiftStats.startDateTime?.toISOString(),
+          end_datetime: shiftStats.endDateTime?.toISOString(),
+        };
+        if (selectedClientId) updatePayload.client_id = selectedClientId;
+
+        const { error: updateErr } = await supabase
+          .from('machine_hour_logs')
+          .update(updatePayload)
+          .eq('id', existingLog.id);
+
+        if (updateErr) throw updateErr;
+
+        if (machineId && endVal > 0) {
+          await supabase
+            .from('machines')
+            .update({
+              hour_meter: endVal,
+              health_status: isBreakdown ? 'breakdown' : 'active',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', machineId);
+        }
+
+        setSuccess('Daily machine log updated successfully!');
+        setTimeout(() => {
+          if (onSubmit) onSubmit({ ...existingLog, ...updatePayload });
+          onClose();
+        }, 1000);
         return;
       }
 
@@ -613,7 +692,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               </View>
               <View>
                 <Text style={[styles.title, { color: theme.colors.ink }]}>
-                  Log Machine Running Hours
+                  {existingLog ? 'Edit Machine Running Hours' : 'Log Machine Running Hours'}
                 </Text>
                 <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
                   {model || machineCode} {serialNumber ? `• S/N: ${serialNumber}` : ''}
@@ -943,7 +1022,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
           <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
             <Button label="Cancel" onPress={onClose} variant="outline" size="md" />
             <Button
-              label="Submit"
+              label={existingLog ? 'Save Changes' : 'Submit'}
               onPress={handleSubmit}
               isLoading={isSubmitting}
               variant="primary"

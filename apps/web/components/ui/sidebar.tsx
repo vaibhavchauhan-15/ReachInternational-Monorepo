@@ -138,7 +138,7 @@ export function Sidebar({ className, style, children, ...props }: SidebarProps) 
         ...style,
       }}
       className={cn(
-        "fixed top-0 left-0 bottom-0 z-40 hidden md:flex flex-col bg-[var(--color-canvas-elevated)] border-r border-[var(--color-hairline)] select-none overflow-hidden will-change-[width]",
+        "fixed top-0 left-0 bottom-0 z-40 hidden md:flex flex-col bg-[var(--color-canvas-elevated)] border-r border-[var(--color-hairline)] select-none overflow-hidden will-change-[width] print:hidden",
         isInteractive
           ? "transition-[width] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
           : "transition-none",

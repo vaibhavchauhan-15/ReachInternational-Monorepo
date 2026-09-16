@@ -110,6 +110,44 @@ export function formatExactTimestamp(
 }
 
 /**
+ * Formats an exact timestamp in a compact 12-hour AM/PM format without space before AM/PM.
+ * Format: "DD-MM-YYYY, hh:mmA" (e.g. "08-09-2026, 10:55AM")
+ * When includeSeconds is true: "DD-MM-YYYY, hh:mm:ssA" (e.g. "08-09-2026, 10:55:53AM")
+ */
+export function formatCompactExactTimestamp(
+  dateInput: string | Date | null | undefined,
+  includeSeconds: boolean = false
+): string {
+  if (!dateInput) return '—';
+  let date: Date;
+  if (typeof dateInput === 'string') {
+    const cleanStr = dateInput.trim();
+    if (!cleanStr) return '—';
+    date = new Date(cleanStr);
+  } else {
+    date = dateInput;
+  }
+  if (isNaN(date.getTime())) return '—';
+
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+
+  let rawHours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const seconds = String(date.getSeconds()).padStart(2, '0');
+  const period = rawHours >= 12 ? 'PM' : 'AM';
+  let hours = rawHours % 12;
+  if (hours === 0) hours = 12;
+  const hoursStr = String(hours).padStart(2, '0');
+
+  if (includeSeconds) {
+    return `${day}-${month}-${year}, ${hoursStr}:${minutes}:${seconds}${period}`;
+  }
+  return `${day}-${month}-${year}, ${hoursStr}:${minutes}${period}`;
+}
+
+/**
  * Splits an exact timestamp into separate Time and Date strings.
  * Format: { time: "06:15:24 PM", date: "02-09-2026" } or null if invalid.
  */
@@ -930,6 +968,110 @@ export function parseBreakdownString(rawString?: string | null): {
   }
 
   return null;
+}
+
+export interface FormattedBreakdownDetails {
+  timingRange: string | null;
+  duration: string | null;
+  durationRaw: string | null;
+  displayText: string;
+}
+
+/**
+ * Parses and formats breakdown timing and duration into structured, display-ready parts.
+ * Formats:
+ * - Start/End range: compact zero-space timing range e.g. "12:30PM-03:00PM"
+ * - Duration: formatted duration wrapped in parentheses e.g. "(2h:30min)" or "(55min)"
+ * - Single-line fallback: e.g. "12:30PM-03:00PM (2h:30min)"
+ */
+export function parseBreakdownDetails(
+  logOrRemarks?: {
+    remarks?: string | null;
+    is_breakdown?: boolean | null;
+    breakdown_start_time?: string | null;
+    breakdown_end_time?: string | null;
+    breakdown_duration?: string | null;
+    breakdown_hours?: number | null;
+  } | string | null
+): FormattedBreakdownDetails {
+  if (!logOrRemarks) {
+    return { timingRange: null, duration: null, durationRaw: null, displayText: "Normal" };
+  }
+
+  const isObj = typeof logOrRemarks === "object";
+  const isBreakdown = isObj ? Boolean(logOrRemarks.is_breakdown) : true;
+  if (!isBreakdown) {
+    return { timingRange: null, duration: null, durationRaw: null, displayText: "0" };
+  }
+
+  const remarks = isObj ? logOrRemarks.remarks || "" : logOrRemarks;
+  const rawStart = isObj ? logOrRemarks.breakdown_start_time : null;
+  const rawEnd = isObj ? logOrRemarks.breakdown_end_time : null;
+  const rawDuration = isObj ? logOrRemarks.breakdown_duration : null;
+  const rawHours = isObj ? logOrRemarks.breakdown_hours : null;
+
+  const parsed =
+    parseBreakdownString(remarks) ||
+    (rawDuration ? parseBreakdownString(rawDuration) : null);
+
+  const startTime = rawStart || parsed?.startTime;
+  const endTime = rawEnd || parsed?.endTime;
+
+  let timingRange: string | null = null;
+  if (startTime && endTime) {
+    timingRange = formatCompactTiming(startTime, endTime);
+  }
+
+  let durationText: string | null =
+    parsed?.durationFormatted ||
+    parsed?.durationText ||
+    rawDuration ||
+    (rawHours ? `${rawHours}h` : null);
+
+  // If no range found yet, check remarks regex match
+  if (!timingRange && remarks) {
+    const bkdMatch =
+      remarks.match(/\[Breakdown Duration:\s*([^\]]+)\]/i) ||
+      remarks.match(/Breakdown\s*(?:Duration)?:?\s*(\d+h?\s*\d*m?)/i);
+    if (bkdMatch) {
+      const matchStr = bkdMatch[1].trim();
+      const p2 = parseBreakdownString(matchStr);
+      if (p2?.startTime && p2?.endTime) {
+        timingRange = formatCompactTiming(p2.startTime, p2.endTime);
+        durationText = p2.durationFormatted || durationText;
+      } else if (!durationText && matchStr.toLowerCase() !== "breakdown") {
+        durationText = matchStr;
+      }
+    }
+  }
+
+  let durationRaw: string | null = null;
+  let duration: string | null = null;
+  if (durationText) {
+    let clean = durationText.trim();
+    clean = clean
+      .replace(/^Breakdown\s*\((.*)\)$/i, "$1")
+      .replace(/^Machine Breakdown\s*\((.*)\)$/i, "$1")
+      .replace(/^Breakdown\s*/i, "")
+      .replace(/\s*duration$/i, "")
+      .replace(/^\(/, "")
+      .replace(/\)$/, "")
+      .trim();
+    if (clean && clean.toLowerCase() !== "breakdown") {
+      durationRaw = clean;
+      duration = `(${clean})`;
+    }
+  }
+
+  const displayText = timingRange
+    ? duration
+      ? `${timingRange} ${duration}`
+      : timingRange
+    : duration
+    ? duration
+    : "Breakdown";
+
+  return { timingRange, duration, durationRaw, displayText };
 }
 
 /**

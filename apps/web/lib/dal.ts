@@ -8,7 +8,29 @@ import { CACHE_TAGS } from "@/lib/cache";
 import type { User, UserRole } from "@/lib/types/database";
 import { roleHasPermission } from "@reachinternational/permissions";
 
+import { headers } from "next/headers";
+import { verifyInternalUser } from "@/lib/security/internal-auth-token";
+
 export const verifySession = cache(async () => {
+  // 1. Fast-path: Check cryptographically signed edge-verified user headers
+  // Eliminates duplicate outbound network roundtrips to Supabase Auth on authenticated page loads.
+  try {
+    const headersList = await headers();
+    const edgeUserId = headersList.get("x-internal-user-id");
+    const edgeUserEmail = headersList.get("x-internal-user-email") || "";
+    const edgeUserSig = headersList.get("x-internal-user-sig");
+
+    if (edgeUserId && edgeUserSig) {
+      const isValid = await verifyInternalUser(edgeUserId, edgeUserEmail, edgeUserSig);
+      if (isValid) {
+        return { isAuth: true, userId: edgeUserId, email: edgeUserEmail };
+      }
+    }
+  } catch {
+    // Fall through to direct Supabase auth verification if headers() is unavailable
+  }
+
+  // 2. Direct Supabase auth verification (Server Actions, direct mutations, fallback)
   const supabase = await createSupabaseServerClient();
   let user = null;
   try {

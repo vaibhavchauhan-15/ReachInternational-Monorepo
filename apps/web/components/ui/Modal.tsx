@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import React, { ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +26,8 @@ export interface ModalProps {
   headerClassName?: string;
   bodyClassName?: string;
   footerClassName?: string;
+  preventAutoFocus?: boolean;
+  onOpenAutoFocus?: (event: Event) => void;
 }
 
 const sizeClasses = {
@@ -49,6 +51,8 @@ export function Modal({
   headerClassName,
   bodyClassName,
   footerClassName,
+  preventAutoFocus = true,
+  onOpenAutoFocus,
 }: ModalProps) {
   return (
     <Dialog open={open} onOpenChange={(val) => { if (!val) onClose(); }}>
@@ -56,14 +60,42 @@ export function Modal({
         from={from}
         showCloseButton={true}
         className={cn(sizeClasses[size], className)}
+        onOpenAutoFocus={(e) => {
+          if (preventAutoFocus) {
+            e.preventDefault();
+          }
+          onOpenAutoFocus?.(e);
+        }}
       >
         {(title || description || headerActions) && (
           <DialogHeader className={cn("pr-12", headerClassName)}>
             <div className="flex items-center justify-between gap-4 w-full">
               <div className="flex flex-col space-y-1.5 min-w-0 flex-1">
-                {title && <DialogTitle>{title}</DialogTitle>}
+                {title && (
+                  typeof title === "string" ? (
+                    <DialogTitle>{title}</DialogTitle>
+                  ) : (
+                    <DialogTitle asChild>
+                      {React.isValidElement(title) && title.type !== React.Fragment ? (
+                        title
+                      ) : (
+                        <div>{title}</div>
+                      )}
+                    </DialogTitle>
+                  )
+                )}
                 {description && (
-                  <DialogDescription>{description}</DialogDescription>
+                  typeof description === "string" ? (
+                    <DialogDescription>{description}</DialogDescription>
+                  ) : (
+                    <DialogDescription asChild>
+                      {React.isValidElement(description) && description.type !== React.Fragment ? (
+                        description
+                      ) : (
+                        <div>{description}</div>
+                      )}
+                    </DialogDescription>
+                  )
                 )}
               </div>
               {headerActions && (

@@ -3,7 +3,6 @@
 import { useState, useTransition, useRef } from "react";
 import { Modal, Button, useToast } from "@/components/ui";
 import { importMachinesFromExcel } from "@/app/actions/machine-import";
-import { getSampleExcelTemplate } from "@/lib/utils/excel-template";
 import type { BulkImportResult } from "@/app/actions/machine-import";
 import {
   AnimatedUpload,
@@ -101,7 +100,8 @@ export function MachineImportModal({ open, onClose, onSuccess }: MachineImportMo
     }
   };
 
-  const handleDownloadSample = () => {
+  const handleDownloadSample = async () => {
+    const { getSampleExcelTemplate } = await import("@/lib/utils/excel-template");
     const blob = getSampleExcelTemplate();
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");

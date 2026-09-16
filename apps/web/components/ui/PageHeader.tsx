@@ -28,10 +28,10 @@ export function PageHeader({
   className = "",
 }: PageHeaderProps) {
   return (
-    <FadeIn className={`flex flex-col gap-2 mb-6 ${className}`}>
+    <FadeIn className={`hidden md:flex flex-col gap-2 mb-6 ${className}`}>
       {/* Breadcrumbs */}
       {breadcrumbs.length > 0 && (
-        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-[var(--color-mute)]">
+        <nav aria-label="Breadcrumb" className="hidden sm:flex items-center gap-1.5 text-xs text-[var(--color-mute)]">
           <Link href="/dashboard" className="hover:text-[var(--color-ink)] transition-colors">
             Home
           </Link>

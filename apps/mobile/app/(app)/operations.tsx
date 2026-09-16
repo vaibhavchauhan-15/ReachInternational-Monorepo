@@ -6,19 +6,16 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
-  ActivityIndicator,
   Alert,
   Linking,
   Platform,
-  TextInput,
   StatusBar,
   LayoutAnimation,
   UIManager,
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem } from '../../components/ui';
+import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem } from '../../components/ui';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
-import { MobileAssignmentModal } from '../../components/operations/MobileAssignmentModal';
 import { MobileConflictResolutionModal } from '../../components/operations/MobileConflictResolutionModal';
 import { OperationsExportModal } from '../../components/operations/OperationsExportModal';
 import {
@@ -27,9 +24,9 @@ import {
 } from '../../components/operations/OperationsFilterSelectorModal';
 import {
   OperationLogListSkeleton,
-  AssignmentListSkeleton,
 } from '../../components/operations/OperationsSkeleton';
 import { supabase } from '../../lib/supabase';
+import { useOperationsMasterData, useOperationsLogs } from '../../lib/hooks/useOperationsData';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
@@ -37,9 +34,11 @@ import {
   formatCompactTiming,
   formatTo12Hour,
   formatExactTimestamp,
+  formatCompactExactTimestamp,
   splitExactTimestamp,
   formatDate,
   parseBreakdownString,
+  parseBreakdownDetails,
   parseProfileShiftTime,
   parseTimeToMinutes,
   getISTDateString,
@@ -52,18 +51,11 @@ import { OfflineCollisionModal } from '../../components/offline/OfflineCollision
 import { QueuedMutation, MutationStatus } from '../../lib/offline/types';
 import {
   Clock,
-  Gauge,
-  UserCheck,
+  User,
   AlertTriangle,
   Search,
-  Plus,
-  Building2,
   Calendar,
   Truck,
-  User,
-  Sun,
-  Moon,
-  Users,
   ShieldAlert,
   Check,
   ChevronDown,
@@ -71,19 +63,20 @@ import {
   Phone,
   RefreshCw,
   Printer,
-  X,
-  MapPin,
   ChevronLeft,
   ChevronRight,
   Zap,
   FileText,
+  Edit2,
+  Trash2,
 } from 'lucide-react-native';
+import { isManagerOrAbove } from '@reachinternational/permissions';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export type OpsTab = 'logs' | 'assignments' | 'entry' | 'history';
+export type OpsTab = 'logs' | 'entry' | 'history';
 export type LogsViewMode = 'machine' | 'client' | 'operator';
 
 export interface HourLogRecord {
@@ -210,14 +203,14 @@ export default function OperationsScreen() {
   const params = useLocalSearchParams<{ tab?: string }>();
 
   const [activeTab, setActiveTab] = useState<OpsTab>(() => {
-    if (params.tab === 'assignments' || params.tab === 'logs' || params.tab === 'entry' || params.tab === 'history') {
+    if (params.tab === 'logs' || params.tab === 'entry' || params.tab === 'history') {
       return params.tab as OpsTab;
     }
     return isOperator ? 'entry' : 'logs';
   });
 
   useEffect(() => {
-    if (params.tab && (params.tab === 'assignments' || params.tab === 'logs' || params.tab === 'entry' || params.tab === 'history')) {
+    if (params.tab && (params.tab === 'logs' || params.tab === 'entry' || params.tab === 'history')) {
       setActiveTab(params.tab as OpsTab);
     }
   }, [params.tab]);
@@ -252,26 +245,16 @@ export default function OperationsScreen() {
   const [logsPage, setLogsPage] = useState<number>(1);
   const logsPageSize = 10;
 
-  // Assignments Tab States
-  const [assignmentSearch, setAssignmentSearch] = useState<string>('');
-  const [debouncedAssignmentSearch, setDebouncedAssignmentSearch] = useState<string>('');
-  const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'assigned' | 'unassigned' | 'full'>('all');
-  const [expandedMachineIds, setExpandedMachineIds] = useState<Set<string>>(() => new Set());
-
-  // Loading & Refreshing States
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  // Refreshing State (isLoading is derived from TanStack Query)
   const [refreshing, setRefreshing] = useState<boolean>(false);
 
   // Modals States
-  const [showAssignModal, setShowAssignModal] = useState<boolean>(false);
-  const [assignModalTargetMachineId, setAssignModalTargetMachineId] = useState<string>('');
   const [showConflictModal, setShowConflictModal] = useState<boolean>(false);
   const [selectedConflictLog, setSelectedConflictLog] = useState<HourLogRecord | null>(null);
   const [showAllConflicts, setShowAllConflicts] = useState<boolean>(false);
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
 
   // Collapsible section states (Default: COLLAPSED per feedback)
-  const [isFiltersExpanded, setIsFiltersExpanded] = useState<boolean>(false);
   const [isClientSummaryExpanded, setIsClientSummaryExpanded] = useState<boolean>(false);
   const [isMachineSummaryExpanded, setIsMachineSummaryExpanded] = useState<boolean>(false);
   const [isOperatorSummaryExpanded, setIsOperatorSummaryExpanded] = useState<boolean>(false);
@@ -319,39 +302,6 @@ export default function OperationsScreen() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Debounce search input for assignments
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedAssignmentSearch(assignmentSearch);
-    }, 280);
-    return () => clearTimeout(timer);
-  }, [assignmentSearch]);
-
-  const isSearchingLogs = search.trim() !== debouncedSearch.trim();
-  const isSearchingAssignments = assignmentSearch.trim() !== debouncedAssignmentSearch.trim();
-
-  // Expand / Collapse Single Machine Card
-  const toggleMachineExpanded = (machineId: string) => {
-    setExpandedMachineIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(machineId)) {
-        next.delete(machineId);
-      } else {
-        next.add(machineId);
-      }
-      return next;
-    });
-  };
-
-  // Expand / Collapse All Cards
-  const handleToggleExpandAll = (allIds: string[]) => {
-    if (expandedMachineIds.size === allIds.length && allIds.length > 0) {
-      setExpandedMachineIds(new Set());
-    } else {
-      setExpandedMachineIds(new Set(allIds));
-    }
-  };
-
   // Open Log Entry Modal
   const openLogEntryModal = (machineId?: string, machineCode?: string, model?: string, serial?: string) => {
     if (machineId && machineCode) {
@@ -367,158 +317,119 @@ export default function OperationsScreen() {
     setMeterModalVisible(true);
   };
 
-  // Fetch Master Operations Data
-  const fetchOperationsData = useCallback(async () => {
-    try {
-      setIsLoading(true);
+  // TanStack Query v5 Data Fetching & Caching
+  const {
+    data: masterData,
+    isLoading: isMasterLoading,
+    refetch: refetchMaster,
+  } = useOperationsMasterData();
 
-      const [mchRes, assRes, opsRes, clientsRes, logsRes] = await Promise.all([
-        supabase
-          .from('machines')
-          .select(`
-            id,
-            machine_id,
-            model,
-            serial_number,
-            manufacturer,
-            status,
-            hour_meter,
-            client_id,
-            current_supervisor_id,
-            supervisor:users!machines_current_supervisor_id_fkey(id, full_name)
-          `)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('operator_machine_assignments')
-          .select(`
-            id,
-            machine_id,
-            operator_id,
-            shift_start_time,
-            shift_end_time,
-            crosses_midnight,
-            assigned_at,
-            assigned_by,
-            ended_at,
-            ended_by,
-            end_reason,
-            is_active,
-            machine:machines(id, machine_id, model, serial_number),
-            operator:users!operator_machine_assignments_operator_id_fkey(id, full_name, phone),
-            assigner:users!operator_machine_assignments_assigned_by_fkey(id, full_name),
-            ender:users!operator_machine_assignments_ended_by_fkey(id, full_name)
-          `)
-          .order('assigned_at', { ascending: false })
-          .limit(200),
-        supabase
-          .from('users')
-          .select('id, full_name, phone, shift_time')
-          .eq('role', 'operator')
-          .eq('status', 'active')
-          .order('full_name'),
-        supabase
-          .from('clients')
-          .select('id, code, company_name, phone, street, city, district, state, pincode')
-          .order('company_name'),
-        supabase
-          .from('machine_hour_logs')
-          .select(`
-            id,
-            machine_id,
-            operator_id,
-            client_id,
-            log_date,
-            start_meter,
-            end_meter,
-            running_hours,
-            start_time,
-            end_time,
-            overtime_hours,
-            normal_working_hours,
-            location,
-            is_breakdown,
-            remarks,
-            created_at,
-            conflict_flag,
-            conflict_reason,
-            conflict_status,
-            conflict_resolved_by,
-            conflict_resolved_at,
-            conflict_resolution_notes,
-            machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number, manufacturer, status),
-            operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone),
-            client:clients!machine_hour_logs_client_id_fkey(id, company_name, phone, street, city, district, state, pincode)
-          `)
-          .order('log_date', { ascending: false })
-          .order('created_at', { ascending: false })
-          .limit(1000),
-      ]);
+  const {
+    data: logsData,
+    isLoading: isLogsLoading,
+    refetch: refetchLogs,
+  } = useOperationsLogs();
 
-      if (opsRes.data) {
-        setActiveOperators(opsRes.data as any);
-      }
+  const isLoading = isMasterLoading || isLogsLoading;
 
-      if (clientsRes.data) {
-        setClientsList(clientsRes.data as any);
-      }
-
-      let allMachinesData: MachineWithAssignments[] = [];
-      if (mchRes.data) {
-        const activeAssList = (assRes.data || []).filter((a: any) => a.is_active) as unknown as ActiveShiftAssignment[];
-        allMachinesData = mchRes.data.map((m: any) => ({
-          ...m,
-          active_assignments: activeAssList.filter((a) => a.machine_id === m.id),
-        }));
-        setMachinesList(allMachinesData);
-
-        // Auto-select first machine if none selected
-        if (!selectedMachineId && allMachinesData.length > 0) {
-          setSelectedMachineId(allMachinesData[0].id);
-        }
-      }
-
-      if (clientsRes.data && clientsRes.data.length > 0 && !selectedClientId) {
-        // Default to the client with the most recent log, or first client as fallback
-        const rawLogs = (logsRes.data || []) as any[];
-        const recentLog = rawLogs.find((l) => l.client_id || (Array.isArray(l.client) ? l.client[0]?.id : l.client?.id));
-        const recentClient = Array.isArray(recentLog?.client) ? recentLog?.client[0] : recentLog?.client;
-        const recentId = recentLog?.client_id || recentClient?.id || null;
-        const cList = clientsRes.data as any[];
-        const validRecent = recentId && cList.some((c: any) => c.id === recentId);
-        setSelectedClientId(validRecent ? recentId : cList[0]?.id);
-      }
-
-      if (opsRes.data && opsRes.data.length > 0 && !selectedOperatorId) {
-        setSelectedOperatorId(opsRes.data[0].id);
-      }
-
-      if (logsRes.data) {
-        const formattedLogs: HourLogRecord[] = logsRes.data.map((l: any) => {
-          const clientData = Array.isArray(l.client) ? l.client[0] : l.client;
-          return {
-            ...l,
-            machine_code: l.machine?.machine_id || l.machine_id || 'Equipment',
-            client: clientData ? { ...clientData, name: clientData.company_name || clientData.client_name } : null,
-          };
-        });
-        setLogs(formattedLogs);
-      }
-    } catch (err) {
-      console.error('Error fetching operations master data:', err);
-    } finally {
-      setIsLoading(false);
-      setRefreshing(false);
-    }
-  }, [selectedMachineId, selectedClientId, selectedOperatorId]);
-
+  // Synchronize master data into component state
   useEffect(() => {
-    fetchOperationsData();
-  }, [fetchOperationsData]);
+    if (!masterData) return;
+    setActiveOperators(masterData.activeOperators as any);
+    setClientsList(masterData.clientsList as any);
+    setMachinesList(masterData.machinesList as any);
 
-  const onRefresh = useCallback(() => {
+    // Auto-select first machine if none selected
+    if (!selectedMachineId && masterData.machinesList.length > 0) {
+      setSelectedMachineId(masterData.machinesList[0].id);
+    }
+    if (!selectedOperatorId && masterData.activeOperators.length > 0) {
+      setSelectedOperatorId(masterData.activeOperators[0].id);
+    }
+  }, [masterData, selectedMachineId, selectedOperatorId]);
+
+  // Synchronize logs data into component state
+  useEffect(() => {
+    if (!logsData) return;
+    setLogs(logsData);
+
+    // Default to the client with the most recent log, or first client as fallback
+    if (clientsList.length > 0 && !selectedClientId) {
+      const rawLogs = logsData as any[];
+      const recentLog = rawLogs.find((l) => l.client_id || (Array.isArray(l.client) ? l.client[0]?.id : l.client?.id));
+      const recentClient = Array.isArray(recentLog?.client) ? recentLog?.client[0] : recentLog?.client;
+      const recentId = recentLog?.client_id || recentClient?.id || null;
+      const validRecent = recentId && clientsList.some((c: any) => c.id === recentId);
+      setSelectedClientId(validRecent ? recentId : clientsList[0]?.id);
+    }
+  }, [logsData, clientsList, selectedClientId]);
+
+  const handleDataRefresh = useCallback(async () => {
+    await Promise.all([refetchMaster(), refetchLogs()]);
+  }, [refetchMaster, refetchLogs]);
+
+  const canManageLogs = isManagerOrAbove((role || '').toLowerCase());
+  const [editingLogRecord, setEditingLogRecord] = useState<HourLogRecord | null>(null);
+
+  const handleEditLog = useCallback((log: HourLogRecord) => {
+    setEditingLogRecord(log);
+  }, []);
+
+  const handleDeleteLog = useCallback((log: HourLogRecord) => {
+    if (!canManageLogs) {
+      Alert.alert('Permission Denied', 'Only administrators are authorized to delete daily running hour logs.');
+      return;
+    }
+    Alert.alert(
+      'Delete Daily Running Hour Log',
+      `Are you sure you want to permanently delete the ${formatDate(log.log_date)} running hour log for ${log.machine?.model || log.machine_code || 'equipment'}? The machine hour meter will be recalculated.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes, Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const { error } = await supabase
+                .from('machine_hour_logs')
+                .delete()
+                .eq('id', log.id);
+              if (error) {
+                Alert.alert('Error', error.message || 'Failed to delete log');
+                return;
+              }
+              setLogs((prev) => prev.filter((l) => l.id !== log.id));
+              if (log.machine_id) {
+                const { data: latest } = await supabase
+                  .from('machine_hour_logs')
+                  .select('end_meter')
+                  .eq('machine_id', log.machine_id)
+                  .order('log_date', { ascending: false })
+                  .order('end_meter', { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                if (latest && typeof latest.end_meter === 'number') {
+                  await supabase
+                    .from('machines')
+                    .update({ hour_meter: latest.end_meter, updated_at: new Date().toISOString() })
+                    .eq('id', log.machine_id);
+                }
+              }
+              refetchLogs();
+            } catch (err: any) {
+              Alert.alert('Error', err?.message || 'Failed to delete log');
+            }
+          },
+        },
+      ]
+    );
+  }, [refetchLogs]);
+
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    fetchOperationsData();
-  }, [fetchOperationsData]);
+    await handleDataRefresh();
+    setRefreshing(false);
+  }, [handleDataRefresh]);
 
   // Realized Overtime Shift Conflicts
   const pendingConflicts = useMemo(() => {
@@ -752,41 +663,6 @@ export default function OperationsScreen() {
     return machinesList.filter((m) => m.client_id && matchingClientIds.has(m.client_id));
   }, [machinesList, selectedClientId, clientsList]);
 
-  // Assignments Tab Metrics & Filtered List
-  const activeAssignmentsList = useMemo(() => {
-    const list: ActiveShiftAssignment[] = [];
-    machinesList.forEach((m) => {
-      list.push(...(m.active_assignments || []));
-    });
-    return list;
-  }, [machinesList]);
-
-  const totalMachinesCount = machinesList.length;
-  const activeShiftOperatorsCount = activeAssignmentsList.length;
-  const fullCapacityCount = machinesList.filter((m) => (m.active_assignments || []).length >= 3).length;
-  const unassignedCount = machinesList.filter((m) => (m.active_assignments || []).length === 0).length;
-
-  const filteredMachinesForAssignments = useMemo(() => {
-    return machinesList.filter((m) => {
-      const assCount = (m.active_assignments || []).length;
-      if (assignmentFilter === 'assigned' && assCount === 0) return false;
-      if (assignmentFilter === 'unassigned' && assCount > 0) return false;
-      if (assignmentFilter === 'full' && assCount < 3) return false;
-
-      if (!assignmentSearch.trim()) return true;
-      const q = assignmentSearch.toLowerCase().trim();
-      const code = (m.machine_id || '').toLowerCase();
-      const model = (m.model || '').toLowerCase();
-      const serial = (m.serial_number || '').toLowerCase();
-      const hasOpMatch = (m.active_assignments || []).some((a) => {
-        const name = (a.operator?.full_name || '').toLowerCase();
-        return name.includes(q);
-      });
-
-      return code.includes(q) || model.includes(q) || serial.includes(q) || hasOpMatch;
-    });
-  }, [machinesList, assignmentFilter, assignmentSearch]);
-
   // Handlers for Selectors
   const openMachineSelector = () => {
     const options: FilterSelectOption[] = machinesList.map((m) => ({
@@ -910,7 +786,7 @@ export default function OperationsScreen() {
     const options: FilterSelectOption[] = activeOperators.map((op) => ({
       id: op.id,
       label: op.full_name,
-      subLabel: op.phone ? `📞 ${op.phone}` : undefined,
+      subLabel: op.phone ? `ðŸ“ž ${op.phone}` : undefined,
       badge: 'OPERATOR',
       badgeVariant: 'warning',
     }));
@@ -927,12 +803,6 @@ export default function OperationsScreen() {
     });
   };
 
-  // Open Assign Operator Modal
-  const handleOpenAssignModal = (targetMachId?: string) => {
-    setAssignModalTargetMachineId(targetMachId || selectedMachineId || (machinesList[0]?.id || ''));
-    setShowAssignModal(true);
-  };
-
   // Open Conflict Modal
   const handleOpenConflictModal = (log: HourLogRecord) => {
     setSelectedConflictLog(log);
@@ -941,15 +811,6 @@ export default function OperationsScreen() {
 
   const headerActions = useMemo<HeaderActionItem[]>(() => {
     const list: HeaderActionItem[] = [];
-
-    if (!isOperator) {
-      list.push({
-        id: 'assign-operator',
-        label: 'Assign Operator',
-        icon: <UserCheck size={16} color={theme.colors.link} />,
-        onPress: () => handleOpenAssignModal(),
-      });
-    }
 
     list.push({
       id: 'export-print',
@@ -965,24 +826,6 @@ export default function OperationsScreen() {
       onPress: () => onRefresh(),
     });
 
-    if (!isOperator) {
-      if (activeTab === 'logs') {
-        list.push({
-          id: 'switch-assignments',
-          label: 'Switch to Shift Assignments',
-          icon: <Gauge size={16} color={theme.colors.ink} />,
-          onPress: () => setActiveTab('assignments'),
-        });
-      } else {
-        list.push({
-          id: 'switch-logs',
-          label: 'Switch to Running Hours',
-          icon: <Clock size={16} color={theme.colors.ink} />,
-          onPress: () => setActiveTab('logs'),
-        });
-      }
-    }
-
     if (pendingConflicts.length > 0) {
       list.push({
         id: 'review-conflict',
@@ -994,37 +837,20 @@ export default function OperationsScreen() {
     }
 
     return list;
-  }, [isOperator, activeTab, theme.colors.link, theme.colors.ink, onRefresh, pendingConflicts]);
+  }, [theme.colors.ink, onRefresh, pendingConflicts]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} />
 
-      {/* 1. TOP STANDARDIZED MOBILE HEADER: [Logo] + [Page Title] + [Assign CTA] + [Quick Access] + [3-Dot Actions] */}
+      {/* 1. TOP STANDARDIZED MOBILE HEADER: [Logo] + [Page Title] + [Quick Access] + [3-Dot Actions] */}
       <MobileHeader
         title="Fleet Operations"
         actions={headerActions}
-        rightAction={
-          !isOperator ? (
-            <TouchableOpacity
-              onPress={() => handleOpenAssignModal()}
-              activeOpacity={0.8}
-              style={[
-                styles.headerAssignBtn,
-                { backgroundColor: theme.colors.ink },
-              ]}
-              accessibilityLabel="Assign Operator"
-            >
-              <UserCheck size={13} color={theme.colors.canvas} style={{ marginRight: 4 }} />
-              <Text style={[styles.headerAssignBtnText, { color: theme.colors.canvas }]}>
-                Assign
-              </Text>
-            </TouchableOpacity>
-          ) : undefined
-        }
       />
 
-      {/* 2. TOP NAVBAR (ABOVE NAVBAR) DIRECTLY BELOW HEADER */}
+      {/* 2. TOP NAVBAR (ABOVE NAVBAR) — Operators only (Log Entry / Log History) */}
+      {isOperator && (
       <View
         style={[
           styles.aboveNavbar,
@@ -1107,78 +933,10 @@ export default function OperationsScreen() {
                 </Text>
               </TouchableOpacity>
             </>
-          ) : (
-            <>
-              {/* Daily Running Hours Tab */}
-              <TouchableOpacity
-                onPress={() => setActiveTab('logs')}
-                activeOpacity={0.8}
-                style={[
-                  styles.aboveNavbarTab,
-                  activeTab === 'logs'
-                    ? [styles.aboveNavbarTabActive, { backgroundColor: theme.colors.ink }]
-                    : [
-                        styles.aboveNavbarTabInactive,
-                        {
-                          backgroundColor: theme.colors.canvasElevated,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ],
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.aboveNavbarTabText,
-                    {
-                      color:
-                        activeTab === 'logs'
-                          ? theme.colors.canvas
-                          : theme.colors.body,
-                    },
-                    activeTab === 'logs' && styles.aboveNavbarTabTextActive,
-                  ]}
-                >
-                  Daily Running Hours
-                </Text>
-              </TouchableOpacity>
-
-              {/* Machine Assignments Tab */}
-              <TouchableOpacity
-                onPress={() => setActiveTab('assignments')}
-                activeOpacity={0.8}
-                style={[
-                  styles.aboveNavbarTab,
-                  activeTab === 'assignments'
-                    ? [styles.aboveNavbarTabActive, { backgroundColor: theme.colors.ink }]
-                    : [
-                        styles.aboveNavbarTabInactive,
-                        {
-                          backgroundColor: theme.colors.canvasElevated,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ],
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.aboveNavbarTabText,
-                    {
-                      color:
-                        activeTab === 'assignments'
-                          ? theme.colors.canvas
-                          : theme.colors.body,
-                    },
-                    activeTab === 'assignments' && styles.aboveNavbarTabTextActive,
-                  ]}
-                  numberOfLines={1}
-                >
-                  Machine Assignments
-                </Text>
-              </TouchableOpacity>
-            </>
-          )}
+          ) : null}
         </ScrollView>
       </View>
+      )}
 
       {/* 2. TAB 1: DAILY RUNNING HOURS FEED */}
       {activeTab === 'logs' && (
@@ -1451,51 +1209,9 @@ export default function OperationsScreen() {
               >
                 <Printer size={16} color="#ffffff" />
               </TouchableOpacity>
-
-              {/* Expand / Collapse Filters Button */}
-              <TouchableOpacity
-                onPress={() => toggleWithAnimation(setIsFiltersExpanded)}
-                activeOpacity={0.7}
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: radiusNumeric.lg,
-                  backgroundColor: theme.colors.canvas,
-                  borderWidth: 1,
-                  borderColor: theme.colors.hairline,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                accessibilityLabel="Toggle Filters"
-              >
-                {isFiltersExpanded ? <ChevronUp size={16} color={theme.colors.mute} /> : <ChevronDown size={16} color={theme.colors.mute} />}
-              </TouchableOpacity>
             </View>
 
-            {/* Search Input Bar */}
-            <View style={[styles.searchBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, marginBottom: spacingNumeric.sm }]}>
-              {isSearchingLogs ? (
-                <ActivityIndicator size="small" color={theme.colors.link} style={{ marginRight: 8 }} />
-              ) : (
-                <Search size={14} color={theme.colors.mute} style={{ marginRight: 8 }} />
-              )}
-              <TextInput
-                style={[styles.searchInput, { color: theme.colors.ink }]}
-                placeholder="Search machine, operator, remarks, location..."
-                placeholderTextColor={theme.colors.mute}
-                value={search}
-                onChangeText={setSearch}
-                autoCapitalize="none"
-              />
-              {search.length > 0 && (
-                <TouchableOpacity onPress={() => setSearch('')} style={{ padding: 4 }}>
-                  <X size={14} color={theme.colors.mute} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Dropdowns depending on logsViewMode (Collapsible) */}
-            {isFiltersExpanded && (
+            {/* Dropdowns depending on logsViewMode (Permanently Expanded) */}
             <View style={styles.dropdownsContainer}>
               {logsViewMode === 'machine' && (
                 <>
@@ -1506,7 +1222,7 @@ export default function OperationsScreen() {
                       style={[styles.selectorTrigger, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
                     >
                       <Text style={[styles.selectorTriggerText, { color: theme.colors.ink }]} numberOfLines={1}>
-                        {selectedMachineObj ? `${selectedMachineObj.machine_id} · ${selectedMachineObj.model || ''}` : 'Select Machine...'}
+                        {selectedMachineObj ? `${selectedMachineObj.machine_id} Â· ${selectedMachineObj.model || ''}` : 'Select Machine...'}
                       </Text>
                       <ChevronDown size={16} color={theme.colors.mute} />
                     </TouchableOpacity>
@@ -1551,7 +1267,7 @@ export default function OperationsScreen() {
                             const loc = parts.length > 0 ? parts.join(', ') : ((selectedClientObj as any).address ? String((selectedClientObj as any).address).trim() : '');
                             return loc ? (
                               <Text style={{ color: theme.colors.mute, fontWeight: '400', fontSize: 11 }}>
-                                {` • ${loc}`}
+                                {` â€¢ ${loc}`}
                               </Text>
                             ) : null;
                           })()}
@@ -1648,7 +1364,6 @@ export default function OperationsScreen() {
                 </>
               )}
             </View>
-            )}
           </Card>
 
           {/* 3. DYNAMIC SUMMARY HEADER CARDS */}
@@ -1665,7 +1380,9 @@ export default function OperationsScreen() {
               >
                 <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   <Text style={[styles.summaryHeaderTitle, { color: theme.colors.ink }]}>
-                    {selectedMachineObj.machine_id} {selectedMachineObj.model ? `(${selectedMachineObj.model})` : ''}
+                    {selectedMachineObj.model || ''}
+                    {selectedMachineObj.model && selectedMachineObj.serial_number ? ' ' : ''}
+                    {selectedMachineObj.serial_number ? `(${selectedMachineObj.serial_number})` : (!selectedMachineObj.model ? 'Machine' : '')}
                   </Text>
                   <View style={[styles.statusBadgePill, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : '#e0f2fe' }]}>
                     <Text style={[styles.statusBadgeText, { color: theme.colors.link }]}>
@@ -1690,11 +1407,11 @@ export default function OperationsScreen() {
                 <View style={[styles.machineSpecsGrid, { marginTop: 8 }]}>
                   <View style={styles.specItem}>
                     <Text style={[styles.specLabel, { color: theme.colors.mute }]}>MANUFACTURER</Text>
-                    <Text style={[styles.specValue, { color: theme.colors.ink }]}>{selectedMachineObj.manufacturer || '—'}</Text>
+                    <Text style={[styles.specValue, { color: theme.colors.ink }]}>{selectedMachineObj.manufacturer || 'â€”'}</Text>
                   </View>
                   <View style={styles.specItem}>
                     <Text style={[styles.specLabel, { color: theme.colors.mute }]}>MODEL</Text>
-                    <Text style={[styles.specValue, { color: theme.colors.ink }]}>{selectedMachineObj.model || '—'}</Text>
+                    <Text style={[styles.specValue, { color: theme.colors.ink }]}>{selectedMachineObj.model || 'â€”'}</Text>
                   </View>
                   <View style={styles.specItem}>
                     <Text style={[styles.specLabel, { color: theme.colors.mute }]}>SERIAL NO / CODE</Text>
@@ -1733,13 +1450,6 @@ export default function OperationsScreen() {
                     <Text style={[styles.summaryHeaderTitle, { color: theme.colors.ink }]}>
                       {selectedClientObj.company_name}
                     </Text>
-                    {selectedClientObj.code ? (
-                      <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline }}>
-                        <Text style={{ fontSize: 10, fontFamily: 'monospace', color: theme.colors.mute, fontWeight: '700' }}>
-                          {selectedClientObj.code}
-                        </Text>
-                      </View>
-                    ) : null}
                     <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#e0f2fe' }}>
                       <Text style={{ fontSize: 10, fontFamily: 'monospace', color: theme.colors.link, fontWeight: '700' }}>
                         {clientMachines.length} {clientMachines.length === 1 ? 'Machine' : 'Machines'}
@@ -1764,12 +1474,12 @@ export default function OperationsScreen() {
                 <>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 8, marginBottom: 8 }}>
                     <Text style={{ fontSize: 11, color: theme.colors.mute }} numberOfLines={2}>
-                      📍 {[selectedClientObj.street, selectedClientObj.city, selectedClientObj.district, selectedClientObj.state, selectedClientObj.pincode].filter(Boolean).map((s) => String(s).trim()).filter(Boolean).join(', ') || '—'}
+                      ðŸ“ {[selectedClientObj.street, selectedClientObj.city, selectedClientObj.district, selectedClientObj.state, selectedClientObj.pincode].filter(Boolean).map((s) => String(s).trim()).filter(Boolean).join(', ') || 'â€”'}
                     </Text>
                     {selectedClientObj.phone ? (
                       <TouchableOpacity onPress={() => Linking.openURL(`tel:${selectedClientObj.phone}`)}>
                         <Text style={{ fontSize: 11, color: theme.colors.link, fontFamily: 'monospace' }}>
-                          📞 {selectedClientObj.phone}
+                          ðŸ“ž {selectedClientObj.phone}
                         </Text>
                       </TouchableOpacity>
                     ) : null}
@@ -1862,13 +1572,13 @@ export default function OperationsScreen() {
                       {selectedOperatorObj?.phone ? (
                         <TouchableOpacity onPress={() => Linking.openURL(`tel:${selectedOperatorObj.phone}`)}>
                           <Text style={{ fontSize: 11, color: theme.colors.link, fontFamily: 'monospace' }}>
-                            📞 {selectedOperatorObj.phone}
+                            ðŸ“ž {selectedOperatorObj.phone}
                           </Text>
                         </TouchableOpacity>
                       ) : null}
                       {selectedOperatorObj?.email ? (
                         <Text style={{ fontSize: 11, color: theme.colors.mute }}>
-                          ✉️ {selectedOperatorObj.email}
+                          âœ‰ï¸ {selectedOperatorObj.email}
                         </Text>
                       ) : null}
                     </View>
@@ -1917,9 +1627,9 @@ export default function OperationsScreen() {
             </Card>
           )}
 
-          {/* 4. DAILY RUNNING LOG CARDS LIST */}
+          {/* 4. DAILY RUNNING LOG CARDS LIST: Render across all view modes */}
           <View style={styles.logsListContainer}>
-            {isLoading || isSearchingLogs ? (
+            {isLoading ? (
               <OperationLogListSkeleton count={4} />
             ) : filteredLogs.length === 0 ? (
               <View style={[styles.emptyCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
@@ -1936,6 +1646,8 @@ export default function OperationsScreen() {
                 const mModel = log.machine?.model || log.machine_code || '30D-7SA';
                 const mSerial = log.machine?.serial_number || '2103006590';
                 const clientName = log.client?.name || log.client?.company_name || 'Unassigned Client';
+                const clientCity = log.client?.city || (log.location ? log.location.split(',')[0]?.trim() : '') || '—';
+                const breakdownInfo = parseBreakdownDetails(log);
                 const opName = log.operator?.full_name || 'Operator';
                 const cleanRemarks = (log.remarks || '—').replace(/\[Breakdown Duration:[^\]]+\]/gi, '').trim();
                 const hasConflict = Boolean(log.conflict_flag);
@@ -1964,23 +1676,12 @@ export default function OperationsScreen() {
                       isResolvedConflict && { borderLeftWidth: 3, borderLeftColor: '#059669' },
                     ]}
                   >
-                    {/* Log Card Header */}
-                    <View style={styles.logCardHeader}>
-                      <View style={styles.logCardHeaderLeft}>
-                        <View style={styles.dateRow}>
-                          <Text style={[styles.logDateText, { color: theme.colors.mute }]}>{formatDate(log.log_date)}</Text>
-                          {log.created_at && (
-                            <View style={[styles.timestampBadge, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#e0f2fe' }]}>
-                              <Clock size={10} color={theme.colors.link} style={{ marginRight: 3 }} />
-                              <Text style={[styles.timestampText, { color: theme.colors.link }]}>
-                                {formatExactTimestamp(log.created_at, true)}
-                              </Text>
-                            </View>
-                          )}
+                      {/* Log Card Header — consistent card UI: blue date, Model (Serial) one row */}
+                      <View style={[styles.logCardHeader, { alignItems: 'flex-start' }]}>
+                        <View style={[styles.logCardHeaderLeft, { flex: 1 }]}>
+                          <Text style={[styles.logDateText, { color: theme.colors.link }]}>{formatDate(log.log_date)}</Text>
+                          <Text style={[styles.logMachineModel, { color: theme.colors.ink }]} numberOfLines={1}>{mSerial ? `${mModel} (${mSerial})` : mModel}</Text>
                         </View>
-                        <Text style={[styles.logMachineModel, { color: theme.colors.ink }]}>{mModel}</Text>
-                        <Text style={[styles.logMachineSerial, { color: theme.colors.mute }]}>S/N: {mSerial}</Text>
-                      </View>
 
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         {isPendingConflict && (
@@ -2013,61 +1714,73 @@ export default function OperationsScreen() {
                             </Text>
                           </View>
                         )}
-
-                        {log.is_breakdown ? (
-                          <View style={[styles.breakdownBadge, { backgroundColor: isDark ? 'rgba(225, 29, 72, 0.18)' : '#fee2e2', borderWidth: 1, borderColor: isDark ? 'rgba(225, 29, 72, 0.35)' : '#fecaca' }]}>
-                            <AlertTriangle size={11} color={isDark ? '#fb7185' : '#e11d48'} style={{ marginRight: 3 }} />
-                            <Text style={[styles.breakdownBadgeText, { color: isDark ? '#fb7185' : '#e11d48' }]}>Breakdown</Text>
-                          </View>
-                        ) : (
-                          <View style={[styles.normalBadge, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                            <Text style={[styles.normalBadgeText, { color: theme.colors.mute }]}>0</Text>
-                          </View>
-                        )}
                       </View>
                     </View>
 
                     {/* Middle Specs Box */}
                     <View style={[styles.logDetailsBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                      {/* Operator tab: operator name lives in summary header — show Machine instead.
+                          Client tab: client lives in summary header — machine shown in card title. */}
+                      {logsViewMode === 'operator' ? (
                       <View style={styles.logDetailRow}>
                         <View style={{ flex: 1 }}>
-                          <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Client / Location:</Text>
+                          <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Machine:</Text>
+                          <Text style={[styles.logDetailValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                            {mSerial ? `${mModel} (${mSerial})` : mModel}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                          <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Client / City:</Text>
                           <Text style={[styles.logDetailValue, { color: theme.colors.ink }]} numberOfLines={1}>
                             {clientName}
                           </Text>
-                          {log.location ? (
+                        </View>
+                      </View>
+                      ) : logsViewMode === 'client' ? (
+                      <View style={styles.logDetailRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Operator:</Text>
+                          <Text style={[styles.logDetailValue, { color: theme.colors.ink }]}>{opName}</Text>
+                        </View>
+                        <View style={{ flex: 1, alignItems: 'flex-end' }}>
+                          <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Shift Timings:</Text>
+                          <Text style={[styles.logDetailValueMono, { color: theme.colors.ink }]}>
+                            {formatCompactTiming(log.start_time, log.end_time)}
+                          </Text>
+                        </View>
+                      </View>
+                      ) : (
+                      <View style={styles.logDetailRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Client / City:</Text>
+                          <Text style={[styles.logDetailValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                            {clientName}
+                          </Text>
+                          {clientCity !== '—' ? (
                             <Text style={[styles.logDetailSub, { color: theme.colors.mute }]} numberOfLines={1}>
-                              {log.location}
+                              {clientCity}
                             </Text>
                           ) : null}
                         </View>
                         <View style={{ flex: 1, alignItems: 'flex-end' }}>
                           <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Operator:</Text>
                           <Text style={[styles.logDetailValue, { color: theme.colors.ink }]}>{opName}</Text>
-                          {log.operator?.phone ? (
-                            <TouchableOpacity
-                              onPress={() => Linking.openURL(`tel:${log.operator?.phone}`)}
-                              style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}
-                            >
-                              <Phone size={10} color={theme.colors.link} style={{ marginRight: 2 }} />
-                              <Text style={[styles.logDetailPhone, { color: theme.colors.link }]}>{log.operator.phone}</Text>
-                            </TouchableOpacity>
-                          ) : null}
                         </View>
                       </View>
-
-                      {/* Timings & Running Hours Row */}
+                      )}
                       <View style={[styles.logTimingRow, { borderTopColor: theme.colors.hairline }]}>
+                        {logsViewMode !== 'client' && (
                         <View>
                           <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Shift Timings:</Text>
                           <Text style={[styles.logDetailValueMono, { color: theme.colors.ink }]}>
                             {formatCompactTiming(log.start_time, log.end_time)}
                           </Text>
                         </View>
+                        )}
                         <View style={{ alignItems: 'center' }}>
                           <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Meter Reading:</Text>
                           <Text style={[styles.logDetailValueMono, { color: theme.colors.ink }]}>
-                            {startMtr} → {endMtr}
+                            {startMtr} â†’ {endMtr}
                           </Text>
                         </View>
                         <View style={{ alignItems: 'flex-end' }}>
@@ -2078,16 +1791,19 @@ export default function OperationsScreen() {
                         </View>
                       </View>
 
-                      {/* Overtime & Remarks if present */}
-                      {(otHrs > 0 || cleanRemarks !== '—') && (
+                      {/* Breakdown / Overtime / Remarks if present */}
+                      {((log||{}).is_breakdown || otHrs > 0 || cleanRemarks !== 'â€”') && (
                         <View style={[styles.logRemarksRow, { borderTopColor: theme.colors.hairline }]}>
+                          {(log||{}).is_breakdown ? (
+                            <Text>BreakdownYes</Text>
+                          ) : null}
                           {otHrs > 0 && (
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                               <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Overtime:</Text>
                               <Text style={[styles.logOtValue, { color: isDark ? '#fbbf24' : '#d97706' }]}>{otHrs} hrs</Text>
                             </View>
                           )}
-                          {cleanRemarks !== '—' && (
+                          {cleanRemarks !== 'â€”' && (
                             <Text style={[styles.logRemarksText, { color: theme.colors.mute }]} numberOfLines={1}>
                               Note: {cleanRemarks}
                             </Text>
@@ -2188,6 +1904,64 @@ export default function OperationsScreen() {
                         )}
                       </View>
                     )}
+
+                    {/* Log Card Footer: Timestamp & Actions */}
+                    <View style={[styles.logCardFooterActions, { borderTopColor: theme.colors.hairline }]}>
+                      <Text style={[styles.logIdMono, { color: theme.colors.mute, fontSize: 10, fontFamily: 'monospace' }]}>
+                        {log.created_at ? formatCompactExactTimestamp(log.created_at) : ''}
+                      </Text>
+                      {canManageLogs && (
+                        <View style={styles.logCardActionButtons}>
+                          <TouchableOpacity
+                            onPress={() => handleEditLog(log)}
+                            style={[
+                              styles.logActionTouchBtn,
+                              {
+                                backgroundColor: isDark ? '#1e293b' : '#f0f9ff',
+                                borderColor: isDark ? '#38bdf840' : '#bae6fd',
+                              },
+                            ]}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            accessibilityLabel={`Edit log for ${log.machine_code}`}
+                          >
+                            <Edit2 size={13} color={isDark ? '#38bdf8' : '#0284c7'} />
+                            <Text
+                              style={{
+                                fontSize: 11,
+                                fontWeight: '700',
+                                color: isDark ? '#38bdf8' : '#0284c7',
+                              }}
+                            >
+                              Edit
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            onPress={() => handleDeleteLog(log)}
+                            style={[
+                              styles.logActionTouchBtn,
+                              {
+                                backgroundColor: isDark ? '#3f1d24' : '#fff1f2',
+                                borderColor: isDark ? '#fb718540' : '#fecdd3',
+                              },
+                            ]}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            accessibilityLabel={`Delete log for ${log.machine_code}`}
+                          >
+                            <Trash2 size={13} color={isDark ? '#fb7185' : '#e11d48'} />
+                            <Text
+                              style={{
+                                fontSize: 11,
+                                fontWeight: '700',
+                                color: isDark ? '#fb7185' : '#e11d48',
+                              }}
+                            >
+                              Delete
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
                   </Card>
                 );
               })
@@ -2237,338 +2011,6 @@ export default function OperationsScreen() {
         </ScrollView>
       )}
 
-      {/* 3. TAB 2: OPERATOR MACHINE ASSIGNMENTS (Matches Screenshot 4) */}
-      {activeTab === 'assignments' && (
-        <ScrollView
-          style={styles.contentScroll}
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
-        >
-          {/* 4 Capacity KPI Metric Cards (Screenshot 4) */}
-          <View style={styles.metricsGrid4}>
-            <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>TOTAL EQUIPMENT</Text>
-              <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>{totalMachinesCount}</Text>
-            </View>
-            <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>ACTIVE SHIFT OPERATORS</Text>
-              <Text style={[styles.kpiValue, { color: theme.colors.link }]}>{activeShiftOperatorsCount}</Text>
-            </View>
-            <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>FULL CAPACITY (3/3)</Text>
-              <Text style={[styles.kpiValue, { color: isDark ? '#34d399' : '#059669' }]}>{fullCapacityCount}</Text>
-            </View>
-            <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>UNASSIGNED (0/3)</Text>
-              <Text style={[styles.kpiValue, { color: isDark ? '#fbbf24' : '#d97706' }]}>{unassignedCount}</Text>
-            </View>
-          </View>
-
-          {/* Search Bar & Filter Strip */}
-          <Card variant="elevated" style={styles.assignmentFilterCard}>
-            <View style={[styles.searchBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-              {isSearchingAssignments ? (
-                <ActivityIndicator size="small" color={theme.colors.link} style={{ marginRight: 8 }} />
-              ) : (
-                <Search size={14} color={theme.colors.mute} style={{ marginRight: 8 }} />
-              )}
-              <TextInput
-                style={[styles.searchInput, { color: theme.colors.ink }]}
-                placeholder="Search machines, models, serial numbers, operators..."
-                placeholderTextColor={theme.colors.mute}
-                value={assignmentSearch}
-                onChangeText={setAssignmentSearch}
-                autoCapitalize="none"
-              />
-              {assignmentSearch.length > 0 && (
-                <TouchableOpacity onPress={() => setAssignmentSearch('')} style={{ padding: 4 }}>
-                  <X size={14} color={theme.colors.mute} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Filter Pills: All | Assigned | Full | Unassigned */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterPillsScroll}>
-              {[
-                { id: 'all', label: `All (${totalMachinesCount})` },
-                { id: 'assigned', label: `Assigned (${totalMachinesCount - unassignedCount})` },
-                { id: 'full', label: `Full (3/3) (${fullCapacityCount})` },
-                { id: 'unassigned', label: `Unassigned (${unassignedCount})` },
-              ].map((pill) => {
-                const isSelected = assignmentFilter === pill.id;
-                return (
-                  <TouchableOpacity
-                    key={pill.id}
-                    onPress={() => setAssignmentFilter(pill.id as any)}
-                    style={[
-                      styles.assignmentFilterPill,
-                      {
-                        backgroundColor: isSelected ? theme.colors.ink : theme.colors.canvas,
-                        borderColor: isSelected ? theme.colors.ink : theme.colors.hairline,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.assignmentFilterPillText,
-                        { color: isSelected ? theme.colors.canvas : theme.colors.body },
-                        isSelected && { fontWeight: '700' },
-                      ]}
-                    >
-                      {pill.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            {/* Expand / Collapse All Cards Toggle */}
-            <TouchableOpacity
-              onPress={() => handleToggleExpandAll(filteredMachinesForAssignments.map((m) => m.id))}
-              style={[styles.expandAllBtn, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}
-            >
-              <ChevronDown
-                size={14}
-                color={theme.colors.ink}
-                style={[
-                  { marginRight: 6 },
-                  expandedMachineIds.size === filteredMachinesForAssignments.length && filteredMachinesForAssignments.length > 0
-                    ? { transform: [{ rotate: '180deg' }] }
-                    : undefined,
-                ]}
-              />
-              <Text style={[styles.expandAllBtnText, { color: theme.colors.ink }]}>
-                {expandedMachineIds.size === filteredMachinesForAssignments.length && filteredMachinesForAssignments.length > 0
-                  ? 'Collapse All Cards'
-                  : 'Expand All Cards'}
-              </Text>
-            </TouchableOpacity>
-          </Card>
-
-          {/* Machine Assignment Cards List */}
-          <View style={styles.assignmentCardsList}>
-            {isLoading || isSearchingAssignments ? (
-              <AssignmentListSkeleton count={4} />
-            ) : filteredMachinesForAssignments.length === 0 ? (
-              <View style={[styles.emptyCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                <Text style={[styles.emptyCardText, { color: theme.colors.mute }]}>
-                  No equipment matched your search or filter criteria.
-                </Text>
-              </View>
-            ) : (
-              filteredMachinesForAssignments.map((m) => {
-                const isExpanded = expandedMachineIds.has(m.id);
-                const activeAss = m.active_assignments || [];
-                const isFull = activeAss.length >= 3;
-
-                return (
-                  <Card key={m.id} variant="elevated" style={styles.machCard}>
-                    {/* Header Strip — Clickable for accordion */}
-                    <TouchableOpacity
-                      onPress={() => toggleMachineExpanded(m.id)}
-                      activeOpacity={0.7}
-                      style={styles.machCardHeader}
-                    >
-                      <View style={{ flex: 1, marginRight: 8 }}>
-                        <View style={styles.machCardTitleRow}>
-                          <Text style={[styles.machCodeText, { color: theme.colors.ink }]}>{m.machine_id}</Text>
-                          {m.model && <Text style={[styles.machModelText, { color: theme.colors.mute }]}>· {m.model}</Text>}
-                        </View>
-                        <Text style={[styles.machSerialText, { color: theme.colors.mute }]}>
-                          (S/N: {m.serial_number || '—'})
-                        </Text>
-                        <View style={styles.machMetaRow}>
-                          <Text style={[styles.machMetaLabel, { color: theme.colors.mute }]}>
-                            Meter: <Text style={{ fontWeight: '700', color: theme.colors.ink }}>{m.hour_meter || 0} hrs</Text>
-                          </Text>
-                          <Text style={[styles.machMetaLabel, { color: theme.colors.mute }]}>
-                            Status: <Text style={{ fontWeight: '700', color: theme.colors.ink }}>{m.status || 'Available'}</Text>
-                          </Text>
-                        </View>
-                      </View>
-
-                      {/* Right capacity indicator & chevron */}
-                      <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                        <View
-                          style={[
-                            styles.machCapacityBadge,
-                            {
-                              backgroundColor: isFull
-                                ? isDark ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5'
-                                : activeAss.length > 0
-                                ? isDark ? 'rgba(59, 130, 246, 0.15)' : '#e0f2fe'
-                                : theme.colors.canvas,
-                              borderColor: isFull
-                                ? isDark ? 'rgba(16, 185, 129, 0.35)' : '#a7f3d0'
-                                : activeAss.length > 0
-                                ? isDark ? 'rgba(59, 130, 246, 0.3)' : '#bae6fd'
-                                : theme.colors.hairline,
-                            },
-                          ]}
-                        >
-                          <View
-                            style={[
-                              styles.capacityDot,
-                              { backgroundColor: isFull ? (isDark ? '#34d399' : '#059669') : activeAss.length > 0 ? theme.colors.link : (isDark ? '#525252' : '#a3a3a3') },
-                            ]}
-                          />
-                          <Text
-                            style={[
-                              styles.machCapacityText,
-                              { color: isFull ? (isDark ? '#34d399' : '#047857') : activeAss.length > 0 ? theme.colors.link : theme.colors.mute },
-                            ]}
-                          >
-                            {activeAss.length} / 3 Operators
-                          </Text>
-                        </View>
-
-                        {/* Assign Operator Button */}
-                        {!isFull && (
-                          <TouchableOpacity
-                            onPress={() => handleOpenAssignModal(m.id)}
-                            style={[styles.assignQuickBtn, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
-                          >
-                            <Plus size={12} color={theme.colors.link} style={{ marginRight: 2 }} />
-                            <Text style={[styles.assignQuickBtnText, { color: theme.colors.link }]}>Assign Operator</Text>
-                          </TouchableOpacity>
-                        )}
-
-                        <ChevronDown
-                          size={16}
-                          color={theme.colors.mute}
-                          style={isExpanded ? { transform: [{ rotate: '180deg' }] } : undefined}
-                        />
-                      </View>
-                    </TouchableOpacity>
-
-                    {/* Expanded 3 Shift Slots Grid */}
-                    {isExpanded && (
-                      <View style={[styles.machExpandedSlots, { borderTopColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-                        {activeAss.map((ass, idx) => {
-                          const opObj = activeOperators.find((o) => o.id === ass.operator_id) || (ass.operator as any);
-                          const opName = opObj?.full_name || 'Assigned Operator';
-                          const opPhone = opObj?.phone;
-                          const sDisplay = formatTo12Hour(ass.shift_start_time) || '08:00 AM';
-                          const eDisplay = formatTo12Hour(ass.shift_end_time) || '05:00 PM';
-                          const isOvernight = ass.crosses_midnight;
-
-                          return (
-                            <View
-                              key={ass.id || idx}
-                              style={[styles.shiftSlotCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
-                            >
-                              <View style={styles.shiftSlotHeader}>
-                                <Text style={[styles.shiftSlotNum, { color: theme.colors.mute }]}>SHIFT SLOT #{idx + 1}</Text>
-                                <View
-                                  style={[
-                                    styles.timingPill,
-                                    {
-                                      backgroundColor: isOvernight
-                                        ? isDark
-                                          ? 'rgba(99, 102, 241, 0.15)'
-                                          : '#eef2ff'
-                                        : isDark
-                                        ? 'rgba(245, 158, 11, 0.15)'
-                                        : '#fef3c7',
-                                      borderColor: isOvernight
-                                        ? isDark
-                                          ? 'rgba(99, 102, 241, 0.35)'
-                                          : '#c7d2fe'
-                                        : isDark
-                                        ? 'rgba(245, 158, 11, 0.35)'
-                                        : '#fde68a',
-                                    },
-                                  ]}
-                                >
-                                  {isOvernight ? (
-                                    <Moon size={11} color={isDark ? '#a5b4fc' : '#4f46e5'} />
-                                  ) : (
-                                    <Sun size={11} color={isDark ? '#fbbf24' : '#d97706'} />
-                                  )}
-                                  <Text
-                                    style={[
-                                      styles.timingPillText,
-                                      {
-                                        color: isOvernight
-                                          ? isDark
-                                            ? '#c7d2fe'
-                                            : '#4338ca'
-                                          : isDark
-                                          ? '#fbbf24'
-                                          : '#92400e',
-                                      },
-                                    ]}
-                                  >
-                                    {sDisplay} – {eDisplay}
-                                  </Text>
-                                </View>
-                              </View>
-
-                              <View style={styles.shiftSlotBody}>
-                                <View style={{ flex: 1 }}>
-                                  <Text style={[styles.slotOpName, { color: theme.colors.ink }]}>{opName}</Text>
-                                  {opPhone ? (
-                                    <TouchableOpacity
-                                      onPress={() => Linking.openURL(`tel:${opPhone}`)}
-                                      style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}
-                                    >
-                                      <Phone size={11} color={theme.colors.link} style={{ marginRight: 3 }} />
-                                      <Text style={[styles.slotOpPhone, { color: theme.colors.link }]}>{opPhone}</Text>
-                                    </TouchableOpacity>
-                                  ) : (
-                                    <Text style={[styles.slotOpPhone, { color: theme.colors.mute }]}>No contact</Text>
-                                  )}
-                                </View>
-
-                                <TouchableOpacity
-                                  onPress={() => handleOpenAssignModal(m.id)}
-                                  style={[styles.changeOpBtn, { borderColor: theme.colors.hairline }]}
-                                >
-                                  <Text style={[styles.changeOpBtnText, { color: theme.colors.link }]}>Change Operator</Text>
-                                </TouchableOpacity>
-                              </View>
-                            </View>
-                          );
-                        })}
-
-                        {/* Open Slots available buttons */}
-                        {Array.from({ length: Math.max(0, 3 - activeAss.length) }).map((_, emptyIdx) => {
-                          const slotNum = activeAss.length + emptyIdx + 1;
-                          return (
-                            <TouchableOpacity
-                              key={`empty-${emptyIdx}`}
-                              onPress={() => handleOpenAssignModal(m.id)}
-                              style={[styles.emptySlotBtn, { borderColor: theme.colors.hairline }]}
-                            >
-                              <Plus size={14} color={theme.colors.link} />
-                              <Text style={[styles.emptySlotBtnText, { color: theme.colors.link }]}>
-                                + Assign Shift #{slotNum} (Open Slot Available)
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                    )}
-                  </Card>
-                );
-              })
-            )}
-          </View>
-        </ScrollView>
-      )}
-
-      {/* 4. MODALS & DIALOGS */}
-      {/* Assign Operator Modal */}
-      <MobileAssignmentModal
-        visible={showAssignModal}
-        onClose={() => setShowAssignModal(false)}
-        machineId={assignModalTargetMachineId}
-        allMachines={machinesList}
-        activeOperators={activeOperators}
-        currentUserId={user?.id || ''}
-        onSuccess={fetchOperationsData}
-      />
 
       {/* Review Overtime Conflict Modal */}
       <MobileConflictResolutionModal
@@ -2576,34 +2018,36 @@ export default function OperationsScreen() {
         onClose={() => setShowConflictModal(false)}
         log={selectedConflictLog}
         currentUserId={user?.id || ''}
-        onSuccess={fetchOperationsData}
+        onSuccess={handleDataRefresh}
       />
 
-      {/* Export / Print Modal */}
-      <OperationsExportModal
-        visible={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        logs={filteredLogs}
-        viewMode={logsViewMode}
-        selectedEntityName={
-          logsViewMode === 'machine'
-            ? selectedMachineObj?.machine_id || 'Machine'
-            : logsViewMode === 'client'
-            ? selectedClientObj?.company_name || 'Client'
-            : selectedOperatorObj?.full_name || 'Operator'
-        }
-        selectedMonthLabel={MONTH_OPTIONS.find((m) => m.id === selectedMonth)?.label || 'All Months'}
-        selectedLocationLabel={selectedSiteLocation}
-        selectedMachineLabel={
-          selectedClientMachineId === 'all'
-            ? 'All Machines'
-            : machinesList.find((m) => m.id === selectedClientMachineId)?.machine_id
-        }
-        totalRunningHours={activeMetrics.runHours}
-        totalOtHours={activeMetrics.otHours}
-        totalBreakdowns={activeMetrics.breakdowns}
-        supervisorName={userProfile?.full_name || 'Supervisor'}
-      />
+      {/* Export / Print Modal (Loaded strictly on demand) */}
+      {showExportModal && (
+        <OperationsExportModal
+          visible={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          logs={filteredLogs}
+          viewMode={logsViewMode}
+          selectedEntityName={
+            logsViewMode === 'machine'
+              ? selectedMachineObj?.machine_id || 'Machine'
+              : logsViewMode === 'client'
+              ? selectedClientObj?.company_name || 'Client'
+              : selectedOperatorObj?.full_name || 'Operator'
+          }
+          selectedMonthLabel={MONTH_OPTIONS.find((m) => m.id === selectedMonth)?.label || 'All Months'}
+          selectedLocationLabel={selectedSiteLocation}
+          selectedMachineLabel={
+            selectedClientMachineId === 'all'
+              ? 'All Machines'
+              : machinesList.find((m) => m.id === selectedClientMachineId)?.machine_id
+          }
+          totalRunningHours={activeMetrics.runHours}
+          totalOtHours={activeMetrics.otHours}
+          totalBreakdowns={activeMetrics.breakdowns}
+          supervisorName={userProfile?.full_name || 'Supervisor'}
+        />
+      )}
 
       {/* Reusable Filter Selector Sheet */}
       <OperationsFilterSelectorModal
@@ -2626,7 +2070,24 @@ export default function OperationsScreen() {
           serialNumber={targetMachineForLog.serial_number}
           onSubmit={() => {
             setMeterModalVisible(false);
-            fetchOperationsData();
+            handleDataRefresh();
+          }}
+        />
+      )}
+
+      {/* Edit Log Modal for Managers/Supervisors */}
+      {editingLogRecord && (
+        <MeterLogModal
+          visible={Boolean(editingLogRecord)}
+          onClose={() => setEditingLogRecord(null)}
+          machineId={editingLogRecord.machine_id || ''}
+          machineCode={editingLogRecord.machine_code || ''}
+          model={editingLogRecord.machine?.model}
+          serialNumber={editingLogRecord.machine?.serial_number}
+          existingLog={editingLogRecord}
+          onSubmit={() => {
+            setEditingLogRecord(null);
+            handleDataRefresh();
           }}
         />
       )}
@@ -2637,18 +2098,6 @@ export default function OperationsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  headerAssignBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    height: 32,
-    borderRadius: radiusNumeric.md,
-    gap: 4,
-  },
-  headerAssignBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
   },
   aboveNavbar: {
     borderBottomWidth: 1,
@@ -2934,19 +2383,6 @@ const styles = StyleSheet.create({
   subTabPillText: {
     fontSize: 12,
     fontWeight: '600',
-  },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 40,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 12,
-    paddingVertical: 0,
   },
   exportBarRow: {
     flexDirection: 'row',
@@ -3250,178 +2686,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
   },
-  assignmentFilterCard: {
-    padding: spacingNumeric.md,
-    borderRadius: radiusNumeric.lg,
-    marginBottom: spacingNumeric.md,
-    gap: 10,
-  },
-  filterPillsScroll: {
-    gap: 8,
-  },
-  assignmentFilterPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-  },
-  assignmentFilterPillText: {
-    fontSize: 11,
-  },
-  expandAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    height: 32,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-  },
-  expandAllBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  assignmentCardsList: {
-    gap: spacingNumeric.sm,
-  },
-  machCard: {
-    borderRadius: radiusNumeric.lg,
-    overflow: 'hidden',
-  },
-  machCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: spacingNumeric.md,
-  },
-  machCardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  machCodeText: {
-    fontSize: 13,
-    fontWeight: '900',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  machModelText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  machSerialText: {
-    fontSize: 11,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-    marginTop: 1,
-  },
-  machMetaRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 4,
-  },
-  machMetaLabel: {
-    fontSize: 10,
-  },
-  machCapacityBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radiusNumeric.full,
-    borderWidth: 1,
-  },
-  capacityDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  machCapacityText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  assignQuickBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-  },
-  assignQuickBtnText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  machExpandedSlots: {
-    padding: spacingNumeric.md,
-    borderTopWidth: 1,
-    gap: 8,
-  },
-  shiftSlotCard: {
-    padding: spacingNumeric.sm,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    gap: 6,
-  },
-  shiftSlotHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  shiftSlotNum: {
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  timingPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 1,
-  },
-  timingPillText: {
-    fontSize: 10,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-  },
-  shiftSlotBody: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  slotOpName: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  slotOpPhone: {
-    fontSize: 10,
-  },
-  changeOpBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  changeOpBtnText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  emptySlotBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 40,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    gap: 6,
-  },
-  emptySlotBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
   emptyCard: {
     padding: spacingNumeric.xl,
     borderRadius: radiusNumeric.lg,
@@ -3432,5 +2696,32 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  logCardFooterActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 10,
+    marginTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  logIdMono: {
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  logCardActionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  logActionTouchBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    minHeight: 32,
   },
 });

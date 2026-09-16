@@ -9,8 +9,9 @@ import {
   Linking,
   Platform,
   TextInput,
+  Modal,
 } from 'react-native';
-import { Badge, useTheme, SharedLinkPreviewCard } from '../ui';
+import { Badge, useTheme, SharedLinkPreviewCard, AppRefreshControl } from '../ui';
 import { ScissorLiftLogoIcon } from '../branding/ReachInternationalLogo';
 import { supabase } from '../../lib/supabase';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
@@ -38,7 +39,14 @@ import {
   ChevronUp,
   MessageSquare,
   AlertCircle,
+  AlertTriangle,
   ArrowUpDown,
+  User,
+  UserCheck,
+  RefreshCw,
+  ArrowRight,
+  ArrowRightLeft,
+  FileText,
 } from 'lucide-react-native';
 import { MachineModal } from './MachineModal';
 import { DeleteMachineDialog } from './DeleteMachineDialog';
@@ -52,6 +60,147 @@ export interface MachineDetailViewProps {
   userRole?: string | null;
 }
 
+const mobileClientProfileCache = new Map<string, any>();
+
+const MONTH_NAMES_MOBILE = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec',
+];
+
+function formatLogDateHeaderMobile(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return 'Unknown Date';
+    const day = d.getDate();
+    const month = MONTH_NAMES_MOBILE[d.getMonth()];
+    const year = d.getFullYear();
+    return `${day} ${month} ${year}`;
+  } catch {
+    return dateStr;
+  }
+}
+
+function formatTimeWithSecondsMobile(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+  } catch {
+    return '';
+  }
+}
+
+function formatFullDateTimeMobile(dateStr: string): string {
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = d.getDate();
+    const month = MONTH_NAMES_MOBILE[d.getMonth()];
+    const year = d.getFullYear();
+    const time = d.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+    });
+    return `${day} ${month} ${year}, ${time}`;
+  } catch {
+    return dateStr;
+  }
+}
+
+function formatShiftTimingWithDateMobile(meta: Record<string, any>): string {
+  const startDate = meta.startDate || meta.logDate || meta.start_date || meta.log_date;
+  const endDate = meta.endDate || meta.end_date || startDate;
+  const startTime = meta.startTime || meta.start_time;
+  const endTime = meta.endTime || meta.end_time;
+
+  const formatDateShort = (dStr: string) => {
+    try {
+      const d = new Date(dStr);
+      if (isNaN(d.getTime())) return dStr;
+      const day = d.getDate();
+      const month = MONTH_NAMES_MOBILE[d.getMonth()];
+      return `${day} ${month}`;
+    } catch {
+      return dStr;
+    }
+  };
+
+  if (startTime && endTime) {
+    if (startDate && endDate && startDate !== endDate) {
+      return `${formatDateShort(startDate)}, ${startTime} → ${formatDateShort(endDate)}, ${endTime}`;
+    }
+    if (startDate) {
+      return `${formatDateShort(startDate)} • ${startTime} - ${endTime}`;
+    }
+    return `${startTime} - ${endTime}`;
+  }
+
+  if (startDate) {
+    return `${formatDateShort(startDate)} • Shift Logged`;
+  }
+
+  return 'Standard Shift';
+}
+
+function formatFieldLabelMobile(key: string): string {
+  switch (key) {
+    case 'hour_meter':
+      return 'Hour Meter Reading';
+    case 'health_status':
+      return 'Health Status';
+    case 'status':
+      return 'Rental Fleet Status';
+    case 'client_id':
+      return 'Client Assignment';
+    case 'model':
+      return 'Machine Model';
+    case 'serial_number':
+      return 'Serial Number';
+    case 'year_of_mfg':
+      return 'Year of Mfg';
+    case 'manufacturer':
+      return 'Manufacturer';
+    case 'machine_id':
+      return 'Machine Code';
+    case 'operator_ids':
+    case 'current_operator_id':
+      return 'Assigned Operators';
+    case 'supervisor_ids':
+    case 'current_supervisor_id':
+      return 'Assigned Supervisors';
+    default:
+      return key
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+}
+
+function formatDiffValueMobile(val: any): string {
+  if (val === null || val === undefined || val === '') return 'None';
+  if (typeof val === 'boolean') return val ? 'Yes' : 'No';
+  if (typeof val === 'number') return val.toLocaleString();
+  if (typeof val === 'string') {
+    if (val === 'active') return 'Active';
+    if (val === 'under_maintenance') return 'Under Maintenance';
+    if (val === 'breakdown') return 'Breakdown';
+    if (val === 'spare') return 'Spare';
+    if (val === 'available') return 'Available';
+    if (val === 'rented') return 'On Rent';
+    return val;
+  }
+  if (Array.isArray(val)) {
+    return val.length === 0 ? 'None' : val.join(', ');
+  }
+  return JSON.stringify(val);
+}
+
 export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   machine,
   onBack,
@@ -60,6 +209,33 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   userRole,
 }) => {
   const { theme, isDark } = useTheme();
+
+  // On-demand full client profile loading with instant cache retrieval
+  const [fullClient, setFullClient] = useState<any>(() => {
+    if (machine.client_id && mobileClientProfileCache.has(machine.client_id)) {
+      return mobileClientProfileCache.get(machine.client_id);
+    }
+    return machine.client || null;
+  });
+
+  useEffect(() => {
+    if (!machine.client_id) return;
+    if (mobileClientProfileCache.has(machine.client_id)) {
+      setFullClient(mobileClientProfileCache.get(machine.client_id));
+      return;
+    }
+    supabase
+      .from('clients')
+      .select('*')
+      .eq('id', machine.client_id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (data && !error) {
+          mobileClientProfileCache.set(machine.client_id, data);
+          setFullClient(data);
+        }
+      });
+  }, [machine.client_id]);
 
   const normalizedRole = (userRole || '').toLowerCase();
   const isAdminOrManager =
@@ -71,11 +247,13 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   const canEdit = isAdminOrManager || isSupervisor;
   const canDelete = isAdminOrManager;
 
-  // Active Tab: 'overview' (Basic Info) or 'running_hours' (Running Logs)
-  const [activeTab, setActiveTab] = useState<'overview' | 'running_hours'>('overview');
+  // Active Tab: 'overview' (Basic Info), 'running_hours' (Running Logs), or 'audit_trail' (Audit Trail)
+  const [activeTab, setActiveTab] = useState<'overview' | 'running_hours' | 'audit_trail'>('overview');
 
   // Copy states
   const [copiedId, setCopiedId] = useState(false);
+  const [copiedModel, setCopiedModel] = useState(false);
+  const [copiedSerial, setCopiedSerial] = useState(false);
   const [copiedGstin, setCopiedGstin] = useState(false);
   const [copiedPan, setCopiedPan] = useState(false);
   const [copiedSiteAddress, setCopiedSiteAddress] = useState(false);
@@ -83,6 +261,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
   // Modals
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editSection, setEditSection] = useState<'all' | 'info' | 'personnel' | 'client'>('all');
   const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -92,6 +271,15 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [logsError, setLogsError] = useState<string | null>(null);
   const [hasLoadedLogs, setHasLoadedLogs] = useState(false);
+
+  // Audit Trail State (Lazy loaded)
+  const [auditLogs, setAuditLogs] = useState<any[] | null>(null);
+  const [isLoadingAudit, setIsLoadingAudit] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
+  const [hasLoadedAudit, setHasLoadedAudit] = useState(false);
+  const [auditCategory, setAuditCategory] = useState<'all' | 'hour_logs' | 'breakdowns' | 'assignments' | 'updates'>('all');
+  const [selectedMobileAuditLog, setSelectedMobileAuditLog] = useState<any | null>(null);
+  const [copiedLogIdMobile, setCopiedLogIdMobile] = useState(false);
 
   // Logs Filter / Sort State
   const [logSearch, setLogSearch] = useState('');
@@ -114,7 +302,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
     'Machine Details';
 
   // Client data extraction
-  const client = machine.client;
+  const client = fullClient || machine.client;
   const clientCompanyName = client?.company_name || machine.customer_name || '';
   const clientCode = client?.code || '';
   const clientContactPerson = client?.contact_person || '';
@@ -180,6 +368,8 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
           start_time,
           end_time,
           shift,
+          is_breakdown,
+          breakdown_hours,
           remarks,
           created_at,
           operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone, email)
@@ -204,6 +394,448 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
       fetchHourLogs();
     }
   }, [activeTab, hasLoadedLogs, isLoadingLogs, fetchHourLogs]);
+
+  // Audit Trail Fetcher & Caching
+  const fetchAuditLogs = useCallback(async () => {
+    setIsLoadingAudit(true);
+    setAuditError(null);
+    try {
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select(`
+          id,
+          user_id,
+          action,
+          entity_type,
+          entity_id,
+          category,
+          severity,
+          actor_name,
+          actor_role,
+          metadata,
+          details,
+          before_state,
+          after_state,
+          created_at,
+          user:users(id, full_name, role)
+        `)
+        .eq('entity_id', machine.id)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+      setAuditLogs(data || []);
+      setHasLoadedAudit(true);
+    } catch (err: any) {
+      setAuditError(err?.message || 'Failed to load audit logs.');
+      setAuditLogs([]);
+      setHasLoadedAudit(true);
+    } finally {
+      setIsLoadingAudit(false);
+    }
+  }, [machine.id]);
+
+  useEffect(() => {
+    if (activeTab === 'audit_trail' && !hasLoadedAudit && !isLoadingAudit) {
+      fetchAuditLogs();
+    }
+  }, [activeTab, hasLoadedAudit, isLoadingAudit, fetchAuditLogs]);
+
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      if (onMachineUpdated) {
+        await onMachineUpdated();
+      }
+      if (activeTab === 'running_hours') {
+        await fetchHourLogs();
+      } else if (activeTab === 'audit_trail') {
+        await fetchAuditLogs();
+      }
+    } catch (e) {
+      console.warn('[MachineDetailView] Error refreshing:', e);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [onMachineUpdated, activeTab, fetchHourLogs, fetchAuditLogs]);
+
+  // Fast entity name resolver map for mobile audit trail
+  const userMapMobile = useMemo(() => {
+    const map = new Map<string, string>();
+    if (machine?.operators) {
+      machine.operators.forEach((op: any) => {
+        if (op?.id) map.set(op.id, op.full_name || 'Operator');
+      });
+    }
+    if (machine?.supervisors) {
+      machine.supervisors.forEach((sup: any) => {
+        if (sup?.id) map.set(sup.id, sup.full_name || 'Supervisor');
+      });
+    }
+    if (machine?.current_operator?.id) {
+      map.set(machine.current_operator.id, machine.current_operator.full_name || 'Current Operator');
+    }
+    if (machine?.current_supervisor?.id) {
+      map.set(machine.current_supervisor.id, machine.current_supervisor.full_name || 'Current Supervisor');
+    }
+    if (auditLogs) {
+      auditLogs.forEach((l) => {
+        if (l.user) {
+          const u = Array.isArray(l.user) ? l.user[0] : l.user;
+          if (u?.id && u?.full_name) map.set(u.id, u.full_name);
+        }
+        if (l.metadata?.operatorId && l.metadata?.operatorName) {
+          map.set(l.metadata.operatorId, l.metadata.operatorName);
+        }
+      });
+    }
+    return map;
+  }, [machine, auditLogs]);
+
+  const resolveUserNameMobile = useCallback((id?: string | null) => {
+    if (!id) return 'None';
+    return userMapMobile.get(id) || `User (${id.slice(0, 8)})`;
+  }, [userMapMobile]);
+
+  const resolveClientNameMobile = useCallback((id?: string | null) => {
+    if (!id) return 'None (Available)';
+    if (machine?.client_id === id && (client?.company_name || machine?.customer_name)) {
+      return client?.company_name || machine?.customer_name;
+    }
+    return `Client (${id.slice(0, 8)})`;
+  }, [machine, client]);
+
+  // Enriched audit trail with previous vs updated details and deletions
+  const enrichedAuditLogs = useMemo(() => {
+    if (!auditLogs || auditLogs.length === 0) return [];
+
+    const chron = [...auditLogs].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    );
+
+    const runningSnapshot: Record<string, any> = {
+      model: machine?.model,
+      serial_number: machine?.serial_number,
+      machine_id: machine?.machine_id,
+      year_of_mfg: machine?.year_of_mfg,
+      manufacturer: machine?.manufacturer,
+      hour_meter: machine?.hour_meter,
+      health_status: machine?.health_status,
+      status: machine?.status,
+      client_id: machine?.client_id,
+      operator_ids: machine?.operator_ids || [],
+      supervisor_ids: machine?.supervisor_ids || [],
+    };
+
+    const enrichedList: any[] = [];
+
+    for (const log of chron) {
+      const act = (log.action || '').toLowerCase();
+      const isHourLog = act.includes('hour_logged');
+      const isBreakdown =
+        act.includes('breakdown') ||
+        log.metadata?.isBreakdown === true ||
+        log.metadata?.is_breakdown === true ||
+        (log.metadata?.breakdownDuration && String(log.metadata.breakdownDuration) !== '0' && String(log.metadata.breakdownDuration) !== '0h') ||
+        (log.metadata?.breakdownHours && Number(log.metadata.breakdownHours) > 0) ||
+        Boolean(log.metadata?.breakdownReason);
+      const isOpEnded = act.includes('operator_assignment_ended') || act.includes('assignment_ended');
+      const isDeleteEvent = act.includes('delete') || act.includes('deactivated');
+      const isOpUpdate = act.includes('operators_updated') || act.includes('operator_assigned');
+      const isSupUpdate = act.includes('supervisors_updated') || act.includes('reassigned_supervisor');
+      const isClientUpdate = act.includes('client_assignment_updated');
+      const isStatusUpdate = act.includes('operational_status') || act.includes('status');
+      const isInfoUpdate = act.includes('info_updated') || act.includes('updated');
+
+      const diffs: { field: string; label: string; previous: string; updated: string }[] = [];
+      const deletions: { field: string; label: string; deletedValue: string; reason?: string }[] = [];
+
+      // Explicit changes from metadata or before/after state
+      if (log.metadata?.changes && typeof log.metadata.changes === 'object') {
+        for (const [key, change] of Object.entries(log.metadata.changes as Record<string, any>)) {
+          if (!change) continue;
+          if (isHourLog && (key === 'hour_meter' || key === 'hourMeter')) continue;
+
+          if (change.deleted) {
+            deletions.push({
+              field: key,
+              label: formatFieldLabelMobile(key),
+              deletedValue: formatDiffValueMobile(change.previous),
+              reason: 'Removed / cleared during update',
+            });
+          } else if (JSON.stringify(change.previous) !== JSON.stringify(change.updated)) {
+            let prevStr = formatDiffValueMobile(change.previous);
+            let updatedStr = formatDiffValueMobile(change.updated);
+
+            if (key === 'operator_ids') {
+              const prevList = Array.isArray(change.previous) ? change.previous.map(resolveUserNameMobile).join(', ') : resolveUserNameMobile(change.previous);
+              const nextList = Array.isArray(change.updated) ? change.updated.map(resolveUserNameMobile).join(', ') : resolveUserNameMobile(change.updated);
+              prevStr = prevList || 'None';
+              updatedStr = nextList || 'None';
+            } else if (key === 'supervisor_ids' || key === 'current_supervisor_id') {
+              const prevList = Array.isArray(change.previous) ? change.previous.map(resolveUserNameMobile).join(', ') : resolveUserNameMobile(change.previous);
+              const nextList = Array.isArray(change.updated) ? change.updated.map(resolveUserNameMobile).join(', ') : resolveUserNameMobile(change.updated);
+              prevStr = prevList || 'None';
+              updatedStr = nextList || 'None';
+            } else if (key === 'client_id') {
+              prevStr = resolveClientNameMobile(change.previous);
+              updatedStr = resolveClientNameMobile(change.updated);
+            }
+
+            if (updatedStr !== 'None') {
+              diffs.push({
+                field: key,
+                label: formatFieldLabelMobile(key),
+                previous: prevStr,
+                updated: updatedStr,
+              });
+            } else {
+              deletions.push({
+                field: key,
+                label: formatFieldLabelMobile(key),
+                deletedValue: prevStr,
+                reason: 'Unassigned from machine',
+              });
+            }
+          }
+        }
+      }
+
+      // Hour Meter Log (Update snapshot; do NOT duplicate in diffs per Item 3)
+      if (isHourLog && log.metadata) {
+        const end = log.metadata.endMeter ?? log.metadata.end_meter;
+        if (end !== undefined) {
+          runningSnapshot.hour_meter = end;
+        }
+      }
+
+      // Operator Assignment Ended
+      if (isOpEnded && log.metadata) {
+        const opName = log.metadata.operatorName || resolveUserNameMobile(log.metadata.operatorId);
+        deletions.push({
+          field: 'operator',
+          label: 'Removed Operator Assignment',
+          deletedValue: opName,
+          reason: log.metadata.endReason ? `Assignment ended (${log.metadata.endReason})` : 'Operator unassigned from machine',
+        });
+      }
+
+      // Machine Record Deletion
+      if (isDeleteEvent) {
+        const delMeta = log.metadata?.deleted_record || log.metadata || runningSnapshot;
+        deletions.push({
+          field: 'machine',
+          label: 'Deleted Machine Asset Record',
+          deletedValue: `${delMeta.model || machine.model || 'Machine'} • Serial: ${delMeta.serial_number || machine.serial_number || '—'} (${delMeta.machine_id || machine.machine_id || ''})`,
+          reason: 'Machine permanently deleted from inventory',
+        });
+      }
+
+      // Historical Sequential Diff fallback
+      if (diffs.length === 0 && deletions.length === 0) {
+        if (isOpUpdate && log.metadata) {
+          const rawOps = log.metadata.operator_ids || (log.metadata.current_operator_id ? [log.metadata.current_operator_id] : []);
+          const prevOps: string[] = runningSnapshot.operator_ids || [];
+          const removed = prevOps.filter((id) => !rawOps.includes(id));
+          removed.forEach((id) => {
+            deletions.push({
+              field: 'operator',
+              label: 'Removed Operator',
+              deletedValue: resolveUserNameMobile(id),
+              reason: 'Unassigned from machine roster',
+            });
+          });
+          const prevStr = prevOps.map(resolveUserNameMobile).join(', ') || 'None';
+          const nextStr = rawOps.map(resolveUserNameMobile).join(', ') || 'None';
+          if (nextStr !== 'None' && prevStr !== nextStr) {
+            diffs.push({
+              field: 'operator_ids',
+              label: 'Assigned Operators',
+              previous: prevStr,
+              updated: nextStr,
+            });
+          }
+          runningSnapshot.operator_ids = rawOps;
+        } else if (isSupUpdate && log.metadata) {
+          const rawSups = log.metadata.supervisor_ids || (log.metadata.current_supervisor_id ? [log.metadata.current_supervisor_id] : []);
+          const prevSups: string[] = runningSnapshot.supervisor_ids || [];
+          const removed = prevSups.filter((id) => !rawSups.includes(id));
+          removed.forEach((id) => {
+            deletions.push({
+              field: 'supervisor',
+              label: 'Removed Supervisor',
+              deletedValue: resolveUserNameMobile(id),
+              reason: 'Unassigned from machine roster',
+            });
+          });
+          const prevStr = prevSups.map(resolveUserNameMobile).join(', ') || 'None';
+          const nextStr = rawSups.map(resolveUserNameMobile).join(', ') || 'None';
+          if (nextStr !== 'None' && prevStr !== nextStr) {
+            diffs.push({
+              field: 'supervisor_ids',
+              label: 'Assigned Supervisors',
+              previous: prevStr,
+              updated: nextStr,
+            });
+          }
+          runningSnapshot.supervisor_ids = rawSups;
+        } else if (isClientUpdate && log.metadata) {
+          const newClient = log.metadata.client_id;
+          const prevClient = runningSnapshot.client_id;
+          if (prevClient && !newClient) {
+            deletions.push({
+              field: 'client_id',
+              label: 'De-allocated Client',
+              deletedValue: resolveClientNameMobile(prevClient),
+              reason: 'Machine lease ended; returned to available fleet',
+            });
+          } else if (newClient && newClient !== prevClient) {
+            diffs.push({
+              field: 'client_id',
+              label: 'Client Assignment',
+              previous: resolveClientNameMobile(prevClient),
+              updated: resolveClientNameMobile(newClient),
+            });
+          }
+          runningSnapshot.client_id = newClient;
+        } else if (isStatusUpdate && log.metadata) {
+          if (log.metadata.health_status && log.metadata.health_status !== runningSnapshot.health_status) {
+            diffs.push({
+              field: 'health_status',
+              label: 'Health Status',
+              previous: formatDiffValueMobile(runningSnapshot.health_status || 'active'),
+              updated: formatDiffValueMobile(log.metadata.health_status),
+            });
+            runningSnapshot.health_status = log.metadata.health_status;
+          }
+          if (log.metadata.status && log.metadata.status !== runningSnapshot.status) {
+            diffs.push({
+              field: 'status',
+              label: 'Rental Fleet Status',
+              previous: formatDiffValueMobile(runningSnapshot.status || 'available'),
+              updated: formatDiffValueMobile(log.metadata.status),
+            });
+            runningSnapshot.status = log.metadata.status;
+          }
+        } else if (isInfoUpdate && log.metadata) {
+          for (const key of ['model', 'serial_number', 'year_of_mfg', 'manufacturer', 'machine_id', 'hour_meter', 'health_status']) {
+            if (log.metadata[key] !== undefined) {
+              const oldVal = runningSnapshot[key];
+              const newVal = log.metadata[key];
+              if (oldVal !== undefined && String(oldVal) !== String(newVal)) {
+                diffs.push({
+                  field: key,
+                  label: formatFieldLabelMobile(key),
+                  previous: formatDiffValueMobile(oldVal),
+                  updated: formatDiffValueMobile(newVal),
+                });
+              }
+              runningSnapshot[key] = newVal;
+            }
+          }
+        }
+      }
+
+      // Deduplicate: If an entity was removed and already captured in deletions, don't show duplicate "Updated: None" diff
+      const cleanDiffs = diffs.filter((d) => {
+        if (d.updated === 'None' && deletions.length > 0) {
+          const isCovered = deletions.some(
+            (del) =>
+              (d.field.includes('operator') && del.field.includes('operator')) ||
+              (d.field.includes('supervisor') && del.field.includes('supervisor')) ||
+              (d.field.includes('client') && del.field.includes('client'))
+          );
+          if (isCovered) return false;
+        }
+        return true;
+      });
+
+      enrichedList.push({
+        ...log,
+        diffs: cleanDiffs,
+        deletions,
+        isDeletionEvent: isDeleteEvent || isOpEnded || deletions.length > 0,
+        isBreakdown,
+      });
+    }
+
+    return enrichedList.reverse();
+  }, [auditLogs, machine, resolveUserNameMobile, resolveClientNameMobile]);
+
+  const auditCategoryCounts = useMemo(() => {
+    if (!enrichedAuditLogs) return { all: 0, hour_logs: 0, breakdowns: 0, assignments: 0, updates: 0 };
+    return {
+      all: enrichedAuditLogs.length,
+      hour_logs: enrichedAuditLogs.filter((l: any) => {
+        const act = (l.action || '').toLowerCase();
+        return act.includes('hour_logged') || act.includes('hmr') || act.includes('meter');
+      }).length,
+      breakdowns: enrichedAuditLogs.filter((l: any) => l.isBreakdown).length,
+      assignments: enrichedAuditLogs.filter((l: any) => {
+        const act = (l.action || '').toLowerCase();
+        return act.includes('assign') || act.includes('operator') || act.includes('supervisor');
+      }).length,
+      updates: enrichedAuditLogs.filter((l: any) => {
+        const act = (l.action || '').toLowerCase();
+        return (
+          !act.includes('hour_logged') &&
+          !act.includes('hmr') &&
+          !act.includes('meter') &&
+          !act.includes('assign') &&
+          !act.includes('operator') &&
+          !act.includes('supervisor')
+        );
+      }).length,
+    };
+  }, [enrichedAuditLogs]);
+
+  const filteredAuditLogs = useMemo(() => {
+    if (!enrichedAuditLogs) return [];
+    if (auditCategory === 'all') return enrichedAuditLogs;
+    if (auditCategory === 'breakdowns') return enrichedAuditLogs.filter((l: any) => l.isBreakdown);
+    if (auditCategory === 'hour_logs') {
+      return enrichedAuditLogs.filter((l: any) => {
+        const act = (l.action || '').toLowerCase();
+        return act.includes('hour_logged') || act.includes('hmr') || act.includes('meter');
+      });
+    }
+    if (auditCategory === 'assignments') {
+      return enrichedAuditLogs.filter((l: any) => {
+        const act = (l.action || '').toLowerCase();
+        return act.includes('assign') || act.includes('operator') || act.includes('supervisor');
+      });
+    }
+    return enrichedAuditLogs.filter((l: any) => {
+      const act = (l.action || '').toLowerCase();
+      return (
+        !act.includes('hour_logged') &&
+        !act.includes('hmr') &&
+        !act.includes('meter') &&
+        !act.includes('assign') &&
+        !act.includes('operator') &&
+        !act.includes('supervisor')
+      );
+    });
+  }, [enrichedAuditLogs, auditCategory]);
+
+  const groupedAuditLogs = useMemo(() => {
+    if (!filteredAuditLogs.length) return [];
+    const groups: { dateKey: string; dateLabel: string; logs: any[] }[] = [];
+    const map = new Map<string, any[]>();
+
+    for (const log of filteredAuditLogs) {
+      const label = formatLogDateHeaderMobile(log.created_at);
+      if (!map.has(label)) {
+        map.set(label, []);
+        groups.push({ dateKey: label, dateLabel: label, logs: map.get(label)! });
+      }
+      map.get(label)!.push(log);
+    }
+
+    return groups;
+  }, [filteredAuditLogs]);
 
   // Log calculation & filtering
   const totalHoursRun = useMemo(() => {
@@ -330,17 +962,25 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
         style={styles.scrollArea}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <AppRefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+          />
+        }
       >
-        {/* HERO BANNER CARD (Screenshot 2 Match) */}
-        <View
-          style={[
-            styles.heroCard,
-            {
-              backgroundColor: theme.colors.canvasElevated,
-              borderColor: theme.colors.hairline,
-            },
-          ]}
-        >
+        {/* STATIC HEADER & NAVIGATION ZONE */}
+        <View style={[styles.stickyHeaderZone, { backgroundColor: theme.colors.canvas }]}>
+          {/* HERO BANNER CARD (Screenshot 2 Match) */}
+          <View
+            style={[
+              styles.heroCard,
+              {
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
           <View style={styles.heroMainRow}>
             {/* Scissor Lift Logo Icon in Theme-Adaptive Squircle */}
             <View
@@ -400,7 +1040,10 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               </TouchableOpacity>
               {canEdit && (
                 <TouchableOpacity
-                  onPress={() => setEditModalVisible(true)}
+                  onPress={() => {
+                    setEditSection('all');
+                    setEditModalVisible(true);
+                  }}
                   style={[
                     styles.circleEditBtn,
                     {
@@ -479,7 +1122,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 },
               ]}
             >
-              Running Logs
+              HMR
             </Text>
             {hasLoadedLogs && hourLogs && hourLogs.length > 0 && (
               <View style={[styles.tabCountPill, { backgroundColor: theme.colors.link + '18' }]}>
@@ -489,6 +1132,41 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               </View>
             )}
           </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setActiveTab('audit_trail')}
+            activeOpacity={0.7}
+            style={[
+              styles.tabPill,
+              activeTab === 'audit_trail' && [
+                styles.tabPillActive,
+                {
+                  backgroundColor: theme.colors.canvas,
+                  borderColor: theme.colors.hairline,
+                },
+              ],
+            ]}
+          >
+            <Text
+              style={[
+                styles.tabPillText,
+                {
+                  color: activeTab === 'audit_trail' ? theme.colors.link : theme.colors.mute,
+                  fontWeight: activeTab === 'audit_trail' ? '700' : '500',
+                },
+              ]}
+            >
+              Audit
+            </Text>
+            {hasLoadedAudit && auditLogs && auditLogs.length > 0 && (
+              <View style={[styles.tabCountPill, { backgroundColor: theme.colors.link + '18' }]}>
+                <Text style={[styles.tabCountText, { color: theme.colors.link }]}>
+                  {auditLogs.length}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
         </View>
 
         {/* TAB 1: BASIC INFO & CLIENT DETAILS (Screenshot 2 Match) */}
@@ -508,10 +1186,27 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 <Text style={[styles.cardHeaderTitle, { color: theme.colors.ink }]}>
                   Basic Info
                 </Text>
-                <Badge
-                  status={machine.status === 'rented' ? 'in_transit' : 'available'}
-                  customLabel={machine.status === 'rented' ? '• ON RENT' : '• AVAILABLE'}
-                />
+                {canEdit && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setEditSection('info');
+                      setEditModalVisible(true);
+                    }}
+                    style={[
+                      styles.circleEditBtn,
+                      {
+                        backgroundColor: theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                        width: 32,
+                        height: 32,
+                      },
+                    ]}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Edit Basic Info"
+                  >
+                    <Edit2 size={13} color={theme.colors.ink} />
+                  </TouchableOpacity>
+                )}
               </View>
 
               <View style={styles.specsGrid}>
@@ -536,7 +1231,18 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
                 {/* Model */}
                 <View style={[styles.specBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                  <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>MODEL</Text>
+                  <View style={styles.specBoxHeader}>
+                    <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>MODEL</Text>
+                    {Boolean(machine.model) && (
+                      <TouchableOpacity onPress={() => handleCopy(setCopiedModel)}>
+                        {copiedModel ? (
+                          <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
+                        ) : (
+                          <Copy size={11} color={theme.colors.mute} />
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
                   <Text style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
                     {machine.model || '—'}
                   </Text>
@@ -544,7 +1250,18 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
                 {/* Serial No */}
                 <View style={[styles.specBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                  <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>SERIAL NO</Text>
+                  <View style={styles.specBoxHeader}>
+                    <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>SERIAL NO</Text>
+                    {Boolean(machine.serial_number) && (
+                      <TouchableOpacity onPress={() => handleCopy(setCopiedSerial)}>
+                        {copiedSerial ? (
+                          <Check size={11} color={theme.colors.success} strokeWidth={2.5} />
+                        ) : (
+                          <Copy size={11} color={theme.colors.mute} />
+                        )}
+                      </TouchableOpacity>
+                    )}
+                  </View>
                   <Text style={[styles.specBoxValueMono, { color: theme.colors.ink }]} numberOfLines={1}>
                     {machine.serial_number || '—'}
                   </Text>
@@ -589,7 +1306,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     )}
                   </View>
                   <Text style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                    {supervisors.length > 0 ? supervisors[0].full_name : '—'}
+                    {supervisors.length > 0 ? supervisors.map((s: any) => s.full_name).join(', ') : '—'}
                   </Text>
                 </View>
 
@@ -599,36 +1316,12 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>OPERATORS</Text>
                     {operators.length > 0 && (
                       <Text style={[styles.specCountBadge, { color: '#f59e0b' }]}>
-                        {operators.length} (24h)
+                        {operators.length}
                       </Text>
                     )}
                   </View>
                   <Text style={[styles.specBoxValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                    {operators.length > 0 ? operators[0].full_name : '—'}
-                  </Text>
-                </View>
-
-                {/* Health Status */}
-                <View style={[styles.specBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                  <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>HEALTH STATUS</Text>
-                  <Text style={[styles.specBoxValue, { color: theme.colors.ink }]}>
-                    {machine.health_status === 'breakdown'
-                      ? 'Breakdown'
-                      : machine.health_status === 'under_maintenance'
-                      ? 'Under Maintenance'
-                      : machine.health_status === 'spare'
-                      ? 'Spare'
-                      : 'Active'}
-                  </Text>
-                </View>
-
-                {/* Rental Fleet Status */}
-                <View style={[styles.specBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                  <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>
-                    RENTAL FLEET STATUS
-                  </Text>
-                  <Text style={[styles.specBoxValueRental, { color: theme.colors.link }]}>
-                    {machine.status === 'rented' ? 'On Rent' : 'Available'}
+                    {operators.length > 0 ? operators.map((o: any) => o.full_name).join(', ') : '—'}
                   </Text>
                 </View>
               </View>
@@ -648,13 +1341,16 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 <View style={styles.cardHeaderLeft}>
                   <Users size={16} color={theme.colors.link} />
                   <Text style={[styles.cardHeaderTitle, { color: theme.colors.ink }]}>
-                    Assigned Shift Personnel (24h Fleet Coverage)
+                    Assigned Shift Personnel
                   </Text>
                 </View>
 
                 {canEdit && (
                   <TouchableOpacity
-                    onPress={() => setEditModalVisible(true)}
+                    onPress={() => {
+                      setEditSection('personnel');
+                      setEditModalVisible(true);
+                    }}
                     style={styles.manageStaffBtn}
                   >
                     <Edit2 size={12} color={theme.colors.link} />
@@ -674,9 +1370,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       <Text style={[styles.personnelSubTitle, { color: theme.colors.ink }]}>
                         Supervisors ({supervisors.length})
                       </Text>
-                    </View>
-                    <View style={styles.oversightBadge}>
-                      <Text style={styles.oversightBadgeText}>Oversight & Verification</Text>
                     </View>
                   </View>
 
@@ -714,24 +1407,31 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                           </View>
                         </View>
 
-                        <View style={styles.personnelActionIcons}>
-                          {s.phone && (
-                            <TouchableOpacity
-                              onPress={() => handleCall(s.phone)}
-                              style={[styles.staffContactBtn, { borderColor: theme.colors.hairline }]}
-                            >
-                              <Phone size={12} color={theme.colors.mute} />
-                            </TouchableOpacity>
-                          )}
-                          {s.email && (
-                            <TouchableOpacity
-                              onPress={() => handleEmail(s.email)}
-                              style={[styles.staffContactBtn, { borderColor: theme.colors.hairline }]}
-                            >
-                              <Mail size={12} color={theme.colors.mute} />
-                            </TouchableOpacity>
-                          )}
-                        </View>
+                        {(s.phone || s.email) ? (
+                          <View style={[styles.personnelActionGroup, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
+                            {s.phone ? (
+                              <TouchableOpacity
+                                onPress={() => handleCall(s.phone)}
+                                style={styles.personnelActionGroupBtn}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              >
+                                <Phone size={12} color={theme.colors.mute} />
+                              </TouchableOpacity>
+                            ) : null}
+                            {s.phone && s.email ? (
+                              <View style={[styles.personnelActionDivider, { backgroundColor: theme.colors.hairline }]} />
+                            ) : null}
+                            {s.email ? (
+                              <TouchableOpacity
+                                onPress={() => handleEmail(s.email)}
+                                style={styles.personnelActionGroupBtn}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              >
+                                <Mail size={12} color={theme.colors.mute} />
+                              </TouchableOpacity>
+                            ) : null}
+                          </View>
+                        ) : null}
                       </View>
                     ))
                   )}
@@ -744,11 +1444,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       <Wrench size={14} color="#f59e0b" />
                       <Text style={[styles.personnelSubTitle, { color: theme.colors.ink }]}>
                         Operators ({operators.length})
-                      </Text>
-                    </View>
-                    <View style={[styles.oversightBadge, { backgroundColor: '#f59e0b15', borderColor: '#f59e0b35' }]}>
-                      <Text style={[styles.oversightBadgeText, { color: '#f59e0b' }]}>
-                        Hour Logging & Operations
                       </Text>
                     </View>
                   </View>
@@ -787,24 +1482,31 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                           </View>
                         </View>
 
-                        <View style={styles.personnelActionIcons}>
-                          {o.phone && (
-                            <TouchableOpacity
-                              onPress={() => handleCall(o.phone)}
-                              style={[styles.staffContactBtn, { borderColor: theme.colors.hairline }]}
-                            >
-                              <Phone size={12} color={theme.colors.mute} />
-                            </TouchableOpacity>
-                          )}
-                          {o.email && (
-                            <TouchableOpacity
-                              onPress={() => handleEmail(o.email)}
-                              style={[styles.staffContactBtn, { borderColor: theme.colors.hairline }]}
-                            >
-                              <Mail size={12} color={theme.colors.mute} />
-                            </TouchableOpacity>
-                          )}
-                        </View>
+                        {(o.phone || o.email) ? (
+                          <View style={[styles.personnelActionGroup, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
+                            {o.phone ? (
+                              <TouchableOpacity
+                                onPress={() => handleCall(o.phone)}
+                                style={styles.personnelActionGroupBtn}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              >
+                                <Phone size={12} color={theme.colors.mute} />
+                              </TouchableOpacity>
+                            ) : null}
+                            {o.phone && o.email ? (
+                              <View style={[styles.personnelActionDivider, { backgroundColor: theme.colors.hairline }]} />
+                            ) : null}
+                            {o.email ? (
+                              <TouchableOpacity
+                                onPress={() => handleEmail(o.email)}
+                                style={styles.personnelActionGroupBtn}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              >
+                                <Mail size={12} color={theme.colors.mute} />
+                              </TouchableOpacity>
+                            ) : null}
+                          </View>
+                        ) : null}
                       </View>
                     ))
                   )}
@@ -826,7 +1528,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 <View style={styles.cardHeaderLeft}>
                   <Building2 size={16} color={theme.colors.link} />
                   <Text style={[styles.cardHeaderTitle, { color: theme.colors.ink }]}>
-                    Assigned Client Details
+                    Client Details
                   </Text>
                   {clientCode ? (
                     <View style={styles.clientCodePill}>
@@ -834,11 +1536,47 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     </View>
                   ) : null}
                 </View>
-
-                <Badge
-                  status={machine.status === 'rented' ? 'in_transit' : 'available'}
-                  customLabel={machine.status === 'rented' ? 'On Rent Active' : 'Site Deployed'}
-                />
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  {fullSiteAddress ? (
+                    <TouchableOpacity
+                      onPress={handleOpenMap}
+                      style={[
+                        styles.circleEditBtn,
+                        {
+                          backgroundColor: theme.colors.canvas,
+                          borderColor: theme.colors.hairline,
+                          width: 32,
+                          height: 32,
+                        },
+                      ]}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Open Map Location"
+                    >
+                      <MapPin size={13} color="#0ea5e9" />
+                    </TouchableOpacity>
+                  ) : null}
+                  {canEdit && (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setEditSection('client');
+                        setEditModalVisible(true);
+                      }}
+                      style={[
+                        styles.circleEditBtn,
+                        {
+                          backgroundColor: theme.colors.canvas,
+                          borderColor: theme.colors.hairline,
+                          width: 32,
+                          height: 32,
+                        },
+                      ]}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Edit Client Details"
+                    >
+                      <Edit2 size={13} color={theme.colors.ink} />
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
 
               {hasLinkedClient ? (
@@ -937,7 +1675,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     </View>
                   ) : null}
 
-                  {/* Quick Action Touch Buttons (Call, WhatsApp, Map) */}
+                  {/* Quick Action Touch Buttons (Call, WhatsApp) */}
                   <View style={styles.quickTouchRow}>
                     {clientPhone ? (
                       <TouchableOpacity
@@ -958,17 +1696,6 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       >
                         <MessageSquare size={14} color="#22c55e" />
                         <Text style={[styles.touchActionText, { color: '#22c55e' }]}>WhatsApp</Text>
-                      </TouchableOpacity>
-                    ) : null}
-
-                    {fullSiteAddress ? (
-                      <TouchableOpacity
-                        onPress={handleOpenMap}
-                        style={[styles.touchActionBtn, { backgroundColor: '#0ea5e918', borderColor: '#0ea5e935' }]}
-                        activeOpacity={0.7}
-                      >
-                        <MapPin size={14} color="#0ea5e9" />
-                        <Text style={[styles.touchActionText, { color: '#0ea5e9' }]}>Map Location</Text>
                       </TouchableOpacity>
                     ) : null}
                   </View>
@@ -1153,7 +1880,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                         {/* Meter Box */}
                         <View style={[styles.logMeterBox, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
                           <View>
-                            <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>METER READING</Text>
+                            <Text style={[styles.specBoxLabel, { color: theme.colors.mute }]}>HOUR METER READINGS</Text>
                             <Text style={[styles.logMeterNumbers, { color: theme.colors.ink }]}>
                               {log.start_meter || 0} → {log.end_meter || 0}
                             </Text>
@@ -1165,9 +1892,28 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                           </View>
                         </View>
 
-                        {/* Shift & Remarks */}
+                        {/* Operating Hours & Breakdown Details */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4, borderTopWidth: 1, borderTopColor: theme.colors.hairline, borderBottomWidth: log.remarks ? 1 : 0, borderBottomColor: theme.colors.hairline }}>
+                          <Text style={{ fontSize: 11, color: theme.colors.ink, fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }) }}>
+                            Worked: <Text style={{ fontWeight: '700' }}>{log.running_hours || 0} hrs</Text>
+                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Text style={{ fontSize: 11, color: theme.colors.mute }}>Breakdown:</Text>
+                            {Boolean(log.is_breakdown || (Number(log.breakdown_hours) > 0)) ? (
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#e11d48', fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }) }}>
+                                {Number(log.breakdown_hours) > 0 ? `${log.breakdown_hours} hrs` : 'Breakdown'}
+                              </Text>
+                            ) : (
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669', fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }) }}>
+                                0
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+
+                        {/* Remarks */}
                         {log.remarks ? (
-                          <Text style={[styles.logRemarksText, { color: theme.colors.mute }]} numberOfLines={2}>
+                          <Text style={[styles.logRemarksText, { color: theme.colors.mute, marginTop: 2 }]} numberOfLines={2}>
                             &ldquo;{log.remarks}&rdquo;
                           </Text>
                         ) : null}
@@ -1204,7 +1950,795 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
             </View>
           </View>
         )}
+
+        {/* TAB 3: AUDIT TRAIL */}
+        {activeTab === 'audit_trail' && (
+          <View style={styles.tabContentArea}>
+            <View
+              style={[
+                styles.contentCard,
+                {
+                  backgroundColor: theme.colors.canvasElevated,
+                  borderColor: theme.colors.hairline,
+                },
+              ]}
+            >
+              {/* Header with Title and Total Records Badge */}
+              <View style={[styles.cardHeader, { borderBottomColor: theme.colors.hairline }]}>
+                <Text style={[styles.cardHeaderTitle, { color: theme.colors.ink }]}>
+                  Machine Audit Trail
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {hasLoadedAudit && auditLogs && auditLogs.length > 0 && (
+                    <View
+                      style={[
+                        styles.totalHoursBadge,
+                        {
+                          backgroundColor: theme.colors.link + '18',
+                          borderColor: theme.colors.link + '35',
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.totalHoursText, { color: theme.colors.link }]}>
+                        {auditLogs.length} Records
+                      </Text>
+                    </View>
+                  )}
+                  <TouchableOpacity
+                    onPress={fetchAuditLogs}
+                    disabled={isLoadingAudit}
+                    activeOpacity={0.7}
+                    style={[styles.circleEditBtn, { borderColor: theme.colors.hairline, width: 28, height: 28, borderRadius: 14 }]}
+                  >
+                    <RefreshCw size={13} color={theme.colors.ink} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Filter Controls (Search box removed) */}
+              <View style={[styles.auditControlsCard, { borderBottomWidth: 1, borderBottomColor: theme.colors.hairline }]}>
+                {/* Filter Chips */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.auditFilterStrip}>
+                  <TouchableOpacity
+                    onPress={() => setAuditCategory('all')}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.auditFilterChip,
+                      {
+                        backgroundColor: auditCategory === 'all' ? theme.colors.ink : theme.colors.canvas,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.auditFilterChipText,
+                        { color: auditCategory === 'all' ? theme.colors.canvas : theme.colors.mute },
+                      ]}
+                    >
+                      All ({auditCategoryCounts.all})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setAuditCategory('hour_logs')}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.auditFilterChip,
+                      {
+                        backgroundColor: auditCategory === 'hour_logs' ? '#059669' : theme.colors.canvas,
+                        borderColor: auditCategory === 'hour_logs' ? '#059669' : theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.auditFilterChipText,
+                        { color: auditCategory === 'hour_logs' ? '#ffffff' : theme.colors.mute },
+                      ]}
+                    >
+                      HMR Logs ({auditCategoryCounts.hour_logs})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setAuditCategory('breakdowns')}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.auditFilterChip,
+                      {
+                        backgroundColor: auditCategory === 'breakdowns' ? '#e11d48' : theme.colors.canvas,
+                        borderColor: auditCategory === 'breakdowns' ? '#e11d48' : theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.auditFilterChipText,
+                        { color: auditCategory === 'breakdowns' ? '#ffffff' : theme.colors.mute },
+                      ]}
+                    >
+                      Breakdowns ({auditCategoryCounts.breakdowns})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setAuditCategory('assignments')}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.auditFilterChip,
+                      {
+                        backgroundColor: auditCategory === 'assignments' ? '#0284c7' : theme.colors.canvas,
+                        borderColor: auditCategory === 'assignments' ? '#0284c7' : theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.auditFilterChipText,
+                        { color: auditCategory === 'assignments' ? '#ffffff' : theme.colors.mute },
+                      ]}
+                    >
+                      Assignments ({auditCategoryCounts.assignments})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setAuditCategory('updates')}
+                    activeOpacity={0.7}
+                    style={[
+                      styles.auditFilterChip,
+                      {
+                        backgroundColor: auditCategory === 'updates' ? '#d97706' : theme.colors.canvas,
+                        borderColor: auditCategory === 'updates' ? '#d97706' : theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.auditFilterChipText,
+                        { color: auditCategory === 'updates' ? '#ffffff' : theme.colors.mute },
+                      ]}
+                    >
+                      Updates ({auditCategoryCounts.updates})
+                    </Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+
+              {/* Loading State */}
+              {isLoadingAudit && (
+                <View style={styles.loadingLogsWrap}>
+                  <ActivityIndicator size="small" color={theme.colors.link} />
+                  <Text style={[styles.loadingLogsText, { color: theme.colors.mute }]}>
+                    Loading audit trail history...
+                  </Text>
+                </View>
+              )}
+
+              {/* Error State */}
+              {!isLoadingAudit && auditError && (
+                <View style={styles.emptyLogsWrap}>
+                  <AlertCircle size={28} color="#e11d48" />
+                  <Text style={[styles.emptyLogsTitle, { color: theme.colors.ink, marginTop: 6 }]}>
+                    Failed to load audit trail
+                  </Text>
+                  <Text style={[styles.emptyLogsSub, { color: theme.colors.mute }]}>
+                    {auditError}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={fetchAuditLogs}
+                    activeOpacity={0.7}
+                    style={[styles.pageBtn, { borderColor: theme.colors.hairline, marginTop: 8 }]}
+                  >
+                    <Text style={[styles.pageBtnText, { color: theme.colors.link }]}>Retry</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Empty State */}
+              {!isLoadingAudit && !auditError && hasLoadedAudit && filteredAuditLogs.length === 0 && (
+                <View style={styles.emptyLogsWrap}>
+                  <Clock size={32} color={theme.colors.mute} />
+                  <Text style={[styles.emptyLogsTitle, { color: theme.colors.ink }]}>
+                    {auditCategory !== 'all' ? 'No Matching Records' : 'No Audit History'}
+                  </Text>
+                  <Text style={[styles.emptyLogsSub, { color: theme.colors.mute }]}>
+                    {auditCategory !== 'all'
+                      ? 'No audit logs matched your selected category filter.'
+                      : 'No audit records have been recorded for this machine.'}
+                  </Text>
+                </View>
+              )}
+
+              {/* Structured Audit Cards List Grouped by Date */}
+              {!isLoadingAudit && !auditError && groupedAuditLogs.length > 0 && (
+                <View style={{ gap: 12, paddingVertical: spacingNumeric.sm }}>
+                  {groupedAuditLogs.map((group) => (
+                    <View key={group.dateKey} style={styles.auditDateGroup}>
+                      {/* Date Divider */}
+                      <View style={styles.auditDateDividerRow}>
+                        <View style={[styles.auditDateDividerLine, { backgroundColor: theme.colors.hairline }]} />
+                        <View
+                          style={[
+                            styles.auditDateBadge,
+                            { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
+                          ]}
+                        >
+                          <Text style={[styles.auditDateBadgeText, { color: theme.colors.ink }]}>
+                            {group.dateLabel}
+                          </Text>
+                        </View>
+                        <View style={[styles.auditDateDividerLine, { backgroundColor: theme.colors.hairline }]} />
+                      </View>
+
+                      {/* Cards in group */}
+                      <View style={styles.auditListWrap}>
+                        {group.logs.map((log) => {
+                          const isHourLog = (log.action || '').toLowerCase().includes('hour_logged');
+                          const isAssignLog =
+                            (log.action || '').toLowerCase().includes('operator_assigned') ||
+                            (log.action || '').toLowerCase().includes('operators_updated') ||
+                            (log.action || '').toLowerCase().includes('reassigned_supervisor') ||
+                            (log.action || '').toLowerCase().includes('supervisors_updated') ||
+                            (log.action || '').toLowerCase().includes('assign');
+                          const isStatusLog =
+                            (log.action || '').toLowerCase().includes('operational_status') ||
+                            (log.action || '').toLowerCase().includes('status');
+
+                          const actorName = log.actor_name || log.user?.full_name || 'System Operator';
+                          const actorRole = log.actor_role || log.user?.role || 'Staff';
+
+                          const hasDeletions = log.deletions && log.deletions.length > 0;
+                          const hasDiffs = log.diffs && log.diffs.length > 0;
+                          const isPureRemoval = hasDeletions && (!hasDiffs || log.diffs.every((d: any) => d.updated === 'None'));
+
+                          return (
+                            <View
+                              key={log.id}
+                              style={[
+                                styles.auditCard,
+                                {
+                                  backgroundColor: log.isDeletionEvent ? '#e11d4808' : theme.colors.canvas,
+                                  borderColor: log.isDeletionEvent ? '#e11d4830' : theme.colors.hairline,
+                                },
+                              ]}
+                            >
+                              {/* Header: Action Badge, Actor Name, Actor Role */}
+                              <View style={styles.auditCardTopRow}>
+                                <View style={styles.auditCardActorRow}>
+                                  <View
+                                    style={[
+                                      styles.runningHoursBadge,
+                                      {
+                                        backgroundColor: isHourLog
+                                          ? '#05966918'
+                                          : isPureRemoval
+                                          ? '#e11d4818'
+                                          : isAssignLog
+                                          ? '#0284c718'
+                                          : isStatusLog
+                                          ? '#d9770618'
+                                          : theme.colors.hairline,
+                                        borderColor: isHourLog
+                                          ? '#05966935'
+                                          : isPureRemoval
+                                          ? '#e11d4835'
+                                          : isAssignLog
+                                          ? '#0284c735'
+                                          : isStatusLog
+                                          ? '#d9770635'
+                                          : theme.colors.hairline,
+                                      },
+                                    ]}
+                                  >
+                                    <Text
+                                      style={[
+                                        styles.runningHoursBadgeText,
+                                        {
+                                          color: isHourLog
+                                            ? '#059669'
+                                            : isPureRemoval
+                                            ? '#e11d48'
+                                            : isAssignLog
+                                            ? '#0284c7'
+                                            : isStatusLog
+                                            ? '#d97706'
+                                            : theme.colors.ink,
+                                        },
+                                      ]}
+                                    >
+                                      {isHourLog
+                                        ? 'Hour Meter'
+                                        : isPureRemoval
+                                        ? 'Removed'
+                                        : isAssignLog
+                                        ? 'Assignment'
+                                        : isStatusLog
+                                        ? 'Status'
+                                        : 'Update'}
+                                    </Text>
+                                  </View>
+
+                                  <Text style={[styles.auditCardActorName, { color: theme.colors.ink }]} numberOfLines={1}>
+                                    {actorName}
+                                  </Text>
+
+                                  <Text
+                                    style={[
+                                      styles.auditCardActorRole,
+                                      {
+                                        color: theme.colors.mute,
+                                        borderColor: theme.colors.hairline,
+                                        backgroundColor: theme.colors.canvasElevated,
+                                      },
+                                    ]}
+                                  >
+                                    {actorRole.replace(/_/g, ' ')}
+                                  </Text>
+                                </View>
+                              </View>
+
+                              {/* ── DELETIONS (If anything was deleted/removed) ── */}
+                              {hasDeletions && (
+                                <View style={[styles.auditDeletionBox, { backgroundColor: '#e11d480e', borderColor: '#e11d4825' }]}>
+                                  <View style={styles.auditDeletionHeader}>
+                                    <Trash2 size={12} color="#e11d48" />
+                                    <Text style={styles.auditDeletionTitle}>Deleted / Removed Details</Text>
+                                  </View>
+                                  <View style={{ gap: 4 }}>
+                                    {log.deletions.map((del: any, dIdx: number) => (
+                                      <View key={dIdx} style={[styles.auditDeletionItem, { backgroundColor: theme.colors.canvasElevated, borderColor: '#e11d4820' }]}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                          <Text style={{ fontSize: 9, fontWeight: '800', color: '#e11d48', textTransform: 'uppercase' }}>
+                                            {del.label}:
+                                          </Text>
+                                          <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.ink, textDecorationLine: 'line-through' }}>
+                                            {del.deletedValue}
+                                          </Text>
+                                        </View>
+                                        {del.reason ? (
+                                          <Text style={{ fontSize: 10, color: theme.colors.mute, fontStyle: 'italic' }}>
+                                            {del.reason}
+                                          </Text>
+                                        ) : null}
+                                      </View>
+                                    ))}
+                                  </View>
+                                </View>
+                              )}
+
+                              {/* ── UPDATES (Previous vs Updated Details - Only if not pure removal) ── */}
+                              {hasDiffs && (
+                                <View style={[styles.auditDiffBox, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+                                  <View style={styles.auditDiffHeader}>
+                                    <ArrowRight size={11} color={theme.colors.link} />
+                                    <Text style={[styles.auditDiffTitle, { color: theme.colors.mute }]}>Previous vs Updated Details</Text>
+                                  </View>
+                                  <View style={{ gap: 4 }}>
+                                    {log.diffs.map((diff: any, dfIdx: number) => (
+                                      <View key={dfIdx} style={[styles.auditDiffRow, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                                        <Text style={[styles.auditDiffLabel, { color: theme.colors.ink }]}>{diff.label}:</Text>
+                                        <View style={styles.auditDiffValuesRow}>
+                                          <Text style={[styles.auditDiffPrevText, { color: theme.colors.mute }]}>
+                                            Prev: {diff.previous}
+                                          </Text>
+                                          <ArrowRight size={10} color="#059669" />
+                                          <Text style={styles.auditDiffUpdatedText}>
+                                            Updated: {diff.updated}
+                                          </Text>
+                                        </View>
+                                      </View>
+                                    ))}
+                                  </View>
+                                </View>
+                              )}
+
+                              {/* Meaningful Operational Content: Single Layout for Hour Log */}
+                              {isHourLog && log.metadata && (
+                                <View style={{ gap: 6 }}>
+                                  {/* Single unified metrics strip (Worked : 4 hrs, Meter, Shift, Breakdown: 0 in green / time in red) */}
+                                  <View
+                                    style={{
+                                      flexDirection: 'row',
+                                      flexWrap: 'wrap',
+                                      alignItems: 'center',
+                                      padding: 8,
+                                      borderRadius: radiusNumeric.sm,
+                                      borderWidth: 1,
+                                      borderColor: theme.colors.hairline,
+                                      backgroundColor: theme.colors.canvas,
+                                      gap: 8,
+                                    }}
+                                  >
+                                    {/* 1. Worked */}
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                      <Text style={{ fontSize: 11, color: theme.colors.mute, fontWeight: '600' }}>Worked :</Text>
+                                      <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '800', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                                        {Number(log.metadata.runningHours || log.metadata.running_hours || 0).toFixed(1).replace(/\.0$/, '')} hrs
+                                      </Text>
+                                    </View>
+
+                                    <Text style={{ fontSize: 10, color: theme.colors.hairline }}>•</Text>
+
+                                    {/* 2. Meter Range */}
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                      <Text style={{ fontSize: 11, color: theme.colors.mute, fontWeight: '600' }}>Meter:</Text>
+                                      <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '700', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                                        {log.metadata.startMeter ?? log.metadata.start_meter ?? '—'} →{' '}
+                                        <Text style={{ color: '#059669' }}>
+                                          {log.metadata.endMeter ?? log.metadata.end_meter ?? '—'}
+                                        </Text>
+                                      </Text>
+                                    </View>
+
+                                    <Text style={{ fontSize: 10, color: theme.colors.hairline }}>•</Text>
+
+                                    {/* 3. Shift Time */}
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%' }}>
+                                      <Text style={{ fontSize: 11, color: theme.colors.mute, fontWeight: '600' }}>Shift:</Text>
+                                      <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '600' }} numberOfLines={1}>
+                                        {formatShiftTimingWithDateMobile(log.metadata)}
+                                      </Text>
+                                    </View>
+
+                                    <Text style={{ fontSize: 10, color: theme.colors.hairline }}>•</Text>
+
+                                    {/* 4. Breakdown */}
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                      <Text style={{ fontSize: 11, color: theme.colors.mute, fontWeight: '600' }}>Breakdown:</Text>
+                                      {log.metadata.isBreakdown ? (
+                                        <Text style={{ fontSize: 11, color: '#e11d48', fontWeight: '800', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                                          {log.metadata.breakdownDuration || (log.metadata.breakdownHours ? `${log.metadata.breakdownHours}h` : 'Breakdown')}
+                                        </Text>
+                                      ) : (
+                                        <Text style={{ fontSize: 11, color: '#059669', fontWeight: '800', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                                          0
+                                        </Text>
+                                      )}
+                                    </View>
+                                  </View>
+
+                                  {/* Breakdown reason single note */}
+                                  {log.metadata.isBreakdown && log.metadata.breakdownReason && (
+                                    <View
+                                      style={[
+                                        styles.auditBreakdownBanner,
+                                        { backgroundColor: '#e11d4812', borderColor: '#e11d4835' },
+                                      ]}
+                                    >
+                                      <AlertCircle size={12} color="#e11d48" />
+                                      <Text style={[styles.auditBreakdownText, { color: '#e11d48' }]}>
+                                        Reason: {log.metadata.breakdownReason}
+                                      </Text>
+                                    </View>
+                                  )}
+
+                                  {/* Location */}
+                                  {log.metadata.location && (
+                                    <View style={styles.auditLocationRow}>
+                                      <MapPin size={11} color={theme.colors.link} />
+                                      <Text
+                                        style={[styles.auditLocationText, { color: theme.colors.mute }]}
+                                        numberOfLines={1}
+                                      >
+                                        {log.metadata.location}
+                                      </Text>
+                                    </View>
+                                  )}
+                                </View>
+                              )}
+
+                              {/* Target Machine & Timestamps Footer on all cards */}
+                              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: theme.colors.hairline + '50' }}>
+                                <Text style={{ fontSize: 10, color: theme.colors.mute }}>
+                                  Target: {machine.model || 'Machine'}
+                                  {machine.serial_number ? ` • ${machine.serial_number}` : ''}
+                                  {machine.machine_id ? ` (${machine.machine_id})` : ''}
+                                </Text>
+
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <Clock size={10} color={theme.colors.mute} />
+                                  <Text style={[styles.auditCardTimeText, { color: theme.colors.mute }]}>
+                                    {formatTimeWithSecondsMobile(log.created_at)}
+                                  </Text>
+                                </View>
+                              </View>
+
+                              {/* Mobile View Details Trigger Button (Min 44px hit target) */}
+                              <TouchableOpacity
+                                onPress={() => setSelectedMobileAuditLog(log)}
+                                activeOpacity={0.7}
+                                style={[
+                                  styles.viewDetailsBtnMobile,
+                                  {
+                                    backgroundColor: theme.colors.link,
+                                    borderColor: 'transparent',
+                                  },
+                                ]}
+                              >
+                                <Text style={[styles.viewDetailsBtnTextMobile, { color: '#FFFFFF' }]}>
+                                  View Details
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+        )}
       </ScrollView>
+
+      {/* Complete Audit Log Details Modal (Mobile Bottom-Sheet / Dialog) */}
+      <Modal
+        visible={Boolean(selectedMobileAuditLog)}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSelectedMobileAuditLog(null)}
+      >
+        <View style={styles.auditModalOverlay}>
+          <View style={[styles.auditModalCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+            {/* Modal Header */}
+            <View style={[styles.auditModalHeader, { borderBottomColor: theme.colors.hairline }]}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View
+                    style={[
+                      styles.runningHoursBadge,
+                      {
+                        backgroundColor: selectedMobileAuditLog?.isBreakdown
+                          ? '#e11d4818'
+                          : (selectedMobileAuditLog?.action || '').toLowerCase().includes('hour_logged')
+                          ? '#05966918'
+                          : theme.colors.hairline,
+                        borderColor: selectedMobileAuditLog?.isBreakdown
+                          ? '#e11d4835'
+                          : (selectedMobileAuditLog?.action || '').toLowerCase().includes('hour_logged')
+                          ? '#05966935'
+                          : theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.runningHoursBadgeText,
+                        {
+                          color: selectedMobileAuditLog?.isBreakdown
+                            ? '#e11d48'
+                            : (selectedMobileAuditLog?.action || '').toLowerCase().includes('hour_logged')
+                            ? '#059669'
+                            : theme.colors.ink,
+                        },
+                      ]}
+                    >
+                      {selectedMobileAuditLog?.isBreakdown
+                        ? 'Breakdown'
+                        : (selectedMobileAuditLog?.action || '').toLowerCase().includes('hour_logged')
+                        ? 'Hour Meter'
+                        : 'Audit Record'}
+                    </Text>
+                  </View>
+                  <Text style={[styles.cardHeaderTitle, { color: theme.colors.ink }]} numberOfLines={1}>
+                    Audit Details
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 10, color: theme.colors.mute }}>
+                  {selectedMobileAuditLog ? formatFullDateTimeMobile(selectedMobileAuditLog.created_at) : ''}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setSelectedMobileAuditLog(null)}
+                style={[styles.circleEditBtn, { borderColor: theme.colors.hairline, width: 28, height: 28, borderRadius: 14 }]}
+              >
+                <X size={14} color={theme.colors.ink} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Scrollable Audit Details Body */}
+            {selectedMobileAuditLog && (
+              <ScrollView style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+                <View style={{ gap: 12, paddingBottom: 24 }}>
+                  {/* Level 1: Actor & Authorization */}
+                  <View style={[styles.auditModalSection, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                    <Text style={[styles.auditModalSectionTitle, { color: theme.colors.mute }]}>
+                      ACTOR & AUTHORIZATION
+                    </Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.ink }}>
+                        {selectedMobileAuditLog.actor_name || selectedMobileAuditLog.user?.full_name || 'System Operator'}
+                      </Text>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.mute, textTransform: 'capitalize' }}>
+                        {(selectedMobileAuditLog.actor_role || selectedMobileAuditLog.user?.role || 'Staff').replace(/_/g, ' ')}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Level 2: Target Machine Info */}
+                  <View style={[styles.auditModalSection, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                    <Text style={[styles.auditModalSectionTitle, { color: theme.colors.mute }]}>
+                      TARGET MACHINE CONTEXT
+                    </Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                      <View>
+                        <Text style={{ fontSize: 10, color: theme.colors.mute }}>Model</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.ink }}>
+                          {selectedMobileAuditLog.metadata?.model || machine.model || '50B-9'}
+                        </Text>
+                      </View>
+                      <View>
+                        <Text style={{ fontSize: 10, color: theme.colors.mute }}>Machine ID</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.link }}>
+                          {selectedMobileAuditLog.metadata?.machineCode || machine.machine_id || '—'}
+                        </Text>
+                      </View>
+                      <View>
+                        <Text style={{ fontSize: 10, color: theme.colors.mute }}>Serial</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.ink, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                          {selectedMobileAuditLog.metadata?.serial_number || machine.serial_number || '—'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Level 3: Breakdown or Operational Shift & Meter */}
+                  {selectedMobileAuditLog.isBreakdown && (
+                    <View style={[styles.auditModalSection, { backgroundColor: '#e11d4812', borderColor: '#e11d4835' }]}>
+                      <Text style={[styles.auditModalSectionTitle, { color: '#e11d48' }]}>
+                        BREAKDOWN INFORMATION
+                      </Text>
+                      <View style={{ gap: 6 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ fontSize: 11, color: theme.colors.mute }}>Duration:</Text>
+                          <Text style={{ fontSize: 12, fontWeight: '800', color: '#e11d48' }}>
+                            {selectedMobileAuditLog.metadata?.breakdownDuration || (selectedMobileAuditLog.metadata?.breakdownHours ? `${selectedMobileAuditLog.metadata.breakdownHours}h` : 'Breakdown')}
+                          </Text>
+                        </View>
+                        {selectedMobileAuditLog.metadata?.breakdownReason && (
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                            <Text style={{ fontSize: 11, color: theme.colors.mute }}>Reason:</Text>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.ink }}>
+                              {selectedMobileAuditLog.metadata.breakdownReason}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  )}
+
+                  {(selectedMobileAuditLog.action || '').toLowerCase().includes('hour_logged') && selectedMobileAuditLog.metadata && (
+                    <View style={[styles.auditModalSection, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                      <Text style={[styles.auditModalSectionTitle, { color: theme.colors.mute }]}>
+                        OPERATIONAL METRICS
+                      </Text>
+                      <View style={{ gap: 6 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ fontSize: 11, color: theme.colors.mute }}>Worked Hours:</Text>
+                          <Text style={{ fontSize: 12, fontWeight: '800', color: theme.colors.ink }}>
+                            {Number(selectedMobileAuditLog.metadata.runningHours || selectedMobileAuditLog.metadata.running_hours || 0).toFixed(1)} hrs
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ fontSize: 11, color: theme.colors.mute }}>Meter Range:</Text>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.ink, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                            {selectedMobileAuditLog.metadata.startMeter ?? selectedMobileAuditLog.metadata.start_meter ?? '—'} →{' '}
+                            <Text style={{ color: '#059669' }}>
+                              {selectedMobileAuditLog.metadata.endMeter ?? selectedMobileAuditLog.metadata.end_meter ?? '—'}
+                            </Text>
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ fontSize: 11, color: theme.colors.mute }}>Breakdown Condition:</Text>
+                          <Text style={{ fontSize: 12, fontWeight: '800', color: selectedMobileAuditLog.isBreakdown ? '#e11d48' : '#059669' }}>
+                            {selectedMobileAuditLog.isBreakdown ? selectedMobileAuditLog.metadata?.breakdownDuration || 'Active' : '0 (Normal)'}
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ fontSize: 11, color: theme.colors.mute }}>Shift Timing:</Text>
+                          <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.ink }}>
+                            {formatShiftTimingWithDateMobile(selectedMobileAuditLog.metadata)}
+                          </Text>
+                        </View>
+                        {selectedMobileAuditLog.metadata.location && (
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={{ fontSize: 11, color: theme.colors.mute }}>Location:</Text>
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.ink, maxWidth: '65%' }} numberOfLines={1}>
+                              {selectedMobileAuditLog.metadata.location}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Level 4: Diffs & Deletions */}
+                  {selectedMobileAuditLog.diffs && selectedMobileAuditLog.diffs.length > 0 && (
+                    <View style={[styles.auditModalSection, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                      <Text style={[styles.auditModalSectionTitle, { color: theme.colors.mute }]}>
+                        CHANGED FIELDS COMPARISON
+                      </Text>
+                      <View style={{ gap: 6 }}>
+                        {selectedMobileAuditLog.diffs.map((diff: any, dIdx: number) => (
+                          <View key={dIdx} style={{ gap: 2 }}>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: theme.colors.ink }}>
+                              {diff.label}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={{ fontSize: 11, color: theme.colors.mute, textDecorationLine: 'line-through' }}>
+                                {diff.previous}
+                              </Text>
+                              <ArrowRight size={10} color="#059669" />
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>
+                                {diff.updated}
+                              </Text>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {selectedMobileAuditLog.deletions && selectedMobileAuditLog.deletions.length > 0 && (
+                    <View style={[styles.auditModalSection, { backgroundColor: '#e11d4810', borderColor: '#e11d4825' }]}>
+                      <Text style={[styles.auditModalSectionTitle, { color: '#e11d48' }]}>
+                        DELETED / REMOVED DETAILS
+                      </Text>
+                      <View style={{ gap: 6 }}>
+                        {selectedMobileAuditLog.deletions.map((del: any, dIdx: number) => (
+                          <View key={dIdx} style={{ gap: 2 }}>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#e11d48' }}>
+                              {del.label}
+                            </Text>
+                            <Text style={{ fontSize: 11, color: theme.colors.ink, textDecorationLine: 'line-through' }}>
+                              {del.deletedValue}
+                            </Text>
+                            {del.reason ? (
+                              <Text style={{ fontSize: 10, color: theme.colors.mute, fontStyle: 'italic' }}>
+                                {del.reason}
+                              </Text>
+                            ) : null}
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Level 5: Audit ID & System Info */}
+                  <View style={[styles.auditModalSection, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                    <Text style={[styles.auditModalSectionTitle, { color: theme.colors.mute }]}>
+                      AUDIT METADATA
+                    </Text>
+                    <View style={{ gap: 4 }}>
+                      <Text style={{ fontSize: 10, color: theme.colors.mute }}>
+                        Action: <Text style={{ color: theme.colors.ink, fontWeight: '600' }}>{selectedMobileAuditLog.action}</Text>
+                      </Text>
+                      <Text style={{ fontSize: 10, color: theme.colors.mute }}>
+                        Log ID: <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', color: theme.colors.ink }}>{selectedMobileAuditLog.id}</Text>
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </ScrollView>
+            )}
+
+            {/* Modal Footer Button */}
+            <View style={{ paddingHorizontal: 16, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.colors.hairline }}>
+              <TouchableOpacity
+                onPress={() => setSelectedMobileAuditLog(null)}
+                style={[styles.pageBtn, { borderColor: theme.colors.hairline, width: '100%', minHeight: 44 }]}
+              >
+                <Text style={[styles.pageBtnText, { color: theme.colors.ink, fontWeight: '700' }]}>
+                  Close
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Edit Machine Modal */}
       <MachineModal
@@ -1215,6 +2749,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
           if (onMachineUpdated) onMachineUpdated();
         }}
         userRole={userRole}
+        initialSection={editSection}
       />
 
       {/* Delete Machine Dialog */}
@@ -1303,6 +2838,11 @@ const styles = StyleSheet.create({
     padding: spacingNumeric.md,
     gap: spacingNumeric.md,
     paddingBottom: 40,
+  },
+  stickyHeaderZone: {
+    gap: spacingNumeric.sm,
+    paddingTop: 2,
+    paddingBottom: spacingNumeric.xs,
   },
   heroCard: {
     borderRadius: radiusNumeric.lg,
@@ -1581,6 +3121,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  personnelActionGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    paddingHorizontal: 2,
+    paddingVertical: 2,
+  },
+  personnelActionGroupBtn: {
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  personnelActionDivider: {
+    width: 1,
+    height: 12,
+    marginHorizontal: 1,
+  },
   staffContactBtn: {
     width: 28,
     height: 28,
@@ -1845,5 +3404,313 @@ const styles = StyleSheet.create({
   },
   pageIndicatorText: {
     fontSize: 11,
+  },
+  auditControlsCard: {
+    padding: spacingNumeric.sm,
+    gap: spacingNumeric.sm,
+  },
+  auditSearchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    height: 38,
+  },
+  auditSearchInput: {
+    flex: 1,
+    fontSize: 12,
+    paddingVertical: 0,
+  },
+  auditFilterStrip: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingVertical: 2,
+  },
+  auditFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+  },
+  auditFilterChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  auditListWrap: {
+    padding: spacingNumeric.sm,
+    gap: spacingNumeric.sm,
+  },
+  auditCard: {
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    padding: spacingNumeric.sm,
+    gap: 8,
+  },
+  auditCardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  auditCardActorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    flexWrap: 'wrap',
+  },
+  auditCardActorName: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  auditCardActorRole: {
+    fontSize: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    textTransform: 'capitalize',
+  },
+  auditCardTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  auditCardTimeText: {
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  auditMiniGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  auditMiniCell: {
+    flex: 1,
+    minWidth: '45%',
+    padding: 8,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    gap: 2,
+  },
+  auditMiniLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  auditMiniValue: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  auditBreakdownBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    padding: 8,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+  },
+  auditBreakdownText: {
+    fontSize: 11,
+    fontWeight: '600',
+    flex: 1,
+  },
+  auditLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  auditLocationText: {
+    fontSize: 11,
+    flex: 1,
+  },
+  auditAssignRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    padding: 8,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+  },
+  auditAssignText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  auditGenericText: {
+    fontSize: 11,
+    fontStyle: 'italic',
+  },
+  auditTechToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingTop: 4,
+    alignSelf: 'flex-start',
+  },
+  auditTechToggleText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  auditJsonBox: {
+    padding: 8,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  auditJsonText: {
+    fontSize: 10,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  auditDeletionBox: {
+    padding: spacingNumeric.sm,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    gap: 4,
+  },
+  auditDeletionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  auditDeletionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#e11d48',
+  },
+  auditDeletionItem: {
+    padding: 6,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    gap: 2,
+  },
+  auditDiffBox: {
+    padding: spacingNumeric.sm,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    gap: 4,
+  },
+  auditDiffHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  auditDiffTitle: {
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  auditDiffRow: {
+    padding: 6,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    gap: 4,
+  },
+  auditDiffLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  auditDiffValuesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  auditDiffPrevText: {
+    fontSize: 10,
+    textDecorationLine: 'line-through',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  auditDiffUpdatedText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#059669',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  auditDateGroup: {
+    gap: 4,
+    marginBottom: 4,
+  },
+  auditDateDividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: spacingNumeric.sm,
+    marginVertical: 4,
+  },
+  auditDateDividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  auditDateBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  auditDateBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  auditCardBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 4,
+    paddingTop: 6,
+    borderTopWidth: 1,
+  },
+  viewDetailsBtnMobile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    minHeight: 44,
+    marginTop: 6,
+  },
+  viewDetailsBtnTextMobile: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  auditModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  auditModalCard: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderWidth: 1,
+    maxHeight: '85%',
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
+  },
+  auditModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+  },
+  auditModalSection: {
+    padding: 12,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    gap: 4,
+  },
+  auditModalSectionTitle: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.6,
   },
 });

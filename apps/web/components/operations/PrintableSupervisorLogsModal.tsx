@@ -25,7 +25,6 @@ import {
   buildMachineExportFileName,
 } from "@/lib/pdf/pdf-config";
 import { getPrintStylesheet } from "@/lib/pdf/pdf-print-styles";
-import { exportSupervisorRunningLogsToExcel } from "@/lib/utils/supervisor-logs-export";
 import { getOperationsExportLogsAction } from "@/app/actions/operators";
 import { Printer, FileSpreadsheet, Loader2 } from "lucide-react";
 
@@ -719,8 +718,9 @@ export function PrintableSupervisorLogsModal({
     handleBrowserPrint(pdfFileName);
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (isLoadingLogs || exportLogs.length === 0) return;
+    const { exportSupervisorRunningLogsToExcel } = await import("@/lib/utils/supervisor-logs-export");
     exportSupervisorRunningLogsToExcel({
       logs: exportLogs,
       viewMode,

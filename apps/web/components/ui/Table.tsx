@@ -85,6 +85,9 @@ export function TableCell({
   );
 }
 
+import { PageSizeSelect, type PageSizeSelectProps } from "./PageSizeSelect";
+export { PageSizeSelect, type PageSizeSelectProps };
+
 export interface PaginationProps {
   page: number;
   pageSize: number;
@@ -124,17 +127,11 @@ export function Pagination({
         {onPageSizeChange && (
           <div className="flex items-center gap-1.5 ml-2">
             <span className="text-[11px] text-[var(--color-mute)]">Per page:</span>
-            <select
+            <PageSizeSelect
               value={pageSize}
-              onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              className="h-9 sm:h-7 px-1.5 text-xs rounded-md border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] focus:outline-none focus:border-sky-500 cursor-pointer"
-            >
-              {pageSizeOptions.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
+              onChange={onPageSizeChange}
+              options={pageSizeOptions}
+            />
           </div>
         )}
       </div>

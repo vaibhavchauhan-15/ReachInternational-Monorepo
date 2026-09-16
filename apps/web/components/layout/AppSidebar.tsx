@@ -15,7 +15,7 @@ import {
   AnimatedSettings,
 } from "@/components/ui/animated-icons";
 import type { User } from "@/lib/types/database";
-import { CommandPalette } from "@/components/ui/CommandPalette";
+import dynamic from "next/dynamic";
 import {
   Sidebar,
   SidebarFooter,
@@ -29,7 +29,16 @@ import { SidebarHeader } from "./sidebar/SidebarHeader";
 import { QuickAccessTrigger } from "./sidebar/QuickAccessTrigger";
 import { SidebarNavigation } from "./sidebar/SidebarNavigation";
 import { UserProfileDropdown } from "./sidebar/UserProfileDropdown";
-import { MobileSidebarDrawer } from "./sidebar/MobileSidebarDrawer";
+
+const CommandPalette = dynamic(
+  () => import("@/components/ui/CommandPalette").then((mod) => mod.CommandPalette),
+  { ssr: false }
+);
+
+const MobileSidebarDrawer = dynamic(
+  () => import("./sidebar/MobileSidebarDrawer").then((mod) => mod.MobileSidebarDrawer),
+  { ssr: false }
+);
 
 export { SIDEBAR_WIDTH_EXPANDED, SIDEBAR_WIDTH_COLLAPSED };
 export type { NavItem, AppSidebarProps };
@@ -54,7 +63,6 @@ export const mainNavItems: NavItem[] = [
     roles: ["super_admin", "admin", "manager", "service_manager", "supervisor", "operator"],
     subItems: [
       { label: "Running Hours", tab: "logs" },
-      { label: "Operator Machine Assignments", tab: "assignments" },
       // { label: "Site Movement / Loading-Unloading", tab: "site-movement" }, // Soft-removed per user request
       // { label: "Operator Roster & Salary", tab: "operators" }, // Soft-removed per user request
     ],
@@ -120,7 +128,6 @@ export function AppSidebar({ user, collapsed, onToggleCollapse }: AppSidebarProp
               ...item,
               subItems: [
                 { label: "Running Hours", tab: "logs" },
-                { label: "Operator Machine Assignments", tab: "assignments" },
                 // { label: "Site Movement / Loading-Unloading", tab: "site-movement" }, // Soft-removed per user request
                 // { label: "Operator Roster & Salary", tab: "operators" }, // Soft-removed per user request
               ],
@@ -162,20 +169,24 @@ export function AppSidebar({ user, collapsed, onToggleCollapse }: AppSidebarProp
         </SidebarFooter>
       </Sidebar>
 
-      {/* Mobile Drawer */}
-      <MobileSidebarDrawer
-        user={user}
-        items={visibleMainItems}
-        isOpen={mobileOpen}
-        onClose={() => setMobileOpen(false)}
-      />
+      {/* Mobile Drawer (Lazy loaded strictly when opened on mobile) */}
+      {mobileOpen && (
+        <MobileSidebarDrawer
+          user={user}
+          items={visibleMainItems}
+          isOpen={mobileOpen}
+          onClose={() => setMobileOpen(false)}
+        />
+      )}
 
-      {/* Global Command Palette */}
-      <CommandPalette
-        isOpen={cmdOpen}
-        onClose={() => setCmdOpen(false)}
-        userRole={user.role}
-      />
+      {/* Global Command Palette (Lazy loaded strictly on command trigger) */}
+      {cmdOpen && (
+        <CommandPalette
+          isOpen={cmdOpen}
+          onClose={() => setCmdOpen(false)}
+          userRole={user.role}
+        />
+      )}
     </>
   );
 }

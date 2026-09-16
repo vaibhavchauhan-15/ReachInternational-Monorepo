@@ -42,6 +42,7 @@ export interface ClientSelectProps {
   allowAll?: boolean;
   allLabel?: string;
   compact?: boolean;
+  isLoading?: boolean;
   error?: string;
   className?: string;
 }
@@ -69,6 +70,7 @@ export function ClientSelect({
   allowAll = false,
   allLabel = "All Clients",
   compact = false,
+  isLoading = false,
   error,
   className = "",
 }: ClientSelectProps) {
@@ -79,7 +81,7 @@ export function ClientSelect({
   const popoverRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const { mounted, position, isPositioned, updatePosition } = useDynamicDropdownPosition({
+  const { mounted, position, isPositioned, portalTarget, updatePosition } = useDynamicDropdownPosition({
     isOpen,
     triggerRef,
     popoverRef,
@@ -87,8 +89,8 @@ export function ClientSelect({
       setIsOpen(false);
       setSearchQuery("");
     },
-    minWidth: 320,
-    maxHeightCap: 380,
+    minWidth: 260,
+    maxHeightCap: 320,
     matchTriggerWidth: true,
   });
 
@@ -257,12 +259,14 @@ export function ClientSelect({
       )}
 
       {/* Popover Menu */}
-      {mounted && createPortal(
+      {mounted && portalTarget && createPortal(
         <AnimatePresence onExitComplete={() => setSearchQuery("")}>
           {isOpen && isPositioned && (
             <motion.div
               ref={popoverRef}
               key="client-select-popover"
+              data-portal-dropdown="true"
+              data-portal-select="true"
               initial={{
                 opacity: 0,
                 scale: 0.97,
@@ -290,6 +294,7 @@ export function ClientSelect({
                 width: `${position.width}px`,
                 maxHeight: `${position.maxHeight}px`,
                 zIndex: 99999,
+                pointerEvents: "auto",
                 transformOrigin: position.placement === "top" ? "bottom center" : "top center",
               }}
               className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden flex flex-col backdrop-blur-md"
@@ -321,7 +326,12 @@ export function ClientSelect({
                 {allowAll && !searchQuery.trim() && (
                   <button
                     type="button"
-                    onClick={() => handleSelect("all")}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleSelect("all");
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
                     className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
                       isAllSelected
                         ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold"
@@ -357,8 +367,13 @@ export function ClientSelect({
                       <button
                         key={c.id}
                         type="button"
-                        onClick={() => handleSelect(c.id)}
-                        className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs text-left transition-colors cursor-pointer ${
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleSelect(c.id);
+                        }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-lg text-xs text-left transition-colors cursor-pointer min-h-[44px] ${
                           isSelected
                             ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold"
                             : "hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
@@ -385,7 +400,7 @@ export function ClientSelect({
             </motion.div>
           )}
         </AnimatePresence>,
-        document.body
+        portalTarget
       )}
     </div>
   );

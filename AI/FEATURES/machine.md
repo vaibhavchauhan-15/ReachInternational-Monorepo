@@ -57,6 +57,14 @@ Manages machine fleet registry, serial numbers, client assignments, supervisor a
   1. **Basic Info & Client**: Displays core master parameters (ID, Model, Serial Number, YUM, Manufacturer, HMR, Rental Status, Health Status), dedicated **"Assigned Shift Personnel (24h Fleet Coverage)"** section detailing all assigned supervisors and operators with shift times and communication shortcuts, and Assigned Client Details with 1-click Contact/Directions Actions (Call, WhatsApp, Google Maps Location, Copy Site Address).
   2. **Hours Meter Logs**: Complete daily shift logbook entries with log date, client company, operator, start/end meter readings, total running hours, and remarks.
 
+## Modal Dropdown Selector Architecture (2026-09-16 Fix)
+- **Root Cause**: Radix UI's `@radix-ui/react-dialog` sets `pointer-events: none` on `<body>` (inherited property) and traps focus inside the dialog node. Dropdowns portaled to `document.body` were visible but unclickable and their search input could never receive focus.
+- **Solution**: `data-portal-container="true"` attribute placed on the dialog card element (both on `DialogPrimitive.Content` and directly on the `motion.div` child) so that `useDynamicDropdownPosition` s `resolvePortalTarget()` finds the nearest dialog card and portals all 7 dropdown components into the dialog`s DOM subtree, keeping them inside the `pointer-events: auto` / focus-scope boundary.
+- **Escape Key Behavior**: When a dropdown popover is open inside a dialog, pressing Escape closes only the dropdown (not the entire modal), preserving in-progress edits.
+- **Multi-User Selection**: `MultiUserSelect` supports selecting multiple supervisors AND operators with searchable chips, shift timing metadata, removable individual chips, and a "Deselect All" action. Saved via `updateMachineSupervisorsAction` and `updateMachineOperatorsAction` server actions.
+- **Mobile Separate Edit Functions**: Web `/machines/[id]` renders separate edit functions per section (Hero, Card 1 Info, Card 2 Personnel, Card 3 Client) via `MobilePageHeader` 3-dot dropdown and card-level Edit buttons, wired through window event listeners. Native mobile app uses `MachineModal` with `initialSection` for section-specific editing.
+
+
 ## Serial Number Duplicate Prevention & Validation
 - **Database Unique Constraint**: Case-insensitive, trimmed unique index `idx_machines_serial_number_unique_ci` on `public.machines (lower(trim(serial_number)))`.
 - **Zod Schema Validation**: `CreateMachineSchema` and `UpdateMachineSchema` in `@reachinternational/validation` require trimmed, non-empty `serial_number`.

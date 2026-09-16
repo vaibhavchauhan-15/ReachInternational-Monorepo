@@ -23,6 +23,7 @@ import {
   Gauge,
   Users,
   User,
+  Building2,
   Settings,
 } from 'lucide-react-native';
 
@@ -82,6 +83,16 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = () => {
           label: 'Operations',
           icon: Gauge,
         },
+        ...((isAdmin || normalizedRole === 'manager' || normalizedRole === 'service_manager')
+          ? [
+              {
+                id: 'clients',
+                href: '/(app)/clients',
+                label: 'Clients',
+                icon: Building2,
+              },
+            ]
+          : []),
         ...(isAdmin
           ? [
               {
@@ -149,6 +160,8 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = () => {
               isActive = pathname.includes('machines');
             } else if (item.id === 'operations') {
               isActive = pathname.includes('operations');
+            } else if (item.id === 'clients') {
+              isActive = pathname.includes('clients');
             } else if (item.id === 'users') {
               isActive = pathname.includes('users');
             }

@@ -41,9 +41,18 @@ import {
   Info,
   Trash2,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import type { User as UserType } from "@/lib/types/database";
-import { EditProfileModal } from "@/components/profile/EditProfileModal";
-import { AccountDeletionModal } from "@/components/profile/AccountDeletionModal";
+
+const AccountDeletionModal = dynamic(
+  () => import("@/components/profile/AccountDeletionModal").then((m) => m.AccountDeletionModal),
+  { ssr: false }
+);
+
+const EditProfileModal = dynamic(
+  () => import("@/components/profile/EditProfileModal").then((m) => m.EditProfileModal),
+  { ssr: false }
+);
 import { logout, changePasswordAction } from "@/app/actions/auth";
 import { useTheme, type Theme } from "@/components/theme/ThemeProvider";
 import { useRouter } from "next/navigation";
@@ -100,7 +109,7 @@ export function SettingsClient({ user }: SettingsClientProps) {
 
     startPasswordTransition(async () => {
       const res = await changePasswordAction({
-        currentPassword: currentPassword.trim() || undefined,
+        currentPassword: currentPassword.trim(),
         newPassword: newPassword.trim(),
       });
 
@@ -720,16 +729,18 @@ export function SettingsClient({ user }: SettingsClientProps) {
       {/* MODALS */}
       {/* ========================================================================= */}
 
-      {/* Edit Profile Modal */}
-      <EditProfileModal
-        user={user}
-        isOpen={isEditProfileOpen}
-        onClose={() => setIsEditProfileOpen(false)}
-        onSuccess={() => {
-          setIsEditProfileOpen(false);
-          router.refresh();
-        }}
-      />
+      {/* Edit Profile Modal (Lazy loaded strictly when opened) */}
+      {isEditProfileOpen && user && (
+        <EditProfileModal
+          user={user}
+          isOpen={isEditProfileOpen}
+          onClose={() => setIsEditProfileOpen(false)}
+          onSuccess={() => {
+            setIsEditProfileOpen(false);
+            router.refresh();
+          }}
+        />
+      )}
 
       {/* Sign Out Confirmation Modal */}
       <Modal
@@ -896,8 +907,8 @@ export function SettingsClient({ user }: SettingsClientProps) {
         </div>
       </Modal>
 
-      {/* Account Deletion Modal */}
-      {user && (
+      {/* Account Deletion Modal (Lazy loaded strictly when clicked) */}
+      {deleteModalOpen && user && (
         <AccountDeletionModal
           user={user}
           isOpen={deleteModalOpen}

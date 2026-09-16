@@ -7,6 +7,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { TAGS } from "@/lib/cache";
 import {
   CreateAssignmentSchema,
+  UpdateAssignmentSchema,
   EndAssignmentSchema,
   ResolveConflictSchema,
 } from "@reachinternational/validation";
@@ -16,6 +17,12 @@ import {
   minutesTo24HourTime,
 } from "@reachinternational/utils";
 import type { OperatorMachineAssignment } from "@/lib/types/database";
+
+import {
+  getOperationsAssignmentsData,
+  getMachineAssignmentHistoryData,
+  OPERATIONS_CACHE_TAGS,
+} from "@/lib/data/operations";
 
 function normalizeTimeTo24Hour(timeStr: string): string {
   const mins = parseTimeToMinutes(timeStr);
@@ -123,10 +130,13 @@ export async function createAssignmentAction(payload: {
     }
 
     // 2. Revalidate Cache Tags
+    revalidateTag(TAGS.operationsAssignments, "max");
+    revalidateTag(TAGS.operations, "max");
     revalidateTag(TAGS.machines, "max");
     revalidateTag(TAGS.machinesMeta, "max");
     revalidateTag(TAGS.dashboardKpis, "max");
     revalidateTag(TAGS.machineDetail(parsed.data.machineId), "max");
+    revalidateTag(TAGS.operationAssignmentDetail(parsed.data.machineId), "max");
 
     return {
       success: true,
@@ -186,10 +196,13 @@ export async function endAssignmentAction(payload: {
     }
 
     // Revalidate Tags
+    revalidateTag(TAGS.operationsAssignments, "max");
+    revalidateTag(TAGS.operations, "max");
     revalidateTag(TAGS.machines, "max");
     revalidateTag(TAGS.dashboardKpis, "max");
     if (rpcResult?.machine_id) {
       revalidateTag(TAGS.machineDetail(rpcResult.machine_id), "max");
+      revalidateTag(TAGS.operationAssignmentDetail(rpcResult.machine_id), "max");
     }
 
     return { success: true, data: { success: true } };
@@ -257,6 +270,13 @@ export async function resolveHourLogConflictAction(payload: {
 
     revalidateTag(TAGS.machines, "max");
     revalidateTag(TAGS.dashboardKpis, "max");
+    revalidateTag(TAGS.operationsLogs, "max");
+    revalidateTag(TAGS.operations, "max");
+    revalidateTag(TAGS.operationLogDetail(parsed.data.logId), "max");
+    revalidateTag(OPERATIONS_CACHE_TAGS.logSummary(parsed.data.logId), "max");
+    revalidateTag(OPERATIONS_CACHE_TAGS.logDetails(parsed.data.logId), "max");
+    revalidateTag(OPERATIONS_CACHE_TAGS.logHistory(parsed.data.logId), "max");
+    revalidateTag(OPERATIONS_CACHE_TAGS.logAudit(parsed.data.logId), "max");
 
     return { success: true, data: { success: true } };
   } catch (err: unknown) {
@@ -339,3 +359,131 @@ export async function getMachineActiveAssignmentsAction(
     return { assignments: [] };
   }
 }
+
+/**
+ * Updates an active operator assignment's shift window and notes.
+ * Enforces GiST exclusion overlap prevention atomically.
+ */
+export async function updateAssignmentAction(payload: {
+  assignmentId: string;
+  shiftStartTime: string;
+  shiftEndTime: string;
+  notes?: string | null;
+}): Promise<AssignmentActionResult<{ success: boolean; assignmentId: string }>> {
+  try {
+    const caller = await requireRole(
+      "admin",
+      "super_admin",
+      "manager",
+      "service_manager",
+      "supervisor"
+    );
+
+    const parsed = UpdateAssignmentSchema.safeParse(payload);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message || "Invalid update assignment input.",
+      };
+    }
+
+    const start24 = normalizeTimeTo24Hour(parsed.data.shiftStartTime);
+    const end24 = normalizeTimeTo24Hour(parsed.data.shiftEndTime);
+
+    if (start24 === end24) {
+      return {
+        success: false,
+        error: "Shift start time and end time cannot be identical.",
+      };
+    }
+
+    const supabase = createSupabaseAdminClient();
+
+    // Verify assignment exists and is active
+    const { data: existing, error: fetchErr } = await supabase
+      .from("operator_machine_assignments")
+      .select("id, machine_id, operator_id, is_active")
+      .eq("id", payload.assignmentId)
+      .eq("is_active", true)
+      .single();
+
+    if (fetchErr || !existing) {
+      return { success: false, error: "Active assignment not found." };
+    }
+
+    // Update assignment shift times (trigger trg_sync_operator_shift_ranges enforces GiST exclusion)
+    const { error: updateErr } = await supabase
+      .from("operator_machine_assignments")
+      .update({
+        shift_start_time: start24,
+        shift_end_time: end24,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", payload.assignmentId);
+
+    if (updateErr) {
+      if (updateErr.message?.includes("23P01") || updateErr.code === "23P01") {
+        return {
+          success: false,
+          code: "SHIFT_OVERLAP_CONFLICT",
+          error: "This shift timing conflicts with another active shift assignment for this operator.",
+        };
+      }
+      return { success: false, error: updateErr.message || "Failed to update assignment shift." };
+    }
+
+    // Revalidate tags
+    revalidateTag(TAGS.operationsAssignments, "max");
+    revalidateTag(TAGS.operations, "max");
+    revalidateTag(TAGS.machines, "max");
+    revalidateTag(TAGS.machineDetail(existing.machine_id), "max");
+    revalidateTag(TAGS.operationAssignmentDetail(existing.machine_id), "max");
+
+    return { success: true, data: { success: true, assignmentId: payload.assignmentId } };
+  } catch (err: unknown) {
+    if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
+      throw err;
+    }
+    const message = err instanceof Error ? err.message : "Failed to update assignment.";
+    return { success: false, error: message };
+  }
+}
+
+/**
+ * On-demand data loader for the Operations Assignments Tab.
+ */
+export async function getOperationsAssignmentsAction() {
+  try {
+    await requireRole("admin", "super_admin", "manager", "service_manager", "supervisor", "operator");
+    const data = await getOperationsAssignmentsData();
+    return { success: true, data };
+  } catch (err: unknown) {
+    if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
+      throw err;
+    }
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to retrieve assignments",
+    };
+  }
+}
+
+/**
+ * On-demand history loader for a specific machine's assignment timeline.
+ */
+export async function getMachineAssignmentHistoryAction(machineId: string) {
+  try {
+    await requireRole("admin", "super_admin", "manager", "service_manager", "supervisor", "operator");
+    const data = await getMachineAssignmentHistoryData(machineId);
+    return { success: true, data };
+  } catch (err: unknown) {
+    if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
+      throw err;
+    }
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "Failed to retrieve assignment history",
+    };
+  }
+}
+

@@ -92,7 +92,6 @@ export default function SignupPage() {
             sups.map((s) => ({
               value: s.value,
               label: s.label,
-              description: s.description,
             }))
           );
         }

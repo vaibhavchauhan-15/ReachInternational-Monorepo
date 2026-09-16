@@ -4,29 +4,21 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
-  AnimatedDashboard,
   AnimatedGauge,
-  AnimatedClock,
   AnimatedWrench,
-  AnimatedClipboardList,
   AnimatedUsers,
-  AnimatedSearch,
   AnimatedUser,
-  AnimatedFileText,
-  AnimatedSettings,
-  AnimatedX,
-  AnimatedChevronRight,
-  AnimatedLogOut,
+  AnimatedBuilding2,
 } from "@/components/ui/animated-icons";
 import { motion, AnimatePresence } from "framer-motion";
 import type { User, UserRole } from "@/lib/types/database";
-import { logout } from "@/app/actions/auth";
-import { CommandPalette } from "@/components/ui/CommandPalette";
-import { ThemeToggle } from "@/components/theme/ThemeToggle";
-import { Button } from "@/components/ui";
-import { EditProfileModal } from "@/components/profile/EditProfileModal";
-import { AccountDeletionModal } from "@/components/profile/AccountDeletionModal";
-import { Phone, MapPin, ShieldCheck, Clock, FileText, Edit, Shield, Building, Mail, Trash2 } from "lucide-react";
+import dynamic from "next/dynamic";
+import { UserProfileCard } from "@/components/profile/UserProfileCard";
+
+const CommandPalette = dynamic(
+  () => import("@/components/ui/CommandPalette").then((m) => m.CommandPalette),
+  { ssr: false }
+);
 
 interface MobileBottomNavProps {
   user: User;
@@ -62,8 +54,6 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
   const searchParams = useSearchParams();
   const [profileSheetOpen, setProfileSheetOpen] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
-  const [editProfileOpen, setEditProfileOpen] = useState(false);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   // Global ⌘K / Search shortcut listener
   useEffect(() => {
@@ -78,6 +68,8 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
   }, []);
 
   const isOperator = user.role === "operator";
+  const canAccessClients = ["super_admin", "admin", "manager", "service_manager"].includes(user.role);
+  const canAccessUsers = ["super_admin", "admin", "manager", "service_manager", "hr_manager", "supervisor"].includes(user.role);
 
   // Build responsive nav items based on user role
   const navItems: NavItemConfig[] = isOperator
@@ -87,13 +79,6 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
           href: "/operations",
           label: "Operations",
           icon: AnimatedGauge,
-        },
-        {
-          id: "search",
-          label: "Search",
-          icon: AnimatedSearch,
-          isAction: true,
-          actionType: "search",
         },
         {
           id: "profile",
@@ -116,14 +101,17 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
           label: "Operations",
           icon: AnimatedGauge,
         },
-        {
-          id: "search",
-          label: "Search",
-          icon: AnimatedSearch,
-          isAction: true,
-          actionType: "search",
-        },
-        ...(user.role === "super_admin" || user.role === "admin"
+        ...(canAccessClients
+          ? [
+              {
+                id: "clients",
+                href: "/clients",
+                label: "Clients",
+                icon: AnimatedBuilding2,
+              },
+            ]
+          : []),
+        ...(canAccessUsers
           ? [
               {
                 id: "users",
@@ -152,7 +140,7 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
       {/* Mobile Floating Bottom Navbar */}
       <nav
         aria-label="Mobile Navigation"
-        className="fixed bottom-0 left-0 right-0 z-40 md:hidden px-3 pb-safe pt-1 pointer-events-none"
+        className="fixed bottom-0 left-0 right-0 z-40 md:hidden px-3 pb-safe pt-1 pointer-events-none print:hidden"
       >
         <motion.div
           initial={{ y: 80, opacity: 0 }}
@@ -265,266 +253,24 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", stiffness: 350, damping: 32 }}
-              className="relative z-50 w-full bg-card border-t border-border rounded-t-[28px] shadow-2xl p-6 space-y-5 pb-safe max-h-[85vh] overflow-y-auto"
+              className="relative z-50 w-full max-w-lg bg-[var(--color-canvas-elevated)] border-t border-[var(--color-hairline)] rounded-t-2xl shadow-2xl p-3 pb-safe max-h-[90vh] overflow-hidden flex flex-col"
             >
-              {/* Handle Bar */}
-              <div className="w-12 h-1.5 bg-muted rounded-full mx-auto -mt-2 mb-2 opacity-80" />
+              {/* Grab Handle */}
+              <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-2 shrink-0" />
 
-              {/* Drawer Header with Close */}
-              <div className="flex items-center justify-between border-b border-border pb-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground text-lg font-bold shadow-md">
-                    {user.full_name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-foreground leading-snug">
-                      {user.full_name}
-                    </h3>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {user.email}
-                    </p>
-                    <div className="mt-1 flex items-center gap-2">
-                      <span className="badge-base bg-muted text-muted-foreground text-[10px]">
-                        {roleLabels[user.role]}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <ThemeToggle />
-                  <button
-                    onClick={() => setProfileSheetOpen(false)}
-                    className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <AnimatedX size={20} />
-                  </button>
-                </div>
-              </div>
-
-              {/* User Detailed Operational & Identity Profile Info */}
-              <div className="space-y-3">
-                {/* 1. OPERATIONAL & SHIFT */}
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">
-                    Operational & Shift
-                  </span>
-                  <div className="rounded-xl bg-background border border-border divide-y divide-border overflow-hidden shadow-2xs">
-                    {/* Shift Time */}
-                    <div className="flex items-center gap-3 p-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400">
-                        <Clock size={16} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                          Shift Schedule
-                        </p>
-                        <p className="text-xs font-semibold text-foreground truncate mt-0.5">
-                          {user.shift_time || "General Shift (08:00 AM - 08:00 PM)"}
-                        </p>
-                      </div>
-                      <span className="badge-base bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px]">
-                        Active
-                      </span>
-                    </div>
-
-                    {/* Base Location */}
-                    <div className="flex items-center gap-3 p-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                        <Building size={16} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                          Base Yard / Location
-                        </p>
-                        <p className="text-xs font-semibold text-foreground truncate mt-0.5">
-                          {[user.city, user.state].filter(Boolean).join(", ") || "Corporate HQ / Base Yard"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 2. CONTACT & RESIDENCE */}
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">
-                    Contact & Residence
-                  </span>
-                  <div className="rounded-xl bg-background border border-border divide-y divide-border overflow-hidden shadow-2xs">
-                    {/* Phone */}
-                    <div className="flex items-center gap-3 p-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                        <Phone size={16} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                          Mobile Phone
-                        </p>
-                        <p className="text-xs font-semibold font-mono text-foreground truncate mt-0.5">
-                          {user.phone ? (user.phone.startsWith('+') ? user.phone : '+91 ' + user.phone) : '—'}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Email */}
-                    <div className="flex items-center gap-3 p-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                        <Mail size={16} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                          Official Email
-                        </p>
-                        <p className="text-xs font-semibold text-foreground truncate mt-0.5">
-                          {user.email}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Address */}
-                    <div className="flex items-start gap-3 p-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 mt-0.5">
-                        <MapPin size={16} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                          Registered Address
-                        </p>
-                        <p className="text-xs font-semibold text-foreground leading-snug mt-0.5">
-                          {[user.address, user.city, user.district, user.state].filter(Boolean).join(", ") || "No address registered"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 3. GOVERNMENT KYC & CREDENTIALS */}
-                <div className="space-y-1.5">
-                  <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-1">
-                    Government KYC & Credentials
-                  </span>
-                  <div className="rounded-xl bg-background border border-border divide-y divide-border overflow-hidden shadow-2xs">
-                    {/* Aadhaar */}
-                    <div className="flex items-center gap-3 p-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-                        <ShieldCheck size={16} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                          Aadhaar Card (KYC)
-                        </p>
-                        <p className="text-xs font-mono font-semibold text-foreground truncate mt-0.5">
-                          {user.aadhaar_number
-                            ? user.aadhaar_number.length >= 12
-                              ? `XXXX-XXXX-${user.aadhaar_number.slice(-4)}`
-                              : user.aadhaar_number
-                            : "Not Provided"}
-                        </p>
-                      </div>
-                      {user.aadhaar_number ? (
-                        <span className="badge-base bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px]">
-                          Verified
-                        </span>
-                      ) : (
-                        <span className="badge-base bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 text-[10px]">
-                          Pending
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Licence */}
-                    <div className="flex items-center gap-3 p-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                        <FileText size={16} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                          Driving Licence
-                        </p>
-                        <p className="text-xs font-mono font-semibold text-foreground truncate uppercase mt-0.5">
-                          {user.license_number || "Not Provided"}
-                        </p>
-                      </div>
-                      {user.license_number ? (
-                        <span className="badge-base bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px]">
-                          Valid
-                        </span>
-                      ) : (
-                        <span className="badge-base bg-muted text-muted-foreground border border-border text-[10px]">
-                          Optional
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Edit Profile Action Button */}
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="md"
-                  fullWidth
-                  onClick={() => {
-                    setProfileSheetOpen(false);
-                    setEditProfileOpen(true);
-                  }}
-                  icon={<Edit size={14} className="text-sky-500" />}
-                  className="h-10 rounded-xl justify-center font-bold text-xs shadow-xs border border-border hover:bg-muted active:scale-[0.98] transition-all"
-                >
-                  Edit Profile & Shift Details
-                </Button>
-
-                {/* Request Account Deletion Link */}
-                <Link
-                  href="/delete-account"
-                  onClick={() => setProfileSheetOpen(false)}
-                  className="w-full flex items-center justify-center gap-2 h-9 px-3 rounded-xl border border-rose-500/20 bg-rose-500/5 hover:bg-rose-500/10 text-rose-600 dark:text-rose-400 text-xs font-semibold shadow-2xs transition-all active:scale-[0.98]"
-                >
-                  <Trash2 size={13} className="text-rose-500" />
-                  <span>Request Account Deletion</span>
-                </Link>
-              </div>
-
-              {/* Sign Out Action */}
-              <div className="pt-2">
-                <form action={logout}>
-                  <Button
-                    type="submit"
-                    variant="danger"
-                    size="md"
-                    fullWidth
-                    icon={<AnimatedLogOut size={16} />}
-                    className="p-3.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 font-semibold text-xs border border-rose-500/20 shadow-xs active:scale-[0.98] transition-all justify-center"
-                  >
-                    Sign out of account
-                  </Button>
-                </form>
-              </div>
+              {/* Shared Unified Profile Card (Same as Desktop with Dual-Tier Lazy Loading) */}
+              <UserProfileCard
+                user={user}
+                onClose={() => setProfileSheetOpen(false)}
+                isMobileDrawer={true}
+              />
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* Edit Profile Modal */}
-      {user && (
-        <EditProfileModal
-          user={user}
-          isOpen={editProfileOpen}
-          onClose={() => setEditProfileOpen(false)}
-        />
-      )}
-
-      {/* Account Deletion Modal */}
-      {user && (
-        <AccountDeletionModal
-          user={user}
-          isOpen={deleteModalOpen}
-          onClose={() => setDeleteModalOpen(false)}
-        />
-      )}
-
-      {/* Mobile Search Command Palette Modal */}
-      {user && (
+      {/* Mobile Search Command Palette Modal (Lazy loaded strictly when tapped) */}
+      {cmdOpen && user && (
         <CommandPalette
           isOpen={cmdOpen}
           onClose={() => setCmdOpen(false)}

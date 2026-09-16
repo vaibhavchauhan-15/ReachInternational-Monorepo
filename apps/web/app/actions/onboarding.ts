@@ -29,10 +29,33 @@ export async function completeOnboardingAction(
     };
   }
 
+  // Fetch verified user profile from database to enforce canonical role & verify status
+  const { data: userProfile, error: profileErr } = await supabase
+    .from("users")
+    .select("id, role, complete_profile")
+    .eq("id", user.id)
+    .single();
+
+  if (profileErr || !userProfile) {
+    return {
+      error: "User profile record not found. Please contact an administrator.",
+    };
+  }
+
+  // Idempotency / state guard: if already complete, direct immediately to appropriate dashboard
+  if (userProfile.complete_profile === "yes") {
+    return {
+      success: true,
+      redirectUrl: userProfile.role === "operator" ? "/operations?tab=entry" : "/machines",
+    };
+  }
+
   const raw = Object.fromEntries(formData.entries()) as Record<string, string>;
   const full_name = (raw.full_name || "").trim();
   const phone = (raw.phone || "").trim();
-  const role = (raw.role || "").trim();
+  // SECURITY (REV-C01): User role is strictly bound to the authenticated user's assigned role in the database.
+  // Never permit client-submitted formData.role to overwrite or escalate user role.
+  const role = userProfile.role || "operator";
   const shift_start_time = (raw.shift_start_time || "").trim();
   const shift_end_time = (raw.shift_end_time || "").trim();
   const shift_time = (raw.shift_time || "").trim() || (shift_start_time && shift_end_time ? `${shift_start_time} - ${shift_end_time}` : "");
@@ -116,12 +139,12 @@ export async function completeOnboardingAction(
     if (rpcError) {
       console.warn("[Onboarding] complete_user_onboarding_atomic RPC returned error, attempting direct table update via admin client:", rpcError.message);
       const adminClient = createSupabaseAdminClient();
+      // SECURITY (REV-C01): Do NOT include role in update payload. Role is established on signup/approval.
       const { error: directError } = await adminClient
         .from("users")
         .update({
           full_name,
           phone,
-          role: role || undefined,
           shift_time,
           shift_start_time: shift_start_time || null,
           shift_end_time: shift_end_time || null,

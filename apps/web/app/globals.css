@@ -1083,3 +1083,11 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }
+
+/* Pull-to-refresh overscroll containment: prevents browser elastic rubber-banding from competing with gesture on mobile/tablet touch */
+@media (max-width: 1023px) and (pointer: coarse) {
+  html, body {
+    overscroll-behavior-y: contain;
+  }
+}
+

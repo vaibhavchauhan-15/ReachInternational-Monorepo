@@ -173,6 +173,11 @@ export async function submitAccountDeletionRequestAction(payload: {
  */
 export async function getAccountDeletionRequestsAction(): Promise<AccountDeletionRequest[]> {
   try {
+    const currentUser = await getCurrentUserOrNull();
+    if (!currentUser || (currentUser.role !== "admin" && currentUser.role !== "super_admin")) {
+      return [];
+    }
+
     const adminClient = createSupabaseAdminClient();
     const requests: AccountDeletionRequest[] = [];
 

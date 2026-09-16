@@ -23,10 +23,10 @@ import {
   buildExportFileName,
 } from "@/lib/pdf/pdf-config";
 import { getPrintStylesheet } from "@/lib/pdf/pdf-print-styles";
-import { exportOperatorLogsToExcel } from "@/lib/utils/operator-logs-export";
 import { DateRangePicker } from "@/components/ui/DateRangePicker";
-import { Printer, FileSpreadsheet, Calendar } from "lucide-react";
+import { Printer, FileSpreadsheet, Calendar, Loader2 } from "lucide-react";
 import { getISTDateString } from "@reachinternational/utils";
+import { getOperationsExportLogsAction } from "@/app/actions/operators";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 const PRINT_DOC_ID = "printable-operator-logs-document";
@@ -257,7 +257,7 @@ function OperatorLogsReportContent({
 export function PrintableOperatorLogsModal({
   open,
   onClose,
-  logs = [],
+  logs: _fallbackLogs = [],
   user,
   assignedMachine,
 }: PrintableOperatorLogsModalProps) {
@@ -279,38 +279,75 @@ export function PrintableOperatorLogsModal({
     }
   });
 
+  const [fetchedLogs, setFetchedLogs] = useState<OperatorHourLog[]>([]);
+  const [isLoadingLogs, setIsLoadingLogs] = useState<boolean>(true);
+  const [fetchedMetrics, setFetchedMetrics] = useState({
+    totalOpHours: 0,
+    totalOtHours: 0,
+    totalBreakdowns: 0,
+    loggedDaysCount: 0,
+  });
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Filter logs month-wise or by custom date range
-  const filteredLogs = logs.filter((log) => {
-    if (selectedMonth === "custom") {
-      if (!customStartDate && !customEndDate) return true;
-      const logDate = log.log_date?.split("T")[0] || "";
-      if (customStartDate && logDate < customStartDate) return false;
-      if (customEndDate && logDate > customEndDate) return false;
-      return true;
-    }
-    if (selectedMonth === "all") return true;
-    return getLogMonthNumber(log.log_date) === selectedMonth;
-  });
+  // Fetch complete unpaginated dataset for export on-demand using current filters & permissions
+  useEffect(() => {
+    if (!open) return;
+    setIsLoadingLogs(true);
+    let isCancelled = false;
 
-  // Aggregate KPI Metrics
-  let totalOpHours = 0;
-  let totalOtHours = 0;
-  let totalBreakdowns = 0;
+    getOperationsExportLogsAction({
+      viewMode: "operator",
+      entityId: user.id,
+      operatorId: user.id,
+      month: selectedMonth,
+      customStartDate: selectedMonth === "custom" ? customStartDate : undefined,
+      customEndDate: selectedMonth === "custom" ? customEndDate : undefined,
+    })
+      .then((res) => {
+        if (!isCancelled) {
+          if (res.success && res.logs) {
+            setFetchedLogs(res.logs as OperatorHourLog[]);
+            if (res.summary) {
+              setFetchedMetrics({
+                totalOpHours: res.summary.totalRunningHours,
+                totalOtHours: res.summary.totalOtHours,
+                totalBreakdowns: res.summary.totalBreakdowns,
+                loggedDaysCount: res.summary.loggedDaysCount,
+              });
+            }
+          } else {
+            console.error("Failed to load operator export logs:", res.error);
+            setFetchedLogs([]);
+          }
+        }
+      })
+      .catch((err) => {
+        if (!isCancelled) {
+          console.error("Exception fetching operator export logs:", err);
+          setFetchedLogs([]);
+        }
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setIsLoadingLogs(false);
+        }
+      });
 
-  filteredLogs.forEach((log) => {
-    const isBkd = log.is_breakdown || log.machine_condition === "breakdown";
-    if (isBkd) totalBreakdowns++;
-    const op = log.running_hours || computeDurationHours(log.start_time, log.end_time);
-    const ot = log.overtime_hours || 0;
-    totalOpHours += op;
-    totalOtHours += ot;
-  });
+    return () => {
+      isCancelled = true;
+    };
+  }, [open, user.id, selectedMonth, customStartDate, customEndDate]);
+
+  const exportLogs = fetchedLogs;
+  const totalOpHours = fetchedMetrics.totalOpHours;
+  const totalOtHours = fetchedMetrics.totalOtHours;
+  const totalBreakdowns = fetchedMetrics.totalBreakdowns;
 
   const doPrint = () => {
+    if (isLoadingLogs || exportLogs.length === 0) return;
     const pdfFileName = buildExportFileName(
       user.full_name || "Operator",
       selectedMonth,
@@ -321,9 +358,11 @@ export function PrintableOperatorLogsModal({
     handleBrowserPrint(pdfFileName);
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    if (isLoadingLogs || exportLogs.length === 0) return;
+    const { exportOperatorLogsToExcel } = await import("@/lib/utils/operator-logs-export");
     exportOperatorLogsToExcel(
-      logs,
+      exportLogs,
       user,
       assignedMachine,
       selectedMonth,
@@ -333,7 +372,7 @@ export function PrintableOperatorLogsModal({
   };
 
   const reportProps: ReportContentProps = {
-    logs: filteredLogs,
+    logs: exportLogs,
     user,
     assignedMachine,
     selectedMonth,
@@ -372,20 +411,31 @@ export function PrintableOperatorLogsModal({
         footer={
           <div className="flex flex-wrap items-center justify-between gap-3 w-full pt-2 no-print">
             <div className="text-xs text-[var(--color-mute)] font-medium">
-              Showing <strong>{filteredLogs.length}</strong> log entries.
+              {isLoadingLogs ? (
+                <span className="flex items-center gap-1.5 text-sky-600 dark:text-sky-400">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Loading unpaginated logs from server...
+                </span>
+              ) : (
+                <>
+                  Showing <strong>{exportLogs.length}</strong> unpaginated log entries.
+                </>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleExportExcel}
-                className="px-4 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold text-xs hover:bg-emerald-500/20 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                disabled={isLoadingLogs || exportLogs.length === 0}
+                className="px-4 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-bold text-xs hover:bg-emerald-500/20 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Export Excel (.xlsx)
               </button>
               <button
                 type="button"
                 onClick={doPrint}
-                className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                disabled={isLoadingLogs || exportLogs.length === 0}
+                className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Printer className="h-4 w-4" /> Print / Save as PDF
               </button>
@@ -440,7 +490,23 @@ export function PrintableOperatorLogsModal({
           </div>
 
           <div id={PREVIEW_ID} className="max-w-full overflow-x-auto custom-scrollbar">
-            <OperatorLogsReportContent {...reportProps} />
+            {isLoadingLogs ? (
+              <div className="flex flex-col items-center justify-center p-12 gap-3 min-h-[300px]">
+                <Loader2 className="h-6 w-6 animate-spin text-sky-600 dark:text-sky-400" />
+                <p className="text-xs text-[var(--color-mute)] font-medium">
+                  Loading unpaginated machine logs for export...
+                </p>
+              </div>
+            ) : exportLogs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-12 gap-2 min-h-[300px] text-center">
+                <p className="text-sm font-bold text-[var(--color-ink)]">No Logs Found</p>
+                <p className="text-xs text-[var(--color-mute)]">
+                  There are no machine logs matching the selected period to export.
+                </p>
+              </div>
+            ) : (
+              <OperatorLogsReportContent {...reportProps} />
+            )}
           </div>
         </div>
       </Modal>

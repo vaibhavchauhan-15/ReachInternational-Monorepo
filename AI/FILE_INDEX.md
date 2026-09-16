@@ -67,3 +67,10 @@ This index maps features directly to exact file paths. AI agents must use this t
 - Cross-Platform Responsive UI Rules: `.agents/rules/responsive_cross_platform_design.md`
 - Web & Mobile UI Consistency Rules: `.agents/rules/web_mobile_ui_consistency.md`
 
+## 9. Client Directory & CRM
+- Web Pages: `apps/web/app/(app)/clients/page.tsx`, `apps/web/app/(app)/clients/loading.tsx`
+- Web Components: `apps/web/components/clients/*` (`ClientsCoordinatorClient.tsx`, `ClientsHeader.tsx`, `MobileClientCard.tsx`, `ClientsTable.tsx`, `ClientModal.tsx`)
+- Web Server Actions & DAL: `apps/web/app/actions/clients.ts`, `apps/web/lib/data/clients/*`
+- Mobile Pages & Components: `apps/mobile/app/(app)/clients.tsx`, `apps/mobile/components/clients/MobileClientCard.tsx`
+
+

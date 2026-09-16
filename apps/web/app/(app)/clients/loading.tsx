@@ -1,5 +1,9 @@
-import { ClientsSkeleton } from "@/components/ui";
+import { ClientsPageShellLoading } from "@/components/clients/ClientsPageShellLoading";
 
 export default function ClientsLoading() {
-  return <ClientsSkeleton />;
+  return (
+    <div className="p-4 sm:p-6">
+      <ClientsPageShellLoading />
+    </div>
+  );
 }

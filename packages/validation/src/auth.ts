@@ -140,7 +140,7 @@ export const UserAccountRequestSchema = z.object({
 export const OnboardingProfileSchema = z.object({
   full_name: z.string().trim().min(2, "Full name is required (minimum 2 characters)").max(100, "Full name cannot exceed 100 characters"),
   phone: z.string().trim().min(10, "Valid 10-digit mobile number is required").max(15, "Mobile number cannot exceed 15 digits"),
-  role: z.string().trim().min(1, "Role is required").max(50, "Role string cannot exceed 50 characters"),
+  role: z.string().trim().max(50).optional().nullable(),
   supervisor_id: z.string().trim().max(100).optional().nullable(),
   working_location_id: z.string().trim().max(100).optional().nullable(),
   shift_time: z.string().trim().max(100, "Shift timing cannot exceed 100 characters").optional().nullable(),

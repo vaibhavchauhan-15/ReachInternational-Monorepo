@@ -1,5 +1,5 @@
 import "server-only";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import type { AuditCategory, AuditSeverity } from "@reachinternational/types";
 import { deriveAuditCategory, deriveAuditSeverity } from "@reachinternational/types";
 
@@ -48,7 +48,9 @@ export async function logAudit({
   ip_address,
 }: AuditLogParams) {
   try {
-    const supabase = await createSupabaseServerClient();
+    // SECURITY (M-04): Use admin client for audit writes to ensure records are always written
+    // regardless of session state, expired tokens, or RLS restrictions.
+    const supabase = createSupabaseAdminClient();
 
     // Resolve actor from session if not explicitly provided
     let resolvedUserId = user_id;

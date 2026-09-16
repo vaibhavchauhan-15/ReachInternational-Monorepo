@@ -94,16 +94,6 @@ export function CommandPalette({
         roles: ["super_admin", "admin", "manager", "supervisor", "service_manager"],
       },
       {
-        id: "nav-operations-assignments",
-        title: "Operator Machine Assignments",
-        subtitle: "Manage recurring daily shifts and multi-operator machine rosters",
-        category: "Navigation",
-        icon: AnimatedClipboardList,
-        href: "/operations?tab=assignments",
-        keywords: ["assignments", "shifts", "operators", "roster"],
-        roles: ["super_admin", "admin", "manager", "supervisor", "service_manager"],
-      },
-      {
         id: "nav-audit-logs",
         title: "Go to Audit Logs",
         subtitle: "Centralized audit trail of machines, assignments, employees, sign-ins, and security",

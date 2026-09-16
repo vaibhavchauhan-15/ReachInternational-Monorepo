@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   AnimatedChevronDown,
   AnimatedCheck,
@@ -8,6 +9,7 @@ import {
 } from "./animated-icons";
 import { Search, Clock, Users, UserCheck } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDynamicDropdownPosition } from "@/lib/hooks/useDynamicDropdownPosition";
 
 export interface MultiUserSelectItem {
   id: string;
@@ -87,7 +89,22 @@ export function MultiUserSelect({
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const { mounted, position, isPositioned, portalTarget, updatePosition } = useDynamicDropdownPosition({
+    isOpen,
+    triggerRef,
+    popoverRef,
+    onClose: () => {
+      setIsOpen(false);
+      setSearchQuery("");
+    },
+    minWidth: 260,
+    maxHeightCap: 320,
+    matchTriggerWidth: true,
+  });
 
   // Filter eligible users by role/status
   const eligibleUsers = useMemo(() => {
@@ -119,32 +136,19 @@ export function MultiUserSelect({
       });
     }
 
-    const valSet = new Set(values || []);
     return [...list].sort((a, b) => {
-      const aSelected = valSet.has(a.id) ? 1 : 0;
-      const bSelected = valSet.has(b.id) ? 1 : 0;
-      if (aSelected !== bSelected) return bSelected - aSelected;
       const nameA = a.full_name || a.name || "";
       const nameB = b.full_name || b.name || "";
       return nameA.localeCompare(nameB);
     });
-  }, [eligibleUsers, searchQuery, values]);
-
-  // Click outside listener
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-        setSearchQuery("");
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [eligibleUsers, searchQuery]);
 
   const handleToggleOpen = () => {
     if (disabled) return;
     const nextState = !isOpen;
+    if (nextState) {
+      updatePosition();
+    }
     setIsOpen(nextState);
     if (nextState) {
       setTimeout(() => searchInputRef.current?.focus(), 50);
@@ -166,6 +170,7 @@ export function MultiUserSelect({
   };
 
   const handleRemoveChip = (userId: string, e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     if (disabled) return;
     const newValues = (values || []).filter((id) => id !== userId);
@@ -174,6 +179,7 @@ export function MultiUserSelect({
   };
 
   const handleClearAll = (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     if (disabled) return;
     onChange([], []);
@@ -211,6 +217,7 @@ export function MultiUserSelect({
 
       {/* Main Trigger Box */}
       <div
+        ref={triggerRef}
         role="button"
         tabIndex={disabled ? -1 : 0}
         onClick={handleToggleOpen}
@@ -291,109 +298,162 @@ export function MultiUserSelect({
         </p>
       )}
 
-      {/* Dropdown Popover */}
-      {isOpen && (
-        <div className="absolute z-50 top-full left-0 right-0 mt-1.5 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden max-h-80 flex flex-col backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-150">
-          {/* Search Header */}
-          <div className="p-2.5 border-b border-[var(--color-hairline)] flex items-center gap-2 bg-[var(--color-canvas)]">
-            <Search className="h-3.5 w-3.5 text-[var(--color-mute)] shrink-0 ml-1" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search staff by name, shift, role, phone..."
-              className="w-full bg-transparent text-xs text-[var(--color-ink)] focus:outline-none placeholder:text-[var(--color-mute)] py-0.5"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="text-[var(--color-mute)] hover:text-[var(--color-ink)] p-1 cursor-pointer"
-              >
-                <AnimatedX size={12} />
-              </button>
-            )}
-          </div>
-
-          {/* Quick Selection Status Banner */}
-          <div className="px-3 py-1.5 bg-[var(--color-hairline-soft-surface)]/50 border-b border-[var(--color-hairline)] flex items-center justify-between text-[11px] text-[var(--color-mute)] font-medium">
-            <span>
-              {selectedUsers.length} of {eligibleUsers.length} selected
-            </span>
-            {selectedUsers.length > 0 && (
-              <button
-                type="button"
-                onClick={() => onChange([], [])}
-                className="text-sky-600 dark:text-sky-400 hover:underline font-semibold cursor-pointer"
-              >
-                Deselect All
-              </button>
-            )}
-          </div>
-
-          {/* Candidate User List */}
-          <div className="overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
-            {filteredCandidates.length === 0 ? (
-              <div className="py-6 text-center text-xs text-[var(--color-mute)]">
-                No matching staff found
-              </div>
-            ) : (
-              filteredCandidates.map((u) => {
-                const isSelected = (values || []).includes(u.id);
-                const name = u.full_name || u.name || "Staff";
-                return (
+      {/* Dynamic Viewport Dropdown Popover Portaled into the nearest dialog card (or body) */}
+      {mounted && portalTarget && createPortal(
+        <AnimatePresence>
+          {isOpen && isPositioned && (
+            <motion.div
+              ref={popoverRef}
+              key="multi-user-select-popover"
+              data-portal-dropdown="true"
+              data-portal-select="true"
+              initial={{
+                opacity: 0,
+                scale: 0.97,
+                y: position.placement === "top" ? 6 : -6,
+              }}
+              animate={{
+                opacity: 1,
+                scale: 1,
+                y: 0,
+              }}
+              exit={{
+                opacity: 0,
+                scale: 0.97,
+                y: position.placement === "top" ? 4 : -4,
+              }}
+              transition={{
+                duration: 0.16,
+                ease: [0.16, 1, 0.3, 1],
+              }}
+              style={{
+                position: "fixed",
+                top: position.top !== undefined ? `${position.top}px` : "auto",
+                bottom: position.bottom !== undefined ? `${position.bottom}px` : "auto",
+                left: `${position.left}px`,
+                width: `${position.width}px`,
+                maxHeight: `${position.maxHeight}px`,
+                zIndex: 99999,
+                pointerEvents: "auto",
+                transformOrigin: position.placement === "top" ? "bottom center" : "top center",
+              }}
+              className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden flex flex-col backdrop-blur-md"
+            >
+              {/* Search Header */}
+              <div className="p-2 border-b border-[var(--color-hairline)] flex items-center gap-2 bg-[var(--color-canvas)] shrink-0">
+                <Search className="h-3.5 w-3.5 text-[var(--color-mute)] shrink-0 ml-1" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search staff by name, shift, role, phone..."
+                  className="w-full bg-transparent text-xs text-[var(--color-ink)] focus:outline-none placeholder:text-[var(--color-mute)] py-1"
+                />
+                {searchQuery && (
                   <button
-                    key={u.id}
                     type="button"
-                    onClick={() => handleToggleUser(u.id)}
-                    className={`w-full flex items-center justify-between p-2 sm:p-2.5 rounded-xl text-xs text-left transition-all cursor-pointer ${
-                      isSelected
-                        ? "bg-sky-500/10 text-sky-700 dark:text-sky-300 font-semibold border border-sky-500/20"
-                        : "hover:bg-[var(--color-canvas)] text-[var(--color-ink)] border border-transparent"
-                    }`}
+                    onClick={() => setSearchQuery("")}
+                    className="text-[var(--color-mute)] hover:text-[var(--color-ink)] p-1 cursor-pointer"
                   >
-                    <div className="min-w-0 pr-2 flex-1 flex flex-col gap-0.5">
-                      <div className="font-bold flex items-center gap-2 truncate">
-                        <span className="truncate text-xs sm:text-[13px]">{name}</span>
-                        {u.role && (
-                          <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shrink-0 border ${getRoleBadgeStyle(
-                              u.role
-                            )}`}
-                          >
-                            {formatRoleLabel(u.role)}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-[var(--color-mute)] font-mono">
-                        {u.shift_time && (
-                          <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold">
-                            <Clock size={10} className="shrink-0" />
-                            <span>{u.shift_time}</span>
-                          </span>
-                        )}
-                        {u.phone && <span>📞 {u.phone}</span>}
-                        {u.email && <span className="truncate">✉️ {u.email}</span>}
-                      </div>
-                    </div>
-
-                    <div
-                      className={`h-5 w-5 rounded-md border flex items-center justify-center shrink-0 transition-colors ${
-                        isSelected
-                          ? "bg-sky-600 border-sky-600 text-white shadow-xs"
-                          : "border-neutral-300 dark:border-neutral-700 bg-[var(--color-canvas)]"
-                      }`}
-                    >
-                      {isSelected && <AnimatedCheck size={12} className="text-white" />}
-                    </div>
+                    <AnimatedX size={12} />
                   </button>
-                );
-              })
-            )}
-          </div>
-        </div>
+                )}
+              </div>
+
+              {/* Quick Selection Status Banner */}
+              <div className="px-3 py-1.5 bg-[var(--color-hairline-soft-surface)]/50 border-b border-[var(--color-hairline)] flex items-center justify-between text-[11px] text-[var(--color-mute)] font-medium shrink-0">
+                <span>
+                  {selectedUsers.length} of {eligibleUsers.length} selected
+                </span>
+                {selectedUsers.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onChange([], []);
+                    }}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    className="text-sky-600 dark:text-sky-400 hover:underline font-semibold cursor-pointer"
+                  >
+                    Deselect All
+                  </button>
+                )}
+              </div>
+
+              {/* Candidate User List */}
+              <div className="overflow-y-auto p-1.5 space-y-1 custom-scrollbar flex-1 min-h-0">
+                {filteredCandidates.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-[var(--color-mute)]">
+                    No matching staff found
+                  </div>
+                ) : (
+                  filteredCandidates.map((u) => {
+                    const isSelected = (values || []).includes(u.id);
+                    const name = u.full_name || u.name || "Staff";
+                    return (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleToggleUser(u.id);
+                        }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        className={`w-full flex items-center justify-between p-2 sm:p-2.5 rounded-xl text-xs text-left transition-all cursor-pointer min-h-[44px] ${
+                          isSelected
+                            ? "bg-sky-500/10 text-sky-700 dark:text-sky-300 font-semibold border border-sky-500/20"
+                            : "hover:bg-[var(--color-canvas)] text-[var(--color-ink)] border border-transparent"
+                        }`}
+                      >
+                        <div className="min-w-0 pr-2 flex-1 flex flex-col gap-0.5">
+                          <div className="font-bold flex items-center gap-2 truncate">
+                            <span className="truncate text-xs sm:text-[13px]">{name}</span>
+                            {u.role && (
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider shrink-0 border ${getRoleBadgeStyle(
+                                  u.role
+                                )}`}
+                              >
+                                {formatRoleLabel(u.role)}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-[var(--color-mute)] font-mono">
+                            {u.shift_time && (
+                              <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-semibold">
+                                <Clock size={10} className="shrink-0" />
+                                <span>{u.shift_time}</span>
+                              </span>
+                            )}
+                            {u.phone && <span>📞 {u.phone}</span>}
+                            {u.email && <span className="truncate">✉️ {u.email}</span>}
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 pl-2">
+                          <div
+                            className={`h-5 w-5 rounded-md border flex items-center justify-center transition-colors ${
+                              isSelected
+                                ? "bg-sky-600 border-sky-600 text-white shadow-xs"
+                                : "border-[var(--color-hairline)] bg-[var(--color-canvas)]"
+                            }`}
+                          >
+                            {isSelected && <AnimatedCheck size={12} className="text-white stroke-[2.5]" />}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        portalTarget
       )}
     </div>
   );

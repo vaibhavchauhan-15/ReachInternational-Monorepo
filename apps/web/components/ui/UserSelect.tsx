@@ -94,7 +94,7 @@ export function UserSelect({
   const popoverRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const { mounted, position, isPositioned, updatePosition } = useDynamicDropdownPosition({
+  const { mounted, position, isPositioned, portalTarget, updatePosition } = useDynamicDropdownPosition({
     isOpen,
     triggerRef,
     popoverRef,
@@ -271,12 +271,14 @@ export function UserSelect({
       )}
 
       {/* Popover Menu rendered via Portal with Dynamic Viewport Positioning & Smooth Transitions */}
-      {mounted && createPortal(
+      {mounted && portalTarget && createPortal(
         <AnimatePresence onExitComplete={() => setSearchQuery("")}>
           {isOpen && isPositioned && (
             <motion.div
               ref={popoverRef}
               key="user-select-popover"
+              data-portal-dropdown="true"
+              data-portal-select="true"
               initial={{
                 opacity: 0,
                 scale: 0.97,
@@ -304,6 +306,7 @@ export function UserSelect({
                 width: `${position.width}px`,
                 maxHeight: `${position.maxHeight}px`,
                 zIndex: 99999,
+                pointerEvents: "auto",
                 transformOrigin: position.placement === "top" ? "bottom center" : "top center",
               }}
               className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl overflow-hidden flex flex-col backdrop-blur-md"
@@ -403,7 +406,7 @@ export function UserSelect({
             </motion.div>
           )}
         </AnimatePresence>,
-        document.body
+        portalTarget
       )}
     </div>
   );

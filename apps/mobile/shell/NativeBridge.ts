@@ -96,7 +96,13 @@ export async function handleBridgeMessage(
 
       case "DOWNLOAD_FILE": {
         const { url, dataUri, filename, mimeType } = data.payload || {};
-        const safeName = filename || `download-${Date.now()}`;
+        // SECURITY (REV-M01): Sanitize filename to prevent arbitrary directory traversal attacks
+        const sanitizedBase = String(filename || `download-${Date.now()}`)
+          .replace(/[\/\\]/g, "")
+          .replace(/\.{2,}/g, "")
+          .replace(/[^a-zA-Z0-9._-]/g, "_")
+          .trim();
+        const safeName = sanitizedBase.replace(/^_+/, "") || `download-${Date.now()}`;
         const targetPath = `${FileSystem.documentDirectory}${safeName}`;
 
         if (dataUri && typeof dataUri === "string") {

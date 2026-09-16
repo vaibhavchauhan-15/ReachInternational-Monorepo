@@ -162,7 +162,15 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
     // Graceful fallback
   }
 
-  const handleBackPress = onPressBack || (() => router.back());
+  const handleBackPress =
+    onPressBack ||
+    (() => {
+      if (typeof router.canGoBack === 'function' && router.canGoBack()) {
+        router.back();
+      } else {
+        router.replace('/(app)/dashboard');
+      }
+    });
 
   const topPadding =
     Platform.OS === 'web'

@@ -110,7 +110,7 @@ export async function login(state: AuthFormState, formData: FormData): Promise<A
 function formatRetryAfter(seconds: number): string {
   if (seconds < 60) {
     const s = Math.round(seconds);
-    return s === 1 ? "1 minute" : `${s} minutes`;
+    return s <= 1 ? "1 second" : `${s} seconds`;
   }
   if (seconds < 3600) {
     const m = Math.round(seconds / 60);
@@ -611,30 +611,32 @@ export async function signup(
 }
 
 /**
- * Public/authenticated server action to fetch all active supervisors for selection dropdowns.
- * Uses admin client to bypass anon RLS safely and only projects non-sensitive identity fields.
+ * Server action to fetch all active supervisors for selection dropdowns.
+ * SECURITY (C-02): Uses admin client scoped to non-sensitive fields only.
+ * Emails are intentionally excluded to prevent information disclosure.
  */
 export async function getSupervisorsAction(): Promise<
-  Array<{ value: string; label: string; description?: string }>
+  Array<{ value: string; label: string }>
 > {
   try {
     const adminSupabase = createSupabaseAdminClient();
     const { data, error } = await adminSupabase
       .from("users")
-      .select("id, full_name, email")
+      .select("id, full_name")
       .eq("role", "supervisor")
       .eq("status", "active")
-      .order("full_name", { ascending: true });
+      .order("full_name", { ascending: true })
+      .limit(200);
 
     if (error || !data) {
       console.error("Error fetching supervisors list:", error);
       return [];
     }
 
+    // SECURITY: Only return ID and name — no email, no description
     return data.map((s) => ({
       value: s.id,
       label: s.full_name,
-      description: s.email || undefined,
     }));
   } catch (err) {
     console.error("Exception in getSupervisorsAction:", err);
@@ -643,8 +645,8 @@ export async function getSupervisorsAction(): Promise<
 }
 
 /**
- * Public/authenticated server action to fetch all active working locations for selection dropdowns.
- * Uses admin client to bypass anon RLS safely and only projects non-sensitive fields.
+ * Server action to fetch all active working locations for selection dropdowns.
+ * SECURITY (C-02): Scoped to non-sensitive location fields only.
  */
 export async function getWorkingLocationsAction(): Promise<
   Array<{ value: string; label: string; description?: string }>
@@ -655,7 +657,8 @@ export async function getWorkingLocationsAction(): Promise<
       .from("working_locations")
       .select("id, name, type, city, state")
       .eq("status", "active")
-      .order("name", { ascending: true });
+      .order("name", { ascending: true })
+      .limit(200);
 
     if (error || !data) {
       console.error("Error fetching working locations list:", error);
@@ -678,7 +681,7 @@ export async function getWorkingLocationsAction(): Promise<
  * Optionally verifies current password if provided, then updates password and logs audit.
  */
 export async function changePasswordAction(params: {
-  currentPassword?: string;
+  currentPassword: string;
   newPassword: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
@@ -692,12 +695,28 @@ export async function changePasswordAction(params: {
       return { success: false, error: "Not authenticated. Please log in again." };
     }
 
-    if (!params.newPassword || params.newPassword.length < 6) {
-      return { success: false, error: "Password must be at least 6 characters long." };
+    // SECURITY (H-02): Current password is MANDATORY to prevent session-hijack password takeover
+    if (!params.currentPassword) {
+      return { success: false, error: "Current password is required to change your password." };
     }
 
-    // If current password provided, verify it first
-    if (params.currentPassword && user.email) {
+    // SECURITY (H-03): Enforce consistent 8-char + complexity requirements (same as signup)
+    if (!params.newPassword || params.newPassword.length < 8) {
+      return { success: false, error: "New password must be at least 8 characters long." };
+    }
+
+    const hasUppercase = /[A-Z]/.test(params.newPassword);
+    const hasLowercase = /[a-z]/.test(params.newPassword);
+    const hasDigit = /\d/.test(params.newPassword);
+    if (!hasUppercase || !hasLowercase || !hasDigit) {
+      return {
+        success: false,
+        error: "New password must contain at least one uppercase letter, one lowercase letter, and one number.",
+      };
+    }
+
+    // Verify current password before allowing change
+    if (user.email) {
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: user.email,
         password: params.currentPassword,
@@ -706,6 +725,8 @@ export async function changePasswordAction(params: {
       if (signInError) {
         return { success: false, error: "Current password is incorrect." };
       }
+    } else {
+      return { success: false, error: "Unable to verify identity. Please contact support." };
     }
 
     const { error: updateError } = await supabase.auth.updateUser({

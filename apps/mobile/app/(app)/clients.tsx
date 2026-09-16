@@ -1,12 +1,36 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, Modal, TextInput, Switch, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, Modal, TextInput, Switch, ActivityIndicator, Linking } from 'react-native';
 import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText, RefreshCw } from 'lucide-react-native';
+import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
-import { ClientListSkeleton } from '../../components/clients/ClientCardSkeleton';
+import { ClientListSkeleton, MobileClientCard } from '../../components/clients';
+import { DropdownFilterSelector, type FilterOption } from '../../components/machines';
 
 export type StatusFilter = 'all' | 'active' | 'inactive';
+
+export type ClientSortOptionType =
+  | 'company_name_asc'
+  | 'company_name_desc'
+  | 'code_asc'
+  | 'code_desc'
+  | 'created_at_desc'
+  | 'created_at_asc';
+
+const CLIENT_STATUS_FILTER_OPTIONS: FilterOption[] = [
+  { id: 'all', label: 'All Status' },
+  { id: 'active', label: 'Active', dotColor: '#10b981' },
+  { id: 'inactive', label: 'Inactive', dotColor: '#f59e0b' },
+];
+
+const CLIENT_SORT_OPTIONS: FilterOption[] = [
+  { id: 'company_name_asc', label: 'Company (A → Z)' },
+  { id: 'company_name_desc', label: 'Company (Z → A)' },
+  { id: 'code_asc', label: 'Client Code (A → Z)' },
+  { id: 'code_desc', label: 'Client Code (Z → A)' },
+  { id: 'created_at_desc', label: 'Newest Registered' },
+  { id: 'created_at_asc', label: 'Oldest Registered' },
+];
 
 interface ClientItem {
   id: string;
@@ -75,60 +99,47 @@ const INITIAL_CLIENTS: ClientItem[] = [
   },
 ];
 
+interface MobileQueryCacheEntry {
+  clients: ClientItem[];
+  total: number;
+  timestamp: number;
+}
+
 export default function ClientsScreen() {
-  const { theme } = useTheme();
+  const { theme, isDark } = useTheme();
 
   const [clients, setClients] = useState<ClientItem[]>(INITIAL_CLIENTS);
+  const [totalCount, setTotalCount] = useState<number>(INITIAL_CLIENTS.length);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<StatusFilter>('all');
+  const [sortBy, setSortBy] = useState<ClientSortOptionType>('company_name_asc');
   const [refreshing, setRefreshing] = useState(false);
   const [page, setPage] = useState(1);
-  const pageSize = 10;
+  const [pageSize, setPageSize] = useState<10 | 25 | 50 | 100>(10);
+  const querySeqRef = React.useRef(0);
+  const mobileQueryCacheRef = React.useRef<Map<string, MobileQueryCacheEntry>>(new Map());
 
-  // 280ms Search debounce
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search);
-    }, 280);
-    return () => clearTimeout(timer);
-  }, [search]);
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (activeFilter !== 'all') count++;
+    if (debouncedSearch.trim() !== '') count++;
+    if (sortBy !== 'company_name_asc') count++;
+    return count;
+  }, [activeFilter, debouncedSearch, sortBy]);
 
-  const isSearching = search.trim() !== debouncedSearch.trim() && search.trim() !== '';
-
-  const fetchClients = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .order('company_name', { ascending: true });
-
-      if (error) throw error;
-      if (data && data.length > 0) {
-        setClients(data as unknown as ClientItem[]);
-      } else {
-        setClients(INITIAL_CLIENTS);
-      }
-    } catch (err) {
-      console.warn('Clients query fallback to initial mock:', err);
-      setClients(INITIAL_CLIENTS);
-    } finally {
-      setIsLoading(false);
-      setRefreshing(false);
-    }
+  const handleResetAllFilters = useCallback(() => {
+    setSearch('');
+    setDebouncedSearch('');
+    setActiveFilter('all');
+    setSortBy('company_name_asc');
+    setPage(1);
   }, []);
 
-  useEffect(() => {
-    fetchClients();
-  }, [fetchClients]);
-
-  // Modal State
+  // Client Modal Form State
   const [modalVisible, setModalVisible] = useState(false);
   const [editingClient, setEditingClient] = useState<ClientItem | null>(null);
-
-  // Form State
   const [companyName, setCompanyName] = useState('');
   const [contactPerson, setContactPerson] = useState('');
   const [phone, setPhone] = useState('');
@@ -139,8 +150,6 @@ export default function ClientsScreen() {
   const [district, setDistrict] = useState('');
   const [stateName, setStateName] = useState('');
   const [pincode, setPincode] = useState('');
-
-  // Conditional Billing Address
   const [isBillingAddressDifferent, setIsBillingAddressDifferent] = useState(false);
   const [billingAddress, setBillingAddress] = useState('');
   const [billingCity, setBillingCity] = useState('');
@@ -148,9 +157,315 @@ export default function ClientsScreen() {
   const [billingState, setBillingState] = useState('');
   const [billingPincode, setBillingPincode] = useState('');
 
+  // C11 Client Detail State & In-Memory Session Cache
+  const [detailModalVisible, setDetailModalVisible] = useState(false);
+  const [selectedDetailClient, setSelectedDetailClient] = useState<ClientItem | null>(null);
+  type MobileDetailTab = 'machines' | 'logs' | 'assignments' | 'history' | 'audit';
+  const [mobileActiveTab, setMobileActiveTab] = useState<MobileDetailTab | null>(null);
+  const [mobileLocationExpanded, setMobileLocationExpanded] = useState(false);
+  const [mobileLocationLoading, setMobileLocationLoading] = useState(false);
+  const [mobileLocationData, setMobileLocationData] = useState<{ site_address: string; billing_address: string; is_different: boolean } | null>(null);
+
+  const [mobileTabLoading, setMobileTabLoading] = useState<string | null>(null);
+  const [mobileMachines, setMobileMachines] = useState<any[]>([]);
+  const [mobileLogs, setMobileLogs] = useState<any[]>([]);
+  const [mobileAssignments, setMobileAssignments] = useState<any[]>([]);
+  const [mobileHistory, setMobileHistory] = useState<any[]>([]);
+  const [mobileAudits, setMobileAudits] = useState<any[]>([]);
+
+  const mobileDetailCacheRef = React.useRef<Map<string, any>>(new Map());
+
+  // C14 Location Hierarchy State & In-Memory Session Cache
+  const mobileLocationHierarchyCacheRef = React.useRef<Map<string, any[]>>(new Map());
+  const [mobileStatesList, setMobileStatesList] = useState<any[]>([]);
+  const [mobileDistrictsList, setMobileDistrictsList] = useState<any[]>([]);
+  const [mobileCitiesList, setMobileCitiesList] = useState<any[]>([]);
+  const [mobileLoadingStates, setMobileLoadingStates] = useState(false);
+  const [mobileLoadingDistricts, setMobileLoadingDistricts] = useState(false);
+  const [mobileLoadingCities, setMobileLoadingCities] = useState(false);
+
+  // Progressive Location: Load States when modal opens
+  useEffect(() => {
+    if (!modalVisible) return;
+    const cacheKey = "states";
+    if (mobileLocationHierarchyCacheRef.current.has(cacheKey)) {
+      setMobileStatesList(mobileLocationHierarchyCacheRef.current.get(cacheKey) || []);
+      return;
+    }
+    setMobileLoadingStates(true);
+    supabase
+      .from("states")
+      .select("id, name")
+      .order("name", { ascending: true })
+      .then(({ data, error }) => {
+        setMobileLoadingStates(false);
+        if (!error && data) {
+          setMobileStatesList(data);
+          mobileLocationHierarchyCacheRef.current.set(cacheKey, data);
+        }
+      });
+  }, [modalVisible]);
+
+  // Progressive Location: Load Districts when stateName changes
+  useEffect(() => {
+    if (!modalVisible || !stateName.trim()) {
+      setMobileDistrictsList([]);
+      return;
+    }
+    const cleanState = stateName.trim().toLowerCase();
+    const cacheKey = `districts:${cleanState}`;
+    if (mobileLocationHierarchyCacheRef.current.has(cacheKey)) {
+      setMobileDistrictsList(mobileLocationHierarchyCacheRef.current.get(cacheKey) || []);
+      return;
+    }
+    setMobileLoadingDistricts(true);
+    const matchedState = mobileStatesList.find((s) => s.name.toLowerCase() === cleanState);
+    const query = matchedState
+      ? supabase.from("districts").select("id, state_id, name").eq("state_id", matchedState.id)
+      : supabase.from("districts").select("id, state_id, name, states!inner(name)").ilike("states.name", stateName.trim());
+
+    query.order("name", { ascending: true }).then(({ data, error }) => {
+      setMobileLoadingDistricts(false);
+      if (!error && data) {
+        const mapped = data.map((d: any) => ({ id: d.id, name: d.name }));
+        setMobileDistrictsList(mapped);
+        mobileLocationHierarchyCacheRef.current.set(cacheKey, mapped);
+      }
+    });
+  }, [modalVisible, stateName, mobileStatesList]);
+
+  // Progressive Location: Load Cities when district changes
+  useEffect(() => {
+    if (!modalVisible || !district.trim()) {
+      setMobileCitiesList([]);
+      return;
+    }
+    const cleanDist = district.trim().toLowerCase();
+    const cacheKey = `cities:${cleanDist}`;
+    if (mobileLocationHierarchyCacheRef.current.has(cacheKey)) {
+      setMobileCitiesList(mobileLocationHierarchyCacheRef.current.get(cacheKey) || []);
+      return;
+    }
+    setMobileLoadingCities(true);
+    const matchedDist = mobileDistrictsList.find((d) => d.name.toLowerCase() === cleanDist);
+    const query = matchedDist
+      ? supabase.from("cities").select("id, district_id, name").eq("district_id", matchedDist.id)
+      : supabase.from("cities").select("id, district_id, name, districts!inner(name)").ilike("districts.name", district.trim());
+
+    query.order("name", { ascending: true }).then(({ data, error }) => {
+      setMobileLoadingCities(false);
+      if (!error && data) {
+        const mapped = data.map((c: any) => ({ id: c.id, name: c.name }));
+        setMobileCitiesList(mapped);
+        mobileLocationHierarchyCacheRef.current.set(cacheKey, mapped);
+      }
+    });
+  }, [modalVisible, district, mobileDistrictsList]);
+
+  const [kpis, setKpis] = useState<{
+    total: number;
+    active: number;
+    inactive: number;
+    cities: number;
+    locationsCovered: number;
+  }>({
+    total: INITIAL_CLIENTS.length,
+    active: INITIAL_CLIENTS.filter((c) => c.status === 'active').length,
+    inactive: INITIAL_CLIENTS.filter((c) => c.status === 'inactive').length,
+    cities: 3,
+    locationsCovered: 3,
+  });
+
+  // 350ms Search debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const isSearching = search.trim() !== debouncedSearch.trim() && search.trim() !== '';
+
+  const getMobileCacheKey = useCallback(
+    (status: StatusFilter, query: string, sortOption: ClientSortOptionType, pageNum: number, sizeNum: number = 10) =>
+      `status=${status}&search=${(query || '').trim().toLowerCase()}&sort=${sortOption}&page=${pageNum}&pageSize=${sizeNum}`,
+    []
+  );
+
+  const fetchKPIs = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.rpc('get_clients_directory_summary');
+      if (!error && data) {
+        setKpis({
+          total: Number(data.total) || 0,
+          active: Number(data.active) || 0,
+          inactive: Number(data.inactive) || 0,
+          cities: Number(data.cities) || 0,
+          locationsCovered: Number(data.locationsCovered ?? data.cities) || 0,
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to fetch client directory KPI summary on mobile:', err);
+    }
+  }, []);
+
+  const fetchClients = useCallback(
+    async (
+      searchQuery: string,
+      statusFilter: StatusFilter,
+      sortOption: ClientSortOptionType,
+      pageNum: number,
+      sizeNum: number = pageSize
+    ) => {
+      const cacheKey = getMobileCacheKey(statusFilter, searchQuery, sortOption, pageNum, sizeNum);
+
+      // 1. Check in-memory cache (60s TTL) -> 0ms cache hit
+      const cached = mobileQueryCacheRef.current.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < 60000) {
+        setClients(cached.clients);
+        setTotalCount(cached.total);
+        setIsLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      // 2. C9 Detection: If clicking Active and existing list query already has status=active
+      if (statusFilter === 'active' && !searchQuery) {
+        const allKey = getMobileCacheKey('all', '', sortOption, 1, sizeNum);
+        const cachedAll = mobileQueryCacheRef.current.get(allKey);
+        if (cachedAll && kpis.total === kpis.active) {
+          mobileQueryCacheRef.current.set(cacheKey, {
+            clients: cachedAll.clients,
+            total: kpis.active,
+            timestamp: Date.now(),
+          });
+          setClients(cachedAll.clients);
+          setTotalCount(kpis.active);
+          setIsLoading(false);
+          setRefreshing(false);
+          return;
+        }
+      }
+
+      // 3. C9 Detection: If clicking Inactive and kpis.inactive === 0 (with no search)
+      if (statusFilter === 'inactive' && kpis.inactive === 0 && !searchQuery) {
+        mobileQueryCacheRef.current.set(cacheKey, {
+          clients: [],
+          total: 0,
+          timestamp: Date.now(),
+        });
+        setClients([]);
+        setTotalCount(0);
+        setIsLoading(false);
+        setRefreshing(false);
+        return;
+      }
+
+      const seq = ++querySeqRef.current;
+      try {
+        setIsLoading(true);
+        // C10 Lean projection: strictly returns CODE, COMPANY & TAX, CONTACT PERSON, PHONE, SITE LOCATION, STATUS
+        // Absolutely zero relations (machines, logs, assignments, audits)
+        const CLIENT_PROJECTION =
+          'id, code, company_name, contact_person, phone, gstin, pan_number, street, city, district, state, pincode, is_billing_address_different, status, deleted_at';
+
+        let dbQuery = supabase
+          .from('clients')
+          .select(CLIENT_PROJECTION, { count: 'exact' });
+
+        // Status filter
+        if (statusFilter === 'active') {
+          dbQuery = dbQuery.eq('status', 'active').is('deleted_at', null);
+        } else if (statusFilter === 'inactive') {
+          dbQuery = dbQuery.or('status.eq.inactive,deleted_at.not.is.null');
+        }
+
+        // Server-side full-text search across all 8 indexed dimensions
+        const s = (searchQuery || '').trim().replace(/[,()"\\]/g, '');
+        if (s) {
+          dbQuery = dbQuery.or(
+            `company_name.ilike.%${s}%,code.ilike.%${s}%,gstin.ilike.%${s}%,pan_number.ilike.%${s}%,contact_person.ilike.%${s}%,phone.ilike.%${s}%,city.ilike.%${s}%,district.ilike.%${s}%,state.ilike.%${s}%`
+          );
+        }
+
+        const from = (pageNum - 1) * sizeNum;
+        const to = from + sizeNum - 1;
+
+        let orderCol = 'company_name';
+        let ascending = true;
+
+        if (sortOption === 'company_name_desc') {
+          orderCol = 'company_name';
+          ascending = false;
+        } else if (sortOption === 'code_asc') {
+          orderCol = 'code';
+          ascending = true;
+        } else if (sortOption === 'code_desc') {
+          orderCol = 'code';
+          ascending = false;
+        } else if (sortOption === 'created_at_desc') {
+          orderCol = 'created_at';
+          ascending = false;
+        } else if (sortOption === 'created_at_asc') {
+          orderCol = 'created_at';
+          ascending = true;
+        }
+
+        dbQuery = dbQuery.order(orderCol, { ascending }).range(from, to);
+
+        const { data, count, error } = await dbQuery;
+
+        // Discard stale responses if newer query fired
+        if (seq !== querySeqRef.current) return;
+
+        if (error) throw error;
+        if (data && data.length > 0) {
+          const clientData = data as unknown as ClientItem[];
+          const finalCount = count ?? data.length;
+          mobileQueryCacheRef.current.set(cacheKey, {
+            clients: clientData,
+            total: finalCount,
+            timestamp: Date.now(),
+          });
+          setClients(clientData);
+          setTotalCount(finalCount);
+        } else if (count === 0 || !data || data.length === 0) {
+          mobileQueryCacheRef.current.set(cacheKey, {
+            clients: [],
+            total: 0,
+            timestamp: Date.now(),
+          });
+          setClients([]);
+          setTotalCount(0);
+        }
+      } catch (err) {
+        if (seq !== querySeqRef.current) return;
+        console.warn('Clients server query error, falling back to mock:', err);
+        setClients(INITIAL_CLIENTS);
+        setTotalCount(INITIAL_CLIENTS.length);
+      } finally {
+        if (seq === querySeqRef.current) {
+          setIsLoading(false);
+          setRefreshing(false);
+        }
+      }
+    },
+    [getMobileCacheKey, pageSize, kpis.total, kpis.active, kpis.inactive]
+  );
+
+  useEffect(() => {
+    fetchKPIs();
+  }, [fetchKPIs]);
+
+  useEffect(() => {
+    fetchClients(debouncedSearch, activeFilter, sortBy, page, pageSize);
+  }, [debouncedSearch, activeFilter, sortBy, page, pageSize, fetchClients]);
+
   const onRefresh = () => {
+    mobileQueryCacheRef.current.clear();
     setRefreshing(true);
-    fetchClients();
+    fetchKPIs();
+    fetchClients(debouncedSearch, activeFilter, sortBy, page, pageSize);
   };
 
   const handleSearchChange = (text: string) => {
@@ -159,34 +474,14 @@ export default function ClientsScreen() {
   };
 
   const handleFilterChange = (filter: StatusFilter) => {
+    if (filter === activeFilter) return;
     setActiveFilter(filter);
     setPage(1);
   };
 
-  const filteredClients = clients.filter((c) => {
-    const q = search.toLowerCase().trim();
-    const matchesSearch =
-      !q ||
-      c.company_name.toLowerCase().includes(q) ||
-      c.code.toLowerCase().includes(q) ||
-      (c.contact_person && c.contact_person.toLowerCase().includes(q)) ||
-      (c.phone && c.phone.includes(q)) ||
-      (c.gstin && c.gstin.toLowerCase().includes(q)) ||
-      (c.pan_number && c.pan_number.toLowerCase().includes(q)) ||
-      (c.address && c.address.toLowerCase().includes(q)) ||
-      (c.city && c.city.toLowerCase().includes(q)) ||
-      (c.district && c.district.toLowerCase().includes(q)) ||
-      (c.state && c.state.toLowerCase().includes(q)) ||
-      (c.billing_address && c.billing_address.toLowerCase().includes(q)) ||
-      (c.billing_city && c.billing_city.toLowerCase().includes(q));
-
-    const matchesStatus = activeFilter === 'all' || c.status === activeFilter;
-    return matchesSearch && matchesStatus;
-  });
-
-  const totalFiltered = filteredClients.length;
-  const totalPages = Math.ceil(totalFiltered / pageSize);
-  const paginatedClients = filteredClients.slice((page - 1) * pageSize, page * pageSize);
+  const totalFiltered = totalCount;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+  const paginatedClients = clients;
 
   const handleOpenAdd = () => {
     setEditingClient(null);
@@ -300,6 +595,7 @@ export default function ClientsScreen() {
       };
       setClients([newClient, ...clients]);
     }
+    mobileQueryCacheRef.current.clear();
     setModalVisible(false);
   };
 
@@ -313,6 +609,7 @@ export default function ClientsScreen() {
           text: 'Soft Delete',
           style: 'destructive',
           onPress: () => {
+            mobileQueryCacheRef.current.clear();
             setClients((prev) =>
               prev.map((c) => (c.id === client.id ? { ...c, status: 'inactive', deleted_at: new Date().toISOString() } : c))
             );
@@ -321,6 +618,169 @@ export default function ClientsScreen() {
       ]
     );
   };
+
+  // C11 Client Detail Handlers
+  const handleOpenDetail = useCallback((client: ClientItem) => {
+    setSelectedDetailClient(client);
+    setMobileActiveTab(null);
+    setMobileLocationExpanded(false);
+    setMobileLocationData(null);
+    setMobileMachines([]);
+    setMobileLogs([]);
+    setMobileAssignments([]);
+    setMobileHistory([]);
+    setMobileAudits([]);
+    setMobileTabLoading(null);
+    setDetailModalVisible(true);
+  }, []);
+
+  const handleToggleMobileLocation = useCallback(async () => {
+    if (!selectedDetailClient?.id) return;
+    const next = !mobileLocationExpanded;
+    setMobileLocationExpanded(next);
+
+    if (next && !mobileLocationData) {
+      const cacheKey = `${selectedDetailClient.id}:location`;
+      const cached = mobileDetailCacheRef.current.get(cacheKey);
+      if (cached) {
+        setMobileLocationData(cached);
+        return;
+      }
+      try {
+        setMobileLocationLoading(true);
+        const { data } = await supabase
+          .from('clients')
+          .select('street, city, district, state, pincode, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode')
+          .eq('id', selectedDetailClient.id)
+          .single();
+        if (data) {
+          const street = (data.street || '').trim();
+          const site = [street, data.city, data.district, data.state, data.pincode].filter(Boolean).join(', ');
+          const billing = data.is_billing_address_different
+            ? [data.billing_address, data.billing_city, data.billing_district, data.billing_state, data.billing_pincode].filter(Boolean).join(', ')
+            : site;
+          const loc = {
+            site_address: site || '—',
+            billing_address: billing || 'Same as site location',
+            is_different: !!data.is_billing_address_different,
+          };
+          setMobileLocationData(loc);
+          mobileDetailCacheRef.current.set(cacheKey, loc);
+        }
+      } catch (e) {
+        console.warn('Failed to fetch mobile client location on demand:', e);
+      } finally {
+        setMobileLocationLoading(false);
+      }
+    }
+  }, [selectedDetailClient?.id, mobileLocationExpanded, mobileLocationData]);
+
+  const handleMobileTabChange = useCallback(
+    async (tab: 'machines' | 'logs' | 'assignments' | 'history' | 'audit') => {
+      setMobileActiveTab(tab);
+      if (!selectedDetailClient?.id) return;
+
+      const clientId = selectedDetailClient.id;
+      const cacheKey = `${clientId}:${tab}`;
+      const cached = mobileDetailCacheRef.current.get(cacheKey);
+      if (cached) {
+        if (tab === 'machines') setMobileMachines(cached);
+        if (tab === 'logs') setMobileLogs(cached);
+        if (tab === 'assignments') setMobileAssignments(cached);
+        if (tab === 'history') setMobileHistory(cached);
+        if (tab === 'audit') setMobileAudits(cached);
+        return;
+      }
+
+      setMobileTabLoading(tab);
+      try {
+        if (tab === 'machines') {
+          const { data } = await supabase
+            .from('machines')
+            .select('id, machine_id, model, status, health_status, serial_number')
+            .eq('client_id', clientId)
+            .order('machine_id', { ascending: true });
+          const res = data || [];
+          setMobileMachines(res);
+          mobileDetailCacheRef.current.set(cacheKey, res);
+        } else if (tab === 'logs') {
+          const { data } = await supabase
+            .from('machine_hour_logs')
+            .select('id, log_date, start_meter, end_meter, running_hours, shift, is_breakdown, machines!inner(machine_id, model), users!operator_id(full_name)')
+            .eq('client_id', clientId)
+            .order('log_date', { ascending: false })
+            .limit(20);
+          const res = (data || []).map((l: any) => ({
+            id: l.id,
+            log_date: l.log_date,
+            running_hours: l.running_hours,
+            start_meter: l.start_meter,
+            end_meter: l.end_meter,
+            is_breakdown: !!l.is_breakdown,
+            machine_code: Array.isArray(l.machines) ? l.machines[0]?.machine_id : l.machines?.machine_id || '—',
+            operator_name: Array.isArray(l.users) ? l.users[0]?.full_name : l.users?.full_name || '—',
+          }));
+          setMobileLogs(res);
+          mobileDetailCacheRef.current.set(cacheKey, res);
+        } else if (tab === 'assignments') {
+          const { data } = await supabase
+            .from('operator_machine_assignments')
+            .select('id, shift_start_time, shift_end_time, is_active, machines!inner(machine_id, model, client_id), users!operator_id(full_name, phone)')
+            .eq('machines.client_id', clientId)
+            .order('is_active', { ascending: false });
+          const res = (data || []).map((a: any) => ({
+            id: a.id,
+            shift: `${(a.shift_start_time || '').slice(0, 5)} - ${(a.shift_end_time || '').slice(0, 5)}`,
+            is_active: !!a.is_active,
+            machine_code: Array.isArray(a.machines) ? a.machines[0]?.machine_id : a.machines?.machine_id || '—',
+            operator_name: Array.isArray(a.users) ? a.users[0]?.full_name : a.users?.full_name || '—',
+            operator_phone: Array.isArray(a.users) ? a.users[0]?.phone : a.users?.phone || '',
+          }));
+          setMobileAssignments(res);
+          mobileDetailCacheRef.current.set(cacheKey, res);
+        } else if (tab === 'history') {
+          const [cRes, mRes] = await Promise.all([
+            supabase.from('clients').select('created_at, code').eq('id', clientId).single(),
+            supabase.from('machines').select('machine_id, created_at').eq('client_id', clientId),
+          ]);
+          const events: Array<{ id: string; title: string; desc: string; date: string }> = [];
+          if (cRes.data?.created_at) {
+            events.push({
+              id: 'c-created',
+              title: 'Account Registered',
+              desc: `Client created under code ${cRes.data.code}`,
+              date: cRes.data.created_at,
+            });
+          }
+          if (mRes.data && mRes.data.length > 0) {
+            events.push({
+              id: 'm-deployed',
+              title: 'Fleet Deployed',
+              desc: `${mRes.data.length} equipment units allocated to account`,
+              date: mRes.data[0]?.created_at || new Date().toISOString(),
+            });
+          }
+          setMobileHistory(events);
+          mobileDetailCacheRef.current.set(cacheKey, events);
+        } else if (tab === 'audit') {
+          const { data } = await supabase
+            .from('audit_logs')
+            .select('id, action, actor_name, severity, created_at')
+            .or(`entity_id.eq.${clientId},details->>clientId.eq.${clientId}`)
+            .order('created_at', { ascending: false })
+            .limit(20);
+          const res = data || [];
+          setMobileAudits(res);
+          mobileDetailCacheRef.current.set(cacheKey, res);
+        }
+      } catch (e) {
+        console.warn('Failed to load mobile client tab data:', e);
+      } finally {
+        setMobileTabLoading(null);
+      }
+    },
+    [selectedDetailClient?.id]
+  );
 
   const headerActions = useMemo<HeaderActionItem[]>(() => {
     const list: HeaderActionItem[] = [];
@@ -350,7 +810,7 @@ export default function ClientsScreen() {
         search={{
           value: search,
           onChangeText: handleSearchChange,
-          placeholder: 'Search clients, GST, PAN, city...',
+          placeholder: 'Search by company, code, GST, PAN, city, state...',
           onClear: () => handleSearchChange(''),
           isSearching: isSearching,
         }}
@@ -359,70 +819,186 @@ export default function ClientsScreen() {
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0070f3" />}
       >
-        {/* KPI Summary Cards */}
-        <View style={styles.kpiRow}>
-          <Card style={styles.kpiCard}>
-            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Total Clients</Text>
-            <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>{clients.length}</Text>
-          </Card>
-          <Card style={styles.kpiCard}>
-            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Active</Text>
-            <Text style={[styles.kpiValue, { color: theme.colors.success }]}>
-              {clients.filter((c) => c.status === 'active').length}
-            </Text>
-          </Card>
-        </View>
+        {/* Interactive 4-Card KPI Metric Grid */}
+        <View style={styles.kpiGrid}>
+          {/* Total Accounts Card */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => handleFilterChange('all')}
+            style={[
+              styles.kpiCard,
+              {
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor:
+                  activeFilter === 'all'
+                    ? theme.colors.ink
+                    : theme.colors.hairline,
+              },
+            ]}
+          >
+            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>TOTAL ACCOUNTS</Text>
+            <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>{kpis.total}</Text>
+          </TouchableOpacity>
 
-        {/* Search & Add CTA */}
-        <View style={styles.actionRow}>
-          <View style={styles.searchContainer}>
-            <Input
-              value={search}
-              onChangeText={handleSearchChange}
-              placeholder="Search clients, GST, PAN, city..."
-              leftIcon={
-                isSearching ? (
-                  <ActivityIndicator size="small" color={theme.colors.primary} />
-                ) : (
-                  <Search size={16} color={theme.colors.mute} />
-                )
-              }
-            />
-          </View>
-          <TouchableOpacity style={[styles.addBtn, { backgroundColor: theme.colors.primary }]} onPress={handleOpenAdd}>
-            <Plus size={18} color="#ffffff" />
+          {/* Active Accounts Card */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => handleFilterChange(activeFilter === 'active' ? 'all' : 'active')}
+            style={[
+              styles.kpiCard,
+              {
+                backgroundColor:
+                  activeFilter === 'active'
+                    ? isDark ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5'
+                    : theme.colors.canvasElevated,
+                borderColor: activeFilter === 'active' ? '#10b981' : theme.colors.hairline,
+              },
+            ]}
+          >
+            <Text style={[styles.kpiLabel, { color: '#10b981' }]}>ACTIVE ACCOUNTS</Text>
+            <Text style={[styles.kpiValue, { color: '#059669' }]}>{kpis.active}</Text>
+          </TouchableOpacity>
+
+          {/* Inactive Accounts Card */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => handleFilterChange(activeFilter === 'inactive' ? 'all' : 'inactive')}
+            style={[
+              styles.kpiCard,
+              {
+                backgroundColor:
+                  activeFilter === 'inactive'
+                    ? isDark ? 'rgba(245, 158, 11, 0.15)' : '#fffbeb'
+                    : theme.colors.canvasElevated,
+                borderColor: activeFilter === 'inactive' ? '#f59e0b' : theme.colors.hairline,
+              },
+            ]}
+          >
+            <Text style={[styles.kpiLabel, { color: '#f59e0b' }]}>INACTIVE / CHURN</Text>
+            <Text style={[styles.kpiValue, { color: '#d97706' }]}>{kpis.inactive}</Text>
+          </TouchableOpacity>
+
+          {/* Locations Covered Card */}
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => handleFilterChange('all')}
+            style={[
+              styles.kpiCard,
+              {
+                backgroundColor: theme.colors.canvasElevated,
+                borderColor: theme.colors.hairline,
+              },
+            ]}
+          >
+            <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>ACTIVE CITIES</Text>
+            <Text style={[styles.kpiValue, { color: theme.colors.primary }]}>
+              {kpis.locationsCovered || kpis.cities}
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Filter Strip */}
-        <View style={styles.filterStrip}>
-          {(['all', 'active', 'inactive'] as StatusFilter[]).map((filter) => {
-            const isActive = activeFilter === filter;
-            return (
-              <TouchableOpacity
-                key={filter}
-                style={[
-                  styles.filterChip,
-                  {
-                    backgroundColor: isActive ? theme.colors.primary : theme.colors.canvasElevated,
-                    borderColor: theme.colors.hairline,
-                  },
-                ]}
-                onPress={() => handleFilterChange(filter)}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    { color: isActive ? '#ffffff' : theme.colors.ink },
-                  ]}
-                >
-                  {filter.toUpperCase()}
-                </Text>
+        {/* Search & Filter Toolbar Card */}
+        <View
+          style={[
+            styles.filterToolbar,
+            {
+              backgroundColor: theme.colors.canvasElevated,
+              borderColor: theme.colors.hairline,
+            },
+          ]}
+        >
+          {/* Top Search & Add CTA Row */}
+          <View style={styles.actionRow}>
+            <View style={styles.searchContainer}>
+              <Input
+                value={search}
+                onChangeText={handleSearchChange}
+                placeholder="Search company, code, GST, PAN, city..."
+                leftIcon={
+                  isSearching ? (
+                    <ActivityIndicator size="small" color={theme.colors.primary} />
+                  ) : (
+                    <Search size={16} color={theme.colors.mute} />
+                  )
+                }
+              />
+            </View>
+            <TouchableOpacity
+              style={[styles.addBtn, { backgroundColor: theme.colors.primary }]}
+              onPress={handleOpenAdd}
+              accessibilityLabel="Add client"
+            >
+              <Plus size={18} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
+
+          {/* Filter & Sort Selectors Row */}
+          <View style={styles.filterSelectorsRow}>
+            <View style={styles.selectorCol}>
+              <DropdownFilterSelector
+                label="Status"
+                value={activeFilter}
+                options={CLIENT_STATUS_FILTER_OPTIONS}
+                onChange={(val) => handleFilterChange(val as StatusFilter)}
+                minMenuWidth={160}
+              />
+            </View>
+            <View style={styles.selectorCol}>
+              <DropdownFilterSelector
+                label="Sort"
+                value={sortBy}
+                options={CLIENT_SORT_OPTIONS}
+                onChange={(val) => {
+                  setSortBy(val as ClientSortOptionType);
+                  setPage(1);
+                }}
+                align="right"
+                minMenuWidth={200}
+              />
+            </View>
+          </View>
+
+          {/* Active Filter Chips */}
+          {activeFilterCount > 0 && (
+            <View style={[styles.activeChipsRow, { borderTopColor: theme.colors.hairline }]}>
+              <Text style={[styles.activeChipsLabel, { color: theme.colors.mute }]}>Active:</Text>
+              {debouncedSearch.trim() !== '' && (
+                <View style={[styles.activeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                  <Text style={[styles.activeChipText, { color: theme.colors.ink }]} numberOfLines={1}>
+                    "{debouncedSearch}"
+                  </Text>
+                  <TouchableOpacity onPress={() => handleSearchChange('')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <X size={12} color={theme.colors.mute} />
+                  </TouchableOpacity>
+                </View>
+              )}
+              {activeFilter !== 'all' && (
+                <View style={[styles.activeChip, { backgroundColor: activeFilter === 'active' ? '#ecfdf5' : '#fffbeb', borderColor: activeFilter === 'active' ? '#a7f3d0' : '#fde68a' }]}>
+                  <Text style={[styles.activeChipText, { color: activeFilter === 'active' ? '#059669' : '#d97706' }]}>
+                    Status: {activeFilter === 'active' ? 'Active' : 'Inactive'}
+                  </Text>
+                  <TouchableOpacity onPress={() => handleFilterChange('all')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <X size={12} color={activeFilter === 'active' ? '#059669' : '#d97706'} />
+                  </TouchableOpacity>
+                </View>
+              )}
+              {sortBy !== 'company_name_asc' && (
+                <View style={[styles.activeChip, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
+                  <Text style={[styles.activeChipText, { color: theme.colors.ink }]}>
+                    Sort: {CLIENT_SORT_OPTIONS.find((s) => s.id === sortBy)?.label || sortBy}
+                  </Text>
+                  <TouchableOpacity onPress={() => setSortBy('company_name_asc')} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <X size={12} color={theme.colors.mute} />
+                  </TouchableOpacity>
+                </View>
+              )}
+              <TouchableOpacity onPress={handleResetAllFilters} style={styles.clearAllBtn}>
+                <Text style={[styles.clearAllText, { color: theme.colors.link }]}>Clear All</Text>
               </TouchableOpacity>
-            );
-          })}
+            </View>
+          )}
         </View>
 
         {/* Client Cards List */}
@@ -436,72 +1012,15 @@ export default function ClientsScreen() {
             </Card>
           ) : (
             paginatedClients.map((item) => (
-              <Card key={item.id} style={styles.clientCard}>
-                <View style={styles.cardHeader}>
-                  <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={[styles.codeText, { color: theme.colors.primary }]}>{item.code}</Text>
-                    <Text style={[styles.clientName, { color: theme.colors.ink }]}>{item.company_name}</Text>
-                    {(item.gstin || item.pan_number) && (
-                      <View style={styles.tagRow}>
-                        {item.gstin ? (
-                          <View style={[styles.taxBadge, { backgroundColor: '#f3e8ff', borderColor: '#d8b4fe' }]}>
-                            <Text style={[styles.taxBadgeText, { color: '#7e22ce' }]}>GST: {item.gstin}</Text>
-                          </View>
-                        ) : null}
-                        {item.pan_number ? (
-                          <View style={[styles.taxBadge, { backgroundColor: '#e0f2fe', borderColor: '#bae6fd' }]}>
-                            <Text style={[styles.taxBadgeText, { color: '#0369a1' }]}>PAN: {item.pan_number}</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                    )}
-                  </View>
-                  <Badge
-                    status={item.deleted_at ? 'inactive' : item.status}
-                    customLabel={item.deleted_at ? 'SOFT DELETED' : item.status.toUpperCase()}
-                  />
-                </View>
-
-                <View style={[styles.cardDetails, { borderTopColor: theme.colors.hairline }]}>
-                  {item.contact_person && (
-                    <Text style={[styles.detailRow, { color: theme.colors.ink }]}>
-                      Person: <Text style={{ fontWeight: '600' }}>{item.contact_person}</Text>
-                    </Text>
-                  )}
-                  {item.phone && (
-                    <Text style={[styles.detailRow, { color: theme.colors.ink }]}>
-                      Phone: <Text style={{ fontFamily: 'monospace' }}>{item.phone}</Text>
-                    </Text>
-                  )}
-                  <Text style={[styles.detailRow, { color: theme.colors.ink }]}>
-                    Location: <Text style={{ fontWeight: '600' }}>{[item.street, item.city, item.district, item.state, item.pincode].filter(Boolean).join(', ') || item.address || '—'}</Text>
-                  </Text>
-                  {item.is_billing_address_different && (
-                    <Text style={[styles.detailRow, { color: '#d97706', fontWeight: '600' }]}>
-                      Billing: {[item.billing_city, item.billing_state].filter(Boolean).join(', ') || 'Separate Address'}
-                    </Text>
-                  )}
-                </View>
-
-                {/* Touch Actions */}
-                <View style={[styles.cardActions, { borderTopColor: theme.colors.hairline }]}>
-                  <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: theme.colors.canvas }]}
-                    onPress={() => handleOpenEdit(item)}
-                  >
-                    <Edit2 size={14} color={theme.colors.primary} />
-                    <Text style={[styles.actionBtnText, { color: theme.colors.primary }]}>Edit</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: '#fef2f2' }]}
-                    onPress={() => handleSoftDelete(item)}
-                  >
-                    <Trash2 size={14} color="#dc2626" />
-                    <Text style={[styles.actionBtnText, { color: '#dc2626' }]}>Soft Delete</Text>
-                  </TouchableOpacity>
-                </View>
-              </Card>
+              <MobileClientCard
+                key={item.id}
+                client={item}
+                canManageClients={true}
+                searchTerm={debouncedSearch}
+                onViewDetails={handleOpenDetail}
+                onEdit={handleOpenEdit}
+                onDelete={handleSoftDelete}
+              />
             ))
           )}
         </View>
@@ -536,6 +1055,40 @@ export default function ClientsScreen() {
             >
               <Text style={[styles.pageBtnText, { color: theme.colors.ink }]}>Next</Text>
             </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Server-Side Page Size Selector (10, 25, 50, 100) */}
+        {totalFiltered > 0 && (
+          <View style={styles.pageSizeRow}>
+            <Text style={[styles.pageSizeLabel, { color: theme.colors.mute }]}>Rows per page:</Text>
+            {([10, 25, 50, 100] as const).map((opt) => (
+              <TouchableOpacity
+                key={opt}
+                style={[
+                  styles.pageSizeChip,
+                  {
+                    backgroundColor: pageSize === opt ? theme.colors.primary : theme.colors.canvasElevated,
+                    borderColor: theme.colors.hairline,
+                  },
+                ]}
+                onPress={() => {
+                  if (pageSize !== opt) {
+                    setPageSize(opt);
+                    setPage(1);
+                  }
+                }}
+              >
+                <Text
+                  style={[
+                    styles.pageSizeChipText,
+                    { color: pageSize === opt ? '#ffffff' : theme.colors.ink },
+                  ]}
+                >
+                  {opt}
+                </Text>
+              </TouchableOpacity>
+            ))}
           </View>
         )}
       </ScrollView>
@@ -619,16 +1172,133 @@ export default function ClientsScreen() {
               </View>
 
               <View style={styles.formSection}>
-                <Text style={[styles.sectionTitle, { color: theme.colors.mute }]}>Site Address</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.mute, marginBottom: 0 }]}>Site Location</Text>
+                  <Text style={{ fontSize: 10, color: theme.colors.mute, fontWeight: "600" }}>
+                    {stateName || "State"} → {district || "District"} → {city || "City"}
+                  </Text>
+                </View>
+
+                {/* Progressive State Quick Selector Strip */}
+                {mobileStatesList.length > 0 && (
+                  <View style={{ marginBottom: 8 }}>
+                    <Text style={{ fontSize: 10, color: theme.colors.mute, marginBottom: 4 }}>Select State:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {mobileStatesList.map((s) => (
+                        <TouchableOpacity
+                          key={s.id}
+                          onPress={() => {
+                            setStateName(s.name);
+                            setDistrict("");
+                            setCity("");
+                          }}
+                          style={{
+                            minHeight: 44,
+                            paddingHorizontal: 12,
+                            borderRadius: radiusNumeric.sm,
+                            borderWidth: 1,
+                            borderColor: stateName.toLowerCase() === s.name.toLowerCase() ? theme.colors.primary : theme.colors.hairline,
+                            backgroundColor: stateName.toLowerCase() === s.name.toLowerCase() ? (isDark ? "#0284c7" : "#0ea5e9") : theme.colors.canvas,
+                            justifyContent: "center",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: "600",
+                              color: stateName.toLowerCase() === s.name.toLowerCase() ? "#ffffff" : theme.colors.ink,
+                            }}
+                          >
+                            {s.name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Progressive District Quick Selector Strip */}
+                {mobileDistrictsList.length > 0 && (
+                  <View style={{ marginBottom: 8 }}>
+                    <Text style={{ fontSize: 10, color: theme.colors.mute, marginBottom: 4 }}>Select District ({stateName}):</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {mobileDistrictsList.map((d) => (
+                        <TouchableOpacity
+                          key={d.id}
+                          onPress={() => {
+                            setDistrict(d.name);
+                            setCity("");
+                          }}
+                          style={{
+                            minHeight: 44,
+                            paddingHorizontal: 12,
+                            borderRadius: radiusNumeric.sm,
+                            borderWidth: 1,
+                            borderColor: district.toLowerCase() === d.name.toLowerCase() ? theme.colors.primary : theme.colors.hairline,
+                            backgroundColor: district.toLowerCase() === d.name.toLowerCase() ? (isDark ? "#0284c7" : "#0ea5e9") : theme.colors.canvas,
+                            justifyContent: "center",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: "600",
+                              color: district.toLowerCase() === d.name.toLowerCase() ? "#ffffff" : theme.colors.ink,
+                            }}
+                          >
+                            {d.name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {/* Progressive City Quick Selector Strip */}
+                {mobileCitiesList.length > 0 && (
+                  <View style={{ marginBottom: 8 }}>
+                    <Text style={{ fontSize: 10, color: theme.colors.mute, marginBottom: 4 }}>Select City / Town ({district}):</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {mobileCitiesList.map((c) => (
+                        <TouchableOpacity
+                          key={c.id}
+                          onPress={() => setCity(c.name)}
+                          style={{
+                            minHeight: 44,
+                            paddingHorizontal: 12,
+                            borderRadius: radiusNumeric.sm,
+                            borderWidth: 1,
+                            borderColor: city.toLowerCase() === c.name.toLowerCase() ? theme.colors.primary : theme.colors.hairline,
+                            backgroundColor: city.toLowerCase() === c.name.toLowerCase() ? (isDark ? "#0284c7" : "#0ea5e9") : theme.colors.canvas,
+                            justifyContent: "center",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: "600",
+                              color: city.toLowerCase() === c.name.toLowerCase() ? "#ffffff" : theme.colors.ink,
+                            }}
+                          >
+                            {c.name}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
 
                 <View style={styles.formGroup}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Site Address *</Text>
+                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Street / Site Address *</Text>
                   <TextInput
                     value={address}
                     onChangeText={setAddress}
                     placeholder="e.g. Plot 42, Sector 18, Industrial Area"
                     placeholderTextColor={theme.colors.mute}
-                    style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                    style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
                   />
                 </View>
 
@@ -640,7 +1310,7 @@ export default function ClientsScreen() {
                       onChangeText={setCity}
                       placeholder="e.g. Pune"
                       placeholderTextColor={theme.colors.mute}
-                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
                     />
                   </View>
 
@@ -651,7 +1321,7 @@ export default function ClientsScreen() {
                       onChangeText={setDistrict}
                       placeholder="e.g. Pune"
                       placeholderTextColor={theme.colors.mute}
-                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
                     />
                   </View>
                 </View>
@@ -664,7 +1334,7 @@ export default function ClientsScreen() {
                       onChangeText={setStateName}
                       placeholder="e.g. Maharashtra"
                       placeholderTextColor={theme.colors.mute}
-                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
                     />
                   </View>
 
@@ -676,7 +1346,7 @@ export default function ClientsScreen() {
                       placeholder="411001"
                       placeholderTextColor={theme.colors.mute}
                       keyboardType="numeric"
-                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
                     />
                   </View>
                 </View>
@@ -768,6 +1438,365 @@ export default function ClientsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* C11 Client Detail Modal */}
+      <Modal visible={detailModalVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated, maxHeight: '92%' }]}>
+            {/* Header: Summary */}
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                  <Text style={[styles.codeText, { color: theme.colors.primary }]}>
+                    {selectedDetailClient?.code}
+                  </Text>
+                  {selectedDetailClient?.status && (
+                    <Badge
+                      status={selectedDetailClient.deleted_at ? 'inactive' : selectedDetailClient.status}
+                      customLabel={selectedDetailClient.deleted_at ? 'SOFT DELETED' : selectedDetailClient.status.toUpperCase()}
+                    />
+                  )}
+                </View>
+                <Text style={[styles.modalTitle, { color: theme.colors.ink }]} numberOfLines={1}>
+                  {selectedDetailClient?.company_name}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setDetailModalVisible(false)}
+                style={{ width: 44, height: 44, justifyContent: 'center', alignItems: 'center' }}
+              >
+                <X size={20} color={theme.colors.mute} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Scrollable Modal Body with Persistent Summary & Operational Tabs */}
+            <ScrollView style={{ maxHeight: 540 }} showsVerticalScrollIndicator={false}>
+              <View style={{ gap: 10, paddingBottom: 10 }}>
+                {/* 1. Primary Contact Card (Immediate / Summary) */}
+                <View style={[styles.detailSectionCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
+                  <Text style={[styles.detailCardTitle, { color: theme.colors.primary }]}>
+                    Primary Contact
+                  </Text>
+                  <View style={{ gap: 4, marginTop: 4 }}>
+                    <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>
+                      Person: <Text style={{ color: theme.colors.ink, fontWeight: '600' }}>{selectedDetailClient?.contact_person || '—'}</Text>
+                    </Text>
+                    {selectedDetailClient?.phone && (
+                      <TouchableOpacity
+                        onPress={() => Linking.openURL(`tel:${selectedDetailClient.phone}`)}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44 }}
+                      >
+                        <Phone size={12} color={theme.colors.primary} />
+                        <Text style={{ fontFamily: 'monospace', fontSize: 12, color: theme.colors.primary, fontWeight: '600' }}>
+                          {selectedDetailClient.phone}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+
+                {/* 2. Tax Identifiers Card (Immediate / Summary) */}
+                <View style={[styles.detailSectionCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
+                  <Text style={[styles.detailCardTitle, { color: '#7e22ce' }]}>
+                    Tax & Statutory Identifiers
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>GSTIN</Text>
+                      <Text style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: '700', color: theme.colors.ink }}>
+                        {selectedDetailClient?.gstin || 'Not Registered'}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>PAN</Text>
+                      <Text style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: '700', color: theme.colors.ink }}>
+                        {selectedDetailClient?.pan_number || '—'}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* 3. Location & Billing Card (On Demand) */}
+                <View style={[styles.detailSectionCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={[styles.detailCardTitle, { color: '#059669' }]}>
+                      Operational & Billing Addresses
+                    </Text>
+                    <TouchableOpacity
+                      onPress={handleToggleMobileLocation}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingHorizontal: 6 }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: theme.colors.primary }}>
+                        {mobileLocationExpanded ? 'Hide' : 'Load On Demand'}
+                      </Text>
+                      {mobileLocationExpanded ? <ChevronUp size={12} color={theme.colors.primary} /> : <ChevronDown size={12} color={theme.colors.primary} />}
+                    </TouchableOpacity>
+                  </View>
+
+                  {!mobileLocationExpanded ? (
+                    <Text style={{ fontSize: 11, color: theme.colors.mute, marginTop: 2 }}>
+                      {[selectedDetailClient?.street, selectedDetailClient?.city, selectedDetailClient?.state].filter(Boolean).join(', ') || '—'}
+                    </Text>
+                  ) : mobileLocationLoading ? (
+                    <View style={{ paddingVertical: 12, alignItems: 'center', gap: 4 }}>
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
+                      <Text style={{ fontSize: 10, color: theme.colors.mute }}>Fetching location details...</Text>
+                    </View>
+                  ) : (
+                    <View style={{ gap: 8, marginTop: 6, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingTop: 6 }}>
+                      <View>
+                        <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>Site Address:</Text>
+                        <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '500' }}>
+                          {mobileLocationData?.site_address || '—'}
+                        </Text>
+                      </View>
+                      <View>
+                        <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>Billing Address:</Text>
+                        <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '500' }}>
+                          {mobileLocationData?.billing_address || 'Same as site location'}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+
+                {/* 4. Horizontal Sub-Navigation Tab Strip (5 Operational Tabs) */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 6, paddingVertical: 4 }}
+                  style={{ maxHeight: 48 }}
+                >
+                  {(
+                    [
+                      { id: 'machines', label: 'Machines', icon: Truck, count: mobileMachines.length },
+                      { id: 'logs', label: 'Running Logs', icon: Clock, count: mobileLogs.length },
+                      { id: 'assignments', label: 'Assignments', icon: UserCheck, count: mobileAssignments.length },
+                      { id: 'history', label: 'History', icon: History, count: mobileHistory.length },
+                      { id: 'audit', label: 'Audit', icon: ShieldCheck, count: mobileAudits.length },
+                    ] as const
+                  ).map((tab) => {
+                    const isActive = mobileActiveTab === tab.id;
+                    const IconComponent = tab.icon;
+                    return (
+                      <TouchableOpacity
+                        key={tab.id}
+                        onPress={() => handleMobileTabChange(tab.id)}
+                        style={[
+                          styles.detailTabChip,
+                          {
+                            backgroundColor: isActive ? theme.colors.primary : theme.colors.canvas,
+                            borderColor: isActive ? theme.colors.primary : theme.colors.hairline,
+                            minHeight: 44,
+                          },
+                        ]}
+                      >
+                        <IconComponent size={12} color={isActive ? '#ffffff' : theme.colors.mute} />
+                        <Text
+                          style={[
+                            styles.detailTabChipText,
+                            { color: isActive ? '#ffffff' : theme.colors.ink },
+                          ]}
+                        >
+                          {tab.label} {tab.count > 0 ? `(${tab.count})` : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+
+                {/* 5. Operational Tab Content Area */}
+                {mobileActiveTab === null && (
+                  <View style={[styles.detailSectionCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas, alignItems: 'center', paddingVertical: 16 }]}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.ink }}>
+                      Operational Records (On Demand)
+                    </Text>
+                    <Text style={{ fontSize: 11, color: theme.colors.mute, textAlign: 'center', marginTop: 4, marginBottom: 10 }}>
+                      Select a tab above to load machines, logs, assignments, history, or audit logs on demand.
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
+                      <TouchableOpacity
+                        onPress={() => handleMobileTabChange('machines')}
+                        style={[styles.detailTabChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated, minHeight: 44 }]}
+                      >
+                        <Truck size={12} color={theme.colors.primary} />
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.ink }}>Machines</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleMobileTabChange('logs')}
+                        style={[styles.detailTabChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated, minHeight: 44 }]}
+                      >
+                        <Clock size={12} color="#059669" />
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.ink }}>Running Logs</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleMobileTabChange('assignments')}
+                        style={[styles.detailTabChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated, minHeight: 44 }]}
+                      >
+                        <UserCheck size={12} color="#7e22ce" />
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.ink }}>Assignments</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+
+                {/* TAB: MACHINES */}
+                {mobileActiveTab === 'machines' && (
+                  <View style={{ gap: 8 }}>
+                  {mobileTabLoading === 'machines' ? (
+                    <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
+                      <Text style={{ fontSize: 11, color: theme.colors.mute }}>Loading deployed machines...</Text>
+                    </View>
+                  ) : mobileMachines.length === 0 ? (
+                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 11, color: theme.colors.mute }}>
+                      No equipment assigned to this client.
+                    </Text>
+                  ) : (
+                    mobileMachines.map((m: any) => (
+                      <View key={m.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
+                        <View>
+                          <Text style={{ fontFamily: 'monospace', fontWeight: '800', color: theme.colors.primary, fontSize: 12 }}>
+                            {m.machine_id}
+                          </Text>
+                          <Text style={{ fontSize: 10, color: theme.colors.mute }}>{m.model}</Text>
+                        </View>
+                        <Badge status={m.status === 'rented' || m.status === 'active' ? 'active' : 'inactive'} customLabel={m.status.toUpperCase()} />
+                      </View>
+                    ))
+                  )}
+                </View>
+              )}
+
+              {/* TAB: LOGS */}
+              {mobileActiveTab === 'logs' && (
+                <View style={{ gap: 8 }}>
+                  {mobileTabLoading === 'logs' ? (
+                    <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
+                      <Text style={{ fontSize: 11, color: theme.colors.mute }}>Loading running logs...</Text>
+                    </View>
+                  ) : mobileLogs.length === 0 ? (
+                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 11, color: theme.colors.mute }}>
+                      No running logs recorded.
+                    </Text>
+                  ) : (
+                    mobileLogs.map((l: any) => (
+                      <View key={l.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
+                        <View>
+                          <Text style={{ fontFamily: 'monospace', fontWeight: '700', fontSize: 11, color: theme.colors.ink }}>
+                            {l.machine_code} • {l.log_date}
+                          </Text>
+                          <Text style={{ fontSize: 10, color: theme.colors.mute }}>Operator: {l.operator_name}</Text>
+                        </View>
+                        <Text style={{ fontFamily: 'monospace', fontWeight: '800', color: '#059669', fontSize: 12 }}>
+                          {l.running_hours} hrs
+                        </Text>
+                      </View>
+                    ))
+                  )}
+                </View>
+              )}
+
+              {/* TAB: ASSIGNMENTS */}
+              {mobileActiveTab === 'assignments' && (
+                <View style={{ gap: 8 }}>
+                  {mobileTabLoading === 'assignments' ? (
+                    <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
+                      <Text style={{ fontSize: 11, color: theme.colors.mute }}>Loading assignments...</Text>
+                    </View>
+                  ) : mobileAssignments.length === 0 ? (
+                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 11, color: theme.colors.mute }}>
+                      No operator assignments found.
+                    </Text>
+                  ) : (
+                    mobileAssignments.map((a: any) => (
+                      <View key={a.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
+                        <View>
+                          <Text style={{ fontWeight: '700', fontSize: 12, color: theme.colors.ink }}>{a.operator_name}</Text>
+                          <Text style={{ fontSize: 10, color: theme.colors.mute }}>{a.machine_code} ({a.shift})</Text>
+                        </View>
+                        <Badge status={a.is_active ? 'active' : 'inactive'} customLabel={a.is_active ? 'ACTIVE' : 'ENDED'} />
+                      </View>
+                    ))
+                  )}
+                </View>
+              )}
+
+              {/* TAB: HISTORY */}
+              {mobileActiveTab === 'history' && (
+                <View style={{ gap: 8 }}>
+                  {mobileTabLoading === 'history' ? (
+                    <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
+                      <Text style={{ fontSize: 11, color: theme.colors.mute }}>Loading history...</Text>
+                    </View>
+                  ) : mobileHistory.length === 0 ? (
+                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 11, color: theme.colors.mute }}>
+                      No timeline history events found.
+                    </Text>
+                  ) : (
+                    mobileHistory.map((h: any) => (
+                      <View key={h.id} style={[styles.detailSectionCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ fontWeight: '700', fontSize: 12, color: theme.colors.ink }}>{h.title}</Text>
+                          <Text style={{ fontSize: 9, color: theme.colors.mute }}>{new Date(h.date).toLocaleDateString()}</Text>
+                        </View>
+                        <Text style={{ fontSize: 11, color: theme.colors.mute, marginTop: 2 }}>{h.desc}</Text>
+                      </View>
+                    ))
+                  )}
+                </View>
+              )}
+
+              {/* TAB: AUDIT */}
+              {mobileActiveTab === 'audit' && (
+                <View style={{ gap: 8 }}>
+                  {mobileTabLoading === 'audit' ? (
+                    <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
+                      <ActivityIndicator size="small" color={theme.colors.primary} />
+                      <Text style={{ fontSize: 11, color: theme.colors.mute }}>Loading audit trail...</Text>
+                    </View>
+                  ) : mobileAudits.length === 0 ? (
+                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 11, color: theme.colors.mute }}>
+                      Zero audit entries logged.
+                    </Text>
+                  ) : (
+                    mobileAudits.map((a: any) => (
+                      <View key={a.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
+                        <View>
+                          <Text style={{ fontFamily: 'monospace', fontWeight: '700', fontSize: 11, color: theme.colors.primary }}>
+                            {a.action}
+                          </Text>
+                          <Text style={{ fontSize: 10, color: theme.colors.mute }}>Actor: {a.actor_name || 'System'}</Text>
+                        </View>
+                        <Text style={{ fontSize: 9, color: theme.colors.mute }}>{new Date(a.created_at).toLocaleDateString()}</Text>
+                      </View>
+                    ))
+                  )}
+                </View>
+              )}
+              </View>
+            </ScrollView>
+
+            {/* Modal Footer */}
+            <View style={styles.modalFooter}>
+              <Button label="Close" variant="outline" onPress={() => setDetailModalVisible(false)} />
+              {selectedDetailClient && (
+                <Button
+                  label="Edit Client"
+                  variant="primary"
+                  onPress={() => {
+                    setDetailModalVisible(false);
+                    handleOpenEdit(selectedDetailClient);
+                  }}
+                />
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -775,16 +1804,92 @@ export default function ClientsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scrollContent: { padding: spacingNumeric.md },
-  kpiRow: { flexDirection: 'row', gap: spacingNumeric.sm, marginBottom: spacingNumeric.md },
-  kpiCard: { flex: 1, padding: spacingNumeric.sm, borderRadius: radiusNumeric.md },
-  kpiLabel: { fontSize: 11, fontWeight: '500' },
-  kpiValue: { fontSize: 18, fontWeight: '800', marginTop: 2 },
-  actionRow: { flexDirection: 'row', gap: spacingNumeric.sm, marginBottom: spacingNumeric.sm },
+  kpiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: spacingNumeric.md,
+  },
+  kpiCard: {
+    flex: 1,
+    minWidth: '47%',
+    padding: spacingNumeric.md,
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  kpiLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  kpiValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  filterToolbar: {
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    padding: spacingNumeric.sm + 2,
+    gap: spacingNumeric.sm,
+    marginBottom: spacingNumeric.md,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  actionRow: { flexDirection: 'row', gap: spacingNumeric.sm },
   searchContainer: { flex: 1 },
   addBtn: { width: 44, height: 44, borderRadius: radiusNumeric.md, justifyContent: 'center', alignItems: 'center' },
-  filterStrip: { flexDirection: 'row', gap: spacingNumeric.xs, marginBottom: spacingNumeric.md },
-  filterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: radiusNumeric.full, borderWidth: 1 },
-  filterChipText: { fontSize: 10, fontWeight: '700' },
+  filterSelectorsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  selectorCol: {
+    flex: 1,
+  },
+  activeChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+  },
+  activeChipsLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginRight: 2,
+  },
+  activeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+  },
+  activeChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  clearAllBtn: {
+    paddingHorizontal: 4,
+    paddingVertical: 3,
+  },
+  clearAllText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
   listContainer: { gap: spacingNumeric.sm },
   emptyCard: { padding: spacingNumeric.lg, alignItems: 'center' },
   emptyText: { fontSize: 12, fontWeight: '600' },
@@ -819,4 +1924,14 @@ const styles = StyleSheet.create({
   pageBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6, borderWidth: 1 },
   pageBtnText: { fontSize: 12, fontWeight: '600' },
   pageIndicator: { fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  pageSizeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, marginBottom: 20 },
+  pageSizeLabel: { fontSize: 11, fontWeight: '600' },
+  pageSizeChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1, minHeight: 32, justifyContent: 'center', alignItems: 'center' },
+  pageSizeChipText: { fontSize: 11, fontWeight: '700' },
+  detailTabChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radiusNumeric.full, borderWidth: 1, minHeight: 44 },
+  detailTabChipText: { fontSize: 11, fontWeight: '700' },
+  detailSectionCard: { borderWidth: 1, borderRadius: radiusNumeric.sm, padding: 10 },
+  detailCardTitle: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  detailTextSmall: { fontSize: 10, fontWeight: '500' },
+  detailItemCard: { borderWidth: 1, borderRadius: radiusNumeric.sm, padding: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 44 },
 });

@@ -53,7 +53,7 @@ export const TRUSTED_DOMAINS: string[] = [
   "localhost",
   "10.0.2.2",
   "127.0.0.1",
-  "supabase.co",
+  "dhbbgfzbyatzvqafnsqp.supabase.co",
 ];
 
 /**
@@ -78,7 +78,9 @@ export function isAllowedUrl(url: string): boolean {
     // Check trusted domains or local network IP addresses
     return (
       TRUSTED_DOMAINS.some(
-        (domain) => hostname === domain || hostname.endsWith(`.${domain}`)
+        (domain) =>
+          hostname === domain ||
+          (domain !== "dhbbgfzbyatzvqafnsqp.supabase.co" && hostname.endsWith(`.${domain}`))
       ) ||
       /^192\.168\.\d+\.\d+$/.test(hostname) ||
       /^10\.\d+\.\d+\.\d+$/.test(hostname) ||

@@ -119,16 +119,6 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         roles: ['super_admin', 'admin', 'manager', 'supervisor', 'service_manager', 'operator'],
       },
       {
-        id: 'nav-operations-assignments',
-        title: 'Operator Machine Assignments',
-        subtitle: 'Manage 3-shift operator equipment rosters and capacity allocations',
-        category: 'Navigation',
-        icon: ClipboardList,
-        href: '/(app)/operations?tab=assignments',
-        keywords: ['assignments', 'shifts', 'roster', 'operator assignments'],
-        roles: ['super_admin', 'admin', 'manager', 'supervisor', 'service_manager'],
-      },
-      {
         id: 'nav-clients',
         title: 'Clients & Accounts Directory',
         subtitle: 'Registered customer organizations, sites, billing & assigned equipment',

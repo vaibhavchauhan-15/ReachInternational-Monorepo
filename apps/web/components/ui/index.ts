@@ -49,6 +49,7 @@ export { FilterToolbar, type FilterToolbarProps } from "./FilterToolbar";
 export { FilterDropdown, type FilterDropdownOption, type FilterDropdownProps } from "./FilterDropdown";
 export { SortControl, type SortControlProps } from "./SortControl";
 export { FilterChips, type FilterChipsProps, type FilterChipItem } from "./FilterChips";
+export { Highlight, highlightText, type HighlightProps } from "./Highlight";
 
 // 6. Tables & Data Display
 export {
@@ -60,6 +61,8 @@ export {
   TableCell,
   Pagination,
   type PaginationProps,
+  PageSizeSelect,
+  type PageSizeSelectProps,
 } from "./Table";
 export { EnterpriseTable, CopyCell, type ColumnDef, type TableDensity } from "./EnterpriseTable";
 export { DataTable, type DataTableProps } from "./DataTable";
@@ -198,3 +201,6 @@ export type { IconAnimationVariant, IconTrigger, AnimateIconProps, AnimatedIconP
 // 11. Branding
 export { Logo, ReachInternationalLogo, ScissorLiftLogoIcon, type LogoProps } from "./Logo";
 export { BRAND_ASSETS, BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
+
+// 12. Scroll Cloud Fade Effect
+export { ScrollCloud } from "./ScrollCloud";

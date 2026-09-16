@@ -3,7 +3,10 @@ import { getCurrentUser } from "@/lib/dal";
 import {
   getMachineById,
   getMachineActiveRental,
-} from "@/lib/queries/machines";
+  getActiveSupervisors,
+  getActiveOperators,
+} from "@/lib/data/machines";
+import { getClientOptions } from "@/lib/queries/clients";
 import { EmptyState, MachineDetailSkeleton } from "@/components/ui";
 import { MachineClientView } from "./machine-client-view";
 
@@ -11,11 +14,19 @@ async function MachineDetailContent({ id }: { id: string }) {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  // On initial page load, only fetch machine and active rental metadata.
-  // Machine hour meter running logs are lazy-loaded on demand when the tab is selected.
-  const [machine, activeRental] = await Promise.all([
+  const canManage =
+    user.role === "super_admin" ||
+    user.role === "admin" ||
+    user.role === "manager" ||
+    user.role === "service_manager";
+
+  // Parallel fetch: all light queries in one Promise.all()
+  const [machine, activeRental, supervisors, operators, clients] = await Promise.all([
     getMachineById(id),
     getMachineActiveRental(id),
+    canManage ? getActiveSupervisors() : Promise.resolve([]),
+    canManage ? getActiveOperators() : Promise.resolve([]),
+    canManage ? getClientOptions() : Promise.resolve([]),
   ]);
 
   if (!machine) {
@@ -29,11 +40,6 @@ async function MachineDetailContent({ id }: { id: string }) {
     );
   }
 
-  const canManage =
-    user.role === "super_admin" ||
-    user.role === "admin" ||
-    user.role === "manager" ||
-    user.role === "service_manager";
   const canEdit = canManage;
   const canDelete = canManage;
   const isAssignedEngineer = user.role === "engineer" && machine.engineer_id === user.id;
@@ -42,11 +48,15 @@ async function MachineDetailContent({ id }: { id: string }) {
     <MachineClientView
       machine={machine}
       activeRental={activeRental}
+      supervisors={supervisors}
+      operators={operators}
+      clients={clients}
       isAdmin={canManage}
       canEdit={canEdit}
       canDelete={canDelete}
       isAssignedEngineer={isAssignedEngineer}
       currentUserId={user.id}
+      userRole={user.role}
     />
   );
 }

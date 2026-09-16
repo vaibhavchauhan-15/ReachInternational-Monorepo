@@ -18,3 +18,5 @@ export * from './Logo';
 export * from './SharedLinkPreviewCard';
 export * from '../machines/DropdownFilterSelector';
 export * from '../permissions';
+export * from './HighlightText';
+export * from './RefreshControl';

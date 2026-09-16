@@ -99,6 +99,7 @@ export function CopyCell({
 export function EnterpriseTable<T extends { id: string | number }>({
   columns,
   data,
+  loading = false,
   emptyMessage = "No data found",
   emptyDescription = "There are no records matching your criteria.",
   emptyAction,
@@ -251,7 +252,16 @@ export function EnterpriseTable<T extends { id: string | number }>({
             </motion.div>
           ) : (
             <div className="text-xs text-[var(--color-mute)] font-medium">
-              Showing <span className="text-[var(--color-ink)] font-bold">{data.length}</span> entries
+              {loading ? (
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-3.5 w-16 bg-[var(--color-hairline)] animate-pulse rounded" />
+                  <span className="text-[11px] text-[var(--color-mute)]">Searching machines...</span>
+                </div>
+              ) : (
+                <>
+                  Showing <span className="text-[var(--color-ink)] font-bold">{data.length}</span> entries
+                </>
+              )}
             </div>
           )}
         </AnimatePresence>
@@ -408,7 +418,36 @@ export function EnterpriseTable<T extends { id: string | number }>({
 
           {/* Table Body */}
           <tbody className="divide-y divide-[var(--color-hairline)]">
-            {sortedData.length === 0 ? (
+            {loading ? (
+              Array.from({ length: 6 }).map((_, rIdx) => (
+                <tr key={`skeleton-row-${rIdx}`} className="bg-[var(--color-canvas)]">
+                  {selectable && (
+                    <td className={`w-10 ${densityPadding[density]}`}>
+                      <div className="w-4 h-4 rounded bg-[var(--color-hairline)] animate-pulse" />
+                    </td>
+                  )}
+                  {visibleColumns.map((col, cIdx) => (
+                    <td key={`skeleton-cell-${rIdx}-${col.id}`} className={densityPadding[density]}>
+                      <div
+                        className="h-4 bg-[var(--color-hairline)] animate-pulse rounded"
+                        style={{
+                          width:
+                            cIdx === 0
+                              ? "65%"
+                              : cIdx === 1
+                              ? "80%"
+                              : cIdx === 2
+                              ? "70%"
+                              : cIdx === 3
+                              ? "45%"
+                              : "55%",
+                        }}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))
+            ) : sortedData.length === 0 ? (
               <tr>
                 <td
                   colSpan={visibleColumns.length + (selectable ? 1 : 0)}

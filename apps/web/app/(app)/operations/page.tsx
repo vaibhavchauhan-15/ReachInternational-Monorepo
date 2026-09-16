@@ -2,10 +2,12 @@ import { requirePermission, getCurrentUser } from "@/lib/dal";
 import { redirect } from "next/navigation";
 import { getOperationsHubData } from "@/lib/queries/operators";
 import { OperationsClient } from "@/components/operations/OperationsClient";
+import { getOperationsCurrentMonth } from "@reachinternational/utils";
 
 export interface OperationsPageSearchParams {
   tab?: string;
   page?: string;
+  pageSize?: string;
   view?: "machine" | "client" | "operator";
   machine?: string;
   client?: string;
@@ -15,7 +17,8 @@ export interface OperationsPageSearchParams {
   start?: string;
   end?: string;
   search?: string;
-  sort?: "date-desc" | "date-asc";
+  sort?: "date-desc" | "date-asc" | "hours-desc" | "hours-asc" | "meter-desc" | "meter-asc" | string;
+  expanded?: string;
 }
 
 export default async function OperationsPage(props: {
@@ -35,8 +38,9 @@ export default async function OperationsPage(props: {
     (tab === "entry" ||
       tab === "history" ||
       tab === "machines" ||
+      tab === "assignments" ||
       !tab ||
-      !["logs", "assignments", "site-movement", "operators"].includes(tab))
+      !["logs", "site-movement", "operators"].includes(tab))
   ) {
     redirect("/operations?tab=logs");
   }
@@ -50,7 +54,7 @@ export default async function OperationsPage(props: {
   const site = searchParams?.site;
   const operatorId = searchParams?.operator;
   const rawMonth = searchParams?.month;
-  const currentMonthNumber = String(new Date().getMonth() + 1).padStart(2, "0");
+  const currentMonthNumber = getOperationsCurrentMonth();
   // Default to current month unless explicitly provided (e.g. 'all', specific month '01'-'12', or 'custom')
   const month = rawMonth && rawMonth.trim() !== "" ? rawMonth : currentMonthNumber;
   const customStart = searchParams?.start;
@@ -67,11 +71,19 @@ export default async function OperationsPage(props: {
       ? "operator"
       : machineId
       ? "machine"
-      : "client";
+      : "machine";
+
+  const rawPageSize = searchParams?.pageSize ? parseInt(searchParams.pageSize, 10) : undefined;
+  const effectivePageSize =
+    rawPageSize && !isNaN(rawPageSize) && rawPageSize > 0
+      ? rawPageSize
+      : 20;
+
+  const expanded = searchParams?.expanded;
 
   const data = await getOperationsHubData(user!, effectiveTab, {
     page,
-    pageSize: 10,
+    pageSize: effectivePageSize,
     viewMode,
     machineId,
     clientId,
@@ -82,10 +94,13 @@ export default async function OperationsPage(props: {
     customEnd,
     search,
     sort,
+    expanded: expanded === "true",
   });
 
   const effectiveInitialClientId =
-    clientId || (data as any).effectiveClientId || (data as any).mostRecentClientId;
+    clientId || (data as any).activeClientId || (data as any).effectiveClientId || (data as any).mostRecentClientId;
+  const effectiveInitialMachineId = machineId || (data as any).activeMachineId;
+  const effectiveInitialOperatorId = operatorId || (data as any).activeOperatorId;
 
   return (
     <OperationsClient
@@ -99,22 +114,22 @@ export default async function OperationsPage(props: {
       assignedMachine={data.assignedMachine}
       recentLogs={data.recentLogs}
       allMachines={data.allMachines}
-      initialTab={tab}
       totalLogsCount={data.totalLogsCount}
       currentPage={data.currentPage}
       logsPageSize={data.logsPageSize}
       logsSummary={data.logsSummary}
       initialViewMode={viewMode}
-      initialMachineId={machineId}
+      initialMachineId={effectiveInitialMachineId}
       initialClientId={effectiveInitialClientId}
       mostRecentClientId={(data as any).mostRecentClientId}
       initialSite={site}
-      initialOperatorId={operatorId}
+      initialOperatorId={effectiveInitialOperatorId}
       initialMonth={month}
       initialCustomStart={customStart}
       initialCustomEnd={customEnd}
       initialSearch={search}
       initialSort={sort}
+      initialExpanded={expanded === "true"}
     />
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getUserDetailAction } from "@/app/actions/users";
 import {
   AnimatedUser,
   AnimatedPhone,
@@ -141,6 +142,21 @@ export function UserEditModal({
     license_number: user.license_number || "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (user?.id && user.aadhaar_number === undefined && user.license_number === undefined && user.address === undefined) {
+      getUserDetailAction(user.id).then((res) => {
+        if (res.user) {
+          setEditForm((prev) => ({
+            ...prev,
+            address: prev.address || res.user?.address || "",
+            aadhaar_number: prev.aadhaar_number || (res.user?.aadhaar_number ? formatAadhaar(res.user.aadhaar_number) : ""),
+            license_number: prev.license_number || res.user?.license_number || "",
+          }));
+        }
+      }).catch(() => {});
+    }
+  }, [user?.id]);
 
   const handleFieldChange = (field: string, val: string) => {
     let formattedVal = val;

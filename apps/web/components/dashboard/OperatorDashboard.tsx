@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, startTransition } from "react";
+import dynamic from "next/dynamic";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   AnimatedGauge,
@@ -32,6 +33,8 @@ import {
   AlertOctagon,
   ArrowRight,
   Printer,
+  FileSpreadsheet,
+  Loader2,
   Building2,
   MapPin,
   Gauge,
@@ -48,6 +51,8 @@ import type {
 import {
   submitOperatorHourLogAction,
   updateOperatorHourLogAction,
+  deleteOperatorHourLogAction,
+  getOperationsExportLogsAction,
 } from "@/app/actions/operators";
 import { useToast, CustomTimePicker, CustomDatePicker, Modal, MachineSelect, ClientSelect, SegmentedToggle, Button, Pagination } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -69,7 +74,10 @@ import {
   checkIntervalOverlap,
   getISTDateString,
 } from "@reachinternational/utils";
-import { PrintableOperatorLogsModal } from "./PrintableOperatorLogsModal";
+const PrintableOperatorLogsModal = dynamic(
+  () => import("./PrintableOperatorLogsModal").then((mod) => mod.PrintableOperatorLogsModal),
+  { ssr: false }
+);
 import { handleClipboardPaste } from "@/lib/security/clipboard";
 import { HmrSchema, RemarksSchema } from "@reachinternational/validation";
 
@@ -147,6 +155,14 @@ export function OperatorDashboard({
   const urlTab = searchParams.get("tab");
   const [activeTab, setActiveTab] = useState<"entry" | "history">(urlTab === "history" ? "history" : "entry");
 
+  // Local state for instant <1ms UI updates on create, edit, and delete mutations
+  const [logsList, setLogsList] = useState<OperatorHourLog[]>(recentLogs);
+  const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLogsList(recentLogs);
+  }, [recentLogs]);
+
   // Interval ticker for real-time validation against current time (e.g. shift conclusion)
   const [currentTick, setCurrentTick] = useState<number>(() => Date.now());
   useEffect(() => {
@@ -208,7 +224,7 @@ export function OperatorDashboard({
   };
 
   const filteredLogs = useMemo(() => {
-    return recentLogs.filter((log) => {
+    return logsList.filter((log) => {
       // Date / Week / Month / Year Filter
       if (historyDateFilter !== "all" && log.log_date) {
         const now = new Date();
@@ -250,22 +266,119 @@ export function OperatorDashboard({
         remarksStr.includes(q)
       );
     });
-  }, [recentLogs, historyDateFilter, historySearch]);
+  }, [logsList, historyDateFilter, historySearch]);
 
   const paginatedLogs = useMemo(() => {
     const from = (historyPage - 1) * historyPageSize;
     return filteredLogs.slice(from, from + historyPageSize);
   }, [filteredLogs, historyPage, historyPageSize]);
 
+  // Mobile Lazy Loading Scroll State for Operator History
+  const [mobileHistoryCount, setMobileHistoryCount] = useState<number>(10);
+  const [isLoadingMoreMobileHistory, setIsLoadingMoreMobileHistory] = useState<boolean>(false);
+  const mobileHistorySentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMobileHistoryCount(10);
+  }, [historyDateFilter, historySearch]);
+
+  const mobileDisplayedLogs = useMemo(() => {
+    return filteredLogs.slice(0, mobileHistoryCount);
+  }, [filteredLogs, mobileHistoryCount]);
+
+  const mobileHasMoreHistory = mobileHistoryCount < filteredLogs.length;
+
+  const handleLoadMoreMobileHistory = useCallback(() => {
+    if (!mobileHasMoreHistory || isLoadingMoreMobileHistory) return;
+    setIsLoadingMoreMobileHistory(true);
+    setTimeout(() => {
+      setMobileHistoryCount((prev) => Math.min(prev + 10, filteredLogs.length));
+      setIsLoadingMoreMobileHistory(false);
+    }, 180);
+  }, [mobileHasMoreHistory, isLoadingMoreMobileHistory, filteredLogs.length]);
+
+  useEffect(() => {
+    const sentinel = mobileHistorySentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const first = entries[0];
+        if (first && first.isIntersecting) {
+          handleLoadMoreMobileHistory();
+        }
+      },
+      { root: null, rootMargin: "350px", threshold: 0.1 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [handleLoadMoreMobileHistory]);
+
   // PDF Print & Excel Export Modal State
   const [showPrintModal, setShowPrintModal] = useState<boolean>(false);
+  const [isExportingExcel, setIsExportingExcel] = useState<boolean>(false);
 
   const handleExportPdfClick = () => {
-    if (recentLogs.length === 0) {
-      toast("error", "No Logs Available", "There are no machine logs to export.");
-      return;
-    }
     setShowPrintModal(true);
+  };
+
+  const handleDirectExcelExport = async () => {
+    if (isExportingExcel) return;
+    try {
+      setIsExportingExcel(true);
+      // 1. Load export module dynamically (zero bundle footprint on page load)
+      const { exportOperatorLogsToExcel } = await import("@/lib/utils/operator-logs-export");
+
+      // Resolve date filter matching current table view
+      let exportMonth = "all";
+      let exportStartDate: string | undefined = undefined;
+      let exportEndDate: string | undefined = undefined;
+
+      if (historyDateFilter === "today") {
+        exportMonth = "custom";
+        exportStartDate = getISTDateString();
+        exportEndDate = getISTDateString();
+      } else if (historyDateFilter === "week") {
+        exportMonth = "custom";
+        exportStartDate = addDaysToDateStr(getISTDateString(), -7);
+        exportEndDate = getISTDateString();
+      } else if (historyDateFilter === "month") {
+        exportMonth = "current";
+      }
+
+      // 2. Query filtered unpaginated data using current filters + operator permissions
+      const res = await getOperationsExportLogsAction({
+        viewMode: "operator",
+        entityId: user.id,
+        operatorId: user.id,
+        month: exportMonth,
+        customStartDate: exportStartDate,
+        customEndDate: exportEndDate,
+        search: historySearch,
+      });
+
+      if (!res.success || !res.logs || res.logs.length === 0) {
+        toast("error", "Export Failed", res.error || "No logs found for the selected filters to export.");
+        return;
+      }
+
+      // 3. Generate Excel file
+      exportOperatorLogsToExcel(
+        res.logs as OperatorHourLog[],
+        user,
+        assignedMachine,
+        exportMonth,
+        exportStartDate,
+        exportEndDate
+      );
+
+      toast("success", "Export Successful", `Exported ${res.logs.length} machine logs to Excel.`);
+    } catch (err: any) {
+      toast("error", "Export Error", err?.message || "Failed to export logs to Excel.");
+    } finally {
+      setIsExportingExcel(false);
+    }
   };
 
   // Machine Selection (Pre-filled with assigned machine, fallback to first machine if available)
@@ -302,7 +415,7 @@ export function OperatorDashboard({
       }
 
       // 2. Look in recent logs for this specific machine
-      const logForMachine = recentLogs.find((l) => l.machine_id === mId && (l.client_id || (l as any).client));
+      const logForMachine = logsList.find((l) => l.machine_id === mId && (l.client_id || (l as any).client));
       if (logForMachine) {
         if (logForMachine.client_id) {
           const found = dbClients.find((c) => c.id === logForMachine.client_id);
@@ -314,7 +427,7 @@ export function OperatorDashboard({
       }
 
       // 3. Look in any recent logs
-      const anyLogWithClient = recentLogs.find((l) => l.client_id || (l as any).client);
+      const anyLogWithClient = logsList.find((l) => l.client_id || (l as any).client);
       if (anyLogWithClient) {
         if (anyLogWithClient.client_id) {
           const found = dbClients.find((c) => c.id === anyLogWithClient.client_id);
@@ -328,7 +441,7 @@ export function OperatorDashboard({
       // 4. Fallback to first client in DB
       return dbClients.length > 0 ? dbClients[0] : null;
     },
-    [recentLogs, dbClients]
+    [logsList, dbClients]
   );
 
   // Helper to find associated client location for a machine from recent logs or client record in DB
@@ -336,11 +449,11 @@ export function OperatorDashboard({
     (mId: string, clientObj?: CRMClient | null) => {
       // 1. Look in recent logs for this specific machine
       if (mId) {
-        const logForMachine = recentLogs.find((l) => l.machine_id === mId && l.location && l.location.trim() !== "");
+        const logForMachine = logsList.find((l) => l.machine_id === mId && l.location && l.location.trim() !== "");
         if (logForMachine?.location) return logForMachine.location;
       }
       // 2. Look in any recent logs with location
-      const anyLogWithLocation = recentLogs.find((l) => l.location && l.location.trim() !== "");
+      const anyLogWithLocation = logsList.find((l) => l.location && l.location.trim() !== "");
       if (anyLogWithLocation?.location) return anyLogWithLocation.location;
       // 3. Client address from DB
       if (clientObj) {
@@ -354,7 +467,7 @@ export function OperatorDashboard({
       }
       return "";
     },
-    [recentLogs, dbClients]
+    [logsList, dbClients]
   );
 
   const initialMachineId = assignedMachine?.id || (availableMachines.length > 0 ? availableMachines[0].id : "");
@@ -391,7 +504,7 @@ export function OperatorDashboard({
     (mId: string) => {
       if (!mId) return 0;
       // 1. Look for the most recent log recorded for this machine (recentLogs is ordered log_date DESC, created_at DESC)
-      const logForMachine = recentLogs.find(
+      const logForMachine = logsList.find(
         (l) => l.machine_id === mId && l.end_meter !== undefined && l.end_meter !== null
       );
       if (logForMachine && typeof logForMachine.end_meter === "number") {
@@ -401,7 +514,7 @@ export function OperatorDashboard({
       const machine = availableMachines.find((m) => m.id === mId) || assignedMachine;
       return machine?.hour_meter ?? 0;
     },
-    [recentLogs, availableMachines, assignedMachine]
+    [logsList, availableMachines, assignedMachine]
   );
 
   const initialMeter = getLatestMeterForMachine(
@@ -677,8 +790,8 @@ export function OperatorDashboard({
   // Machine Timeline: Finds the latest log recorded on this machine and its end time
   const machineTimeline = useMemo(() => {
     if (!selectedMachineId) return null;
-    return findLatestMachineLogTimeline(recentLogs, selectedMachineId);
-  }, [recentLogs, selectedMachineId]);
+    return findLatestMachineLogTimeline(logsList, selectedMachineId);
+  }, [logsList, selectedMachineId]);
 
   // Real-time sequencing check: New log must start at or after previous log's end time
   const sequencingValidation = useMemo(() => {
@@ -703,14 +816,14 @@ export function OperatorDashboard({
 
   // Client-side real-time shift time interval overlap validation
   const shiftOverlapWarning = useMemo(() => {
-    if (!selectedMachineId || recentLogs.length === 0 || !operatingStats.isValid || !operatingStats.startDateTime || !operatingStats.endDateTime) {
+    if (!selectedMachineId || logsList.length === 0 || !operatingStats.isValid || !operatingStats.startDateTime || !operatingStats.endDateTime) {
       return null;
     }
 
     const currentStart = operatingStats.startDateTime;
     const currentEnd = operatingStats.endDateTime;
 
-    const machineLogs = recentLogs.filter((l) => l.machine_id === selectedMachineId);
+    const machineLogs = logsList.filter((l) => l.machine_id === selectedMachineId);
 
     for (const log of machineLogs) {
       let exStart: Date | null = null;
@@ -741,7 +854,7 @@ export function OperatorDashboard({
     }
 
     return null;
-  }, [selectedMachineId, recentLogs, operatingStats.isValid, operatingStats.startDateTime, operatingStats.endDateTime, operatingStats.resolvedRangeFormatted]);
+  }, [selectedMachineId, logsList, operatingStats.isValid, operatingStats.startDateTime, operatingStats.endDateTime, operatingStats.resolvedRangeFormatted]);
 
   // Load draft from localStorage on mount
   useEffect(() => {
@@ -991,6 +1104,12 @@ export function OperatorDashboard({
         return;
       }
 
+      if (endMtrNum - startMtrNum > 24) {
+        toast("error", "Invalid Meter Reading", "Machine running hours cannot exceed 24 hours in a single log.");
+        setSubmitting(false);
+        return;
+      }
+
       const bkdDurationStr = isBreakdown && breakdownStats?.isValid ? breakdownStats.fullBreakdownString : undefined;
       const bkdDecimalHours = isBreakdown && breakdownStats?.isValid ? breakdownStats.durationDecimalHours : 0;
       const bkdStart = isBreakdown && breakdownStats?.isValid ? breakdownStartTime : undefined;
@@ -1045,7 +1164,12 @@ export function OperatorDashboard({
         setStartMeter(String(endMtrNum));
         setEndMeter(String(endMtrNum));
         clearDraft();
-        router.refresh();
+        if (res.data) {
+          setLogsList((prev) => [res.data as OperatorHourLog, ...prev.filter((l) => l.id !== (res.data as any).id)]);
+        }
+        startTransition(() => {
+          router.refresh();
+        });
       } else {
         setMessage({ type: "error", text: res.error || "Failed to submit daily machine log." });
         toast("error", "Submission Failed", res.error || "Could not submit daily machine log.");
@@ -1079,7 +1203,7 @@ export function OperatorDashboard({
     }
     const currentStart = editOperatingStats.startDateTime;
     const currentEnd = editOperatingStats.endDateTime;
-    const machineLogs = recentLogs.filter((l) => l.machine_id === editingLog.machine_id && l.id !== editingLog.id);
+    const machineLogs = logsList.filter((l) => l.machine_id === editingLog.machine_id && l.id !== editingLog.id);
 
     for (const log of machineLogs) {
       let exStart: Date | null = null;
@@ -1108,7 +1232,7 @@ export function OperatorDashboard({
       }
     }
     return null;
-  }, [editingLog, editOperatingStats.isValid, editOperatingStats.startDateTime, editOperatingStats.endDateTime, editOperatingStats.resolvedRangeFormatted, recentLogs]);
+  }, [editingLog, editOperatingStats.isValid, editOperatingStats.startDateTime, editOperatingStats.endDateTime, editOperatingStats.resolvedRangeFormatted, logsList]);
 
   // Open Edit Modal for a Log
   const handleOpenEditLog = (log: OperatorHourLog) => {
@@ -1211,10 +1335,44 @@ export function OperatorDashboard({
     setUpdatingLog(false);
     if (res.success) {
       toast("success", "Log Resubmitted", "Your updated daily machine log has been resubmitted.");
+      if (res.data) {
+        setLogsList((prev) => prev.map((l) => (l.id === (res.data as any).id ? (res.data as OperatorHourLog) : l)));
+      }
       setEditingLog(null);
-      router.refresh();
+      startTransition(() => {
+        router.refresh();
+      });
     } else {
       toast("error", "Update Failed", res.error || "Could not update daily log.");
+    }
+  };
+
+  const handleDeleteEditingLog = async () => {
+    if (!editingLog) return;
+    if (!window.confirm("Are you sure you want to delete this daily machine log? This will recalculate the machine hour meter.")) {
+      return;
+    }
+    const logIdToDelete = editingLog.id;
+    setDeletingLogId(logIdToDelete);
+    try {
+      const res = await deleteOperatorHourLogAction({
+        logId: logIdToDelete,
+        reason: "Deleted by operator from dashboard",
+      });
+      if (res.success) {
+        toast("success", "Log Deleted", "The daily machine log has been permanently deleted.");
+        setLogsList((prev) => prev.filter((l) => l.id !== logIdToDelete));
+        setEditingLog(null);
+        startTransition(() => {
+          router.refresh();
+        });
+      } else {
+        toast("error", "Delete Failed", res.error || "Failed to delete log.");
+      }
+    } catch (err: any) {
+      toast("error", "Delete Failed", err?.message || "An unexpected error occurred.");
+    } finally {
+      setDeletingLogId(null);
     }
   };
 
@@ -1261,7 +1419,7 @@ export function OperatorDashboard({
               {
                 id: "history",
                 label: "Log History",
-                count: recentLogs.length,
+                count: logsList.length,
               },
             ]}
           />
@@ -1706,6 +1864,21 @@ export function OperatorDashboard({
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                onClick={handleDirectExcelExport}
+                disabled={isExportingExcel}
+                className="px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Export all filtered logs directly to Excel (.xlsx)"
+              >
+                {isExportingExcel ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-emerald-600 dark:text-emerald-400" />
+                ) : (
+                  <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                )}
+                <span className="hidden sm:inline">Export Excel</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleExportPdfClick}
                 className="px-3 py-2 rounded-xl border border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300 hover:bg-sky-500/20 text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer shrink-0"
                 title="Export or Print machine logs to PDF or Excel (.xlsx)"
@@ -1788,7 +1961,7 @@ export function OperatorDashboard({
                     ? "Try adjusting your search query or date filter selection."
                     : "Switch to the 'Log Entry' tab above to submit your daily machine log."}
                 </p>
-                {recentLogs.length === 0 && (
+                {logsList.length === 0 && (
                   <button
                     type="button"
                     onClick={() => handleTabSwitch("entry")}
@@ -1803,7 +1976,7 @@ export function OperatorDashboard({
             <>
               {/* Mobile Native Card View (rendered on screens < 640px) */}
               <div className="block sm:hidden space-y-2.5">
-                {paginatedLogs.map((log) => {
+                {mobileDisplayedLogs.map((log) => {
                   const isBkd = log.is_breakdown || log.machine_condition === "breakdown";
                   const isToday = isLogFromToday(log.log_date);
                   const canEdit = isLogEditable(log.log_date);
@@ -1972,6 +2145,39 @@ export function OperatorDashboard({
                     </div>
                   );
                 })}
+
+                {/* Mobile Infinite Scroll Sentinel */}
+                <div ref={mobileHistorySentinelRef} className="h-1 w-full pointer-events-none" aria-hidden="true" />
+
+                {/* Skeletons while loading more logs chunk-by-chunk on mobile */}
+                {isLoadingMoreMobileHistory && (
+                  <div className="space-y-2.5 animate-pulse" aria-label="Loading more logs...">
+                    {Array.from({ length: 2 }).map((_, i) => (
+                      <div
+                        key={`skel-mobile-hist-${i}`}
+                        className="p-3 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2.5 shadow-2xs"
+                      >
+                        <div className="flex items-start justify-between border-b border-[var(--color-hairline)] pb-2.5 gap-2">
+                          <div className="h-4 w-24 rounded bg-[var(--color-hairline)]" />
+                          <div className="h-4 w-20 rounded bg-[var(--color-hairline)]" />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="h-3.5 w-3/4 rounded bg-[var(--color-hairline)]/70" />
+                          <div className="h-3.5 w-1/2 rounded bg-[var(--color-hairline)]/70" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* End-of-List Indicator on Mobile */}
+                {!mobileHasMoreHistory && filteredLogs.length > 0 && (
+                  <div className="py-6 flex items-center justify-center gap-3 text-xs text-[var(--color-mute)] select-none">
+                    <div className="h-[1px] flex-1 bg-[var(--color-hairline)]" />
+                    <span className="font-medium text-[var(--color-mute)]">All daily machine logs have been displayed</span>
+                    <div className="h-[1px] flex-1 bg-[var(--color-hairline)]" />
+                  </div>
+                )}
               </div>
 
               {/* Desktop Data Table Area (rendered on screens >= 640px) */}
@@ -2113,9 +2319,9 @@ export function OperatorDashboard({
                 </table>
               </div>
 
-              {/* Pagination Controls */}
+              {/* Pagination Controls (Desktop / Tablet only) */}
               {filteredLogs.length > 0 && (
-                <div className="pt-3 border-t border-[var(--color-hairline)]">
+                <div className="pt-3 border-t border-[var(--color-hairline)] hidden sm:block">
                   <Pagination
                     page={historyPage}
                     pageSize={historyPageSize}
@@ -2586,11 +2792,22 @@ export function OperatorDashboard({
             <div className="flex items-center gap-2 px-5 sm:px-6 py-3.5 border-t border-[var(--color-hairline)] shrink-0 bg-[var(--color-canvas-elevated)]">
               <Button
                 type="button"
+                variant="danger"
+                size="md"
+                onClick={handleDeleteEditingLog}
+                loading={deletingLogId === editingLog.id}
+                disabled={updatingLog || deletingLogId !== null}
+                className="shrink-0"
+              >
+                Delete Log
+              </Button>
+              <div className="flex-1" />
+              <Button
+                type="button"
                 variant="secondary"
                 size="md"
                 onClick={() => setEditingLog(null)}
-                disabled={updatingLog}
-                className="flex-1"
+                disabled={updatingLog || deletingLogId !== null}
               >
                 Cancel
               </Button>
@@ -2600,7 +2817,7 @@ export function OperatorDashboard({
                 variant="primary"
                 size="md"
                 loading={updatingLog}
-                className="flex-1"
+                disabled={deletingLogId !== null}
               >
                 Resubmit Entry
               </Button>
@@ -2609,14 +2826,16 @@ export function OperatorDashboard({
         </div>
       )}
 
-      {/* Printable PDF Report Modal */}
-      <PrintableOperatorLogsModal
-        open={showPrintModal}
-        onClose={() => setShowPrintModal(false)}
-        logs={recentLogs}
-        user={user}
-        assignedMachine={assignedMachine}
-      />
+      {/* Printable PDF Report Modal (Loaded on demand strictly when Print is clicked) */}
+      {showPrintModal && (
+        <PrintableOperatorLogsModal
+          open={showPrintModal}
+          onClose={() => setShowPrintModal(false)}
+          logs={logsList}
+          user={user}
+          assignedMachine={assignedMachine}
+        />
+      )}
     </div>
   );
 }

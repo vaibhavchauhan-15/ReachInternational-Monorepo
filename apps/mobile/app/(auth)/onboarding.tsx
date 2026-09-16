@@ -183,7 +183,7 @@ export default function OnboardingScreen() {
         p_user_id: user.id,
         p_full_name: fullName.trim(),
         p_phone: cleanPhone,
-        p_role: selectedRole,
+        p_role: userProfile?.role || selectedRole,
         p_shift_time: finalShift,
         p_address: address.trim(),
         p_city: city.trim(),
@@ -202,7 +202,6 @@ export default function OnboardingScreen() {
           .update({
             full_name: fullName.trim(),
             phone: cleanPhone,
-            role: selectedRole,
             shift_time: finalShift,
             address: address.trim(),
             city: city.trim(),

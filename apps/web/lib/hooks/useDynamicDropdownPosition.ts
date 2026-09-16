@@ -35,6 +35,14 @@ export interface UseDynamicDropdownPositionOptions {
  * Guarantees zero (0, 0) layout flickering on first open through synchronous layout
  * pre-measurement and retains valid coordinates during AnimatePresence exit animations.
  */
+/**
+ * CSS selector marking a container that portaled dropdown popovers must render into.
+ * Modal dialog cards carry this attribute so portaled dropdowns stay inside the
+ * dialog DOM subtree (and therefore inside Radix's focus scope + pointer-events
+ * scope) instead of being portaled to `document.body`.
+ */
+export const PORTAL_CONTAINER_SELECTOR = '[data-portal-container="true"]';
+
 export function useDynamicDropdownPosition({
   isOpen,
   triggerRef,
@@ -48,6 +56,17 @@ export function useDynamicDropdownPosition({
 }: UseDynamicDropdownPositionOptions) {
   const [mounted, setMounted] = useState(false);
   const [isPositioned, setIsPositioned] = useState(false);
+  /**
+   * DOM node the popover is portaled into.
+   *
+   * Modal dialogs (`DialogContent`) render with `disableOutsidePointerEvents`, which
+   * sets `pointer-events: none` on `<body>` (an inherited property) and traps focus
+   * inside the dialog node. Portaling to `document.body` in that situation produces a
+   * dropdown that is visible but unclickable and whose search input can never be
+   * focused. Resolving the nearest `[data-portal-container]` (the dialog card) keeps
+   * the popover inside the dialog subtree, so clicks and keyboard focus work natively.
+   */
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
   const [position, setPosition] = useState<DropdownPosition>({
     top: undefined,
     bottom: undefined,
@@ -62,6 +81,16 @@ export function useDynamicDropdownPosition({
   useEffect(() => {
     onCloseRef.current = onClose;
   });
+
+  // Resolve the portal container for the popover: the nearest dialog card marked with
+  // `[data-portal-container]`, falling back to `document.body` for page-level usage
+  // (filters, toolbars, tables) where the current portal behaviour is unchanged.
+  const resolvePortalTarget = useCallback((): HTMLElement | null => {
+    if (typeof document === "undefined") return null;
+    const trigger = triggerRef.current;
+    const container = trigger?.closest?.(PORTAL_CONTAINER_SELECTOR) as HTMLElement | null;
+    return container ?? document.body;
+  }, [triggerRef]);
 
   const updatePosition = useCallback(() => {
     if (!triggerRef.current || typeof window === "undefined") return null;
@@ -153,8 +182,10 @@ export function useDynamicDropdownPosition({
   useIsomorphicLayoutEffect(() => {
     if (isOpen) {
       updatePosition();
+      const target = resolvePortalTarget();
+      setPortalTarget((prev) => (prev === target ? prev : target));
     }
-  }, [isOpen, updatePosition]);
+  }, [isOpen, updatePosition, resolvePortalTarget]);
 
   // Dynamic repositioning on scroll, resize, or trigger dimensions changes while open
   useEffect(() => {
@@ -200,8 +231,10 @@ export function useDynamicDropdownPosition({
 
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
       const target = e.target as Node;
+      if (!target || !target.isConnected) return;
       if (triggerRef.current && triggerRef.current.contains(target)) return;
       if (popoverRef.current && popoverRef.current.contains(target)) return;
+      if ((target as Element)?.closest?.('[data-portal-dropdown], [data-portal-select], [data-portal-menu]')) return;
       onCloseRef.current?.();
     };
 
@@ -226,6 +259,7 @@ export function useDynamicDropdownPosition({
     mounted,
     position,
     isPositioned,
+    portalTarget,
     updatePosition,
   };
 }

@@ -88,7 +88,7 @@ export default function SignupScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   // Supervisor Selection State
-  const [supervisors, setSupervisors] = useState<Array<{ id: string; full_name: string; email?: string }>>([]);
+  const [supervisors, setSupervisors] = useState<Array<{ id: string; full_name: string }>>([]);
   const [selectedSupervisorId, setSelectedSupervisorId] = useState('');
   const [supervisorModalVisible, setSupervisorModalVisible] = useState(false);
   const [supervisorSearch, setSupervisorSearch] = useState('');
@@ -120,7 +120,7 @@ export default function SignupScreen() {
       try {
         const { data, error } = await supabase.rpc('get_active_supervisors_public');
         if (!error && data && isMounted) {
-          setSupervisors(data as Array<{ id: string; full_name: string; email?: string }>);
+          setSupervisors(data as Array<{ id: string; full_name: string }>);
         }
       } catch (err) {
         console.warn('Failed to load active supervisors for mobile signup:', err);
@@ -278,6 +278,9 @@ export default function SignupScreen() {
         ? `${shiftStartTime.trim()} - ${shiftEndTime.trim()}`
         : shiftStartTime.trim() || shiftEndTime.trim() || null;
 
+    const allowedRoleValues = SIGNUP_ROLES.map((r) => r.value);
+    const safeRole = allowedRoleValues.includes(selectedRole) ? selectedRole : 'operator';
+
     try {
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
@@ -286,8 +289,8 @@ export default function SignupScreen() {
           data: {
             full_name: fullName.trim(),
             phone: cleanPhone,
-            role: selectedRole,
-            supervisor_id: isSupervisedRole(selectedRole) ? selectedSupervisorId || null : null,
+            role: safeRole,
+            supervisor_id: isSupervisedRole(safeRole) ? selectedSupervisorId || null : null,
             working_location_id: selectedWorkingLocationId || null,
             shift_time: finalShift,
             shift_start_time: shiftStartTime.trim() || null,
@@ -950,9 +953,6 @@ export default function SignupScreen() {
                         <Text style={[styles.modalItemTitle, { color: isSelected ? primarySkyBlue : theme.colors.ink }]}>
                           {s.full_name}
                         </Text>
-                        {s.email && (
-                          <Text style={[styles.modalItemDesc, { color: theme.colors.mute }]}>{s.email}</Text>
-                        )}
                       </View>
                       {isSelected && <Check size={18} color={primarySkyBlue} />}
                     </TouchableOpacity>

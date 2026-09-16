@@ -5,13 +5,19 @@ import crypto from "crypto";
 import { revalidateTag } from "next/cache";
 import { getCurrentUser, requireRole } from "@/lib/dal";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { CACHE_TAGS } from "@/lib/cache";
+import { CACHE_TAGS, TAGS } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
 import {
   checkAndStoreIdempotencyKey,
   completeIdempotencyKey,
   failIdempotencyKey,
 } from "@/lib/security/idempotency";
+import {
+  SubmitHourLogSchema,
+  UpdateHourLogSchema,
+  DeleteHourLogSchema,
+} from "@reachinternational/validation";
+import { isManagerOrAbove } from "@reachinternational/permissions";
 import {
   computeShiftTiming,
   computeBreakdownDuration,
@@ -24,8 +30,23 @@ import {
   addDaysToDateStr,
   getISTDateString,
   isShiftEndInFuture,
+  resolveOperationsDateRange,
 } from "@reachinternational/utils";
 import { formatHourLogsData } from "@/lib/queries/operators";
+import {
+  getOperationsClientLogsData,
+  getOperationsMachineLogsData,
+  getOperationsOperatorLogsData,
+  getOperatorHistoryData,
+  OPERATIONS_CACHE_TAGS,
+  type OperationsClientLogsParams,
+  type OperationsClientLogsResult,
+  type OperationsMachineLogsParams,
+  type OperationsMachineLogsResult,
+  type OperationsOperatorLogsParams,
+  type OperationsOperatorLogsResult,
+  type OperatorHistoryData,
+} from "@/lib/data/operations";
 
 function isValidUuid(id?: string | null): boolean {
   if (!id) return false;
@@ -255,6 +276,12 @@ export async function submitOperatorHourLogAction(payload: {
     return { success: false, error: "Insufficient permissions. Only operators, supervisors, and admins can submit hour logs." };
   }
 
+  // Schema Validation (Stage 2: validate)
+  const parsed = SubmitHourLogSchema.safeParse(payload);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message || "Validation failed." };
+  }
+
   // Replay Attack Protection Guard
   const idempotency = await checkAndStoreIdempotencyKey({
     userId: user.id,
@@ -291,6 +318,11 @@ export async function submitOperatorHourLogAction(payload: {
   if (endMtr < startMtr) {
     await failIdempotencyKey(currentIdempotencyKey);
     return { success: false, error: "Ending hour meter reading cannot be less than starting hour meter reading." };
+  }
+
+  if (endMtr - startMtr > 24) {
+    await failIdempotencyKey(currentIdempotencyKey);
+    return { success: false, error: "Machine running hours cannot exceed 24 hours in a single log." };
   }
 
   const supabase = createSupabaseAdminClient();
@@ -637,6 +669,11 @@ export async function submitOperatorHourLogAction(payload: {
 
   revalidateTag(CACHE_TAGS.machines, "max");
   revalidateTag(CACHE_TAGS.dashboard, "max");
+  revalidateTag(TAGS.operationsLogs, "max");
+  revalidateTag(TAGS.operations, "max");
+  if (payload.machineId) revalidateTag(TAGS.machineOperations(payload.machineId), "max");
+  if (targetClientId) revalidateTag(TAGS.clientOperations(targetClientId), "max");
+  if (targetOperatorId) revalidateTag(TAGS.operatorOperations(targetOperatorId), "max");
   return responsePayload;
 }
 
@@ -663,6 +700,12 @@ export async function updateOperatorHourLogAction(payload: {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
 
+  // Schema Validation (Stage 2: validate)
+  const parsed = UpdateHourLogSchema.safeParse(payload);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message || "Validation failed." };
+  }
+
   const supabase = createSupabaseAdminClient();
 
   // Fetch existing log to verify ownership
@@ -673,12 +716,16 @@ export async function updateOperatorHourLogAction(payload: {
     .single();
 
   if (!existingLog) return { success: false, error: "Log entry not found." };
-  if (existingLog.operator_id !== user.id && user.role !== "super_admin" && user.role !== "admin") {
+
+  const userRoleLower = (user.role || "").toLowerCase();
+  const isManagerTier = isManagerOrAbove(userRoleLower);
+
+  if (!isManagerTier && existingLog.operator_id !== user.id) {
     return { success: false, error: "You can only edit your own meter logs." };
   }
 
-  // 7-day edit locking window enforcement for operators (admins and super_admins can edit anytime)
-  if (user.role !== "super_admin" && user.role !== "admin" && existingLog.log_date) {
+  // 7-day edit locking window enforcement for operators (managers and above can edit anytime)
+  if (!isManagerTier && existingLog.log_date) {
     const logDateStr = existingLog.log_date.split("T")[0];
     const parts = logDateStr.split("-").map(Number);
     const now = new Date();
@@ -698,6 +745,10 @@ export async function updateOperatorHourLogAction(payload: {
 
   if (endMtr < startMtr) {
     return { success: false, error: "End hour meter reading cannot be less than starting hour meter reading." };
+  }
+
+  if (endMtr - startMtr > 24) {
+    return { success: false, error: "Machine running hours cannot exceed 24 hours in a single log." };
   }
 
   const effectiveCondition = payload.isBreakdown ? "breakdown" : (payload.machineCondition || existingLog.machine_condition || "good");
@@ -722,8 +773,8 @@ export async function updateOperatorHourLogAction(payload: {
     return { success: false, error: timing.errorMessage || "Invalid shift timing values." };
   }
 
-  // Future Shift End Guard: Operator cannot enter logs before shift end
-  if (isShiftEndInFuture(timing.endDateTime, 1)) {
+  // Future Shift End Guard: Operator cannot enter logs before shift end (manager and above can correct/edit logs)
+  if (!isManagerTier && isShiftEndInFuture(timing.endDateTime, 1)) {
     return { success: false, error: "Cannot log before shift end." };
   }
 
@@ -861,7 +912,151 @@ export async function updateOperatorHourLogAction(payload: {
 
   revalidateTag(CACHE_TAGS.machines, "max");
   revalidateTag(CACHE_TAGS.dashboard, "max");
+  revalidateTag(TAGS.operationsLogs, "max");
+  revalidateTag(TAGS.operations, "max");
+  revalidateTag(TAGS.operationLogDetail(payload.logId), "max");
+  revalidateTag(OPERATIONS_CACHE_TAGS.logSummary(payload.logId), "max");
+  revalidateTag(OPERATIONS_CACHE_TAGS.logDetails(payload.logId), "max");
+  revalidateTag(OPERATIONS_CACHE_TAGS.logHistory(payload.logId), "max");
+  revalidateTag(OPERATIONS_CACHE_TAGS.logAudit(payload.logId), "max");
+  if (existingLog?.machine_id) revalidateTag(TAGS.machineOperations(existingLog.machine_id), "max");
+  if (existingLog?.client_id) revalidateTag(TAGS.clientOperations(existingLog.client_id), "max");
+  if (existingLog?.operator_id) revalidateTag(TAGS.operatorOperations(existingLog.operator_id), "max");
   return { success: true, data };
+}
+
+/**
+ * Permanently deletes a machine hour log entry with authorization enforcement,
+ * machine hour meter reconciliation, structured audit logging, and targeted cache invalidation.
+ *
+ * Lifecycle: CLICK -> validate -> server mutation -> PostgreSQL/RLS -> targeted cache invalidation -> update UI
+ */
+export async function deleteOperatorHourLogAction(payload: {
+  logId: string;
+  reason?: string | null;
+}) {
+  const user = await getCurrentUser();
+  if (!user) return { success: false, error: "Unauthorized" };
+
+  const parsed = DeleteHourLogSchema.safeParse(payload);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message || "Invalid log ID format." };
+  }
+
+  const supabase = createSupabaseAdminClient();
+
+  // 1. Fetch existing log to verify permissions and get machine_id / client_id / operator_id
+  const { data: existingLog, error: fetchErr } = await supabase
+    .from("machine_hour_logs")
+    .select("id, machine_id, client_id, operator_id, start_meter, end_meter, log_date, created_at")
+    .eq("id", parsed.data.logId)
+    .single();
+
+  if (fetchErr || !existingLog) {
+    return { success: false, error: "Log entry not found." };
+  }
+
+  // Permission check: super_admin, admin, manager, service_manager, supervisor,
+  // or author operator within 24 hours of submission
+  const userRoleLower = (user.role || "").toLowerCase();
+  const isSupervisorOrAbove =
+    isManagerOrAbove(userRoleLower) || userRoleLower === "supervisor";
+
+  const isAuthorOperator =
+    userRoleLower === "operator" &&
+    existingLog.operator_id === user.id &&
+    Date.now() - new Date(existingLog.created_at).getTime() <= 24 * 60 * 60 * 1000;
+
+  if (!isSupervisorOrAbove && !isAuthorOperator) {
+    return {
+      success: false,
+      error: "You do not have permission to delete this log entry.",
+    };
+  }
+
+  // 2. Delete the record
+  const { error: deleteErr } = await supabase
+    .from("machine_hour_logs")
+    .delete()
+    .eq("id", parsed.data.logId);
+
+  if (deleteErr) {
+    console.error("Error deleting machine hour log:", deleteErr);
+    return { success: false, error: formatOperatorDatabaseError(deleteErr) };
+  }
+
+  // 3. Reconcile machine meter reading if needed
+  // Fetch latest remaining log on this machine
+  const { data: latestRemaining } = await supabase
+    .from("machine_hour_logs")
+    .select("end_meter")
+    .eq("machine_id", existingLog.machine_id)
+    .order("log_date", { ascending: false })
+    .order("end_meter", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (latestRemaining && typeof latestRemaining.end_meter === "number") {
+    await supabase
+      .from("machines")
+      .update({
+        hour_meter: latestRemaining.end_meter,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existingLog.machine_id);
+  } else if (existingLog.start_meter !== undefined && existingLog.start_meter !== null) {
+    // If no remaining logs, reset machine hour_meter to the start_meter of the deleted log
+    await supabase
+      .from("machines")
+      .update({
+        hour_meter: existingLog.start_meter,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", existingLog.machine_id);
+  }
+
+  // 4. Audit logging
+  await logAudit({
+    user_id: user.id,
+    action: "operator.log_deleted",
+    entity_type: "machine_hour_log",
+    entity_id: parsed.data.logId,
+    metadata: {
+      machineId: existingLog.machine_id,
+      operatorId: existingLog.operator_id,
+      clientId: existingLog.client_id,
+      logDate: existingLog.log_date,
+      startMeter: existingLog.start_meter,
+      endMeter: existingLog.end_meter,
+      reason: parsed.data.reason || null,
+      deletedBy: user.id,
+    },
+  });
+
+  // 5. Targeted cache invalidation (tag isolation: NEVER touch TAGS.operationsAssignments)
+  revalidateTag(CACHE_TAGS.machines, "max");
+  revalidateTag(CACHE_TAGS.dashboard, "max");
+  revalidateTag(TAGS.operationsLogs, "max");
+  revalidateTag(TAGS.operations, "max");
+  revalidateTag(TAGS.operationLogDetail(parsed.data.logId), "max");
+  revalidateTag(OPERATIONS_CACHE_TAGS.logSummary(parsed.data.logId), "max");
+  revalidateTag(OPERATIONS_CACHE_TAGS.logDetails(parsed.data.logId), "max");
+  revalidateTag(OPERATIONS_CACHE_TAGS.logHistory(parsed.data.logId), "max");
+  revalidateTag(OPERATIONS_CACHE_TAGS.logAudit(parsed.data.logId), "max");
+  if (existingLog.machine_id) revalidateTag(TAGS.machineOperations(existingLog.machine_id), "max");
+  if (existingLog.client_id) revalidateTag(TAGS.clientOperations(existingLog.client_id), "max");
+  if (existingLog.operator_id) revalidateTag(TAGS.operatorOperations(existingLog.operator_id), "max");
+  revalidateTag(TAGS.machines, "max");
+
+  return {
+    success: true,
+    data: {
+      id: parsed.data.logId,
+      machineId: existingLog.machine_id,
+      startMeter: existingLog.start_meter,
+      endMeter: existingLog.end_meter,
+    },
+  };
 }
 
 export async function assignOperatorToMachineAction(payload: {
@@ -1206,6 +1401,42 @@ export async function getOperationsExportLogsAction(params: GetOperationsExportL
       return { success: false, error: "Unauthorized" };
     }
 
+    const AUTHORIZED_EXPORT_ROLES = [
+      "super_admin",
+      "admin",
+      "company_admin",
+      "manager",
+      "service_manager",
+      "branch_manager",
+      "supervisor",
+      "operator",
+      "client",
+    ];
+
+    const userRole = user.role as string;
+    if (!AUTHORIZED_EXPORT_ROLES.includes(userRole)) {
+      return { success: false, error: "Unauthorized: Insufficient permissions for operational export" };
+    }
+
+    // Strict RBAC Enforcement:
+    // - Operators can NEVER export other operators' logs or fleet-wide logs
+    // - Clients can NEVER export logs outside their own company/client
+    if (userRole === "operator") {
+      params.viewMode = "operator";
+      params.entityId = user.id;
+      params.operatorId = user.id;
+      params.clientId = undefined;
+      params.machineId = undefined;
+    } else if (userRole === "client") {
+      params.viewMode = "client";
+      const uClientId = (user as any).client_id;
+      if (uClientId) {
+        params.clientId = uClientId;
+        params.entityId = uClientId;
+      }
+      params.operatorId = undefined;
+    }
+
     const supabase = createSupabaseAdminClient();
 
     // 1. Resolve entity filter
@@ -1300,19 +1531,21 @@ export async function getOperationsExportLogsAction(params: GetOperationsExportL
         query = query.eq("operator_id", resolvedOperatorId);
       }
 
-      // Time filter (Selected Time)
-      if (params.month === "custom") {
-        if (params.customStartDate) query = query.gte("log_date", params.customStartDate);
-        if (params.customEndDate) query = query.lte("log_date", params.customEndDate);
-      } else if (params.month && params.month !== "all") {
-        const year = new Date().getFullYear();
-        const monthNum = parseInt(params.month, 10);
-        if (!isNaN(monthNum) && monthNum >= 1 && monthNum <= 12) {
-          const mStr = String(monthNum).padStart(2, "0");
-          const startDate = `${year}-${mStr}-01`;
-          const lastDay = new Date(year, monthNum, 0).getDate();
-          const endDate = `${year}-${mStr}-${String(lastDay).padStart(2, "0")}`;
-          query = query.gte("log_date", startDate).lte("log_date", endDate);
+      // Time filter (Selected Time via canonical IST-safe range resolver)
+      const resolvedRange = resolveOperationsDateRange({
+        month: params.month,
+        startDate: params.customStartDate,
+        endDate: params.customEndDate,
+      });
+
+      if (resolvedRange.startDate) {
+        query = query.gte("log_date", resolvedRange.startDate);
+      }
+      if (resolvedRange.endDate) {
+        if (resolvedRange.endOperator === "lt") {
+          query = query.lt("log_date", resolvedRange.endDate);
+        } else {
+          query = query.lte("log_date", resolvedRange.endDate);
         }
       }
 
@@ -1390,5 +1623,95 @@ export async function getOperationsExportLogsAction(params: GetOperationsExportL
     return { success: false, error: err?.message || "Failed to fetch export operational logs" };
   }
 }
+
+/**
+ * On-demand Server Action for fetching client running hours logs.
+ * Triggered when user clicks "Clients" sub-tab or changes client filters.
+ * Returns cached client data without refetching machines, operators, or permissions.
+ */
+export async function getOperationsClientLogsAction(params: OperationsClientLogsParams = {}): Promise<{
+  success: boolean;
+  data?: OperationsClientLogsResult;
+  error?: string;
+}> {
+  try {
+    const data = await getOperationsClientLogsData(params);
+    return { success: true, data };
+  } catch (err: any) {
+    console.error("[getOperationsClientLogsAction] Exception:", err);
+    return { success: false, error: err?.message || "Failed to fetch client operational logs" };
+  }
+}
+
+/**
+ * On-demand Server Action for expanding a client group and fetching its paginated logs.
+ * Triggered strictly when user expands a client group [ v ].
+ * Guarantees fetchLogs: true with server-side pagination.
+ */
+export async function getClientGroupLogsAction(params: OperationsClientLogsParams = {}): Promise<{
+  success: boolean;
+  data?: OperationsClientLogsResult;
+  error?: string;
+}> {
+  return getOperationsClientLogsAction({ ...params, fetchLogs: true });
+}
+
+/**
+ * On-demand Server Action for fetching machine running hours logs.
+ * Returns cached machine data without refetching clients, operators, or permissions.
+ */
+export async function getOperationsMachineLogsAction(params: OperationsMachineLogsParams = {}): Promise<{
+  success: boolean;
+  data?: OperationsMachineLogsResult;
+  error?: string;
+}> {
+  try {
+    const data = await getOperationsMachineLogsData(params);
+    return { success: true, data };
+  } catch (err: any) {
+    console.error("[getOperationsMachineLogsAction] Exception:", err);
+    return { success: false, error: err?.message || "Failed to fetch machine operational logs" };
+  }
+}
+
+/**
+ * On-demand Server Action for fetching operator running hours logs.
+ * Returns cached operator data without refetching machines, clients, or permissions.
+ */
+export async function getOperationsOperatorLogsAction(params: OperationsOperatorLogsParams = {}): Promise<{
+  success: boolean;
+  data?: OperationsOperatorLogsResult;
+  error?: string;
+}> {
+  try {
+    const data = await getOperationsOperatorLogsData(params);
+    return { success: true, data };
+  } catch (err: any) {
+    console.error("[getOperationsOperatorLogsAction] Exception:", err);
+    return { success: false, error: err?.message || "Failed to fetch operator operational logs" };
+  }
+}
+
+/**
+ * On-demand Server Action for fetching operator lifetime history and assignment track record.
+ * Evaluated strictly on-demand when the user opens the Operator History Modal.
+ */
+export async function getOperatorHistoryAction(operatorId: string): Promise<{
+  success: boolean;
+  data?: OperatorHistoryData;
+  error?: string;
+}> {
+  if (!isValidUuid(operatorId)) {
+    return { success: false, error: "Invalid operator ID format." };
+  }
+  try {
+    const data = await getOperatorHistoryData(operatorId);
+    return { success: true, data };
+  } catch (err: any) {
+    console.error("[getOperatorHistoryAction] Exception:", err);
+    return { success: false, error: err?.message || "Failed to fetch operator history data" };
+  }
+}
+
 
 

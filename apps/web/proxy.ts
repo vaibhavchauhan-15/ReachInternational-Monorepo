@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { checkRateLimitAsync, getClientIp, RATE_LIMIT_PROFILES } from "@/lib/security/rate-limiter";
+import { signInternalUser } from "@/lib/security/internal-auth-token";
 
 const activeProtectedRoutes = [
   "/machines",
@@ -84,8 +85,15 @@ export async function proxy(request: NextRequest) {
     );
   }
 
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.delete("x-internal-user-id");
+  requestHeaders.delete("x-internal-user-email");
+  requestHeaders.delete("x-internal-user-sig");
+
   let response = NextResponse.next({
-    request,
+    request: {
+      headers: requestHeaders,
+    },
   });
 
   const supabase = createServerClient(
@@ -99,7 +107,9 @@ export async function proxy(request: NextRequest) {
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           response = NextResponse.next({
-            request,
+            request: {
+              headers: requestHeaders,
+            },
           });
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, options)
@@ -132,6 +142,27 @@ export async function proxy(request: NextRequest) {
       console.warn("[Auth Proxy] Supabase auth rate limit reached (429). Continuing with request processing.");
     } else {
       console.error("[Auth Proxy] Error verifying user:", err);
+    }
+  }
+
+  // Inject cryptographically signed edge-verified user credentials into downstream request headers
+  // to avoid redundant auth roundtrips in downstream Server Components (lib/dal.ts verifySession)
+  if (authenticatedUser) {
+    try {
+      const authSig = await signInternalUser(authenticatedUser.id, authenticatedUser.email || "");
+      requestHeaders.set("x-internal-user-id", authenticatedUser.id);
+      requestHeaders.set("x-internal-user-email", authenticatedUser.email || "");
+      requestHeaders.set("x-internal-user-sig", authSig);
+
+      const existingCookies = response.cookies.getAll();
+      response = NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      });
+      existingCookies.forEach((c) => response.cookies.set(c));
+    } catch (sigErr) {
+      console.error("[Auth Proxy] Error signing internal auth headers:", sigErr);
     }
   }
 

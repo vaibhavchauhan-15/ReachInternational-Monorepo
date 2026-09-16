@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import type { User } from "@/lib/types/database";
 import { AppSidebar, SIDEBAR_WIDTH_EXPANDED, SIDEBAR_WIDTH_COLLAPSED } from "@/components/layout/AppSidebar";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
+import { MobilePageHeader } from "@/components/layout/MobilePageHeader";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
 
@@ -108,8 +109,14 @@ export function AppShellClient({
               : "transition-none"
           )}
         >
-          {/* Main Content Viewport */}
-          <main className="flex-1 w-full max-w-full px-3 sm:px-6 pt-3 md:pt-6 pb-24 md:pb-8">
+          <MobilePageHeader userRole={user.role} />
+
+        {/* Main Content Viewport */}
+          <main
+            id="main-content"
+            data-primary-scroll="true"
+            className="flex-1 w-full max-w-full px-3 sm:px-6 pt-2 md:pt-6 pb-24 md:pb-8"
+          >
             {children}
           </main>
         </div>
