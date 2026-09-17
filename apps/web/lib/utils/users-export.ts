@@ -1,8 +1,10 @@
 import * as XLSX from "xlsx";
 import type { User } from "@/lib/types/database";
-import { formatDate, maskAadhaar, formatLicenseNumber } from "@reachinternational/utils";
+import { formatDate, formatAadhaar, formatLicenseNumber } from "@reachinternational/utils";
+import { handleBrowserPrint } from "@/lib/pdf/pdf-utils";
+import { PDF_BRANDING } from "@/lib/pdf/pdf-config";
 
-function formatRoleName(role: string): string {
+export function formatRoleName(role: string): string {
   switch (role) {
     case "super_admin":
       return "Super Admin";
@@ -31,7 +33,7 @@ function formatRoleName(role: string): string {
   }
 }
 
-function formatStatus(status: string): string {
+export function formatStatus(status: string): string {
   switch (status) {
     case "active":
       return "Active";
@@ -42,6 +44,39 @@ function formatStatus(status: string): string {
     default:
       return status ? status.charAt(0).toUpperCase() + status.slice(1) : "—";
   }
+}
+
+/**
+ * Merges street address, city, district, and state into a single cohesive address string.
+ * Deduplicates repeated tokens (e.g. city === district) and skips empty or placeholder values.
+ */
+export function formatMergedAddress(u: {
+  address?: string | null;
+  city?: string | null;
+  district?: string | null;
+  state?: string | null;
+  location?: string | null;
+}): string {
+  const parts: string[] = [];
+  const seen = new Set<string>();
+
+  const addPart = (val?: string | null) => {
+    if (!val) return;
+    const trimmed = val.trim();
+    if (!trimmed || trimmed === "—" || trimmed === "-" || trimmed.toLowerCase() === "null") return;
+    const normalized = trimmed.toLowerCase();
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      parts.push(trimmed);
+    }
+  };
+
+  addPart(u.address);
+  addPart(u.city || u.location);
+  addPart(u.district);
+  addPart(u.state);
+
+  return parts.length > 0 ? parts.join(", ") : "—";
 }
 
 // Generate formatted date & time slug for filename
@@ -59,12 +94,27 @@ export function formatUsersExportDateTimeSlug(dateObj: Date = new Date()): { dis
 
 export function buildUsersExportFileName(
   prefix: string = "Users-Directory",
-  extension: "xlsx" | "csv"
+  extension: "xlsx" | "csv" | "pdf"
 ): string {
   const { slugDateTime } = formatUsersExportDateTimeSlug();
   const cleanPrefix = prefix.replace(/[^a-zA-Z0-9-_]+/g, "-");
   return `${cleanPrefix}-${slugDateTime}.${extension}`;
 }
+
+export const USER_EXPORT_COLUMNS = [
+  "S.No",
+  "Full Name",
+  "Email Address",
+  "Mobile Number",
+  "Role",
+  "Supervisor",
+  "Working Location",
+  "Status",
+  "Address",
+  "Aadhaar Number",
+  "Driving Licence",
+  "Joined Date",
+] as const;
 
 export function exportUsersToExcel(
   users: User[],
@@ -91,23 +141,8 @@ export function exportUsersToExcel(
       ];
   const blankRow = [""];
 
-  // Table Headers
-  const tableHeaders = [
-    "S.No",
-    "Full Name",
-    "Email Address",
-    "Mobile Number",
-    "Role",
-    "Supervisor",
-    "Working Location",
-    "Status",
-    "City",
-    "District",
-    "State",
-    "Aadhaar Number",
-    "Driving Licence",
-    "Joined Date",
-  ];
+  // Table Headers (12 Clean Columns)
+  const tableHeaders = [...USER_EXPORT_COLUMNS];
 
   let activeCount = 0;
   let pendingCount = 0;
@@ -128,24 +163,20 @@ export function exportUsersToExcel(
       u.supervisor?.full_name || "—",
       u.working_location?.name || "—",
       formatStatus(u.status),
-      u.city || u.location || "—",
-      u.district || "—",
-      u.state || "—",
-      u.aadhaar_number ? maskAadhaar(u.aadhaar_number) : "—",
+      formatMergedAddress(u),
+      u.aadhaar_number ? formatAadhaar(u.aadhaar_number) : "—",
       u.license_number ? formatLicenseNumber(u.license_number) : "—",
       u.created_at ? formatDate(u.created_at) : "—",
     ];
   });
 
-  // Summary Row
+  // Summary Row (12 columns)
   const summaryRow = [
     "SUMMARY TOTALS",
     `Total: ${users.length} Users`,
     `Active: ${activeCount}`,
     `Pending: ${pendingCount}`,
     `Inactive: ${inactiveCount}`,
-    "",
-    "",
     "",
     "",
     "",
@@ -167,7 +198,7 @@ export function exportUsersToExcel(
 
   const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
 
-  // Column Widths
+  // Column Widths (optimized for 12 columns)
   worksheet["!cols"] = [
     { wch: 8 },  // S.No
     { wch: 26 }, // Full Name
@@ -177,11 +208,9 @@ export function exportUsersToExcel(
     { wch: 22 }, // Supervisor
     { wch: 24 }, // Working Location
     { wch: 18 }, // Status
-    { wch: 18 }, // City
-    { wch: 18 }, // District
-    { wch: 18 }, // State
-    { wch: 18 }, // Aadhaar
-    { wch: 20 }, // Licence
+    { wch: 38 }, // Address (Merged)
+    { wch: 20 }, // Aadhaar Number
+    { wch: 22 }, // Driving Licence
     { wch: 16 }, // Joined Date
   ];
 
@@ -195,22 +224,7 @@ export function exportUsersToExcel(
 export function exportUsersToCSV(users: User[], filenamePrefix: string = "Users-Directory") {
   if (!users || users.length === 0) return;
 
-  const headers = [
-    "S.No",
-    "Full Name",
-    "Email Address",
-    "Mobile Number",
-    "Role",
-    "Supervisor",
-    "Working Location",
-    "Status",
-    "City",
-    "District",
-    "State",
-    "Aadhaar Number",
-    "Driving Licence",
-    "Joined Date",
-  ];
+  const headers = [...USER_EXPORT_COLUMNS];
 
   const escapeCSV = (value: string | number | null | undefined): string => {
     if (value === null || value === undefined) return '""';
@@ -227,10 +241,8 @@ export function exportUsersToCSV(users: User[], filenamePrefix: string = "Users-
     u.supervisor?.full_name || "",
     u.working_location?.name || "",
     formatStatus(u.status),
-    u.city || u.location || "",
-    u.district || "",
-    u.state || "",
-    u.aadhaar_number ? maskAadhaar(u.aadhaar_number) : "",
+    formatMergedAddress(u) === "—" ? "" : formatMergedAddress(u),
+    u.aadhaar_number ? formatAadhaar(u.aadhaar_number) : "",
     u.license_number ? formatLicenseNumber(u.license_number) : "",
     u.created_at ? formatDate(u.created_at) : "",
   ]);
@@ -240,7 +252,7 @@ export function exportUsersToCSV(users: User[], filenamePrefix: string = "Users-
     ...rows.map((row) => row.map(escapeCSV).join(",")),
   ].join("\r\n");
 
-  // UTF-8 BOM for Excel compatibility
+  // UTF-8 BOM for seamless Excel/Numbers compatibility
   const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -252,4 +264,219 @@ export function exportUsersToCSV(users: User[], filenamePrefix: string = "Users-
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
+}
+
+const USERS_PRINT_DOC_ID = "printable-users-directory-document";
+
+/**
+ * Generates an enterprise-standard, lightweight HTML report for the User Directory
+ * matching 100% of the Excel and CSV columns and Reach International design system.
+ */
+export function generateUsersReportHtml(users: User[], scopeLabel: string = "User Directory"): string {
+  const { displayDateTime } = formatUsersExportDateTimeSlug();
+
+  let activeCount = 0;
+  let pendingCount = 0;
+  let inactiveCount = 0;
+
+  users.forEach((u) => {
+    if (u.status === "active") activeCount++;
+    else if (u.status === "pending") pendingCount++;
+    else if (u.status === "inactive") inactiveCount++;
+  });
+
+  const rowsHtml = users
+    .map((u, index) => {
+      const isEven = index % 2 === 0;
+      const rowBg = isEven ? "#ffffff" : "#fbfbfb";
+      const statusText = formatStatus(u.status);
+      const statusColor =
+        u.status === "active"
+          ? "#059669"
+          : u.status === "pending"
+          ? "#d97706"
+          : "#dc2626";
+
+      return `
+        <tr style="background-color: ${rowBg}; page-break-inside: avoid;">
+          <td style="padding: 5px 4px; border: 1px solid #d4d4d4; text-align: center; font-size: 8.5px; font-weight: bold; font-family: monospace;">${index + 1}</td>
+          <td style="padding: 5px 6px; border: 1px solid #d4d4d4; font-size: 9px; font-weight: 600; color: #111827;">${u.full_name || "—"}</td>
+          <td style="padding: 5px 6px; border: 1px solid #d4d4d4; font-size: 8.5px; color: #374151; word-break: break-all;">${u.email || "—"}</td>
+          <td style="padding: 5px 6px; border: 1px solid #d4d4d4; font-size: 8.5px; font-family: monospace; color: #111827; white-space: nowrap;">${u.phone || "—"}</td>
+          <td style="padding: 5px 6px; border: 1px solid #d4d4d4; font-size: 8.5px; font-weight: 600; color: #1f2937;">${formatRoleName(u.role)}</td>
+          <td style="padding: 5px 6px; border: 1px solid #d4d4d4; font-size: 8.5px; color: #4b5563;">${u.supervisor?.full_name || "—"}</td>
+          <td style="padding: 5px 6px; border: 1px solid #d4d4d4; font-size: 8.5px; color: #4b5563;">${u.working_location?.name || "—"}</td>
+          <td style="padding: 5px 4px; border: 1px solid #d4d4d4; text-align: center; font-size: 8.5px; font-weight: 700; color: ${statusColor};">${statusText}</td>
+          <td style="padding: 5px 6px; border: 1px solid #d4d4d4; font-size: 8px; color: #4b5563; line-height: 1.25;">${formatMergedAddress(u)}</td>
+          <td style="padding: 5px 6px; border: 1px solid #d4d4d4; font-size: 8.5px; font-family: monospace; color: #111827; white-space: nowrap; text-align: center;">${u.aadhaar_number ? formatAadhaar(u.aadhaar_number) : "—"}</td>
+          <td style="padding: 5px 6px; border: 1px solid #d4d4d4; font-size: 8.5px; font-family: monospace; color: #111827; white-space: nowrap; text-align: center;">${u.license_number ? formatLicenseNumber(u.license_number) : "—"}</td>
+          <td style="padding: 5px 6px; border: 1px solid #d4d4d4; font-size: 8.5px; font-family: monospace; color: #4b5563; text-align: center; white-space: nowrap;">${u.created_at ? formatDate(u.created_at) : "—"}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #171717; background-color: #ffffff; padding: 12px 16px; max-width: 297mm; margin: 0 auto; box-sizing: border-box;">
+      <!-- Header Banner -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #171717; padding-bottom: 10px; margin-bottom: 12px;">
+        <div>
+          <div style="font-size: 15px; font-weight: 900; letter-spacing: 0.5px; color: #111827; text-transform: uppercase;">
+            ${PDF_BRANDING.companyName}
+          </div>
+          <div style="font-size: 12px; font-weight: 700; color: #374151; margin-top: 2px;">
+            USER &amp; EMPLOYEE DIRECTORY REPORT
+          </div>
+          <div style="font-size: 9.5px; color: #6b7280; margin-top: 2px;">
+            Official Personnel Registry, Contact Information &amp; KYC Verification Records
+          </div>
+        </div>
+        <div style="text-align: right; font-size: 9px; color: #4b5563; line-height: 1.4;">
+          <div><strong>Report Scope:</strong> ${scopeLabel}</div>
+          <div><strong>Total Exported:</strong> ${users.length} Users</div>
+          <div><strong>Export Date:</strong> ${displayDateTime}</div>
+          <div><strong>Generated By:</strong> System Administrator</div>
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards Strip -->
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <div style="flex: 1; background-color: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px 10px;">
+          <div style="font-size: 8px; font-weight: 700; text-transform: uppercase; color: #6b7280; letter-spacing: 0.5px;">Total Users</div>
+          <div style="font-size: 15px; font-weight: 800; color: #111827; margin-top: 2px;">${users.length}</div>
+        </div>
+        <div style="flex: 1; background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 6px 10px;">
+          <div style="font-size: 8px; font-weight: 700; text-transform: uppercase; color: #047857; letter-spacing: 0.5px;">Active Accounts</div>
+          <div style="font-size: 15px; font-weight: 800; color: #065f46; margin-top: 2px;">${activeCount}</div>
+        </div>
+        <div style="flex: 1; background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 6px 10px;">
+          <div style="font-size: 8px; font-weight: 700; text-transform: uppercase; color: #b45309; letter-spacing: 0.5px;">Pending Approval</div>
+          <div style="font-size: 15px; font-weight: 800; color: #92400e; margin-top: 2px;">${pendingCount}</div>
+        </div>
+        <div style="flex: 1; background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 6px 10px;">
+          <div style="font-size: 8px; font-weight: 700; text-transform: uppercase; color: #b91c1c; letter-spacing: 0.5px;">Inactive Accounts</div>
+          <div style="font-size: 15px; font-weight: 800; color: #991b1b; margin-top: 2px;">${inactiveCount}</div>
+        </div>
+      </div>
+
+      <!-- 12-Column High-Density Report Table -->
+      <table style="width: 100%; border-collapse: collapse; border: 1px solid #171717; margin-bottom: 16px;">
+        <thead>
+          <tr style="background-color: #171717; color: #ffffff;">
+            <th style="padding: 6px 4px; border: 1px solid #374151; font-size: 8px; font-weight: 800; text-transform: uppercase; width: 3%;">S.N</th>
+            <th style="padding: 6px 6px; border: 1px solid #374151; font-size: 8px; font-weight: 800; text-transform: uppercase; text-align: left; width: 13%;">Full Name</th>
+            <th style="padding: 6px 6px; border: 1px solid #374151; font-size: 8px; font-weight: 800; text-transform: uppercase; text-align: left; width: 14%;">Email Address</th>
+            <th style="padding: 6px 6px; border: 1px solid #374151; font-size: 8px; font-weight: 800; text-transform: uppercase; text-align: left; width: 9%;">Mobile</th>
+            <th style="padding: 6px 6px; border: 1px solid #374151; font-size: 8px; font-weight: 800; text-transform: uppercase; text-align: left; width: 8%;">Role</th>
+            <th style="padding: 6px 6px; border: 1px solid #374151; font-size: 8px; font-weight: 800; text-transform: uppercase; text-align: left; width: 8%;">Supervisor</th>
+            <th style="padding: 6px 6px; border: 1px solid #374151; font-size: 8px; font-weight: 800; text-transform: uppercase; text-align: left; width: 8%;">Location</th>
+            <th style="padding: 6px 4px; border: 1px solid #374151; font-size: 8px; font-weight: 800; text-transform: uppercase; text-align: center; width: 6%;">Status</th>
+            <th style="padding: 6px 6px; border: 1px solid #374151; font-size: 8px; font-weight: 800; text-transform: uppercase; text-align: left; width: 13%;">Address</th>
+            <th style="padding: 6px 6px; border: 1px solid #374151; font-size: 8px; font-weight: 800; text-transform: uppercase; text-align: center; width: 8%;">Aadhaar Number</th>
+            <th style="padding: 6px 6px; border: 1px solid #374151; font-size: 8px; font-weight: 800; text-transform: uppercase; text-align: center; width: 7%;">Driving Licence</th>
+            <th style="padding: 6px 6px; border: 1px solid #374151; font-size: 8px; font-weight: 800; text-transform: uppercase; text-align: center; width: 6%;">Joined Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+
+      <!-- Signatures Footer -->
+      <div style="display: flex; justify-content: space-between; margin-top: 24px; padding-top: 12px; border-top: 1px solid #e5e7eb; page-break-inside: avoid;">
+        <div style="width: 28%; text-align: center;">
+          <div style="height: 36px;"></div>
+          <div style="border-top: 1px dashed #9ca3af; padding-top: 4px; font-size: 9px; font-weight: 700; color: #1f2937;">Prepared By</div>
+          <div style="font-size: 8px; color: #6b7280;">(Human Resources &amp; Admin)</div>
+        </div>
+        <div style="width: 28%; text-align: center;">
+          <div style="height: 36px;"></div>
+          <div style="border-top: 1px dashed #9ca3af; padding-top: 4px; font-size: 9px; font-weight: 700; color: #1f2937;">Site Verification</div>
+          <div style="font-size: 8px; color: #6b7280;">(Operations Division)</div>
+        </div>
+        <div style="width: 28%; text-align: center;">
+          <div style="height: 36px;"></div>
+          <div style="border-top: 1px dashed #9ca3af; padding-top: 4px; font-size: 9px; font-weight: 700; color: #1f2937;">Verified &amp; Approved By</div>
+          <div style="font-size: 8px; font-weight: 800; color: #111827;">REACH INTERNATIONAL</div>
+          <div style="font-size: 8px; color: #6b7280;">(Executive Authority)</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Executes a clean, lightweight PDF export using the browser's native print engine.
+ * Sets the document title to the target PDF filename, mounts the report into the print container,
+ * and launches the system Print / Save as PDF prompt.
+ */
+export function exportUsersToPDF(
+  users: User[],
+  filenamePrefix: string = "Users-Directory",
+  scopeLabel: string = "Full Directory"
+) {
+  if (!users || users.length === 0) return;
+
+  const fileName = buildUsersExportFileName(filenamePrefix, "pdf");
+
+  // Ensure print style is present in head
+  const styleId = "users-pdf-print-styles";
+  if (!document.getElementById(styleId)) {
+    const styleEl = document.createElement("style");
+    styleEl.id = styleId;
+    styleEl.innerHTML = `
+      @media screen {
+        #${USERS_PRINT_DOC_ID} {
+          display: none !important;
+        }
+      }
+      @media print {
+        @page {
+          size: landscape A4;
+          margin: 6mm 8mm 6mm 8mm;
+        }
+        html, body {
+          background: #ffffff !important;
+          color: #000000 !important;
+          height: auto !important;
+          min-height: 0 !important;
+          overflow: visible !important;
+          position: static !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        body > *:not(#${USERS_PRINT_DOC_ID}) {
+          display: none !important;
+        }
+        #${USERS_PRINT_DOC_ID} {
+          display: block !important;
+          position: static !important;
+          width: 100% !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          visibility: visible !important;
+        }
+        #${USERS_PRINT_DOC_ID} * {
+          visibility: visible !important;
+        }
+      }
+    `;
+    document.head.appendChild(styleEl);
+  }
+
+  // Ensure print container exists in body
+  let container = document.getElementById(USERS_PRINT_DOC_ID);
+  if (!container) {
+    container = document.createElement("div");
+    container.id = USERS_PRINT_DOC_ID;
+    document.body.appendChild(container);
+  }
+
+  // Populate container with clean report HTML
+  container.innerHTML = generateUsersReportHtml(users, scopeLabel);
+
+  // Trigger print dialog with swapped title
+  handleBrowserPrint(fileName);
 }

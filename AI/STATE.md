@@ -4,6 +4,15 @@
 - **Phase**: **Production Ready — Google Play Store Compliance & Mobile Deployment Pipeline**
 - **Release Candidate**: `v2026.09.07` (Branch: `main`)
 - **Health**: Production Ready (0 TypeScript Errors across all workspace packages, 0 Runtime Errors, 0 Warnings, 0 P0/P1/P2 Issues)
+- [x] **User Directory Unified Export Architecture & Cross-Platform PDF Parity (2026-09-17)**:
+  - **Delivered**:
+    1. Single Merged Address Column: Eliminated separate City, District, and State columns; merged `street + city + district + state` into a single `Address` column with intelligent duplicate token deduplication in `formatMergedAddress()`.
+    2. Real Database Aadhaar & Driving Licence Hydration: Added `address, aadhaar_number, license_number` directly to `USER_LIST_COLUMNS` in `apps/web/lib/data/users/user-list.ts`, resolving missing values that previously displayed as dashes (`—`).
+    3. Landscape A4 PDF Report Generation: Added lightweight PDF generation on Web using CSS `@media print` landscape A4 spooling with company branding, KPI summary strip, and verification sign-offs at 0 KB client bundle cost.
+    4. 100% Consistent 12-Column Schema Across All Formats: Excel (.xlsx), CSV (.csv), and PDF formats now output identical data and column order (`S.No`, `Full Name`, `Email Address`, `Mobile Number`, `Role`, `Supervisor`, `Working Location`, `Status`, `Address`, `Aadhaar Number`, `Driving Licence`, `Joined Date`).
+    5. Mobile Parity (`apps/mobile/components/users/UserExportModal.tsx`): Added CSV and PDF export options using `expo-print` and `expo-sharing` with identical 12 columns and layout.
+    6. Responsive Web Controls: Added 3-way format selector (`xlsx`, `csv`, `pdf`) in `UsersHeader.tsx` with mobile viewport clamping (`max-w-[calc(100vw-24px)]`), and added PDF support to the floating bulk action bar.
+  - **Verification**: Monorepo typecheck passed across all 7 workspace packages (0 errors, exit 0); ESLint clean on modified DAL and export files (0 errors, exit 0).
 - [x] **Security Audit Re-Verification & Linter Remediation (Pass 3) (2026-09-16)**:
   - **Delivered**:
     1. Revoked Unauthenticated Anon RPC Execution (REV3-H01): Created and applied migrations 082 and 083, revoking default `PUBLIC` / `anon` execution on all 36 sensitive `SECURITY DEFINER` RPCs and trigger functions. Linter finding count dropped from 36 down to exactly 2 authorized signup selectors (`get_active_supervisors_public` and `get_active_working_locations_public`).

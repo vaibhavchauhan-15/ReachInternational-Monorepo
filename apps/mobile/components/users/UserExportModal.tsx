@@ -11,11 +11,18 @@ import {
 } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { formatDate, maskAadhaar, formatLicenseNumber } from '@reachinternational/utils';
+import { formatDate, formatAadhaar, formatLicenseNumber } from '@reachinternational/utils';
 import { FileSpreadsheet, X, FileText, Download, Check } from 'lucide-react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
+import * as Print from 'expo-print';
 import { notifyUserExported } from '../../lib/notifications';
+import {
+  buildPdfHtmlHeader,
+  buildPdfHtmlKpiStrip,
+  buildPdfHtmlSignatureBlock,
+  buildPdfHtmlWrapper,
+} from '../../lib/pdf-html-templates';
 import type { UserRecord } from './UserDetailModal';
 
 export interface UserExportModalProps {
@@ -82,6 +89,29 @@ function formatSlugDateTime(): string {
   return `${day}-${month}-${year}-${hours}-${minutes}`;
 }
 
+export function formatMergedAddress(u: UserRecord): string {
+  const parts: string[] = [];
+  const seen = new Set<string>();
+
+  const addPart = (val?: string | null) => {
+    if (!val) return;
+    const trimmed = val.trim();
+    if (!trimmed || trimmed === '—' || trimmed === '-' || trimmed.toLowerCase() === 'null') return;
+    const normalized = trimmed.toLowerCase();
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      parts.push(trimmed);
+    }
+  };
+
+  addPart(u.address);
+  addPart(u.city || u.location);
+  addPart(u.district);
+  addPart(u.state);
+
+  return parts.length > 0 ? parts.join(', ') : '—';
+}
+
 function generateCSV(users: UserRecord[]): string {
   const headers = [
     'S.No',
@@ -92,9 +122,7 @@ function generateCSV(users: UserRecord[]): string {
     'Supervisor',
     'Working Location',
     'Status',
-    'City',
-    'District',
-    'State',
+    'Address',
     'Aadhaar Number',
     'Driving Licence',
     'Joined Date',
@@ -115,10 +143,8 @@ function generateCSV(users: UserRecord[]): string {
     u.supervisor?.full_name || '',
     u.working_location?.name || '',
     formatStatus(u.status),
-    u.city || u.location || '',
-    u.district || '',
-    u.state || '',
-    u.aadhaar_number ? maskAadhaar(u.aadhaar_number) : '',
+    formatMergedAddress(u) === '—' ? '' : formatMergedAddress(u),
+    u.aadhaar_number ? formatAadhaar(u.aadhaar_number) : '',
     u.license_number ? formatLicenseNumber(u.license_number) : '',
     u.created_at ? formatDate(u.created_at) : '',
   ]);
@@ -127,6 +153,123 @@ function generateCSV(users: UserRecord[]): string {
     headers.map(escapeCSV).join(','),
     ...rows.map((row) => row.map(escapeCSV).join(',')),
   ].join('\r\n');
+}
+
+function generateReportHtml(users: UserRecord[], scopeLabel: string): string {
+  const dateObj = new Date();
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const year = dateObj.getFullYear();
+  const hours = String(dateObj.getHours()).padStart(2, '0');
+  const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+  const displayDateTime = `${day}-${month}-${year} ${hours}:${minutes}`;
+
+  let activeCount = 0;
+  let pendingCount = 0;
+  let inactiveCount = 0;
+
+  users.forEach((u) => {
+    if (u.status === 'active') activeCount++;
+    else if (u.status === 'pending') pendingCount++;
+    else if (u.status === 'inactive') inactiveCount++;
+  });
+
+  const headerHtml = buildPdfHtmlHeader({
+    title: 'USER &amp; EMPLOYEE DIRECTORY REPORT',
+    subtitle: 'Official Personnel Registry, Contact Information &amp; KYC Verification Records',
+    metaItems: [
+      { label: 'Report Scope', value: scopeLabel },
+      { label: 'Total Users', value: `${users.length} Users` },
+      { label: 'Export Date', value: displayDateTime },
+      { label: 'Authorized By', value: 'Operations &amp; HR' },
+    ],
+  });
+
+  const kpiStripHtml = buildPdfHtmlKpiStrip([
+    { label: 'Total Users', value: `${users.length}` },
+    { label: 'Active Accounts', value: `${activeCount}`, color: '#059669' },
+    { label: 'Pending Approval', value: `${pendingCount}`, color: '#d97706' },
+    { label: 'Inactive Accounts', value: `${inactiveCount}`, color: '#dc2626' },
+  ]);
+
+  const rowsHtml = users
+    .map((u, index) => {
+      const isEven = index % 2 === 0;
+      const rowBg = isEven ? '#ffffff' : '#f9fafb';
+      const statusText = formatStatus(u.status);
+      const statusColor =
+        u.status === 'active'
+          ? '#059669'
+          : u.status === 'pending'
+          ? '#d97706'
+          : '#dc2626';
+
+      return `
+        <tr style="background-color: ${rowBg};">
+          <td style="width: 3%; font-family: monospace; font-size: 8px;">${index + 1}</td>
+          <td style="width: 13%; text-align: left; font-weight: 600; font-size: 8.5px;">${u.full_name || '—'}</td>
+          <td style="width: 14%; text-align: left; font-size: 8px; word-break: break-all;">${u.email || '—'}</td>
+          <td style="width: 9%; font-family: monospace; font-size: 8px;">${u.phone || '—'}</td>
+          <td style="width: 8%; font-size: 8px; font-weight: 600;">${formatRoleName(u.role)}</td>
+          <td style="width: 8%; font-size: 8px;">${u.supervisor?.full_name || '—'}</td>
+          <td style="width: 8%; font-size: 8px;">${u.working_location?.name || '—'}</td>
+          <td style="width: 6%; font-weight: bold; font-size: 8px; color: ${statusColor};">${statusText}</td>
+          <td style="width: 13%; text-align: left; font-size: 7.5px; line-height: 1.2;">${formatMergedAddress(u)}</td>
+          <td style="width: 8%; font-family: monospace; font-size: 8px;">${u.aadhaar_number ? formatAadhaar(u.aadhaar_number) : '—'}</td>
+          <td style="width: 7%; font-family: monospace; font-size: 8px;">${u.license_number ? formatLicenseNumber(u.license_number) : '—'}</td>
+          <td style="width: 6%; font-family: monospace; font-size: 8px;">${u.created_at ? formatDate(u.created_at) : '—'}</td>
+        </tr>
+      `;
+    })
+    .join('\n');
+
+  const tableHtml = `
+    <table>
+      <thead>
+        <tr>
+          <th style="width: 3%;">S.N</th>
+          <th style="width: 13%; text-align: left;">FULL NAME</th>
+          <th style="width: 14%; text-align: left;">EMAIL ADDRESS</th>
+          <th style="width: 9%;">MOBILE</th>
+          <th style="width: 8%;">ROLE</th>
+          <th style="width: 8%;">SUPERVISOR</th>
+          <th style="width: 8%;">LOCATION</th>
+          <th style="width: 6%;">STATUS</th>
+          <th style="width: 13%; text-align: left;">ADDRESS</th>
+          <th style="width: 8%;">AADHAAR</th>
+          <th style="width: 7%;">LICENCE</th>
+          <th style="width: 6%;">JOINED</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+      </tbody>
+    </table>
+  `;
+
+  const signaturesHtml = buildPdfHtmlSignatureBlock([
+    {
+      title: 'Prepared By',
+      name: 'HR &amp; ADMINISTRATION',
+      subtitle: '(Personnel Registry)',
+    },
+    {
+      title: 'Site Verification',
+      name: 'OPERATIONS SUPERVISOR',
+      subtitle: '(Field Deployment)',
+    },
+    {
+      title: 'Verified &amp; Approved By',
+      name: 'REACH INTERNATIONAL',
+      subtitle: '(Executive Management)',
+    },
+  ]);
+
+  return buildPdfHtmlWrapper({
+    title: 'USER & EMPLOYEE DIRECTORY REPORT',
+    bodyContent: `${headerHtml}\n${kpiStripHtml}\n${tableHtml}\n${signaturesHtml}`,
+    orientation: 'landscape',
+  });
 }
 
 export const UserExportModal: React.FC<UserExportModalProps> = ({
@@ -142,6 +285,7 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
 }) => {
   const { theme } = useTheme();
   const [isExporting, setIsExporting] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'pdf'>('csv');
   const [exportScope, setExportScope] = useState<'current' | 'all' | 'selected'>('current');
 
   const handleExecuteExport = async (scope: 'current' | 'all' | 'selected') => {
@@ -151,16 +295,20 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
 
       let targetUsers: UserRecord[] = [];
       let filenamePrefix = 'Users-Directory';
+      let scopeLabel = 'Full Directory';
 
       if (scope === 'current') {
         targetUsers = currentPageUsers;
         filenamePrefix = `Users-Page-${currentPage}`;
+        scopeLabel = `Page ${currentPage} of ${totalPages || 1}`;
       } else if (scope === 'selected') {
         targetUsers = currentPageUsers.filter((u) => selectedUserIds.includes(u.id));
         filenamePrefix = 'Users-Selected';
+        scopeLabel = `Selected Users (${targetUsers.length})`;
       } else {
         targetUsers = await onFetchAllMatchingUsers();
         filenamePrefix = activeFilterCount > 0 ? 'Users-Directory-Filtered' : 'Users-Directory-All';
+        scopeLabel = activeFilterCount > 0 ? 'Filtered Dataset' : 'Full Directory';
       }
 
       if (!targetUsers || targetUsers.length === 0) {
@@ -168,27 +316,49 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
         return;
       }
 
-      const csvString = generateCSV(targetUsers);
-      const fileName = `${filenamePrefix}-${formatSlugDateTime()}.csv`;
-      const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+      if (exportFormat === 'csv') {
+        const csvString = generateCSV(targetUsers);
+        const fileName = `${filenamePrefix}-${formatSlugDateTime()}.csv`;
+        const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
 
-      // Write UTF-8 BOM for Excel compatibility
-      await FileSystem.writeAsStringAsync(fileUri, '\uFEFF' + csvString, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
-
-      const isAvailable = await Sharing.isAvailableAsync();
-      if (isAvailable) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'text/csv',
-          dialogTitle: `Export ${targetUsers.length} Users`,
-          UTI: 'public.comma-separated-values-text',
+        // Write UTF-8 BOM for Excel compatibility
+        await FileSystem.writeAsStringAsync(fileUri, '\uFEFF' + csvString, {
+          encoding: FileSystem.EncodingType.UTF8,
         });
-        notifyUserExported('csv', targetUsers.length);
-        onClose();
+
+        const isAvailable = await Sharing.isAvailableAsync();
+        if (isAvailable) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'text/csv',
+            dialogTitle: `Export ${targetUsers.length} Users (CSV)`,
+            UTI: 'public.comma-separated-values-text',
+          });
+          notifyUserExported('csv', targetUsers.length);
+          onClose();
+        } else {
+          notifyUserExported('csv', targetUsers.length);
+          Alert.alert('Sharing Unavailable', 'Native sharing is not available on this device.');
+        }
       } else {
-        notifyUserExported('csv', targetUsers.length);
-        Alert.alert('Sharing Unavailable', 'Native sharing is not available on this device.');
+        // PDF Export via expo-print and native sharing
+        const html = generateReportHtml(targetUsers, scopeLabel);
+        const { uri } = await Print.printToFileAsync({
+          html,
+          margins: { top: 20, bottom: 20, left: 20, right: 20 },
+        });
+
+        notifyUserExported('pdf', targetUsers.length);
+        const isAvailable = await Sharing.isAvailableAsync();
+        if (isAvailable) {
+          await Sharing.shareAsync(uri, {
+            mimeType: 'application/pdf',
+            dialogTitle: `Export ${targetUsers.length} Users (PDF)`,
+            UTI: 'com.adobe.pdf',
+          });
+          onClose();
+        } else {
+          Alert.alert('PDF Generated', `Report saved to: ${uri}`);
+        }
       }
     } catch (err: any) {
       Alert.alert('Export Error', err?.message || 'Failed to export users directory.');
@@ -221,15 +391,29 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
               {/* Header */}
               <View style={[styles.header, { borderBottomColor: theme.colors.hairline }]}>
                 <View style={styles.titleRow}>
-                  <View style={[styles.iconWrap, { backgroundColor: '#10b98118' }]}>
-                    <FileSpreadsheet size={18} color="#10b981" />
+                  <View
+                    style={[
+                      styles.iconWrap,
+                      {
+                        backgroundColor:
+                          exportFormat === 'csv' ? '#0284c718' : '#e11d4818',
+                      },
+                    ]}
+                  >
+                    {exportFormat === 'csv' ? (
+                      <FileSpreadsheet size={18} color="#0284c7" />
+                    ) : (
+                      <FileText size={18} color="#e11d48" />
+                    )}
                   </View>
                   <View>
                     <Text style={[styles.title, { color: theme.colors.ink }]}>
                       Export Directory
                     </Text>
                     <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
-                      Generate CSV formatted report
+                      {exportFormat === 'csv'
+                        ? 'Generate clean CSV spreadsheet'
+                        : 'Generate landscape A4 PDF report'}
                     </Text>
                   </View>
                 </View>
@@ -242,14 +426,82 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                 </TouchableOpacity>
               </View>
 
-              {/* Format Badge */}
-              <View style={[styles.formatRow, { backgroundColor: theme.colors.canvas, borderBottomColor: theme.colors.hairline }]}>
-                <View style={[styles.badge, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                  <FileText size={13} color="#0284c7" />
-                  <Text style={[styles.badgeText, { color: theme.colors.ink }]}>CSV Format (UTF-8)</Text>
+              {/* Format Selector Toggle (CSV / PDF) */}
+              <View
+                style={[
+                  styles.formatRow,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderBottomColor: theme.colors.hairline,
+                  },
+                ]}
+              >
+                <View style={styles.formatToggleContainer}>
+                  <TouchableOpacity
+                    onPress={() => setExportFormat('csv')}
+                    disabled={isExporting}
+                    style={[
+                      styles.formatToggleBtn,
+                      exportFormat === 'csv' && {
+                        backgroundColor: theme.colors.canvasElevated,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <FileSpreadsheet
+                      size={13}
+                      color={exportFormat === 'csv' ? '#0284c7' : theme.colors.mute}
+                    />
+                    <Text
+                      style={[
+                        styles.formatToggleText,
+                        {
+                          color:
+                            exportFormat === 'csv'
+                              ? theme.colors.ink
+                              : theme.colors.mute,
+                          fontWeight: exportFormat === 'csv' ? '700' : '500',
+                        },
+                      ]}
+                    >
+                      CSV (.csv)
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => setExportFormat('pdf')}
+                    disabled={isExporting}
+                    style={[
+                      styles.formatToggleBtn,
+                      exportFormat === 'pdf' && {
+                        backgroundColor: theme.colors.canvasElevated,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
+                    <FileText
+                      size={13}
+                      color={exportFormat === 'pdf' ? '#e11d48' : theme.colors.mute}
+                    />
+                    <Text
+                      style={[
+                        styles.formatToggleText,
+                        {
+                          color:
+                            exportFormat === 'pdf'
+                              ? theme.colors.ink
+                              : theme.colors.mute,
+                          fontWeight: exportFormat === 'pdf' ? '700' : '500',
+                        },
+                      ]}
+                    >
+                      PDF (.pdf)
+                    </Text>
+                  </TouchableOpacity>
                 </View>
+
                 <Text style={[styles.metaText, { color: theme.colors.mute }]}>
-                  Compatible with Excel & Sheets
+                  {exportFormat === 'csv' ? 'Excel / Sheets' : 'Print / Save'}
                 </Text>
               </View>
 
@@ -267,24 +519,46 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                   onPress={() => handleExecuteExport('current')}
                   disabled={isExporting || currentPageUsers.length === 0}
                 >
-                  <View style={[styles.optionIconWrap, { backgroundColor: '#10b98115' }]}>
+                  <View
+                    style={[
+                      styles.optionIconWrap,
+                      {
+                        backgroundColor:
+                          exportFormat === 'csv' ? '#0284c715' : '#e11d4815',
+                      },
+                    ]}
+                  >
                     {isExporting && exportScope === 'current' ? (
-                      <ActivityIndicator size="small" color="#10b981" />
+                      <ActivityIndicator
+                        size="small"
+                        color={exportFormat === 'csv' ? '#0284c7' : '#e11d48'}
+                      />
+                    ) : exportFormat === 'csv' ? (
+                      <FileSpreadsheet size={16} color="#0284c7" />
                     ) : (
-                      <FileSpreadsheet size={16} color="#10b981" />
+                      <FileText size={16} color="#e11d48" />
                     )}
                   </View>
                   <View style={styles.optionContent}>
                     <Text style={[styles.optionTitle, { color: theme.colors.ink }]}>
-                      Current Page
+                      Current Page Only
                     </Text>
                     <Text style={[styles.optionDesc, { color: theme.colors.mute }]}>
                       Page {currentPage} of {totalPages || 1}
                     </Text>
                   </View>
-                  <View style={[styles.countBadge, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+                  <View
+                    style={[
+                      styles.countBadge,
+                      {
+                        backgroundColor: theme.colors.canvasElevated,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
                     <Text style={[styles.countBadgeText, { color: theme.colors.ink }]}>
-                      {currentPageUsers.length} {currentPageUsers.length === 1 ? 'user' : 'users'}
+                      {currentPageUsers.length}{' '}
+                      {currentPageUsers.length === 1 ? 'user' : 'users'}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -301,7 +575,12 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                   onPress={() => handleExecuteExport('all')}
                   disabled={isExporting || totalMatchingCount === 0}
                 >
-                  <View style={[styles.optionIconWrap, { backgroundColor: '#3b82f615' }]}>
+                  <View
+                    style={[
+                      styles.optionIconWrap,
+                      { backgroundColor: '#3b82f615' },
+                    ]}
+                  >
                     {isExporting && exportScope === 'all' ? (
                       <ActivityIndicator size="small" color="#3b82f6" />
                     ) : (
@@ -313,12 +592,23 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                       All Matching Users
                     </Text>
                     <Text style={[styles.optionDesc, { color: theme.colors.mute }]}>
-                      {activeFilterCount > 0 ? 'Filtered dataset across all pages' : 'Entire directory across all pages'}
+                      {activeFilterCount > 0
+                        ? 'Filtered dataset across all pages'
+                        : 'Entire directory across all pages'}
                     </Text>
                   </View>
-                  <View style={[styles.countBadge, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+                  <View
+                    style={[
+                      styles.countBadge,
+                      {
+                        backgroundColor: theme.colors.canvasElevated,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ]}
+                  >
                     <Text style={[styles.countBadgeText, { color: theme.colors.ink }]}>
-                      {totalMatchingCount} {totalMatchingCount === 1 ? 'user' : 'users'}
+                      {totalMatchingCount}{' '}
+                      {totalMatchingCount === 1 ? 'user' : 'users'}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -333,10 +623,13 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                         borderColor: '#f59e0b33',
                       },
                     ]}
-                    onPress={() => handleExecuteExport('selected')}
-                    disabled={isExporting}
                   >
-                    <View style={[styles.optionIconWrap, { backgroundColor: '#f59e0b18' }]}>
+                    <View
+                      style={[
+                        styles.optionIconWrap,
+                        { backgroundColor: '#f59e0b18' },
+                      ]}
+                    >
                       {isExporting && exportScope === 'selected' ? (
                         <ActivityIndicator size="small" color="#f59e0b" />
                       ) : (
@@ -351,7 +644,12 @@ export const UserExportModal: React.FC<UserExportModalProps> = ({
                         Checked rows on current page
                       </Text>
                     </View>
-                    <View style={[styles.countBadge, { backgroundColor: '#fef3c7', borderColor: '#fde68a' }]}>
+                    <View
+                      style={[
+                        styles.countBadge,
+                        { backgroundColor: '#fef3c7', borderColor: '#fde68a' },
+                      ]}
+                    >
                       <Text style={[styles.countBadgeText, { color: '#92400e' }]}>
                         {selectedCount} {selectedCount === 1 ? 'user' : 'users'}
                       </Text>
@@ -440,18 +738,26 @@ const styles = StyleSheet.create({
     paddingVertical: spacingNumeric.sm,
     borderBottomWidth: 1,
   },
-  badge: {
+  formatToggleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
+    padding: 2,
+    borderRadius: radiusNumeric.sm,
+    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+  },
+  formatToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: radiusNumeric.sm,
+    borderRadius: radiusNumeric.sm - 2,
     borderWidth: 1,
+    borderColor: 'transparent',
   },
-  badgeText: {
+  formatToggleText: {
     fontSize: 11,
-    fontWeight: '700',
   },
   metaText: {
     fontSize: 11,

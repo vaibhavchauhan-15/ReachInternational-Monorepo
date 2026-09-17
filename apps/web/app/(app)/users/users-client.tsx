@@ -11,7 +11,7 @@ import {
   ConfirmationDialog,
 } from "@/components/ui";
 import { AnimatedTrash2 } from "@/components/ui/animated-icons";
-import { FileSpreadsheet, Download } from "lucide-react";
+import { FileSpreadsheet, Download, FileText } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import type { User, UserRole, ProfileChangeRequest, AccountDeletionRequest } from "@/lib/types/database";
@@ -1003,15 +1003,17 @@ export function UsersPageClient({
     }
   }, [selectedUserIds, usersList, searchResults, router, toast]);
 
-  // Export Implementations
+  // Export Implementations (Excel, CSV, PDF with 12 clean unified columns)
   const handleExportCurrentPage = useCallback(
-    async (format: "xlsx" | "csv") => {
+    async (format: "xlsx" | "csv" | "pdf") => {
       try {
-        const { exportUsersToExcel, exportUsersToCSV } = await import("@/lib/utils/users-export");
+        const { exportUsersToExcel, exportUsersToCSV, exportUsersToPDF } = await import("@/lib/utils/users-export");
         if (format === "xlsx") {
           exportUsersToExcel(usersList, "Users-Page", `Page ${currentPage}`);
-        } else {
+        } else if (format === "csv") {
           exportUsersToCSV(usersList, "Users-Page");
+        } else {
+          exportUsersToPDF(usersList, "Users-Page", `Page ${currentPage}`);
         }
         toast("success", `Exported ${usersList.length} users to .${format}`);
       } catch (err: any) {
@@ -1022,7 +1024,7 @@ export function UsersPageClient({
   );
 
   const handleExportFiltered = useCallback(
-    async (format: "xlsx" | "csv") => {
+    async (format: "xlsx" | "csv" | "pdf") => {
       try {
         const filteredUsers = await exportUsersFilteredAction({
           search: searchParams?.get("search") || undefined,
@@ -1034,11 +1036,13 @@ export function UsersPageClient({
           sort: searchParams?.get("sort") || undefined,
         });
 
-        const { exportUsersToExcel, exportUsersToCSV } = await import("@/lib/utils/users-export");
+        const { exportUsersToExcel, exportUsersToCSV, exportUsersToPDF } = await import("@/lib/utils/users-export");
         if (format === "xlsx") {
           exportUsersToExcel(filteredUsers, "Users-Filtered", "Filtered Results");
-        } else {
+        } else if (format === "csv") {
           exportUsersToCSV(filteredUsers, "Users-Filtered");
+        } else {
+          exportUsersToPDF(filteredUsers, "Users-Filtered", "Filtered Results");
         }
         toast("success", `Exported ${filteredUsers.length} users to .${format}`);
       } catch (err: any) {
@@ -1049,14 +1053,16 @@ export function UsersPageClient({
   );
 
   const handleExportAll = useCallback(
-    async (format: "xlsx" | "csv") => {
+    async (format: "xlsx" | "csv" | "pdf") => {
       try {
         const allUsers = await exportUsersFilteredAction({});
-        const { exportUsersToExcel, exportUsersToCSV } = await import("@/lib/utils/users-export");
+        const { exportUsersToExcel, exportUsersToCSV, exportUsersToPDF } = await import("@/lib/utils/users-export");
         if (format === "xlsx") {
           exportUsersToExcel(allUsers, "Users-Directory-All", "Full Directory");
-        } else {
+        } else if (format === "csv") {
           exportUsersToCSV(allUsers, "Users-Directory-All");
+        } else {
+          exportUsersToPDF(allUsers, "Users-Directory-All", "Full Directory");
         }
         toast("success", `Exported entire directory (${allUsers.length} users) to .${format}`);
       } catch (err: any) {
@@ -1066,50 +1072,56 @@ export function UsersPageClient({
     [toast]
   );
 
-  const handleExportSelectedExcel = useCallback(async () => {
-    if (selectedUserIds.length === 0) return;
-    try {
-      const selectedUsers = [...usersList, ...pendingUsersList].filter((u) => selectedUserIds.includes(u.id));
-      const { exportUsersToExcel } = await import("@/lib/utils/users-export");
-      exportUsersToExcel(selectedUsers, "Users-Selected", "Selected Users");
-      toast("success", `Exported ${selectedUsers.length} selected users to .xlsx`);
-    } catch (err: any) {
-      toast("error", err?.message || "Failed to export selected users.");
-    }
-  }, [selectedUserIds, usersList, pendingUsersList, toast]);
-
-  const handleExportSelectedCSV = useCallback(async () => {
-    if (selectedUserIds.length === 0) return;
-    try {
-      const selectedUsers = [...usersList, ...pendingUsersList].filter((u) => selectedUserIds.includes(u.id));
-      const { exportUsersToCSV } = await import("@/lib/utils/users-export");
-      exportUsersToCSV(selectedUsers, "Users-Selected");
-      toast("success", `Exported ${selectedUsers.length} selected users to .csv`);
-    } catch (err: any) {
-      toast("error", err?.message || "Failed to export selected users.");
-    }
-  }, [selectedUserIds, usersList, pendingUsersList, toast]);
+  const handleExportSelected = useCallback(
+    async (format: "xlsx" | "csv" | "pdf") => {
+      if (selectedUserIds.length === 0) return;
+      try {
+        const selectedUsers = [...usersList, ...pendingUsersList].filter((u) => selectedUserIds.includes(u.id));
+        const { exportUsersToExcel, exportUsersToCSV, exportUsersToPDF } = await import("@/lib/utils/users-export");
+        if (format === "xlsx") {
+          exportUsersToExcel(selectedUsers, "Users-Selected", "Selected Users");
+        } else if (format === "csv") {
+          exportUsersToCSV(selectedUsers, "Users-Selected");
+        } else {
+          exportUsersToPDF(selectedUsers, "Users-Selected", "Selected Users");
+        }
+        toast("success", `Exported ${selectedUsers.length} selected users to .${format}`);
+      } catch (err: any) {
+        toast("error", err?.message || "Failed to export selected users.");
+      }
+    },
+    [selectedUserIds, usersList, pendingUsersList, toast]
+  );
 
   useEffect(() => {
     const handleQuickExportExcel = () => {
       if (selectedUserIds.length > 0) {
-        handleExportSelectedExcel();
+        handleExportSelected("xlsx");
       } else {
         handleExportFiltered("xlsx");
       }
     };
     const handleQuickExportCsv = () => {
       if (selectedUserIds.length > 0) {
-        handleExportSelectedCSV();
+        handleExportSelected("csv");
       } else {
         handleExportFiltered("csv");
       }
     };
+    const handleQuickExportPdf = () => {
+      if (selectedUserIds.length > 0) {
+        handleExportSelected("pdf");
+      } else {
+        handleExportFiltered("pdf");
+      }
+    };
     const handleQuickExport = (e: Event) => {
-      const customEvent = e as CustomEvent<{ format?: "excel" | "csv" }>;
+      const customEvent = e as CustomEvent<{ format?: "excel" | "csv" | "pdf" }>;
       const format = customEvent.detail?.format;
       if (format === "csv") {
         handleQuickExportCsv();
+      } else if (format === "pdf") {
+        handleQuickExportPdf();
       } else {
         handleQuickExportExcel();
       }
@@ -1117,13 +1129,17 @@ export function UsersPageClient({
 
     window.addEventListener("reach:quick-export-excel", handleQuickExportExcel);
     window.addEventListener("reach:quick-export-csv", handleQuickExportCsv);
+    window.addEventListener("reach:quick-export-pdf", handleQuickExportPdf);
     window.addEventListener("reach:quick-export", handleQuickExport);
+    window.addEventListener("reach:quick-print", handleQuickExportPdf);
     return () => {
       window.removeEventListener("reach:quick-export-excel", handleQuickExportExcel);
       window.removeEventListener("reach:quick-export-csv", handleQuickExportCsv);
+      window.removeEventListener("reach:quick-export-pdf", handleQuickExportPdf);
       window.removeEventListener("reach:quick-export", handleQuickExport);
+      window.removeEventListener("reach:quick-print", handleQuickExportPdf);
     };
-  }, [selectedUserIds, handleExportSelectedExcel, handleExportSelectedCSV, handleExportFiltered]);
+  }, [selectedUserIds, handleExportSelected, handleExportFiltered]);
 
   const stateOptions = useMemo(() => {
     const baseStates = aggregates?.states ?? [];
@@ -1192,10 +1208,7 @@ export function UsersPageClient({
         onExportCurrentPage={handleExportCurrentPage}
         onExportFiltered={handleExportFiltered}
         onExportAll={handleExportAll}
-        onExportSelected={(format) => {
-          if (format === "xlsx") handleExportSelectedExcel();
-          else handleExportSelectedCSV();
-        }}
+        onExportSelected={handleExportSelected}
         onScrollToProfileRequests={() => {
           const el = document.getElementById("profile-change-requests-section");
           if (el) el.scrollIntoView({ behavior: "smooth" });
@@ -1515,7 +1528,7 @@ export function UsersPageClient({
             <div className="flex items-center gap-2 flex-wrap ml-auto">
               <button
                 type="button"
-                onClick={handleExportSelectedExcel}
+                onClick={() => handleExportSelected("xlsx")}
                 className="h-9 sm:h-8 px-3 rounded-sm text-xs font-medium bg-white/10 hover:bg-white/20 text-white border border-white/15 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
                 title="Export selected users to Excel (.xlsx)"
               >
@@ -1525,12 +1538,22 @@ export function UsersPageClient({
 
               <button
                 type="button"
-                onClick={handleExportSelectedCSV}
+                onClick={() => handleExportSelected("csv")}
                 className="h-9 sm:h-8 px-3 rounded-sm text-xs font-medium bg-white/10 hover:bg-white/20 text-white border border-white/15 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
                 title="Export selected users to CSV (.csv)"
               >
                 <Download className="h-3.5 w-3.5 text-sky-400" />
                 <span>CSV</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleExportSelected("pdf")}
+                className="h-9 sm:h-8 px-3 rounded-sm text-xs font-medium bg-white/10 hover:bg-white/20 text-white border border-white/15 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-[0.98]"
+                title="Export selected users to PDF (.pdf)"
+              >
+                <FileText className="h-3.5 w-3.5 text-rose-400" />
+                <span>PDF</span>
               </button>
 
               <button

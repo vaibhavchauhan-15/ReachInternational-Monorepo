@@ -34,10 +34,10 @@ export interface UsersHeaderProps {
   onRoleFilterChange: (val: string) => void;
   onStatusFilterChange: (val: string) => void;
   onAddUser: () => void;
-  onExportCurrentPage: (format: "xlsx" | "csv") => void;
-  onExportFiltered: (format: "xlsx" | "csv") => void;
-  onExportAll: (format: "xlsx" | "csv") => void;
-  onExportSelected: (format: "xlsx" | "csv") => void;
+  onExportCurrentPage: (format: "xlsx" | "csv" | "pdf") => void;
+  onExportFiltered: (format: "xlsx" | "csv" | "pdf") => void;
+  onExportAll: (format: "xlsx" | "csv" | "pdf") => void;
+  onExportSelected: (format: "xlsx" | "csv" | "pdf") => void;
   onScrollToProfileRequests?: () => void;
   onScrollToDeletionRequests?: () => void;
   onScrollToPendingApprovals?: () => void;
@@ -66,7 +66,7 @@ export function UsersHeader({
   onScrollToPendingApprovals,
 }: UsersHeaderProps) {
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
-  const [exportFormat, setExportFormat] = useState<"xlsx" | "csv">("xlsx");
+  const [exportFormat, setExportFormat] = useState<"xlsx" | "csv" | "pdf">("xlsx");
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
   // Close export dropdown when clicking outside
@@ -110,9 +110,17 @@ export function UsersHeader({
                 className={`h-11 sm:h-9 px-2.5 sm:px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-[0.98] transition-all ${
                   isExportMenuOpen ? "border-[var(--color-ink)] ring-1 ring-[var(--color-ink)]/10" : ""
                 }`}
-                title="Export user directory (.xlsx / .csv)"
+                title="Export user directory (.xlsx / .csv / .pdf)"
               >
-                <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                {exportFormat === "xlsx" && (
+                  <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                )}
+                {exportFormat === "csv" && (
+                  <FileText className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                )}
+                {exportFormat === "pdf" && (
+                  <FileText className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
+                )}
                 <span className="hidden sm:inline text-xs font-semibold">Export</span>
                 <AnimatedChevronDown
                   size={13}
@@ -129,9 +137,9 @@ export function UsersHeader({
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: -4, scale: 0.98 }}
                     transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-                    className="absolute right-0 top-full mt-1.5 z-50 w-[290px] sm:w-[320px] rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl backdrop-blur-md text-[var(--color-ink)] overflow-hidden"
+                    className="absolute right-0 top-full mt-1.5 z-50 w-[300px] sm:w-[340px] max-w-[calc(100vw-24px)] rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl backdrop-blur-md text-[var(--color-ink)] overflow-hidden"
                   >
-                    {/* Header: Title + Format Selector */}
+                    {/* Header: Title + 3-Way Format Selector */}
                     <div className="p-3 border-b border-[var(--color-hairline)]">
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <span className="text-[11px] font-mono font-bold tracking-wider uppercase text-[var(--color-mute)]">
@@ -141,30 +149,42 @@ export function UsersHeader({
                           {totalCount} Total
                         </span>
                       </div>
-                      <div className="grid grid-cols-2 gap-1 p-0.5 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)]">
+                      <div className="grid grid-cols-3 gap-1 p-0.5 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)]">
                         <button
                           type="button"
                           onClick={() => setExportFormat("xlsx")}
-                          className={`h-7 px-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          className={`h-7 px-1 sm:px-2 rounded-md text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 sm:gap-1.5 transition-all cursor-pointer ${
                             exportFormat === "xlsx"
                               ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-xs"
                               : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
                           }`}
                         >
-                          <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                          <span>Excel (.xlsx)</span>
+                          <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                          <span>Excel<span className="hidden sm:inline"> (.xlsx)</span></span>
                         </button>
                         <button
                           type="button"
                           onClick={() => setExportFormat("csv")}
-                          className={`h-7 px-2 rounded-md text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                          className={`h-7 px-1 sm:px-2 rounded-md text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 sm:gap-1.5 transition-all cursor-pointer ${
                             exportFormat === "csv"
                               ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-xs"
                               : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
                           }`}
                         >
-                          <FileText className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
-                          <span>CSV (.csv)</span>
+                          <FileText className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
+                          <span>CSV<span className="hidden sm:inline"> (.csv)</span></span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setExportFormat("pdf")}
+                          className={`h-7 px-1 sm:px-2 rounded-md text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 sm:gap-1.5 transition-all cursor-pointer ${
+                            exportFormat === "pdf"
+                              ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-xs"
+                              : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
+                          }`}
+                        >
+                          <FileText className="h-3.5 w-3.5 text-rose-600 dark:text-rose-400 shrink-0" />
+                          <span>PDF<span className="hidden sm:inline"> (.pdf)</span></span>
                         </button>
                       </div>
                     </div>
@@ -181,8 +201,20 @@ export function UsersHeader({
                         className="w-full flex items-center justify-between gap-3 p-2.5 rounded-lg text-left hover:bg-[var(--color-canvas)] transition-all cursor-pointer group"
                       >
                         <div className="flex items-start gap-2.5 min-w-0">
-                          <div className="h-8 w-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/60 flex items-center justify-center shrink-0 text-emerald-700 dark:text-emerald-400 group-hover:scale-105 transition-transform">
-                            <FileSpreadsheet className="h-4 w-4" />
+                          <div
+                            className={`h-8 w-8 rounded-lg border flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform ${
+                              exportFormat === "xlsx"
+                                ? "bg-emerald-50 dark:bg-emerald-950/50 border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-400"
+                                : exportFormat === "csv"
+                                ? "bg-sky-50 dark:bg-sky-950/50 border-sky-200 dark:border-sky-800/60 text-sky-700 dark:text-sky-400"
+                                : "bg-rose-50 dark:bg-rose-950/50 border-rose-200 dark:border-rose-800/60 text-rose-700 dark:text-rose-400"
+                            }`}
+                          >
+                            {exportFormat === "xlsx" ? (
+                              <FileSpreadsheet className="h-4 w-4" />
+                            ) : (
+                              <FileText className="h-4 w-4" />
+                            )}
                           </div>
                           <div className="min-w-0">
                             <div className="text-xs font-semibold text-[var(--color-ink)]">
@@ -285,7 +317,9 @@ export function UsersHeader({
                     {/* Footer / Hint */}
                     <div className="px-3 py-2 bg-[var(--color-canvas)] border-t border-[var(--color-hairline)] rounded-b-xl flex items-center justify-between text-[10px] text-[var(--color-mute)]">
                       <span>Format: .{exportFormat}</span>
-                      <span>Instant file download</span>
+                      <span>
+                        {exportFormat === "pdf" ? "Print / Save as PDF" : "Instant file download"}
+                      </span>
                     </div>
                   </motion.div>
                 )}

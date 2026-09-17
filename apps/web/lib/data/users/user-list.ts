@@ -2,7 +2,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getCurrentUser, requireRole } from "@/lib/dal";
-import type { User, WorkingLocation } from "@/lib/types/database";
+import type { User } from "@/lib/types/database";
 import { getISTDateString } from "@reachinternational/utils";
 import { SUPERVISOR_VISIBLE_USER_ROLES } from "@reachinternational/permissions";
 import { getActiveSupervisorsCached, getActiveWorkingLocationsCached } from "./user-shared";
@@ -35,7 +35,7 @@ export interface UserListResponse {
  * Reuses the machine-list.ts projection pattern.
  */
 export const USER_LIST_COLUMNS =
-  "id, full_name, email, phone, role, status, city, district, state, state_id, shift_time, supervisor_id, supervisor_ids, working_location_id, created_at, updated_at";
+  "id, full_name, email, phone, role, status, address, city, district, state, state_id, aadhaar_number, license_number, shift_time, supervisor_id, supervisor_ids, working_location_id, created_at, updated_at";
 
 export function sanitizeSearchToken(token: string): string {
   return token
@@ -49,7 +49,10 @@ export function sanitizeSearchToken(token: string): string {
  * Targets only relevant indexed columns based on input pattern (digits, email, role, multi-token text)
  * and skips single-character queries to prevent heavy unindexed sequential table scans.
  */
-export function applyOptimizedUserSearch(query: any, search?: string) {
+export function applyOptimizedUserSearch<T extends { or: (filters: string) => T }>(
+  query: T,
+  search?: string
+): T {
   if (!search) return query;
   const trimmed = search.trim();
   if (trimmed.length === 0) return query;
@@ -154,7 +157,9 @@ export function applyOptimizedUserSearch(query: any, search?: string) {
  * Eliminates ad-hoc eager SQL joins and avoids secondary table roundtrips.
  * Reuses the machine-list.ts hydration pattern.
  */
-export async function hydrateUsersPersonnel(rawUsers: any[]): Promise<User[]> {
+type CachedSupervisor = Pick<User, "id" | "full_name" | "email" | "phone" | "role">;
+
+export async function hydrateUsersPersonnel(rawUsers: User[]): Promise<User[]> {
   if (!rawUsers || rawUsers.length === 0) return [];
 
   const [activeSupervisors, activeLocations] = await Promise.all([
@@ -162,7 +167,7 @@ export async function hydrateUsersPersonnel(rawUsers: any[]): Promise<User[]> {
     getActiveWorkingLocationsCached(),
   ]);
 
-  const supervisorMap = new Map(activeSupervisors.map((s) => [s.id, s]));
+  const supervisorMap = new Map<string, CachedSupervisor>(activeSupervisors.map((s) => [s.id, s]));
   const locationMap = new Map(activeLocations.map((l) => [l.id, l]));
 
   // Check for any edge-case supervisor IDs not present in the active cache (e.g. inactive supervisors)
@@ -189,7 +194,7 @@ export async function hydrateUsersPersonnel(rawUsers: any[]): Promise<User[]> {
         .select("id, full_name, email, phone, role")
         .in("id", Array.from(missingSupIds));
       if (extraSups) {
-        extraSups.forEach((s) => supervisorMap.set(s.id, s as any));
+        extraSups.forEach((s) => supervisorMap.set(s.id, s as CachedSupervisor));
       }
     } catch {
       // Silently continue if supplemental fetch fails

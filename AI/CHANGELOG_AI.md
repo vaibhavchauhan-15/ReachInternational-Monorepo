@@ -1,3 +1,40 @@
+- **User Directory Unified Export Architecture & Multi-Format Parity (Excel, CSV, PDF) (2026-09-17)**:
+  - **1. User Request / Page Feedback (`/users?tab=all`)**:
+    - "make this user export format more proper and clean data"
+    - "reacd the screenshot of the generated excel/csv: city , state , distric are seprate instead of street + city + district + state=Address; add address column and merge all the column data and maek single address column; remove street + city + district + state column keep only address column"
+    - "addhar number and licence number are not showing here but user already saved their adhar number from the database export the proper data"
+    - "also add pdf export feature too; excel , csv , pdf all format exported data should be same and consistuent not a single change"
+    - "maek sure it should be light weirght , fast and optimize; all the expoeted data should small in size as possible can be reduce the size; add pdf option and remove unwanted tins also make sure it should be responsive to both mobile and desktop"
+  - **2. Root Cause Analysis**:
+    - `USER_LIST_COLUMNS` projection in `apps/web/lib/data/users/user-list.ts` had explicitly omitted `address, aadhaar_number, license_number`, causing those fields to be `undefined` during list and export extraction.
+    - Export utility previously generated separate columns for City, District, and State without a merged Address column.
+    - PDF export option was missing from user directory exports (previously only Excel and CSV were offered).
+    - Mobile export modal (`UserExportModal.tsx`) only supported CSV without PDF sharing capability.
+  - **3. Implementation & Solutions**:
+    - **Address Merging**: Created `formatMergedAddress(user)` in `apps/web/lib/utils/users-export.ts` merging `[address, city, district, state]` into a clean single string, deduplicating repetitive tokens (e.g. avoiding "Songhad tapi, Songhad tapi").
+    - **Database Projection**: Added `address, aadhaar_number, license_number` directly into `USER_LIST_COLUMNS` in `apps/web/lib/data/users/user-list.ts`, ensuring live Aadhaar and Driving Licence numbers flow into client states and exports.
+    - **Consistent 12-Column Schema Across All Formats**: Standardized Excel (.xlsx), CSV (.csv), and PDF formats to identical 12 columns:
+      1. `S.No`
+      2. `Full Name`
+      3. `Email Address`
+      4. `Mobile Number`
+      5. `Role`
+      6. `Supervisor`
+      7. `Working Location`
+      8. `Status`
+      9. `Address`
+      10. `Aadhaar Number`
+      11. `Driving Licence`
+      12. `Joined Date`
+    - **Zero-Dependency Landscape A4 PDF Generation**: Implemented `exportUsersToPDF()` using native browser print spooling with `@media print` landscape A4 stylesheet, generating crisp vector PDFs with company header, KPI summary strip, and verification sign-off blocks with 0 KB client bundle overhead.
+    - **UI Responsive Refinements**:
+      - `UsersHeader.tsx`: Added 3-way format selector (`xlsx`, `csv`, `pdf`) with clear icons and mobile width clamping (`max-w-[calc(100vw-24px)]`).
+      - Floating bulk selection actions bar: Added PDF export action alongside Excel and CSV.
+      - Mobile Parity (`apps/mobile/components/users/UserExportModal.tsx`): Added CSV vs PDF format toggle with native `expo-print` + `expo-sharing` integration and identical 12 columns.
+  - **4. Verification**:
+    - `pnpm turbo run typecheck`: 7 of 7 packages passed with 0 errors (exit 0).
+    - ESLint on modified DAL and export files: 0 errors, 0 warnings (exit 0).
+
 - **Security Audit & Vulnerability Remediation — Pass 3 (Web, Database RPCs, Supabase Advisor) (2026-09-16)**:
   - **1. User Request**:
     - "revarify the securiy and vunerability again suign security skills"
