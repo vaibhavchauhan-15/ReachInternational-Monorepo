@@ -51,14 +51,10 @@ import {
 } from 'lucide-react-native';
 
 const SIGNUP_ROLES = [
-  { value: 'service_engineer', label: 'Service Engineer', desc: 'Field operations & breakdown resolution' },
-  { value: 'manager', label: 'Manager', desc: 'Operations, fleet, client contracts & business management' },
-  { value: 'service_manager', label: 'Service Manager', desc: 'Service planning, engineer dispatch & FSR approval' },
-  { value: 'store_manager', label: 'Store Manager', desc: 'Inventory stock ledger & transfers' },
-  { value: 'supervisor', label: 'Supervisor', desc: 'Raise complaints & machine inspection' },
   { value: 'operator', label: 'Operator', desc: 'Machine duty & daily running hour logs' },
-  { value: 'mechanic', label: 'Mechanic / Technician', desc: 'Repair work orders & parts request' },
-  { value: 'hr_manager', label: 'HR Manager', desc: 'Staff onboarding & payroll management' },
+  { value: 'supervisor', label: 'Supervisor', desc: 'Equipment monitoring & shift supervision' },
+  { value: 'manager', label: 'Manager', desc: 'Fleet operations, client accounts & asset management' },
+  { value: 'hr', label: 'HR', desc: 'Staff onboarding & personnel management' },
 ];
 
 export default function SignupScreen() {
@@ -68,7 +64,7 @@ export default function SignupScreen() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [selectedRole, setSelectedRole] = useState('service_engineer');
+  const [selectedRole, setSelectedRole] = useState('operator');
   const [roleModalVisible, setRoleModalVisible] = useState(false);
 
   const [shiftStartTime, setShiftStartTime] = useState('08:00 AM');

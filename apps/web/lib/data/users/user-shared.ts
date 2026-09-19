@@ -8,10 +8,12 @@ import { SUPERVISOR_VISIBLE_USER_ROLES } from "@reachinternational/permissions";
 export interface UserListAggregates {
   total: number;
   active: number;
+  operators: number;
   engineers: number;
   new_registrations: number;
   totalUsers: number;
   activeUsers: number;
+  operatorCount: number;
   engineerCount: number;
   states: Array<{ id: string; label: string }>;
 }
@@ -25,7 +27,7 @@ export const getActiveSupervisorsCached = unstable_cache(
     const { data, error } = await supabase
       .from("users")
       .select("id, full_name, email, phone, role")
-      .in("role", ["supervisor", "admin", "super_admin", "manager", "service_manager"])
+      .in("role", ["supervisor", "admin", "super_admin", "manager"])
       .eq("status", "active")
       .order("full_name", { ascending: true });
 
@@ -72,16 +74,18 @@ export const getUserListAggregatesCached = unstable_cache(
         if (parsed && typeof parsed.total !== "undefined") {
           const total = Number(parsed.total ?? 0);
           const active = Number(parsed.active ?? 0);
-          const engineers = Number(parsed.engineers ?? 0);
+          const operators = Number(parsed.operators ?? parsed.engineers ?? 0);
           const new_registrations = Number(parsed.new_registrations ?? 0);
           return {
             total,
             active,
-            engineers,
+            operators,
+            engineers: operators,
             new_registrations,
             totalUsers: total,
             activeUsers: active,
-            engineerCount: engineers,
+            operatorCount: operators,
+            engineerCount: operators,
             states: Array.isArray(parsed.states) ? parsed.states : [],
           };
         }
@@ -98,15 +102,17 @@ export const getUserListAggregatesCached = unstable_cache(
         if (parsed && typeof parsed.total_users !== "undefined") {
           const total = Number(parsed.total_users ?? 0);
           const active = Number(parsed.active_users ?? 0);
-          const engineers = Number(parsed.engineer_count ?? 0);
+          const operators = Number(parsed.operator_count ?? parsed.engineer_count ?? 0);
           return {
             total,
             active,
-            engineers,
+            operators,
+            engineers: operators,
             new_registrations: 0,
             totalUsers: total,
             activeUsers: active,
-            engineerCount: engineers,
+            operatorCount: operators,
+            engineerCount: operators,
             states: Array.isArray(parsed.states) ? parsed.states : [],
           };
         }
@@ -116,10 +122,10 @@ export const getUserListAggregatesCached = unstable_cache(
     }
 
     // 3. Parallel fallback queries
-    const [totalRes, activeRes, engineerRes, statesRes] = await Promise.all([
+    const [totalRes, activeRes, operatorRes, statesRes] = await Promise.all([
       supabase.from("users").select("id", { count: "exact", head: true }),
       supabase.from("users").select("id", { count: "exact", head: true }).eq("status", "active"),
-      supabase.from("users").select("id", { count: "exact", head: true }).in("role", ["engineer", "service_engineer"]),
+      supabase.from("users").select("id", { count: "exact", head: true }).eq("role", "operator"),
       supabase.from("users").select("state, state_id").not("state", "is", null).limit(300),
     ]);
 
@@ -142,20 +148,22 @@ export const getUserListAggregatesCached = unstable_cache(
 
     const total = totalRes.count ?? 0;
     const active = activeRes.count ?? 0;
-    const engineers = engineerRes.count ?? 0;
+    const operators = operatorRes.count ?? 0;
 
     return {
       total,
       active,
-      engineers,
+      operators,
+      engineers: operators,
       new_registrations: 0,
       totalUsers: total,
       activeUsers: active,
-      engineerCount: engineers,
+      operatorCount: operators,
+      engineerCount: operators,
       states: sortedStates,
     };
   },
-  ["user-list-aggregates-v3"],
+  ["user-list-aggregates-v4"],
   { revalidate: CACHE_TIERS.CLASS_C_OPERATIONAL, tags: [TAGS.users] }
 );
 
@@ -176,16 +184,18 @@ export async function getSupervisorUserListAggregatesCached(
           if (parsed && typeof parsed.total !== "undefined") {
             const total = Number(parsed.total ?? 0);
             const active = Number(parsed.active ?? 0);
-            const engineers = Number(parsed.engineers ?? 0);
+            const operators = Number(parsed.operators ?? parsed.engineers ?? 0);
             const new_registrations = Number(parsed.new_registrations ?? 0);
             return {
               total,
               active,
-              engineers,
+              operators,
+              engineers: operators,
               new_registrations,
               totalUsers: total,
               activeUsers: active,
-              engineerCount: engineers,
+              operatorCount: operators,
+              engineerCount: operators,
               states: Array.isArray(parsed.states) ? parsed.states : [],
             };
           }
@@ -197,7 +207,7 @@ export async function getSupervisorUserListAggregatesCached(
       // 2. Secondary fallback parallel queries
       const scopeFilter = `supervisor_id.eq.${supId},supervisor_ids.cs.{${supId}}`;
 
-      const [totalRes, activeRes, engineerRes, statesRes] = await Promise.all([
+      const [totalRes, activeRes, operatorRes, statesRes] = await Promise.all([
         supabase
           .from("users")
           .select("id", { count: "exact", head: true })
@@ -213,7 +223,7 @@ export async function getSupervisorUserListAggregatesCached(
           .from("users")
           .select("id", { count: "exact", head: true })
           .or(scopeFilter)
-          .in("role", ["engineer", "service_engineer"]),
+          .eq("role", "operator"),
         supabase
           .from("users")
           .select("state, state_id")
@@ -242,20 +252,22 @@ export async function getSupervisorUserListAggregatesCached(
 
       const total = totalRes.count ?? 0;
       const active = activeRes.count ?? 0;
-      const engineers = engineerRes.count ?? 0;
+      const operators = operatorRes.count ?? 0;
 
       return {
         total,
         active,
-        engineers,
+        operators,
+        engineers: operators,
         new_registrations: 0,
         totalUsers: total,
         activeUsers: active,
-        engineerCount: engineers,
+        operatorCount: operators,
+        engineerCount: operators,
         states: sortedStates,
       };
     },
-    [`supervisor-user-aggregates-v2-${supervisorId}`],
+    [`supervisor-user-aggregates-v3-${supervisorId}`],
     { revalidate: CACHE_TIERS.CLASS_C_OPERATIONAL, tags: [TAGS.users] }
   );
 
@@ -368,9 +380,9 @@ export const getPendingProfileChangeRequests = unstable_cache(
     } else if (userRole === "admin") {
       // Admin can review requests from manager and below
       query = query.not("requester_role", "in", '("super_admin","admin")');
-    } else if (["manager", "service_manager", "hr_manager", "store_manager"].includes(userRole)) {
-      // Manager can review requests from supervisor and below
-      query = query.not("requester_role", "in", '("super_admin","admin","manager","service_manager","hr_manager","store_manager")');
+    } else if (["manager", "hr"].includes(userRole)) {
+      // Manager/HR can review requests from supervisor and operator
+      query = query.not("requester_role", "in", '("super_admin","admin","manager","hr")');
     } else {
       // Non-approvers see empty
       return [];

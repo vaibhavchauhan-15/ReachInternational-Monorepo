@@ -12,7 +12,7 @@ import {
 } from "@/lib/data/clients";
 import { getCurrentUser } from "@/lib/dal";
 
-const AUTHORIZED_ROLES = ["super_admin", "admin", "manager", "service_manager", "supervisor"] as const;
+const AUTHORIZED_ROLES = ["super_admin", "admin", "manager", "supervisor"] as const;
 
 function isAuthorized(role?: string): boolean {
   if (!role) return false;

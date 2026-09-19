@@ -19,7 +19,7 @@ export interface ClientMutationResult {
   fieldErrors?: Record<string, string>;
 }
 
-const AUTHORIZED_ROLES = ["super_admin", "admin", "manager", "service_manager"] as const;
+const AUTHORIZED_ROLES = ["super_admin", "admin", "manager"] as const;
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isValidUuid(id?: string | null): boolean {

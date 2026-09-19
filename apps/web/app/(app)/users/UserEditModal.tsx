@@ -57,46 +57,22 @@ const allRoleSelectOptions: SelectOption[] = [
     icon: <ShieldCheck className="h-4 w-4 text-violet-500" />,
   },
   {
-    value: "service_manager",
-    label: "Service Manager",
-    description: "Service planning, engineer dispatch & FSR approval",
-    icon: <ShieldCheck className="h-4 w-4 text-indigo-500" />,
-  },
-  {
-    value: "service_engineer",
-    label: "Service Engineer",
-    description: "Field operations & breakdown resolution",
-    icon: <Wrench className="h-4 w-4 text-blue-500" />,
-  },
-  {
     value: "supervisor",
     label: "Supervisor",
-    description: "Raise complaints & machine inspection",
+    description: "Site supervisor & operator assignment oversight",
     icon: <ShieldCheck className="h-4 w-4 text-teal-500" />,
   },
   {
-    value: "store_manager",
-    label: "Store Manager",
-    description: "Inventory stock ledger & transfers",
-    icon: <Package className="h-4 w-4 text-purple-500" />,
+    value: "hr",
+    label: "HR",
+    description: "Staff onboarding, documents & directory management",
+    icon: <Users className="h-4 w-4 text-emerald-500" />,
   },
   {
     value: "operator",
     label: "Operator",
     description: "Machine duty & daily running hour logs",
     icon: <Activity className="h-4 w-4 text-amber-500" />,
-  },
-  {
-    value: "mechanic",
-    label: "Mechanic / Technician",
-    description: "Repair work orders & parts request",
-    icon: <Wrench className="h-4 w-4 text-orange-500" />,
-  },
-  {
-    value: "hr_manager",
-    label: "HR Manager",
-    description: "Staff onboarding, leave & payroll",
-    icon: <Users className="h-4 w-4 text-emerald-500" />,
   },
 ];
 

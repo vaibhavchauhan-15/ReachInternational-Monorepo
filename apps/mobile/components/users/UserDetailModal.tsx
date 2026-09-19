@@ -101,13 +101,9 @@ const ALL_ROLES = [
   { value: 'super_admin', label: 'Super Admin' },
   { value: 'admin', label: 'Admin' },
   { value: 'manager', label: 'Manager' },
-  { value: 'service_manager', label: 'Service Manager' },
-  { value: 'service_engineer', label: 'Service Engineer' },
   { value: 'supervisor', label: 'Supervisor' },
-  { value: 'store_manager', label: 'Store Manager' },
+  { value: 'hr', label: 'HR' },
   { value: 'operator', label: 'Operator' },
-  { value: 'mechanic', label: 'Mechanic' },
-  { value: 'hr_manager', label: 'HR Manager' },
 ];
 
 function getRoleMeta(role: string) {
@@ -129,30 +125,12 @@ function getRoleMeta(role: string) {
         icon: <ShieldCheck size={18} color="#b45309" />,
       };
     case 'manager':
-    case 'branch_manager':
       return {
         label: 'Manager',
         badgeBg: '#e0e7ff',
         badgeText: '#4338ca',
         badgeBorder: '#c7d2fe',
         icon: <ShieldCheck size={18} color="#4338ca" />,
-      };
-    case 'service_manager':
-      return {
-        label: 'Service Manager',
-        badgeBg: '#e0f2fe',
-        badgeText: '#0369a1',
-        badgeBorder: '#bae6fd',
-        icon: <ShieldCheck size={18} color="#0369a1" />,
-      };
-    case 'service_engineer':
-    case 'engineer':
-      return {
-        label: 'Service Engineer',
-        badgeBg: '#dbeafe',
-        badgeText: '#1d4ed8',
-        badgeBorder: '#bfdbfe',
-        icon: <Shield size={18} color="#1d4ed8" />,
       };
     case 'supervisor':
       return {
@@ -162,13 +140,13 @@ function getRoleMeta(role: string) {
         badgeBorder: '#99f6e4',
         icon: <ShieldCheck size={18} color="#0f766e" />,
       };
-    case 'store_manager':
+    case 'hr':
       return {
-        label: 'Store Manager',
-        badgeBg: '#f3e8ff',
-        badgeText: '#7e22ce',
-        badgeBorder: '#e9d5ff',
-        icon: <Shield size={18} color="#7e22ce" />,
+        label: 'HR',
+        badgeBg: '#d1fae5',
+        badgeText: '#047857',
+        badgeBorder: '#a7f3d0',
+        icon: <ShieldCheck size={18} color="#047857" />,
       };
     case 'operator':
       return {
@@ -177,22 +155,6 @@ function getRoleMeta(role: string) {
         badgeText: '#92400e',
         badgeBorder: '#fde68a',
         icon: <Shield size={18} color="#92400e" />,
-      };
-    case 'mechanic':
-      return {
-        label: 'Mechanic',
-        badgeBg: '#ffedd5',
-        badgeText: '#c2410c',
-        badgeBorder: '#fed7aa',
-        icon: <Shield size={18} color="#c2410c" />,
-      };
-    case 'hr_manager':
-      return {
-        label: 'HR Manager',
-        badgeBg: '#d1fae5',
-        badgeText: '#047857',
-        badgeBorder: '#a7f3d0',
-        icon: <ShieldCheck size={18} color="#047857" />,
       };
     default:
       return {

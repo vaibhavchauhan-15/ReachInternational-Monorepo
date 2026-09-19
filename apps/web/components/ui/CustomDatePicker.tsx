@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { formatDate } from "@reachinternational/utils";
 import { useDynamicDropdownPosition } from "@/lib/hooks/useDynamicDropdownPosition";
+import { cn } from "@/lib/utils";
 
 export interface CustomDatePickerProps {
   value: string; // Format: "YYYY-MM-DD"
@@ -36,6 +37,8 @@ export interface CustomDatePickerProps {
   disabled?: boolean;
   helperText?: string;
   align?: "left" | "right";
+  hideIcon?: boolean;
+  showIcon?: boolean;
 }
 
 const MONTH_NAMES = [
@@ -84,13 +87,14 @@ export function CustomDatePicker({
   showWindowBadge = true,
   showRelativeBadge = true,
   label,
-  labelClassName = "block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)]",
+  labelClassName,
   required = false,
   placeholder = "Select date...",
   className = "",
   disabled = false,
   helperText,
-  align = "left",
+  hideIcon = false,
+  showIcon = true,
 }: CustomDatePickerProps) {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -127,13 +131,15 @@ export function CustomDatePicker({
     return new Date(initial.getFullYear(), initial.getMonth(), 1);
   });
 
-  // Sync view month when value changes externally
-  useEffect(() => {
+  // Sync view month when value changes externally (pure render-time state adjustment without cascading effect)
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
     if (value) {
       const parsed = parseYMD(value);
       setViewDate(new Date(parsed.getFullYear(), parsed.getMonth(), 1));
     }
-  }, [value]);
+  }
 
   const { mounted, position, isPositioned, portalTarget, updatePosition } = useDynamicDropdownPosition({
     isOpen: isCalendarOpen,
@@ -331,7 +337,7 @@ export function CustomDatePicker({
     try {
       const parsed = parseYMD(value);
       return formatDate(parsed);
-    } catch (e) {
+    } catch {
       return value;
     }
   }, [value, placeholder]);
@@ -344,9 +350,25 @@ export function CustomDatePicker({
       <div>
         {label && (
           <div className="flex items-center justify-between mb-1">
-            <label className={labelClassName}>
-              {label}
-              {required && <span className="text-rose-500 ml-0.5">*</span>}
+            <label
+              className={cn(
+                "text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] inline-flex items-center gap-1.5 min-w-0 leading-none",
+                labelClassName
+              )}
+            >
+              {!hideIcon && showIcon && typeof label === "string" && (
+                <Calendar className="h-3.5 w-3.5 text-[var(--color-mute)] shrink-0" />
+              )}
+              {typeof label === "string" ? (
+                <span className="truncate leading-none">{label}</span>
+              ) : (
+                label
+              )}
+              {required && (
+                <span className="text-rose-500 font-semibold ml-0.5 shrink-0 select-none leading-none">
+                  *
+                </span>
+              )}
             </label>
             {showWindowBadge && (
               <span className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold tracking-tight shrink-0">

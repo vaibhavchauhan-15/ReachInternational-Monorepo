@@ -35,9 +35,8 @@ async function UsersPageContent({ searchParams }: PageProps) {
   const isAuthorized =
     currentUser.role === "admin" ||
     currentUser.role === "super_admin" ||
-    currentUser.role === "service_manager" ||
-    currentUser.role === "hr_manager" ||
     currentUser.role === "manager" ||
+    currentUser.role === "hr" ||
     isSupervisor ||
     canViewUsers(currentUser.role);
   const isSuperAdmin = currentUser.role === "super_admin";

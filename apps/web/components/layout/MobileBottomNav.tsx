@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
+  AnimatedDashboard,
   AnimatedGauge,
   AnimatedWrench,
   AnimatedUsers,
@@ -35,20 +36,6 @@ interface NavItemConfig {
   roles?: UserRole[];
 }
 
-const roleLabels: Record<UserRole, string> = {
-  super_admin: "Super Admin",
-  admin: "Admin",
-  manager: "Manager",
-  service_manager: "Service Manager",
-  engineer: "Service Engineer",
-  service_engineer: "Service Engineer",
-  supervisor: "Supervisor",
-  store_manager: "Store Manager",
-  operator: "Operator",
-  mechanic: "Mechanic",
-  hr_manager: "HR Manager",
-};
-
 export function MobileBottomNav({ user }: MobileBottomNavProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -68,17 +55,52 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
   }, []);
 
   const isOperator = user.role === "operator";
-  const canAccessClients = ["super_admin", "admin", "manager", "service_manager"].includes(user.role);
-  const canAccessUsers = ["super_admin", "admin", "manager", "service_manager", "hr_manager", "supervisor"].includes(user.role);
+  const isHr = user.role === "hr";
+  const canAccessClients = ["super_admin", "admin", "manager"].includes(user.role);
+  const canAccessUsers = ["super_admin", "admin", "manager", "hr", "supervisor"].includes(user.role);
 
   // Build responsive nav items based on user role
   const navItems: NavItemConfig[] = isOperator
     ? [
         {
+          id: "dashboard",
+          href: "/dashboard",
+          label: "Dashboard",
+          icon: AnimatedDashboard,
+        },
+        {
           id: "operations",
           href: "/operations",
           label: "Operations",
           icon: AnimatedGauge,
+        },
+        {
+          id: "machines",
+          href: "/machines",
+          label: "Machines",
+          icon: AnimatedWrench,
+        },
+        {
+          id: "profile",
+          label: "Profile",
+          icon: AnimatedUser,
+          isAction: true,
+          actionType: "profile",
+        },
+      ]
+    : isHr
+    ? [
+        {
+          id: "dashboard",
+          href: "/dashboard",
+          label: "Dashboard",
+          icon: AnimatedDashboard,
+        },
+        {
+          id: "users",
+          href: "/users",
+          label: "Users",
+          icon: AnimatedUsers,
         },
         {
           id: "profile",
@@ -89,6 +111,12 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
         },
       ]
     : [
+        {
+          id: "dashboard",
+          href: "/dashboard",
+          label: "Dashboard",
+          icon: AnimatedDashboard,
+        },
         {
           id: "machines",
           href: "/machines",
@@ -111,7 +139,7 @@ export function MobileBottomNav({ user }: MobileBottomNavProps) {
               },
             ]
           : []),
-        ...(canAccessUsers
+        ...(canAccessUsers && !canAccessClients
           ? [
               {
                 id: "users",

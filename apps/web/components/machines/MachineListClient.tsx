@@ -862,8 +862,7 @@ export function MachineListClient({
   const canManage =
     userRole === "super_admin" ||
     userRole === "admin" ||
-    userRole === "manager" ||
-    userRole === "service_manager";
+    userRole === "manager";
   const isSupervisor = userRole === "supervisor";
   const isAdmin = canManage;
   const canEdit = canManage;
@@ -1298,8 +1297,9 @@ export function MachineListClient({
   );
 
   const statsSummary = useMemo(() => {
-    if (initialKpis) {
+    if (initialKpis && (initialKpis.total > 0 || machines.length === 0)) {
       return {
+        totalCount: initialKpis.total,
         availableCount: initialKpis.available,
         rentedCount: initialKpis.rented,
         breakdownCount: initialKpis.breakdown,
@@ -1323,8 +1323,15 @@ export function MachineListClient({
       if (m.health_status === "spare") spareCount++;
     });
 
-    return { availableCount, rentedCount, breakdownCount, maintenanceCount, spareCount };
-  }, [machines, initialKpis]);
+    return {
+      totalCount: total > 0 ? total : machines.length,
+      availableCount,
+      rentedCount,
+      breakdownCount,
+      maintenanceCount,
+      spareCount,
+    };
+  }, [machines, initialKpis, total]);
 
   // Full unified columns mapping for high density table
   const tableColumns = useMemo(
@@ -1526,126 +1533,140 @@ export function MachineListClient({
     <div className="flex flex-col gap-5 pb-24 md:pb-6">
       {/* Canonical Page Header */}
       <PageHeader
-        title="Machine Directory"
+        title={userRole === "operator" ? "Assigned Equipment" : "Machine Directory"}
         breadcrumbs={[{ label: "Machines" }]}
-            actions={
-              <div className="flex items-center gap-2">
-                <ExportButton
-                  format="xlsx"
-                  iconOnly
-                  loading={isExporting}
-                  onClick={() => handleExportExcel(selectedIds)}
-                  tooltip="Export machine directory to Excel (.xlsx)"
-                />
+        actions={
+          userRole === "operator" ? (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.refresh()}
+                className="h-9 px-3 text-xs font-semibold gap-1.5"
+              >
+                <AnimatedRefresh size={14} className="text-muted-foreground" />
+                <span className="hidden sm:inline">Refresh</span>
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <ExportButton
+                format="xlsx"
+                iconOnly
+                loading={isExporting}
+                onClick={() => handleExportExcel(selectedIds)}
+                tooltip="Export machine directory to Excel (.xlsx)"
+              />
 
-                <HeaderMoreMenu
-                  isAdmin={isAdmin}
-                  onOpenImport={() => setImportModalOpen(true)}
-                  onExportExcel={() => handleExportExcel(selectedIds)}
-                  onExportCSV={() => handleExportCSV(selectedIds)}
-                  onExportPDF={() => handleOpenPDFModal(selectedIds)}
-                  onRefresh={() => router.refresh()}
-                />
+              <HeaderMoreMenu
+                isAdmin={isAdmin}
+                onOpenImport={() => setImportModalOpen(true)}
+                onExportExcel={() => handleExportExcel(selectedIds)}
+                onExportCSV={() => handleExportCSV(selectedIds)}
+                onExportPDF={() => handleOpenPDFModal(selectedIds)}
+                onRefresh={() => router.refresh()}
+              />
 
-                {canCreateMachine && (
-                  <Button
-                    variant="primary"
-                    icon={<AnimatedPlus size={15} />}
-                    responsive
-                    onClick={() => {
-                      setEditingMachine(null);
-                      setModalOpen(true);
-                    }}
-                    className="h-9 px-3.5 sm:px-4 text-xs font-semibold whitespace-nowrap"
-                  >
-                    Add Machine
-                  </Button>
-                )}
-              </div>
-            }
-          />
+              {canCreateMachine && (
+                <Button
+                  variant="primary"
+                  icon={<AnimatedPlus size={15} />}
+                  responsive
+                  onClick={() => {
+                    setEditingMachine(null);
+                    setModalOpen(true);
+                  }}
+                  className="h-9 px-3.5 sm:px-4 text-xs font-semibold whitespace-nowrap"
+                >
+                  Add Machine
+                </Button>
+              )}
+            </div>
+          )
+        }
+      />
 
-          {/* Interactive KPI Cards Row */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3.5">
-            {/* Total Card */}
-            <motion.div
-              whileTap={{ scale: 0.98 }}
-              onClick={() => updateFilters({ status: "all", page: 1 })}
-              className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
-                currentStatus === "all"
-                  ? "bg-[var(--color-canvas-elevated)] border-[var(--color-ink)] shadow-xs ring-1 ring-[var(--color-ink)]/10"
-                  : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-[var(--color-ink)]/30"
-              }`}
-            >
-              <div className="text-[10px] sm:text-[11px] font-semibold text-[var(--color-mute)] uppercase tracking-wider">
-                Total Machines
-              </div>
-              <div className="text-xl sm:text-2xl font-extrabold text-[var(--color-ink)] mt-1">
-                <AnimatedCounter value={initialKpis?.total ?? total} />
-              </div>
-            </motion.div>
-
-            {/* Available Card */}
-            <motion.div
-              whileTap={{ scale: 0.98 }}
-              onClick={() => updateFilters({ status: "available", page: 1 })}
-              className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
-                currentStatus === "available"
-                  ? "bg-emerald-50/40 border-emerald-500 shadow-xs ring-1 ring-emerald-500/20 dark:bg-emerald-950/20"
-                  : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-emerald-500/40"
-              }`}
-            >
-              <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-                Available Fleet
-              </div>
-              <div className="text-xl sm:text-2xl font-extrabold text-emerald-700 dark:text-emerald-300 mt-1">
-                <AnimatedCounter value={statsSummary.availableCount} />
-              </div>
-            </motion.div>
-
-            {/* Rented Card */}
-            <motion.div
-              whileTap={{ scale: 0.98 }}
-              onClick={() => updateFilters({ status: "rented", page: 1 })}
-              className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
-                currentStatus === "rented"
-                  ? "bg-sky-50/40 border-sky-500 shadow-xs ring-1 ring-sky-500/20 dark:bg-sky-950/20"
-                  : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-sky-500/40"
-              }`}
-            >
-              <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-400">
-                On Rent
-              </div>
-              <div className="text-xl sm:text-2xl font-extrabold text-sky-700 dark:text-sky-300 mt-1">
-                <AnimatedCounter value={statsSummary.rentedCount} />
-              </div>
-            </motion.div>
-
-            {/* Breakdown Card */}
-            <motion.div
-              whileTap={{ scale: 0.98 }}
-              onClick={() => {
-                const next = healthStatusFilter === "breakdown" ? "all" : "breakdown";
-                setHealthStatusFilter(next);
-                updateFilters({ health_status: next, page: 1 });
-              }}
-              className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
-                healthStatusFilter === "breakdown"
-                  ? "bg-rose-50/40 border-rose-500 shadow-xs ring-1 ring-rose-500/20 dark:bg-rose-950/20"
-                  : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-rose-500/40"
-              }`}
-            >
-              <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
-                Breakdown Events
-              </div>
-              <div className="text-xl sm:text-2xl font-extrabold text-rose-700 dark:text-rose-300 mt-1">
-                <AnimatedCounter value={statsSummary.breakdownCount} />
-              </div>
-            </motion.div>
+      {/* Interactive KPI Cards Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3.5">
+        {/* Total Card */}
+        <motion.div
+          whileTap={{ scale: 0.98 }}
+          onClick={() => updateFilters({ status: "all", page: 1 })}
+          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
+            currentStatus === "all"
+              ? "bg-[var(--color-canvas-elevated)] border-[var(--color-ink)] shadow-xs ring-1 ring-[var(--color-ink)]/10"
+              : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-[var(--color-ink)]/30"
+          }`}
+        >
+          <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-[var(--color-mute)]">
+            {userRole === "operator" ? "Assigned Fleet" : "Total Fleet"}
           </div>
+          <div className="text-xl sm:text-2xl font-extrabold text-[var(--color-ink)] mt-1">
+            <AnimatedCounter value={statsSummary.totalCount} />
+          </div>
+        </motion.div>
 
-          {/* Search Bar & Filter Toolbar */}
-          <FilterToolbar
+        {/* Available Card */}
+        <motion.div
+          whileTap={{ scale: 0.98 }}
+          onClick={() => updateFilters({ status: "available", page: 1 })}
+          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
+            currentStatus === "available"
+              ? "bg-emerald-50/40 border-emerald-500 shadow-xs ring-1 ring-emerald-500/20 dark:bg-emerald-950/20"
+              : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-emerald-500/40"
+          }`}
+        >
+          <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+            Available
+          </div>
+          <div className="text-xl sm:text-2xl font-extrabold text-emerald-700 dark:text-emerald-300 mt-1">
+            <AnimatedCounter value={statsSummary.availableCount} />
+          </div>
+        </motion.div>
+
+        {/* Rented Card */}
+        <motion.div
+          whileTap={{ scale: 0.98 }}
+          onClick={() => updateFilters({ status: "rented", page: 1 })}
+          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
+            currentStatus === "rented"
+              ? "bg-sky-50/40 border-sky-500 shadow-xs ring-1 ring-sky-500/20 dark:bg-sky-950/20"
+              : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-sky-500/40"
+          }`}
+        >
+          <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-400">
+            On Rent
+          </div>
+          <div className="text-xl sm:text-2xl font-extrabold text-sky-700 dark:text-sky-300 mt-1">
+            <AnimatedCounter value={statsSummary.rentedCount} />
+          </div>
+        </motion.div>
+
+        {/* Breakdown Card */}
+        <motion.div
+          whileTap={{ scale: 0.98 }}
+          onClick={() => {
+            const next = healthStatusFilter === "breakdown" ? "all" : "breakdown";
+            setHealthStatusFilter(next);
+            updateFilters({ health_status: next, page: 1 });
+          }}
+          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
+            healthStatusFilter === "breakdown"
+              ? "bg-rose-50/40 border-rose-500 shadow-xs ring-1 ring-rose-500/20 dark:bg-rose-950/20"
+              : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-rose-500/40"
+          }`}
+        >
+          <div className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400">
+            Breakdown Events
+          </div>
+          <div className="text-xl sm:text-2xl font-extrabold text-rose-700 dark:text-rose-300 mt-1">
+            <AnimatedCounter value={statsSummary.breakdownCount} />
+          </div>
+        </motion.div>
+      </div>
+
+      {/* Search Bar & Filter Toolbar */}
+      <FilterToolbar
             searchQuery={localSearchTerm}
             onSearchChange={handleSearchChange}
             placeholder="Search Machine ID, Model, Serial Number..."
@@ -1898,26 +1919,53 @@ export function MachineListClient({
               {isPending || isSearchLoading ? (
                 <MobileMachineCardSkeletonList />
               ) : activeMachines.length === 0 ? (
-                <div className="col-span-full py-12 px-4 text-center rounded-2xl border border-dashed border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] flex flex-col items-center justify-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[var(--color-hairline-soft-surface)] flex items-center justify-center text-[var(--color-mute)]">
-                    <Search className="w-5 h-5" />
+                userRole === "operator" ? (
+                  <div className="col-span-full max-w-md mx-auto py-12 px-4 text-center rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] flex flex-col items-center justify-center gap-3 w-full shadow-xs">
+                    <div className="w-12 h-12 rounded-2xl bg-[var(--color-hairline-soft-surface)] flex items-center justify-center text-[var(--color-mute)] border border-[var(--color-hairline)] mb-1">
+                      <AnimatedWrench className="w-6 h-6 text-[var(--color-mute)]" />
+                    </div>
+                    <div className="text-base font-bold text-[var(--color-ink)]">
+                      {isSearchActive ? `No machines found matching "${localSearchTerm}"` : "No Machine Assigned"}
+                    </div>
+                    <p className="text-xs text-[var(--color-mute)] max-w-sm leading-relaxed">
+                      {isSearchActive
+                        ? "No assigned equipment matched your search or filters. Try adjusting your query or resetting filters."
+                        : "You do not currently have a machine assigned to your account. Please reach out to your site supervisor to be assigned to active equipment."}
+                    </p>
+                    {isSearchActive ? (
+                      <Button variant="secondary" size="sm" onClick={() => handleSearchChange("")} className="mt-1">
+                        Clear Search
+                      </Button>
+                    ) : (
+                      <Link href="/operations?tab=entry" className="mt-2">
+                        <Button variant="primary" size="sm" className="min-h-[40px]">
+                          Go to Operations Hub
+                        </Button>
+                      </Link>
+                    )}
                   </div>
-                  <div className="text-sm font-semibold text-[var(--color-ink)]">
-                    {isSearchActive
-                      ? `No machines found matching "${localSearchTerm}"`
-                      : "No machines match your criteria"}
+                ) : (
+                  <div className="col-span-full py-12 px-4 text-center rounded-2xl border border-dashed border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] flex flex-col items-center justify-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-[var(--color-hairline-soft-surface)] flex items-center justify-center text-[var(--color-mute)]">
+                      <Search className="w-5 h-5" />
+                    </div>
+                    <div className="text-sm font-semibold text-[var(--color-ink)]">
+                      {isSearchActive
+                        ? `No machines found matching "${localSearchTerm}"`
+                        : "No machines match your criteria"}
+                    </div>
+                    <p className="text-xs text-[var(--color-mute)] max-w-sm">
+                      {isSearchActive
+                        ? "No records matched Machine ID, Model, or Serial Number. Check for typos or clear your search to view all machines."
+                        : "Try adjusting filters or search terms."}
+                    </p>
+                    {isSearchActive && (
+                      <Button variant="secondary" size="sm" onClick={() => handleSearchChange("")} className="mt-1">
+                        Clear Search
+                      </Button>
+                    )}
                   </div>
-                  <p className="text-xs text-[var(--color-mute)] max-w-sm">
-                    {isSearchActive
-                      ? "No records matched Machine ID, Model, or Serial Number. Check for typos or clear your search to view all machines."
-                      : "Try adjusting filters or search terms."}
-                  </p>
-                  {isSearchActive && (
-                    <Button variant="secondary" size="sm" onClick={() => handleSearchChange("")} className="mt-1">
-                      Clear Search
-                    </Button>
-                  )}
-                </div>
+                )
               ) : (
                 <>
                   <AnimatePresence mode="popLayout">
@@ -1952,34 +2000,34 @@ export function MachineListClient({
           )}
 
           {/* Infinite Scroll Sentinel for Mobile */}
-            {!isDesktop && !isSearchActive && mobileHasMore && !loadMoreMobileError && !isPending && (
-              <div ref={mobileSentinelRef} className="h-6 w-full pointer-events-none" />
-            )}
+          {!isDesktop && !isSearchActive && mobileHasMore && !loadMoreMobileError && !isPending && (
+            <div ref={mobileSentinelRef} className="h-6 w-full pointer-events-none" />
+          )}
 
-            {/* Mobile Load More Error with Retry */}
-            {!isDesktop && !isSearchActive && loadMoreMobileError && (
-              <div className="p-3 my-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] flex items-center justify-between gap-3 text-xs shadow-xs">
-                <span className="text-[var(--color-error)] font-medium">{loadMoreMobileError}</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleMobileRetry}
-                  className="h-7 px-3 text-xs font-semibold rounded-md border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)] flex items-center gap-1.5 cursor-pointer"
-                >
-                  <RotateCcw className="h-3 w-3" />
-                  Retry
-                </Button>
-              </div>
-            )}
+          {/* Mobile Load More Error with Retry */}
+          {!isDesktop && !isSearchActive && loadMoreMobileError && (
+            <div className="p-3 my-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] flex items-center justify-between gap-3 text-xs shadow-xs">
+              <span className="text-[var(--color-error)] font-medium">{loadMoreMobileError}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleMobileRetry}
+                className="h-7 px-3 text-xs font-semibold rounded-md border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)] flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Retry
+              </Button>
+            </div>
+          )}
 
-            {/* End-of-List Indicator on Mobile */}
-            {!isDesktop && !isSearchActive && !mobileHasMore && mobileMachinesList.length > 0 && !isPending && (
-              <div className="py-6 flex items-center justify-center gap-3 text-xs text-[var(--color-mute)] select-none">
-                <div className="h-[1px] flex-1 bg-[var(--color-hairline)]" />
-                <span className="font-medium text-[var(--color-mute)]">All machines have been displayed</span>
-                <div className="h-[1px] flex-1 bg-[var(--color-hairline)]" />
-              </div>
-            )}
+          {/* End-of-List Indicator on Mobile */}
+          {!isDesktop && !isSearchActive && !mobileHasMore && mobileMachinesList.length > 0 && !isPending && (
+            <div className="py-6 flex items-center justify-center gap-3 text-xs text-[var(--color-mute)] select-none">
+              <div className="h-[1px] flex-1 bg-[var(--color-hairline)]" />
+              <span className="font-medium text-[var(--color-mute)]">All machines have been displayed</span>
+              <div className="h-[1px] flex-1 bg-[var(--color-hairline)]" />
+            </div>
+          )}
 
           {/* Pagination */}
           {activeTotalPages > 1 && (

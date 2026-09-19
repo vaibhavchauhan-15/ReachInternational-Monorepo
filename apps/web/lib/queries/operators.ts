@@ -125,7 +125,7 @@ const HOUR_LOG_DIRECT_PROJECTION = `
  * Resilient multi-tier hour logs fetcher.
  * Automatically recovers if foreign key embeddings or newer conflict columns are pending database migration.
  */
-async function fetchHourLogsResiliently(
+export async function fetchHourLogsResiliently(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
   options: { operatorId?: string; limit?: number } = {}
 ): Promise<any[]> {
@@ -745,72 +745,7 @@ export const getOperationsHubData = cache(async (
 ) => {
   const supabase = createSupabaseAdminClient();
 
-  // 1. Operator Entry Tab: Only fetch operator assignment + recent logs
-  if (user.role === "operator" || tab === "entry" || tab === "history") {
-    const [assignedMachineRes, activeAssignmentRes, rawRecentLogs, clientsList, allMachinesRes] = await Promise.all([
-      supabase
-        .from("machines")
-        .select("id, machine_id, model, serial_number, hour_meter, status, manufacturer, client_id, current_operator_id, operator_ids, current_supervisor_id, supervisor_ids, client:clients(id, code, company_name, street, address, city, district, state, phone)")
-        .or(`current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}}`)
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from("operator_machine_assignments")
-        .select("id, machine_id, shift_start_time, shift_end_time, is_active")
-        .eq("operator_id", user.id)
-        .eq("is_active", true)
-        .limit(1)
-        .maybeSingle(),
-      fetchHourLogsResiliently(supabase, { operatorId: user.id, limit: 100 }),
-      getClients(undefined, true),
-      getMachines({ pageSize: 1000 }),
-    ]);
 
-    const formattedAssignedMachine = assignedMachineRes.data
-      ? (() => {
-          const m = assignedMachineRes.data as any;
-          const code = m.machine_id || m.id;
-          const activeAssignment = activeAssignmentRes.data;
-          return {
-            ...m,
-            machine_id: code,
-            machine_code: code,
-            machine_name: m.model ? `${code} (${m.model})` : code,
-            shift_start_time: activeAssignment?.shift_start_time || null,
-            shift_end_time: activeAssignment?.shift_end_time || null,
-          };
-        })()
-      : null;
-
-    const formattedLogs = formatHourLogsData(
-      rawRecentLogs,
-      allMachinesRes.machines,
-      [user],
-      clientsList
-    );
-
-    return {
-      machines: allMachinesRes.machines,
-      dbClients: clientsList,
-      operators: [],
-      assignments: activeAssignmentRes.data ? [activeAssignmentRes.data] : [],
-      hourLogs: formattedLogs,
-      siteMovements: [],
-      operatorPayouts: [],
-      assignedMachine: (formattedAssignedMachine as unknown as Machine) || null,
-      recentLogs: formattedLogs as unknown as OperatorHourLog[],
-      allMachines: allMachinesRes.machines as unknown as MachineWithEngineer[],
-      totalLogsCount: formattedLogs.length,
-      currentPage: 1,
-      logsPageSize: 10,
-      logsSummary: {
-        totalRunHours: 0,
-        totalOtHours: 0,
-        totalBreakdowns: 0,
-        loggedDaysCount: 0,
-      },
-    };
-  }
 
   // 2. Supervisor Logs Tab: Sub-tab isolated loaders with server-side pagination & GIN trigram indexes
   if (tab === "logs") {
@@ -946,14 +881,5 @@ export const getOperationsHubData = cache(async (
   };
 });
 
-export const getOperatorEntryContext = cache(async (operatorId: string) => {
-  const supabase = createSupabaseAdminClient();
-  const { data: machine } = await supabase
-    .from("machines")
-    .select("id, machine_id, model, serial_number, hour_meter, status, manufacturer, client_id, current_operator_id, operator_ids, current_supervisor_id, supervisor_ids, client:clients(id, code, company_name, address, city, state, phone)")
-    .or(`current_operator_id.eq.${operatorId},operator_ids.cs.{${operatorId}}`)
-    .limit(1)
-    .maybeSingle();
-
-  return { assignedMachine: machine };
-});
+// Re-export canonical ultra-fast Operator Entry Context read model
+export { getOperatorEntryContext } from "@/lib/queries/operator-entry";

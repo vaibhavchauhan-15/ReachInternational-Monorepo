@@ -118,7 +118,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
   const approverLabel =
     role === 'admin'
       ? 'Super Administrator'
-      : ['manager', 'service_manager', 'hr_manager', 'store_manager'].includes(role || '')
+      : ['manager', 'hr'].includes(role || '')
       ? 'Administrator'
       : 'Manager / Administrator';
 
@@ -288,7 +288,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
         const targetApprover =
           role === 'admin'
             ? 'super_admin'
-            : ['manager', 'service_manager', 'hr_manager', 'store_manager'].includes(role || '')
+            : ['manager', 'hr'].includes(role || '')
             ? 'admin'
             : 'manager';
 

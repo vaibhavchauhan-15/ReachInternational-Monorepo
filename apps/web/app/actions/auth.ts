@@ -100,11 +100,7 @@ export async function login(state: AuthFormState, formData: FormData): Promise<A
     redirect("/onboarding");
   }
 
-  if (profile.role === "operator") {
-    redirect("/operations?tab=entry");
-  }
-
-  redirect("/machines");
+  redirect("/dashboard");
 }
 
 function formatRetryAfter(seconds: number): string {
@@ -235,15 +231,10 @@ export async function signup(
   // SECURITY (F07): Only allow non-admin roles during self-registration signup.
   // Admin and super_admin roles must be explicitly assigned by existing admins post-approval.
   const allowedSignupRoles = [
-    "service_engineer",
     "manager",
-    "service_manager",
-    "engineer",
     "supervisor",
-    "store_manager",
+    "hr",
     "operator",
-    "mechanic",
-    "hr_manager",
   ];
 
   const role = allowedSignupRoles.includes(requestedRole) ? requestedRole : "operator";

@@ -74,13 +74,9 @@ const ROLE_FILTER_OPTIONS: FilterOption[] = [
   { id: 'super_admin', label: 'Super Admin', dotColor: '#ef4444' },
   { id: 'admin', label: 'Admin', dotColor: '#f59e0b' },
   { id: 'manager', label: 'Manager', dotColor: '#6366f1' },
-  { id: 'service_manager', label: 'Service Manager', dotColor: '#0284c7' },
-  { id: 'service_engineer', label: 'Service Engineer', dotColor: '#2563eb' },
   { id: 'supervisor', label: 'Supervisor', dotColor: '#0d9488' },
+  { id: 'hr', label: 'HR', dotColor: '#059669' },
   { id: 'operator', label: 'Operator', dotColor: '#d97706' },
-  { id: 'mechanic', label: 'Mechanic', dotColor: '#ea580c' },
-  { id: 'store_manager', label: 'Store Manager', dotColor: '#9333ea' },
-  { id: 'hr_manager', label: 'HR Manager', dotColor: '#059669' },
 ];
 
 const STATUS_FILTER_OPTIONS: FilterOption[] = [
@@ -127,23 +123,13 @@ function formatRoleName(role: string): string {
     case 'admin':
       return 'Admin';
     case 'manager':
-    case 'branch_manager':
       return 'Manager';
-    case 'service_manager':
-      return 'Service Manager';
-    case 'service_engineer':
-    case 'engineer':
-      return 'Service Engineer';
     case 'supervisor':
       return 'Supervisor';
-    case 'store_manager':
-      return 'Store Manager';
+    case 'hr':
+      return 'HR';
     case 'operator':
       return 'Operator';
-    case 'mechanic':
-      return 'Mechanic';
-    case 'hr_manager':
-      return 'HR Manager';
     default:
       return role ? role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'User';
   }
@@ -156,23 +142,13 @@ function getRoleAccentColor(role: string): string {
     case 'admin':
       return '#f59e0b';
     case 'manager':
-    case 'branch_manager':
       return '#6366f1';
-    case 'service_manager':
-      return '#0284c7';
-    case 'service_engineer':
-    case 'engineer':
-      return '#2563eb';
     case 'supervisor':
       return '#0d9488';
-    case 'store_manager':
-      return '#9333ea';
+    case 'hr':
+      return '#059669';
     case 'operator':
       return '#d97706';
-    case 'mechanic':
-      return '#ea580c';
-    case 'hr_manager':
-      return '#059669';
     default:
       return '#64748b';
   }
@@ -235,16 +211,10 @@ function applyOptimizedUserSearch(query: any, search?: string) {
   const isKnownRole = [
     'super_admin',
     'admin',
-    'service_manager',
-    'service_engineer',
-    'engineer',
-    'supervisor',
-    'store_manager',
-    'hr_manager',
-    'operator',
-    'mechanic',
     'manager',
-    'branch_manager',
+    'supervisor',
+    'hr',
+    'operator',
   ].some((r) => r === roleSlug || r.includes(roleSlug) || roleSlug.includes(r));
 
   if (words.length > 1) {
@@ -805,10 +775,10 @@ export default function UsersScreen() {
 
     // 1. Role Filter
     if (roleFilter !== 'all') {
-      if (roleFilter === 'engineers') {
-        query = query.in('role', ['engineer', 'service_engineer']);
+      if (roleFilter === 'operators') {
+        query = query.eq('role', 'operator');
       } else if (roleFilter === 'managers') {
-        query = query.in('role', ['manager', 'branch_manager', 'admin', 'super_admin']);
+        query = query.in('role', ['manager', 'admin', 'super_admin']);
       } else {
         query = query.eq('role', roleFilter);
       }
@@ -1467,7 +1437,7 @@ export default function UsersScreen() {
   // Metric snapshot calculations
   const pendingCount = users.filter((u) => u.status === 'pending').length;
   const activeCount = users.filter((u) => u.status === 'active').length;
-  const engineerCount = users.filter((u) => u.role === 'service_engineer' || u.role === 'engineer').length;
+  const operatorCount = users.filter((u) => u.role === 'operator').length;
 
   const headerActions = useMemo<HeaderActionItem[]>(() => {
     const list: HeaderActionItem[] = [];
@@ -1708,25 +1678,25 @@ export default function UsersScreen() {
                 <Text style={[styles.kpiValue, { color: '#059669' }]}>{activeCount}</Text>
               </TouchableOpacity>
 
-              {/* Card 3: Service Engineers */}
+              {/* Card 3: Operators */}
               <TouchableOpacity
                 activeOpacity={0.8}
                 onPress={() => {
-                  setRoleFilter((prev) => (prev === 'service_engineer' ? 'all' : 'service_engineer'));
+                  setRoleFilter((prev) => (prev === 'operator' ? 'all' : 'operator'));
                 }}
                 style={[
                   styles.kpiCard,
                   {
                     backgroundColor:
-                      roleFilter === 'service_engineer'
-                        ? isDark ? '#1e3a8a26' : '#eff6ff'
+                      roleFilter === 'operator'
+                        ? isDark ? '#78350f26' : '#fffbeb'
                         : theme.colors.canvasElevated,
-                    borderColor: roleFilter === 'service_engineer' ? '#2563eb' : theme.colors.hairline,
+                    borderColor: roleFilter === 'operator' ? '#d97706' : theme.colors.hairline,
                   },
                 ]}
               >
-                <Text style={[styles.kpiLabel, { color: '#2563eb' }]}>ENGINEERS</Text>
-                <Text style={[styles.kpiValue, { color: '#1d4ed8' }]}>{engineerCount}</Text>
+                <Text style={[styles.kpiLabel, { color: '#d97706' }]}>OPERATORS</Text>
+                <Text style={[styles.kpiValue, { color: '#b45309' }]}>{operatorCount}</Text>
               </TouchableOpacity>
 
               {/* Card 4: Pending Approvals */}

@@ -1,6 +1,6 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getCurrentUser, requirePermission } from "@/lib/dal";
+import { requirePermission, requireRole } from "@/lib/dal";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { Button } from "@/components/ui/Button";
@@ -31,12 +31,8 @@ interface AuditDetailPageProps {
 }
 
 export default async function AuditDetailPage({ params }: AuditDetailPageProps) {
+  await requireRole("admin", "manager");
   await requirePermission("audit.view");
-  const user = await getCurrentUser();
-
-  if (!user) {
-    redirect("/login");
-  }
 
   const { id } = await params;
   const supabase = createSupabaseAdminClient();

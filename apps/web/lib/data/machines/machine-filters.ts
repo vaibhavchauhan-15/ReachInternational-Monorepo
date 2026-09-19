@@ -132,21 +132,6 @@ export const getActiveOperators = unstable_cache(
   { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta] }
 );
 
-export const getActiveEngineers = unstable_cache(
-  async (): Promise<User[]> => {
-    const supabase = createSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from("users")
-      .select("id, full_name, phone, email")
-      .in("role", ["engineer", "service_engineer"])
-      .neq("status", "inactive")
-      .order("full_name");
-    if (error) return [];
-    return (data as User[]) ?? [];
-  },
-  ["active-engineers-v4"],
-  { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta] }
-);
 
 export const getMachineCities = unstable_cache(
   async (): Promise<string[]> => {

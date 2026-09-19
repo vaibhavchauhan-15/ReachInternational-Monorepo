@@ -136,7 +136,7 @@ export function DeleteAccountClient({
       {/* Top Breadcrumb / Return Links */}
       <div className="flex items-center justify-between text-xs text-[var(--color-mute)]">
         <Link
-          href={currentUser?.role === "operator" ? "/operations?tab=entry" : "/machines"}
+          href="/dashboard"
           className="inline-flex items-center gap-1.5 hover:text-[var(--color-ink)] transition-colors font-medium"
         >
           <ArrowLeft size={13} />
@@ -232,7 +232,7 @@ export function DeleteAccountClient({
               </Button>
 
               <Link
-                href={currentUser?.role === "operator" ? "/operations?tab=entry" : "/machines"}
+                href="/dashboard"
                 className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] hover:bg-[var(--color-canvas-elevated)] text-xs font-semibold text-[var(--color-ink)] transition-colors shadow-2xs"
               >
                 Return to Fleet Dashboard
@@ -390,7 +390,7 @@ export function DeleteAccountClient({
             {/* Submit Action Buttons */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-[var(--color-hairline)]">
               <Link
-                href={currentUser?.role === "operator" ? "/operations?tab=entry" : "/machines"}
+                href="/dashboard"
                 className="px-4 py-2 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-canvas-elevated)] text-xs font-semibold text-[var(--color-ink)] transition-colors shadow-2xs"
               >
                 Cancel & Return

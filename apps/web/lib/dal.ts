@@ -93,15 +93,12 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
 
 export function protectOperatorRoute(role?: string) {
   if (role === "operator") {
-    redirect("/operations?tab=entry");
+    redirect("/dashboard");
   }
 }
 
-export function protectDisabledRoute(role?: string) {
-  if (role === "operator") {
-    redirect("/operations?tab=entry");
-  }
-  redirect("/machines");
+export function protectDisabledRoute(_role?: string) {
+  redirect("/dashboard");
 }
 
 export const getCurrentUserRole = cache(async (): Promise<UserRole | null> => {
@@ -126,7 +123,7 @@ export const requireRole = cache(async (...roles: UserRole[]) => {
   }
 
   if (!roles.includes(user.role)) {
-    redirect("/machines");
+    redirect("/dashboard");
   }
 
   return user;
@@ -144,7 +141,7 @@ export const requirePermission = cache(async (permissionCode: string) => {
   }
 
   if (!roleHasPermission(user.role, permissionCode)) {
-    redirect("/machines");
+    redirect("/dashboard");
   }
 
   return user;
@@ -165,7 +162,7 @@ export const requireAnyPermission = cache(async (...permissionCodes: string[]) =
 
   const hasAny = permissionCodes.some((code) => roleHasPermission(user.role, code));
   if (!hasAny) {
-    redirect("/machines");
+    redirect("/dashboard");
   }
 
   return user;

@@ -163,7 +163,25 @@ const getCachedMachineList = unstable_cache(
 
     // Role scoping boundaries
     if (role === "operator" && scopedUserId !== "all") {
-      query = query.or(`current_operator_id.eq.${scopedUserId},operator_ids.cs.{${scopedUserId}}`);
+      const { data: omaList } = await supabase
+        .from("operator_machine_assignments")
+        .select("machine_id")
+        .eq("operator_id", scopedUserId)
+        .eq("is_active", true);
+
+      const assignedMachineIds = (omaList || [])
+        .map((r: any) => r.machine_id)
+        .filter(Boolean);
+
+      if (assignedMachineIds.length > 0) {
+        query = query.or(
+          `current_operator_id.eq.${scopedUserId},operator_ids.cs.{${scopedUserId}},id.in.(${assignedMachineIds.join(",")})`
+        );
+      } else {
+        query = query.or(
+          `current_operator_id.eq.${scopedUserId},operator_ids.cs.{${scopedUserId}}`
+        );
+      }
     } else if (role === "supervisor" && scopedUserId !== "all") {
       query = query.or(`current_supervisor_id.eq.${scopedUserId},supervisor_ids.cs.{${scopedUserId}}`);
     }

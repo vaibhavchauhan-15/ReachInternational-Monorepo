@@ -32,7 +32,7 @@ import {
   isShiftEndInFuture,
   resolveOperationsDateRange,
 } from "@reachinternational/utils";
-import { formatHourLogsData } from "@/lib/queries/operators";
+import { formatHourLogsData, fetchHourLogsResiliently } from "@/lib/queries/operators";
 import {
   getOperationsClientLogsData,
   getOperationsMachineLogsData,
@@ -673,7 +673,11 @@ export async function submitOperatorHourLogAction(payload: {
   revalidateTag(TAGS.operations, "max");
   if (payload.machineId) revalidateTag(TAGS.machineOperations(payload.machineId), "max");
   if (targetClientId) revalidateTag(TAGS.clientOperations(targetClientId), "max");
-  if (targetOperatorId) revalidateTag(TAGS.operatorOperations(targetOperatorId), "max");
+  if (targetOperatorId) {
+    revalidateTag(TAGS.operatorOperations(targetOperatorId), "max");
+    revalidateTag(`operator-entry:${targetOperatorId}`, "max");
+    revalidateTag(TAGS.dashboardOperator(targetOperatorId), "max");
+  }
   return responsePayload;
 }
 
@@ -737,6 +741,9 @@ export async function updateOperatorHourLogAction(payload: {
       if (diffDays > 7) {
         return { success: false, error: "This log entry is locked. Logs older than 7 days cannot be edited." };
       }
+      if (diffDays < 0) {
+        return { success: false, error: "Cannot edit log entry with future date." };
+      }
     }
   }
 
@@ -756,6 +763,24 @@ export async function updateOperatorHourLogAction(payload: {
   const targetEndTime = payload.endTime ?? existingLog.end_time ?? undefined;
   const targetStartDate = payload.startDate || existingLog.log_date;
   const targetEndDate = payload.endDate || existingLog.end_date;
+
+  // Validate that updated log date is strictly within allowed 7-day range for non-managers
+  if (!isManagerTier && targetStartDate) {
+    const rawDate = targetStartDate.trim().split("T")[0];
+    const parts = rawDate.split("-").map(Number);
+    if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      const now = new Date();
+      const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+      const parsedMidnight = new Date(parts[0], parts[1] - 1, parts[2]).getTime();
+      const diffDays = Math.floor((todayMidnight - parsedMidnight) / (1000 * 60 * 60 * 24));
+      if (diffDays < 0) {
+        return { success: false, error: "Cannot set machine log to a future date." };
+      }
+      if (diffDays > 7) {
+        return { success: false, error: "Cannot set log date older than 7 days. You can only update logs within the previous 7 days." };
+      }
+    }
+  }
 
   const safeEditOvertime = payload.overtimeHours !== undefined && !isNaN(Number(payload.overtimeHours))
     ? Math.min(Math.max(0, Number(payload.overtimeHours)), 16.0)
@@ -921,7 +946,11 @@ export async function updateOperatorHourLogAction(payload: {
   revalidateTag(OPERATIONS_CACHE_TAGS.logAudit(payload.logId), "max");
   if (existingLog?.machine_id) revalidateTag(TAGS.machineOperations(existingLog.machine_id), "max");
   if (existingLog?.client_id) revalidateTag(TAGS.clientOperations(existingLog.client_id), "max");
-  if (existingLog?.operator_id) revalidateTag(TAGS.operatorOperations(existingLog.operator_id), "max");
+  if (existingLog?.operator_id) {
+    revalidateTag(TAGS.operatorOperations(existingLog.operator_id), "max");
+    revalidateTag(`operator-entry:${existingLog.operator_id}`, "max");
+    revalidateTag(TAGS.dashboardOperator(existingLog.operator_id), "max");
+  }
   return { success: true, data };
 }
 
@@ -956,21 +985,12 @@ export async function deleteOperatorHourLogAction(payload: {
     return { success: false, error: "Log entry not found." };
   }
 
-  // Permission check: super_admin, admin, manager, service_manager, supervisor,
-  // or author operator within 24 hours of submission
+  // Permission check: strictly super_admin only
   const userRoleLower = (user.role || "").toLowerCase();
-  const isSupervisorOrAbove =
-    isManagerOrAbove(userRoleLower) || userRoleLower === "supervisor";
-
-  const isAuthorOperator =
-    userRoleLower === "operator" &&
-    existingLog.operator_id === user.id &&
-    Date.now() - new Date(existingLog.created_at).getTime() <= 24 * 60 * 60 * 1000;
-
-  if (!isSupervisorOrAbove && !isAuthorOperator) {
+  if (userRoleLower !== "super_admin") {
     return {
       success: false,
-      error: "You do not have permission to delete this log entry.",
+      error: "Unauthorized: Only Super Admin is authorized to delete machine hour logs.",
     };
   }
 
@@ -1045,7 +1065,10 @@ export async function deleteOperatorHourLogAction(payload: {
   revalidateTag(OPERATIONS_CACHE_TAGS.logAudit(parsed.data.logId), "max");
   if (existingLog.machine_id) revalidateTag(TAGS.machineOperations(existingLog.machine_id), "max");
   if (existingLog.client_id) revalidateTag(TAGS.clientOperations(existingLog.client_id), "max");
-  if (existingLog.operator_id) revalidateTag(TAGS.operatorOperations(existingLog.operator_id), "max");
+  if (existingLog.operator_id) {
+    revalidateTag(TAGS.operatorOperations(existingLog.operator_id), "max");
+    revalidateTag(`operator-entry:${existingLog.operator_id}`, "max");
+  }
   revalidateTag(TAGS.machines, "max");
 
   return {
@@ -1071,7 +1094,6 @@ export async function assignOperatorToMachineAction(payload: {
     user.role !== "admin" &&
     user.role !== "super_admin" &&
     user.role !== "manager" &&
-    user.role !== "service_manager" &&
     user.role !== "supervisor"
   ) {
     return { success: false, error: "Insufficient permissions. Only Supervisors, Managers, and Administrators can assign operators." };
@@ -1116,38 +1138,32 @@ export async function assignOperatorToMachineAction(payload: {
       .neq("id", payload.machineId);
   }
 
-  // Update target machine with new operator
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from("machines")
     .update({
       current_operator_id: payload.operatorId || null,
-      updated_at: nowIso,
+      operator_ids: payload.operatorId ? [payload.operatorId] : [],
+      updated_at: new Date().toISOString(),
     })
-    .eq("id", payload.machineId)
-    .select("id, machine_id, current_operator_id")
-    .single();
+    .eq("id", payload.machineId);
 
   if (error) {
-    console.error("Error updating machine operator assignment:", error);
     return { success: false, error: error.message };
   }
 
   await logAudit({
     user_id: user.id,
-    action: payload.operatorId ? "machine.operator_assigned" : "machine.operator_unassigned",
+    action: "machine.operator_assigned",
     entity_type: "machine",
     entity_id: payload.machineId,
-    metadata: {
-      operatorId: payload.operatorId || null,
-      assignedBy: user.id,
-      notes: payload.notes || null,
-    },
+    metadata: { operatorId: payload.operatorId },
   });
 
   revalidateTag(CACHE_TAGS.machines, "max");
-  revalidateTag(CACHE_TAGS.dashboard, "max");
+  revalidateTag(CACHE_TAGS.operations, "max");
+  revalidateTag(CACHE_TAGS.machineDetail(payload.machineId), "max");
 
-  return { success: true, data };
+  return { success: true };
 }
 
 export async function requestOperatorAssignmentChangeAction(payload: {
@@ -1157,7 +1173,7 @@ export async function requestOperatorAssignmentChangeAction(payload: {
 }) {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
-  if (!["operator", "supervisor", "admin", "super_admin", "manager", "service_manager"].includes(user.role)) {
+  if (!["operator", "supervisor", "admin", "super_admin", "manager"].includes(user.role)) {
     return { success: false, error: "Insufficient permissions." };
   }
 
@@ -1189,7 +1205,6 @@ export async function hireOperatorAction(payload: {
   if (
     user.role !== "supervisor" &&
     user.role !== "manager" &&
-    user.role !== "service_manager" &&
     user.role !== "admin" &&
     user.role !== "super_admin"
   ) {
@@ -1208,51 +1223,58 @@ export async function hireOperatorAction(payload: {
     user_metadata: {
       full_name: payload.fullName,
       role: "operator",
-      phone: payload.phone || null,
-      status: "active",
     },
   });
 
   if (authError || !authData.user) {
-    console.error("Error creating auth user for operator:", authError);
-    return { success: false, error: authError?.message || "Failed to create operator authentication record" };
+    return { success: false, error: authError?.message || "Failed to create authentication user." };
   }
 
-  // 2. Synchronize profile details in public.users
-  const { data: newUser, error: userError } = await supabase
-    .from("users")
-    .update({
-      full_name: payload.fullName,
-      phone: payload.phone,
-      role: "operator",
-      status: "active",
-    })
-    .eq("id", authData.user.id)
-    .select()
-    .single();
+  // 2. Insert into public.users with pending status
+  const { error: userError } = await supabase.from("users").insert({
+    id: authData.user.id,
+    email,
+    full_name: payload.fullName,
+    phone: payload.phone,
+    role: "operator",
+    status: "active",
+    supervisor_id: user.role === "supervisor" ? user.id : null,
+    complete_profile: "no",
+  });
 
-  if (userError || !newUser) {
-    console.error("Error synchronizing operator user profile:", userError);
-    return { success: false, error: userError?.message || "Failed to create operator profile" };
+  if (userError) {
+    await supabase.auth.admin.deleteUser(authData.user.id);
+    return { success: false, error: userError.message };
+  }
+
+  // 3. Store salary if provided
+  if (payload.salary && payload.salary > 0) {
+    await supabase.from("operator_salaries").insert({
+      operator_id: authData.user.id,
+      base_salary: payload.salary,
+      currency: "INR",
+      effective_from: new Date().toISOString().split("T")[0],
+      created_by: user.id,
+    });
   }
 
   await logAudit({
     user_id: user.id,
     action: "operator.hired",
     entity_type: "user",
-    entity_id: newUser.id,
-    metadata: { salary: payload.salary },
+    entity_id: authData.user.id,
+    metadata: { operatorName: payload.fullName, phone: payload.phone, salary: payload.salary },
   });
 
-  revalidateTag(CACHE_TAGS.dashboard, "max");
   revalidateTag(CACHE_TAGS.users, "max");
-  return { success: true, data: newUser };
+  revalidateTag(CACHE_TAGS.operations, "max");
+
+  return { success: true, data: { id: authData.user.id, email, temporaryPassword } };
 }
 
 export async function recordOperatorPayoutAction(payload: {
   operatorId: string;
   periodMonth: string;
-  totalRunningHours: number;
   baseSalary: number;
   allowance?: number;
   deductions?: number;
@@ -1260,7 +1282,7 @@ export async function recordOperatorPayoutAction(payload: {
 }) {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
-  if (!["supervisor", "manager", "service_manager", "admin", "super_admin"].includes(user.role)) {
+  if (!["supervisor", "manager", "admin", "super_admin"].includes(user.role)) {
     return { success: false, error: "Insufficient permissions. Only supervisors and admins can record payouts." };
   }
 
@@ -1288,7 +1310,7 @@ export async function recordMachineSiteMovementAction(payload: {
 }) {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
-  if (!["supervisor", "manager", "service_manager", "admin", "super_admin"].includes(user.role)) {
+  if (!["supervisor", "manager", "admin", "super_admin"].includes(user.role)) {
     return { success: false, error: "Insufficient permissions. Only supervisors and admins can record site movements." };
   }
 
@@ -1404,13 +1426,9 @@ export async function getOperationsExportLogsAction(params: GetOperationsExportL
     const AUTHORIZED_EXPORT_ROLES = [
       "super_admin",
       "admin",
-      "company_admin",
       "manager",
-      "service_manager",
-      "branch_manager",
       "supervisor",
       "operator",
-      "client",
     ];
 
     const userRole = user.role as string;
@@ -1712,6 +1730,31 @@ export async function getOperatorHistoryAction(operatorId: string): Promise<{
     return { success: false, error: err?.message || "Failed to fetch operator history data" };
   }
 }
+
+/**
+ * On-demand Server Action to fetch operator historical machine logs.
+ * Loaded ONLY when the operator opens the History tab (0 KB impact on initial route load).
+ */
+export async function getOperatorHistoryLogsAction(limit: number = 100): Promise<{
+  success: boolean;
+  logs?: any[];
+  error?: string;
+}> {
+  const user = await getCurrentUser();
+  if (!user) return { success: false, error: "Unauthorized" };
+
+  try {
+    const supabase = createSupabaseAdminClient();
+    const rawLogs = await fetchHourLogsResiliently(supabase, { operatorId: user.id, limit });
+    const formatted = formatHourLogsData(rawLogs, [], [user], []);
+    return { success: true, logs: formatted };
+  } catch (err: unknown) {
+    console.error("[getOperatorHistoryLogsAction] Exception:", err);
+    const msg = err instanceof Error ? err.message : "Failed to fetch operator logs";
+    return { success: false, error: msg };
+  }
+}
+
 
 
 

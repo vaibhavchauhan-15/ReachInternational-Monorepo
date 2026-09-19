@@ -62,26 +62,21 @@ export const defaultPublicNavLinks: NavItem[] = [
 ];
 
 export const appNavItems: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: AnimatedDashboard },
-  { href: "/machines", label: "Machines", icon: AnimatedWrench },
-  { href: "/notifications", label: "Notifications", icon: AnimatedBell, roles: ["super_admin", "admin", "manager", "service_engineer", "engineer"] },
-  { href: "/users", label: "Users", icon: AnimatedUsers, roles: ["super_admin", "admin", "manager", "hr_manager"] },
-  { href: "/audit", label: "Audit Logs", icon: AnimatedFileText, roles: ["super_admin", "admin"] },
-  { href: "/settings", label: "Settings", icon: AnimatedSettings, roles: ["super_admin"] },
+  { href: "/dashboard", label: "Dashboard", icon: AnimatedDashboard, roles: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"] },
+  { href: "/machines", label: "Machines", icon: AnimatedWrench, roles: ["super_admin", "admin", "manager", "supervisor", "operator"] },
+  { href: "/operations", label: "Operations", icon: AnimatedDashboard, roles: ["super_admin", "admin", "manager", "supervisor", "operator"] },
+  { href: "/clients", label: "Clients", icon: AnimatedDashboard, roles: ["super_admin", "admin", "manager"] },
+  { href: "/users", label: "Users", icon: AnimatedUsers, roles: ["super_admin", "admin", "manager", "hr", "supervisor"] },
+  { href: "/audit", label: "Audit Logs", icon: AnimatedFileText, roles: ["super_admin", "admin", "manager"] },
 ];
 
 const roleLabels: Record<UserRole, string> = {
   super_admin: "Super Admin",
   admin: "Admin",
   manager: "Manager",
-  service_manager: "Service Manager",
-  engineer: "Service Engineer",
-  service_engineer: "Service Engineer",
   supervisor: "Supervisor",
-  store_manager: "Store Manager",
+  hr: "HR",
   operator: "Operator",
-  mechanic: "Mechanic",
-  hr_manager: "HR Manager",
 };
 
 const UserMenu = memo(function UserMenu({ user }: { user: User }) {
@@ -144,10 +139,28 @@ const UserMenu = memo(function UserMenu({ user }: { user: User }) {
                       Admin
                     </span>
                   )}
-                  {user.role === "engineer" && (
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-300/80 dark:border-blue-800/80 shadow-xs">
-                      <AnimatedShield size={12} className="text-blue-600 dark:text-blue-400" />
-                      Engineer
+                  {user.role === "manager" && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-indigo-100 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-300 border border-indigo-300/80 dark:border-indigo-800/80 shadow-xs">
+                      <AnimatedShieldCheck size={12} className="text-indigo-600 dark:text-indigo-400" />
+                      Manager
+                    </span>
+                  )}
+                  {user.role === "supervisor" && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-teal-100 dark:bg-teal-950/80 text-teal-800 dark:text-teal-300 border border-teal-300/80 dark:border-teal-800/80 shadow-xs">
+                      <AnimatedShieldCheck size={12} className="text-teal-600 dark:text-teal-400" />
+                      Supervisor
+                    </span>
+                  )}
+                  {user.role === "hr" && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300/80 dark:border-emerald-800/80 shadow-xs">
+                      <AnimatedShieldCheck size={12} className="text-emerald-600 dark:text-emerald-400" />
+                      HR
+                    </span>
+                  )}
+                  {user.role === "operator" && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800/80 shadow-xs">
+                      <AnimatedShield size={12} className="text-amber-600 dark:text-amber-400" />
+                      Operator
                     </span>
                   )}
 
@@ -240,12 +253,11 @@ export function PublicNavbar({
   const [activeSection, setActiveSection] = useState<string>("");
   const [hoveredLink, setHoveredLink] = useState<string | null>(null);
   const [cmdOpen, setCmdOpen] = useState(false);
-  const [isMac, setIsMac] = useState(false);
-
-  // Detect platform for the correct command-palette shortcut glyph (⌘K vs Ctrl K).
-  useEffect(() => {
-    setIsMac(/Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent));
-  }, []);
+  const [isMac] = useState(() =>
+    typeof window !== "undefined"
+      ? /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent)
+      : false
+  );
 
   // Determine active nav links
   const activeNavItems = useMemo(() => {

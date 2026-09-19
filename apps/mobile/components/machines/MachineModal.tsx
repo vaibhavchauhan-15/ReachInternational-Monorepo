@@ -170,7 +170,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
         supabase
           .from('users')
           .select('id, full_name, phone, email, shift_time')
-          .in('role', ['supervisor', 'manager', 'service_manager', 'admin', 'super_admin'])
+          .in('role', ['supervisor', 'manager', 'admin', 'super_admin'])
           .eq('status', 'active')
           .order('full_name', { ascending: true }),
         supabase

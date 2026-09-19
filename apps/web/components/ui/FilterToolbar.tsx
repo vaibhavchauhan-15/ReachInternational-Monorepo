@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef } from "react";
 import {
   AnimatedSearch,
   AnimatedSlidersHorizontal,
@@ -28,6 +28,8 @@ export interface FilterToolbarProps {
   defaultOpen?: boolean;
   /** Custom class name for outer card wrapper */
   className?: string;
+  /** Custom class name for search input */
+  inputClassName?: string;
   /** Optional submit handler for form submission */
   onSubmitSearch?: (e: React.FormEvent) => void;
   /** Whether search query or filter is actively loading/debouncing */
@@ -44,19 +46,18 @@ export function FilterToolbar({
   children,
   defaultOpen = false,
   className = "",
+  inputClassName = "",
   onSubmitSearch,
   isLoading = false,
 }: FilterToolbarProps) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
+  const [prevDefaultOpen, setPrevDefaultOpen] = useState(defaultOpen);
+  if (defaultOpen !== undefined && defaultOpen !== prevDefaultOpen) {
+    setPrevDefaultOpen(defaultOpen);
+    setIsOpen(defaultOpen);
+  }
   const [isTransitioning, setIsTransitioning] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
-
-  // Sync external defaultOpen if changed
-  useEffect(() => {
-    if (defaultOpen !== undefined) {
-      setIsOpen(defaultOpen);
-    }
-  }, [defaultOpen]);
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,11 +111,11 @@ export function FilterToolbar({
             placeholder={placeholder}
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
-            className={`w-full h-11 sm:h-9 pl-9 pr-8 text-[16px] sm:text-xs rounded-lg border bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[var(--color-mute)] focus:outline-none focus:border-[var(--color-ink)] focus:ring-1 focus:ring-[var(--color-ink)]/20 transition-all ${
+            className={`w-full h-11 sm:h-9 pl-9 pr-8 text-[16px] sm:text-xs placeholder:text-[11px] sm:placeholder:text-xs rounded-lg border bg-[var(--color-canvas)] text-[var(--color-ink)] placeholder-[var(--color-mute)] focus:outline-none focus:border-[var(--color-ink)] focus:ring-1 focus:ring-[var(--color-ink)]/20 transition-all ${
               isLoading
                 ? "border-[var(--color-ink)]/40 ring-1 ring-[var(--color-ink)]/10"
                 : "border-[var(--color-hairline)]"
-            }`}
+            } ${inputClassName}`}
           />
           {searchQuery && (
             <button

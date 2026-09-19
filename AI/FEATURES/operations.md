@@ -11,6 +11,57 @@ It provides complete cross-platform parity between the Next.js Web App (`apps/we
 
 > **⚠️ REMOVED (2026-09-16)**: The Operations Log Detail Modal (`OperationsLogDetailModal.tsx`) has been completely removed per user feedback. Log rows in `OperationsLogsTable.tsx` and `OperationsLogsMobileList.tsx` are fully non-clickable; the row eye (view) icon was replaced with a destructive delete (trash) icon wired through `deleteOperatorHourLogAction` with a `ConfirmationDialog` guard. The delete control is RBAC-gated per row via an optional `canDeleteLog?: (log: MachineHourLog) => boolean` prop (supplied by `OperationsLogsTab.tsx` from `userRole`/`user`; mirrors the server action: supervisor+ may delete any log, operators only their own within 24h). Historical references to the detail modal below are retained for archival context only.
 
+## 0. Operator Landing Page Architecture (`Entry / History`) (2026-09-19)
+When an authenticated operator visits Fleet Operations (`/operations`), the page fast-paths to an ultra-lean, specialized entry experience:
+- **Dedicated Read-Model RPC**: `public.get_operator_entry_context(p_operator_id uuid)` fetches ONLY:
+  - Current Operator: id, full_name, shift_start, shift_end, role
+  - Assigned Machine: id, machine_id, model, serial_number
+  - Client & Site Location: id, company_name, site
+  - Last Recorded HMR: latest valid end meter
+  - Last Recorded Log: id, log_date, start_meter, end_meter, running_hours, overtime_hours, start_time, end_time, operator_name, is_breakdown
+- **Zero-Waterfall Routing**: Operators bypass all manager waterfalls (1,000 machines catalog, client list, supervisor selectors).
+- **Sub-100ms Critical Shell**: `EntryHeader`, `OperatorMachineInfo`, `HMRInputs`, `LastMachineLogCard`, and `ShiftInputs` render immediately in the main server chunk.
+- **Dynamic Code-Splitting**: `BreakdownSection`, `SubmitConfirmModal`, `OperatorHistoryTab`, and export utilities load on demand via `next/dynamic`.
+- **On-Demand History**: History records load only when the operator opens the "History" tab.
+- **Cross-Platform Parity**: Full synchronization in `apps/mobile/app/(app)/operations.tsx` and `MobileOperatorEntryCard.tsx` with offline mutation queuing (`offlineQueueManager`).
+- **Mobile Viewport (360×800) Optimizations**:
+  - `EntryHeader`: Removed greetings (`Good morning/evening`), subtitles, date pills, and outer wrapper card. The component now renders strictly the clean segmented operational subnavigation toggle (`Log Entry` and `Log History`), eliminating redundant greeting headers since operators already have the dedicated `/dashboard` landing page.
+  - `OperatorMachineInfo`: Pruned redundant shift timing pill and clock icon. Client site address wraps to new lines (`break-words leading-tight`, `items-start`) instead of truncating with `...`.
+  - `HMRInputs`: Displays `HMR` on mobile (<640px) and `Hour Meter Readings (HMR)` on desktop (≥640px); pruned `Gauge` and `CheckCircle2` icons; running hours chip optimized with `shrink-0`.
+  - `LastMachineLogCard`: Refactored to a unified, responsive single-card layout with zero icons, displaying only Last Recorded Date, Shift End Time, and Last Entry By (Operator Name).
+  - `ShiftInputs`: Pruned `Clock` icon; simplified title to `SHIFT TIMING`; unified overtime controls into a single non-wrapping row across mobile and desktop.
+  - `BreakdownSection`: Renamed title to `Machine Breakdown`; removed description paragraph; simplified button to `+ Add` / `Remove`. Removed all `<Clock>` SVG icons from Breakdown Start and Breakdown End pickers. Downscaled breakdown duration banner typography (`text-[10px] sm:text-xs`) with compact padding and non-overflowing layout.
+  - `OperatorEntryClient`: Permanently removed the separate "Shift Remarks (Optional)" section/card since breakdown reasons are already logged within the breakdown section and automatically piped into submission remarks.
+  - `MobileOperatorEntryCard`: Full synchronization: mobile header shows strictly the greeting; client site address wraps across multiple lines without `numberOfLines={1}` truncation; breakdown reason is handled inside the breakdown section and standalone shift remarks input is removed.
+
+### 0.1. Operator RBAC Matrix & Exclusive Super Admin Log Deletion (2026-09-19)
+- **19-Point Operator Governance Policy**:
+  - `Daily Log Entry`: Allowed (own assigned machine/shift).
+  - `View Own Log History`: Allowed (`operator_id = auth.uid()`).
+  - `Edit Own Logs`: Allowed within 7 days (`log_date >= CURRENT_DATE - 7`). Locked after 7 days.
+  - `Delete Own Logs`: BLOCKED (operators have zero delete controls).
+  - `Export Own Logs`: Allowed (exports own logs only, company-wide export blocked).
+  - `View Other Operators' Logs`: BLOCKED at database RLS (`public.machine_hour_logs`) and UI layer.
+  - `Edit Other Operators' Logs`: BLOCKED at database RLS and UI layer.
+  - `Delete Other Operators' Logs`: BLOCKED.
+  - `View Machine Data`: Restricted to basic info of assigned machine only.
+  - `Add/Edit/Delete Machine`: BLOCKED.
+  - `Assign Operator to Machine`: BLOCKED.
+  - `Change Shift Assignment`: BLOCKED.
+  - `Manage Clients`: BLOCKED (clients route redirected).
+  - `Manage Users`: BLOCKED (users directory redirected).
+  - `View Audit Logs`: BLOCKED (`audit_logs` RLS returns false for operators).
+  - `Manage Breakdowns`: BLOCKED.
+  - `Approve Anything`: BLOCKED.
+  - `Change Own Role/Permissions`: BLOCKED.
+  - `Export Company-Wide Data`: BLOCKED.
+- **Exclusive Super Admin Deletion Policy**:
+  - Deleting machine/operator logs is **exclusively permitted for `super_admin`**.
+  - **Database RLS**: `CREATE POLICY "super_admin_delete_machine_hour_logs" ON public.machine_hour_logs FOR DELETE USING ((SELECT public.current_user_role()) = 'super_admin'::text)`.
+  - **Server Action**: `deleteOperatorHourLogAction` strictly validates `userRoleLower === "super_admin"`.
+  - **Web UI**: `OperatorHistoryTab.tsx` has zero trash/delete icons (`canDelete={false}`); `OperationsLogsTab.tsx` gates `canDeleteLog` strictly to `role === "super_admin"`.
+  - **Mobile App**: `apps/mobile/app/(app)/operations.tsx` gates trash icon on log cards and `handleDeleteLog` to `isSuperAdmin`.
+
 ## 1. Top-Level Tab Views
 
 ### A. Daily Running Hours (`tab=logs`)

@@ -6,6 +6,7 @@ import {
   OPERATIONS_QUERY_KEYS,
   OPERATIONS_CACHE_TTLS,
 } from '@reachinternational/utils';
+import type { OperatorEntryContext } from '@reachinternational/types';
 import { supabase } from '../supabase';
 
 export interface ActiveShiftAssignment {
@@ -61,9 +62,10 @@ export interface OperationsMasterData {
   clientsList: ClientRecord[];
 }
 
-export function useOperationsMasterData() {
+export function useOperationsMasterData(enabled: boolean = true) {
   return useQuery<OperationsMasterData>({
     queryKey: ['operations', 'master'],
+    enabled,
     queryFn: async () => {
       const [mchRes, assRes, opsRes, clientsRes] = await Promise.all([
         supabase
@@ -134,7 +136,7 @@ export function useOperationsMasterData() {
   });
 }
 
-export function useOperationsLogs(rawFilters?: RawOperationsFilterInput) {
+export function useOperationsLogs(rawFilters?: RawOperationsFilterInput, enabled: boolean = true) {
   const normalized = useMemo(() => {
     return rawFilters ? normalizeOperationsFilter(rawFilters) : null;
   }, [
@@ -161,6 +163,7 @@ export function useOperationsLogs(rawFilters?: RawOperationsFilterInput) {
 
   return useQuery<any[]>({
     queryKey,
+    enabled,
     queryFn: async () => {
       // 1. High-Performance Read Model RPC (Phase 19)
       try {
@@ -272,3 +275,36 @@ export function useOperationsLogs(rawFilters?: RawOperationsFilterInput) {
     staleTime: OPERATIONS_CACHE_TTLS.machineLogs * 1000, // 45 seconds cache stale time (45s)
   });
 }
+
+/**
+ * Ultra-fast read-model hook for Operator Landing screen.
+ * Queries ONLY the authenticated operator, assigned machine, client, and latest HMR in ONE RPC call.
+ */
+export function useOperatorEntryContext(operatorId?: string) {
+  return useQuery<OperatorEntryContext | null>({
+    queryKey: ['operator', 'entry-context', operatorId],
+    queryFn: async () => {
+      if (!operatorId) return null;
+      const { data, error } = await supabase.rpc('get_operator_entry_context', {
+        p_operator_id: operatorId,
+      });
+
+      if (error) {
+        console.error('[useOperatorEntryContext] RPC Error:', error);
+        return null;
+      }
+
+      const res = data as any;
+      return {
+        operator: res?.operator || null,
+        machine: res?.machine || null,
+        client: res?.client || null,
+        last_hmr: typeof res?.last_hmr === 'number' ? res.last_hmr : Number(res?.last_hmr) || 0,
+        last_log: res?.last_log || null,
+      };
+    },
+    enabled: Boolean(operatorId),
+    staleTime: 15_000, // 15 seconds operational cache
+  });
+}
+

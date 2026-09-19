@@ -101,16 +101,10 @@ export function applyOptimizedUserSearch<T extends { or: (filters: string) => T 
   const isKnownRole = [
     "super_admin",
     "admin",
-    "service_manager",
-    "service_engineer",
-    "engineer",
-    "supervisor",
-    "store_manager",
-    "hr_manager",
-    "operator",
-    "mechanic",
     "manager",
-    "branch_manager",
+    "supervisor",
+    "hr",
+    "operator",
   ].some((r) => r === roleSlug || r.includes(roleSlug) || roleSlug.includes(r));
 
   if (words.length > 1) {
@@ -234,7 +228,7 @@ export async function hydrateUsersPersonnel(rawUsers: User[]): Promise<User[]> {
  * Uses exact column projection (USER_LIST_COLUMNS) and in-memory hydration.
  */
 export async function getUserList(params: UserListParams = {}): Promise<UserListResponse> {
-  await requireRole("admin", "super_admin", "service_manager", "hr_manager", "manager", "supervisor");
+  await requireRole("admin", "super_admin", "manager", "hr", "supervisor");
   const currentUser = await getCurrentUser();
   if (!currentUser) throw new Error("Unauthorized");
 

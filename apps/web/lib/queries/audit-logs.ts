@@ -80,13 +80,8 @@ export const getAuditLogsFiltered = cache(
       "super_admin",
       "admin",
       "manager",
-      "service_manager",
       "supervisor",
-      "service_engineer",
-      "engineer",
-      "mechanic",
-      "store_manager",
-      "hr_manager",
+      "hr",
     ];
     if (!allowedRoles.includes(currentUser.role)) {
       return {

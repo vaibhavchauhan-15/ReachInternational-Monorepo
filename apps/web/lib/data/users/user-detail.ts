@@ -17,7 +17,7 @@ export const USER_DETAIL_COLUMNS =
  */
 export async function getUserById(userId: string): Promise<User | null> {
   if (!userId) return null;
-  await requireRole("admin", "super_admin", "service_manager", "hr_manager", "manager", "supervisor");
+  await requireRole("admin", "super_admin", "manager", "hr", "supervisor");
 
   const adminClient = createSupabaseAdminClient();
   const { data, error } = await adminClient

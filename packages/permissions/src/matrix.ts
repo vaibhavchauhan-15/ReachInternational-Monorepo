@@ -23,118 +23,6 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "report.view", "report.export", "audit.view", "settings.view"
   ],
 
-  service_manager: [
-    "machine.view", "machine.create", "machine.edit", "machine.delete", "machine.assign",
-    "complaint.view", "complaint.create", "complaint.assign", "complaint.update", "complaint.close", "complaint.escalate", "complaint.update_status",
-    "service.view", "service.plan", "service.create", "service.assign", "service.update", "service.close", "service.cancel", "service.reschedule", "service.complete", "service.approve",
-    "fsr.view", "fsr.review", "fsr.approve",
-    "inventory.view", "inventory.request", "part_request.create", "part_request.view", "part_request.edit", "part_request.approve", "part_request.approve_service_req", "part_request.reject", "part_request.escalate",
-    "employee.view", "engineer.workload.view", "mechanic.workload.view", "mechanic.assign",
-    "operator.view", "rental.view",
-    "notification.view", "notification.send",
-    "profile.edit_self", "profile.approve_changes",
-    "report.view", "report.export", "audit.view"
-  ],
-
-  service_engineer: [
-    "machine.view",
-    "complaint.view", "complaint.create", "complaint.update", "complaint.close",
-    "service.view", "service.update", "service.close",
-    "fsr.view", "fsr.create", "fsr.update",
-    "inventory.view", "inventory.request",
-    "operator.view", "notification.view",
-    "profile.edit_self",
-    "report.view", "audit.view"
-  ],
-
-  engineer: [
-    "machine.view",
-    "complaint.view", "complaint.create", "complaint.update", "complaint.close",
-    "service.view", "service.update", "service.close",
-    "fsr.view", "fsr.create", "fsr.update",
-    "inventory.view", "inventory.request",
-    "operator.view", "notification.view",
-    "profile.edit_self",
-    "report.view", "audit.view"
-  ],
-
-  supervisor: [
-    "machine.view", "machine.status_update", "machine.assign_operator", "machine.assign_client",
-    "complaint.view", "complaint.create",
-    "service.view",
-    "operator.view", "operator.assign", "operator.log_approve", "operator.create", "operator.salary_manage",
-    "site_movement.view", "site_movement.manage",
-    "user.view",
-    "profile.edit_self",
-    "notification.view", "notification.send"
-  ],
-
-  mechanic: [
-    "machine.view",
-    "complaint.view", "complaint.create", "complaint.update",
-    "service.view", "service.update",
-    "fsr.view", "fsr.create", "fsr.update",
-    "inventory.view", "inventory.request", "part_request.create", "part_request.view",
-    "operator.view", "rental.view",
-    "profile.edit_self",
-    "notification.view",
-    "report.view", "audit.view"
-  ],
-
-  operator: [
-    "machine.view",
-    "complaint.view",
-    "complaint.create",
-    "complaint.update",
-    "service.view",
-    "fsr.view",
-    "operator.view",
-    "operator.log_create",
-    "operator.log_edit",
-    "part_request.create",
-    "part_request.view",
-    "rental.view",
-    "profile.edit_self",
-    "notification.view",
-    "notification.send",
-    "report.view",
-    "audit.view"
-  ],
-
-  store_manager: [
-    "machine.view",
-    "complaint.view",
-    "service.view",
-    "fsr.view",
-    "inventory.view", "inventory.create", "inventory.edit", "inventory.archive", "inventory.stock_in", "inventory.stock_out", "inventory.adjust", "inventory.transfer", "inventory.approve_transfer", "inventory.request",
-    "part_request.create", "part_request.view", "part_request.approve", "part_request.reject", "part_request.issue",
-    "po.view", "po.create", "po.edit", "po.approve", "po.cancel",
-    "challan.view", "challan.create", "challan.edit", "challan.approve", "challan.cancel",
-    "supplier.view", "supplier.create", "supplier.edit", "supplier.archive",
-    "grn.view", "grn.create",
-    "purchase_return.view", "purchase_return.create",
-    "employee.view",
-    "rental.view",
-    "finance.view",
-    "notification.view", "notification.send",
-    "profile.edit_self",
-    "report.view", "report.export", "audit.view",
-    "settings.view", "settings.edit"
-  ],
-
-  hr_manager: [
-    "employee.view", "employee.create", "employee.edit", "employee.delete", "employee.onboard", "employee.status_change",
-    "employee.salary.view", "employee.salary.create", "employee.salary.edit",
-    "department.manage", "designation.manage",
-    "employee.document.manage",
-    "user_request.create", "user_request.view", "user.view",
-    "notification.view", "notification.send",
-    "profile.edit_self", "profile.approve_changes",
-    "report.view", "report.export",
-    "audit.view",
-    "settings.view", "settings.edit"
-  ],
-
   manager: [
     "machine.view", "machine.create", "machine.edit", "machine.delete", "machine.assign",
     "complaint.view", "complaint.create", "complaint.assign", "complaint.update", "complaint.close",
@@ -153,6 +41,41 @@ export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
     "user.view", "user.create", "user.edit",
     "profile.edit_self", "profile.approve_changes",
     "report.view", "report.export", "audit.view", "settings.view"
+  ],
+
+  supervisor: [
+    "machine.view", "machine.status_update", "machine.assign_operator", "machine.assign_client",
+    "complaint.view", "complaint.create",
+    "service.view",
+    "operator.view", "operator.assign", "operator.log_approve", "operator.create", "operator.salary_manage",
+    "site_movement.view", "site_movement.manage",
+    "user.view",
+    "profile.edit_self",
+    "notification.view", "notification.send"
+  ],
+
+  hr: [
+    "employee.view", "employee.create", "employee.edit", "employee.delete", "employee.onboard", "employee.status_change",
+    "employee.salary.view", "employee.salary.create", "employee.salary.edit",
+    "department.manage", "designation.manage",
+    "employee.document.manage",
+    "user_request.create", "user_request.view", "user.view", "user.create", "user.edit", "user.activate",
+    "notification.view", "notification.send",
+    "profile.edit_self", "profile.approve_changes",
+    "report.view", "report.export",
+    "settings.view", "settings.edit"
+  ],
+
+  operator: [
+    "machine.view",
+    "complaint.view",
+    "complaint.create",
+    "operator.view",
+    "operator.log_create",
+    "operator.log_edit",
+    "profile.edit_self",
+    "notification.view",
+    "notification.send",
   ],
 };
 

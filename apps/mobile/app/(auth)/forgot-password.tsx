@@ -102,7 +102,7 @@ export default function ForgotPasswordScreen() {
 
           <Input
             label="Email Address"
-            placeholder="engineer@reachinternational.co.in"
+            placeholder="operator@reachinternational.co.in"
             value={email}
             onChangeText={setEmail}
             autoCapitalize="none"

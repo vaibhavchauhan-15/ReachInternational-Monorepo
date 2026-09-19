@@ -169,10 +169,8 @@ export default function LoginScreen() {
         // Routing based on onboarding and role
         if (profile.complete_profile !== 'yes') {
           router.replace('/(auth)/onboarding');
-        } else if (profile.role === 'operator') {
-          router.replace('/(app)/operations');
         } else {
-          router.replace('/(app)/machines');
+          router.replace('/(app)/dashboard');
         }
       }
     } catch (err: unknown) {

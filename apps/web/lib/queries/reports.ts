@@ -37,7 +37,7 @@ export async function getOperationsReportData(
   filters: ReportFilterParams
 ): Promise<{ rows: MachineReportRow[]; totalHours: number; totalOvertime: number; error?: string }> {
   // 1. Authorization: Only authenticated staff can generate reports
-  if (!["admin", "super_admin", "supervisor", "service_manager"].includes(user.role)) {
+  if (!["admin", "super_admin", "manager", "supervisor", "hr"].includes(user.role)) {
     return { rows: [], totalHours: 0, totalOvertime: 0, error: "Unauthorized for report generation" };
   }
 

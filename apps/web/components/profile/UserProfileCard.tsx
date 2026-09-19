@@ -54,44 +54,19 @@ export const ROLE_CONFIG: Record<
     badgeClass: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20",
     icon: AnimatedShield,
   },
-  service_manager: {
-    label: "Service Manager",
-    badgeClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
-    icon: AnimatedShield,
-  },
-  engineer: {
-    label: "Engineer",
-    badgeClass: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20",
-    icon: AnimatedShield,
-  },
-  service_engineer: {
-    label: "Service Engineer",
-    badgeClass: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20",
-    icon: AnimatedShield,
-  },
   supervisor: {
     label: "Supervisor",
     badgeClass: "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20",
     icon: AnimatedShield,
   },
-  store_manager: {
-    label: "Store Manager",
-    badgeClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
+  hr: {
+    label: "HR",
+    badgeClass: "bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20",
     icon: AnimatedShield,
   },
   operator: {
     label: "Operator",
     badgeClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
-    icon: AnimatedShield,
-  },
-  mechanic: {
-    label: "Mechanic",
-    badgeClass: "bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20",
-    icon: AnimatedShield,
-  },
-  hr_manager: {
-    label: "HR Manager",
-    badgeClass: "bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20",
     icon: AnimatedShield,
   },
 };

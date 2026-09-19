@@ -40,13 +40,9 @@ const PRESET_ROLES: FilterOption[] = [
   { id: 'super_admin', label: 'Super Admin', dotColor: '#ef4444' },
   { id: 'admin', label: 'Admin', dotColor: '#f59e0b' },
   { id: 'manager', label: 'Manager', dotColor: '#6366f1' },
-  { id: 'service_manager', label: 'Service Manager', dotColor: '#0284c7' },
-  { id: 'service_engineer', label: 'Service Engineer', dotColor: '#2563eb' },
   { id: 'supervisor', label: 'Supervisor', dotColor: '#0d9488' },
-  { id: 'store_manager', label: 'Store Manager', dotColor: '#9333ea' },
+  { id: 'hr', label: 'HR', dotColor: '#059669' },
   { id: 'operator', label: 'Operator', dotColor: '#d97706' },
-  { id: 'mechanic', label: 'Mechanic', dotColor: '#ea580c' },
-  { id: 'hr_manager', label: 'HR Manager', dotColor: '#059669' },
 ];
 
 const PRESET_STATUSES: FilterOption[] = [

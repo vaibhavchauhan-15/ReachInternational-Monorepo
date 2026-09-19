@@ -23,8 +23,7 @@
 - `EnterpriseSecuritySection.tsx`: Security & compliance badge list.
 - `WorkflowSection.tsx`, `ScrollStorySection.tsx`, `AnalyticsShowcaseSection.tsx`: Interactive story & workflow animations.
 
-## Feature Domain Components
-- **Dashboard**: `components/dashboard/Charts.tsx`, `components/dashboard/ChartLoaders.tsx`
+- **Dashboard (6 Roles)**: `components/dashboard/shared/*` (`DashboardShell`, `DashboardHeader`, `KPIGrid`, `KPICard`, `StatusCard`, `PrimaryAction`, `AlertWidget`, `ActivityWidget`), `components/dashboard/*/*DashboardView.tsx` (`super-admin`, `admin`, `manager`, `supervisor`, `hr`, `operator`)
 - **Machines**: `components/machines/MachineListClient.tsx`, `components/machines/MachineModal.tsx`, `components/machines/MachineRow.tsx`
 - **Services**: `components/services/ServicesClient.tsx`
 - **Notifications**: `components/notifications/NotificationListClient.tsx`, `components/notifications/NotificationPreviewModal.tsx`, `components/notifications/NotificationRow.tsx`

@@ -39,14 +39,10 @@ import {
 } from 'lucide-react-native';
 
 const USER_ROLES = [
-  { value: 'service_engineer', label: 'Service Engineer' },
-  { value: 'manager', label: 'Manager' },
-  { value: 'service_manager', label: 'Service Manager' },
-  { value: 'store_manager', label: 'Store Manager' },
-  { value: 'supervisor', label: 'Supervisor' },
   { value: 'operator', label: 'Operator' },
-  { value: 'mechanic', label: 'Mechanic' },
-  { value: 'hr_manager', label: 'HR Manager' },
+  { value: 'supervisor', label: 'Supervisor' },
+  { value: 'hr', label: 'HR' },
+  { value: 'manager', label: 'Manager' },
   { value: 'admin', label: 'Admin' },
   { value: 'super_admin', label: 'Super Admin' },
 ];
@@ -69,7 +65,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState('service_engineer');
+  const [role, setRole] = useState('operator');
   const [rolePickerVisible, setRolePickerVisible] = useState(false);
   const [shiftTime, setShiftTime] = useState('Day Shift (08:00 AM - 08:00 PM)');
   const [address, setAddress] = useState('');

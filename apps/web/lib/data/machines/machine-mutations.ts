@@ -104,7 +104,7 @@ export async function checkMachineSerialNumberAvailable(
  */
 export async function createMachine(input: CreateMachineInput): Promise<MutationResult> {
   try {
-    const caller = await requireRole("admin", "super_admin", "manager", "service_manager");
+    const caller = await requireRole("admin", "super_admin", "manager");
     const supabase = await createSupabaseServerClient();
 
     const errors: Record<string, string> = {};
@@ -237,7 +237,7 @@ export async function updateMachine(id: string, input: UpdateMachineInput): Prom
   }
 
   try {
-    const caller = await requireRole("admin", "super_admin", "manager", "service_manager", "supervisor");
+    const caller = await requireRole("admin", "super_admin", "manager", "supervisor");
     const supabase = await createSupabaseServerClient();
     const isSupervisor = caller.role === "supervisor";
 
@@ -413,7 +413,7 @@ export async function deactivateMachine(id: string): Promise<MutationResult> {
   }
 
   try {
-    await requireRole("admin", "super_admin", "manager", "service_manager");
+    await requireRole("admin", "super_admin", "manager");
     const supabase = await createSupabaseServerClient();
 
     // Query full machine details before deletion to log exact deleted attributes

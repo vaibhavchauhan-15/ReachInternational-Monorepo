@@ -1,4 +1,5 @@
 import {
+  LayoutDashboard,
   Wrench,
   Gauge,
   Star,
@@ -24,13 +25,16 @@ export interface MobileNavItem {
 
 export const mobileNavItems: MobileNavItem[] = [
   {
+    href: '/(app)/dashboard',
+    label: 'Dashboard',
+    icon: LayoutDashboard,
+    roles: ['super_admin', 'admin', 'manager', 'supervisor', 'hr', 'operator'],
+  },
+  {
     href: '/(app)/machines',
     label: 'Machines',
     icon: Wrench,
-    roles: [
-      'super_admin', 'admin', 'manager', 'service_manager', 'service_engineer', 'engineer',
-      'supervisor', 'mechanic', 'store_manager'
-    ],
+    roles: ['super_admin', 'admin', 'manager', 'supervisor', 'operator'],
     subItems: [
       { label: 'Directory', tab: 'inventory' },
     ],
@@ -39,7 +43,7 @@ export const mobileNavItems: MobileNavItem[] = [
     href: '/(app)/operations',
     label: 'Operations',
     icon: Gauge,
-    roles: ['super_admin', 'admin', 'manager', 'service_manager', 'supervisor', 'operator'],
+    roles: ['super_admin', 'admin', 'manager', 'supervisor', 'operator'],
     subItems: [
       { label: 'Running Hours', tab: 'logs' },
       { label: 'Assignments', tab: 'assignments' },
@@ -49,7 +53,7 @@ export const mobileNavItems: MobileNavItem[] = [
     href: '/(app)/clients',
     label: 'Clients',
     icon: Building2,
-    roles: ['super_admin', 'admin', 'manager', 'service_manager'],
+    roles: ['super_admin', 'admin', 'manager'],
     subItems: [
       { label: 'Client Directory', tab: 'all' },
     ],
@@ -58,7 +62,7 @@ export const mobileNavItems: MobileNavItem[] = [
     href: '/(app)/users',
     label: 'Employees & Users',
     icon: Users,
-    roles: ['super_admin', 'admin', 'manager', 'service_manager', 'hr_manager'],
+    roles: ['super_admin', 'admin', 'manager', 'hr', 'supervisor'],
     subItems: [
       { label: 'All Accounts', tab: 'all' },
     ],
@@ -71,6 +75,17 @@ export function getVisibleMobileNavItems(role?: string): MobileNavItem[] {
   return mobileNavItems
     .filter((item) => !item.roles || item.roles.includes(role) || item.roles.includes(normalizedRole))
     .map((item) => {
+      if (item.href === '/(app)/machines') {
+        if (normalizedRole === 'operator') {
+          return {
+            ...item,
+            subItems: [
+              { label: 'Assigned Machine', tab: 'assigned' },
+            ],
+          };
+        }
+        return item;
+      }
       if (item.href === '/(app)/operations') {
         if (normalizedRole === 'operator') {
           return {

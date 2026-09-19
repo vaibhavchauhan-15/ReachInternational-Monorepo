@@ -162,3 +162,38 @@ export function MachineAssignmentCardSkeletonList({ count = 3 }: { count?: numbe
     </div>
   );
 }
+
+export function OperatorHistoryCardSkeletonList({ count = 3 }: { count?: number }) {
+  return (
+    <div className="space-y-2.5" aria-label="Loading history logs...">
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={`op-hist-skel-${i}`}
+          className="p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-2 animate-pulse shadow-2xs"
+        >
+          {/* Header Row: timestamp + hours */}
+          <div className="flex items-center justify-between border-b border-[var(--color-hairline)] pb-1.5">
+            <div className="h-3 w-32 rounded bg-[var(--color-hairline)]" />
+            <div className="h-4 w-14 rounded bg-[var(--color-hairline)]/80" />
+          </div>
+          {/* Machine */}
+          <div className="h-3.5 w-44 rounded bg-[var(--color-hairline)]" />
+          {/* Client */}
+          <div className="h-3 w-40 rounded bg-[var(--color-hairline)]/70" />
+          {/* HMR */}
+          <div className="h-3 w-36 rounded bg-[var(--color-hairline)]/70" />
+          {/* Shift Date */}
+          <div className="h-3 w-28 rounded bg-[var(--color-hairline)]/70" />
+          {/* Shift Time */}
+          <div className="h-3 w-48 rounded bg-[var(--color-hairline)]/70" />
+          {/* Breakdown & Edit Icon */}
+          <div className="flex items-center justify-between pt-1 border-t border-[var(--color-hairline)]/70">
+            <div className="h-3 w-24 rounded bg-[var(--color-hairline)]/60" />
+            <div className="h-4 w-4 rounded bg-[var(--color-hairline)]/60" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+

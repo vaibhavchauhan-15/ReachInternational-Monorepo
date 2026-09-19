@@ -45,6 +45,12 @@ export const TAGS = {
   dashboardDueLists: "dashboard:due-lists",
   dashboardActivity: "dashboard:activity",
   userDashboard: (userId: string) => `dashboard:user:${userId}`,
+  dashboardSuperAdmin: (userId: string) => `dashboard:super_admin:${userId}`,
+  dashboardAdmin: (userId: string) => `dashboard:admin:${userId}`,
+  dashboardManager: (userId: string) => `dashboard:manager:${userId}`,
+  dashboardSupervisor: (userId: string) => `dashboard:supervisor:${userId}`,
+  dashboardHR: (userId: string) => `dashboard:hr:${userId}`,
+  dashboardOperator: (userId: string) => `dashboard:operator:${userId}`,
 
   services: "services",
   machineServices: (machineId: string) => `machine-services:${machineId}`,

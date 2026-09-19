@@ -96,7 +96,7 @@ export default async function PrivacyPolicyPage() {
           <div className="flex items-center gap-3">
             {isLoggedIn ? (
               <Link
-                href={user?.role === "operator" ? "/operations?tab=entry" : "/machines"}
+                href="/dashboard"
                 className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-[#0070f3] hover:bg-[#0060df] text-white !text-white font-semibold text-xs shadow-xs transition-colors cursor-pointer"
               >
                 <span className="text-white !text-white font-semibold text-xs leading-none">
@@ -319,7 +319,7 @@ export default async function PrivacyPolicyPage() {
                 <strong>PostgreSQL Row-Level Security (RLS):</strong> Data queries are partitioned at the database kernel level according to user role and tenant scoping. Operators only access their own shifts and assigned equipment.
               </li>
               <li>
-                <strong>Role-Based Access Control (RBAC):</strong> System roles (<code className="text-sm font-mono">admin</code>, <code className="text-sm font-mono">service_manager</code>, <code className="text-sm font-mono">engineer</code>, <code className="text-sm font-mono">operator</code>, <code className="text-sm font-mono">client</code>) possess strictly compartmentalized permissions. Sensitive personal KYC data is shielded from unauthorized peers.
+                <strong>Role-Based Access Control (RBAC):</strong> System roles (<code className="text-sm font-mono">super_admin</code>, <code className="text-sm font-mono">admin</code>, <code className="text-sm font-mono">manager</code>, <code className="text-sm font-mono">supervisor</code>, <code className="text-sm font-mono">hr</code>, <code className="text-sm font-mono">operator</code>) possess strictly compartmentalized permissions. Sensitive personal KYC data is shielded from unauthorized peers.
               </li>
               <li>
                 <strong>Encryption in Transit & at Rest:</strong> All network communication uses TLS 1.3 encryption with enforced HTTPS. Stored records, backup snapshots, and cloud document buckets utilize AES-256 encryption.

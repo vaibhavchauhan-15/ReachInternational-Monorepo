@@ -54,14 +54,9 @@ const ROLE_LABELS: Record<string, string> = {
   super_admin: 'Super Admin',
   admin: 'Admin',
   manager: 'Manager',
-  service_manager: 'Service Manager',
-  engineer: 'Service Engineer',
-  service_engineer: 'Service Engineer',
   supervisor: 'Supervisor',
-  store_manager: 'Store Manager',
+  hr: 'HR',
   operator: 'Operator',
-  mechanic: 'Mechanic',
-  hr_manager: 'HR Manager',
 };
 
 export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({

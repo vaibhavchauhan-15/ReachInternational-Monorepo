@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { AnimatedChevronDown } from "@/components/ui/animated-icons";
 import { SidebarTooltip } from "@/components/ui";
@@ -78,6 +78,7 @@ export function NavigationItem({
             ) : (
               <Link href={item.href} className="w-full flex justify-center focus:outline-none">
                 <SidebarMenuButton
+                  as="div"
                   ref={setAnchorEl}
                   active={isActive}
                   aria-label={item.label}
@@ -147,7 +148,7 @@ export function NavigationItem({
                 return (
                   <SidebarMenuSubItem key={sub.tab}>
                     <Link href={`${item.href}?tab=${sub.tab}`} className="focus:outline-none">
-                      <SidebarMenuSubButton active={isSubActive}>
+                      <SidebarMenuSubButton as="div" active={isSubActive}>
                         <span className="truncate">{sub.label}</span>
                       </SidebarMenuSubButton>
                     </Link>
@@ -159,7 +160,7 @@ export function NavigationItem({
         </Collapsible>
       ) : (
         <Link href={item.href} className="focus:outline-none">
-          <SidebarMenuButton active={isActive}>
+          <SidebarMenuButton as="div" active={isActive}>
             <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-sky-600 dark:text-sky-400 font-bold" : ""}`} />
             <span className="truncate">{item.label}</span>
           </SidebarMenuButton>

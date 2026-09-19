@@ -1,5 +1,5 @@
-import { DashboardSkeleton } from "@/components/ui";
+import { DashboardShellSkeleton } from "@/components/dashboard/shared";
 
 export default function DashboardLoading() {
-  return <DashboardSkeleton />;
+  return <DashboardShellSkeleton kpiCount={4} />;
 }

@@ -1,4 +1,9 @@
 import "server-only";
+
+/**
+ * @deprecated Legacy service-machine dashboard queries.
+ * Use role-specific read model DAL functions from `@/lib/data/dashboard` instead.
+ */
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -51,26 +56,25 @@ const getCachedDashboardKpis = unstable_cache(
     const today = new Date().toISOString().split("T")[0];
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
 
-    let mQuery = supabase.from("machines").select("status, next_service_due_date, engineer_id");
-    if (role === "engineer" || role === "service_engineer" || role === "mechanic") {
-      mQuery = mQuery.eq("engineer_id", userId);
+    let mQuery = supabase.from("machines").select("status, health_status, next_service_due_date");
+    if (role === "operator") {
+      mQuery = mQuery.eq("current_operator_id", userId);
     }
     const { data: machines } = await mQuery;
     const allMachines = machines ?? [];
 
-    let srQuery = supabase.from("service_records").select("id").eq("service_date", today);
-    if (role === "engineer" || role === "service_engineer" || role === "mechanic") {
-      srQuery = srQuery.eq("engineer_id", userId);
-    }
+    const srQuery = supabase.from("service_records").select("id").eq("service_date", today);
     const { data: srToday } = await srQuery;
 
     let nQuery = supabase.from("notifications").select("status").eq("alert_date", today);
-    if (role === "engineer" || role === "service_engineer" || role === "mechanic") {
+    if (role === "operator") {
       nQuery = nQuery.eq("recipient_id", userId);
     }
     const { data: notifsToday } = await nQuery;
 
-    const activeMachines = allMachines.filter((m) => m.status === "active");
+    const activeMachines = allMachines.filter(
+      (m) => (m.status === "active" || m.health_status === "active") && m.status !== "inactive"
+    );
 
     return {
       total_machines: allMachines.length,
@@ -98,10 +102,7 @@ const getCachedDashboardCharts = unstable_cache(
       return data as { monthly_services: MonthlyServiceData[]; overdue_trend: OverdueTrendData[] };
     }
 
-    let srQuery = supabase.from("service_records").select("service_date");
-    if (role === "engineer" || role === "service_engineer" || role === "mechanic") {
-      srQuery = srQuery.eq("engineer_id", userId);
-    }
+    const srQuery = supabase.from("service_records").select("service_date");
     const { data: records } = await srQuery;
 
     const monthsMap: Record<string, number> = {};
@@ -129,8 +130,8 @@ const getCachedDashboardCharts = unstable_cache(
     }));
 
     let mQuery = supabase.from("machines").select("next_service_due_date").eq("status", "active");
-    if (role === "engineer" || role === "service_engineer" || role === "mechanic") {
-      mQuery = mQuery.eq("engineer_id", userId);
+    if (role === "operator") {
+      mQuery = mQuery.eq("current_operator_id", userId);
     }
     const { data: machines } = await mQuery;
 
@@ -172,7 +173,7 @@ const getCachedDashboardDueLists = unstable_cache(
     let mQuery = supabase
       .from("machines")
       .select("*");
-    if (role === "engineer" || role === "service_engineer" || role === "mechanic") {
+    if (role === "operator") {
       mQuery = mQuery.eq("current_operator_id", userId);
     }
     const { data: rawMachines } = await mQuery;
@@ -207,7 +208,7 @@ const getCachedRecentActivity = unstable_cache(
       return (data as AuditLogWithUser[]).slice(0, 10);
     }
 
-    if (role === "engineer" || role === "service_engineer" || role === "mechanic") return [];
+    if (role === "operator") return [];
 
     const { data: logs } = await supabase
       .from("audit_logs")
@@ -269,7 +270,7 @@ export async function getDueMachines(
 
 export const getRecentActivity = cache(async (): Promise<AuditLogWithUser[]> => {
   const user = await getCurrentUser();
-  if (!user || user.role === "engineer" || user.role === "service_engineer" || user.role === "mechanic") return [];
+  if (!user || user.role === "operator") return [];
   return getCachedRecentActivity(user.id, user.role);
 });
 

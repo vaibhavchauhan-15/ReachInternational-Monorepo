@@ -241,9 +241,8 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   const isAdminOrManager =
     normalizedRole === 'admin' ||
     normalizedRole === 'super_admin' ||
-    normalizedRole === 'manager' ||
-    normalizedRole === 'service_manager';
-  const isSupervisor = normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor';
+    normalizedRole === 'manager';
+  const isSupervisor = normalizedRole === 'supervisor';
   const canEdit = isAdminOrManager || isSupervisor;
   const canDelete = isAdminOrManager;
 
@@ -1133,39 +1132,41 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={() => setActiveTab('audit_trail')}
-            activeOpacity={0.7}
-            style={[
-              styles.tabPill,
-              activeTab === 'audit_trail' && [
-                styles.tabPillActive,
-                {
-                  backgroundColor: theme.colors.canvas,
-                  borderColor: theme.colors.hairline,
-                },
-              ],
-            ]}
-          >
-            <Text
+          {normalizedRole !== 'operator' && (
+            <TouchableOpacity
+              onPress={() => setActiveTab('audit_trail')}
+              activeOpacity={0.7}
               style={[
-                styles.tabPillText,
-                {
-                  color: activeTab === 'audit_trail' ? theme.colors.link : theme.colors.mute,
-                  fontWeight: activeTab === 'audit_trail' ? '700' : '500',
-                },
+                styles.tabPill,
+                activeTab === 'audit_trail' && [
+                  styles.tabPillActive,
+                  {
+                    backgroundColor: theme.colors.canvas,
+                    borderColor: theme.colors.hairline,
+                  },
+                ],
               ]}
             >
-              Audit
-            </Text>
-            {hasLoadedAudit && auditLogs && auditLogs.length > 0 && (
-              <View style={[styles.tabCountPill, { backgroundColor: theme.colors.link + '18' }]}>
-                <Text style={[styles.tabCountText, { color: theme.colors.link }]}>
-                  {auditLogs.length}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
+              <Text
+                style={[
+                  styles.tabPillText,
+                  {
+                    color: activeTab === 'audit_trail' ? theme.colors.link : theme.colors.mute,
+                    fontWeight: activeTab === 'audit_trail' ? '700' : '500',
+                  },
+                ]}
+              >
+                Audit
+              </Text>
+              {hasLoadedAudit && auditLogs && auditLogs.length > 0 && (
+                <View style={[styles.tabCountPill, { backgroundColor: theme.colors.link + '18' }]}>
+                  <Text style={[styles.tabCountText, { color: theme.colors.link }]}>
+                    {auditLogs.length}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
         </View>
 
@@ -1952,7 +1953,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
         )}
 
         {/* TAB 3: AUDIT TRAIL */}
-        {activeTab === 'audit_trail' && (
+        {activeTab === 'audit_trail' && normalizedRole !== 'operator' && (
           <View style={styles.tabContentArea}>
             <View
               style={[

@@ -53,13 +53,9 @@ const ALL_ROLES = [
   { value: 'super_admin', label: 'Super Admin' },
   { value: 'admin', label: 'Admin' },
   { value: 'manager', label: 'Manager' },
-  { value: 'service_manager', label: 'Service Manager' },
-  { value: 'service_engineer', label: 'Service Engineer' },
   { value: 'supervisor', label: 'Supervisor' },
-  { value: 'store_manager', label: 'Store Manager' },
+  { value: 'hr', label: 'HR' },
   { value: 'operator', label: 'Operator' },
-  { value: 'mechanic', label: 'Mechanic' },
-  { value: 'hr_manager', label: 'HR Manager' },
 ];
 
 export const UserEditModal: React.FC<UserEditModalProps> = ({
@@ -73,7 +69,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
 
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState('service_engineer');
+  const [role, setRole] = useState('operator');
   const [shiftTime, setShiftTime] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
@@ -107,7 +103,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
     if (user) {
       setFullName(user.full_name || '');
       setPhone(user.phone || '');
-      setRole(user.role || 'service_engineer');
+      setRole(user.role || 'operator');
       setShiftTime(user.shift_time || '');
       setAddress(user.address || '');
       setCity(user.city || '');

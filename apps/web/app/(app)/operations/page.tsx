@@ -1,7 +1,9 @@
 import { requirePermission, getCurrentUser } from "@/lib/dal";
 import { redirect } from "next/navigation";
 import { getOperationsHubData } from "@/lib/queries/operators";
+import { getOperatorEntryContext } from "@/lib/queries/operator-entry";
 import { OperationsClient } from "@/components/operations/OperationsClient";
+import { OperatorEntryClient } from "@/components/operations/entry/OperatorEntryClient";
 import { getOperationsCurrentMonth } from "@reachinternational/utils";
 
 export interface OperationsPageSearchParams {
@@ -26,6 +28,9 @@ export default async function OperationsPage(props: {
 }) {
   await requirePermission("machine.view");
   const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
   const searchParams = await props.searchParams;
   const tab = searchParams?.tab;
 
@@ -35,17 +40,24 @@ export default async function OperationsPage(props: {
 
   if (
     user?.role !== "operator" &&
-    (tab === "entry" ||
-      tab === "history" ||
-      tab === "machines" ||
-      tab === "assignments" ||
-      !tab ||
-      !["logs", "site-movement", "operators"].includes(tab))
+    (!tab || !["logs", "site-movement", "operators"].includes(tab))
   ) {
     redirect("/operations?tab=logs");
   }
 
-  const effectiveTab = tab || (user?.role === "operator" ? "entry" : "logs");
+  const effectiveTab = user?.role === "operator" ? (tab || "entry") : (tab || "logs");
+
+  // Fast Path: Operator Entry/History landing loads ONLY the tiny entry context
+  if (user?.role === "operator") {
+    const entryContext = await getOperatorEntryContext(user.id);
+    return (
+      <OperatorEntryClient
+        initialContext={entryContext}
+        user={user}
+        initialTab={effectiveTab === "history" ? "history" : "entry"}
+      />
+    );
+  }
 
   const page = searchParams?.page ? Math.max(1, parseInt(searchParams.page, 10)) : 1;
   const rawView = searchParams?.view;
@@ -97,10 +109,11 @@ export default async function OperationsPage(props: {
     expanded: expanded === "true",
   });
 
+  const dataMap = data as unknown as Record<string, string | undefined>;
   const effectiveInitialClientId =
-    clientId || (data as any).activeClientId || (data as any).effectiveClientId || (data as any).mostRecentClientId;
-  const effectiveInitialMachineId = machineId || (data as any).activeMachineId;
-  const effectiveInitialOperatorId = operatorId || (data as any).activeOperatorId;
+    clientId || dataMap.activeClientId || dataMap.effectiveClientId || dataMap.mostRecentClientId;
+  const effectiveInitialMachineId = machineId || dataMap.activeMachineId;
+  const effectiveInitialOperatorId = operatorId || dataMap.activeOperatorId;
 
   return (
     <OperationsClient
@@ -121,7 +134,7 @@ export default async function OperationsPage(props: {
       initialViewMode={viewMode}
       initialMachineId={effectiveInitialMachineId}
       initialClientId={effectiveInitialClientId}
-      mostRecentClientId={(data as any).mostRecentClientId}
+      mostRecentClientId={dataMap.mostRecentClientId}
       initialSite={site}
       initialOperatorId={effectiveInitialOperatorId}
       initialMonth={month}

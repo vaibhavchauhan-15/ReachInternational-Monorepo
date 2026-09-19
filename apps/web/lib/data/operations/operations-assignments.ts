@@ -91,7 +91,7 @@ async function fetchOperationsAssignmentsData(): Promise<OperationsAssignmentsRe
     supabase
       .from("users")
       .select("id, full_name, email, phone, role, status, shift_time, shift_start_time, shift_end_time")
-      .in("role", ["operator", "supervisor", "manager", "admin", "super_admin", "service_manager"])
+      .in("role", ["operator", "supervisor", "manager", "admin", "super_admin"])
       .eq("status", "active")
       .order("full_name", { ascending: true }),
     supabase

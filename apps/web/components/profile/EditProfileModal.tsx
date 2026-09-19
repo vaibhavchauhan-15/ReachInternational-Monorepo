@@ -161,7 +161,7 @@ export function EditProfileModal({
   const approverHierarchyLabel =
     user.role === "admin"
       ? "Super Administrator"
-      : ["manager", "service_manager", "hr_manager", "store_manager"].includes(user.role)
+      : ["manager", "hr"].includes(user.role)
       ? "Administrator"
       : "Manager / Administrator";
 

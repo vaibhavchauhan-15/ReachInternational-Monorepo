@@ -2,14 +2,9 @@ export type UserRole =
   | "super_admin"
   | "admin"
   | "manager"
-  | "service_manager"
-  | "engineer"
-  | "service_engineer"
   | "supervisor"
-  | "store_manager"
-  | "operator"
-  | "mechanic"
-  | "hr_manager";
+  | "hr"
+  | "operator";
 
 export type PermissionScope = 
   | "ORGANIZATION"
@@ -428,6 +423,46 @@ export interface MachineHourLog {
   client?: CRMClient | null;
 }
 
+export interface OperatorLastLogSummary {
+  id: string;
+  log_date: string;
+  start_meter: number;
+  end_meter: number;
+  start_time?: string | null;
+  end_time?: string | null;
+  running_hours: number;
+  overtime_hours: number;
+  is_breakdown: boolean;
+  breakdown_duration?: string | null;
+  operator_id?: string | null;
+  operator_name?: string | null;
+}
+
+export interface OperatorEntryContext {
+  operator: {
+    id: string;
+    name: string;
+    role: string;
+    shift_start: string;
+    shift_end: string;
+    raw_shift_start: string;
+    raw_shift_end: string;
+  } | null;
+  machine: {
+    id: string;
+    machine_id: string;
+    model?: string | null;
+    serial_number?: string | null;
+  } | null;
+  client: {
+    id: string;
+    company_name: string;
+    site: string;
+  } | null;
+  last_hmr: number;
+  last_log?: OperatorLastLogSummary | null;
+}
+
 export interface MachineComplaint {
   id: string;
   complaint_no: string;
@@ -823,6 +858,9 @@ export interface SystemSettings {
   updated_at: string;
 }
 
+/**
+ * @deprecated Legacy service-machine KPI summary. Use role-specific DTOs from `./dashboard` instead.
+ */
 export interface DashboardSummary {
   total_machines: number;
   active_machines: number;
@@ -837,11 +875,17 @@ export interface DashboardSummary {
   active_operators?: number;
 }
 
+/**
+ * @deprecated Legacy monthly service data.
+ */
 export interface MonthlyServiceData {
   month: string;
   count: number;
 }
 
+/**
+ * @deprecated Legacy store manager metrics.
+ */
 export interface StoreManagerDashboardMetrics {
   totalParts: number;
   totalStockQty: number;

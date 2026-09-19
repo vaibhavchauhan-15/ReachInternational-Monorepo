@@ -14,7 +14,7 @@ import {
   Animated,
   Easing,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme, MobileHeader, Skeleton, HeaderActionItem } from '../../components/ui';
 import { MobileMachineCard } from '../../components/machines/MobileMachineCard';
 import { MachineModal } from '../../components/machines/MachineModal';
@@ -110,6 +110,7 @@ const MACHINE_SELECT_COLUMNS = `
 `;
 
 export default function MachinesScreen() {
+  const router = useRouter();
   const { theme, isDark } = useTheme();
   const { role, user } = useAuth();
   const params = useLocalSearchParams<{ id?: string; machineId?: string }>();
@@ -201,9 +202,8 @@ export default function MachinesScreen() {
   const isAdminOrManager =
     normalizedRole === 'admin' ||
     normalizedRole === 'super_admin' ||
-    normalizedRole === 'manager' ||
-    normalizedRole === 'service_manager';
-  const isSupervisor = normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor';
+    normalizedRole === 'manager';
+  const isSupervisor = normalizedRole === 'supervisor';
   const canCreate = isAdminOrManager;
 
   // Fetch machines with full hydration, role scoping, whole-DB trigram search, and resilient fallback
@@ -216,8 +216,29 @@ export default function MachinesScreen() {
         .select(MACHINE_SELECT_COLUMNS);
 
       // Role scoping matching web DAL
+      let opAssignedMachineId: string | null = null;
       if (normalizedRole === 'operator' && user?.id) {
-        query = query.or(`current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}}`);
+        try {
+          const { data: omaData } = await supabase
+            .from('operator_machine_assignments')
+            .select('machine_id')
+            .eq('operator_id', user.id)
+            .eq('is_active', true)
+            .order('assigned_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (omaData?.machine_id) {
+            opAssignedMachineId = omaData.machine_id;
+          }
+        } catch (omaErr) {
+          console.warn('[MachinesScreen] Error checking active operator assignment:', omaErr);
+        }
+
+        if (opAssignedMachineId) {
+          query = query.or(`id.eq.${opAssignedMachineId},current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}}`);
+        } else {
+          query = query.or(`current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}}`);
+        }
       } else if ((normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor') && user?.id) {
         query = query.or(`current_supervisor_id.eq.${user.id},supervisor_ids.cs.{${user.id}}`);
       }
@@ -261,7 +282,11 @@ export default function MachinesScreen() {
           `);
 
         if (normalizedRole === 'operator' && user?.id) {
-          fallbackQuery = fallbackQuery.or(`current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}}`);
+          if (opAssignedMachineId) {
+            fallbackQuery = fallbackQuery.or(`id.eq.${opAssignedMachineId},current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}}`);
+          } else {
+            fallbackQuery = fallbackQuery.or(`current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}}`);
+          }
         } else if ((normalizedRole === 'supervisor' || normalizedRole === 'site_supervisor') && user?.id) {
           fallbackQuery = fallbackQuery.or(`current_supervisor_id.eq.${user.id},supervisor_ids.cs.{${user.id}}`);
         }
@@ -637,7 +662,18 @@ export default function MachinesScreen() {
   const currentSortLabel =
     SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label || 'Sort';
 
-  const headerActions = useMemo<HeaderActionItem[]>(() => {
+  const headerActions = useMemo((): HeaderActionItem[] => {
+    if (normalizedRole === 'operator') {
+      return [
+        {
+          id: 'refresh-assigned',
+          label: 'Refresh Machine',
+          icon: <RefreshCw size={16} color={theme.colors.ink} />,
+          onPress: () => fetchMachines(),
+        },
+      ];
+    }
+
     const list: HeaderActionItem[] = [];
 
     if (canCreate) {
@@ -704,7 +740,7 @@ export default function MachinesScreen() {
         <>
           {/* Top Standardized Mobile Header: [Logo] + [Page Title] + [Quick Access] + [3-Dot Actions] */}
           <MobileHeader
-            title="Machine Directory"
+            title={normalizedRole === 'operator' ? 'Assigned Machine' : 'Machine Directory'}
             actions={headerActions}
           />
 
@@ -719,6 +755,83 @@ export default function MachinesScreen() {
           />
         }
       >
+        {normalizedRole === 'operator' ? (
+          isLoading ? (
+            <MobileMachineListSkeleton count={1} />
+          ) : fetchError ? (
+            <View
+              style={[
+                styles.emptyContainer,
+                {
+                  backgroundColor: theme.colors.canvasElevated,
+                  borderColor: theme.colors.hairline,
+                  marginHorizontal: 4,
+                  marginTop: 8,
+                },
+              ]}
+            >
+              <AlertCircle size={36} color={theme.colors.error} />
+              <Text style={[styles.emptyTitle, { color: theme.colors.ink }]}>
+                Unable to load assigned machine
+              </Text>
+              <Text style={[styles.emptySubtext, { color: theme.colors.mute }]}>
+                {fetchError}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setIsLoading(true);
+                  fetchMachines();
+                }}
+                style={[styles.emptyResetBtn, { backgroundColor: theme.colors.ink }]}
+              >
+                <Text style={[styles.emptyResetBtnText, { color: theme.colors.canvas }]}>
+                  Retry Fetch
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : machines.length === 0 ? (
+            <View
+              style={[
+                styles.emptyContainer,
+                {
+                  backgroundColor: theme.colors.canvasElevated,
+                  borderColor: theme.colors.hairline,
+                  padding: 32,
+                  marginHorizontal: 4,
+                  marginTop: 8,
+                },
+              ]}
+            >
+              <Wrench size={40} color={theme.colors.mute} />
+              <Text style={[styles.emptyTitle, { color: theme.colors.ink, marginTop: 8 }]}>
+                No Machine Assigned
+              </Text>
+              <Text style={[styles.emptySubtext, { color: theme.colors.mute, textAlign: 'center', lineHeight: 18 }]}>
+                You do not currently have an active machine assigned to your profile. Please contact your site supervisor to be assigned to equipment.
+              </Text>
+              <TouchableOpacity
+                onPress={() => router.push('/(app)/operations')}
+                style={[styles.emptyResetBtn, { backgroundColor: theme.colors.ink, minHeight: 44, marginTop: 12, justifyContent: 'center' }]}
+              >
+                <Text style={[styles.emptyResetBtnText, { color: theme.colors.canvas }]}>
+                  Go to Operations Hub
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={{ marginHorizontal: 2 }}>
+              <MobileMachineCard
+                machine={machines[0]}
+                isAdmin={false}
+                isSupervisor={false}
+                onEdit={() => {}}
+                onDelete={() => {}}
+                onViewDetails={(m) => setSelectedMachine(m)}
+              />
+            </View>
+          )
+        ) : (
+          <>
         {/* Interactive 4-Card KPI Metric Grid */}
         <View style={styles.kpiGrid}>
           {/* Total Machines Card */}
@@ -1497,6 +1610,8 @@ export default function MachinesScreen() {
               />
             ))}
           </View>
+        )}
+          </>
         )}
       </ScrollView>
         </>

@@ -33,13 +33,9 @@ const roleOptions = [
   { value: "super_admin", label: "Super Admin" },
   { value: "admin", label: "Admin" },
   { value: "manager", label: "Manager" },
-  { value: "service_manager", label: "Service Manager" },
-  { value: "service_engineer", label: "Service Engineer" },
   { value: "supervisor", label: "Supervisor" },
-  { value: "store_manager", label: "Store Manager" },
+  { value: "hr", label: "HR" },
   { value: "operator", label: "Operator" },
-  { value: "mechanic", label: "Mechanic" },
-  { value: "hr_manager", label: "HR Manager" },
 ];
 
 interface UserDetailSheetProps {
@@ -74,28 +70,13 @@ function getRoleBadge(role: string) {
         </span>
       );
     case "manager":
-    case "branch_manager":
       return <Badge variant="default">Manager</Badge>;
-    case "service_manager":
-      return <Badge variant="default">Service Manager</Badge>;
-    case "service_engineer":
-    case "engineer":
-      return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-300/80 dark:border-blue-800/80 shadow-xs">
-          <Shield className="h-3 w-3 text-blue-600 dark:text-blue-400" />
-          Service Engineer
-        </span>
-      );
     case "supervisor":
       return <Badge variant="default">Supervisor</Badge>;
-    case "store_manager":
-      return <Badge variant="warning">Store Manager</Badge>;
+    case "hr":
+      return <Badge variant="success">HR</Badge>;
     case "operator":
       return <Badge variant="warning">Operator</Badge>;
-    case "mechanic":
-      return <Badge variant="error">Mechanic</Badge>;
-    case "hr_manager":
-      return <Badge variant="success">HR Manager</Badge>;
     default:
       return <Badge>{role}</Badge>;
   }
@@ -108,12 +89,13 @@ function getRoleIcon(role: string) {
     case "admin":
       return <ShieldCheck className="h-5 w-5 text-amber-600 dark:text-amber-400" />;
     case "manager":
-    case "service_manager":
-    case "branch_manager":
       return <ShieldCheck className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />;
-    case "service_engineer":
-    case "engineer":
-      return <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400" />;
+    case "supervisor":
+      return <Shield className="h-5 w-5 text-teal-600 dark:text-teal-400" />;
+    case "hr":
+      return <Shield className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />;
+    case "operator":
+      return <Shield className="h-5 w-5 text-amber-600 dark:text-amber-400" />;
     default:
       return <Shield className="h-5 w-5 text-[var(--color-mute)]" />;
   }
@@ -162,12 +144,7 @@ export function UserDetailSheet({
 
   const canViewContactInfo = () => {
     if (!user) return false;
-    if (currentUser.role === "super_admin") return true;
-    if (currentUser.role === "admin") {
-      if (user.role === "engineer") return true;
-      if (user.id === currentUser.id) return true;
-      return false;
-    }
+    if (currentUser.role === "super_admin" || currentUser.role === "admin") return true;
     if (currentUser.role === "supervisor") {
       const isAssigned =
         user.supervisor_id === currentUser.id ||
@@ -188,7 +165,7 @@ export function UserDetailSheet({
   const canManageUser = () => {
     if (!user) return false;
     if (currentUser.role === "super_admin") return true;
-    if (currentUser.role === "admin" && user.role === "engineer") return true;
+    if (currentUser.role === "admin" && user.role !== "super_admin") return true;
     return false;
   };
 

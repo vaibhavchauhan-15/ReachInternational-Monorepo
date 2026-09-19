@@ -90,7 +90,7 @@ AUTHENTICATION STATE    DESCRIPTION / HANDLING
 
 The monorepo defines distinct public and protected route domains:
 * **Public Auth Routes**: `/login`, `/signup`, `/reset-password`, `/auth/callback`.
-* **Protected Routes**: `/dashboard`, `/my-work`, `/tasks`, `/machines`, `/service`, `/operations`, `/rentals`, `/crm`, `/finance`, `/hr`, `/inventory`, `/users`, `/branches`, `/audit-logs`, `/settings`.
+* **Protected Routes**: `/dashboard`, `/machines`, `/clients`, `/operations`, `/users`, `/audit`.
 
 ---
 
@@ -116,24 +116,17 @@ Layer 3: Supabase PostgreSQL Database (RLS) → Evaluates auth.uid() against tab
 
 ## 11. Role Model (`@reachinternational/permissions`)
 
-ReachInternational defines 13 canonical enterprise roles in `@reachinternational/permissions`:
+ReachInternational defines strictly 6 canonical enterprise roles in `@reachinternational/permissions` and database constraint `users_role_check`:
 
 ```text
 ROLE CODE            ROLE DISPLAY NAME    CATEGORY / HIERARCHY TIER
 ──────────────────────────────────────────────────────────────────────────────────────────
-• super_admin        Super Admin          Admin (Full multi-tenant control)
-• admin / company_admin System Admin      Admin (Organization-wide management)
-• branch_manager     Branch Manager       Management (Branch operations & approvals)
-• service_manager    Service Manager      Management (Service & breakdown oversight)
-• store_manager      Store Manager        Management (Inventory & PO approvals)
-• hr_manager         HR Manager           Management (Staff & payroll management)
-• finance_manager    Finance Manager      Finance (Ledgers, billing, 3-way PO match)
-• rental_manager     Rental Manager       Operations (Fleet agreements & damage routing)
-• sales_executive    Sales Executive      Sales (CRM leads, pipeline & quotations)
-• service_engineer   Service Engineer     Field (Breakdown repairs & digital FSRs)
-• mechanic           Mechanic             Field (Equipment maintenance & repairs)
-• supervisor         Supervisor           Field (Site movements & operator logs)
-• operator / client  Operator / Client    Field/Client (Daily meter logs / owned fleet)
+• super_admin        Super Admin          Executive (Full platform control)
+• admin              System Admin         Administrative (Organization-wide management)
+• manager            Manager              Management (Fleet, clients, and operations oversight)
+• supervisor         Supervisor           Field Leadership (Equipment monitoring & operator shift supervision)
+• hr                 HR                   Human Resources (Employee lifecycle, KYC & directory management)
+• operator           Operator             Field Duty (Equipment operations & daily hour meter logging)
 ```
 
 ---
@@ -186,17 +179,24 @@ All data tables (`machines`, `service_logs`, `purchase_orders`, `users`) MUST co
 
 ## 17. Branch Scope (`getUserBranchIds`)
 
-1. **Branch-Scoped Filtering**: Users with branch-restricted roles (`branch_manager`, `service_manager`, `field_engineer`, `mechanic`, `operator`) can only access data belonging to their assigned branches.
+1. **Branch-Scoped Filtering**: Users with branch-restricted roles (`manager`, `supervisor`, `operator`) can only access data belonging to their assigned branches/machines.
 2. **`getUserBranchIds()` Helper**: `getUserBranchIds(user)` in `lib/dal.ts` resolves the user's primary `branch_id` and additional branch assignments from `user_branches`.
 
 ---
 
-## 18. Ownership Scope
+## 18. Ownership Scope & Operator RBAC Governance
 
-For field engineers, operators, and clients, authorization rules verify ownership:
-* `created_by === user.id` (Log creator)
-* `assigned_to === user.id` (Assigned breakdown complaint / task)
-* `client_id === user.client_id` (Client-owned machine)
+1. **Operator Ownership Scope**:
+   - **Daily Log Entry**: Operators can create daily hour meter logs for their assigned machine and active shift.
+   - **View Own Logs Only**: Operators can only view their own logged shifts (`operator_id = auth.uid()`). Viewing other operators' logs is blocked at both RLS and UI layers.
+   - **Edit Own Logs within 7 Days**: Operators may edit their own logs within 7 days of `log_date`. Logs older than 7 days are locked (`CURRENT_DATE - 7`).
+   - **Delete Prohibition for Operators**: Operators CANNOT delete any logs (their own or others). Delete controls are completely removed from operator views.
+   - **Export Own Logs Only**: Operators can only export/print their own log records. Company-wide exports are blocked.
+   - **Assigned Machine Info Only**: Operators can only view basic details of machines they are assigned to. Adding, editing, deleting, or reassigning machines/shifts is strictly blocked.
+   - **Administrative Prohibitions**: Operators cannot manage clients, manage users, view audit logs, manage breakdowns, approve anything, or alter roles/permissions.
+2. **Exclusive Super Admin Log Deletion**:
+   - Deletion of machine/operator hour logs (`public.machine_hour_logs`) is **exclusively restricted to `super_admin`**.
+   - Enforced at database RLS (`FOR DELETE USING ((SELECT public.current_user_role()) = 'super_admin'::text)`), backend Server Action (`deleteOperatorHourLogAction`), Web UI (`OperationsLogsTab`), and Mobile App (`apps/mobile/app/(app)/operations.tsx`).
 
 ---
 

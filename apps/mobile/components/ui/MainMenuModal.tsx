@@ -39,11 +39,12 @@ export const MainMenuModal: React.FC<MainMenuModalProps> = ({ visible, onClose }
   };
 
   const normalizedRole = (role || '').toLowerCase();
-  const isManagerOrAdmin =
+  const canAccessUsers =
     normalizedRole === 'admin' ||
     normalizedRole === 'super_admin' ||
-    normalizedRole === 'service_manager' ||
-    normalizedRole === 'hr_manager';
+    normalizedRole === 'manager' ||
+    normalizedRole === 'hr' ||
+    normalizedRole === 'supervisor';
 
   const menuItems = [
     {
@@ -60,7 +61,7 @@ export const MainMenuModal: React.FC<MainMenuModalProps> = ({ visible, onClose }
       route: '/(app)/operations',
       icon: Gauge,
     },
-    ...(isManagerOrAdmin
+    ...(canAccessUsers
       ? [
           {
             id: 'users',

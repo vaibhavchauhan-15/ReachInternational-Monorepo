@@ -88,7 +88,7 @@ export function UsersHeader({
 
   const totalUsersCount = aggregates?.total ?? aggregates?.totalUsers ?? totalCount ?? usersCount;
   const activeCount = aggregates?.active ?? aggregates?.activeUsers ?? 0;
-  const engineerCount = aggregates?.engineers ?? aggregates?.engineerCount ?? 0;
+  const operatorCount = aggregates?.operators ?? aggregates?.operatorCount ?? aggregates?.engineers ?? aggregates?.engineerCount ?? 0;
   const newRegistrationsCount = aggregates?.new_registrations ?? pendingCount;
 
   return (
@@ -386,21 +386,21 @@ export function UsersHeader({
 
         <motion.div
           whileTap={{ scale: 0.98 }}
-          onClick={() => onRoleFilterChange(roleFilter === "service_engineer" || roleFilter === "engineer" ? "all" : "service_engineer")}
+          onClick={() => onRoleFilterChange(roleFilter === "operator" ? "all" : "operator")}
           className={`cursor-pointer p-4 rounded-[var(--radius-md)] border transition-all ${
-            roleFilter === "service_engineer" || roleFilter === "engineer"
-              ? "bg-blue-50/40 border-blue-500 shadow-xs ring-1 ring-blue-500/20 dark:bg-blue-950/20"
-              : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-blue-500/40"
+            roleFilter === "operator"
+              ? "bg-amber-50/40 border-amber-500 shadow-xs ring-1 ring-amber-500/20 dark:bg-amber-950/20"
+              : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-amber-500/40"
           }`}
         >
           <div className="flex items-center justify-between text-[var(--color-mute)]">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-              Engineers
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+              Operators
             </span>
-            <AnimatedShieldCheck size={16} className="text-blue-600 dark:text-blue-400" />
+            <AnimatedShieldCheck size={16} className="text-amber-600 dark:text-amber-400" />
           </div>
-          <div className="text-2xl font-extrabold text-blue-700 dark:text-blue-300 mt-1">
-            <AnimatedCounter value={engineerCount} />
+          <div className="text-2xl font-extrabold text-amber-700 dark:text-amber-300 mt-1">
+            <AnimatedCounter value={operatorCount} />
           </div>
         </motion.div>
 

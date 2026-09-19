@@ -20,13 +20,9 @@ const allRoleOptions = [
   { value: "super_admin", label: "Super Admin" },
   { value: "admin", label: "Admin" },
   { value: "manager", label: "Manager" },
-  { value: "service_manager", label: "Service Manager" },
-  { value: "service_engineer", label: "Service Engineer" },
   { value: "supervisor", label: "Supervisor" },
-  { value: "store_manager", label: "Store Manager" },
+  { value: "hr", label: "HR" },
   { value: "operator", label: "Operator" },
-  { value: "mechanic", label: "Mechanic / Tech" },
-  { value: "hr_manager", label: "HR Manager" },
 ];
 
 interface UserRowProps {
@@ -97,23 +93,9 @@ function getRoleBadge(role: string) {
         </span>
       );
     case "manager":
-    case "branch_manager":
       return (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border border-indigo-500/20">
           Manager
-        </span>
-      );
-    case "service_manager":
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/20">
-          Service Manager
-        </span>
-      );
-    case "service_engineer":
-    case "engineer":
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20">
-          Service Engineer
         </span>
       );
     case "supervisor":
@@ -122,28 +104,16 @@ function getRoleBadge(role: string) {
           Supervisor
         </span>
       );
-    case "store_manager":
+    case "hr":
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-purple-500/10 text-purple-700 dark:text-purple-400 border border-purple-500/20">
-          Store Manager
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+          HR
         </span>
       );
     case "operator":
       return (
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
           Operator
-        </span>
-      );
-    case "mechanic":
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-orange-500/10 text-orange-700 dark:text-orange-400 border border-orange-500/20">
-          Mechanic
-        </span>
-      );
-    case "hr_manager":
-      return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
-          HR Manager
         </span>
       );
     default:

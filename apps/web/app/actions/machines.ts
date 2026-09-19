@@ -77,7 +77,7 @@ function parseUuidArray(formData: FormData, fieldName: string, fallbackField?: s
 
 export async function createMachine(state: MachineFormState, formData: FormData): Promise<MachineFormState> {
   try {
-    await requireRole("admin", "super_admin", "manager", "service_manager");
+    await requireRole("admin", "super_admin", "manager");
 
     const supabase = await createSupabaseServerClient();
     const {
@@ -230,7 +230,7 @@ export async function updateMachine(id: string, state: MachineFormState, formDat
     return { error: "Invalid machine ID format." };
   }
   try {
-    const caller = await requireRole("admin", "super_admin", "manager", "service_manager", "supervisor");
+    const caller = await requireRole("admin", "super_admin", "manager", "supervisor");
     const supabase = await createSupabaseServerClient();
     const {
       data: { user },
@@ -453,7 +453,7 @@ export async function updateMachineOperationalStatus(
     return { error: "Invalid machine ID format." };
   }
   try {
-    await requireRole("admin", "super_admin", "manager", "service_manager", "supervisor");
+    await requireRole("admin", "super_admin", "manager", "supervisor");
     const supabase = await createSupabaseServerClient();
     const {
       data: { user },
@@ -596,7 +596,7 @@ export async function reassignMachineSupervisor(machineId: string, supervisorId:
     return { error: "Invalid supervisor ID format." };
   }
   try {
-    await requireRole("admin", "super_admin", "manager", "service_manager");
+    await requireRole("admin", "super_admin", "manager");
     const supabase = await createSupabaseServerClient();
 
     const { data: previousMachine } = await supabase
@@ -711,7 +711,7 @@ export async function updateMachineInfoAction(
     return { error: "Invalid machine ID format." };
   }
   try {
-    await requireRole("admin", "super_admin", "manager", "service_manager", "supervisor");
+    await requireRole("admin", "super_admin", "manager", "supervisor");
     const supabase = await createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { error: "Authentication required." };
@@ -872,7 +872,7 @@ export async function updateMachineSupervisorsAction(
     return { error: "Invalid machine ID format." };
   }
   try {
-    await requireRole("admin", "super_admin", "manager", "service_manager");
+    await requireRole("admin", "super_admin", "manager");
     const supabase = await createSupabaseServerClient();
     const validSups = Array.isArray(supervisorIds) ? supervisorIds.filter(isValidUuid) : [];
     const current_supervisor_id = validSups[0] || null;
@@ -952,7 +952,7 @@ export async function updateMachineOperatorsAction(
     return { error: "Invalid machine ID format." };
   }
   try {
-    await requireRole("admin", "super_admin", "manager", "service_manager", "supervisor");
+    await requireRole("admin", "super_admin", "manager", "supervisor");
     const supabase = await createSupabaseServerClient();
     const validOps = Array.isArray(operatorIds) ? operatorIds.filter(isValidUuid) : [];
     const current_operator_id = validOps[0] || null;
@@ -1033,7 +1033,7 @@ export async function updateMachineClientAssignmentAction(
     return { error: "Invalid machine ID format." };
   }
   try {
-    await requireRole("admin", "super_admin", "manager", "service_manager", "supervisor");
+    await requireRole("admin", "super_admin", "manager", "supervisor");
     const supabase = await createSupabaseServerClient();
     
     const validClientId = clientId && isValidUuid(clientId) ? clientId : null;

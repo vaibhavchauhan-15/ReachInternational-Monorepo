@@ -1,7 +1,7 @@
 # Project Memory — ReachInternational (reachinternational.co.in)
 
 ## Core Overview
-**ReachInternational** is an enterprise-grade industrial machine service, maintenance tracking, and notification management platform built for Service Managers, Engineers, and Clients.
+**ReachInternational** is an enterprise-grade industrial machine running logs, operator shift entries, machinery fleet management, and client operations tracking platform built for Super Admins, Admins, Managers, Supervisors, HR, and Operators.
 
 ## Technology Stack
 - **Framework**: Next.js 16.2 (App Router - `apps/web`), Expo SDK 57 React Native (`apps/mobile`), Turborepo monorepo
@@ -12,11 +12,13 @@
 - **Shared Packages (`packages/*`)**: `@reachinternational/types`, `@reachinternational/validation`, `@reachinternational/permissions`, `@reachinternational/design-tokens`, `@reachinternational/utils`
 - **Validation & State**: Zod v4, Server Actions, React Server Components (RSC) + Data Access Layer (DAL), TanStack Query (Mobile)
 
-## Key User Roles (RBAC)
-1. **admin** (Super Admin): Full system control, user management, global configuration.
-2. **service_manager**: Manages assigned client accounts, machines, service schedules, and notifications.
-3. **engineer**: Field operations, update machine status, log completed services, upload reports.
-4. **client**: View owned machines, service histories, and notification preferences.
+## Canonical User Roles (Strictly 6 Roles Monorepo-Wide)
+1. **super_admin**: Full platform control, tenant isolation, security enforcement, global oversight.
+2. **admin**: Global organizational management, user administration, fleet and client management.
+3. **manager**: Operational management, shift review, equipment allocation, and personnel oversight.
+4. **supervisor**: Site-level coordination, equipment supervision, direct operator assignment management.
+5. **hr**: Human resources, personnel lifecycle, profile change requests, user records management.
+6. **operator**: Daily machine operation, HMR meter logging (`/operations?tab=entry`), shift execution.
 
 ## Fundamental Architectural Rules
 1. **Memory First**: Always check `AI/PROJECT_MEMORY.md`, `AI/STATE.md`, and `AI/CURRENT_TASK.md` before reading code.

@@ -1,32 +1,24 @@
-# Current Task: User Directory Unified Export Architecture (Address Merging, DB Identity Hydration, PDF Support, Cross-Platform Web & Mobile Parity)
+# Current Task: Operator Dashboard Single Alert & Duplicate Removal (/dashboard)
 
-Status: COMPLETED & VERIFIED (2026-09-17)
+Status: COMPLETED & FULLY VERIFIED (2026-09-19)
 
 ## Task Summary
-Addressed user feedback on `/users?tab=all` regarding the User & Employee Directory export features:
-1. **Single Unified `Address` Column**:
-   - Replaced fragmented `City`, `District`, and `State` columns with a single clean `Address` column merging `street + city + district + state`.
-   - Created smart deduplication in `formatMergedAddress()` preventing redundant strings (e.g. "Songhad tapi, Songhad tapi, Gujarat" -> "Songhad tapi, Gujarat").
-2. **PostgreSQL Identity Data Hydration**:
-   - Projected `address`, `aadhaar_number`, and `license_number` into `USER_LIST_COLUMNS` in `apps/web/lib/data/users/user-list.ts`.
-   - Fixed missing Aadhaar and Driving Licence numbers that previously rendered as dashes (`—`) despite being populated in the database.
-3. **Print-Ready Landscape A4 PDF Export**:
-   - Added instant PDF export feature on both Web and Mobile.
-   - Web implementation uses zero-dependency CSS `@media print` landscape A4 spooling via `handleBrowserPrint()`.
-   - Mobile implementation uses native `expo-print` (`Print.printToFileAsync`) and `expo-sharing` (`Sharing.shareAsync`).
-   - Clean, professional styling matching Vercel Geist design tokens with company header, KPI strip, and authorization sign-offs.
-4. **100% Data Consistency Across All Formats**:
-   - Guaranteed identical 12-column sequence across Excel (.xlsx), CSV (.csv), and PDF:
-     `S.No`, `Full Name`, `Email Address`, `Mobile Number`, `Role`, `Supervisor`, `Working Location`, `Status`, `Address`, `Aadhaar Number`, `Driving Licence`, `Joined Date`.
-5. **Lightweight & High Performance**:
-   - Dynamic code splitting with on-demand library imports.
-   - Minimal file size (<15 KB for typical spreadsheets, UTF-8 BOM for CSV).
-   - Zero additional client-side bundle weight for PDF on web.
-6. **Responsive UI & Mobile Parity**:
-   - Web header dropdown (`UsersHeader.tsx`) supports 3-way toggle (Excel, CSV, PDF) with responsive viewport clamping (`max-w-[calc(100vw-24px)]`).
-   - Mobile modal (`UserExportModal.tsx`) provides CSV and PDF export options with identical 12-column data.
-   - Floating bulk selection actions bar supports Excel, CSV, and PDF.
+Addressed user feedback on `/dashboard` (viewport 360×800):
+1. **Duplicate Action Card Removal**:
+   - Removed the black `<PrimaryAction>` card (`Submit Today's Machine Log` / `Today's Log Submitted`) from `OperatorDashboardView.tsx`, keeping strictly ONE alert element.
+   - Pruned unused imports (`PrimaryAction`, `PlusCircle`, `FileCheck2`).
+2. **Light Gradient Green Success Alert**:
+   - Added `success` severity variant with light emerald/green gradient (`bg-gradient-to-r from-emerald-500/10 via-emerald-500/[0.04] to-transparent`, `border-emerald-500/25`, `CheckCircle2` icon, emerald typography) to `AlertWidget.tsx`.
+   - Added `"success"` to `DashboardAlert.severity` union in `packages/types/src/dashboard.ts`.
+3. **Dynamic Single Consolidated Operator Alert**:
+   - Before submission (incomplete): Shows yellow/amber gradient alert (`Today's Log Pending`, "Daily running hours have not been submitted for today.", actionUrl: `/operations?tab=entry`).
+   - After submission (complete): Shows light green gradient alert (`Today's Log Submitted`, "Daily shift running hours are recorded. Click to view or update your log.", actionUrl: `/operations?tab=history`).
+   - Created and applied Migration 093 (`093_operator_dashboard_submitted_alert.sql`) updating `public.get_operator_dashboard()` RPC to return `entry-submitted` success alert when log exists for today.
+4. **Cross-Platform Mobile Parity (`apps/mobile`)**:
+   - Synchronized `OperatorDashboardCard.tsx` on mobile to display yellow/amber alert background (`#fffbeb` / `rgba(245, 158, 11, 0.12)`) and `AlertTriangle` when pending, and light emerald/green background (`#ecfdf5` / `rgba(16, 185, 129, 0.12)`) and `FileCheck2` when submitted.
 
 ## Verification
-- Monorepo compilation: `pnpm turbo run typecheck` across all 7 packages passed (0 errors, exit 0).
-- ESLint: Targeted check on `user-list.ts`, `users-export.ts`, `UsersHeader.tsx` passed with 0 errors (exit 0).
+- Turborepo `pnpm turbo run typecheck` across all 7 workspace packages passed (0 errors, exit 0).
+- `@reachinternational/web`: `tsc --noEmit` passed (0 errors, exit 0).
+- `@reachinternational/mobile`: `tsc --noEmit` passed (0 errors, exit 0).
+- Live Supabase DB execution of `get_operator_dashboard` verified for both pending and submitted operators.

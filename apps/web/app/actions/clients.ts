@@ -207,7 +207,7 @@ export async function restoreClientAction(clientId: string): Promise<{ success?:
   }
 }
 
-const AUTHORIZED_CLIENT_ROLES = ["super_admin", "admin", "manager", "service_manager", "supervisor"] as const;
+const AUTHORIZED_CLIENT_ROLES = ["super_admin", "admin", "manager", "supervisor"] as const;
 
 /**
  * Server Action: Search clients using server-side 8-dimension GIN trigram indexes.

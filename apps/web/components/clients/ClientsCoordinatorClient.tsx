@@ -371,7 +371,7 @@ export function ClientsCoordinatorClient({
   // Toast feedback state
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
-  const canManageClients = ["super_admin", "admin", "manager", "service_manager"].includes(user.role);
+  const canManageClients = ["super_admin", "admin", "manager"].includes(user.role);
 
   // View mode switcher: "auto" | "cards" | "table"
   const [viewMode, setViewMode] = useState<"auto" | "cards" | "table">("auto");

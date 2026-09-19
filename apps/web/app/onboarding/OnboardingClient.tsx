@@ -35,14 +35,10 @@ import { completeOnboardingAction, type OnboardingFormState } from "@/app/action
 import type { User } from "@/lib/types/database";
 
 const onboardingRoleOptions: SelectOption[] = [
-  { value: "service_engineer", label: "Service Engineer" },
   { value: "manager", label: "Manager" },
-  { value: "service_manager", label: "Service Manager" },
   { value: "supervisor", label: "Supervisor" },
-  { value: "store_manager", label: "Store Manager" },
+  { value: "hr", label: "HR" },
   { value: "operator", label: "Operator" },
-  { value: "mechanic", label: "Mechanic / Technician" },
-  { value: "hr_manager", label: "HR Manager" },
 ];
 
 const stateSelectOptions: SelectOption[] = INDIAN_STATES.map((s) => ({
@@ -72,7 +68,7 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
     full_name: user.full_name && user.full_name !== user.email ? user.full_name : "",
     email: user.email || "",
     phone: user.phone || "",
-    role: user.role || "service_engineer",
+    role: user.role || "operator",
     shift_start_time: initialShifts.start,
     shift_end_time: initialShifts.end,
     city: user.city || "",

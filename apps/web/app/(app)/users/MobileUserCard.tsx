@@ -39,23 +39,9 @@ function getRoleBadge(role: string) {
         </span>
       );
     case "manager":
-    case "branch_manager":
       return (
         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 shadow-xs whitespace-nowrap">
           Manager
-        </span>
-      );
-    case "service_manager":
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800/80 shadow-xs whitespace-nowrap">
-          Service Manager
-        </span>
-      );
-    case "service_engineer":
-    case "engineer":
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/80 shadow-xs whitespace-nowrap">
-          Service Engineer
         </span>
       );
     case "supervisor":
@@ -64,28 +50,16 @@ function getRoleBadge(role: string) {
           Supervisor
         </span>
       );
-    case "store_manager":
+    case "hr":
       return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800/80 shadow-xs whitespace-nowrap">
-          Store Manager
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 shadow-xs whitespace-nowrap">
+          HR
         </span>
       );
     case "operator":
       return (
         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 shadow-xs whitespace-nowrap">
           Operator
-        </span>
-      );
-    case "mechanic":
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-orange-50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800/80 shadow-xs whitespace-nowrap">
-          Mechanic
-        </span>
-      );
-    case "hr_manager":
-      return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 shadow-xs whitespace-nowrap">
-          HR Manager
         </span>
       );
     default:
@@ -111,23 +85,13 @@ function getRoleAvatarStyle(role?: string): string {
     case "admin":
       return "from-amber-500/20 to-amber-600/25 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-800";
     case "manager":
-    case "branch_manager":
       return "from-indigo-500/20 to-indigo-600/25 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-800";
-    case "service_manager":
-      return "from-sky-500/20 to-sky-600/25 text-sky-700 dark:text-sky-300 border-sky-300 dark:border-sky-800";
-    case "service_engineer":
-    case "engineer":
-      return "from-blue-500/20 to-blue-600/25 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800";
     case "supervisor":
       return "from-teal-500/20 to-teal-600/25 text-teal-700 dark:text-teal-300 border-teal-300 dark:border-teal-800";
-    case "store_manager":
-      return "from-purple-500/20 to-purple-600/25 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800";
+    case "hr":
+      return "from-emerald-500/20 to-emerald-600/25 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800";
     case "operator":
       return "from-amber-500/20 to-yellow-600/25 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800";
-    case "mechanic":
-      return "from-orange-500/20 to-orange-600/25 text-orange-700 dark:text-orange-300 border-orange-300 dark:border-orange-800";
-    case "hr_manager":
-      return "from-emerald-500/20 to-emerald-600/25 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800";
     default:
       return "from-zinc-500/20 to-zinc-600/25 text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-800";
   }
@@ -180,13 +144,14 @@ export const MobileUserCard = memo(function MobileUserCard({
   searchTerm,
 }: MobileUserCardProps) {
   const canViewContactInfo = () => {
-    if (currentUser.role === "super_admin") return true;
-    if (currentUser.role === "admin") {
-      if (user.role === "engineer") return true;
-      if (user.id === currentUser.id) return true;
-      return false;
-    }
+    if (currentUser.role === "super_admin" || currentUser.role === "admin") return true;
     if (user.id === currentUser.id) return true;
+    if (currentUser.role === "supervisor") {
+      const isAssigned =
+        user.supervisor_id === currentUser.id ||
+        (user.supervisor_ids && user.supervisor_ids.includes(currentUser.id));
+      if (isAssigned) return true;
+    }
     return false;
   };
 
@@ -199,20 +164,12 @@ export const MobileUserCard = memo(function MobileUserCard({
       ? "border-l-[3px] border-l-amber-500"
       : user.role === "manager"
       ? "border-l-[3px] border-l-indigo-500"
-      : user.role === "service_manager"
-      ? "border-l-[3px] border-l-sky-500"
-      : user.role === "engineer" || user.role === "service_engineer"
-      ? "border-l-[3px] border-l-blue-500"
       : user.role === "supervisor"
       ? "border-l-[3px] border-l-teal-500"
-      : user.role === "store_manager"
-      ? "border-l-[3px] border-l-purple-500"
+      : user.role === "hr"
+      ? "border-l-[3px] border-l-emerald-500"
       : user.role === "operator"
       ? "border-l-[3px] border-l-amber-500"
-      : user.role === "mechanic"
-      ? "border-l-[3px] border-l-orange-500"
-      : user.role === "hr_manager"
-      ? "border-l-[3px] border-l-emerald-500"
       : "border-l-[3px] border-l-slate-400";
 
   return (

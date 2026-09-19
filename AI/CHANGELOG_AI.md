@@ -1,3 +1,609 @@
+- **Operator Dashboard Single Alert & Duplicate Removal (2026-09-19)**:
+  - **1. User Request**:
+    - Page Feedback: `/dashboard` (Viewport: 360×800):
+      - `<LinkComponent> link "Submit Today's Machine Lo"` (.max-w-7xl > .space-y-6 > div > .group): "remove this this is the duplicate aleart keep only one alreart and after log submmiter then show the submitted status with light gradient green color card before log is incompletet then show it aleart with yellow gredient color see the screenshot"
+  - **2. Root Cause Analysis**:
+    - `OperatorDashboardView.tsx` rendered both `<AlertWidget alerts={data?.alerts ?? []} />` AND `<PrimaryAction ... />` (the black/dark card `Submit Today's Machine Log` / `Today's Log Submitted`), creating two stacked alert/action cards for the same submission action.
+    - `AlertWidget.tsx` only had variants for `critical` (rose), `warning` (amber/yellow), and `info` (sky), lacking a `success` variant with light emerald/green gradient styling for completed submission alerts.
+    - Database RPC `get_operator_dashboard()` only emitted an alert when today's log was pending (`v_entry_exists = false`), returning an empty alerts array once the log was submitted.
+  - **3. Implementation & Changes**:
+    - `apps/web/components/dashboard/operator/OperatorDashboardView.tsx`:
+      - Removed `<PrimaryAction>` card completely, resolving the duplicate card issue.
+      - Synthesized a single consolidated operator alert dynamically:
+        - When pending (`!isSubmitted`): Yellow/amber gradient alert (`Today's Log Pending`, "Daily running hours have not been submitted for today.", actionUrl: `/operations?tab=entry`).
+        - When submitted (`isSubmitted`): Light green gradient alert (`Today's Log Submitted`, "Daily shift running hours are recorded. Click to view or update your log.", actionUrl: `/operations?tab=history`).
+      - Pruned unused imports (`PrimaryAction`, `PlusCircle`, `FileCheck2`).
+    - `apps/web/components/dashboard/shared/AlertWidget.tsx`:
+      - Added `success` variant to `severityConfig`:
+        - `bg`: `bg-gradient-to-r from-emerald-500/10 via-emerald-500/[0.04] to-transparent dark:from-emerald-950/30 dark:via-emerald-950/15`
+        - `border`: `border-emerald-500/25 hover:border-emerald-500/40`
+        - `text`: `text-emerald-900 dark:text-emerald-200`
+        - `descText`: `text-emerald-700/80 dark:text-emerald-300/80`
+        - `icon`: `CheckCircle2` in `bg-emerald-500/15`
+    - `packages/types/src/dashboard.ts`:
+      - Added `"success"` to `DashboardAlert.severity` union type.
+    - Database Migration 093 (`supabase/migrations/093_operator_dashboard_submitted_alert.sql`):
+      - Created and applied migration 093 to live Supabase DB (`dhbbgfzbyatzvqafnsqp`), updating `public.get_operator_dashboard()` to return `entry-submitted` with `severity: 'success'` when today's log exists.
+    - `apps/mobile/components/dashboard/operator/OperatorDashboardCard.tsx`:
+      - Synchronized mobile CTA card with matching yellow/amber alert background and `AlertTriangle` when pending, and light emerald/green background and `FileCheck2` when submitted.
+  - **4. Verification**:
+    - Turborepo `pnpm turbo run typecheck` across all 7 workspace packages passed (0 errors, exit 0).
+    - `@reachinternational/web`: `tsc --noEmit` passed (0 errors, exit 0).
+    - `@reachinternational/mobile`: `tsc --noEmit` passed (0 errors, exit 0).
+    - Live Supabase DB execution of `get_operator_dashboard` verified for both pending and submitted operators.
+
+- **Dashboard Feedback & Audit RBAC Restriction (/dashboard) (2026-09-19)**:
+  - **1. User Request**:
+    - Page Feedback: `/dashboard` (Viewport: 1536×695):
+      - `<SidebarGroup> <SidebarMenu> <NavigationItem> <SidebarMenuItem> <LinkComponent> <SidebarMenuButton>`: "hide audit page from the supervisor since audit only visible to the admin , superadmin and manager role user only"
+      - `h2 "Active Alerts & Exceptions (1)"`: "Change to Alert"
+      - `paragraph: "Site Operations & Field Team Supervision"`: "remove this"
+  - **2. Root Cause Analysis**:
+    - `apps/web/components/layout/AppSidebar.tsx`, `PublicNavbar.tsx`, and `CommandPalette.tsx` included `"supervisor"` and `"hr"` in the roles allowlist for `/audit`. In `matrix.ts`, `"audit.view"` was granted to `hr`, and the navigation allowed supervisors to see the sidebar item even though supervisors do not have audit viewing privileges.
+    - `AlertWidget.tsx` hardcoded the section title to `"Active Alerts & Exceptions"` and appended the count `(${alerts.length})`, creating an overly verbose header in DOM (`Active Alerts & Exceptions (1)`).
+    - `SupervisorDashboardView.tsx` passed `subtitle="Site Operations & Field Team Supervision"` to `DashboardHeader`, creating redundant clutter underneath the greeting.
+  - **3. Implementation & Changes**:
+    - `apps/web/components/layout/AppSidebar.tsx`:
+      - Restricted `/audit` roles strictly to `["super_admin", "admin", "manager"]`.
+    - `apps/web/components/layout/PublicNavbar.tsx`:
+      - Restricted `/audit` roles strictly to `["super_admin", "admin", "manager"]`.
+    - `apps/web/components/ui/CommandPalette.tsx`:
+      - Restricted `nav-audit-logs` command roles strictly to `["super_admin", "admin", "manager"]`.
+    - `packages/permissions/src/matrix.ts`:
+      - Removed `"audit.view"` from `ROLE_PERMISSIONS.hr`, making audit view exclusive to `super_admin`, `admin`, and `manager`.
+    - `apps/web/app/(app)/audit/page.tsx` & `apps/web/app/(app)/audit/[id]/page.tsx`:
+      - Added server-side defense-in-depth via `await requireRole("admin", "manager");` alongside `await requirePermission("audit.view");`.
+    - `apps/web/components/dashboard/shared/AlertWidget.tsx`:
+      - Updated default `title` to `"Alert"`, added optional `showCount?: boolean` (defaults to `false`), cleanly rendering `<h2 className="text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider">Alert</h2>`.
+    - `apps/web/components/dashboard/supervisor/SupervisorDashboardView.tsx`:
+      - Removed `subtitle="Site Operations & Field Team Supervision"` prop from `<DashboardHeader />`.
+    - `apps/web/components/dashboard/admin/AdminDashboardView.tsx`, `ManagerDashboardView.tsx`, `HRDashboardView.tsx`, `OperatorDashboardView.tsx`:
+      - Removed subtitle props across all dashboard views for monorepo-wide consistency.
+    - `apps/web/components/dashboard/shared/DashboardSkeleton.tsx`:
+      - Removed secondary subtitle skeleton placeholder to avoid layout shift.
+    - `apps/mobile/app/(app)/dashboard.tsx`:
+      - Synchronized mobile alerts eyebrow header to `ALERT`.
+  - **4. Verification**:
+    - Turborepo `pnpm turbo run typecheck --force` across all 7 workspace packages passed (0 errors, exit 0).
+    - Scoped ESLint check on modified web files passed with 0 errors (exit 0).
+
+- **Operator Dashboard Subtitle & Operations Entry Header Pruning (2026-09-19)**:
+  - **1. User Request**:
+    - Page Feedback: `/dashboard` (Viewport: 360×800):
+      - `paragraph: "Operator Running Log Station & Assigned ..."` (.space-y-6 > .flex > div > .text-xs): "remove this"
+    - Page Feedback: `/operations?tab=entry` (Viewport: 360×800):
+      - `<OperatorEntryClient> <EntryHeader> h1 "Good evening, Deepak Patel"` (.w-full > .rounded-xl > .sm:hidden > .text-[15px]): "remvoe the greetings from here keep only entery and histry toggle since we have dashboard page"
+  - **2. Root Cause Analysis**:
+    - `/dashboard` displayed `subtitle="Operator Running Log Station & Assigned Equipment"` under the operator greeting in `OperatorDashboardView.tsx`.
+    - `/operations?tab=entry` wrapped a full header card with time-based greetings (`Good evening, Deepak Patel`), date badges, and subtitle descriptions above the subnavigation toggle in `EntryHeader.tsx`. With the dedicated `/dashboard` landing page already providing the operator with personal greetings and high-level shift status, repeating the greeting on the entry logging screen was redundant.
+  - **3. Implementation & Changes**:
+    - `apps/web/components/dashboard/operator/OperatorDashboardView.tsx`:
+      - Removed `subtitle="Operator Running Log Station & Assigned Equipment"` prop from `<DashboardHeader />`.
+    - `apps/web/components/operations/entry/EntryHeader.tsx`:
+      - Completely removed operator greeting headings (both mobile and desktop), subtitle paragraph, date pill, and outer wrapper card with divider border.
+      - Streamlined component to render strictly the `<SegmentedToggle>` for `Log Entry` and `Log History`.
+    - `apps/web/components/operations/entry/OperatorEntryClient.tsx`:
+      - Omitted unused `operatorName` prop and cleaned section comments.
+    - `apps/mobile/components/operations/MobileOperatorEntryCard.tsx`:
+      - Removed `headerRow` with `getGreeting()` and operator name, keeping mobile entry card synchronized with web.
+  - **4. Verification**:
+    - Turborepo `pnpm turbo run typecheck` across all 7 workspace packages passed (0 errors, exit 0).
+    - `@reachinternational/web`: `tsc --noEmit` passed (0 errors, exit 0).
+    - `@reachinternational/mobile`: `tsc --noEmit` passed (0 errors, exit 0).
+
+- **Dashboard Active Machines KPI Loading Fix & Header Subtitle Pruning (2026-09-19)**:
+  - **1. User Request**:
+    - Page Feedback: `/dashboard` (Viewport: 1536×679):
+      - `<LinkComponent> card base` (div > .grid > .block > .card-base): "here properly load the total active machine kpi"
+      - `paragraph: "Global Platform Governance & Multi-Tenan..."` (.space-y-6 > .flex > div > .text-xs): "remove this"
+  - **2. Root Cause Analysis**:
+    - Active Machines metric evaluated to `0` in `public.get_super_admin_dashboard()` and `public.get_manager_dashboard()` because the SQL queries checked `WHERE status = 'active'`. In the ReachInternational schema, `status` represents commercial rental status (`'available'`, `'rented'`, `'inactive'`), while operational health status is stored in `health_status` (`'active'`, `'breakdown'`, `'spare'`). Querying `status = 'active'` yielded 0 rows.
+    - `SuperAdminDashboardView.tsx` passed `subtitle="Global Platform Governance & Multi-Tenant Oversight"` to `DashboardHeader`. Furthermore, `DashboardHeader.tsx` used `subtitle || "Operational Overview & Fleet Telemetry"`, preventing suppression of the subtitle when omitted.
+  - **3. Implementation & Changes**:
+    - `supabase/migrations/092_fix_active_machines_dashboard_kpis.sql`:
+      - Updated `public.get_super_admin_dashboard()` to compute `v_active_machines` via `SELECT count(*) INTO v_active_machines FROM public.machines WHERE (health_status = 'active' OR status = 'active') AND (status IS NULL OR status != 'inactive')`.
+      - Updated `public.get_manager_dashboard()` to compute `v_active` via `count(*) FILTER (WHERE (health_status = 'active' OR status = 'active') AND (status IS NULL OR status != 'inactive'))`.
+      - Applied migration 092 to live Supabase DB (`dhbbgfzbyatzvqafnsqp`).
+    - `apps/web/components/dashboard/shared/DashboardHeader.tsx`:
+      - Made subtitle rendering strictly conditional on non-empty `subtitle` prop (`{subtitle ? <p className="text-xs sm:text-sm text-[var(--color-mute)] mt-0.5">{subtitle}</p> : null}`) without default fallback.
+    - `apps/web/components/dashboard/super-admin/SuperAdminDashboardView.tsx`:
+      - Removed `subtitle="Global Platform Governance & Multi-Tenant Oversight"` prop from `DashboardHeader`.
+    - `apps/web/lib/queries/dashboard.ts`:
+      - Updated fallback query projection to include `health_status` and filtered active machines with `(m.status === "active" || m.health_status === "active") && m.status !== "inactive"`.
+      - Converted `let srQuery` to `const srQuery`.
+  - **4. Verification**:
+    - Turborepo `@reachinternational/web`: `tsc --noEmit` passed (0 errors, exit 0).
+    - Turborepo `@reachinternational/mobile`: `tsc --noEmit` passed (0 errors, exit 0).
+    - Targeted ESLint on modified components: clean (0 errors, 0 warnings, exit 0).
+    - Live Supabase DB execution: `get_super_admin_dashboard()` returns `activeMachines: 16`; `get_manager_dashboard()` returns `machineUtilization.active: 16`.
+
+- **Dashboard KPI Consistent Padding, Gradients & Mobile Device Optimization (2026-09-19)**:
+  - **1. User Request**:
+    - "make all the dashboard kpi consitent padding , gredient color , clean and well formatted"
+    - "remove this" (role badge "Supervisor" in header)
+    - "make this dashboard pages clean and consistuent"
+    - "make each and every card optimixe for the mobile device", "make each and every card label optimize for the mobile device", "make each and every card label + icon optimize for the mobile device"
+  - **2. Root Cause & UX Analysis**:
+    - `KPICard`, `StatusCard`, and `ActivityWidget` wrapped elements inside `<Card>` without `padding="none"`, inheriting `padding="lg"` (`p-6` = 24px) by default. In Tailwind CSS, this created class collisions with internal `p-4 sm:p-5`, leading to inconsistent padding and excessive whitespace.
+    - On 2-column mobile grids (≤640px, e.g. 360px–430px screens), a card has ~150px usable width. The combination of 24px padding and a 32px icon container left only ~70px for the card title, causing `truncate` to aggressively cut off names like "Supervised Machines", "Field Operators", "Submissions Pending", and "Breakdowns Reported".
+    - Role badge pill in `DashboardHeader` added visual noise beside the greeting.
+  - **3. Implementation & Solutions**:
+    - `apps/web/components/dashboard/shared/DashboardHeader.tsx` & `DashboardSkeleton.tsx`:
+      - Removed `<Badge>` component rendering the user's role from the greeting header and removed matching skeleton pill from the skeleton loader.
+    - `apps/web/components/dashboard/shared/KPICard.tsx`:
+      - Passed `padding="none"` to `<Card>` and standardized padding to `p-3.5 sm:p-4 md:p-5`.
+      - Added linear gradient backgrounds (`bg-gradient-to-br from-... via-... to-...`) and 2px top hairline gradient highlight bars (`bg-gradient-to-r ${styles.accent}`) for all 5 semantic variants (`default`, `warning`, `error`, `success`, `info`).
+      - Mobile label optimization: replaced `truncate` with `break-words line-clamp-2 leading-tight sm:leading-snug min-h-[28px] sm:min-h-0` so titles wrap cleanly into 2 lines on small devices without truncation.
+      - Mobile icon optimization: sized icon boxes down to `p-1.5` with `w-3.5 h-3.5` on mobile (`p-2` with `w-4 h-4` on desktop) with `items-start justify-between gap-1.5 sm:gap-2` top-alignment.
+    - `apps/web/components/dashboard/shared/KPIGrid.tsx`:
+      - Adjusted mobile gap from `gap-3` to `gap-2.5 sm:gap-4` to maximize card space in 2-column mobile viewports.
+    - `apps/web/components/dashboard/shared/StatusCard.tsx`:
+      - Passed `padding="none"` to `<Card>` and standardized padding to `p-3.5 sm:p-4 md:p-5`.
+      - Added status-driven gradient backgrounds, top hairline gradient bars, and responsive icon sizing.
+    - `apps/web/components/dashboard/shared/PrimaryAction.tsx` & `AlertWidget.tsx` & `ActivityWidget.tsx`:
+      - Standardized padding to `p-3.5 sm:p-4 md:p-5` with rich gradient fills.
+    - `apps/web/components/dashboard/operator/OperatorDashboardView.tsx`:
+      - Converted custom machine, client, and HMR cards to `padding="none"`, `p-3.5 sm:p-4 md:p-5`, subtle gradients, and top hairline accent bars.
+    - Secondary grid gaps unified across all role dashboard views (`SupervisorDashboardView`, `AdminDashboardView`, `SuperAdminDashboardView`, `ManagerDashboardView`, `HRDashboardView`).
+  - **4. Verification**:
+    - Turborepo `pnpm turbo run typecheck` passed with 0 errors across all 7 workspace packages.
+    - Web typecheck passed (`tsc --noEmit`, exit 0).
+    - Mobile typecheck passed (exit 0).
+
+- **Dashboard RSC Serialization Fix & Cross-Role Access Hardening (2026-09-19)**:
+  - **1. User Request**:
+    - "Only plain objects can be passed to Client Components from Server Components. Classes or other objects with methods are not supported. <... label=... value={1} icon={{$$typeof: ..., render: ...}} href=... variant=...> ... fix this error and make all the role to access the dashboard properly"
+  - **2. Root Cause Analysis**:
+    - `apps/web/components/dashboard/shared/KPICard.tsx` was marked with `"use client";`. In Next.js App Router (React Server Components), functions and forwardRef objects (such as Lucide icon components) cannot cross the Server Component → Client Component boundary. When Server Component dashboard views (`SupervisorDashboardView`, `AdminDashboardView`, `SuperAdminDashboardView`, `ManagerDashboardView`, `HRDashboardView`) passed `icon={Wrench}` or other Lucide icons as props to `<KPICard />`, React serialization failed and crashed the page with `Only plain objects can be passed to Client Components from Server Components...`.
+    - `KPICard` does not use any client hooks (`useState`, `useEffect`) or browser APIs. Only its child `<AnimatedCounter />` is a client component, which already has its own `"use client"` directive in `Motion.tsx` accepting only primitive numbers.
+    - Multiple role dashboard views lacked defensive null-safety defaults on telemetry metrics and contained links to `/operations?tab=history` (operator-exclusive tab), causing redirects when clicked by admins, managers, and HR users.
+    - In the database RPCs (`088_dashboard_read_model_rpcs.sql`), `get_hr_dashboard` alert action URL pointed to `/profile-requests` (which does not exist), and `get_admin_dashboard` pointed to `tab=history`.
+  - **3. Implementation & Solutions**:
+    - `apps/web/components/dashboard/shared/KPICard.tsx`:
+      - Removed `"use client";` to make `KPICard` a Server Component.
+      - Widened `icon` prop type to `LucideIcon | React.ComponentType<{ className?: string; size?: number | string }> | React.ReactNode`.
+      - Safely evaluates `<Icon className="w-4 h-4" />` directly on the server, generating native SVG JSX elements without crossing RSC boundaries.
+    - `apps/web/app/(app)/dashboard/page.tsx`:
+      - Case-normalized `user.role` via `(user.role?.toLowerCase() || "operator") as DashboardRole`.
+      - Added inactive/suspended account redirect to `/login?reason=inactive`.
+      - Guaranteed full coverage for all 6 canonical roles with fallback to `OperatorDashboardView`.
+    - `apps/web/components/dashboard/`:
+      - `SuperAdminDashboardView.tsx`: Added defensive fallbacks (`data?.totalUsers ?? 0`, etc.) and updated "Logs Today" link to `/operations?tab=logs`.
+      - `AdminDashboardView.tsx`: Added defensive fallbacks and updated "Logs Today", "Breakdowns", and "Overtime" links to `/operations?tab=logs`.
+      - `ManagerDashboardView.tsx`: Added defensive fallbacks and updated "Total Logs Submitted Today" and "Total Running Hours Today" links to `/operations?tab=logs`.
+      - `HRDashboardView.tsx`: Added defensive fallbacks and updated "Logs Recorded Today" link to `/operations?tab=logs`.
+    - `supabase/migrations/091_dashboard_action_urls.sql`:
+      - Created and applied migration 091 to live Supabase DB (`dhbbgfzbyatzvqafnsqp`).
+      - Updated `get_admin_dashboard` alerts to `/operations?tab=logs`.
+      - Updated `get_hr_dashboard` pending profile requests alert to `/users`.
+      - Updated `get_super_admin_dashboard` no-logs alert to `/operations?tab=logs`.
+      - Updated `get_supervisor_dashboard` pending submissions alert to `/operations?tab=logs`.
+  - **4. Verification**:
+    - Turborepo `pnpm turbo run typecheck` passed across all 7 workspace packages (0 errors, exit 0).
+    - Web TypeScript check (`pnpm --filter @reachinternational/web typecheck`) passed (0 errors, exit 0).
+    - Live Supabase DB execution of all 6 dashboard RPCs verified.
+
+- **Supervisor Dashboard Access, Post-Login Redirection & Route Hardening (2026-09-19)**:
+  - **1. User Request**:
+    - "after login supervisor still directed to teh machine page fix this and directed to the dashboard page also make the dashboard page proeprly funtion use supervisor can acces it"
+  - **2. Root Cause Analysis**:
+    - `apps/web/proxy.ts` previously had `/dashboard` listed under `deprecatedRoutes`, while `activeProtectedRoutes` omitted it. When any user logged in or clicked the "Dashboard" navigation item, Next.js Edge Proxy middleware flagged `/dashboard` as a deprecated route and redirected back to `/machines`.
+    - In `SupervisorDashboardView.tsx`, metrics destructuring lacked null-safe fallbacks, and the KPI cards ("Logs Submitted Today", "Overtime Shifts") as well as breakdown alerts directed supervisors to `/operations?tab=history` (which is exclusively an operator's personal log entry history) rather than `/operations?tab=logs` (where supervisors review, verify, and inspect fleet operations).
+    - In `apps/web/app/(app)/operations/page.tsx`, non-operators accessing `tab=history` or `tab=entry` were executing `OperatorEntryClient` rather than being cleanly redirected to `/operations?tab=logs`.
+  - **3. Implementation & Solutions**:
+    - `apps/web/proxy.ts`:
+      - Moved `"/dashboard"` to `activeProtectedRoutes` and pruned it from `deprecatedRoutes`.
+      - Updated authenticated user entry route redirects (`/login`, `/signup`, `/forgot-password`), root `/`, and deprecated routes to direct to `"/dashboard"`.
+    - `supabase/migrations/090_supervisor_dashboard_action_url.sql`:
+      - Created and applied migration 090 to live Supabase DB (`dhbbgfzbyatzvqafnsqp`). Updated `public.get_supervisor_dashboard` to set breakdown alert `actionUrl: '/operations?tab=logs'`.
+    - `apps/web/components/dashboard/supervisor/SupervisorDashboardView.tsx`:
+      - Added null-safe fallback values (`data?.todayLogs?.submitted ?? 0`, `data?.todayLogs?.pending ?? 0`, etc.).
+      - Updated action and KPI links to point to `/operations?tab=logs`.
+    - `apps/web/app/(app)/operations/page.tsx`:
+      - Gated `OperatorEntryClient` strictly to `user?.role === "operator"`.
+      - Non-operators landing on invalid or operator-only tabs are redirected to `/operations?tab=logs`.
+    - `apps/mobile/components/dashboard/`:
+      - Added defensive optional chaining to `SupervisorDashboardCard.tsx` (`data?.todayLogs?.submitted`, `data?.todayLogs?.pending`), `OperatorDashboardCard.tsx`, `ManagerDashboardCard.tsx`, and `AdminDashboardCard.tsx`.
+  - **4. Verification**:
+    - Turborepo `pnpm turbo run typecheck` passed across all 7 workspace packages (0 errors, exit 0).
+    - Web TypeScript check (`pnpm --filter @reachinternational/web typecheck`) passed (0 errors, exit 0).
+    - Scoped ESLint check on all modified web files clean with 0 errors, 0 warnings (exit 0).
+    - Live Supabase DB execution of `get_supervisor_dashboard` verified.
+
+- **Operator Dashboard Access & Edge Proxy Route Resolution (2026-09-19)**:
+  - **1. User Request**:
+    - "operator user unable to open the dashboard page; fix this"
+  - **2. Root Cause Analysis**:
+    - In `apps/web/proxy.ts`, `/dashboard` was listed under `deprecatedRoutes` rather than `activeProtectedRoutes`. When an operator (or any user) clicked "Dashboard" or navigated to `/dashboard`, the Next.js Edge Proxy intercepted the request before rendering and executed `NextResponse.redirect(new URL("/machines", request.nextUrl))`, bouncing the user back to `/machines`.
+    - In `NavigationItem.tsx`, `SidebarMenuButton` rendered a native `<button>` element nested inside a Next.js `<Link>` (`<a>` element), violating HTML5 specifications and risking click event interception.
+  - **3. Implementation & Solutions**:
+    - `apps/web/proxy.ts`:
+      - Moved `"/dashboard"` from `deprecatedRoutes` to `activeProtectedRoutes`.
+      - Updated authenticated route redirects for deprecated routes, root `/`, and authenticated visits to auth routes (`/login`, `/signup`) from `/machines` to `"/dashboard"`.
+      - Fixed catch clause typing to `err: unknown` with type-safe guards.
+    - `apps/web/components/ui/sidebar.tsx`:
+      - Supported polymorphic `as?: "button" | "div"` on `SidebarMenuButton` and `SidebarMenuSubButton` with type-safe `React.ElementType` rendering.
+    - `apps/web/components/layout/sidebar/NavigationItem.tsx`:
+      - Passed `as="div"` to `<SidebarMenuButton>` and `<SidebarMenuSubButton>` when wrapped in `<Link>`, eliminating HTML nesting violations and ensuring seamless click navigation.
+      - Pruned unused React hooks (`useRef`, `useEffect`, `useCallback`).
+    - `apps/web/components/dashboard/operator/OperatorDashboardView.tsx`:
+      - Added defensive optional chaining (`data?.today?.entryStatus`, `data?.today?.lastHmr`, `data?.alerts ?? []`) ensuring robust rendering.
+  - **4. Verification**:
+    - Monorepo typecheck passed with 0 errors across all 7 workspace packages (`pnpm turbo run typecheck`).
+    - Targeted ESLint check passed with 0 errors and 0 warnings.
+
+- **Operator Machine Page Parity with Supervisor & Interactive KPI CTA Cards (2026-09-19)**:
+  - **1. User Request**:
+    - "make this machine page optimzie for both desktop and mobile for the operator role just like supervisor page show the above cta card too"
+  - **2. Implementation & Solutions**:
+    - `supabase/migrations/089_operator_machine_directory_kpi_scoping.sql`: Created and applied migration 089 to live Supabase DB (`dhbbgfzbyatzvqafnsqp`). Enhanced `get_machines_directory_summary` to include machines assigned via `operator_machine_assignments` for `p_operator_id` using an indexed semi-join (`EXISTS`).
+    - `apps/web/lib/data/machines/machine-list.ts`: Updated `getCachedMachineList` operator scoping to check `operator_machine_assignments` for active assignments and include `id.in.(${assignedMachineIds.join(",")})` alongside direct machine table assignments.
+    - `apps/web/app/(app)/machines/page.tsx`: Replaced operator early return with the unified `getMachineList` and `getMachineKPIs` pipeline. Resolves all `searchParams` (`search`, `status`, `health_status`, `supervisor`, `sort`, `page`), passes `initialKpis={kpis}` to `MachineListClient`, and provides a resilient fallback to `getOperatorAssignedMachine(user.id)`.
+    - `apps/web/components/machines/MachineListClient.tsx`:
+      - Un-gated the 4 interactive KPI CTA metric cards (Total Fleet/Machines, Available, On Rent, Breakdown Events) for operators. Clicking any card updates status/health filters.
+      - Updated `statsSummary` to return `totalCount` with accurate fallback to `machines.length` if `initialKpis.total === 0` so counters never show 0 when machines are assigned.
+      - Un-gated `FilterToolbar` for operators with search input, dropdown filter selectors (rental status, health status, supervisor, sort), active badge chips, and desktop view mode switcher.
+      - Removed forced cards view (`if (userRole === "operator") return "cards"`). Operators now use Auto View (`EnterpriseTable` on desktop ≥641px, `MobileMachineCard` on mobile ≤640px) or can toggle Table/Cards on desktop.
+      - Expanded Cards view from narrow `max-w-xl` to standard responsive grid (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`).
+      - Un-gated mobile infinite scroll, retry handler, and desktop pagination for operators.
+      - Added clean Refresh action button in `PageHeader` for operators.
+  - **3. Verification**:
+    - Turborepo `pnpm turbo run typecheck` across all 7 workspace packages passed (0 errors, exit 0).
+    - Mobile TypeScript check (`pnpm --filter @reachinternational/mobile typecheck`) passed (0 errors, exit 0).
+    - Live Supabase DB migration 089 verified and applied.
+
+- **Role-Based Dashboard Architecture — 6 Canonical Roles (2026-09-19)**:
+  - **1. User Request**:
+    - Build a dedicated, high-performance, role-based dashboard architecture for all 6 canonical roles (Super Admin, Admin, Manager, Supervisor, HR, Operator).
+    - Every user lands on `/dashboard` after login/session restore.
+    - Each role gets a dedicated read model, dedicated Server Component composition, and shared dashboard UI primitives.
+    - No "fetch everything then hide" pattern.
+  - **2. Implementation & Solutions**:
+    - `packages/types/src/dashboard.ts`: Created strict role DTOs (`SuperAdminDashboardDTO`, `AdminDashboardDTO`, `ManagerDashboardDTO`, `SupervisorDashboardDTO`, `HRDashboardDTO`, `OperatorDashboardDTO`, `DashboardAlert`, `RoleDashboardMap`). Deprecated legacy `DashboardSummary`.
+    - `supabase/migrations/088_dashboard_read_model_rpcs.sql`: Created and applied 6 lean PostgreSQL RPCs (`get_super_admin_dashboard`, `get_admin_dashboard`, `get_manager_dashboard`, `get_supervisor_dashboard`, `get_hr_dashboard`, `get_operator_dashboard`) returning structured JSON with real-time exception alerts in <5ms.
+    - `apps/web/lib/data/dashboard/`: Role-scoped fetchers with `unstable_cache` (15s TTL), React `cache()`, and role dispatcher `getDashboardForRole`. Added role-scoped cache tags to `tags.ts`.
+    - `apps/web/components/dashboard/shared/`: Created shared UI primitives (`DashboardShell`, `DashboardHeader`, `KPIGrid`, `KPICard`, `StatusCard`, `PrimaryAction`, `AlertWidget`, `ActivityWidget`, `DashboardShellSkeleton`, `WidgetSkeleton`, `DashboardErrorState`).
+    - `apps/web/components/dashboard/`: Created role-specific Server Component compositions (`SuperAdminDashboardView`, `AdminDashboardView`, `ManagerDashboardView`, `SupervisorDashboardView`, `HRDashboardView`, `OperatorDashboardView`).
+    - `apps/web/app/(app)/dashboard/page.tsx`: Rewrote from redirect stub to role-resolving Server Component. Updated `loading.tsx` and created `error.tsx`.
+    - Navigation & Redirects: Updated post-login redirects in `auth.ts` and route fallbacks in `dal.ts` to `/dashboard`. Added `Dashboard` with `AnimatedDashboard` as primary main nav item in `AppSidebar.tsx` and `MobileBottomNav.tsx`. Updated `AI/ROUTING_MAP.md`.
+    - Mobile Parity: Rewrote `apps/mobile/app/(app)/dashboard.tsx` with role RPCs, touch cards, and CTAs. Updated gateway and login redirects to `/(app)/dashboard`.
+    - Cache Invalidation: Revalidates `dashboard:operator:${id}` in `operators.ts`.
+    - Cleanup: Deleted 5 legacy dashboard files and deprecated `lib/queries/dashboard.ts`.
+  - **3. Verification**:
+    - Turborepo `pnpm turbo run typecheck` passed across all 7 workspace packages (0 errors, exit 0).
+    - Scoped ESLint check on new dashboard components and DAL clean (0 errors, 0 warnings, exit 0).
+    - Live Supabase DB migration verified.
+
+- **Operator Machine Page Card-First UX & Navbar Reorder (2026-09-19)**:
+  - **1. User Request**:
+    - Page feedback on `/machines` @360×800:
+      1. In the machine page for the operator don't show the direct machine data; first show the assigned machine card only same like supervisor sees the machine card in the machine page; reuse that card; then click that card to see the details of the page; remove this current machine page for the operator; don't create new machine page for the operator; we already have machine page reuse it; also make sure this machine is optimized for the operator: show only basic details of the machine.
+      2. Place operation page first, then machine page in the navbar.
+  - **2. Root Cause Analysis**:
+    - `/machines` rendered `<OperatorAssignedMachineView>`, dumping all machine data (specs, metrics, worksite, supervisor contact) directly on the main page.
+    - Operators did not see the standard `<MobileMachineCard>` that supervisors see.
+    - `/machines/[id]` was also rendering `<OperatorAssignedMachineView>` instead of reusing the canonical `<MachineClientView>`.
+    - Bottom nav for operators listed Machines before Operations.
+  - **3. Implementation & Solutions**:
+    - `apps/web/app/(app)/machines/page.tsx`:
+      - Replaced `<OperatorAssignedMachineView>` with the canonical `<MachineListClient>` passing the single assigned machine.
+    - `apps/web/components/machines/MachineListClient.tsx`:
+      - Tailored for `userRole === "operator"`: header title "Assigned Equipment", hides export/import/PDF actions, hides KPI summary strip, hides FilterToolbar/search bar, forces card view mode (`effectiveView = "cards"`), centers single card in `max-w-xl mx-auto`, and provides a dedicated empty state ("No Machine Assigned") with "Go to Operations Hub" CTA.
+    - `apps/web/components/machines/MobileMachineCard.tsx`:
+      - Added card-container click handler navigating to `/machines/${machine.id}`.
+      - Rendered contextual 3-dots actions menu only for admins/supervisors, keeping the operator card footer clean with "Logs" on the left and "View Details" on the right.
+    - `apps/web/app/(app)/machines/[id]/page.tsx` & `machine-client-view.tsx`:
+      - Reused `<MachineClientView>` for operators.
+      - Gated access to assigned machine.
+      - Stripped non-operator data: GSTIN, PAN, billing address, commercial rental rates, audit trail tab, and edit/delete actions.
+    - `apps/web/components/layout/MobileBottomNav.tsx` & `AppSidebar.tsx`:
+      - Reordered operator navigation items: Operations first, Machines second.
+    - `apps/mobile/components/navigation/MobileBottomNav.tsx`:
+      - Reordered mobile operator tabs: Operations first, Machines second.
+    - `apps/mobile/app/(app)/machines.tsx`:
+      - Reused canonical `MobileMachineCard` for operator assigned machine view.
+    - Removed deprecated `OperatorAssignedMachineView.tsx` and `MobileOperatorAssignedMachineCard.tsx`.
+  - **4. Verification**:
+    - Turborepo `pnpm turbo run typecheck` across all 7 workspace packages passed (0 errors, exit 0).
+    - Mobile TypeScript check (`node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit`) in `apps/mobile` passed (0 errors, exit 0).
+    - Scoped ESLint check clean.
+
+- **Operator History Shift Date, Edit Modal Header Pruning & Skeleton Loading (2026-09-19)**:
+  - **1. User Request**:
+    - Page feedback on `/operations?tab=history` @360×800:
+      1. Above the shift time add shift date too with bold.
+      2. Update log dialog: remove description text.
+      3. Update log dialog: change title to "Update Logs".
+      4. Use skeleton loading, remove the spinning loader; also use skeleton loading while scrolling (infinite pagination).
+  - **2. Root Cause Analysis**:
+    - The mobile history card omitted explicit shift date row (it only had timestamp at the top).
+    - `OperationsEditLogModal.tsx` rendered title "Update Daily Machine Log" and an unnecessary description subtitle paragraph.
+    - Initial fetch and chunk sentinel used `Loader2` spinners instead of matching skeleton placeholders.
+  - **3. Implementation & Solutions**:
+    - `apps/web/components/operations/entry/OperatorHistoryTab.tsx`:
+      - Added `Shift Date : <strong className="text-[var(--color-ink)] font-bold">{formatDate(log.log_date)}</strong>` right above Shift Time.
+      - Replaced initial fetch spinner with `<OperatorHistoryCardSkeletonList count={4} />` on mobile and table skeleton rows on desktop.
+      - Replaced sentinel infinite scroll spinner with `<OperatorHistoryCardSkeletonList count={2} />`.
+    - `apps/web/components/operations/skeletons/OperationsSkeletons.tsx`:
+      - Added and exported `OperatorHistoryCardSkeletonList` mirroring the exact mobile history touch card layout.
+    - `apps/web/components/operations/modals/OperationsEditLogModal.tsx`:
+      - Renamed title to `"Update Logs"` and pruned the `description` prop.
+  - **4. Verification**:
+    - `pnpm turbo run typecheck` across all 7 packages passed with 0 errors (exit 0).
+    - Scoped ESLint check on modified files clean with 0 errors and 0 warnings (exit 0).
+
+- **Operator History Mobile Card Formatting & FilterToolbar Placeholder (2026-09-19)**:
+  - **1. User Request**:
+    - Page feedback on `/operations?tab=history` @360×800:
+      1. Top header: show the log timestamp date and time with small text, machine + serial number, client : Client name only + city name with small text, HMR: 77255->772260, shift Time : 06:00 AM-03:00 PM, Breakdown: 02:00 PM-03:00 PM (1h:00Mins) with small text so it fits in mobile screen, and at the end show the edit icon.
+      2. Button "Edit": remove outer layout and show only icon.
+      3. FilterToolbar: make the search placeholder text small.
+  - **2. Root Cause Analysis**:
+    - Mobile cards in `OperatorHistoryTab.tsx` placed the shift timing in the top header and timestamp at the bottom, lacked client city display, rendered HMR without arrow, and used a bulky edit button with background, border, and text.
+    - `FilterToolbar.tsx` input used `text-[16px] sm:text-xs` without placeholder-specific sizing, causing mobile browsers to inherit 16px font size on the placeholder text and clipping long strings.
+  - **3. Implementation & Solutions**:
+    - `apps/web/components/operations/entry/OperatorHistoryTab.tsx`:
+      - Shifted exact log entry timestamp (`formatExactTimestamp(log.created_at, false)`) to the top header in small monospace font (`text-[10px] font-mono text-[var(--color-mute)] font-medium`) alongside operating hours badge (`+{rt.toFixed(1)} hrs`).
+      - Machine row formatted as `${model} (${serial})`.
+      - Client row formatted as `Client : ${clientName} (${clientCity})` with small text for city.
+      - HMR row formatted as `HMR: ${startM.toFixed(1)} → ${endM.toFixed(1)}` with bold end meter.
+      - Shift time row formatted as `Shift Time : ${shiftTimingStr}` (+ overtime badge).
+      - Breakdown row displays `Breakdown: ${breakdownInfo.displayText}` in `text-[10px] font-mono` so it fits on 360px mobile viewports without overflowing.
+      - Edit button stripped of outer layout (no background, no border, no text), rendering strictly `<Pencil size={14} />` at the end of the card.
+    - `apps/web/components/ui/FilterToolbar.tsx`:
+      - Added `placeholder:text-[11px] sm:placeholder:text-xs` and optional `inputClassName?: string` to ensure compact placeholder rendering on mobile.
+      - Fixed React 19 setState in effect by adjusting state during render.
+    - `apps/mobile/app/(app)/operations.tsx`:
+      - Synchronized edit button in log cards to icon-only `<Edit2 size={15} />`.
+      - Mounted `<MobileOperatorEntryCard />` for `activeTab === 'entry'` and wired `activeTab === 'history'`.
+  - **4. Verification**:
+    - Turborepo `pnpm turbo run typecheck` across all 7 workspace packages passed with 0 errors (exit 0).
+    - Scoped ESLint check on modified files in `apps/web` passed with 0 errors and 0 warnings (exit 0).
+
+- **Operator Role Machine Page Navbar Integration & Assigned Machine View (2026-09-19)**:
+  - **1. User Request**:
+    - Page feedback on `/operations?tab=entry` @360×800:
+      1. For the operator role, show the machine page in the navbar.
+      2. In the machine page, operators only see the assigned machine details with basic info.
+  - **2. Root Cause Analysis**:
+    - Previously, `/machines` was inaccessible to operators (`dal.ts` and `machines/page.tsx` redirected operators to `/operations?tab=entry`).
+    - Navigation components (`MobileBottomNav.tsx`, `AppSidebar.tsx`, `PublicNavbar.tsx`, `CommandPalette.tsx`, and React Native mobile equivalents) filtered out `/machines` from operators.
+    - `/machines` rendered the fleet-wide directory table/card grid with 25+ units, KPI aggregate counters, management actions (Add Machine, Import, Export, Edit, Delete), and commercial rental rates which operators should not see.
+  - **3. Implementation & Solutions**:
+    - **Navigation Integration (Web & Mobile Parity)**:
+      - `apps/web/components/layout/MobileBottomNav.tsx`: Added `Machines` tab (`/machines`, `AnimatedWrench`) to operator bottom navbar (`Machines`, `Operations`, `Profile`).
+      - `apps/web/components/layout/AppSidebar.tsx`: Added `"operator"` to `/machines` role allowlist; mapped subItem to `{ label: "Assigned Machine", tab: "assigned" }`.
+      - `apps/web/components/layout/PublicNavbar.tsx`: Added `"operator"` to `/machines` role allowlist; refactored lazy `isMac` state initialization for ESLint compliance.
+      - `apps/web/components/ui/CommandPalette.tsx`: Added `My Assigned Machine` navigation shortcut for operators.
+      - `apps/mobile/components/navigation/MobileBottomNav.tsx`: Added `Machines` tab (`/(app)/machines`, `Wrench`) for `isOperator`.
+      - `apps/mobile/lib/nav/navItems.ts`: Added `'operator'` to `/machines` roles with subItem `{ label: 'Assigned Machine', tab: 'assigned' }`.
+      - `apps/mobile/components/navigation/MobileCommandPalette.tsx`: Added `My Assigned Machine` search command for operators.
+    - **Backend & Data Access Layer**:
+      - `apps/web/lib/dal.ts`: Allowed `"operator"` to access `/machines` route.
+      - `apps/web/lib/data/machines/machine-detail.ts`: Implemented `getOperatorAssignedMachine(operatorId)` resolving active shift assignment from `operator_machine_assignments` (`is_active = true`), with fallback to `machines.current_operator_id` / `operator_ids` array, hydrated with `getMachineById`.
+      - `apps/web/app/(app)/machines/page.tsx`: Lifted operator redirect; directly fetches `getOperatorAssignedMachine` for operators and renders `<OperatorAssignedMachineView />`.
+      - `apps/web/app/(app)/machines/[id]/page.tsx` & `machine-client-view.tsx`: Gated access for operators so they can only access their assigned machine. Hid commercial rental rates and the Audit Trail tab for operators.
+    - **Operator Assigned Machine Views (Web & Mobile)**:
+      - `apps/web/components/machines/OperatorAssignedMachineView.tsx`: Created responsive 3-tier view rendering basic machine details (Machine ID, Model, Serial Number, Manufacturer, Year of Mfg, Health Status badge, Current HMR reading), worksite address, supervisor contact with direct `tel:` call button, quick CTAs to `/operations?tab=entry` and `/operations?tab=history`, and an unassigned state.
+      - `apps/mobile/components/machines/MobileOperatorAssignedMachineCard.tsx`: Created native mobile touch card displaying status pill, machine ID, model, serial, HMR, shift timing, worksite location, supervisor call button, and action buttons.
+      - `apps/mobile/app/(app)/machines.tsx`: Lifted operator redirect; queries assigned machine directly for operators; hides fleet KPIs, filters, and full directory; renders `MobileOperatorAssignedMachineCard` or unassigned empty state.
+      - `apps/mobile/components/machines/MachineDetailView.tsx`: Hidden Audit tab button and content for operators.
+  - **4. Verification**:
+    - `pnpm turbo run typecheck` across all 7 workspace packages passed with 0 errors (exit 0).
+    - Scoped ESLint check on modified files in `apps/web` passed with 0 errors and 0 warnings.
+    - Mobile TypeScript check (`tsc --noEmit`) in `apps/mobile` passed with 0 errors.
+
+- **Operator Log Entry & Update UI Parity, 7-Day Window & HMR Auto-Fill (2026-09-19)**:
+  - **1. User Request**:
+    - Page feedback on `/operations?tab=entry` @360×800:
+      1. `<Primitive.div> <Primitive.div.Slot> <DismissableLayer> <Primitive.div> <Primitive.div.Slot> <motion.div>`: while update log dialogue box reuse the same ui of the log entry but dont show the machine, client and last log info.
+      2. `<Primitive.div.Slot> <DismissableLayer> <Primitive.div> <Primitive.div.Slot> <motion.div> <CustomDatePicker> button "12-09-2026"`: while update the logs user can update only previous 7 days date just like while entry the logs, properly validate it make this changes to the database level.
+      3. `<OperatorEntryClient> <HMRInputs> input "177663.0"`: auto fill the same hmr here too so operator change only last 2 or 3 digit.
+  - **2. Root Cause Analysis**:
+    - `OperationsEditLogModal.tsx` had an ad-hoc, inconsistent layout compared to the polished log entry form, and passed `allowAnyPast={true}` to `CustomDatePicker` without a 7-day restriction.
+    - Database level (`machine_hour_logs` table) did not have a constraint/trigger blocking operators from updating or inserting logs with future dates or dates older than 7 days.
+    - `OperatorEntryClient.tsx` and mobile `MobileOperatorEntryCard.tsx` initialized `endMeter` to an empty string (`""`), forcing operators to retype the entire 6-to-8 digit meter reading instead of editing only the trailing digits.
+  - **3. Implementation & Solutions**:
+    - **Database Migration 087 (`supabase/migrations/087_enforce_operator_7day_log_window.sql`)**:
+      - Executed and verified live on Supabase project `dhbbgfzbyatzvqafnsqp`.
+      - Attached `BEFORE INSERT OR UPDATE` trigger `trg_enforce_machine_hour_log_operator_date_window` on `public.machine_hour_logs`. Rejects any operator insert or update where `log_date < CURRENT_DATE - 7` or `log_date > CURRENT_DATE`. On update, also ensures existing locked logs cannot be edited.
+      - Hardened RLS policies `update_machine_hour_logs` and `insert_machine_hour_logs` enforcing `(log_date >= CURRENT_DATE - 7) AND (log_date <= CURRENT_DATE)` for operators.
+    - **Backend Action (`apps/web/app/actions/operators.ts`)**:
+      - In `updateOperatorHourLogAction`: Validated that non-manager callers cannot set a date older than 7 days (`diffDays > 7`) or in the future (`diffDays < 0`).
+    - **Frontend Dialog UI Reuse (`apps/web/components/operations/modals/OperationsEditLogModal.tsx`)**:
+      - Completely refactored modal body to reuse `<HMRInputs>`, `<ShiftInputs>`, and `<BreakdownSection>`.
+      - Omitted machine card, client card, and last log info card.
+      - Inherited `maxDaysOld={7}` and `allowFutureDays={0}` from `ShiftInputs` for strict 7-day calendar restriction.
+      - Cleaned header to `"Update Daily Machine Log"` and description to `"Modify your hour meter readings, shift timings, and breakdown status."`.
+    - **HMR Auto-Fill (`apps/web/components/operations/entry/OperatorEntryClient.tsx` & `apps/mobile/components/operations/MobileOperatorEntryCard.tsx`)**:
+      - Pre-filled `endMeter` with `startMeter` (`initialContext.last_hmr`) on initialization.
+      - Added `handleStartMeterChange` to keep `endMeter` synchronized if untouched.
+      - Reset both `startMeter` and `endMeter` to `String(endNum)` on successful submission for immediate subsequent logging.
+      - Synchronized identical pre-fill and post-submission reset in React Native `MobileOperatorEntryCard.tsx`.
+  - **4. Verification**:
+    - `pnpm turbo run typecheck` across all 7 workspace packages passed with 0 errors (exit 0).
+    - Scoped ESLint check on modified components passed with 0 errors and 0 warnings.
+    - Live Supabase database trigger & RLS policies verified.
+
+- **Operator Entry & History Mobile Viewport (360×800) 5-Point Feedback Optimizations (2026-09-19)**:
+  - **1. User Request**:
+    - Page feedback on `/operations?tab=entry` @360×800:
+      1. `<OperatorEntryClient> <OperatorHistoryTab>`: right of the search tab add filter btn and add the filter and sort over there; use search and filter components from machine/user page; enter only date in any format; search placeholder "search the date".
+      2. `<OperatorHistoryTab>`: in this card at the bottom add date and time of the log entry timestamp WITH SMALL TEXT.
+      3. `<OperatorHistoryTab> "22:00:00 – 06:05:00"`: dont show the second, keep only hour and minute, use 12 hours format and show AM/PM.
+      4. `<OperatorHistoryTab> "50B-9 (RI-MC-0001)"`: show the machine model number and machine serial no instead of machine model + ID.
+      5. `<LastMachineLogCard>`: make this last entry card in light green color.
+  - **2. Root Cause Analysis**:
+    - `OperatorHistoryTab` was using a custom search input without the standard `FilterToolbar` or `FilterDropdown` controls used in machines/users pages, lacking sort capabilities and multi-format date search matching.
+    - Shift timing rendered raw DB time strings (`22:00:00 – 06:05:00`) containing seconds and 24-hour format instead of 12-hour AM/PM format.
+    - Mobile log cards lacked exact `created_at` entry timestamps at the bottom.
+    - Mobile card machine title concatenated model with internal machine ID instead of model + serial number.
+    - `<LastMachineLogCard>` used default canvas elevated styling instead of emerald/light green accent theme.
+  - **3. Implementation & Solutions**:
+    - `apps/web/components/operations/entry/OperatorHistoryTab.tsx`:
+      - Replaced custom search div with canonical `<FilterToolbar>` and `<FilterDropdown>` controls.
+      - Wired filter button to the right of search bar, opening a collapsible panel with 3 dropdowns: Date Range ("All Dates", "Today", "Yesterday", "Past 7 Days", "This Month"), Status ("All Logs", "Normal", "Breakdown Logged"), and Sort ("Date: Newest/Oldest", "Operating Hours: High/Low", "End Meter: High/Low").
+      - Added date search with placeholder `"Search the date (e.g. 19 Sep, 2026-09-19)..."` and implemented `matchesDateSearch` supporting all common date formats (`YYYY-MM-DD`, `DD-MM-YYYY`, `DD/MM/YYYY`, `DD.MM.YYYY`, `19 Sep`, `Sep 19`, month names, day numbers, "today", "yesterday", etc.).
+      - Added active filter chips with individual removal and 1-click reset.
+      - Applied `formatTo12Hour` to start and end times, eliminating seconds and rendering clean `10:00 PM – 06:05 AM` on both mobile cards and desktop table.
+      - Updated machine title on mobile cards to `${model} (${serial})` instead of `${model} (${machine_id})`.
+      - Added exact log entry timestamp (`formatCompactExactTimestamp(log.created_at)`) with small monospace font (`text-[9.5px] font-mono text-[var(--color-mute)] font-medium`) at the bottom of each mobile card and desktop table row.
+    - `apps/web/components/operations/entry/LastMachineLogCard.tsx`:
+      - Updated container, header, borders, dividers, and typography to light green theme (`bg-emerald-500/10 dark:bg-emerald-950/25 border border-emerald-500/30 text-emerald-950 dark:text-emerald-100`).
+    - `apps/mobile/components/operations/MobileOperatorEntryCard.tsx`:
+      - Synchronized Last Recorded Machine Log banner with matching light green theme (`backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : '#f0fdf4'`, `borderColor: isDark ? 'rgba(16, 185, 129, 0.3)' : '#bbf7d0'`).
+  - **4. Verification**:
+    - `pnpm turbo run typecheck` across all 7 packages passed (Tasks: 7 successful, 7 total, exit code 0).
+    - `pnpm --filter @reachinternational/web typecheck` passed (exit code 0).
+    - `pnpm --filter @reachinternational/mobile typecheck` passed (exit code 0).
+- **Operator Entry Mobile Viewport (360×800) 7-Point Feedback Optimizations (2026-09-19)**:
+  - **1. User Request**:
+    - Feedback on `/machines` @360×800:
+      1. `<OperatorEntryClient> <EntryHeader>`: remove date from the header for the mobile user only.
+      2. `<OperatorEntryClient> <EntryHeader> "Daily Machine Log"`: remove this.
+      3. & 4. `<OperatorEntryClient> <BreakdownSection> <CustomTimePicker> <Clock>`: remove this icon.
+      5. `<OperatorEntryClient>`: remove this tab (remark option already have in the breakdown tab so remove it).
+      6. `<OperatorEntryClient> <BreakdownSection> 2.5 rounded`: make the text small so it properly fits in the mobile screen, also optimize for both mobile and desktop.
+      7. `<OperatorEntryClient> <OperatorMachineInfo> span`: rest of the address show in the new line instead of hide it.
+  - **2. Root Cause Analysis**:
+    - Mobile header had unnecessary secondary subtitle and date pills taking vertical space on phones.
+    - Breakdown time pickers had clock icons rendered inside their custom labels and from `<CustomTimePicker>` without `hideIcon={true}`.
+    - A redundant "Shift Remarks (Optional)" section was present alongside the breakdown section's reason textarea.
+    - Breakdown duration badge had larger font (`text-xs font-mono font-bold`) with fixed layout overflowing 360px viewport.
+    - Site address on the assigned machine card was constrained with `truncate`, clipping addresses longer than ~15 characters.
+  - **3. Implementation & Solutions**:
+    - `apps/web/components/operations/entry/EntryHeader.tsx`: Removed date badge pill and "Daily Machine Log" row from `<div className="sm:hidden">`, rendering strictly the operator greeting on mobile while preserving the date badge and system title on desktop (`hidden sm:flex`).
+    - `apps/web/components/operations/entry/BreakdownSection.tsx`: Removed `<Clock>` import, passed `hideIcon={true}` to both Start and End `<CustomTimePicker>` components, and removed `<Clock>` from the label JSX. Downscaled the breakdown duration banner typography to `text-[10px] sm:text-xs font-mono font-bold leading-tight` with compact `px-2.5 py-1.5 sm:py-2` padding, `shrink-0` label, and `text-right` value.
+    - `apps/web/components/operations/entry/OperatorMachineInfo.tsx`: Replaced `truncate` on the client site address with `break-words leading-tight` and set `items-start` with `mt-0.5` on the `MapPin` icon, rendering full addresses across multiple lines.
+    - `apps/web/components/operations/entry/OperatorEntryClient.tsx`: Permanently removed the Section E "Shift Remarks (Optional)" card, pruned `remarks` state and draft handlers, and piped breakdown reason directly into submission remarks when a breakdown is flagged.
+    - `apps/mobile/components/operations/MobileOperatorEntryCard.tsx`: Synchronized mobile entry card: pruned "Daily Machine Log" and date pill from header; removed `numberOfLines={1}` from client site address for full multi-line wrapping; moved breakdown reason input inside the breakdown section and removed the redundant standalone Shift Remarks input.
+  - **4. Verification**:
+    - `pnpm --filter @reachinternational/web typecheck` passed (exit 0, 0 errors).
+    - `pnpm --filter @reachinternational/mobile typecheck` passed (exit 0, 0 errors).
+- **Operator RBAC Governance & Exclusive Super Admin Machine Log Deletion (2026-09-19)**:
+  - **1. User Request**:
+    - "Daily Log Entry: Allow; View Own Log History: Allow; Edit Own Logs: Allow within 7 days; Delete Own Logs: Block; Export Own Logs: Allow, but own logs only; View Other Operators' Logs: Block; Edit Other Operators' Logs: Block; Delete Other Operators' Logs: Block; View Machine Data: Assigned machine/basic info only; Add/Edit/Delete Machine: Block; Assign Operator to Machine: Block; Change Shift Assignment: Block; Manage Clients: Block; Manage Users: Block; View Audit Logs: Block; Manage Breakdowns: Block; Approve Anything: Block; Change Own Role/Permissions: Block; Export Company-Wide Data: Block"
+    - "delete any operator logs give access to only super admin user"
+    - "make this changes to the frontend , backend and database"
+  - **2. Root Cause Analysis**:
+    - Previously, operators could see red delete trash icons in their history list (as seen in user-provided screenshot), and deletion of logs was not strictly restricted exclusively to `super_admin` across DB RLS, backend Server Actions, and mobile/web UI components. Furthermore, editing logs by operators had no 7-day cutoff at the database RLS level.
+  - **3. Implementation & Solutions**:
+    - **Database Migration (`supabase/migrations/086_operator_rbac_and_deletion_restriction.sql`)**:
+      - Executed and verified live on Supabase `dhbbgfzbyatzvqafnsqp`.
+      - Replaced `public.machine_hour_logs` RLS DELETE policy with `super_admin_delete_machine_hour_logs`: strictly `USING ((SELECT public.current_user_role()) = 'super_admin'::text)`.
+      - Replaced SELECT policy `view_machine_hour_logs`: operators can only query rows where `operator_id = auth.uid()`.
+      - Replaced UPDATE policy `update_machine_hour_logs`: operators can only update own logs if `log_date >= CURRENT_DATE - 7`.
+      - Replaced `audit_logs` policy `audit_logs_select_hierarchical`: explicitly denies operators (`WHEN 'operator' THEN false`).
+    - **Shared Package (`packages/permissions/src/matrix.ts`)**:
+      - Pruned operator permissions: removed `"audit.view"`, `"complaint.update"`, `"report.view"`, and legacy operational permissions.
+    - **Backend & DAL (`apps/web`)**:
+      - `apps/web/app/actions/operators.ts`: In `deleteOperatorHourLogAction`, enforced `if (userRoleLower !== "super_admin") return { success: false, error: "Unauthorized: Only Super Admin is authorized to delete machine hour logs." }`.
+      - `apps/web/lib/dal.ts`: Added redirect for `operator` to `/operations?tab=entry` in `requireRole`, `requirePermission`, and `requireAnyPermission`.
+      - `apps/web/app/(app)/machines/[id]/page.tsx`: If role is `operator`, verifies assignment to machine; otherwise redirects to `/operations?tab=entry`.
+    - **Web Frontend (`apps/web`)**:
+      - `apps/web/components/operations/entry/OperatorHistoryTab.tsx`: Removed `<Trash2>` button and `handleDeleteLog`; added `<Pencil>` Edit button for logs within 7 days; added `<Lock>` indicator for logs >7 days; mounted `OperationsEditLogModal` with `canDelete={false}`.
+      - `apps/web/components/operations/logs/OperationsLogsTab.tsx`: `canDeleteLog` restricted strictly to `role === "super_admin"`. `canEditLog` permits managers+ or operator within 7 days.
+    - **Mobile App (`apps/mobile`)**:
+      - `apps/mobile/app/(app)/operations.tsx`: Decoupled `canManageLogs` into `canEditLogRecord` (managers+ or operator within 7 days) and `canDeleteLogRecord = isSuperAdmin`. Trash icon on log cards only renders for `super_admin`. `handleDeleteLog` guards against non-super-admin.
+      - `apps/mobile/app/(app)/machines.tsx`: Added operator guard redirecting operators to `/(app)/operations`.
+  - **4. Verification**:
+    - `pnpm turbo run typecheck` across all 7 packages passed (exit 0, 0 errors).
+    - ESLint on modified web files passed with 0 errors and 0 warnings.
+    - Live Supabase database verified.
+
+- **Operator Entry Mobile Viewport (360×800) 19-Point Feedback Optimizations (2026-09-19)**:
+  - **1. User Request**:
+    - 19-point page feedback for `/operations?tab=entry` on mobile viewport (360×800): optimize header greeting & date, remove shift time from machine card header, keep HMR name on mobile and full name on desktop, optimize running hours badge for mobile, remove Gauge and CheckCircle2 icons, remove LastMachineLogCard tabs/sub-text/icons and display only last recorded date, shift end time, and operator name in one responsive card, remove Clock icon from shift inputs, change header to SHIFT TIMING, unify overtime layout for mobile/desktop, simplify breakdown to Machine Breakdown without description paragraph, change button to + Add, remove FileText icon, and make textarea placeholder fit in a single line.
+  - **2. Root Cause Analysis**:
+    - Mobile viewports (≤360px) suffered from horizontal element cramping: header greeting and date badge were sharing a single flex row causing text truncation; HMR title and running hours badge were competing for width; LastMachineLogCard had 4 dense cards with subtext and icons that overwhelmed small mobile screens; overtime controls wrapped awkwardly; remarks placeholder wrapped across 3 lines.
+  - **3. Implementation & Solutions**:
+    - **Header Mobile Optimization (`EntryHeader.tsx`)**: Created separate mobile header view (`sm:hidden`) rendering the date pill on the top right alongside the subtitle, giving full width to the operator greeting without truncation or badge collision. Preserved desktop layout (`hidden sm:flex`).
+    - **Shift Time Pruning (`OperatorMachineInfo.tsx`)**: Removed shift time pill (`06:00 AM – 03:00 PM`) and unused `Clock` icon.
+    - **HMR Label & Icons (`HMRInputs.tsx`)**: Rendered `<span className="sm:hidden">HMR</span><span className="hidden sm:inline">Hour Meter Readings (HMR)</span>`. Removed `<Gauge>` icon and `<CheckCircle2>` icon. Added `shrink-0` to the running hours badge for guaranteed visibility.
+    - **Single-Card Last Machine Log (`LastMachineLogCard.tsx`)**: Completely replaced the 4-column multi-tab card with a unified, responsive single-card layout. Pruned all icons and sub-labels. Displays strictly: Last Recorded Date (`formatDate`), Shift End Time (`formatTo12Hour`), and Last Entry By (Operator Name). Responsive across mobile (stacked key-value rows) and desktop (3 columns).
+    - **Shift Timing & Overtime (`ShiftInputs.tsx`)**: Removed `<Clock>` icon; updated title to `SHIFT TIMING`. Created unified single layout for overtime controls (`Overtime (OT): [0h] [1h] [2h] [4h] [Input]`) fitting on a single row without wrapping on 360px.
+    - **Breakdown Section (`BreakdownSection.tsx`)**: Renamed title to `Machine Breakdown`; removed description paragraph; simplified button to `+ Add` / `Remove`.
+    - **Remarks & Placeholder (`OperatorEntryClient.tsx`)**: Removed `<FileText>` icon; shortened placeholder to `"Fuel refill, site notes, or observations..."` fitting comfortably on a single line.
+    - **Mobile App Parity (`apps/mobile/components/operations/MobileOperatorEntryCard.tsx`)**: Synchronized mobile native entry card with header greeting/date, shift time removed, and Last Recorded Log banner refactored to show only date, shift end time, and operator name with zero icons.
+  - **4. Verification**:
+    - `pnpm turbo run typecheck` across all 7 workspace packages passed (Tasks: 7 successful, exit code 0).
+    - Scoped ESLint check on `apps/web/components/operations/entry` passed with 0 errors and 0 warnings.
+
+- **Operator Last Machine Log Visibility & CustomDatePicker Asterisk Alignment (2026-09-19)**:
+  - **1. User Request**:
+    - "this machine last log exist in the database but why here it not show it properly fix this and make it properly visible"
+    - "also red astrik should be align with the text"
+  - **2. Root Cause Analysis**:
+    - **Last Machine Log Web DAL Drop**: In `apps/web/lib/queries/operator-entry.ts`, the low-level query function `fetchOperatorEntryContextFromDb` stripped `res?.last_log` from the return object when constructing the payload, delivering `initialContext.last_log` as `undefined` to the client. Similarly in mobile `apps/mobile/lib/hooks/useOperationsData.ts`, `useOperatorEntryContext` omitted `last_log`.
+    - **CustomDatePicker Asterisk Wrapping**: In `apps/web/components/ui/CustomDatePicker.tsx`, `<label>` had no `inline-flex` styling. When `label` was passed with an inner `display: flex` container in `ShiftInputs.tsx`, the trailing `{required && <span className="text-rose-500 ml-0.5">*</span>}` was positioned outside the flex formatting context, misaligning or breaking onto a new line.
+  - **3. Implementation & Solutions**:
+    - **Web DAL (`apps/web/lib/queries/operator-entry.ts`)**: Restored `last_log: (res?.last_log as OperatorEntryContext["last_log"]) || null` from the database RPC response.
+    - **Mobile Hook (`apps/mobile/lib/hooks/useOperationsData.ts`)**: Synchronized `useOperatorEntryContext` to return `last_log: res?.last_log || null`.
+    - **State Architecture (`OperatorEntryClient.tsx`)**: Refactored to pure derived state (`activeLastLog = submittedLastLog ?? initialContext.last_log`), eliminating cascading render `useEffect` warnings while ensuring 0ms immediate updates upon log submission.
+    - **Last Machine Log Card (`LastMachineLogCard.tsx`)**: Made numeric formatters safe against potential string or missing values using `Number()`.
+    - **CustomDatePicker (`CustomDatePicker.tsx`)**: Converted `<label>` to `inline-flex items-center gap-1.5 min-w-0 leading-none`, rendering the calendar icon, label text, and required asterisk in a unified, baseline-aligned flex box. Replaced `useEffect` with React render-time state adjustment.
+    - **Shift Inputs (`ShiftInputs.tsx`)**: Simplified `CustomDatePicker` and `CustomTimePicker` to use standard string labels (`label="Log Date"`, `label="Start Time"`, `label="End Time"`), guaranteeing pixel-identical height and asterisk alignment.
+  - **4. Verification**:
+    - `pnpm turbo run typecheck` across all 7 workspace packages passed (exit 0, 0 errors).
+    - Scoped ESLint check on all modified web components passed with 0 errors and 0 warnings.
+    - Verified live database RPC `get_operator_entry_context` returns populated `last_log` payload for assigned machines.
+
+- **Canonical 6-Role Consolidation & Dead Route Pruning Across Monorepo (2026-09-19)**:
+  - **1. User Request**:
+    - "for the mobile app and web app both keep only super admin , admin , manager , supervisor , hr=hr manager both role are some but now keep only HR) , operator keep only this role throughout the project both mobile and web ap change thsi"
+    - "also remove the all pages , routs , any other this keep only above 6 role super admin , admin , manager , supervisor , hr , operator"
+    - "first read the current codebase , implements and impements this make sure dont miss anythings"
+  - **2. Scope & Implementation**:
+    - **Database Migration 085 (`supabase/migrations/085_prune_roles_to_six_canonical.sql`)**: Applied and verified live on Supabase project `dhbbgfzbyatzvqafnsqp`. Replaced `users_role_check` constraint with `role IN ('super_admin', 'admin', 'manager', 'supervisor', 'hr', 'operator')`. Migrated existing `hr_manager` row to `hr`. Synced `auth.users.raw_user_meta_data`. Updated RLS policies on `users`, `machines`, `clients`, `profile_change_requests`, `operator_shift_ranges`, `operator_machine_assignments`, and `audit_logs`. Updated RPCs `get_users_directory_summary()` (returning `operator_count`), `enforce_machine_supervisor_change_role()`, and `handle_new_user()`.
+    - **Shared Packages (`packages/*`)**:
+      - `packages/types/src/database.ts`: `UserRole` restricted strictly to `'super_admin' | 'admin' | 'manager' | 'supervisor' | 'hr' | 'operator'`.
+      - `packages/permissions/src/roles.ts`: `CANONICAL_ROLES`, `ROLE_METADATA`, `isManagerOrAbove`, and `isSupervisedRole` pruned of retired roles.
+      - `packages/permissions/src/matrix.ts`: `ROLE_PERMISSIONS` pruned to 6 canonical roles.
+      - `packages/permissions/src/scopes.ts`: `ROLE_DEFAULT_SCOPES` and `SUPERVISOR_VISIBLE_USER_ROLES` pruned.
+    - **Web App (`apps/web`)**:
+      - Deleted 9 dead routes: `administration`, `audit-logs`, `branches`, `challans`, `documents`, `purchase-orders`, `reports`, `settings`, `vendors`.
+      - Deleted 5 dead component suites: `components/admin`, `components/challans`, `components/purchase`, `components/settings`, `components/vendors`.
+      - Refactored `AppSidebar.tsx`, `MobileBottomNav.tsx`, `AppHeader.tsx`, `PublicNavbar.tsx`, `CommandPalette.tsx`, `dal.ts` (HR redirect to `/users`), `auth.ts`, `users.ts`, `operators.ts`, `UserProfileCard.tsx`, `EditProfileModal.tsx`, `UsersHeader.tsx` (Card 3: "Operators", amber styling), `UserCreateModal.tsx`, `UserEditModal.tsx`, `UserRow.tsx`, `UserDetailSheet.tsx`, `MobileUserCard.tsx`, `ProfileChangeRequestsSection.tsx`, `user-shared.ts` (`operatorCount`), and `dashboard.ts`.
+    - **Mobile App (`apps/mobile`)**:
+      - Refactored `mobileNavItems.ts`, `MobileBottomNav.tsx`, `MobileCommandPalette.tsx` (removed `/my-work`), `MobileProfileSheet.tsx`, `EditProfileModal.tsx`, `MainMenuModal.tsx`, `security.ts`, `signup.tsx`, `onboarding.tsx`, `login.tsx`, `index.tsx` gateway redirect, `users.tsx` (Card 3: "Operators", `#d97706` amber styling, 6 canonical filter chips), `CreateUserModal.tsx`, `UserEditModal.tsx`, `UserDetailModal.tsx`, `UserExportModal.tsx`, `CustomFilterSelectorModal.tsx`, and machine modals.
+  - **3. Verification**:
+    - `pnpm turbo run typecheck` across all 7 packages: **0 errors, exit 0**.
+    - Live Supabase database verified: 81 users all matching 6 canonical roles, 0 constraint errors.
+
+- **Operator Landing Page Ultra-Fast Architecture (`Entry / History`) (2026-09-19)**:
+  - **1. User Request**:
+    - "For the Operator landing page (Entry / History), the best architecture is to make the initial route extremely small and load only the data required to submit an entry."
+    - "Initial load — ONLY these: 1. Current authenticated operator, 2. Assigned machine, 3. Client, 4. Last HMR, 5. Entry form shell (no history records, no audit records, no export libraries, no unrelated users/machines/clients)."
+    - "Database: Create one dedicated read model/RPC: get_operator_entry_context(operator_id). Return only: { operator, machine, client, last_hmr }. No SELECT *. No history join. No audit join."
+    - "Use next/dynamic aggressively for BreakdownSection, HistoryTab, HistoryList, Export, and Heavy dialogs."
+    - "Implement this for the entry tab for operator user so when operator open the web/app then it open very fast and user can fill the entry."
+  - **2. Root Cause Analysis**:
+    - Previously, operators landing on `/operations` underwent the same server component waterfall as managers and supervisors: fetching the entire 1,000-unit machines catalog, full CRM clients list, and 100+ operational logs.
+    - On mobile, `activeTab` defaulted to `'entry'` for operators, but `activeTab === 'logs'` was hardcoded in the content container check, causing an empty screen beneath the tab bar until switching tabs or opening a modal.
+    - Machine and client data were unbounded, inflating route payload and TTFB.
+  - **3. Implementation & Solutions**:
+    - **PostgreSQL RPC Migration (`084_operator_entry_context_rpc.sql`)**: Implemented `public.get_operator_entry_context(p_operator_id uuid)` executing in <1ms, extracting exact scalar values for the active shift assignment, equipment details, client/site address, and the latest valid HMR (`last_hmr`).
+    - **Shared Types**: Added `OperatorEntryContext` to `@reachinternational/types`.
+    - **Web DAL (`apps/web/lib/queries/operator-entry.ts`)**: Built `getOperatorEntryContextCached(operatorId)` using `React.cache()` and `unstable_cache` with a 15-second TTL tagged with `operator-entry:${operatorId}` and `CACHE_TAGS.operations`.
+    - **Targeted Cache Invalidation (`apps/web/app/actions/operators.ts`)**: Wired `revalidateTag(\`operator-entry:\${operatorId}\`, "max")` inside `submitOperatorHourLogAction`, `updateOperatorHourLogAction`, and `deleteOperatorHourLogAction`. Added `getOperatorHistoryLogsAction` for on-demand history queries.
+    - **Fast-Path Server Route (`apps/web/app/(app)/operations/page.tsx`)**: Detected `user.role === 'operator'` and routed immediately to `<OperatorEntryClient />`, eliminating all manager waterfalls.
+    - **Critical Shell Fast Paint (<100ms)**: Immediate server rendering of `EntryHeader.tsx`, `OperatorMachineInfo.tsx`, `HMRInputs.tsx`, and `ShiftInputs.tsx`.
+    - **Dynamic Code-Splitting**: Code-split `BreakdownSection.tsx`, `SubmitConfirmModal.tsx`, `OperatorHistoryTab.tsx`, and export libraries via `next/dynamic`.
+    - **React Native Mobile Parity (`apps/mobile`)**: Created `useOperatorEntryContext` hook in `useOperationsData.ts`, built `MobileOperatorEntryCard.tsx` with instant pre-filling, live validation, and offline queue integration (`offlineQueueManager`), and wired on-demand history feed in `operations.tsx`.
+    - **Page Feedback Enhancements (`/operations?tab=entry` @1536×695)**:
+      - **Item 1: Last Machine Log Summary**: Extended `get_operator_entry_context` RPC to return `last_log` in the same index query (0 extra round trips). Created `LastMachineLogCard.tsx` directly above `ShiftInputs` showing previous log date, meter reading progression (`start → end`), running hours, shift duty times, operator name, and breakdown status.
+      - **Items 2–6: Duplicate Red Stars**: Removed redundant `<span className="text-rose-500">*</span>` from `CustomDatePicker` (Log Date) and `CustomTimePicker` (Start Time, End Time) labels in `ShiftInputs.tsx`.
+      - **Item 7: Active Shift Badge Removal**: Removed "Active Shift" badge from `EntryHeader.tsx`.
+      - **Item 8: Machine Icon**: Replaced `Layers` icon with `Truck` icon in `OperatorMachineInfo.tsx`.
+      - **Item 9: Icon Box Removal**: Removed `ShieldCheck` icon box container from `EntryHeader.tsx`.
+      - **Item 10: Dynamic Time-Based Greeting**: Added IST time greeting ("Good morning/afternoon/evening, [Operator Name]") in `EntryHeader.tsx` and `MobileOperatorEntryCard.tsx`.
+  - **4. Verification**:
+    - Monorepo compilation: `pnpm turbo run typecheck` across all 7 workspace packages passed (0 errors, exit 0).
+    - Web compilation: `pnpm --filter @reachinternational/web typecheck` passed (0 errors, exit 0).
+    - Mobile compilation: `pnpm --filter @reachinternational/mobile typecheck` passed (0 errors, exit 0).
+    - Scoped ESLint check on `components/operations/entry/`: **0 errors, 0 warnings (exit 0)**.
+    - Live Supabase execution: RPC tested and verified live on production database (`dhbbgfzbyatzvqafnsqp`), returning `last_log` row in <1ms.
+
 - **User Directory Unified Export Architecture & Multi-Format Parity (Excel, CSV, PDF) (2026-09-17)**:
   - **1. User Request / Page Feedback (`/users?tab=all`)**:
     - "make this user export format more proper and clean data"

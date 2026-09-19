@@ -4,6 +4,7 @@ import { checkRateLimitAsync, getClientIp, RATE_LIMIT_PROFILES } from "@/lib/sec
 import { signInternalUser } from "@/lib/security/internal-auth-token";
 
 const activeProtectedRoutes = [
+  "/dashboard",
   "/machines",
   "/operations",
   "/clients",
@@ -13,7 +14,6 @@ const activeProtectedRoutes = [
 ];
 
 const deprecatedRoutes = [
-  "/dashboard",
   "/crm",
   "/inventory",
   "/finance",
@@ -135,10 +135,11 @@ export async function proxy(request: NextRequest) {
     if (!userError && user) {
       authenticatedUser = user;
     }
-  } catch (err: any) {
-    if (err?.message === "Auth verification timeout") {
+  } catch (err: unknown) {
+    const error = err as { message?: string; status?: number; code?: string; name?: string };
+    if (error?.message === "Auth verification timeout") {
       console.warn("[Auth Proxy] Supabase auth getUser timed out after 5000ms. Proceeding without active session.");
-    } else if (err?.status === 429 || err?.code === "over_request_rate_limit" || err?.name === "AuthApiError") {
+    } else if (error?.status === 429 || error?.code === "over_request_rate_limit" || error?.name === "AuthApiError") {
       console.warn("[Auth Proxy] Supabase auth rate limit reached (429). Continuing with request processing.");
     } else {
       console.error("[Auth Proxy] Error verifying user:", err);
@@ -178,17 +179,17 @@ export async function proxy(request: NextRequest) {
     request.nextUrl.searchParams.has("reason") ||
     request.nextUrl.searchParams.has("status");
 
-  // Redirect authenticated user visiting auth entry routes (/login, /signup, /forgot-password) to /machines
+  // Redirect authenticated user visiting auth entry routes (/login, /signup, /forgot-password) to /dashboard
   // UNLESS they arrived with an error/status parameter (prevents redirect loops on pending/inactive accounts).
   // Public legal routes (/privacy, /terms, /account-deletion) remain accessible to both authenticated and guest users.
   const isAuthRoute = authRoutes.some((route) => path.startsWith(route));
   if (isAuthRoute && authenticatedUser && !hasAuthErrorParam) {
-    return NextResponse.redirect(new URL("/machines", request.nextUrl));
+    return NextResponse.redirect(new URL("/dashboard", request.nextUrl));
   }
 
-  // Redirect authenticated user visiting deprecated routes or root '/' to /machines
+  // Redirect authenticated user visiting deprecated routes or root '/' to /dashboard
   if ((isDeprecatedRoute || path === "/") && authenticatedUser) {
-    return NextResponse.redirect(new URL("/machines", request.nextUrl));
+    return NextResponse.redirect(new URL("/dashboard", request.nextUrl));
   }
 
   return response;

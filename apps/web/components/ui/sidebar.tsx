@@ -242,20 +242,23 @@ export function SidebarMenuItem({ className, children, ...props }: React.HTMLAtt
   );
 }
 
-export interface SidebarMenuButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface SidebarMenuButtonProps extends React.HTMLAttributes<HTMLElement> {
   active?: boolean;
   icon?: React.ComponentType<{ className?: string }>;
   asChild?: boolean;
+  as?: "button" | "div";
+  type?: "button" | "submit" | "reset";
 }
 
-export const SidebarMenuButton = React.forwardRef<HTMLButtonElement, SidebarMenuButtonProps>(
-  ({ className, active, children, ...props }, ref) => {
+export const SidebarMenuButton = React.forwardRef<HTMLElement, SidebarMenuButtonProps>(
+  ({ className, active, as: Component = "button", children, type, ...props }, ref) => {
     const { collapsed } = useSidebar();
+    const Comp = (Component === "div" ? "div" : "button") as React.ElementType;
 
     return (
-      <button
+      <Comp
         ref={ref}
-        type="button"
+        type={Component === "button" ? (type || "button") : undefined}
         className={cn(
           "relative flex items-center gap-3 rounded-xl transition-colors duration-150 cursor-pointer select-none font-semibold text-xs",
           collapsed ? "justify-center h-11 w-11 mx-auto p-0" : "w-full px-3.5 py-2.5",
@@ -267,7 +270,7 @@ export const SidebarMenuButton = React.forwardRef<HTMLButtonElement, SidebarMenu
         {...props}
       >
         {children}
-      </button>
+      </Comp>
     );
   }
 );
@@ -295,16 +298,19 @@ export function SidebarMenuSubItem({ className, children, ...props }: React.HTML
   );
 }
 
-export interface SidebarMenuSubButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface SidebarMenuSubButtonProps extends React.HTMLAttributes<HTMLElement> {
   active?: boolean;
+  as?: "button" | "div";
+  type?: "button" | "submit" | "reset";
 }
 
-export const SidebarMenuSubButton = React.forwardRef<HTMLButtonElement, SidebarMenuSubButtonProps>(
-  ({ className, active, children, ...props }, ref) => {
+export const SidebarMenuSubButton = React.forwardRef<HTMLElement, SidebarMenuSubButtonProps>(
+  ({ className, active, as: Component = "button", children, type, ...props }, ref) => {
+    const Comp = (Component === "div" ? "div" : "button") as React.ElementType;
     return (
-      <button
+      <Comp
         ref={ref}
-        type="button"
+        type={Component === "button" ? (type || "button") : undefined}
         className={cn(
           "flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer select-none",
           active
@@ -315,7 +321,7 @@ export const SidebarMenuSubButton = React.forwardRef<HTMLButtonElement, SidebarM
         {...props}
       >
         {children}
-      </button>
+      </Comp>
     );
   }
 );

@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/dal";
 import {
   getMachineById,
@@ -7,6 +8,7 @@ import {
   getActiveOperators,
 } from "@/lib/data/machines";
 import { getClientOptions } from "@/lib/queries/clients";
+import { getOperatorEntryContext } from "@/lib/queries/operator-entry";
 import { EmptyState, MachineDetailSkeleton } from "@/components/ui";
 import { MachineClientView } from "./machine-client-view";
 
@@ -17,8 +19,7 @@ async function MachineDetailContent({ id }: { id: string }) {
   const canManage =
     user.role === "super_admin" ||
     user.role === "admin" ||
-    user.role === "manager" ||
-    user.role === "service_manager";
+    user.role === "manager";
 
   // Parallel fetch: all light queries in one Promise.all()
   const [machine, activeRental, supervisors, operators, clients] = await Promise.all([
@@ -40,9 +41,22 @@ async function MachineDetailContent({ id }: { id: string }) {
     );
   }
 
+  // Operators may only view basic info for their assigned machine
+  if (user.role === "operator") {
+    const operatorContext = await getOperatorEntryContext(user.id);
+    const isAssigned =
+      machine.id === operatorContext.machine?.id ||
+      machine.current_operator_id === user.id ||
+      machine.operator_ids?.includes(user.id);
+
+    if (!isAssigned) {
+      redirect("/machines");
+    }
+  }
+
   const canEdit = canManage;
   const canDelete = canManage;
-  const isAssignedEngineer = user.role === "engineer" && machine.engineer_id === user.id;
+  const isAssignedEngineer = false;
 
   return (
     <MachineClientView

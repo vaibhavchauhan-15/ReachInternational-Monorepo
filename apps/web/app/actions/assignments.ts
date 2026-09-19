@@ -54,7 +54,6 @@ export async function createAssignmentAction(payload: {
       "admin",
       "super_admin",
       "manager",
-      "service_manager",
       "supervisor"
     );
 
@@ -164,7 +163,6 @@ export async function endAssignmentAction(payload: {
       "admin",
       "super_admin",
       "manager",
-      "service_manager",
       "supervisor"
     );
 
@@ -230,7 +228,6 @@ export async function resolveHourLogConflictAction(payload: {
       "admin",
       "super_admin",
       "manager",
-      "service_manager",
       "supervisor"
     );
 
@@ -375,7 +372,6 @@ export async function updateAssignmentAction(payload: {
       "admin",
       "super_admin",
       "manager",
-      "service_manager",
       "supervisor"
     );
 
@@ -454,7 +450,7 @@ export async function updateAssignmentAction(payload: {
  */
 export async function getOperationsAssignmentsAction() {
   try {
-    await requireRole("admin", "super_admin", "manager", "service_manager", "supervisor", "operator");
+    await requireRole("admin", "super_admin", "manager", "supervisor", "operator");
     const data = await getOperationsAssignmentsData();
     return { success: true, data };
   } catch (err: unknown) {
@@ -473,7 +469,7 @@ export async function getOperationsAssignmentsAction() {
  */
 export async function getMachineAssignmentHistoryAction(machineId: string) {
   try {
-    await requireRole("admin", "super_admin", "manager", "service_manager", "supervisor", "operator");
+    await requireRole("admin", "super_admin", "manager", "supervisor", "operator");
     const data = await getMachineAssignmentHistoryData(machineId);
     return { success: true, data };
   } catch (err: unknown) {

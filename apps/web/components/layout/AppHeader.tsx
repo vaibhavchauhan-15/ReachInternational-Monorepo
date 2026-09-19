@@ -124,16 +124,28 @@ export function AppHeader({ user }: AppHeaderProps) {
                 Admin
               </span>
             )}
-            {user.role === "engineer" && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-blue-100 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 border border-blue-300/80">
-                <AnimatedShield size={12} className="text-blue-600 dark:text-blue-400" />
-                Engineer
+            {user.role === "manager" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-indigo-100 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-300 border border-indigo-300/80">
+                <AnimatedShieldCheck size={12} className="text-indigo-600 dark:text-indigo-400" />
+                Manager
               </span>
             )}
             {user.role === "supervisor" && (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 border border-purple-300/80">
-                <AnimatedShieldCheck size={12} className="text-purple-600 dark:text-purple-400" />
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-teal-100 dark:bg-teal-950/80 text-teal-800 dark:text-teal-300 border border-teal-300/80">
+                <AnimatedShieldCheck size={12} className="text-teal-600 dark:text-teal-400" />
                 Supervisor
+              </span>
+            )}
+            {user.role === "hr" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300/80">
+                <AnimatedShieldCheck size={12} className="text-emerald-600 dark:text-emerald-400" />
+                HR
+              </span>
+            )}
+            {user.role === "operator" && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300/80">
+                <AnimatedShield size={12} className="text-amber-600 dark:text-amber-400" />
+                Operator
               </span>
             )}
           </div>

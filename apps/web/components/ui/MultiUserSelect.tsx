@@ -54,19 +54,13 @@ function getRoleBadgeStyle(role?: string | null): string {
     case "admin":
       return "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20";
     case "manager":
-    case "service_manager":
       return "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20";
-    case "service_engineer":
-    case "engineer":
-      return "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20";
     case "supervisor":
       return "bg-teal-500/10 text-teal-600 dark:text-teal-400 border-teal-500/20";
-    case "operator":
-    case "mechanic":
-      return "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20";
-    case "store_manager":
-    case "hr_manager":
+    case "hr":
       return "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20";
+    case "operator":
+      return "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20";
     default:
       return "bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] border-[var(--color-hairline)]";
   }

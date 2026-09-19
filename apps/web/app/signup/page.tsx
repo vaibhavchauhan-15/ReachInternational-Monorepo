@@ -36,14 +36,10 @@ import {
 } from "@reachinternational/utils";
 
 const signupRoleOptions: SelectOption[] = [
-  { value: "service_engineer", label: "Service Engineer" },
   { value: "manager", label: "Manager" },
-  { value: "service_manager", label: "Service Manager" },
   { value: "supervisor", label: "Supervisor" },
-  { value: "store_manager", label: "Store Manager" },
+  { value: "hr", label: "HR" },
   { value: "operator", label: "Operator" },
-  { value: "mechanic", label: "Mechanic / Technician" },
-  { value: "hr_manager", label: "HR Manager" },
 ];
 
 const stateSelectOptions: SelectOption[] = INDIAN_STATES.map((s) => ({
@@ -59,7 +55,7 @@ export default function SignupPage() {
     full_name: "",
     email: "",
     phone: "",
-    role: "service_engineer",
+    role: "operator",
     supervisor_id: "",
     working_location_id: "",
     shift_start_time: "08:00 AM",

@@ -53,6 +53,17 @@ export function CommandPalette({
   const commandItems: CommandItem[] = useMemo(() => {
     const items: CommandItem[] = [
       {
+        id: "nav-dashboard",
+        title: "Go to Dashboard",
+        subtitle: "Role-specific operational overview, telemetry, and fleet KPIs",
+        category: "Navigation",
+        icon: AnimatedDashboard,
+        href: "/dashboard",
+        shortcut: "⌘D",
+        keywords: ["home", "overview", "kpis", "telemetry", "metrics", "stats"],
+        roles: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"],
+      },
+      {
         id: "nav-machines",
         title: "Go to Machines Directory",
         subtitle: "Browse and manage tracked equipment fleet (add, edit, delete)",
@@ -61,7 +72,18 @@ export function CommandPalette({
         href: "/machines",
         shortcut: "⌘M",
         keywords: ["equipment", "devices", "inventory", "assets", "machine list"],
-        roles: ["super_admin", "admin", "service_manager", "supervisor", "operator"],
+        roles: ["super_admin", "admin", "manager", "supervisor"],
+      },
+      {
+        id: "nav-machines-operator",
+        title: "My Assigned Machine",
+        subtitle: "View specifications and worksite details for your assigned machine",
+        category: "Navigation",
+        icon: AnimatedWrench,
+        href: "/machines",
+        shortcut: "⌘M",
+        keywords: ["equipment", "machine", "assigned machine", "specs", "details"],
+        roles: ["operator"],
       },
       {
         id: "nav-operations-entry",
@@ -91,7 +113,7 @@ export function CommandPalette({
         icon: AnimatedClipboardList,
         href: "/operations?tab=logs",
         keywords: ["running hours", "meter log", "log history", "operations"],
-        roles: ["super_admin", "admin", "manager", "supervisor", "service_manager"],
+        roles: ["super_admin", "admin", "manager", "supervisor"],
       },
       {
         id: "nav-audit-logs",
@@ -102,7 +124,7 @@ export function CommandPalette({
         href: "/audit",
         shortcut: "⌘A",
         keywords: ["audit", "logs", "security", "history", "compliance", "activities", "assignment audit", "employee logs", "machine logs"],
-        roles: ["super_admin", "admin", "manager", "service_manager", "supervisor", "service_engineer", "engineer", "mechanic", "store_manager", "hr_manager"],
+        roles: ["super_admin", "admin", "manager"],
       },
       {
         id: "nav-clients",
@@ -113,7 +135,7 @@ export function CommandPalette({
         href: "/clients",
         shortcut: "⌘C",
         keywords: ["clients", "customers", "accounts", "directory", "companies"],
-        roles: ["super_admin", "admin", "manager", "service_manager"],
+        roles: ["super_admin", "admin", "manager"],
       },
       {
         id: "nav-users",
@@ -124,7 +146,7 @@ export function CommandPalette({
         href: "/users",
         shortcut: "⌘U",
         keywords: ["employees", "staff", "team", "admins", "operators", "supervisors", "accounts", "roles", "users"],
-        roles: ["super_admin", "admin", "manager", "service_manager"],
+        roles: ["super_admin", "admin", "manager", "hr", "supervisor"],
       },
       {
         id: "action-add-machine",
@@ -144,7 +166,7 @@ export function CommandPalette({
         icon: AnimatedPlus,
         href: "/clients",
         keywords: ["add client", "new customer", "register client", "add account"],
-        roles: ["super_admin", "admin", "manager", "service_manager"],
+        roles: ["super_admin", "admin", "manager"],
       },
       {
         id: "action-add-user",
@@ -154,7 +176,7 @@ export function CommandPalette({
         icon: AnimatedPlus,
         href: "/users?action=create",
         keywords: ["add user", "invite", "create account", "new staff"],
-        roles: ["super_admin", "admin", "manager"],
+        roles: ["super_admin", "admin", "manager", "hr"],
       },
     ];
 

@@ -47,9 +47,9 @@ export function verifyClientSecurityEnvironment(): { secure: boolean; errors: st
 export function sanitizeDeepLinkRoute(incomingRoute: string): string {
   const ALLOWED_ROUTES = [
     '/(app)/dashboard',
-    '/(app)/my-work',
     '/(app)/machines',
     '/(app)/operations',
+    '/(app)/clients',
     '/(app)/users',
     '/(app)/settings',
     '/(app)/profile',

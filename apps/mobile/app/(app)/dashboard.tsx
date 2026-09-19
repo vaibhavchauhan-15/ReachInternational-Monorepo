@@ -1,23 +1,42 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  TouchableOpacity,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
-import { Card, useTheme, MobileHeader, Skeleton, HeaderActionItem } from '../../components/ui';
+import { Card, useTheme, MobileHeader, Skeleton, HeaderActionItem, Badge } from '../../components/ui';
 import { spacingNumeric } from '@reachinternational/design-tokens';
 import { supabase } from '../../lib/supabase';
 import {
   Wrench,
   AlertTriangle,
-  Clock,
   ArrowRight,
   Gauge,
-  Users,
-  Building2,
-  Calendar,
-  Truck,
   RefreshCw,
-  Search,
 } from 'lucide-react-native';
+import {
+  OperatorDashboardCard,
+  SupervisorDashboardCard,
+  ManagerDashboardCard,
+  AdminDashboardCard,
+  SuperAdminDashboardCard,
+  HRDashboardCard,
+} from '../../components/dashboard';
+import type {
+  DashboardRole,
+  SuperAdminDashboardDTO,
+  AdminDashboardDTO,
+  ManagerDashboardDTO,
+  SupervisorDashboardDTO,
+  HRDashboardDTO,
+  OperatorDashboardDTO,
+  DashboardAlert,
+} from '@reachinternational/types';
 
 export default function DashboardScreen() {
   const { user, role, userProfile } = useAuth();
@@ -27,47 +46,64 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Live Metrics
-  const [metrics, setMetrics] = useState({
-    totalMachines: 0,
-    rentedMachines: 0,
-    breakdownMachines: 0,
-    maintenanceMachines: 0,
-  });
+  // Role dashboard data states
+  const [superAdminData, setSuperAdminData] = useState<SuperAdminDashboardDTO | null>(null);
+  const [adminData, setAdminData] = useState<AdminDashboardDTO | null>(null);
+  const [managerData, setManagerData] = useState<ManagerDashboardDTO | null>(null);
+  const [supervisorData, setSupervisorData] = useState<SupervisorDashboardDTO | null>(null);
+  const [hrData, setHrData] = useState<HRDashboardDTO | null>(null);
+  const [operatorData, setOperatorData] = useState<OperatorDashboardDTO | null>(null);
 
-  const userName = userProfile?.full_name || (user?.email ? user.email.split('@')[0] : 'Operator');
+  const activeRole = (role as DashboardRole) || 'operator';
+  const userName = userProfile?.full_name || (user?.email ? user.email.split('@')[0] : 'User');
 
   const fetchDashboardData = useCallback(async () => {
     try {
-      const machinesRes = await supabase
-        .from('machines')
-        .select('id, status, health_status');
+      if (!user?.id) return;
 
-      const machineList = machinesRes.data || [];
-      let rented = 0;
-      let breakdown = 0;
-      let maintenance = 0;
-
-      machineList.forEach((m) => {
-        const r = (m.status || '').toLowerCase();
-        const h = (m.health_status || '').toLowerCase();
-        if (r === 'rented') rented++;
-        if (h === 'breakdown') breakdown++;
-        if (h === 'under_maintenance' || r === 'maintenance') maintenance++;
-      });
-
-      setMetrics({
-        totalMachines: machineList.length,
-        rentedMachines: rented,
-        breakdownMachines: breakdown,
-        maintenanceMachines: maintenance,
-      });
+      switch (activeRole) {
+        case 'super_admin': {
+          const { data } = await supabase.rpc('get_super_admin_dashboard');
+          if (data) setSuperAdminData(data as SuperAdminDashboardDTO);
+          break;
+        }
+        case 'admin': {
+          const { data } = await supabase.rpc('get_admin_dashboard');
+          if (data) setAdminData(data as AdminDashboardDTO);
+          break;
+        }
+        case 'manager': {
+          const { data } = await supabase.rpc('get_manager_dashboard');
+          if (data) setManagerData(data as ManagerDashboardDTO);
+          break;
+        }
+        case 'supervisor': {
+          const { data } = await supabase.rpc('get_supervisor_dashboard', {
+            p_supervisor_id: user.id,
+          });
+          if (data) setSupervisorData(data as SupervisorDashboardDTO);
+          break;
+        }
+        case 'hr': {
+          const { data } = await supabase.rpc('get_hr_dashboard');
+          if (data) setHrData(data as HRDashboardDTO);
+          break;
+        }
+        case 'operator':
+        default: {
+          const { data } = await supabase.rpc('get_operator_dashboard', {
+            p_operator_id: user.id,
+          });
+          if (data) setOperatorData(data as OperatorDashboardDTO);
+          break;
+        }
+      }
     } catch (err) {
       console.warn('[DashboardScreen] Error fetching dashboard data:', err);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [user?.id, activeRole]);
 
   useEffect(() => {
     fetchDashboardData();
@@ -80,179 +116,171 @@ export default function DashboardScreen() {
   }, [fetchDashboardData]);
 
   const headerActions = useMemo<HeaderActionItem[]>(() => {
-    const list: HeaderActionItem[] = [];
+    const list: HeaderActionItem[] = [
+      {
+        id: 'refresh-dashboard',
+        label: 'Refresh Dashboard',
+        icon: <RefreshCw size={16} color={theme.colors.ink} />,
+        onPress: () => onRefresh(),
+      },
+    ];
 
-    list.push({
-      id: 'view-machines',
-      label: 'View Machine Directory',
-      icon: <Truck size={16} color={theme.colors.ink} />,
-      onPress: () => router.push('/(app)/machines' as any),
-    });
-
-    list.push({
-      id: 'view-operations',
-      label: 'View Fleet Operations',
-      icon: <Gauge size={16} color={theme.colors.ink} />,
-      onPress: () => router.push('/(app)/operations' as any),
-    });
-
-    list.push({
-      id: 'refresh-dashboard',
-      label: 'Refresh Dashboard Data',
-      icon: <RefreshCw size={16} color={theme.colors.ink} />,
-      onPress: () => onRefresh(),
-    });
+    if (activeRole !== 'operator') {
+      list.push({
+        id: 'view-machines',
+        label: 'Machine Directory',
+        icon: <Wrench size={16} color={theme.colors.ink} />,
+        onPress: () => router.push('/(app)/machines' as any),
+      });
+      list.push({
+        id: 'view-operations',
+        label: 'Fleet Operations',
+        icon: <Gauge size={16} color={theme.colors.ink} />,
+        onPress: () => router.push('/(app)/operations' as any),
+      });
+    }
 
     return list;
-  }, [theme.colors.ink, router, onRefresh]);
+  }, [theme.colors.ink, activeRole, router, onRefresh]);
+
+  // Extract alerts for the active role
+  const alerts: DashboardAlert[] = useMemo(() => {
+    if (activeRole === 'super_admin') return superAdminData?.alerts || [];
+    if (activeRole === 'admin') return adminData?.alerts || [];
+    if (activeRole === 'manager') return managerData?.alerts || [];
+    if (activeRole === 'supervisor') return supervisorData?.alerts || [];
+    if (activeRole === 'hr') return hrData?.alerts || [];
+    if (activeRole === 'operator') return operatorData?.alerts || [];
+    return [];
+  }, [activeRole, superAdminData, adminData, managerData, supervisorData, hrData, operatorData]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      {/* Top Standardized Mobile Header: [Logo] + [Page Title] + [Search] + [3-Dot Actions] */}
       <MobileHeader
         title={`Welcome, ${userName}`}
-        searchPlaceholder="Search anything across platform..."
+        searchPlaceholder="Search platform..."
         actions={headerActions}
       />
 
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.colors.link}
+          />
+        }
         showsVerticalScrollIndicator={false}
       >
-        {/* Primary KPI Fleet Summary Grid */}
-        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>FLEET ASSET STATUS</Text>
-        <View style={styles.kpiGrid}>
-          <TouchableOpacity
-            style={styles.kpiCardWrapper}
-            onPress={() => router.push('/(app)/machines' as any)}
-            activeOpacity={0.7}
-          >
-            <Card variant="elevated" style={styles.kpiCard}>
-              {isLoading ? (
-                <Skeleton width={44} height={26} borderRadius={4} style={{ marginVertical: 1 }} />
-              ) : (
-                <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
-                  {metrics.totalMachines}
-                </Text>
-              )}
-              <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Total Fleet</Text>
-            </Card>
-          </TouchableOpacity>
+        {/* Alerts Banner if any */}
+        {alerts.length > 0 && (
+          <View style={styles.section}>
+            <Text style={[styles.eyebrowHeader, { color: theme.colors.mute }]}>
+              ALERT
+            </Text>
+            {alerts.map((alert) => {
+              const isCrit = alert.severity === 'critical';
+              const isWarn = alert.severity === 'warning';
+              const bg = isCrit
+                ? 'rgba(239, 68, 68, 0.1)'
+                : isWarn
+                ? 'rgba(245, 158, 11, 0.1)'
+                : 'rgba(0, 112, 243, 0.1)';
+              const border = isCrit
+                ? 'rgba(239, 68, 68, 0.25)'
+                : isWarn
+                ? 'rgba(245, 158, 11, 0.25)'
+                : 'rgba(0, 112, 243, 0.25)';
+              const textColor = isCrit ? '#dc2626' : isWarn ? '#d97706' : theme.colors.link;
 
-          <TouchableOpacity
-            style={styles.kpiCardWrapper}
-            onPress={() => router.push('/(app)/machines' as any)}
-            activeOpacity={0.7}
-          >
-            <Card variant="elevated" style={styles.kpiCard}>
-              {isLoading ? (
-                <Skeleton width={44} height={26} borderRadius={4} style={{ marginVertical: 1 }} />
-              ) : (
-                <Text style={[styles.kpiValue, { color: theme.colors.link }]}>
-                  {metrics.rentedMachines}
-                </Text>
-              )}
-              <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>On Rent</Text>
-            </Card>
-          </TouchableOpacity>
+              return (
+                <TouchableOpacity
+                  key={alert.id}
+                  style={[styles.alertCard, { backgroundColor: bg, borderColor: border }]}
+                  onPress={() => {
+                    if (alert.actionUrl) {
+                      const target = alert.actionUrl.startsWith('/operations')
+                        ? '/(app)/operations'
+                        : alert.actionUrl.startsWith('/machines')
+                        ? '/(app)/machines'
+                        : '/(app)/users';
+                      router.push(target as any);
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <AlertTriangle size={18} color={textColor} style={{ marginTop: 2 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.alertTitle, { color: textColor }]}>
+                      {alert.title}
+                    </Text>
+                    {alert.description && (
+                      <Text style={[styles.alertDesc, { color: theme.colors.mute }]}>
+                        {alert.description}
+                      </Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
 
-          <TouchableOpacity
-            style={styles.kpiCardWrapper}
-            onPress={() => router.push('/(app)/machines' as any)}
-            activeOpacity={0.7}
-          >
-            <Card variant="elevated" style={styles.kpiCard}>
-              {isLoading ? (
-                <Skeleton width={44} height={26} borderRadius={4} style={{ marginVertical: 1 }} />
-              ) : (
-                <Text style={[styles.kpiValue, { color: '#dc2626' }]}>
-                  {metrics.breakdownMachines}
-                </Text>
-              )}
-              <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Breakdowns</Text>
-            </Card>
-          </TouchableOpacity>
+        {/* ---------------- ROLE-SPECIFIC DASHBOARD VIEWS ---------------- */}
+        {activeRole === 'operator' && <OperatorDashboardCard data={operatorData} />}
+        {activeRole === 'supervisor' && <SupervisorDashboardCard data={supervisorData} />}
+        {activeRole === 'manager' && <ManagerDashboardCard data={managerData} />}
+        {activeRole === 'admin' && <AdminDashboardCard data={adminData} />}
+        {activeRole === 'super_admin' && <SuperAdminDashboardCard data={superAdminData} />}
+        {activeRole === 'hr' && <HRDashboardCard data={hrData} />}
 
-          <TouchableOpacity
-            style={styles.kpiCardWrapper}
-            onPress={() => router.push('/(app)/machines' as any)}
-            activeOpacity={0.7}
-          >
-            <Card variant="elevated" style={styles.kpiCard}>
-              {isLoading ? (
-                <Skeleton width={44} height={26} borderRadius={4} style={{ marginVertical: 1 }} />
-              ) : (
-                <Text style={[styles.kpiValue, { color: '#d97706' }]}>
-                  {metrics.maintenanceMachines}
-                </Text>
-              )}
-              <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>Maintenance</Text>
-            </Card>
-          </TouchableOpacity>
-        </View>
+        {/* Quick Nav Workflows (Common to non-operators) */}
+        {activeRole !== 'operator' && (
+          <>
+            <Text style={[styles.eyebrowHeader, { color: theme.colors.mute, marginTop: spacingNumeric.lg }]}>
+              OPERATIONAL WORKFLOWS
+            </Text>
 
-        {/* Quick Operational Shortcuts */}
-        <Text style={[styles.eyebrowHeader, { color: theme.colors.mute, marginTop: spacingNumeric.md }]}>
-          OPERATIONAL WORKFLOWS
-        </Text>
+            <TouchableOpacity
+              onPress={() => router.push('/(app)/operations' as any)}
+              activeOpacity={0.8}
+              style={styles.actionCardWrapper}
+            >
+              <Card variant="elevated" style={styles.actionCard}>
+                <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(0, 112, 243, 0.08)' }]}>
+                  <Gauge size={20} color={theme.colors.link} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.actionTitle, { color: theme.colors.ink }]}>Daily Running Hours</Text>
+                  <Text style={[styles.actionDesc, { color: theme.colors.mute }]}>
+                    Review operator logs, verify meters & analyze site runtime
+                  </Text>
+                </View>
+                <ArrowRight size={16} color={theme.colors.mute} />
+              </Card>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          onPress={() => router.push('/(app)/operations' as any)}
-          activeOpacity={0.8}
-          style={styles.actionCardWrapper}
-        >
-          <Card variant="elevated" style={styles.actionCard}>
-            <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(0, 112, 243, 0.08)' }]}>
-              <Gauge size={20} color={theme.colors.link} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.actionTitle, { color: theme.colors.ink }]}>Daily Running Hours</Text>
-              <Text style={[styles.actionDesc, { color: theme.colors.mute }]}>
-                Record equipment HMR logs, review shift overtime & resolve conflicts
-              </Text>
-            </View>
-            <ArrowRight size={16} color={theme.colors.mute} />
-          </Card>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => router.push('/(app)/operations' as any)}
-          activeOpacity={0.8}
-          style={styles.actionCardWrapper}
-        >
-          <Card variant="elevated" style={styles.actionCard}>
-            <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.08)' }]}>
-              <Users size={20} color={theme.colors.success} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.actionTitle, { color: theme.colors.ink }]}>Operator Machine Roster</Text>
-              <Text style={[styles.actionDesc, { color: theme.colors.mute }]}>
-                Assign operators to machinery across Shift 1, Shift 2 & Shift 3
-              </Text>
-            </View>
-            <ArrowRight size={16} color={theme.colors.mute} />
-          </Card>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => router.push('/(app)/machines' as any)}
-          activeOpacity={0.8}
-          style={styles.actionCardWrapper}
-        >
-          <Card variant="elevated" style={styles.actionCard}>
-            <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(99, 102, 241, 0.08)' }]}>
-              <Wrench size={20} color="#6366f1" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.actionTitle, { color: theme.colors.ink }]}>Machine Directory</Text>
-              <Text style={[styles.actionDesc, { color: theme.colors.mute }]}>
-                Browse fleet assets, track meters, manage categories & export reports
-              </Text>
-            </View>
-            <ArrowRight size={16} color={theme.colors.mute} />
-          </Card>
-        </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push('/(app)/machines' as any)}
+              activeOpacity={0.8}
+              style={styles.actionCardWrapper}
+            >
+              <Card variant="elevated" style={styles.actionCard}>
+                <View style={[styles.actionIconCircle, { backgroundColor: 'rgba(99, 102, 241, 0.08)' }]}>
+                  <Wrench size={20} color="#6366f1" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.actionTitle, { color: theme.colors.ink }]}>Machinery Fleet</Text>
+                  <Text style={[styles.actionDesc, { color: theme.colors.mute }]}>
+                    Browse equipment inventory, track meters & check status
+                  </Text>
+                </View>
+                <ArrowRight size={16} color={theme.colors.mute} />
+              </Card>
+            </TouchableOpacity>
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -264,47 +292,42 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacingNumeric.md,
-    paddingBottom: spacingNumeric.xl,
+    paddingBottom: spacingNumeric['2xl'],
+  },
+  section: {
+    marginBottom: spacingNumeric.md,
   },
   eyebrowHeader: {
-    fontSize: 10,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '700',
     letterSpacing: 0.8,
     marginBottom: spacingNumeric.xs,
   },
-  kpiGrid: {
+  alertCard: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    alignItems: 'flex-start',
+    gap: 10,
+    padding: spacingNumeric.sm + 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 6,
   },
-  kpiCardWrapper: {
-    width: '48.5%',
-  },
-  kpiCard: {
-    padding: spacingNumeric.md,
-    alignItems: 'center',
-  },
-  kpiValue: {
-    fontSize: 24,
-    fontWeight: '800',
-    letterSpacing: -0.5,
-  },
-  kpiLabel: {
-    fontSize: 10,
+  alertTitle: {
+    fontSize: 13,
     fontWeight: '700',
-    textAlign: 'center',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-    marginTop: 4,
+  },
+  alertDesc: {
+    fontSize: 11,
+    marginTop: 2,
   },
   actionCardWrapper: {
-    marginBottom: 8,
+    marginBottom: spacingNumeric.sm,
   },
   actionCard: {
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacingNumeric.md,
-    gap: 12,
+    gap: spacingNumeric.md,
   },
   actionIconCircle: {
     width: 40,
@@ -315,12 +338,10 @@ const styles = StyleSheet.create({
   },
   actionTitle: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
+    marginBottom: 2,
   },
   actionDesc: {
-    fontSize: 11,
-    marginTop: 2,
-    lineHeight: 15,
+    fontSize: 12,
   },
 });
-

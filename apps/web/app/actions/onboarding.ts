@@ -46,7 +46,7 @@ export async function completeOnboardingAction(
   if (userProfile.complete_profile === "yes") {
     return {
       success: true,
-      redirectUrl: userProfile.role === "operator" ? "/operations?tab=entry" : "/machines",
+      redirectUrl: "/dashboard",
     };
   }
 
@@ -195,7 +195,7 @@ export async function completeOnboardingAction(
 
     return {
       success: true,
-      redirectUrl: role === "operator" ? "/operations?tab=entry" : "/machines",
+      redirectUrl: "/dashboard",
     };
   } catch (err: any) {
     return {

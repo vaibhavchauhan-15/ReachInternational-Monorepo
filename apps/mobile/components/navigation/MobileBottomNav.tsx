@@ -19,6 +19,7 @@ import { useTheme } from '../ui/ThemeProvider';
 import { useAuth } from '../../lib/auth/useAuth';
 import { MobileProfileSheet } from './MobileProfileSheet';
 import {
+  LayoutDashboard,
   Wrench,
   Gauge,
   Users,
@@ -52,16 +53,52 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = () => {
 
   const normalizedRole = (role || 'operator').toLowerCase();
   const isOperator = normalizedRole === 'operator';
+  const isHr = normalizedRole === 'hr';
   const isAdmin = normalizedRole === 'admin' || normalizedRole === 'super_admin';
+  const canAccessClients = isAdmin || normalizedRole === 'manager';
+  const canAccessUsers = isAdmin || normalizedRole === 'manager' || normalizedRole === 'hr' || normalizedRole === 'supervisor';
 
-  // Build clean page navigation items (Quick Access is placed directly in the header of every page)
+  // Build clean page navigation items with Dashboard as primary tab
   const navItems: NavItemConfig[] = isOperator
     ? [
+        {
+          id: 'dashboard',
+          href: '/(app)/dashboard',
+          label: 'Dashboard',
+          icon: LayoutDashboard,
+        },
         {
           id: 'operations',
           href: '/(app)/operations',
           label: 'Operations',
           icon: Gauge,
+        },
+        {
+          id: 'machines',
+          href: '/(app)/machines',
+          label: 'Machines',
+          icon: Wrench,
+        },
+        {
+          id: 'settings',
+          href: '/(app)/settings',
+          label: 'Settings',
+          icon: Settings,
+        },
+      ]
+    : isHr
+    ? [
+        {
+          id: 'dashboard',
+          href: '/(app)/dashboard',
+          label: 'Dashboard',
+          icon: LayoutDashboard,
+        },
+        {
+          id: 'users',
+          href: '/(app)/users',
+          label: 'Users',
+          icon: Users,
         },
         {
           id: 'settings',
@@ -71,6 +108,12 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = () => {
         },
       ]
     : [
+        {
+          id: 'dashboard',
+          href: '/(app)/dashboard',
+          label: 'Dashboard',
+          icon: LayoutDashboard,
+        },
         {
           id: 'machines',
           href: '/(app)/machines',
@@ -83,7 +126,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = () => {
           label: 'Operations',
           icon: Gauge,
         },
-        ...((isAdmin || normalizedRole === 'manager' || normalizedRole === 'service_manager')
+        ...(canAccessClients
           ? [
               {
                 id: 'clients',
@@ -93,7 +136,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = () => {
               },
             ]
           : []),
-        ...(isAdmin
+        ...(canAccessUsers && !canAccessClients
           ? [
               {
                 id: 'users',
@@ -152,7 +195,9 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = () => {
 
             // Compute active state
             let isActive = false;
-            if (item.id === 'settings') {
+            if (item.id === 'dashboard') {
+              isActive = pathname.includes('dashboard') || pathname === '/' || pathname === '/(app)';
+            } else if (item.id === 'settings') {
               isActive = pathname.includes('settings');
             } else if (item.isAction && item.actionType === 'profile') {
               isActive = profileSheetOpen || pathname.includes('profile');

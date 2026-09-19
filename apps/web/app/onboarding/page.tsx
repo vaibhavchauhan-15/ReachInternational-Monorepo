@@ -14,10 +14,7 @@ export default async function OnboardingPage() {
 
   // If user already has complete_profile === 'yes', redirect directly to dashboard
   if (user.complete_profile === "yes") {
-    if (user.role === "operator") {
-      redirect("/operations?tab=entry");
-    }
-    redirect("/machines");
+    redirect("/dashboard");
   }
 
   return <OnboardingClient user={user} />;

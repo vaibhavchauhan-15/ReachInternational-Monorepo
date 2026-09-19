@@ -9,11 +9,14 @@ This index maps features directly to exact file paths. AI agents must use this t
 - Supabase Clients: `lib/supabase/server.ts`, `lib/supabase/browser.ts`, `lib/supabase/admin.ts`
 - Data Access: `lib/dal.ts`
 
-## 2. Dashboard & Analytics
-- Pages: `app/(app)/dashboard/page.tsx`
-- Components: `components/dashboard/Charts.tsx`, `components/dashboard/ChartLoaders.tsx`
-- Queries: `lib/queries/dashboard.ts`
-- RPC Migrations: `supabase/migrations/004_dashboard_rpc.sql`, `005_fix_dashboard_rpc_user_context.sql`
+## 2. Dashboard & Analytics (6-Role Architecture)
+- Pages: `app/(app)/dashboard/page.tsx`, `app/(app)/dashboard/loading.tsx`, `app/(app)/dashboard/error.tsx`
+- Types: `packages/types/src/dashboard.ts`
+- Web DAL: `apps/web/lib/data/dashboard/index.ts`, `apps/web/lib/data/dashboard/*.ts`
+- Shared Components: `components/dashboard/shared/*.tsx` (`DashboardShell`, `DashboardHeader`, `KPIGrid`, `KPICard`, `StatusCard`, `PrimaryAction`, `AlertWidget`, `ActivityWidget`, `DashboardSkeleton`, `WidgetSkeleton`, `ErrorState`)
+- Role Compositions: `components/dashboard/*/*DashboardView.tsx` (`super-admin`, `admin`, `manager`, `supervisor`, `hr`, `operator`)
+- Mobile Views: `apps/mobile/app/(app)/dashboard.tsx`, `apps/mobile/components/navigation/MobileBottomNav.tsx`
+- RPC Migration: `supabase/migrations/088_dashboard_read_model_rpcs.sql` (`get_super_admin_dashboard`, `get_admin_dashboard`, `get_manager_dashboard`, `get_supervisor_dashboard`, `get_hr_dashboard`, `get_operator_dashboard`)
 
 ## 3. Machines & Inventory
 - Pages: `app/(app)/machines/page.tsx`, `app/(app)/machines/[id]/page.tsx`

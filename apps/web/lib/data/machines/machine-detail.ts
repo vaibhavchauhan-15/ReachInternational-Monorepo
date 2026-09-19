@@ -252,6 +252,66 @@ export const getMachineAssignments = cache(async (machineId: string): Promise<Op
 });
 
 /**
+ * Fetch the assigned machine for a specific operator.
+ * Resolves active operator_machine_assignments first, then falls back to machines table direct assignment.
+ */
+export const getOperatorAssignedMachine = cache(async (operatorId: string): Promise<Machine | null> => {
+  const user = await getCurrentUser();
+  if (!user) throw new Error("Unauthorized");
+
+  const fetchCached = unstable_cache(
+    async (): Promise<Machine | null> => {
+      const supabase = createSupabaseAdminClient();
+
+      // Priority 1: Active record in operator_machine_assignments
+      const { data: omaData } = await supabase
+        .from("operator_machine_assignments")
+        .select("machine_id")
+        .eq("operator_id", operatorId)
+        .eq("is_active", true)
+        .order("assigned_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      let targetMachineId = omaData?.machine_id;
+
+      // Priority 2: Fallback to machines table direct assignment
+      if (!targetMachineId) {
+        const { data: mData } = await supabase
+          .from("machines")
+          .select("id")
+          .or(`current_operator_id.eq.${operatorId},operator_ids.cs.{${operatorId}}`)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        targetMachineId = mData?.id;
+      }
+
+      if (!targetMachineId) return null;
+
+      const { data: machineData, error: mError } = await supabase
+        .from("machines")
+        .select(MACHINE_DETAIL_COLUMNS)
+        .eq("id", targetMachineId)
+        .maybeSingle();
+
+      if (mError || !machineData) return null;
+
+      const hydrated = await hydrateMachinePersonnelSingle(machineData, supabase);
+      return hydrated as unknown as Machine;
+    },
+    [`operator-assigned-machine-${operatorId}`],
+    {
+      revalidate: CACHE_TIERS.CLASS_C_OPERATIONAL,
+      tags: [TAGS.machines, `operator-machine:${operatorId}`],
+    }
+  );
+
+  return fetchCached();
+});
+
+/**
  * Fetch active rental contract metadata for a machine.
  * Deduplicated per-request and cached with 60s SWR under targeted machine detail tag.
  */
@@ -708,8 +768,7 @@ export const getMachineAuditLogs = cache(async (machineId: string, limit = 50) =
   const canViewAudit =
     user.role === "super_admin" ||
     user.role === "admin" ||
-    user.role === "manager" ||
-    user.role === "service_manager";
+    user.role === "manager";
 
   if (!canViewAudit) {
     return { unauthorized: true, data: [] };

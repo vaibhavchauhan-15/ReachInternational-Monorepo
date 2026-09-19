@@ -7,13 +7,8 @@ export const ROLE_DEFAULT_SCOPES: Record<UserRole, PermissionScope> = {
   super_admin: "ORGANIZATION",
   admin: "ORGANIZATION",
   manager: "ORGANIZATION",
-  hr_manager: "ORGANIZATION",
-  service_manager: "ORGANIZATION",
-  store_manager: "ORGANIZATION",
-  service_engineer: "ASSIGNED",
-  engineer: "ASSIGNED",
   supervisor: "ORGANIZATION",
-  mechanic: "ASSIGNED",
+  hr: "ORGANIZATION",
   operator: "ASSIGNED",
 };
 
@@ -74,9 +69,6 @@ import { roleHasPermission } from "./matrix";
  */
 export const SUPERVISOR_VISIBLE_USER_ROLES = [
   "operator",
-  "mechanic",
-  "service_engineer",
-  "engineer",
 ] as const;
 
 export type SupervisorVisibleUserRole = (typeof SUPERVISOR_VISIBLE_USER_ROLES)[number];

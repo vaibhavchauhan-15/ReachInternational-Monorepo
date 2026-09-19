@@ -33,21 +33,6 @@ export function resolveParentRoute(pathname: string): string {
     return "/clients";
   }
 
-  // Vendor routes
-  if (path.startsWith("/vendors/")) {
-    return "/vendors";
-  }
-
-  // Purchase Order routes
-  if (path.startsWith("/purchase-orders/")) {
-    return "/purchase-orders";
-  }
-
-  // Challan routes
-  if (path.startsWith("/challans/")) {
-    return "/challans";
-  }
-
   // Audit routes
   if (path.startsWith("/audit/")) {
     return "/audit";
@@ -56,16 +41,6 @@ export function resolveParentRoute(pathname: string): string {
   // User routes
   if (path.startsWith("/users/")) {
     return "/users";
-  }
-
-  // Branch routes
-  if (path.startsWith("/branches/")) {
-    return "/branches";
-  }
-
-  // Document routes
-  if (path.startsWith("/documents/")) {
-    return "/documents";
   }
 
   // Dashboard logs

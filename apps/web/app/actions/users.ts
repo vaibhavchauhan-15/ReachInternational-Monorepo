@@ -81,7 +81,7 @@ async function resolveStateInfo(
 
 // Get all users (admin only)
 export async function getAllUsers(): Promise<User[]> {
-  await requireRole("admin", "super_admin", "service_manager", "hr_manager");
+  await requireRole("admin", "super_admin", "manager", "hr");
   const supabase = await createSupabaseServerClient();
   
   const { data, error } = await supabase
@@ -99,7 +99,7 @@ export async function getAllUsers(): Promise<User[]> {
 
 // Get pending users
 export async function getPendingUsers(): Promise<User[]> {
-  await requireRole("admin", "super_admin", "service_manager", "hr_manager");
+  await requireRole("admin", "super_admin", "manager", "hr");
   const supabase = await createSupabaseServerClient();
   
   const { data, error } = await supabase
@@ -752,7 +752,7 @@ export async function updateUserRole(userId: string, newRole: UserRole): Promise
   }
 }
 
-// Update user supervisor (for operator, mechanic, service_engineer, engineer)
+// Update user supervisor (for operator)
 export async function updateUserSupervisor(
   userId: string,
   supervisorIdsInput: string[] | string | null
@@ -807,7 +807,7 @@ export async function updateUserSupervisor(
 
     // Role check: Only supervised roles can have a supervisor assigned
     if (cleanSupervisorIds.length > 0 && !isSupervisedRole(targetUser.role)) {
-      return { error: "Supervisors can only be assigned to operators, mechanics, and service engineers." };
+      return { error: "Supervisors can only be assigned to operators." };
     }
 
     const primarySupervisorId = cleanSupervisorIds[0] ?? null;
@@ -1544,9 +1544,8 @@ export async function getPaginatedUsersAction(params: UserListParams): Promise<{
     const isAuthorized =
       currentUser.role === "admin" ||
       currentUser.role === "super_admin" ||
-      currentUser.role === "service_manager" ||
-      currentUser.role === "hr_manager" ||
       currentUser.role === "manager" ||
+      currentUser.role === "hr" ||
       isSupervisor ||
       canViewUsers(currentUser.role);
 
@@ -1586,9 +1585,8 @@ export async function getUserDetailAction(userId: string): Promise<{ user: User 
     const isAuthorized =
       currentUser.role === "admin" ||
       currentUser.role === "super_admin" ||
-      currentUser.role === "service_manager" ||
-      currentUser.role === "hr_manager" ||
       currentUser.role === "manager" ||
+      currentUser.role === "hr" ||
       isSupervisor ||
       canViewUsers(currentUser.role);
 

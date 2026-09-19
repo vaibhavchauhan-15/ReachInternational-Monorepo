@@ -227,19 +227,31 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     setLogToDelete(log);
   }, []);
 
-  // Manager and above have full row-level edit and delete access across all tabs
+  // Manager and above have full edit access; operators can edit own logs within 7 days
   const canEditLog = useCallback(
-    (_log: MachineHourLog) => {
+    (log: MachineHourLog) => {
       const role = (user?.role || userRole || "").toLowerCase();
-      return isManagerOrAbove(role);
+      if (isManagerOrAbove(role)) return true;
+      if (role === "operator" && log.operator_id === user?.id && log.log_date) {
+        const parts = log.log_date.split("T")[0].split("-").map(Number);
+        const now = new Date();
+        const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+          const logDateMidnight = new Date(parts[0], parts[1] - 1, parts[2]).getTime();
+          const diffDays = Math.floor((todayMidnight - logDateMidnight) / (1000 * 60 * 60 * 24));
+          return diffDays <= 7 && diffDays >= 0;
+        }
+      }
+      return false;
     },
-    [user?.role, userRole]
+    [user?.role, userRole, user?.id]
   );
 
+  // Strictly Super Admin only can delete any machine/operator hour log
   const canDeleteLog = useCallback(
     (_log: MachineHourLog) => {
       const role = (user?.role || userRole || "").toLowerCase();
-      return isManagerOrAbove(role);
+      return role === "super_admin";
     },
     [user?.role, userRole]
   );

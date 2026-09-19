@@ -71,7 +71,7 @@ export default async function AccountDeletionPage() {
           <div className="flex items-center gap-3">
             {isLoggedIn ? (
               <Link
-                href={currentUser?.role === "operator" ? "/operations?tab=entry" : "/machines"}
+                href="/dashboard"
                 className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-[#0070f3] hover:bg-[#0060df] text-white !text-white font-semibold text-xs shadow-xs transition-colors cursor-pointer"
               >
                 <span className="text-white !text-white font-semibold text-xs leading-none">

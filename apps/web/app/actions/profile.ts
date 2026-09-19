@@ -69,8 +69,8 @@ function canApproveProfileChange(approverRole: UserRole, requesterRole: UserRole
   if (approverRole === "admin") {
     return requesterRole !== "super_admin" && requesterRole !== "admin";
   }
-  if (["manager", "service_manager", "hr_manager", "store_manager"].includes(approverRole)) {
-    return !["super_admin", "admin", "manager", "service_manager", "hr_manager", "store_manager"].includes(requesterRole);
+  if (["manager", "hr"].includes(approverRole)) {
+    return !["super_admin", "admin", "manager", "hr"].includes(requesterRole);
   }
   return false;
 }
@@ -80,7 +80,7 @@ function canApproveProfileChange(approverRole: UserRole, requesterRole: UserRole
  */
 function getTargetApproverRole(requesterRole: UserRole): string {
   if (requesterRole === "admin") return "super_admin";
-  if (["manager", "service_manager", "hr_manager", "store_manager"].includes(requesterRole)) return "admin";
+  if (["manager", "hr"].includes(requesterRole)) return "admin";
   return "manager";
 }
 

@@ -34,10 +34,7 @@ export default async function Home() {
   const user = await getCurrentUserOrNull();
 
   if (user && user.status === "active") {
-    if (user.role === "operator") {
-      redirect("/operations?tab=entry");
-    }
-    redirect("/machines");
+    redirect("/dashboard");
   }
 
   redirect("/login");

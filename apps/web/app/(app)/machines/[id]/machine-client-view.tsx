@@ -611,7 +611,7 @@ export function MachineClientView({
             items={[
               { id: "overview", label: "Basic Info" },
               { id: "running_hours", label: "HMR" },
-              { id: "audit_trail", label: "Audit" },
+              ...(userRole !== "operator" ? [{ id: "audit_trail" as const, label: "Audit" }] : []),
             ]}
             value={activeTab}
             onChange={setActiveTab}
@@ -860,11 +860,11 @@ export function MachineClientView({
                 {/* City & State */}
                 <InfoCell label="City & State" value={clientLocation || "—"} />
                 {/* GSTIN */}
-                {clientGstin && (
+                {clientGstin && userRole !== "operator" && (
                   <CopyableInfoCell label="GSTIN" value={clientGstin} mono copied={copiedGstin} onCopy={() => handleCopy(clientGstin, setCopiedGstin, "GSTIN")} />
                 )}
                 {/* PAN */}
-                {clientPan && (
+                {clientPan && userRole !== "operator" && (
                   <CopyableInfoCell label="PAN Number" value={clientPan} mono copied={copiedPan} onCopy={() => handleCopy(clientPan, setCopiedPan, "PAN")} />
                 )}
               </div>
@@ -873,12 +873,12 @@ export function MachineClientView({
               <CopyableInfoCell label="SITE LOCATION" value={fullSiteAddress || "—"} full copied={copiedAddress} onCopy={() => handleCopy(fullSiteAddress, setCopiedAddress, "Address")} />
 
               {/* Billing Address */}
-              {isBillingAddressDifferent && (billingAddress || billingCity) && (
+              {isBillingAddressDifferent && (billingAddress || billingCity) && userRole !== "operator" && (
                 <CopyableInfoCell label="Billing Address" value={fullBillingAddress || "—"} full copied={copiedBillingAddress} onCopy={() => handleCopy(fullBillingAddress, setCopiedBillingAddress, "Billing Address")} />
               )}
 
               {/* Rental Contract */}
-              {activeRental && (
+              {activeRental && userRole !== "operator" && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                   <div>
                     <span className="text-[10px] text-[var(--color-mute)] font-bold uppercase block mb-0.5">Rental Start</span>

@@ -85,6 +85,13 @@ export function MobileMachineCard({
       exit={{ opacity: 0, scale: 0.96 }}
       whileTap={{ scale: 0.99 }}
       transition={{ duration: 0.2, type: "spring", stiffness: 350, damping: 25 }}
+      onClick={() => {
+        if (onViewDetails) {
+          onViewDetails(machine);
+        } else {
+          router.push(`/machines/${machine.id}`);
+        }
+      }}
       className={`p-3.5 sm:p-4 rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs hover:border-[var(--color-ink)]/30 hover:shadow-md transition-all flex flex-col gap-3 relative overflow-hidden group cursor-pointer ${getAccentBorder()}`}
     >
       {/* Top Hairline Sheen on Hover */}
@@ -301,24 +308,26 @@ export function MobileMachineCard({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2">
-          <MachineRowActionsMenu
-            machine={machine}
-            canEdit={isAdmin}
-            isSupervisor={isSupervisor}
-            isAdmin={isAdmin}
-            onEditMachine={onEditMachine}
-            onEditPersonnel={onEditPersonnel}
-            onEditClient={onEditClient}
-            onViewAudit={onViewAudit}
-            onViewLogs={onViewLogs}
-            onDelete={onDelete}
-            onEdit={onEdit}
-            onViewAssignments={onViewAssignments}
-            onViewHistory={onViewHistory}
-            onViewDetails={onViewDetails}
-            align="left"
-            triggerClassName="h-8 w-8 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center justify-center cursor-pointer shadow-2xs"
-          />
+          {(isAdmin || isSupervisor) && (
+            <MachineRowActionsMenu
+              machine={machine}
+              canEdit={isAdmin}
+              isSupervisor={isSupervisor}
+              isAdmin={isAdmin}
+              onEditMachine={onEditMachine}
+              onEditPersonnel={onEditPersonnel}
+              onEditClient={onEditClient}
+              onViewAudit={onViewAudit}
+              onViewLogs={onViewLogs}
+              onDelete={onDelete}
+              onEdit={onEdit}
+              onViewAssignments={onViewAssignments}
+              onViewHistory={onViewHistory}
+              onViewDetails={onViewDetails}
+              align="left"
+              triggerClassName="h-8 w-8 rounded-md text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] active:scale-95 transition-all text-xs font-semibold flex items-center justify-center cursor-pointer shadow-2xs"
+            />
+          )}
 
           {/* Logs Button (Replacing previous Edit button per user feedback) */}
           <button

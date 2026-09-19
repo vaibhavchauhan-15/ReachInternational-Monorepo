@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { getCurrentUser, requirePermission } from "@/lib/dal";
+import { requirePermission, requireRole } from "@/lib/dal";
 import {
   getAuditLogsFiltered,
   mapCategoryToAuditTab,
@@ -30,12 +29,8 @@ interface AuditPageProps {
 }
 
 export default async function AuditPage({ searchParams }: AuditPageProps) {
+  const user = await requireRole("admin", "manager");
   await requirePermission("audit.view");
-  const user = await getCurrentUser();
-
-  if (!user) {
-    redirect("/login");
-  }
 
   const params: AuditSearchParams = searchParams ? await searchParams : {};
 

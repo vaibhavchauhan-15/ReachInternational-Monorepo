@@ -46,8 +46,8 @@ const ROLE_OPTIONS = [
   { value: "super_admin", label: "Super Admin" },
   { value: "admin", label: "Admin" },
   { value: "manager", label: "Manager" },
-  { value: "service_manager", label: "Service Manager" },
   { value: "supervisor", label: "Supervisor" },
+  { value: "hr", label: "HR" },
   { value: "operator", label: "Operator" },
   { value: "system", label: "System / Automated" },
 ];

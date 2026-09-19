@@ -1,8 +1,9 @@
 import { Suspense } from "react";
-import { getCurrentUser, protectOperatorRoute } from "@/lib/dal";
+import { getCurrentUser } from "@/lib/dal";
 import {
   getMachineList,
   getMachineKPIs,
+  getOperatorAssignedMachine,
 } from "@/lib/data/machines";
 import { MachineListClient } from "@/components/machines/MachineListClient";
 import { MachinesSkeleton } from "@/components/ui";
@@ -23,7 +24,6 @@ interface MachinesPageProps {
 async function MachinesContent({ searchParams }: MachinesPageProps) {
   const user = await getCurrentUser();
   if (!user) return null;
-  protectOperatorRoute(user.role);
 
   const resolvedParams = await searchParams;
   const page = parseInt(resolvedParams.page || "1", 10);
@@ -72,17 +72,32 @@ async function MachinesContent({ searchParams }: MachinesPageProps) {
     }),
     getMachineKPIs({
       supervisorId: supervisor !== "all" ? supervisor : undefined,
+      operatorId: user.role === "operator" ? user.id : undefined,
       clientId: client_id !== "all" ? client_id : undefined,
     }),
   ]);
 
+  let finalMachines = machineData.machines;
+  let finalTotal = machineData.total;
+  let finalTotalPages = machineData.totalPages;
+
+  // Fallback for operator if list query returned empty but direct or shift assignment exists
+  if (user.role === "operator" && finalMachines.length === 0 && !search && status === "all" && health_status === "all") {
+    const assignedMachine = await getOperatorAssignedMachine(user.id);
+    if (assignedMachine) {
+      finalMachines = [assignedMachine];
+      finalTotal = 1;
+      finalTotalPages = 1;
+    }
+  }
+
   return (
     <MachineListClient
-      machines={machineData.machines}
-      total={machineData.total}
+      machines={finalMachines}
+      total={finalTotal}
       page={machineData.page}
       pageSize={machineData.pageSize}
-      totalPages={machineData.totalPages}
+      totalPages={finalTotalPages}
       userRole={user.role}
       currentSearch={search}
       currentStatus={status}

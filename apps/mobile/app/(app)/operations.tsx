@@ -26,7 +26,8 @@ import {
   OperationLogListSkeleton,
 } from '../../components/operations/OperationsSkeleton';
 import { supabase } from '../../lib/supabase';
-import { useOperationsMasterData, useOperationsLogs } from '../../lib/hooks/useOperationsData';
+import { useOperationsMasterData, useOperationsLogs, useOperatorEntryContext } from '../../lib/hooks/useOperationsData';
+import { MobileOperatorEntryCard } from '../../components/operations/MobileOperatorEntryCard';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
@@ -200,6 +201,7 @@ export default function OperationsScreen() {
   const { role, user, userProfile } = useAuth();
 
   const isOperator = (role || '').toLowerCase() === 'operator';
+  const { data: entryContext, isLoading: isEntryLoading } = useOperatorEntryContext(isOperator ? user?.id : undefined);
   const params = useLocalSearchParams<{ tab?: string }>();
 
   const [activeTab, setActiveTab] = useState<OpsTab>(() => {
@@ -368,7 +370,32 @@ export default function OperationsScreen() {
     await Promise.all([refetchMaster(), refetchLogs()]);
   }, [refetchMaster, refetchLogs]);
 
-  const canManageLogs = isManagerOrAbove((role || '').toLowerCase());
+  const userRoleLower = (role || '').toLowerCase();
+  const isSuperAdmin = userRoleLower === 'super_admin';
+  const isManagerTier = isManagerOrAbove(userRoleLower);
+
+  const canEditLogRecord = useCallback(
+    (log: HourLogRecord) => {
+      if (isManagerTier) return true;
+      if (userRoleLower === 'operator' && (log.operator_id === user?.id || !log.operator_id)) {
+        if (log.log_date) {
+          const parts = log.log_date.split('T')[0].split('-').map(Number);
+          const now = new Date();
+          const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+          if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+            const logDateMidnight = new Date(parts[0], parts[1] - 1, parts[2]).getTime();
+            const diffDays = Math.floor((todayMidnight - logDateMidnight) / (1000 * 60 * 60 * 24));
+            return diffDays <= 7 && diffDays >= 0;
+          }
+        }
+        return true;
+      }
+      return false;
+    },
+    [isManagerTier, userRoleLower, user?.id]
+  );
+
+  const canDeleteLogRecord = isSuperAdmin;
   const [editingLogRecord, setEditingLogRecord] = useState<HourLogRecord | null>(null);
 
   const handleEditLog = useCallback((log: HourLogRecord) => {
@@ -376,8 +403,8 @@ export default function OperationsScreen() {
   }, []);
 
   const handleDeleteLog = useCallback((log: HourLogRecord) => {
-    if (!canManageLogs) {
-      Alert.alert('Permission Denied', 'Only administrators are authorized to delete daily running hour logs.');
+    if (!isSuperAdmin) {
+      Alert.alert('Permission Denied', 'Only Super Admin is authorized to delete daily running hour logs.');
       return;
     }
     Alert.alert(
@@ -938,8 +965,24 @@ export default function OperationsScreen() {
       </View>
       )}
 
-      {/* 2. TAB 1: DAILY RUNNING HOURS FEED */}
-      {activeTab === 'logs' && (
+      {/* 2. TAB: OPERATOR LOG ENTRY */}
+      {isOperator && activeTab === 'entry' && (
+        <ScrollView
+          style={styles.contentScroll}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
+        >
+          <MobileOperatorEntryCard
+            entryContext={entryContext}
+            isLoading={isEntryLoading}
+            onSuccess={handleDataRefresh}
+          />
+        </ScrollView>
+      )}
+
+      {/* 3. TAB: DAILY RUNNING HOURS FEED / OPERATOR LOG HISTORY */}
+      {((!isOperator && activeTab === 'logs') || (isOperator && activeTab === 'history')) && (
         <ScrollView
           style={styles.contentScroll}
           contentContainerStyle={styles.contentContainer}
@@ -1910,55 +1953,44 @@ export default function OperationsScreen() {
                       <Text style={[styles.logIdMono, { color: theme.colors.mute, fontSize: 10, fontFamily: 'monospace' }]}>
                         {log.created_at ? formatCompactExactTimestamp(log.created_at) : ''}
                       </Text>
-                      {canManageLogs && (
+                      {(canEditLogRecord(log) || canDeleteLogRecord) && (
                         <View style={styles.logCardActionButtons}>
-                          <TouchableOpacity
-                            onPress={() => handleEditLog(log)}
-                            style={[
-                              styles.logActionTouchBtn,
-                              {
-                                backgroundColor: isDark ? '#1e293b' : '#f0f9ff',
-                                borderColor: isDark ? '#38bdf840' : '#bae6fd',
-                              },
-                            ]}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            accessibilityLabel={`Edit log for ${log.machine_code}`}
-                          >
-                            <Edit2 size={13} color={isDark ? '#38bdf8' : '#0284c7'} />
-                            <Text
-                              style={{
-                                fontSize: 11,
-                                fontWeight: '700',
-                                color: isDark ? '#38bdf8' : '#0284c7',
-                              }}
+                          {canEditLogRecord(log) && (
+                            <TouchableOpacity
+                              onPress={() => handleEditLog(log)}
+                              style={{ padding: 6, borderRadius: 6 }}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              accessibilityLabel={`Edit log for ${log.machine_code}`}
                             >
-                              Edit
-                            </Text>
-                          </TouchableOpacity>
+                              <Edit2 size={15} color={isDark ? '#38bdf8' : '#0284c7'} />
+                            </TouchableOpacity>
+                          )}
 
-                          <TouchableOpacity
-                            onPress={() => handleDeleteLog(log)}
-                            style={[
-                              styles.logActionTouchBtn,
-                              {
-                                backgroundColor: isDark ? '#3f1d24' : '#fff1f2',
-                                borderColor: isDark ? '#fb718540' : '#fecdd3',
-                              },
-                            ]}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                            accessibilityLabel={`Delete log for ${log.machine_code}`}
-                          >
-                            <Trash2 size={13} color={isDark ? '#fb7185' : '#e11d48'} />
-                            <Text
-                              style={{
-                                fontSize: 11,
-                                fontWeight: '700',
-                                color: isDark ? '#fb7185' : '#e11d48',
-                              }}
+                          {canDeleteLogRecord && (
+                            <TouchableOpacity
+                              onPress={() => handleDeleteLog(log)}
+                              style={[
+                                styles.logActionTouchBtn,
+                                {
+                                  backgroundColor: isDark ? '#3f1d24' : '#fff1f2',
+                                  borderColor: isDark ? '#fb718540' : '#fecdd3',
+                                },
+                              ]}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              accessibilityLabel={`Delete log for ${log.machine_code}`}
                             >
-                              Delete
-                            </Text>
-                          </TouchableOpacity>
+                              <Trash2 size={13} color={isDark ? '#fb7185' : '#e11d48'} />
+                              <Text
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: '700',
+                                  color: isDark ? '#fb7185' : '#e11d48',
+                                }}
+                              >
+                                Delete
+                              </Text>
+                            </TouchableOpacity>
+                          )}
                         </View>
                       )}
                     </View>

@@ -89,6 +89,15 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
     return [
       // NAVIGATION ITEMS (All Monorepo Domain Pages)
       {
+        id: 'nav-dashboard',
+        title: 'Fleet Operations Dashboard',
+        subtitle: 'Executive overview, fleet utilization KPIs & recent activities',
+        category: 'Navigation',
+        icon: LayoutDashboard,
+        href: '/(app)/dashboard',
+        keywords: ['dashboard', 'kpi', 'metrics', 'overview', 'analytics', 'home'],
+      },
+      {
         id: 'nav-machines',
         title: 'Machines Directory',
         subtitle: 'Fleet inventory, specs, HMR running hours & status tracking',
@@ -96,7 +105,17 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         icon: Wrench,
         href: '/(app)/machines',
         keywords: ['equipment', 'devices', 'inventory', 'assets', 'fleet', 'scissor lift'],
-        roles: ['super_admin', 'admin', 'manager', 'service_manager', 'supervisor', 'operator', 'mechanic', 'engineer', 'service_engineer'],
+        roles: ['super_admin', 'admin', 'manager', 'supervisor'],
+      },
+      {
+        id: 'nav-machines-operator',
+        title: 'My Assigned Machine',
+        subtitle: 'View specifications and worksite details for your assigned machine',
+        category: 'Navigation',
+        icon: Wrench,
+        href: '/(app)/machines',
+        keywords: ['equipment', 'machine', 'assigned machine', 'specs', 'details'],
+        roles: ['operator'],
       },
       {
         id: 'nav-operations',
@@ -106,7 +125,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         icon: Gauge,
         href: '/(app)/operations',
         keywords: ['hours', 'duty', 'meter', 'shifts', 'assignments', 'logs', 'hmr'],
-        roles: ['super_admin', 'admin', 'manager', 'service_manager', 'supervisor', 'operator'],
+        roles: ['super_admin', 'admin', 'manager', 'supervisor', 'operator'],
       },
       {
         id: 'nav-operations-running-hours',
@@ -116,7 +135,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         icon: Clock,
         href: '/(app)/operations?tab=logs',
         keywords: ['running hours', 'meter log', 'log history', 'daily log'],
-        roles: ['super_admin', 'admin', 'manager', 'supervisor', 'service_manager', 'operator'],
+        roles: ['super_admin', 'admin', 'manager', 'supervisor', 'operator'],
       },
       {
         id: 'nav-clients',
@@ -126,7 +145,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         icon: Building2,
         href: '/(app)/clients',
         keywords: ['clients', 'customers', 'accounts', 'sites', 'locations'],
-        roles: ['super_admin', 'admin', 'manager', 'service_manager'],
+        roles: ['super_admin', 'admin', 'manager'],
       },
       {
         id: 'nav-users',
@@ -135,26 +154,8 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         category: 'Navigation',
         icon: Users,
         href: '/(app)/users',
-        keywords: ['users', 'employees', 'staff', 'operators', 'supervisors', 'mechanics', 'kyc', 'aadhaar'],
-        roles: ['super_admin', 'admin', 'manager', 'service_manager', 'hr_manager'],
-      },
-      {
-        id: 'nav-dashboard',
-        title: 'Fleet Operations Dashboard',
-        subtitle: 'Executive overview, fleet utilization KPIs & recent activities',
-        category: 'Navigation',
-        icon: LayoutDashboard,
-        href: '/(app)/dashboard',
-        keywords: ['dashboard', 'kpi', 'metrics', 'overview', 'analytics'],
-      },
-      {
-        id: 'nav-my-work',
-        title: 'My Work & Assigned Tasks',
-        subtitle: 'Personal shift schedule, logged hours & assigned work orders',
-        category: 'Navigation',
-        icon: ClipboardList,
-        href: '/(app)/my-work',
-        keywords: ['my work', 'my tasks', 'my shifts', 'assigned'],
+        keywords: ['users', 'employees', 'staff', 'operators', 'supervisors', 'hr', 'kyc', 'aadhaar'],
+        roles: ['super_admin', 'admin', 'manager', 'hr', 'supervisor'],
       },
       {
         id: 'nav-profile',
@@ -184,7 +185,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         icon: Wrench,
         href: '/(app)/machines',
         keywords: ['add machine', 'create machine', 'new equipment'],
-        roles: ['super_admin', 'admin', 'service_manager', 'manager'],
+        roles: ['super_admin', 'admin', 'manager'],
       },
       {
         id: 'action-assign-operator',
@@ -194,7 +195,7 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         icon: ClipboardList,
         href: '/(app)/operations?tab=assignments',
         keywords: ['assign operator', 'assign machine', 'new assignment'],
-        roles: ['super_admin', 'admin', 'service_manager', 'manager', 'supervisor'],
+        roles: ['super_admin', 'admin', 'manager', 'supervisor'],
       },
 
       // SYSTEM & PREFERENCES

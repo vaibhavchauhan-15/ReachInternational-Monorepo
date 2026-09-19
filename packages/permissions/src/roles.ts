@@ -4,14 +4,9 @@ export const CANONICAL_ROLES: UserRole[] = [
   "super_admin",
   "admin",
   "manager",
-  "service_manager",
-  "engineer",
-  "service_engineer",
   "supervisor",
-  "store_manager",
+  "hr",
   "operator",
-  "mechanic",
-  "hr_manager",
 ];
 
 export interface RoleMetadata {
@@ -40,35 +35,17 @@ export const ROLE_METADATA: Record<UserRole, RoleMetadata> = {
     description: "Operations, fleet, client contracts, and business management.",
     category: "management",
   },
-  service_manager: {
-    code: "service_manager",
-    name: "Service Manager",
-    description: "Service scheduling, breakdown complaint management, FSR review.",
-    category: "management",
-  },
-  service_engineer: {
-    code: "service_engineer",
-    name: "Service Engineer",
-    description: "Field maintenance, service record creation, and digital FSR submit.",
-    category: "field",
-  },
-  engineer: {
-    code: "engineer",
-    name: "Field Engineer",
-    description: "Field technical service & inspection.",
-    category: "field",
-  },
   supervisor: {
     code: "supervisor",
     name: "Site Supervisor",
     description: "On-site machine log approvals and operator assignments.",
     category: "field",
   },
-  store_manager: {
-    code: "store_manager",
-    name: "Store Manager",
-    description: "Inventory stock control, goods receipts, part issues, and POs.",
-    category: "operations",
+  hr: {
+    code: "hr",
+    name: "HR",
+    description: "Human resources, employee onboarding, documents, and directory management.",
+    category: "hr",
   },
   operator: {
     code: "operator",
@@ -76,46 +53,26 @@ export const ROLE_METADATA: Record<UserRole, RoleMetadata> = {
     description: "Daily hour meter logging and breakdown complaint reporting.",
     category: "field",
   },
-  mechanic: {
-    code: "mechanic",
-    name: "Workshop Mechanic",
-    description: "Machine maintenance, parts requests, and repair logs.",
-    category: "field",
-  },
-  hr_manager: {
-    code: "hr_manager",
-    name: "HR Manager",
-    description: "Employee onboarding, salary management, and document tracking.",
-    category: "hr",
-  },
 };
 
 /**
- * Checks whether a given role is Manager tier or above (super_admin, admin, manager, service_manager).
+ * Checks whether a given role is Manager tier or above (super_admin, admin, manager).
  */
 export function isManagerOrAbove(role?: string | null): boolean {
   if (!role) return false;
   return (
     role === "super_admin" ||
     role === "admin" ||
-    role === "manager" ||
-    role === "service_manager"
+    role === "manager"
   );
 }
 
 /**
  * Checks whether a given role requires a supervisor to be selected/assigned:
  * - operator
- * - service_engineer / engineer
- * - mechanic
  */
 export function isSupervisedRole(role?: string | null): boolean {
   if (!role) return false;
-  return (
-    role === "operator" ||
-    role === "service_engineer" ||
-    role === "engineer" ||
-    role === "mechanic"
-  );
+  return role === "operator";
 }
 

@@ -44,23 +44,13 @@ function formatRoleName(role: string): string {
     case 'admin':
       return 'Admin';
     case 'manager':
-    case 'branch_manager':
       return 'Manager';
-    case 'service_manager':
-      return 'Service Manager';
-    case 'service_engineer':
-    case 'engineer':
-      return 'Service Engineer';
     case 'supervisor':
       return 'Supervisor';
-    case 'store_manager':
-      return 'Store Manager';
+    case 'hr':
+      return 'HR';
     case 'operator':
       return 'Operator';
-    case 'mechanic':
-      return 'Mechanic';
-    case 'hr_manager':
-      return 'HR Manager';
     default:
       return role ? role.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'User';
   }
