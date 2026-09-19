@@ -2,6 +2,9 @@ import { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentUserOrNull } from "@/lib/dal";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata: Metadata = {
   title: "REACH INTERNATIONAL — Reaching All Heights",
   description:

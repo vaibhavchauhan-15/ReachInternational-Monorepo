@@ -36,14 +36,16 @@ export const verifySession = cache(async () => {
   try {
     const { data, error } = await supabase.auth.getUser();
     if (error) {
-      if ((error as any)?.status === 429 || (error as any)?.code === "over_request_rate_limit") {
+      const errObj = error as { status?: number; code?: string };
+      if (errObj?.status === 429 || errObj?.code === "over_request_rate_limit") {
         console.warn("[DAL] Supabase auth rate limit reached (429) in verifySession.");
       }
     } else {
       user = data?.user ?? null;
     }
-  } catch (err: any) {
-    if (err?.status === 429 || err?.code === "over_request_rate_limit" || err?.name === "AuthApiError") {
+  } catch (err: unknown) {
+    const errObj = err as { status?: number; code?: string; name?: string };
+    if (errObj?.status === 429 || errObj?.code === "over_request_rate_limit" || errObj?.name === "AuthApiError") {
       console.warn("[DAL] Supabase auth rate limit exception (429) caught in verifySession.");
     } else {
       console.error("[DAL] Unexpected error in verifySession:", err);
@@ -97,7 +99,7 @@ export function protectOperatorRoute(role?: string) {
   }
 }
 
-export function protectDisabledRoute(_role?: string) {
+export function protectDisabledRoute() {
   redirect("/dashboard");
 }
 
@@ -173,6 +175,28 @@ export const getUserBranchIds = cache(async (): Promise<string[] | null> => {
 });
 
 export const getCurrentUserOrNull = cache(async (): Promise<User | null> => {
+  // 1. Fast-path: Check cryptographically signed edge-verified user headers from proxy.ts
+  // Eliminates duplicate outbound network roundtrips to Supabase Auth on initial page loads.
+  try {
+    const headersList = await headers();
+    const edgeUserId = headersList.get("x-internal-user-id");
+    const edgeUserEmail = headersList.get("x-internal-user-email") || "";
+    const edgeUserSig = headersList.get("x-internal-user-sig");
+
+    if (edgeUserId && edgeUserSig) {
+      const isValid = await verifyInternalUser(edgeUserId, edgeUserEmail, edgeUserSig);
+      if (isValid) {
+        const data = await getCachedUserRow(edgeUserId);
+        if (data) {
+          return { ...data, email: edgeUserEmail || data.email || "" } as User;
+        }
+      }
+    }
+  } catch {
+    // Fall through to direct Supabase auth verification if headers() is unavailable
+  }
+
+  // 2. Direct Supabase auth verification fallback
   const supabase = await createSupabaseServerClient();
   let user = null;
   try {
@@ -180,8 +204,9 @@ export const getCurrentUserOrNull = cache(async (): Promise<User | null> => {
     if (!error) {
       user = data?.user ?? null;
     }
-  } catch (err: any) {
-    if (err?.status === 429 || err?.code === "over_request_rate_limit" || err?.name === "AuthApiError") {
+  } catch (err: unknown) {
+    const errObj = err as { status?: number; code?: string; name?: string };
+    if (errObj?.status === 429 || errObj?.code === "over_request_rate_limit" || errObj?.name === "AuthApiError") {
       console.warn("[DAL] Supabase auth rate limit caught in getCurrentUserOrNull.");
     }
   }

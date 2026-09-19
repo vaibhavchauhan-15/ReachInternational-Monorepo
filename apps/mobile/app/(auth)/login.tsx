@@ -24,16 +24,29 @@ import { Mail, Lock, Check, Moon, Sun } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { Input, Alert, useTheme } from '../../components/ui';
 import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
+import { useAuth } from '../../lib/auth/useAuth';
 
 export default function LoginScreen() {
   const router = useRouter();
   const { theme, isDark, setMode } = useTheme();
+  const { session, isLoading: authLoading, isProfileComplete } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const isSubmittingRef = useRef(false);
+
+  // Redirect authenticated user away from login to dashboard or onboarding
+  React.useEffect(() => {
+    if (!authLoading && session) {
+      if (!isProfileComplete) {
+        router.replace('/(auth)/onboarding');
+      } else {
+        router.replace('/(app)/dashboard');
+      }
+    }
+  }, [authLoading, session, isProfileComplete, router]);
 
   const [errorMessage, setErrorMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});

@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/dal";
 import {
   getUserList,
@@ -43,12 +44,7 @@ async function UsersPageContent({ searchParams }: PageProps) {
   const readOnly = isSupervisor || !canCreateUser(currentUser.role);
 
   if (!isAuthorized) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
-        <div className="text-[var(--color-error)] text-lg font-medium">Access Denied</div>
-        <p className="text-[var(--color-mute)]">You don&rsquo;t have permission to view user management.</p>
-      </div>
-    );
+    redirect("/dashboard");
   }
 
   const params = await searchParams;

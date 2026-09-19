@@ -1,10 +1,20 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { redirect } from "next/navigation";
 import { LoginFormClient } from "./login-form";
 import { ReachInternationalLogo } from "@/components/ui";
+import { getCurrentUserOrNull } from "@/lib/dal";
 
-export default function LoginPage() {
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export default async function LoginPage() {
+  const user = await getCurrentUserOrNull();
+  if (user && user.status === "active") {
+    redirect("/dashboard");
+  }
+
   return (
     <div className="min-h-screen min-h-[100dvh] w-full flex flex-col lg:flex-row bg-[var(--color-canvas)] text-[var(--color-ink)] lg:h-screen lg:max-h-screen lg:overflow-hidden select-none">
       {/* ============================================================

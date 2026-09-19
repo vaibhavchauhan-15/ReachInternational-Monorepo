@@ -47,12 +47,14 @@ export default function AppLayout() {
     <View style={styles.container}>
       <OfflineBanner />
       <Tabs
+        initialRouteName="dashboard"
         tabBar={() => <MobileBottomNav />}
         screenOptions={{
           headerShown: false,
         }}
       >
         {/* Primary Monorepo Modules Accessible via Bottom Nav */}
+        <Tabs.Screen name="dashboard" options={{ title: 'Dashboard' }} />
         <Tabs.Screen name="machines" options={{ title: 'Machines' }} />
         <Tabs.Screen name="operations" options={{ title: 'Operations' }} />
         <Tabs.Screen name="users" options={{ title: 'Users' }} />
@@ -61,7 +63,6 @@ export default function AppLayout() {
         {/* Operational Modules Accessible via Settings & Command Palette */}
         <Tabs.Screen name="profile" options={{ title: 'Profile', href: null }} />
         <Tabs.Screen name="clients" options={{ title: 'Clients', href: null }} />
-        <Tabs.Screen name="dashboard" options={{ title: 'Dashboard', href: null }} />
         <Tabs.Screen name="privacy" options={{ title: 'Privacy Policy', href: null }} />
         <Tabs.Screen name="terms" options={{ title: 'Terms of Service', href: null }} />
         <Tabs.Screen name="account-deletion" options={{ title: 'Account Deletion', href: null }} />

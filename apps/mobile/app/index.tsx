@@ -9,7 +9,7 @@ import { AppWebView } from "../shell/AppWebView";
 const SHELL_MODE = process.env.EXPO_PUBLIC_SHELL_MODE || "native";
 
 function NativeGatewayScreen() {
-  const { isLoading, session, role } = useAuth();
+  const { isLoading, session, role, isProfileComplete } = useAuth();
   const { theme, isDark } = useTheme();
   const router = useRouter();
 
@@ -54,12 +54,16 @@ function NativeGatewayScreen() {
   useEffect(() => {
     if (!isLoading) {
       if (session) {
-        router.replace("/(app)/dashboard");
+        if (!isProfileComplete) {
+          router.replace("/(auth)/onboarding");
+        } else {
+          router.replace("/(app)/dashboard");
+        }
       } else {
         router.replace("/(auth)/login");
       }
     }
-  }, [isLoading, session, role, router]);
+  }, [isLoading, session, isProfileComplete, role, router]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>

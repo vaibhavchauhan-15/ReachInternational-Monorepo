@@ -8,9 +8,8 @@ interface DashboardLogsPageProps {
 
 export default async function DashboardLogsPage({ searchParams }: DashboardLogsPageProps) {
   const params = await searchParams;
-  const queryString = new URLSearchParams(
-    Object.entries(params).filter(([, v]) => v !== undefined) as [string, string][]
-  ).toString();
+  const searchEntries = Object.entries(params).filter(([k, v]) => v !== undefined && k !== "tab") as [string, string][];
+  const queryStr = new URLSearchParams(searchEntries).toString();
 
-  redirect(queryString ? `/audit-logs?${queryString}` : "/audit-logs");
+  redirect(`/operations?tab=logs${queryStr ? `&${queryStr}` : ""}`);
 }

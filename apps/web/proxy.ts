@@ -167,9 +167,18 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  // Helper to preserve response cookies (session tokens refreshed by Supabase Auth) on redirects
+  const createRedirectResponse = (targetPath: string) => {
+    const redirectRes = NextResponse.redirect(new URL(targetPath, request.nextUrl));
+    response.cookies.getAll().forEach((c) => {
+      redirectRes.cookies.set(c.name, c.value, c);
+    });
+    return redirectRes;
+  };
+
   // Redirect unauthenticated user accessing protected or deprecated route to /login
   if (isProtectedRoute && !authenticatedUser) {
-    return NextResponse.redirect(new URL("/login", request.nextUrl));
+    return createRedirectResponse("/login");
   }
 
   // Check if request to public route carries an error/message parameter
@@ -184,12 +193,12 @@ export async function proxy(request: NextRequest) {
   // Public legal routes (/privacy, /terms, /account-deletion) remain accessible to both authenticated and guest users.
   const isAuthRoute = authRoutes.some((route) => path.startsWith(route));
   if (isAuthRoute && authenticatedUser && !hasAuthErrorParam) {
-    return NextResponse.redirect(new URL("/dashboard", request.nextUrl));
+    return createRedirectResponse("/dashboard");
   }
 
   // Redirect authenticated user visiting deprecated routes or root '/' to /dashboard
   if ((isDeprecatedRoute || path === "/") && authenticatedUser) {
-    return NextResponse.redirect(new URL("/dashboard", request.nextUrl));
+    return createRedirectResponse("/dashboard");
   }
 
   return response;
