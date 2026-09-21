@@ -85,12 +85,6 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   const [supervisorModalVisible, setSupervisorModalVisible] = useState(false);
   const [supervisorSearch, setSupervisorSearch] = useState('');
 
-  // Working Location State
-  const [workingLocations, setWorkingLocations] = useState<Array<{ id: string; name: string; type: string; city?: string }>>([]);
-  const [workingLocationId, setWorkingLocationId] = useState('');
-  const [workingLocationModalVisible, setWorkingLocationModalVisible] = useState(false);
-  const [workingLocationSearch, setWorkingLocationSearch] = useState('');
-
   React.useEffect(() => {
     async function loadSupervisors() {
       try {
@@ -103,26 +97,13 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
       }
     }
 
-    async function loadWorkingLocations() {
-      try {
-        const { data, error } = await supabase.rpc('get_active_working_locations_public');
-        if (!error && data) {
-          setWorkingLocations(data as Array<{ id: string; name: string; type: string; city?: string }>);
-        }
-      } catch (err) {
-        console.warn('Note: failed to load active working locations for CreateUserModal:', err);
-      }
-    }
-
     loadSupervisors();
-    loadWorkingLocations();
   }, []);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
   const selectedSupervisor = supervisors.find((s) => s.id === supervisorId);
-  const selectedWorkingLocation = workingLocations.find((l) => l.id === workingLocationId);
 
   const availableRoles = isSuperAdmin
     ? USER_ROLES
@@ -185,7 +166,6 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
             role,
             supervisor_id: isSupervisedRole(role) ? supervisorId || null : null,
             supervisor_ids: isSupervisedRole(role) && supervisorId ? [supervisorId] : [],
-            working_location_id: workingLocationId || null,
             shift_time: shiftTime.trim() || null,
             address: address.trim() || null,
             city: city.trim(),
@@ -212,7 +192,6 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
               role,
               supervisor_id: isSupervisedRole(role) ? supervisorId || null : null,
               supervisor_ids: isSupervisedRole(role) && supervisorId ? [supervisorId] : [],
-              working_location_id: workingLocationId || null,
               shift_time: shiftTime.trim() || null,
               address: address.trim() || null,
               city: city.trim(),
@@ -344,24 +323,6 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
                 </TouchableOpacity>
               </View>
             )}
-
-            {/* Working Location Trigger for All Roles */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Working Location / Base</Text>
-              <TouchableOpacity
-                onPress={() => setWorkingLocationModalVisible(true)}
-                activeOpacity={0.8}
-                style={[
-                  styles.roleTrigger,
-                  { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
-                ]}
-              >
-                <Text style={[styles.roleTriggerText, { color: selectedWorkingLocation ? theme.colors.ink : theme.colors.mute }]}>
-                  {selectedWorkingLocation ? `${selectedWorkingLocation.name}${selectedWorkingLocation.city ? ` (${selectedWorkingLocation.city})` : ''}` : 'Select working location...'}
-                </Text>
-                <ChevronDown size={16} color={theme.colors.mute} />
-              </TouchableOpacity>
-            </View>
 
             <Input
               label="Shift Schedule"
@@ -611,76 +572,6 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
                             {s.full_name}
                           </Text>
                           {s.email ? <Text style={{ fontSize: 11, color: theme.colors.mute, marginTop: 2 }}>{s.email}</Text> : null}
-                        </View>
-                        {isSelected && <Check size={18} color={theme.colors.link} />}
-                      </TouchableOpacity>
-                    );
-                  })}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Working Location Picker Modal */}
-        <Modal visible={workingLocationModalVisible} animationType="slide" transparent onRequestClose={() => setWorkingLocationModalVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select Working Location</Text>
-                <TouchableOpacity onPress={() => setWorkingLocationModalVisible(false)} style={styles.closeBtn}>
-                  <X size={18} color={theme.colors.ink} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={{ paddingHorizontal: spacingNumeric.md, paddingVertical: spacingNumeric.xs }}>
-                <Input
-                  placeholder="Search working locations..."
-                  value={workingLocationSearch}
-                  onChangeText={setWorkingLocationSearch}
-                  leftIcon={<Search size={15} color={theme.colors.mute} />}
-                />
-              </View>
-
-              <ScrollView style={styles.roleListScroll} showsVerticalScrollIndicator={false}>
-                <TouchableOpacity
-                  onPress={() => {
-                    setWorkingLocationId('');
-                    setWorkingLocationModalVisible(false);
-                  }}
-                  style={[styles.roleItemRow, { borderBottomColor: theme.colors.hairline }]}
-                >
-                  <Text style={[styles.roleItemText, { color: theme.colors.mute }]}>None (Unassigned)</Text>
-                  {!workingLocationId && <Check size={18} color={theme.colors.link} />}
-                </TouchableOpacity>
-                {workingLocations
-                  .filter((l) => {
-                    const q = workingLocationSearch.toLowerCase().trim();
-                    if (!q) return true;
-                    return (
-                      l.name.toLowerCase().includes(q) ||
-                      (l.city && l.city.toLowerCase().includes(q))
-                    );
-                  })
-                  .map((l) => {
-                    const isSelected = workingLocationId === l.id;
-                    return (
-                      <TouchableOpacity
-                        key={l.id}
-                        onPress={() => {
-                          setWorkingLocationId(l.id);
-                          setWorkingLocationModalVisible(false);
-                        }}
-                        style={[
-                          styles.roleItemRow,
-                          { borderBottomColor: theme.colors.hairline },
-                          isSelected && { backgroundColor: theme.colors.link + '12' },
-                        ]}
-                      >
-                        <View>
-                          <Text style={[styles.roleItemText, { color: isSelected ? theme.colors.link : theme.colors.ink, fontWeight: isSelected ? '700' : '600' }]}>
-                            {l.name}
-                          </Text>
-                          {l.city ? <Text style={{ fontSize: 11, color: theme.colors.mute, marginTop: 2 }}>{l.city}</Text> : null}
                         </View>
                         {isSelected && <Check size={18} color={theme.colors.link} />}
                       </TouchableOpacity>

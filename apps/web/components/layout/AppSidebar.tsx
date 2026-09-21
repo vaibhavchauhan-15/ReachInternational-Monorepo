@@ -2,12 +2,14 @@
 
 import { useState, useMemo } from "react";
 import {
-  AnimatedDashboard,
+  AnimatedHome,
   AnimatedUsers,
   AnimatedWrench,
   AnimatedGauge,
   AnimatedBuilding2,
   AnimatedScrollText,
+  AnimatedSettings,
+  AnimatedCreditCard,
 } from "@/components/ui/animated-icons";
 import dynamic from "next/dynamic";
 import {
@@ -40,8 +42,8 @@ export type { NavItem, AppSidebarProps };
 export const mainNavItems: NavItem[] = [
   {
     href: "/dashboard",
-    label: "Dashboard",
-    icon: AnimatedDashboard,
+    label: "Home",
+    icon: AnimatedHome,
     roles: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"],
   },
   {
@@ -57,7 +59,7 @@ export const mainNavItems: NavItem[] = [
     href: "/operations",
     label: "Operations",
     icon: AnimatedGauge,
-    roles: ["super_admin", "admin", "manager", "supervisor", "operator"],
+    roles: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"],
     subItems: [
       { label: "Running Hours", tab: "logs" },
     ],
@@ -81,10 +83,25 @@ export const mainNavItems: NavItem[] = [
     ],
   },
   {
+    href: "/hr",
+    label: "HR Payroll",
+    icon: AnimatedCreditCard,
+    roles: ["super_admin", "admin", "manager", "hr"],
+    subItems: [
+      { label: "Operator Payroll", tab: "payroll" },
+    ],
+  },
+  {
     href: "/audit",
     label: "Audit Logs",
     icon: AnimatedScrollText,
     roles: ["super_admin", "admin", "manager"],
+  },
+  {
+    href: "/settings",
+    label: "Settings",
+    icon: AnimatedSettings,
+    roles: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"],
   },
 ];
 
@@ -134,6 +151,10 @@ export function AppSidebar({ user, collapsed, onToggleCollapse }: AppSidebarProp
         if (b.href === "/dashboard") return 1;
         if (a.href === "/operations") return -1;
         if (b.href === "/operations") return 1;
+        if (a.href === "/machines") return -1;
+        if (b.href === "/machines") return 1;
+        if (a.href === "/settings") return 1;
+        if (b.href === "/settings") return -1;
         return 0;
       });
     }

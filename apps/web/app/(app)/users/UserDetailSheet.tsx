@@ -395,23 +395,6 @@ export function UserDetailSheet({
                 )}
               </div>
 
-              {/* Working Location / Operating Base */}
-              <div className="flex items-center justify-between">
-                <span className="text-[var(--color-mute)] font-medium flex items-center gap-1.5">
-                  <AnimatedBuilding2 size={14} className="text-blue-500" /> Working Location / Base
-                </span>
-                <span className="font-semibold text-[var(--color-ink)] text-right">
-                  {user.working_location?.name ? (
-                    <span>
-                      {user.working_location.name}
-                      {user.working_location.city ? ` (${user.working_location.city})` : ""}
-                    </span>
-                  ) : (
-                    "—"
-                  )}
-                </span>
-              </div>
-
               {/* Aadhaar Number */}
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[var(--color-mute)] font-medium flex items-center gap-1.5">

@@ -105,7 +105,7 @@ function isRedirectError(error: unknown): boolean {
           </p>
         </div>
 
-        {state.error && Object.keys(fieldErrors).length === 0 && (
+        {state.error && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}

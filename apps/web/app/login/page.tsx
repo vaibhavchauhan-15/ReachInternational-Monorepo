@@ -9,7 +9,32 @@ import { getCurrentUserOrNull } from "@/lib/dal";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const resolvedParams = searchParams ? await searchParams : {};
+  const isRecovery =
+    resolvedParams.type === "recovery" ||
+    Boolean(resolvedParams.code) ||
+    Boolean(resolvedParams.token_hash) ||
+    Boolean(resolvedParams.reset);
+
+  if (isRecovery) {
+    const query = new URLSearchParams();
+    Object.entries(resolvedParams).forEach(([k, v]) => {
+      if (typeof v === "string") query.set(k, v);
+      else if (Array.isArray(v)) v.forEach((val) => query.append(k, val));
+    });
+    if (resolvedParams.code || resolvedParams.token_hash) {
+      if (!query.has("next")) query.set("next", "/reset-password");
+      redirect(`/api/auth/callback?${query.toString()}`);
+    } else {
+      redirect(`/reset-password?${query.toString()}`);
+    }
+  }
+
   const user = await getCurrentUserOrNull();
   if (user && user.status === "active") {
     redirect("/dashboard");

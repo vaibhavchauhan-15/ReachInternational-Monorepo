@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { AnimatedCookie } from "./animated-icons";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "./Button";
+import { updateConsent, trackEvent } from "@/lib/analytics";
 
 const CONSENT_KEY = "cookie-consent";
 const CONSENT_VALUE = "accepted";
@@ -21,11 +22,15 @@ export function CookieConsent() {
 
   const handleAccept = () => {
     localStorage.setItem(CONSENT_KEY, CONSENT_VALUE);
+    updateConsent(true);
+    trackEvent("cookie_consent_accepted");
     setShow(false);
   };
 
   const handleReject = () => {
     localStorage.setItem(CONSENT_KEY, "rejected");
+    updateConsent(false);
+    trackEvent("cookie_consent_rejected");
     setShow(false);
   };
 

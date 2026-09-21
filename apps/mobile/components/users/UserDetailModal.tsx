@@ -577,18 +577,6 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                 </Text>
               </View>
 
-              {/* Working Location / Base */}
-              <View style={styles.detailRow}>
-                <View style={styles.detailLabelWrap}>
-                  <Building2 size={13} color="#2563eb" />
-                  <Text style={[styles.detailLabel, { color: theme.colors.mute }]}>Working Location / Base</Text>
-                </View>
-                <Text style={[styles.detailValue, { color: theme.colors.ink, textAlign: 'right', flex: 1 }]}>
-                  {user.working_location?.name
-                    ? `${user.working_location.name}${user.working_location.city ? ` (${user.working_location.city})` : ''}`
-                    : '—'}
-                </Text>
-              </View>
 
               {/* Aadhaar Number */}
               <View style={styles.detailRow}>

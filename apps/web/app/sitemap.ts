@@ -1,7 +1,8 @@
 import { MetadataRoute } from "next";
+import { getAppUrl } from "@/lib/env";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://www.reachinternational.co.in";
+  const baseUrl = getAppUrl();
 
   return [
     {
@@ -29,7 +30,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.5,
     },
     {
-      url: `${baseUrl}/account-deletion`,
+      url: `${baseUrl}/account-deletion-guide`,
+      lastModified: new Date(),
+      changeFrequency: "monthly",
+      priority: 0.4,
+    },
+    {
+      url: `${baseUrl}/delete-account`,
       lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.4,

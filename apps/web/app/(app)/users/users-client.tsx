@@ -33,7 +33,7 @@ import {
   exportUsersFilteredAction,
   searchUsersServerAction,
 } from "@/app/actions/users";
-import { getSupervisorsAction, getWorkingLocationsAction } from "@/app/actions/auth";
+import { getSupervisorsAction } from "@/app/actions/auth";
 import {
   approveProfileChangeRequest,
   rejectProfileChangeRequest,
@@ -183,12 +183,10 @@ export function UsersPageClient({
 
   // Supervisor state for assignment
   const [availableSupervisors, setAvailableSupervisors] = useState<Array<{ value: string; label: string; description?: string }>>([]);
-  const [availableWorkingLocations, setAvailableWorkingLocations] = useState<Array<{ value: string; label: string; description?: string }>>([]);
 
   useEffect(() => {
     if (readOnly) return;
     getSupervisorsAction().then((res) => { if (Array.isArray(res)) setAvailableSupervisors(res); }).catch(() => {});
-    getWorkingLocationsAction().then((res) => { if (Array.isArray(res)) setAvailableWorkingLocations(res); }).catch(() => {});
   }, [readOnly]);
 
   const supervisorOptions = useMemo(() => {
@@ -276,43 +274,83 @@ export function UsersPageClient({
   }, [usersList, users]);
 
   const handleLoadMoreMobile = useCallback(async () => {
-    if (isFetchingMobileRef.current || !mobileHasMore || isLoadingMoreMobile) return;
+    const hasMoreToLoad = isSearchActive ? searchPage < searchTotalPages : mobileHasMore;
+    if (isFetchingMobileRef.current || !hasMoreToLoad || isLoadingMoreMobile) return;
     isFetchingMobileRef.current = true;
     setIsLoadingMoreMobile(true);
     setLoadMoreMobileError(null);
 
     try {
-      const nextPage = mobilePage + 1;
-      const result = await getPaginatedUsersAction({
-        search: searchParams?.get("search") || undefined,
-        role: searchParams?.get("role") || undefined,
-        status: searchParams?.get("status") || undefined,
-        kyc: searchParams?.get("kyc") || undefined,
-        state: searchParams?.get("state") || undefined,
-        dateRange: searchParams?.get("dateRange") || undefined,
-        sort: searchParams?.get("sort") || undefined,
-        page: nextPage,
-        pageSize: PAGE_SIZE,
-      });
-
-      if (result.error) {
-        setLoadMoreMobileError(result.error);
-      } else {
-        setMobileUsersList((prev) => {
-          const existingIds = new Set(prev.map((u) => u.id));
-          const newItems = (result.users || []).filter((u) => !existingIds.has(u.id));
-          return [...prev, ...newItems];
+      if (isSearchActive) {
+        const nextPage = searchPage + 1;
+        const res = await searchUsersServerAction(localSearchTerm.trim(), {
+          role: roleFilter !== "all" ? roleFilter : undefined,
+          status: statusFilter !== "all" ? statusFilter : undefined,
+          state: stateFilter !== "all" ? stateFilter : undefined,
+          kyc: kycFilter !== "all" ? kycFilter : undefined,
+          dateRange: dateRangeFilter !== "all" ? dateRangeFilter : undefined,
+          sort: sortBy !== "newest" ? sortBy : undefined,
+          page: nextPage,
+          pageSize: 50,
         });
-        setMobilePage(nextPage);
-        setMobileHasMore(nextPage < result.totalPages);
+
+        setSearchResults((prev) => {
+          const existingIds = new Set((prev || []).map((u) => u.id));
+          const newItems = (res.users || []).filter((u) => !existingIds.has(u.id));
+          return [...(prev || []), ...newItems];
+        });
+        setSearchPage(nextPage);
+        setSearchTotalPages(res.totalPages);
+        setSearchTotalCount(res.total);
+      } else {
+        const nextPage = mobilePage + 1;
+        const result = await getPaginatedUsersAction({
+          search: searchParams?.get("search") || undefined,
+          role: roleFilter !== "all" ? roleFilter : undefined,
+          status: statusFilter !== "all" ? statusFilter : undefined,
+          kyc: kycFilter !== "all" ? kycFilter : undefined,
+          state: stateFilter !== "all" ? stateFilter : undefined,
+          dateRange: dateRangeFilter !== "all" ? dateRangeFilter : undefined,
+          sort: sortBy !== "newest" ? sortBy : undefined,
+          page: nextPage,
+          pageSize: PAGE_SIZE,
+        });
+
+        if (result.error) {
+          setLoadMoreMobileError(result.error);
+        } else {
+          setMobileUsersList((prev) => {
+            const existingIds = new Set(prev.map((u) => u.id));
+            const newItems = (result.users || []).filter((u) => !existingIds.has(u.id));
+            return [...prev, ...newItems];
+          });
+          setMobilePage(nextPage);
+          setMobileHasMore(nextPage < result.totalPages);
+        }
       }
-    } catch (err: any) {
-      setLoadMoreMobileError(err?.message || "Failed to load more users.");
+    } catch (err: unknown) {
+      setLoadMoreMobileError(err instanceof Error ? err.message : "Failed to load more users.");
     } finally {
       setIsLoadingMoreMobile(false);
       isFetchingMobileRef.current = false;
     }
-  }, [mobileHasMore, isLoadingMoreMobile, mobilePage, searchParams, PAGE_SIZE]);
+  }, [
+    isSearchActive,
+    searchPage,
+    searchTotalPages,
+    mobileHasMore,
+    isLoadingMoreMobile,
+    localSearchTerm,
+    roleFilter,
+    statusFilter,
+    stateFilter,
+    kycFilter,
+    dateRangeFilter,
+    sortBy,
+    mobilePage,
+    searchParams,
+    PAGE_SIZE,
+  ]);
 
   useEffect(() => {
     const sentinel = mobileSentinelRef.current;
@@ -1331,7 +1369,7 @@ export function UsersPageClient({
         totalCount={isSearchActive ? searchTotalCount : totalCount}
         pageSize={isSearchActive ? 50 : PAGE_SIZE}
         onPageChange={handlePageChange}
-        mobileHasMore={mobileHasMore}
+        mobileHasMore={isSearchActive ? searchPage < searchTotalPages : mobileHasMore}
         isLoadingMoreMobile={isLoadingMoreMobile}
         loadMoreMobileError={loadMoreMobileError}
         onMobileRetry={handleMobileRetry}
@@ -1383,7 +1421,6 @@ export function UsersPageClient({
           loading={loading?.type === "create"}
           onSubmit={handleCreateUser}
           supervisors={supervisorOptions}
-          workingLocations={availableWorkingLocations}
         />
       )}
 
@@ -1395,7 +1432,6 @@ export function UsersPageClient({
           loading={loading?.type === "edit"}
           onSubmit={handleEditUser}
           supervisors={supervisorOptions}
-          workingLocations={availableWorkingLocations}
         />
       )}
 

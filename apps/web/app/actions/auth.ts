@@ -1,9 +1,11 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
+import { getAppUrl, getResetPasswordRedirectUrl } from "@/lib/env";
 import { validateAadhaarNumber, validateLicenseNumber, getStateById, getStateByName } from "@reachinternational/utils";
 import { isSupervisedRole } from "@reachinternational/permissions";
 
@@ -150,8 +152,9 @@ export async function forgotPassword(
     };
   }
 
+  const emailLower = email.toLowerCase();
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email.toLowerCase())) {
+  if (!emailRegex.test(emailLower)) {
     return {
       error: "Please enter a valid email address.",
       fieldErrors: { email: "Please enter a valid email address." },
@@ -159,22 +162,79 @@ export async function forgotPassword(
     };
   }
 
-  const supabase = await createSupabaseServerClient();
+  // 1. Verify if the account exists in Supabase
+  const adminSupabase = createSupabaseAdminClient();
+  const { data: existingUser, error: lookupError } = await adminSupabase
+    .from("users")
+    .select("id, email, status")
+    .ilike("email", emailLower)
+    .maybeSingle();
 
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    // SECURITY (F16): Use NEXT_PUBLIC_APP_URL for redirect, not the Supabase project URL
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || ""}/reset-password`,
+  if (lookupError) {
+    console.error("Database error looking up user in forgotPassword:", lookupError);
+  }
+
+  if (!existingUser) {
+    return {
+      error: "No account found with this email address. Please check your email or request access.",
+      fieldErrors: { email: "No account found with this email address." },
+      fieldValues: { email },
+    };
+  }
+
+  // 2. Verify that user is approved by admin (status must be 'active')
+  if (existingUser.status === "pending") {
+    return {
+      error: "Your account is pending administrator approval. You cannot reset your password until your account has been approved.",
+      fieldErrors: { email: "Account pending administrator approval." },
+      fieldValues: { email },
+    };
+  }
+
+  if (existingUser.status === "inactive") {
+    return {
+      error: "Your account has been deactivated. Please contact your administrator.",
+      fieldErrors: { email: "Account is deactivated." },
+      fieldValues: { email },
+    };
+  }
+
+  if (existingUser.status !== "active") {
+    return {
+      error: "Your account is not active. Please contact your administrator.",
+      fieldErrors: { email: "Account is not active." },
+      fieldValues: { email },
+    };
+  }
+
+  // 3. User is approved and active: send the password reset email via Supabase Auth
+  const supabase = await createSupabaseServerClient();
+  let origin: string | undefined;
+  try {
+    const headerList = await headers();
+    const host = headerList.get("x-forwarded-host") || headerList.get("host");
+    const proto = headerList.get("x-forwarded-proto") || (host?.includes("localhost") ? "http" : "https");
+    if (host) origin = `${proto}://${host}`;
+  } catch {}
+  const resetRedirectUrl = getResetPasswordRedirectUrl(origin);
+
+  const { error } = await supabase.auth.resetPasswordForEmail(existingUser.email || emailLower, {
+    // SECURITY: Use canonical redirect URL for dedicated reset-password page
+    redirectTo: resetRedirectUrl,
   });
 
   if (error) {
+    console.error("Supabase resetPasswordForEmail error:", error);
     return {
-      error: "Failed to send reset email. Please try again.",
+      error: error.message || "Failed to send reset email. Please try again.",
       fieldErrors: { email: "Failed to send reset link." },
       fieldValues: { email },
     };
   }
 
-  return { message: "Password reset link has been sent to your email." };
+  return {
+    message: "Password reset link has been sent to your email. Please check your inbox and click the link to set your new password.",
+  };
 }
 
 export async function signup(
@@ -216,7 +276,6 @@ export async function signup(
   const shiftEndTimeRaw = ((formData.get("shift_end_time") as string) || "").trim();
   const shiftTimeRaw = ((formData.get("shift_time") as string) || "").trim();
   const supervisorIdRaw = ((formData.get("supervisor_id") as string) || "").trim();
-  const workingLocationIdRaw = ((formData.get("working_location_id") as string) || "").trim();
 
   const resolvedShiftTime =
     shiftTimeRaw ||
@@ -245,7 +304,6 @@ export async function signup(
     phone,
     role,
     supervisor_id: supervisorIdRaw,
-    working_location_id: workingLocationIdRaw,
     shift_start_time: shiftStartTimeRaw,
     shift_end_time: shiftEndTimeRaw,
     shift_time: resolvedShiftTime,
@@ -490,9 +548,8 @@ export async function signup(
         aadhaar_number: cleanAadhaar,
         license_number: formattedLicense,
         supervisor_id: supervisorIdRaw || null,
-        working_location_id: workingLocationIdRaw || null,
       },
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/login`,
+      emailRedirectTo: `${getAppUrl()}/login`,
     },
   });
 
@@ -642,29 +699,8 @@ export async function getSupervisorsAction(): Promise<
 export async function getWorkingLocationsAction(): Promise<
   Array<{ value: string; label: string; description?: string }>
 > {
-  try {
-    const adminSupabase = createSupabaseAdminClient();
-    const { data, error } = await adminSupabase
-      .from("working_locations")
-      .select("id, name, type, city, state")
-      .eq("status", "active")
-      .order("name", { ascending: true })
-      .limit(200);
-
-    if (error || !data) {
-      console.error("Error fetching working locations list:", error);
-      return [];
-    }
-
-    return data.map((loc) => ({
-      value: loc.id,
-      label: loc.name,
-      description: [loc.type ? loc.type.toUpperCase() : null, loc.city, loc.state].filter(Boolean).join(" • "),
-    }));
-  } catch (err) {
-    console.error("Exception in getWorkingLocationsAction:", err);
-    return [];
-  }
+  // Working locations table is retired in favor of unified employee address and site deployment logs
+  return [];
 }
 
 /**
@@ -737,9 +773,75 @@ export async function changePasswordAction(params: {
     });
 
     return { success: true };
-  } catch (err: any) {
+  } catch (err: unknown) {
+    const error = err as { message?: string };
     console.error("Exception in changePasswordAction:", err);
-    return { success: false, error: err?.message || "An unexpected error occurred." };
+    return { success: false, error: error?.message || "An unexpected error occurred." };
   }
 }
+
+export async function resetPasswordAction(params: {
+  newPassword: string;
+  confirmPassword: string;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!params.newPassword || !params.confirmPassword) {
+      return { success: false, error: "Please enter and confirm your new password." };
+    }
+
+    if (params.newPassword !== params.confirmPassword) {
+      return { success: false, error: "Passwords do not match." };
+    }
+
+    if (params.newPassword.length < 8) {
+      return { success: false, error: "Password must be at least 8 characters long." };
+    }
+
+    const hasUppercase = /[A-Z]/.test(params.newPassword);
+    const hasLowercase = /[a-z]/.test(params.newPassword);
+    const hasDigit = /\d/.test(params.newPassword);
+    if (!hasUppercase || !hasLowercase || !hasDigit) {
+      return {
+        success: false,
+        error: "Password must contain at least one uppercase letter, one lowercase letter, and one number.",
+      };
+    }
+
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return {
+        success: false,
+        error: "Your password reset session has expired or is invalid. Please request a new reset link.",
+      };
+    }
+
+    const { error: updateError } = await supabase.auth.updateUser({
+      password: params.newPassword,
+    });
+
+    if (updateError) {
+      return { success: false, error: updateError.message || "Failed to reset password." };
+    }
+
+    await logAudit({
+      action: "auth.password_reset",
+      entity_type: "user",
+      entity_id: user.id,
+      user_id: user.id,
+      metadata: { user_email: user.email },
+    });
+
+    return { success: true };
+  } catch (err: unknown) {
+    const error = err as { message?: string };
+    console.error("Exception in resetPasswordAction:", err);
+    return { success: false, error: error?.message || "An unexpected error occurred." };
+  }
+}
+
 

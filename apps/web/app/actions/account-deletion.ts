@@ -62,6 +62,11 @@ export async function submitAccountDeletionRequestAction(payload: {
     const role = matchedUser?.role || currentUser?.role || null;
     const phone = matchedUser?.phone || currentUser?.phone || null;
 
+    // Server-side enforcement: Super Admin accounts cannot be deleted
+    if (role === "super_admin" || currentUser?.role === "super_admin") {
+      return { success: false, error: "Super Administrator accounts cannot be deleted." };
+    }
+
     // Dual-path resilience:
     // Path A: Try inserting into public.account_deletion_requests
     const { data: insertedRequest, error: insertErr } = await adminClient
@@ -150,6 +155,8 @@ export async function submitAccountDeletionRequestAction(payload: {
     try {
       revalidateTag(TAGS.users, "max");
       revalidatePath("/users");
+      revalidatePath("/delete-account");
+      revalidatePath("/account-deletion-guide");
       revalidatePath("/account-deletion");
     } catch {}
 
@@ -541,6 +548,8 @@ export async function cancelMyAccountDeletionRequestAction(
     try {
       revalidateTag(TAGS.users, "max");
       revalidatePath("/users");
+      revalidatePath("/delete-account");
+      revalidatePath("/account-deletion-guide");
       revalidatePath("/account-deletion");
     } catch {}
 

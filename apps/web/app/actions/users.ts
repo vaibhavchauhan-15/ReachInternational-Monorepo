@@ -314,7 +314,6 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
     const aadhaarNumber = (formData.get("aadhaar_number") as string)?.trim() || "";
     const licenseNumber = (formData.get("license_number") as string)?.trim() || "";
     const supervisorId = (formData.get("supervisor_id") as string)?.trim() || null;
-    const workingLocationId = (formData.get("working_location_id") as string)?.trim() || null;
 
     if (!fullName || !email || !password || !role || !phone) {
       return { error: "Full name, email, mobile number, password, and role fields are required." };
@@ -427,7 +426,6 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
         role: role,
         supervisor_id: supervisorId || null,
         supervisor_ids: supervisorId ? [supervisorId] : [],
-        working_location_id: workingLocationId || null,
         phone: phone || null,
         address: address || null,
         shift_time: shiftTime || null,
@@ -463,7 +461,6 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
         role: role,
         supervisor_id: supervisorId || null,
         supervisor_ids: supervisorId ? [supervisorId] : [],
-        working_location_id: workingLocationId || null,
         phone: phone || null,
         address: address || null,
         shift_time: shiftTime || null,
@@ -968,7 +965,6 @@ export async function editUser(userId: string, formData: FormData): Promise<User
     const aadhaarNumber = (formData.get("aadhaar_number") as string)?.trim() || "";
     const licenseNumber = (formData.get("license_number") as string)?.trim() || "";
     const supervisorId = (formData.get("supervisor_id") as string)?.trim() || null;
-    const workingLocationId = (formData.get("working_location_id") as string)?.trim() || null;
     
     if (!fullName) {
       return { error: "Full name is required." };
@@ -1079,7 +1075,6 @@ export async function editUser(userId: string, formData: FormData): Promise<User
         license_number: formattedLicense,
         supervisor_id: supervisorId,
         supervisor_ids: editSupervisorIds,
-        working_location_id: workingLocationId,
         ...(role && (currentUser.role === "super_admin" || role !== "super_admin") ? { role } : {}),
       }
     });
@@ -1102,7 +1097,6 @@ export async function editUser(userId: string, formData: FormData): Promise<User
       license_number: formattedLicense,
       supervisor_id: supervisorId,
       supervisor_ids: editSupervisorIds,
-      working_location_id: workingLocationId,
     };
     if (role && (currentUser.role === "super_admin" || role !== "super_admin")) {
       updatePayload.role = role;

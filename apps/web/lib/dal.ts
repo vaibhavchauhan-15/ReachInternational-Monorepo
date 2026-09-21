@@ -67,7 +67,7 @@ const getCachedUserRow = unstable_cache(
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase
       .from("users")
-      .select("id, full_name, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, address, shift_time, shift_start_time, shift_end_time, complete_profile, email, created_at, updated_at")
+      .select("id, full_name, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, address, shift_time, shift_start_time, shift_end_time, complete_profile, email, daily_rate, ot_hourly_rate, created_at, updated_at")
       .eq("id", userId)
       .single();
 

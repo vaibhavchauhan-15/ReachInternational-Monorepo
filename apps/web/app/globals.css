@@ -171,6 +171,48 @@
   --ease-out-cubic: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
   --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ============================================
+     Bottom Navigation Bar Height
+     ============================================ */
+  --bottom-nav-h: 0px;
+}
+
+/* Mobile bottom nav height (56px bar + safe-area for notched devices) */
+@media (max-width: 767px) {
+  :root {
+    --bottom-nav-h: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Hide bottom nav while a text field is focused (keyboard collision) */
+html[data-nav-hidden] {
+  --bottom-nav-h: 0px;
+}
+html[data-nav-hidden] nav[aria-label="Primary"] {
+  display: none;
+}
+
+/* ============================================
+   Agentation Floating Toolbar Responsiveness & Visibility
+   Positions the toolbar cleanly above the mobile bottom navigation bar (56px)
+   guaranteeing unobstructed visibility across /more, /profile, /settings, etc.
+   ============================================ */
+.reach-agentation-toolbar,
+[data-agentation-toolbar] {
+  z-index: 100000 !important;
+}
+
+@media (max-width: 767px) {
+  .reach-agentation-toolbar,
+  [data-agentation-toolbar] {
+    max-width: calc(100vw - 24px) !important;
+  }
+  .reach-agentation-toolbar:not([style*="top"]),
+  [data-agentation-toolbar]:not([style*="top"]) {
+    bottom: calc(var(--bottom-nav-h, 56px) + 12px) !important;
+    right: 14px !important;
+  }
 }
 
 /* ============================================

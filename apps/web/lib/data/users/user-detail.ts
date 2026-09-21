@@ -9,7 +9,7 @@ import { hydrateUsersPersonnel } from "./user-list";
  * Includes sensitive and heavy fields: aadhaar_number, license_number, address, shift details.
  */
 export const USER_DETAIL_COLUMNS =
-  "id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, address, shift_time, shift_start_time, shift_end_time, complete_profile, supervisor_id, supervisor_ids, working_location_id, created_at, updated_at";
+  "id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, address, shift_time, shift_start_time, shift_end_time, complete_profile, supervisor_id, supervisor_ids, created_at, updated_at";
 
 /**
  * Fetches a single user by ID with full column projection and in-memory relation hydration.
@@ -32,4 +32,48 @@ export async function getUserById(userId: string): Promise<User | null> {
 
   const hydrated = await hydrateUsersPersonnel([data]);
   return hydrated[0] || null;
+}
+
+/**
+ * Fetches a single user record with relation hydration without admin role check.
+ * Used for authenticated user self-profile views (/profile).
+ */
+export async function getUserDetail(userId: string): Promise<User | null> {
+  if (!userId) return null;
+
+  const adminClient = createSupabaseAdminClient();
+  const { data, error } = await adminClient
+    .from("users")
+    .select(USER_DETAIL_COLUMNS)
+    .eq("id", userId)
+    .single();
+
+  if (error || !data) {
+    return null;
+  }
+
+  const hydrated = await hydrateUsersPersonnel([data]);
+  return hydrated[0] || null;
+}
+
+/**
+ * Fetches the user's active pending profile change request (if any).
+ */
+export async function getMyPendingProfileRequest(userId: string) {
+  if (!userId) return null;
+
+  const adminClient = createSupabaseAdminClient();
+  const { data, error } = await adminClient
+    .from("profile_change_requests")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("status", "pending")
+    .order("created_at", { ascending: false })
+    .maybeSingle();
+
+  if (error || !data) {
+    return null;
+  }
+
+  return data;
 }

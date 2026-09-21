@@ -19,7 +19,7 @@ export interface UserListAggregates {
 }
 
 export const USER_SELECT_COLUMNS =
-  "id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, address, shift_time, supervisor_id, supervisor_ids, working_location_id, created_at, updated_at";
+  "id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, address, shift_time, supervisor_id, supervisor_ids, created_at, updated_at";
 
 export const getActiveSupervisorsCached = unstable_cache(
   async (): Promise<Pick<User, "id" | "full_name" | "email" | "phone" | "role">[]> => {
@@ -44,19 +44,7 @@ export const getActiveSupervisorsCached = unstable_cache(
 
 export const getActiveWorkingLocationsCached = unstable_cache(
   async (): Promise<WorkingLocation[]> => {
-    const supabase = createSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from("working_locations")
-      .select("id, name, type, city, state, address, pincode, status, created_at, updated_at")
-      .eq("status", "active")
-      .order("name", { ascending: true });
-
-    if (error) {
-      console.error("[DAL] Error fetching active working locations:", error.message || error);
-      return [];
-    }
-
-    return (data as unknown as WorkingLocation[]) || [];
+    return [];
   },
   ["active-working-locations-list-v1"],
   { revalidate: CACHE_TIERS.CLASS_C_OPERATIONAL, tags: [TAGS.users] }
@@ -300,12 +288,6 @@ export const getAllUsersCached = unstable_cache(
       }
     }
 
-    const { data: locs } = await supabase
-      .from("working_locations")
-      .select("id, name, type, city, state, address")
-      .eq("status", "active");
-    const workingLocationMap = new Map((locs || []).map((l: any) => [l.id, l]));
-
     return rawUsers.map((u) => {
       const supIds = (u.supervisor_ids && u.supervisor_ids.length > 0)
         ? u.supervisor_ids
@@ -323,7 +305,6 @@ export const getAllUsersCached = unstable_cache(
         supervisor_ids: supIds,
         supervisor: primarySup,
         supervisors: supervisorsList,
-        working_location: u.working_location_id ? workingLocationMap.get(u.working_location_id) || null : null,
       };
     });
   },

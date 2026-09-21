@@ -79,6 +79,8 @@ export const PERMISSIONS = {
   USER_REQUEST_CREATE: "user_request.create",
   USER_REQUEST_VIEW: "user_request.view",
   EMPLOYEE_DOCUMENT_MANAGE: "employee.document.manage",
+  HR_PAYROLL_VIEW: "hr.payroll.view",
+  HR_PAYROLL_MANAGE: "hr.payroll.manage",
 
   // Rental Management
   RENTAL_VIEW: "rental.view",

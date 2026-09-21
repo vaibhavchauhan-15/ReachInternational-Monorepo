@@ -11,8 +11,8 @@ import { OperatorDashboardView } from "@/components/dashboard/operator/OperatorD
 import type { DashboardRole } from "@reachinternational/types";
 
 export const metadata: Metadata = {
-  title: "Dashboard | ReachInternational",
-  description: "Role-specific operational dashboard and machinery telemetry.",
+  title: "Home | ReachInternational",
+  description: "Role-specific operational overview, telemetry, and fleet KPIs.",
   robots: { index: false, follow: false },
 };
 

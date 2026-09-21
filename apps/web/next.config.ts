@@ -6,12 +6,12 @@ const isDev = process.env.NODE_ENV !== "production";
 // In development, React 19 & Turbopack require 'unsafe-eval' for source maps, error overlays, and debugging callstack reconstruction.
 // In production, 'unsafe-eval' is strictly excluded to prevent XSS, and upgrade-insecure-requests is enforced.
 const scriptSrc = isDev
-  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
-  : "script-src 'self' 'unsafe-inline'";
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-scripts.com https://www.googletagmanager.com"
+  : "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com https://www.googletagmanager.com";
 
 const connectSrc = isDev
-  ? "connect-src 'self' https://*.supabase.co wss://*.supabase.co ws: wss:"
-  : "connect-src 'self' https://*.supabase.co wss://*.supabase.co";
+  ? "connect-src 'self' https://*.supabase.co wss://*.supabase.co ws: wss: https://va.vercel-scripts.com https://vitals.vercel-insights.com https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com"
+  : "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://va.vercel-scripts.com https://vitals.vercel-insights.com https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com";
 
 const upgradeInsecure = isDev ? "" : "upgrade-insecure-requests;";
 
@@ -58,6 +58,16 @@ const nextConfig: NextConfig = {
         source: "/notification",
         destination: "/notifications",
         permanent: true,
+      },
+      {
+        source: "/account-deletion",
+        destination: "/account-deletion-guide",
+        permanent: true,
+      },
+      {
+        source: "/payroll",
+        destination: "/hr",
+        permanent: false,
       },
     ];
   },

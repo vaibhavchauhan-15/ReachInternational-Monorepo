@@ -33,6 +33,32 @@ function MobileAgentation() {
   }
 }
 
+function MobileGoogleAnalytics() {
+  React.useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const GA_ID = 'G-DC126P3SM9';
+    if (document.getElementById('mobile-google-tag-script')) return;
+
+    const script = document.createElement('script');
+    script.id = 'mobile-google-tag-script';
+    script.async = true;
+    script.src = `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`;
+    document.head.appendChild(script);
+
+    const initScript = document.createElement('script');
+    initScript.id = 'mobile-google-tag-init';
+    initScript.innerHTML = `
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', '${GA_ID}');
+    `;
+    document.head.appendChild(initScript);
+  }, []);
+
+  return null;
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -78,6 +104,7 @@ function ThemedAppContainer() {
       <Slot />
       <PostNotificationBanner />
       <MobileAgentation />
+      <MobileGoogleAnalytics />
     </View>
   );
 }

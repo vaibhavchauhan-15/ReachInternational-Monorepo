@@ -115,6 +115,18 @@ export default function MachinesScreen() {
   const { role, user } = useAuth();
   const params = useLocalSearchParams<{ id?: string; machineId?: string }>();
 
+  const isHr = (role || '').toLowerCase() === 'hr';
+
+  useEffect(() => {
+    if (role && isHr) {
+      router.replace('/(app)/dashboard');
+    }
+  }, [role, isHr, router]);
+
+  if (role && isHr) {
+    return null;
+  }
+
   // Data states
   const [machines, setMachines] = useState<any[]>([]);
   const [supervisorsList, setSupervisorsList] = useState<Array<{ id: string; full_name: string }>>([]);

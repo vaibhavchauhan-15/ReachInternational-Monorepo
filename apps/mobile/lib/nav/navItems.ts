@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard,
+  Home,
   Wrench,
   Gauge,
   Star,
@@ -26,8 +26,8 @@ export interface MobileNavItem {
 export const mobileNavItems: MobileNavItem[] = [
   {
     href: '/(app)/dashboard',
-    label: 'Dashboard',
-    icon: LayoutDashboard,
+    label: 'Home',
+    icon: Home,
     roles: ['super_admin', 'admin', 'manager', 'supervisor', 'hr', 'operator'],
   },
   {

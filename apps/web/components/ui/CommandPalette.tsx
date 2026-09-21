@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   AnimatedSearch,
   AnimatedDashboard,
+  AnimatedHome,
   AnimatedClock,
   AnimatedWrench,
   AnimatedClipboardList,
@@ -19,8 +20,10 @@ import {
   AnimatedBuilding2,
   AnimatedGauge,
   AnimatedScrollText,
+  AnimatedCreditCard,
 } from "./animated-icons";
 import { motion, AnimatePresence } from "framer-motion";
+import { trackEvent, trackSearch } from "@/lib/analytics";
 
 interface CommandItem {
   id: string;
@@ -54,13 +57,13 @@ export function CommandPalette({
     const items: CommandItem[] = [
       {
         id: "nav-dashboard",
-        title: "Go to Dashboard",
+        title: "Go to Home",
         subtitle: "Role-specific operational overview, telemetry, and fleet KPIs",
         category: "Navigation",
-        icon: AnimatedDashboard,
+        icon: AnimatedHome,
         href: "/dashboard",
-        shortcut: "⌘D",
-        keywords: ["home", "overview", "kpis", "telemetry", "metrics", "stats"],
+        shortcut: "⌘H",
+        keywords: ["home", "dashboard", "overview", "kpis", "telemetry", "metrics", "stats"],
         roles: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"],
       },
       {
@@ -113,7 +116,18 @@ export function CommandPalette({
         icon: AnimatedClipboardList,
         href: "/operations?tab=logs",
         keywords: ["running hours", "meter log", "log history", "operations"],
-        roles: ["super_admin", "admin", "manager", "supervisor"],
+        roles: ["super_admin", "admin", "manager", "supervisor", "hr"],
+      },
+      {
+        id: "nav-hr",
+        title: "Go to HR & Operator Payroll",
+        subtitle: "Calculate monthly operator compensation and client-lagged overtime wages",
+        category: "Navigation",
+        icon: AnimatedCreditCard,
+        href: "/hr",
+        shortcut: "⌘P",
+        keywords: ["payroll", "salary", "wages", "rates", "hr", "operator pay", "overtime pay", "compensation"],
+        roles: ["super_admin", "admin", "manager", "hr"],
       },
       {
         id: "nav-audit-logs",
@@ -147,6 +161,17 @@ export function CommandPalette({
         shortcut: "⌘U",
         keywords: ["employees", "staff", "team", "admins", "operators", "supervisors", "accounts", "roles", "users"],
         roles: ["super_admin", "admin", "manager", "hr", "supervisor"],
+      },
+      {
+        id: "nav-settings",
+        title: "Platform Settings & Preferences",
+        subtitle: "Manage appearance, dark mode, policies, and account settings",
+        category: "Navigation",
+        icon: AnimatedSettings,
+        href: "/settings",
+        shortcut: "⌘S",
+        keywords: ["settings", "preferences", "appearance", "theme", "dark mode", "light mode", "privacy", "terms", "delete account"],
+        roles: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"],
       },
       {
         id: "action-add-machine",
@@ -223,6 +248,14 @@ export function CommandPalette({
 
   const executeItem = useCallback(
     (item: CommandItem) => {
+      if (search.trim().length > 0) {
+        trackSearch(search.trim(), "command_palette");
+      }
+      trackEvent("command_palette_execute", {
+        item_id: item.id,
+        item_title: item.title,
+        item_category: item.category,
+      });
       onClose();
       if (item.action) {
         item.action();
@@ -230,7 +263,7 @@ export function CommandPalette({
         router.push(item.href);
       }
     },
-    [onClose, router]
+    [onClose, router, search]
   );
 
   useEffect(() => {

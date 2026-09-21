@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
-import { supabase } from '../../lib/supabase';
+import { getAppUrl } from '../../lib/env';
 import { Button, Input, Card, useTheme } from '../../components/ui';
 import { ReachInternationalLogo } from '../../components/branding';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -30,16 +30,26 @@ export default function ForgotPasswordScreen() {
     setIsLoading(true);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
-      if (error) {
-        setMessage(error.message);
+      const response = await fetch(`${getAppUrl()}/api/auth/forgot-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setMessage(data.error || 'No account found with this email address.');
         setIsSuccess(false);
       } else {
-        setMessage('Password reset instructions have been sent to your email.');
+        setMessage(data.message || 'Password reset instructions have been sent to your email.');
         setIsSuccess(true);
       }
     } catch (err: unknown) {
-      setMessage('Failed to send reset email. Please try again.');
+      console.error('Mobile reset password error:', err);
+      setMessage('Failed to send reset email. Please check your connection and try again.');
       setIsSuccess(false);
     } finally {
       isSubmittingRef.current = false;

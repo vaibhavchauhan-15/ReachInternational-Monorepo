@@ -57,6 +57,7 @@ import {
   LogOut,
   ChevronRight,
   CheckCircle2,
+  XCircle,
   Lock,
   X,
   ExternalLink,
@@ -107,10 +108,48 @@ export default function SettingsScreen() {
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>(DEFAULT_NOTIF_PREFS);
 
   // Password Change Form State
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  // Real-time validation checks for mobile
+  const hasMinLength = newPassword.length >= 8;
+  const hasUpper = /[A-Z]/.test(newPassword);
+  const hasLower = /[a-z]/.test(newPassword);
+  const hasDigit = /\d/.test(newPassword);
+  const hasSymbol = /[!@#$%^&*(),.?":{}|<>\-_+=\[\]]/.test(newPassword);
+  const passwordsMatch = confirmPassword.length > 0 && newPassword === confirmPassword;
+
+  const strengthScore = (() => {
+    if (!newPassword) return 0;
+    if (newPassword.length < 8) return 1;
+    let count = 0;
+    if (hasUpper) count++;
+    if (hasLower) count++;
+    if (hasDigit) count++;
+    if (hasSymbol) count++;
+
+    if (count >= 4) return 3;
+    if (count >= 2 && hasUpper && hasLower && hasDigit) return 2;
+    return 1;
+  })();
+
+  const strengthMeta = {
+    0: { label: '', color: '#94a3b8', bg: '#94a3b8' },
+    1: { label: 'Weak', color: '#e11d48', bg: '#e11d48' },
+    2: { label: 'Medium', color: '#d97706', bg: '#d97706' },
+    3: { label: 'Strong', color: '#059669', bg: '#059669' },
+  }[strengthScore];
+
+  const isPasswordFormValid =
+    Boolean(currentPassword) &&
+    hasMinLength &&
+    hasUpper &&
+    hasLower &&
+    hasDigit &&
+    passwordsMatch;
 
   // Load preferences from AsyncStorage
   const loadPreferences = useCallback(async () => {
@@ -156,23 +195,45 @@ export default function SettingsScreen() {
   // Handle Password Change
   const handleChangePassword = async () => {
     setPasswordError(null);
-    if (!newPassword || newPassword.length < 6) {
-      setPasswordError('New password must be at least 6 characters long.');
+    if (!currentPassword) {
+      setPasswordError('Current password is required.');
+      return;
+    }
+    if (!hasMinLength) {
+      setPasswordError('New password must be at least 8 characters long.');
+      return;
+    }
+    if (!hasUpper || !hasLower || !hasDigit) {
+      setPasswordError('New password must contain an uppercase letter, a lowercase letter, and a number.');
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPasswordError('Passwords do not match. Please verify.');
+      setPasswordError('New passwords do not match. Please verify.');
       return;
     }
 
     setIsChangingPassword(true);
     try {
+      const email = user?.email || userProfile?.email;
+      if (email) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password: currentPassword,
+        });
+        if (signInError) {
+          setPasswordError('Current password is incorrect. Please check and try again.');
+          setIsChangingPassword(false);
+          return;
+        }
+      }
+
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) {
         setPasswordError(error.message || 'Failed to update password.');
       } else {
         Alert.alert('Success', 'Your password has been changed successfully.');
         setPasswordModalVisible(false);
+        setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
       }
@@ -250,38 +311,71 @@ export default function SettingsScreen() {
       >
 
         {/* ========================================================================= */}
-        {/* CARD 1: MY ACCOUNT (COMPACT TOUCH CARD) */}
+        {/* CARD 1: PROFILE & ACCOUNT (SYNCHRONIZED WITH MORE SCREEN) */}
         {/* ========================================================================= */}
-        <Card
-          variant="interactive"
-          onPress={() => setAccountModalVisible(true)}
-          style={[styles.card, styles.touchCard]}
+        <TouchableOpacity
+          onPress={() => router.push('/(app)/profile' as any)}
+          activeOpacity={0.8}
+          style={[
+            styles.profileCard,
+            {
+              backgroundColor: theme.colors.canvasElevated,
+              borderColor: theme.colors.hairline,
+            },
+          ]}
         >
-          <View style={styles.cardTouchRow}>
-            <View style={[styles.avatarBox, { backgroundColor: theme.colors.link }]}>
-              <Text style={styles.avatarText}>
+          <View style={styles.profileRow}>
+            <View
+              style={[
+                styles.profileAvatar,
+                { backgroundColor: theme.colors.ink },
+              ]}
+            >
+              <Text style={[styles.profileAvatarText, { color: theme.colors.canvas }]}>
                 {(userProfile?.full_name || 'U').charAt(0).toUpperCase()}
               </Text>
             </View>
-
-            <View style={{ flex: 1 }}>
-              <View style={styles.nameBadgeRow}>
-                <Text style={[styles.userName, { color: theme.colors.ink }]} numberOfLines={1}>
-                  {userProfile?.full_name || 'Field Personnel'}
-                </Text>
-                <Badge status="active" customLabel={roleLabel} />
-              </View>
-              <Text style={[styles.userSubtext, { color: theme.colors.mute }]} numberOfLines={1}>
+            <View style={styles.profileInfo}>
+              <Text
+                style={[styles.profileName, { color: theme.colors.ink }]}
+                numberOfLines={1}
+              >
+                {userProfile?.full_name || 'Field Personnel'}
+              </Text>
+              <Text
+                style={[styles.profileEmail, { color: theme.colors.mute }]}
+                numberOfLines={1}
+              >
                 {user?.email || userProfile?.email || 'No email registered'}
               </Text>
-              <Text style={[styles.cardActionHint, { color: theme.colors.link }]}>
-                View profile, shift & password
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                <View
+                  style={[
+                    styles.roleBadge,
+                    { backgroundColor: `${theme.colors.ink}10`, borderColor: `${theme.colors.ink}20` },
+                  ]}
+                >
+                  <Text style={[styles.roleText, { color: theme.colors.ink }]}>
+                    {roleLabel}
+                  </Text>
+                </View>
+              </View>
             </View>
-
-            <ChevronRight size={18} color={theme.colors.mute} />
+            <TouchableOpacity
+              onPress={() => setEditProfileVisible(true)}
+              style={[
+                styles.editBtn,
+                {
+                  borderColor: theme.colors.hairline,
+                  backgroundColor: theme.colors.canvas,
+                },
+              ]}
+              accessibilityLabel="Edit Profile"
+            >
+              <Edit size={15} color={theme.colors.mute} />
+            </TouchableOpacity>
           </View>
-        </Card>
+        </TouchableOpacity>
 
         {/* ========================================================================= */}
         {/* CARD 2: NOTIFICATIONS (COMPACT TOUCH CARD) */}
@@ -892,7 +986,7 @@ export default function SettingsScreen() {
             </View>
 
             <Text style={[styles.modalSubtitle, { color: theme.colors.mute }]}>
-              Enter a new secure password (minimum 6 characters) for your field account.
+              Enter your current password and choose a strong new password.
             </Text>
 
             {passwordError && (
@@ -902,22 +996,74 @@ export default function SettingsScreen() {
             )}
 
             <Input
-              label="New Password"
-              placeholder="Minimum 6 characters"
-              value={newPassword}
-              onChangeText={setNewPassword}
+              label="Current Password"
+              placeholder="Enter current password"
+              value={currentPassword}
+              onChangeText={(val) => {
+                setCurrentPassword(val);
+                if (passwordError) setPasswordError(null);
+              }}
               isPassword
-              containerStyle={{ marginVertical: 6 }}
+              containerStyle={{ marginVertical: 4 }}
             />
+
+            <Input
+              label="New Password"
+              placeholder="At least 8 chars (uppercase, lowercase, number, symbol)"
+              value={newPassword}
+              onChangeText={(val) => {
+                setNewPassword(val);
+                if (passwordError) setPasswordError(null);
+              }}
+              isPassword
+              containerStyle={{ marginVertical: 4 }}
+            />
+
+            {/* Strength Meter */}
+            {newPassword.length > 0 && (
+              <View style={{ marginVertical: 4 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text style={{ fontSize: 11, color: theme.colors.mute }}>Password strength:</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: strengthMeta.color }}>
+                    {strengthMeta.label}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', height: 4, gap: 4 }}>
+                  <View style={{ flex: 1, borderRadius: 2, backgroundColor: strengthScore >= 1 ? strengthMeta.bg : theme.colors.hairline }} />
+                  <View style={{ flex: 1, borderRadius: 2, backgroundColor: strengthScore >= 2 ? strengthMeta.bg : theme.colors.hairline }} />
+                  <View style={{ flex: 1, borderRadius: 2, backgroundColor: strengthScore >= 3 ? strengthMeta.bg : theme.colors.hairline }} />
+                </View>
+              </View>
+            )}
 
             <Input
               label="Confirm New Password"
               placeholder="Re-enter new password"
               value={confirmPassword}
-              onChangeText={setConfirmPassword}
+              onChangeText={(val) => {
+                setConfirmPassword(val);
+                if (passwordError) setPasswordError(null);
+              }}
               isPassword
-              containerStyle={{ marginVertical: 6 }}
+              containerStyle={{ marginVertical: 4 }}
             />
+
+            {/* Match Indicator */}
+            {confirmPassword.length > 0 && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2, marginBottom: 6 }}>
+                {passwordsMatch ? (
+                  <>
+                    <CheckCircle2 size={13} color="#059669" />
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#059669' }}>Passwords match</Text>
+                  </>
+                ) : (
+                  <>
+                    <XCircle size={13} color="#e11d48" />
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#e11d48' }}>Passwords do not match</Text>
+                  </>
+                )}
+              </View>
+            )}
 
             <View style={styles.modalButtons}>
               <Button
@@ -936,7 +1082,7 @@ export default function SettingsScreen() {
                 variant="primary"
                 size="sm"
                 isLoading={isChangingPassword}
-                disabled={isChangingPassword || !newPassword}
+                disabled={isChangingPassword || !isPasswordFormValid}
                 style={{ flex: 1 }}
               />
             </View>
@@ -1032,7 +1178,7 @@ export default function SettingsScreen() {
                 <Button
                   label="Open Web Deletion Portal"
                   onPress={() => {
-                    Linking.openURL('https://www.reachinternational.co.in/account-deletion');
+                    Linking.openURL(`${BRAND_WEBSITE}/delete-account`);
                     setDeleteModalVisible(false);
                   }}
                   variant="outline"
@@ -1062,6 +1208,60 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { padding: spacingNumeric.md, paddingBottom: spacingNumeric['2xl'] },
   card: { marginVertical: spacingNumeric.xs, padding: spacingNumeric.md },
+  profileCard: {
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    padding: spacingNumeric.md,
+    marginVertical: spacingNumeric.xs,
+  },
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingNumeric.sm,
+  },
+  profileAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileAvatarText: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  profileInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  profileName: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  profileEmail: {
+    fontSize: 12,
+    marginTop: 1,
+  },
+  roleBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 100,
+    borderWidth: 1,
+  },
+  roleText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  editBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   touchCard: {
     paddingVertical: spacingNumeric.md,
   },

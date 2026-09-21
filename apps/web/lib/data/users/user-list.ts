@@ -5,7 +5,7 @@ import { getCurrentUser, requireRole } from "@/lib/dal";
 import type { User } from "@/lib/types/database";
 import { getISTDateString } from "@reachinternational/utils";
 import { SUPERVISOR_VISIBLE_USER_ROLES } from "@reachinternational/permissions";
-import { getActiveSupervisorsCached, getActiveWorkingLocationsCached } from "./user-shared";
+import { getActiveSupervisorsCached } from "./user-shared";
 
 export const USERS_PAGE_SIZE = 10;
 
@@ -35,7 +35,7 @@ export interface UserListResponse {
  * Reuses the machine-list.ts projection pattern.
  */
 export const USER_LIST_COLUMNS =
-  "id, full_name, email, phone, role, status, address, city, district, state, state_id, aadhaar_number, license_number, shift_time, supervisor_id, supervisor_ids, working_location_id, created_at, updated_at";
+  "id, full_name, email, phone, role, status, address, city, district, state, state_id, aadhaar_number, license_number, shift_time, supervisor_id, supervisor_ids, created_at, updated_at";
 
 export function sanitizeSearchToken(token: string): string {
   return token
@@ -156,13 +156,8 @@ type CachedSupervisor = Pick<User, "id" | "full_name" | "email" | "phone" | "rol
 export async function hydrateUsersPersonnel(rawUsers: User[]): Promise<User[]> {
   if (!rawUsers || rawUsers.length === 0) return [];
 
-  const [activeSupervisors, activeLocations] = await Promise.all([
-    getActiveSupervisorsCached(),
-    getActiveWorkingLocationsCached(),
-  ]);
-
+  const activeSupervisors = await getActiveSupervisorsCached();
   const supervisorMap = new Map<string, CachedSupervisor>(activeSupervisors.map((s) => [s.id, s]));
-  const locationMap = new Map(activeLocations.map((l) => [l.id, l]));
 
   // Check for any edge-case supervisor IDs not present in the active cache (e.g. inactive supervisors)
   const missingSupIds = new Set<string>();
@@ -218,7 +213,6 @@ export async function hydrateUsersPersonnel(rawUsers: User[]): Promise<User[]> {
       supervisor_ids: supIds,
       supervisor: primarySup,
       supervisors: supervisorsList,
-      working_location: u.working_location_id ? locationMap.get(u.working_location_id) || null : null,
     };
   });
 }

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import type { User } from "@/lib/types/database";
 import { AppSidebar, SIDEBAR_WIDTH_EXPANDED, SIDEBAR_WIDTH_COLLAPSED } from "@/components/layout/AppSidebar";
-import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
+import { BottomNav } from "@/components/navigation/BottomNav";
 import { MobilePageHeader } from "@/components/layout/MobilePageHeader";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
@@ -98,7 +98,7 @@ export function AppShellClient({
         />
 
         {/* Mobile Bottom Navigation Bar */}
-        <MobileBottomNav user={user} />
+        <BottomNav role={user.role} />
 
         {/* Main Workspace Column */}
         <div

@@ -130,19 +130,15 @@ Manages user accounts, profile details, company branch assignments, and Role-Bas
   - Entire user rows in `UserRow.tsx` and pending user cards in `users-client.tsx` are whole-item clickable to open `UserDetailSheet` with keyboard navigation and event propagation prevention on checkboxes and action menus.
   - Standalone Eye icon button removed from table rows.
   - Actions table header text removed (`<span className="sr-only">Actions</span>`) with compact column width, cleanly showcasing the 3-dot menu button in every row.
-- **Working Location / Site / Office Selection (All Users)**:
-  - Table `public.working_locations` stores all operational bases (`id`, `name`, `type`, `address`, `city`, `state`, `pincode`, `status`).
-  - Users have a `working_location_id` referencing `working_locations(id)`.
-  - The desktop users table (`/users`) renders a dedicated `Working Location` column showing the site name and city with map pin icon or `—`.
-  - `MobileUserCard` renders a Working Base badge with `MapPin` icon.
-  - `UserDetailSheet` and mobile `UserDetailModal` display the working location under Location & Base details.
-  - `UserCreateModal` and `UserEditModal` render a dynamic `<SearchableSelect>` for Working Location in Section 4 across all roles, with hidden inputs submitting `working_location_id`.
-  - Public RPC `get_active_working_locations_public()` allows unauthenticated and authenticated users to list active locations securely.
-  - Excel and CSV exports include the Working Location column.
+- **Unified User Operational Location (All Users)**:
+  - Users have a consolidated location stored directly via `address`, `city`, `district`, `state`, and `state_id` linked to the Indian administrative master directories.
+  - The desktop users table (`/users`) renders a single consolidated `Location` column showing the user's city, state, and address with map pin icon.
+  - `UserDetailSheet` and mobile `UserDetailModal` display the user's operational address and location cleanly under Location & Base details.
+  - Redundant duplicate working location selectors and non-existent `working_locations` lookup tables were removed, avoiding conflicts when staff rotate between sites, yards, and offices.
 - `auth_user_has_branch_access(target_branch_id)`: Postgres RLS function enforcing branch scoping (Super Admin & Admin bypass branch locks).
 - `prevent_audit_log_modification()`: Postgres trigger preventing any physical UPDATE or DELETE on `public.audit_logs`, guaranteeing immutable audit trails.
 - **Server-Side Pagination, Global Search & Deterministic Sorting (`/users?tab=all`)**:
-  - `getUserList()` enforces 10 users per page (`pageSize = USERS_PAGE_SIZE = 10`), parallelizes supervisor and working location relations lookup with `Promise.all()`, and executes exact count range queries.
+  - `getUserList()` enforces 10 users per page (`pageSize = USERS_PAGE_SIZE = 10`), parallelizes supervisor relations lookup with `Promise.all()`, and executes exact count range queries.
   - Appends `.order("id", { ascending: true })` as a stable secondary tiebreaker across all sort paths (`newest`, `oldest`, `name_asc`, `name_desc`, `role_asc`) ensuring deterministic, non-drifting page boundaries on equal timestamps or values.
   - **Pattern-Aware Search Optimization (`applyOptimizedUserSearch`)**: Intelligently routes queries based on pattern detection:
     - Formatted Phone & Aadhaar numbers: Strips spaces, dashes, +91/0 prefixes (`cleanDigits`), scanning only `phone`, `aadhaar_number`, `license_number`, and `full_name`.

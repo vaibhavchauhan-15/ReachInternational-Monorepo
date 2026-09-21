@@ -6,3 +6,4 @@ export * from "./roles";
 export * from "./permissions";
 export * from "./scopes";
 export * from "./matrix";
+export * from "./navigation";

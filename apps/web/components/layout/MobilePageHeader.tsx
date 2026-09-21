@@ -26,11 +26,12 @@ import { ScrollCloud } from "@/components/ui/ScrollCloud";
 import { recordAppNavigation, popPreviousAppRoute } from "@/lib/navigation";
 
 const PAGE_TITLES: Record<string, string> = {
-  "/dashboard": "Dashboard",
-  "/dashboard/logs": "Dashboard Logs",
+  "/dashboard": "Home",
+  "/dashboard/logs": "Home Logs",
   "/machines": "Machines",
   "/operations": "Operations",
   "/users": "Users",
+  "/hr": "HR Payroll",
   "/clients": "Clients",
   "/audit": "Audit Trail",
   "/audit-logs": "Audit Logs",
@@ -39,7 +40,14 @@ const PAGE_TITLES: Record<string, string> = {
   "/documents": "Documents",
   "/purchase-orders": "Purchase Orders",
   "/reports": "Reports",
+  "/profile": "Profile",
   "/settings": "Settings",
+  "/privacy": "Privacy Policy",
+  "/terms": "Terms of Service",
+  "/account-deletion": "Account Deletion Guide",
+  "/account-deletion-guide": "Account Deletion Guide",
+  "/delete-account": "Delete Account",
+  "/more": "More",
   "/vendors": "Vendors",
   "/administration": "Administration",
 };
@@ -53,6 +61,20 @@ const DETAIL_TITLES: Record<string, string> = {
 
 const ROOT_PAGES = new Set(["/dashboard"]);
 
+// Pages where the 3-dot More menu is excluded (e.g. Home, More, Profile, Settings, Legal/Deletion pages)
+const HIDE_MORE_MENU_PAGES = new Set([
+  "/",
+  "/dashboard",
+  "/more",
+  "/profile",
+  "/settings",
+  "/privacy",
+  "/terms",
+  "/account-deletion",
+  "/account-deletion-guide",
+  "/delete-account",
+]);
+
 
 function resolveTitle(pathname: string): string {
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
@@ -61,7 +83,7 @@ function resolveTitle(pathname: string): string {
   if (segments[0]) {
     return segments[0].charAt(0).toUpperCase() + segments[0].slice(1).replace(/-/g, " ");
   }
-  return "Dashboard";
+  return "Home";
 }
 
 /**
@@ -76,6 +98,8 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const title = resolveTitle(pathname);
   const showBack = !ROOT_PAGES.has(pathname);
+  const normalizedPath = pathname.endsWith("/") && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+  const showMoreMenu = !HIDE_MORE_MENU_PAGES.has(normalizedPath);
   const canAddMachine = pathname === "/machines" && userRole !== "supervisor" && userRole !== "operator";
   const canCreateUser = userRole !== "supervisor" && userRole !== "operator" && userRole !== "client";
   const canAddClient = pathname === "/clients" && canCreateUser;
@@ -83,7 +107,9 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
   const canEditMachine = isMachineDetail && userRole !== "operator" && userRole !== "client";
 
   useEffect(() => {
-    setMoreOpen(false);
+    queueMicrotask(() => {
+      setMoreOpen(false);
+    });
     const search = typeof window !== "undefined" ? window.location.search.replace(/^\?/, "") : "";
     recordAppNavigation(pathname, search);
   }, [pathname]);
@@ -168,18 +194,20 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
             <AnimatedSearch size={16} />
           </button>
 
-          <button
-            type="button"
-            aria-label="More options"
-            onClick={() => setMoreOpen((prev) => !prev)}
-            className={`flex items-center justify-center h-8.5 w-8.5 rounded-lg transition-all cursor-pointer shrink-0 ${
-              moreOpen
-                ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)]"
-                : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas-elevated)]"
-            } active:scale-95`}
-          >
-            <AnimatedMoreVertical size={16} />
-          </button>
+          {showMoreMenu && (
+            <button
+              type="button"
+              aria-label="More options"
+              onClick={() => setMoreOpen((prev) => !prev)}
+              className={`flex items-center justify-center h-8.5 w-8.5 rounded-lg transition-all cursor-pointer shrink-0 ${
+                moreOpen
+                  ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)]"
+                  : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas-elevated)]"
+              } active:scale-95`}
+            >
+              <AnimatedMoreVertical size={16} />
+            </button>
+          )}
         </header>
 
         {/* Company Standard ScrollCloud Dissolve Effect */}
@@ -187,12 +215,12 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
       </div>
 
       {/* 3-Dot More Menu Backdrop */}
-      {moreOpen && (
+      {showMoreMenu && moreOpen && (
         <div className="md:hidden fixed inset-0 z-50" onClick={() => setMoreOpen(false)} aria-hidden />
       )}
 
       {/* 3-Dot More Menu Dropdown Card */}
-      {moreOpen && (
+      {showMoreMenu && moreOpen && (
         <div className="md:hidden fixed right-3 top-[52px] z-50 w-52 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xl overflow-hidden py-1 divide-y divide-[var(--color-hairline)]">
           {/* Contextual Action */}
           {(canAddMachine || canAddClient || (pathname === "/users" && canCreateUser) || (pathname === "/operations" && userRole !== "operator")) && (

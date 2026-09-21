@@ -1,59 +1,73 @@
 /**
  * ReachInternational Mobile — WebView Shell Configuration
  * Authoritative URL resolution, origin whitelisting, and user-agent definition.
+ * Eliminates hardcoded URLs in favor of dynamic environment loading.
  */
 
 import { Platform } from "react-native";
-import Constants from "expo-constants";
+import { getAppUrl, getSupabaseUrl } from "../lib/env";
 
 // App Version
 export const SHELL_VERSION = "1.0.0";
 export const SHELL_USER_AGENT_SUFFIX = `ReachInternationalApp/${SHELL_VERSION} (${Platform.OS}; MobileShell)`;
 
 /**
- * Resolves the target Web App URL:
- * 1. Explicit EXPO_PUBLIC_WEB_APP_URL environment variable
- * 2. In development on Android emulator: http://10.0.2.2:3000
- * 3. In development on iOS simulator / Expo Go: http://<LAN_IP>:3000
- * 4. Production fallback: https://www.reachinternational.co.in
+ * Resolves the target Web App URL using the centralized environment module.
  */
 export function getWebAppUrl(): string {
-  const envUrl = process.env.EXPO_PUBLIC_WEB_APP_URL;
-  if (envUrl && envUrl.trim().length > 0) {
-    return envUrl.trim().replace(/\/$/, "");
-  }
-
-  if (__DEV__) {
-    // If running via Expo Go / dev client, infer host IP from debuggerHost
-    const debuggerHost = Constants.expoConfig?.hostUri || Constants.manifest2?.extra?.expoGo?.debuggerHost;
-    if (debuggerHost) {
-      const hostIp = debuggerHost.split(":")[0];
-      if (hostIp) {
-        return `http://${hostIp}:3000`;
-      }
-    }
-
-    if (Platform.OS === "android") {
-      return "http://10.0.2.2:3000";
-    }
-
-    return "http://localhost:3000";
-  }
-
-  return "https://www.reachinternational.co.in";
+  return getAppUrl();
 }
 
 /**
- * Whitelist of trusted origins that are permitted to load directly within the WebView.
- * Any navigation request targeting outside this whitelist is diverted to the native system browser.
+ * Safely extracts hostname from a full URL string.
  */
+function getHostname(urlStr: string): string | null {
+  try {
+    return new URL(urlStr).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Dynamically resolves whitelist of trusted domains from environment configuration.
+ */
+export function getTrustedDomains(): string[] {
+  const domains = [
+    "reachinternational.co.in",
+    "www.reachinternational.co.in",
+    "localhost",
+    "10.0.2.2",
+    "127.0.0.1",
+  ];
+
+  try {
+    const supabaseHost = getHostname(getSupabaseUrl());
+    if (supabaseHost && !domains.includes(supabaseHost)) {
+      domains.push(supabaseHost);
+    }
+  } catch {
+    // env not initialized in isolated test
+  }
+
+  try {
+    const appHost = getHostname(getAppUrl());
+    if (appHost && !domains.includes(appHost)) {
+      domains.push(appHost);
+    }
+  } catch {
+    // env not initialized in isolated test
+  }
+
+  return domains;
+}
+
 export const TRUSTED_DOMAINS: string[] = [
   "reachinternational.co.in",
   "www.reachinternational.co.in",
   "localhost",
   "10.0.2.2",
   "127.0.0.1",
-  "dhbbgfzbyatzvqafnsqp.supabase.co",
 ];
 
 /**
@@ -74,13 +88,14 @@ export function isAllowedUrl(url: string): boolean {
     }
 
     const hostname = parsed.hostname.toLowerCase();
+    const trusted = getTrustedDomains();
 
     // Check trusted domains or local network IP addresses
     return (
-      TRUSTED_DOMAINS.some(
+      trusted.some(
         (domain) =>
           hostname === domain ||
-          (domain !== "dhbbgfzbyatzvqafnsqp.supabase.co" && hostname.endsWith(`.${domain}`))
+          (!domain.includes(".supabase.co") && hostname.endsWith(`.${domain}`))
       ) ||
       /^192\.168\.\d+\.\d+$/.test(hostname) ||
       /^10\.\d+\.\d+\.\d+$/.test(hostname) ||

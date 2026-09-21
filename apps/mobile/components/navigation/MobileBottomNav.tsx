@@ -1,183 +1,115 @@
 /**
  * ReachInternational Mobile — Floating Bottom Navigation Bar
- * 100% Parity with Web MobileBottomNav (apps/web/components/layout/MobileBottomNav.tsx)
- * Features floating pill container, role-based tabs, active dot indicator,
- * integrated Command Palette search for all pages, and Slide-Up Profile Sheet.
+ * Manifest-driven: reads from @reachinternational/permissions getNavForRole().
+ * Last slot is More (if overflow exists) or Account (if no overflow).
+ * Hides while keyboard is open.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Platform,
+  Keyboard,
 } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../ui/ThemeProvider';
 import { useAuth } from '../../lib/auth/useAuth';
-import { MobileProfileSheet } from './MobileProfileSheet';
 import {
-  LayoutDashboard,
+  getNavForRole,
+  labelFor,
+} from '@reachinternational/permissions';
+import type { UserRole } from '@reachinternational/types';
+import {
+  Home,
   Wrench,
   Gauge,
   Users,
-  User,
   Building2,
-  Settings,
+  Shield,
+  Menu,
+  User,
+  Banknote,
 } from 'lucide-react-native';
 
-export interface MobileBottomNavProps {
-  // Optional custom props if needed
-}
+// Icon string key → Lucide RN component
+const ICONS: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
+  home: Home,
+  gauge: Gauge,
+  wrench: Wrench,
+  building: Building2,
+  users: Users,
+  shield: Shield,
+  menu: Menu,
+  user: User,
+  banknote: Banknote,
+};
 
-interface NavItemConfig {
-  id: string;
-  href?: string;
-  label: string;
-  icon: React.ComponentType<{ size?: number; color?: string }>;
-  isAction?: boolean;
-  actionType?: 'profile';
-  roles?: string[];
-}
+export interface MobileBottomNavProps {}
 
-export const MobileBottomNav: React.FC<MobileBottomNavProps> = () => {
-  const { theme, isDark } = useTheme();
-  const { role } = useAuth();
-  const router = useRouter();
-  const pathname = usePathname();
-  const insets = useSafeAreaInsets();
+export const MobileBottomNav: React.FC<MobileBottomNavProps> = memo(
+  function MobileBottomNav() {
+    const { theme, isDark } = useTheme();
+    const { role } = useAuth();
+    const router = useRouter();
+    const pathname = usePathname();
+    const insets = useSafeAreaInsets();
 
-  const [profileSheetOpen, setProfileSheetOpen] = useState(false);
+    const [keyboardVisible, setKeyboardVisible] = useState(false);
 
-  const normalizedRole = (role || 'operator').toLowerCase();
-  const isOperator = normalizedRole === 'operator';
-  const isHr = normalizedRole === 'hr';
-  const isAdmin = normalizedRole === 'admin' || normalizedRole === 'super_admin';
-  const canAccessClients = isAdmin || normalizedRole === 'manager';
-  const canAccessUsers = isAdmin || normalizedRole === 'manager' || normalizedRole === 'hr' || normalizedRole === 'supervisor';
+    // Hide bar while keyboard is open
+    useEffect(() => {
+      const showSub = Keyboard.addListener('keyboardDidShow', () =>
+        setKeyboardVisible(true),
+      );
+      const hideSub = Keyboard.addListener('keyboardDidHide', () =>
+        setKeyboardVisible(false),
+      );
+      return () => {
+        showSub.remove();
+        hideSub.remove();
+      };
+    }, []);
 
-  // Build clean page navigation items with Dashboard as primary tab
-  const navItems: NavItemConfig[] = isOperator
-    ? [
-        {
-          id: 'dashboard',
-          href: '/(app)/dashboard',
-          label: 'Dashboard',
-          icon: LayoutDashboard,
-        },
-        {
-          id: 'operations',
-          href: '/(app)/operations',
-          label: 'Operations',
-          icon: Gauge,
-        },
-        {
-          id: 'machines',
-          href: '/(app)/machines',
-          label: 'Machines',
-          icon: Wrench,
-        },
-        {
-          id: 'settings',
-          href: '/(app)/settings',
-          label: 'Settings',
-          icon: Settings,
-        },
-      ]
-    : isHr
-    ? [
-        {
-          id: 'dashboard',
-          href: '/(app)/dashboard',
-          label: 'Dashboard',
-          icon: LayoutDashboard,
-        },
-        {
-          id: 'users',
-          href: '/(app)/users',
-          label: 'Users',
-          icon: Users,
-        },
-        {
-          id: 'settings',
-          href: '/(app)/settings',
-          label: 'Settings',
-          icon: Settings,
-        },
-      ]
-    : [
-        {
-          id: 'dashboard',
-          href: '/(app)/dashboard',
-          label: 'Dashboard',
-          icon: LayoutDashboard,
-        },
-        {
-          id: 'machines',
-          href: '/(app)/machines',
-          label: 'Machines',
-          icon: Wrench,
-        },
-        {
-          id: 'operations',
-          href: '/(app)/operations',
-          label: 'Operations',
-          icon: Gauge,
-        },
-        ...(canAccessClients
-          ? [
-              {
-                id: 'clients',
-                href: '/(app)/clients',
-                label: 'Clients',
-                icon: Building2,
-              },
-            ]
-          : []),
-        ...(canAccessUsers && !canAccessClients
-          ? [
-              {
-                id: 'users',
-                href: '/(app)/users',
-                label: 'Users',
-                icon: Users,
-              },
-            ]
-          : []),
-        {
-          id: 'settings',
-          href: '/(app)/settings',
-          label: 'Settings',
-          icon: Settings,
-        },
-      ];
+    if (keyboardVisible) return null;
 
-  const visibleItems = navItems.filter(
-    (item) => !item.roles || item.roles.includes(normalizedRole)
-  );
+    const normalizedRole = ((role || 'operator') as string).toLowerCase() as UserRole;
+    const { primary, more, hasMore } = getNavForRole(normalizedRole);
 
-  const handleItemPress = (item: NavItemConfig) => {
-    if (item.isAction && item.actionType === 'profile') {
-      setProfileSheetOpen(true);
-      return;
-    }
+    // Build tab list from manifest
+    const tabs = [
+      ...primary.map((i) => ({
+        key: i.key,
+        label: labelFor(i, normalizedRole),
+        href: `/(app)${i.href}`,
+        icon: i.icon,
+        match: i.match,
+      })),
+      {
+        key: 'more' as const,
+        label: hasMore ? 'More' : 'Account',
+        href: '/(app)/more',
+        icon: hasMore ? 'menu' : 'user',
+        match: [
+          '/more',
+          '/profile',
+          '/settings',
+          '/privacy',
+          '/terms',
+          '/account-deletion',
+          ...more.flatMap((i) => i.match),
+        ],
+      },
+    ];
 
-    if (item.href) {
-      router.push(item.href as any);
-    }
-  };
-
-  return (
-    <>
-      {/* Floating Bottom Navigation Pill Container */}
+    return (
       <View
         style={[
           styles.outerContainer,
           {
             paddingBottom: Math.max(insets.bottom, 10),
-            pointerEvents: 'box-none',
           },
         ]}
       >
@@ -185,45 +117,35 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = () => {
           style={[
             styles.pillBar,
             {
-              backgroundColor: isDark ? 'rgba(23, 23, 23, 0.94)' : 'rgba(255, 255, 255, 0.94)',
+              backgroundColor: isDark
+                ? 'rgba(23, 23, 23, 0.94)'
+                : 'rgba(255, 255, 255, 0.94)',
               borderColor: theme.colors.hairline,
             },
           ]}
         >
-          {visibleItems.map((item) => {
-            const Icon = item.icon;
+          {tabs.map((item) => {
+            const Icon = ICONS[item.icon] || Menu;
 
             // Compute active state
-            let isActive = false;
-            if (item.id === 'dashboard') {
-              isActive = pathname.includes('dashboard') || pathname === '/' || pathname === '/(app)';
-            } else if (item.id === 'settings') {
-              isActive = pathname.includes('settings');
-            } else if (item.isAction && item.actionType === 'profile') {
-              isActive = profileSheetOpen || pathname.includes('profile');
-            } else if (item.id === 'machines') {
-              isActive = pathname.includes('machines');
-            } else if (item.id === 'operations') {
-              isActive = pathname.includes('operations');
-            } else if (item.id === 'clients') {
-              isActive = pathname.includes('clients');
-            } else if (item.id === 'users') {
-              isActive = pathname.includes('users');
-            }
+            const isActive = item.match.some(
+              (p) => pathname.includes(p.replace('/', '')),
+            );
 
             const itemColor = isActive ? theme.colors.ink : theme.colors.mute;
 
             return (
               <TouchableOpacity
-                key={item.id}
-                onPress={() => handleItemPress(item)}
+                key={item.key}
+                onPress={() => router.push(item.href as any)}
                 style={styles.navItemBtn}
                 activeOpacity={0.7}
-                accessibilityRole="button"
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isActive }}
                 accessibilityLabel={item.label}
               >
                 <View style={styles.itemContent}>
-                  <Icon size={20} color={itemColor} />
+                  <Icon size={18} color={itemColor} />
                   <Text
                     style={[
                       styles.itemLabel,
@@ -236,7 +158,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = () => {
                     {item.label}
                   </Text>
 
-                  {/* Active Dot Indicator beneath active item label */}
+                  {/* Active Dot Indicator */}
                   {isActive && (
                     <View
                       style={[
@@ -251,15 +173,9 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = () => {
           })}
         </View>
       </View>
-
-      {/* Integrated Slide-Up Profile Sheet Modal */}
-      <MobileProfileSheet
-        isOpen={profileSheetOpen}
-        onClose={() => setProfileSheetOpen(false)}
-      />
-    </>
-  );
-};
+    );
+  },
+);
 
 const styles = StyleSheet.create({
   outerContainer: {
@@ -269,7 +185,7 @@ const styles = StyleSheet.create({
     right: 0,
     zIndex: 40,
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingTop: 4,
   },
   pillBar: {
@@ -278,8 +194,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
-    paddingVertical: 6,
-    paddingHorizontal: 6,
+    paddingVertical: 5,
+    paddingHorizontal: 4,
     borderRadius: 9999,
     borderWidth: 1,
     shadowColor: '#000000',
@@ -292,8 +208,9 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 2,
+    paddingVertical: 3,
+    paddingHorizontal: 1,
+    minHeight: 44,
   },
   itemContent: {
     alignItems: 'center',
@@ -301,14 +218,14 @@ const styles = StyleSheet.create({
     minHeight: 38,
   },
   itemLabel: {
-    fontSize: 10,
-    letterSpacing: -0.2,
-    marginTop: 2,
+    fontSize: 9.5,
+    letterSpacing: -0.3,
+    marginTop: 1.5,
   },
   activeDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
+    width: 4.5,
+    height: 4.5,
+    borderRadius: 2.25,
     marginTop: 2,
   },
 });

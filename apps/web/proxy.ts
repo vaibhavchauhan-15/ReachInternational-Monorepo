@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
+import { getSupabaseUrl, getSupabasePublishableKey } from "@/lib/env";
 import { checkRateLimitAsync, getClientIp, RATE_LIMIT_PROFILES } from "@/lib/security/rate-limiter";
 import { signInternalUser } from "@/lib/security/internal-auth-token";
 
@@ -9,7 +10,11 @@ const activeProtectedRoutes = [
   "/operations",
   "/clients",
   "/users",
+  "/hr",
   "/audit",
+  "/settings",
+  "/more",
+  "/profile",
   "/onboarding",
 ];
 
@@ -17,7 +22,6 @@ const deprecatedRoutes = [
   "/crm",
   "/inventory",
   "/finance",
-  "/hr",
   "/tasks",
   "/documents",
   "/challans",
@@ -35,10 +39,9 @@ const deprecatedRoutes = [
   "/audit-logs",
   "/my-work",
   "/docs",
-  "/settings",
 ];
 
-const authRoutes = ["/login", "/forgot-password", "/signup"];
+const authRoutes = ["/login", "/forgot-password", "/signup", "/reset-password"];
 const publicLegalRoutes = [
   "/privacy",
   "/terms",
@@ -97,8 +100,8 @@ export async function proxy(request: NextRequest) {
   });
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    getSupabaseUrl(),
+    getSupabasePublishableKey(),
     {
       cookies: {
         getAll() {
@@ -188,11 +191,34 @@ export async function proxy(request: NextRequest) {
     request.nextUrl.searchParams.has("reason") ||
     request.nextUrl.searchParams.has("status");
 
-  // Redirect authenticated user visiting auth entry routes (/login, /signup, /forgot-password) to /dashboard
-  // UNLESS they arrived with an error/status parameter (prevents redirect loops on pending/inactive accounts).
+  const isRecoveryFlow =
+    request.nextUrl.searchParams.get("type") === "recovery" ||
+    request.nextUrl.searchParams.has("code") ||
+    request.nextUrl.searchParams.has("token_hash") ||
+    request.nextUrl.searchParams.has("reset") ||
+    path.startsWith("/reset-password");
+
+  // Intercept recovery code/token_hash arriving at /reset-password or /login
+  // and route through /api/auth/callback for server-side PKCE code exchange
+  if (
+    (path === "/reset-password" || path === "/login") &&
+    (request.nextUrl.searchParams.has("code") || request.nextUrl.searchParams.has("token_hash"))
+  ) {
+    const callbackUrl = new URL("/api/auth/callback", request.nextUrl);
+    request.nextUrl.searchParams.forEach((val, key) => {
+      callbackUrl.searchParams.set(key, val);
+    });
+    if (!callbackUrl.searchParams.has("next")) {
+      callbackUrl.searchParams.set("next", "/reset-password");
+    }
+    return createRedirectResponse(callbackUrl.pathname + callbackUrl.search);
+  }
+
+  // Redirect authenticated user visiting auth entry routes (/login, /signup, /forgot-password, /reset-password) to /dashboard
+  // UNLESS they arrived with an error/status parameter or are in an active recovery flow.
   // Public legal routes (/privacy, /terms, /account-deletion) remain accessible to both authenticated and guest users.
   const isAuthRoute = authRoutes.some((route) => path.startsWith(route));
-  if (isAuthRoute && authenticatedUser && !hasAuthErrorParam) {
+  if (isAuthRoute && authenticatedUser && !hasAuthErrorParam && !isRecoveryFlow) {
     return createRedirectResponse("/dashboard");
   }
 

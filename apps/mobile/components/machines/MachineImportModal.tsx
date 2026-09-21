@@ -12,6 +12,7 @@ import {
 import { useTheme } from '../ui/ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { FileSpreadsheet, X, Download, CheckCircle2, AlertCircle } from 'lucide-react-native';
+import { getAppUrl } from '../../lib/env';
 
 export interface MachineImportModalProps {
   visible: boolean;
@@ -38,7 +39,7 @@ export const MachineImportModal: React.FC<MachineImportModalProps> = ({
           '5. Hour Meter (HMR) (Optional, e.g. 1500)\n' +
           '6. Health Status (active | under_maintenance | breakdown)\n' +
           '7. Rental Status (available | rented)\n\n' +
-          'Use the Reach International Web Portal (https://dashboard-reachinternational.vercel.app/machines) for direct file upload and validation.',
+          `Use the Reach International Web Portal (${getAppUrl()}/machines) for direct file upload and validation.`,
       });
     } catch {
       // dismissed

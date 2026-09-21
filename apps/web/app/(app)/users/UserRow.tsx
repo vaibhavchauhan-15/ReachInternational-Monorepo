@@ -348,28 +348,7 @@ export const UserRow = memo(function UserRow({
         )}
       </td>
 
-      {/* 5. Working Location / Operating Base */}
-      <td className="py-3 px-4">
-        {user.working_location?.name ? (
-          <div className="flex items-center gap-1.5 min-w-0" title={`Working Base: ${user.working_location.name}${user.working_location.city ? ` (${user.working_location.city})` : ""}`}>
-            <AnimatedMapPin size={13} className="text-[var(--color-link)] shrink-0 opacity-70" />
-            <div className="flex flex-col min-w-0">
-              <span className="text-xs font-medium text-[var(--color-ink)] truncate max-w-[150px]">
-                {user.working_location.name}
-              </span>
-              {user.working_location.city && (
-                <span className="text-[10px] text-[var(--color-mute)] truncate max-w-[150px]">
-                  {user.working_location.city}
-                </span>
-              )}
-            </div>
-          </div>
-        ) : (
-          <span className="text-xs text-[var(--color-mute)] font-normal">—</span>
-        )}
-      </td>
-
-      {/* 5. Employee City */}
+      {/* 5. Location */}
       <td className="py-3 px-4">
         {user.city || user.location ? (
           <span className="text-xs font-medium text-[var(--color-ink)] truncate block max-w-[160px]" title={(user.city || user.location) ?? undefined}>

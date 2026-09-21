@@ -1,6 +1,7 @@
 import "server-only";
 import sgMail from "@sendgrid/mail";
 import { escapeHtml } from "@reachinternational/utils";
+import { getAppUrl } from "@/lib/env";
 
 if (process.env.SENDGRID_API_KEY) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY);
@@ -172,7 +173,7 @@ export async function sendWelcomeEmail(email: string, name: string, password: st
           <p><strong>Password:</strong> ${safePassword}</p>
         </div>
         <p>Please login at the link below:</p>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL || ""}/login" class="btn">Login to Dashboard</a>
+        <a href="${getAppUrl()}/login" class="btn">Login to Dashboard</a>
         <p style="color: #6b7280; font-size: 14px; margin-top: 15px;">For security, please change your password after first login.</p>
       </div>
       <div class="footer">
@@ -214,7 +215,7 @@ export async function sendApprovalEmail(email: string, name: string) {
       <div class="content">
         <h2>Hello ${safeName},</h2>
         <p>Your REACH INTERNATIONAL account has been approved. You can now login to access the system.</p>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL || ""}/login" class="btn">Login to Dashboard</a>
+        <a href="${getAppUrl()}/login" class="btn">Login to Dashboard</a>
       </div>
       <div class="footer">
         <p>This is an automated email from REACH INTERNATIONAL.</p>
@@ -302,7 +303,7 @@ export async function sendPendingApprovalEmailToAdmins(adminEmails: string[], us
           <p><strong>Requested Role:</strong> ${roleDisplay}</p>
         </div>
         <p>Please review and approve/reject this request in the admin dashboard.</p>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL || ""}/users" class="btn">Go to Admin Dashboard</a>
+        <a href="${getAppUrl()}/users" class="btn">Go to Admin Dashboard</a>
       </div>
       <div class="footer">
         <p>This is an automated email from REACH INTERNATIONAL.</p>
@@ -355,7 +356,7 @@ export async function sendPasswordResetNotification(email: string, name: string,
           <p><strong>New Password:</strong> ${safePassword}</p>
         </div>
         <p>Please login at the link below:</p>
-        <a href="${process.env.NEXT_PUBLIC_APP_URL || ""}/login" class="btn">Login to Dashboard</a>
+        <a href="${getAppUrl()}/login" class="btn">Login to Dashboard</a>
         <p style="color: #6b7280; font-size: 14px; margin-top: 15px;">For security, please change your password after logging in.</p>
       </div>
       <div class="footer">

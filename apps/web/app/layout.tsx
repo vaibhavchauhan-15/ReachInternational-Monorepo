@@ -1,10 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Analytics } from "@vercel/analytics/next";
 import { AgentationWrapper } from "@/components/AgentationWrapper";
 import { CookieConsent } from "@/components/ui/CookieConsent";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { ThemeScript } from "@/components/theme/ThemeScript";
+import { GoogleAnalytics } from "@/components/analytics";
+import { getAppUrl, getSupabaseUrl } from "@/lib/env";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,7 +34,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://www.reachinternational.co.in"),
+  metadataBase: new URL(getAppUrl()),
   title: "REACH INTERNATIONAL — Reaching All Heights",
   description:
     "Enterprise heavy machinery fleet management, field service tracking, and automated operations platform.",
@@ -97,10 +100,12 @@ export default function RootLayout({
         <link rel="icon" href="/dark-favicon.svg" type="image/svg+xml" media="(prefers-color-scheme: light)" />
         <link rel="apple-touch-icon" href="/light-apple-touch-icon.png" media="(prefers-color-scheme: dark)" />
         <link rel="apple-touch-icon" href="/dark-apple-touch-icon.png" media="(prefers-color-scheme: light)" />
-        {process.env.NEXT_PUBLIC_SUPABASE_URL ? (
+        <link rel="preconnect" href="https://www.googletagmanager.com" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://www.googletagmanager.com" />
+        {getSupabaseUrl() ? (
           <link
             rel="preconnect"
-            href={process.env.NEXT_PUBLIC_SUPABASE_URL}
+            href={getSupabaseUrl()}
             crossOrigin="anonymous"
           />
         ) : null}
@@ -114,6 +119,8 @@ export default function RootLayout({
               </PullToRefresh>
               <AgentationWrapper />
               <CookieConsent />
+              <GoogleAnalytics />
+              <Analytics />
             </TooltipProvider>
           </ToastProvider>
         </ThemeProvider>

@@ -1,3 +1,5 @@
+"use client";
+
 import React from "react";
 import { ClientsHeader } from "./ClientsHeader";
 import { ClientSearch } from "./ClientSearch";

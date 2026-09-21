@@ -11,6 +11,7 @@ import {
   AnimatedChevronDown,
   AnimatedSearch,
   AnimatedDashboard,
+  AnimatedHome,
   AnimatedWrench,
   AnimatedBell,
   AnimatedUsers,
@@ -62,7 +63,7 @@ export const defaultPublicNavLinks: NavItem[] = [
 ];
 
 export const appNavItems: NavItem[] = [
-  { href: "/dashboard", label: "Dashboard", icon: AnimatedDashboard, roles: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"] },
+  { href: "/dashboard", label: "Home", icon: AnimatedHome, roles: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"] },
   { href: "/machines", label: "Machines", icon: AnimatedWrench, roles: ["super_admin", "admin", "manager", "supervisor", "operator"] },
   { href: "/operations", label: "Operations", icon: AnimatedDashboard, roles: ["super_admin", "admin", "manager", "supervisor", "operator"] },
   { href: "/clients", label: "Clients", icon: AnimatedDashboard, roles: ["super_admin", "admin", "manager"] },
@@ -462,9 +463,10 @@ export function PublicNavbar({
                     <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.96 }}>
                       <Link
                         href="/dashboard"
+                        data-analytics-click="Navbar Go to Home"
                         className="btn-primary flex items-center gap-2 text-xs h-9 px-4 font-medium transition-all shadow-xs hover:shadow-md"
                       >
-                        Go to Dashboard
+                        Go to Home
                         <AnimatedArrowRight size={14} />
                       </Link>
                     </motion.div>
@@ -472,6 +474,7 @@ export function PublicNavbar({
                     <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.96 }}>
                       <Link
                         href="/login"
+                        data-analytics-click="Navbar Get Started"
                         className="relative group overflow-hidden rounded-full bg-primary text-primary-foreground text-xs font-medium px-4.5 py-2 flex items-center gap-2 shadow-sm transition-all duration-200 hover:shadow-md hover:opacity-95"
                       >
                         <span className="relative z-10 flex items-center gap-1.5">
@@ -547,14 +550,16 @@ export function PublicNavbar({
                   {effectiveIsLoggedIn ? (
                     <Link
                       href="/dashboard"
+                      data-analytics-click="Mobile Drawer Go to Home"
                       onClick={() => setMobileMenuOpen(false)}
                       className="btn-primary w-full justify-center text-xs"
                     >
-                      Go to Dashboard
+                      Go to Home
                     </Link>
                   ) : (
                     <Link
                       href="/login"
+                      data-analytics-click="Mobile Drawer Get Started"
                       onClick={() => setMobileMenuOpen(false)}
                       className="btn-primary w-full justify-center text-xs"
                     >

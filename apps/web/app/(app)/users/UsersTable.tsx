@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { RotateCcw } from "lucide-react";
 import { AnimatedSearch } from "@/components/ui/animated-icons";
 import { Card, Button } from "@/components/ui";
@@ -47,11 +47,7 @@ export function TableSkeletonRows({ readOnly }: { readOnly?: boolean }) {
           </td>
           {/* Location */}
           <td className="py-3.5 px-4">
-            <div className="h-3 w-24 bg-[var(--color-hairline)]/70 rounded" />
-          </td>
-          {/* City */}
-          <td className="py-3.5 px-4">
-            <div className="h-3 w-16 bg-[var(--color-hairline)]/70 rounded" />
+            <div className="h-3 w-20 bg-[var(--color-hairline)]/70 rounded" />
           </td>
           {/* Status */}
           <td className="py-3.5 px-4">
@@ -71,30 +67,84 @@ export function TableSkeletonRows({ readOnly }: { readOnly?: boolean }) {
   );
 }
 
-export function MobileCardSkeletonList() {
+export function MobileUserCardSkeleton({ selectable = false }: { selectable?: boolean }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {[1, 2, 3, 4, 5, 6].map((i) => (
-        <div
-          key={i}
-          className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs animate-pulse flex flex-col gap-3"
-        >
-          <div className="flex items-center justify-between gap-2.5">
-            <div className="flex items-center gap-2.5 flex-1 min-w-0">
-              <div className="h-9 w-9 rounded-lg bg-[var(--color-hairline)] shrink-0" />
-              <div className="space-y-1.5 flex-1">
-                <div className="h-3.5 w-24 bg-[var(--color-hairline)] rounded" />
-                <div className="h-2.5 w-16 bg-[var(--color-hairline)]/60 rounded" />
-              </div>
-            </div>
-            <div className="h-5 w-16 rounded-full bg-[var(--color-hairline)]" />
-          </div>
-          <div className="space-y-2 pt-1 border-t border-[var(--color-hairline)]/60">
-            <div className="h-3 w-36 bg-[var(--color-hairline)]/70 rounded" />
-            <div className="h-3 w-28 bg-[var(--color-hairline)]/60 rounded" />
+    <div className="p-3.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xs flex flex-col gap-2.5 relative overflow-hidden border-l-[3px] border-l-[var(--color-hairline)] select-none">
+      {/* Top Header section: Checkbox, Avatar, Name, Status, Chevron */}
+      <div className="flex items-center justify-between gap-2.5">
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          {selectable && (
+            <div className="h-4 w-4 rounded-[4px] bg-[var(--color-hairline)]/70 shrink-0 animate-pulse" />
+          )}
+
+          {/* Initials Avatar Placeholder */}
+          <div className="h-9 w-9 rounded-lg bg-[var(--color-hairline)]/80 shrink-0 animate-pulse" />
+
+          <div className="flex flex-col min-w-0 flex-1 gap-1.5">
+            <div className="h-3.5 w-28 max-w-[70%] bg-[var(--color-hairline)] rounded animate-pulse" />
+            <div className="h-2.5 w-20 max-w-[50%] bg-[var(--color-hairline)]/60 rounded animate-pulse" />
           </div>
         </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <div className="h-5 w-16 rounded-full bg-[var(--color-hairline)]/70 animate-pulse" />
+          <div className="h-3.5 w-3.5 rounded bg-[var(--color-hairline)]/40 animate-pulse" />
+        </div>
+      </div>
+
+      {/* Metadata Row: Contact on Left, Role Badge on Bottom Right */}
+      <div className="pt-2 border-t border-[var(--color-hairline)] flex items-end justify-between gap-2 text-xs">
+        <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+          {/* Email row placeholder */}
+          <div className="flex items-center gap-1.5">
+            <div className="h-3 w-3 rounded-full bg-[var(--color-hairline)]/60 shrink-0 animate-pulse" />
+            <div className="h-3 w-36 max-w-[85%] bg-[var(--color-hairline)]/70 rounded animate-pulse" />
+          </div>
+          {/* Phone row placeholder */}
+          <div className="flex items-center gap-1.5">
+            <div className="h-3 w-3 rounded-full bg-[var(--color-hairline)]/60 shrink-0 animate-pulse" />
+            <div className="h-3 w-28 max-w-[65%] bg-[var(--color-hairline)]/70 rounded animate-pulse" />
+          </div>
+          {/* Location / Base row placeholder */}
+          <div className="flex items-center gap-1.5">
+            <div className="h-3 w-3 rounded-full bg-[var(--color-hairline)]/60 shrink-0 animate-pulse" />
+            <div className="h-3 w-20 max-w-[50%] bg-[var(--color-hairline)]/50 rounded animate-pulse" />
+          </div>
+        </div>
+
+        {/* Role Badge placeholder on Bottom Right */}
+        <div className="h-5 w-16 rounded-full bg-[var(--color-hairline)]/80 shrink-0 self-end animate-pulse" />
+      </div>
+    </div>
+  );
+}
+
+export function MobileCardSkeletonItems({
+  count = 3,
+  selectable = false,
+}: {
+  count?: number;
+  selectable?: boolean;
+}) {
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <MobileUserCardSkeleton key={`mobile-user-card-skeleton-${i}`} selectable={selectable} />
       ))}
+    </>
+  );
+}
+
+export function MobileCardSkeletonList({
+  count = 6,
+  selectable = false,
+}: {
+  count?: number;
+  selectable?: boolean;
+}) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <MobileCardSkeletonItems count={count} selectable={selectable} />
     </div>
   );
 }
@@ -185,7 +235,7 @@ export function UsersTable({
         }
       >
         {isQueryLoading ? (
-          <MobileCardSkeletonList />
+          <MobileCardSkeletonList count={6} selectable={!readOnly} />
         ) : usersList.length === 0 ? (
           <div className="py-14 px-4 text-center rounded-[var(--radius-md)] border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] flex flex-col items-center justify-center">
             <div className="w-12 h-12 rounded-full bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] flex items-center justify-center text-[var(--color-mute)] mb-3 shadow-xs">
@@ -231,19 +281,16 @@ export function UsersTable({
                   />
                 ))}
               </AnimatePresence>
+
+              {/* Skeletons while loading more staff chunk-by-chunk on mobile infinite scroll */}
+              {isLoadingMoreMobile && (
+                <MobileCardSkeletonItems count={3} selectable={!readOnly} />
+              )}
             </div>
 
             {/* Infinite Scroll Sentinel for Mobile View */}
             {mobileHasMore && !loadMoreMobileError && !isQueryLoading && (
               <div ref={mobileSentinelRef} className="h-6 w-full pointer-events-none" />
-            )}
-
-            {/* Loading More Indicator */}
-            {isLoadingMoreMobile && (
-              <div className="py-4 flex items-center justify-center gap-2 text-xs text-[var(--color-mute)]">
-                <AnimatedSearch className="animate-spin text-[var(--color-link)]" size={15} />
-                <span>Loading more staff...</span>
-              </div>
             )}
 
             {/* Pagination Load More Error with Retry */}
@@ -329,11 +376,8 @@ export function UsersTable({
                   <th className="py-3 px-4 w-[13%] whitespace-nowrap">
                     Supervisor
                   </th>
-                  <th className="py-3 px-4 w-[14%] whitespace-nowrap">
-                    Working Location
-                  </th>
-                  <th className="py-3 px-4 w-[9%] whitespace-nowrap">
-                    City
+                  <th className="py-3 px-4 w-[16%] whitespace-nowrap">
+                    Location
                   </th>
                   <th className="py-3 px-4 w-[8%] whitespace-nowrap">
                     Status
@@ -351,7 +395,7 @@ export function UsersTable({
                   <TableSkeletonRows readOnly={readOnly} />
                 ) : usersList.length === 0 ? (
                   <tr>
-                    <td colSpan={readOnly ? 9 : 10} className="py-16 px-4 text-center">
+                    <td colSpan={readOnly ? 8 : 9} className="py-16 px-4 text-center">
                       <div className="flex flex-col items-center justify-center max-w-sm mx-auto">
                         <div className="w-12 h-12 rounded-full bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] flex items-center justify-center text-[var(--color-mute)] mb-3 shadow-xs">
                           <AnimatedSearch size={22} />

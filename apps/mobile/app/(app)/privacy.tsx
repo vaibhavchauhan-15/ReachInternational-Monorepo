@@ -219,7 +219,7 @@ export default function PrivacyPolicyScreen() {
             <Text style={[styles.insetTitle, { color: theme.colors.ink }]}>Account Deletion (Google Play Compliant)</Text>
             <Text style={[styles.insetText, { color: theme.colors.body }]}>
               • In-App: Settings → My Account → Request Account Deletion.{'\n'}
-              • Web Portal: Visit {BRAND_WEBSITE_DISPLAY}/account-deletion.{'\n'}
+              • Web Portal: Visit {BRAND_WEBSITE_DISPLAY}/delete-account.{'\n'}
               • Email: Send request to {BRAND_EMAIL}.{'\n'}
               Personal identity credentials and KYC documents are permanently expunged within 14 business days.
             </Text>

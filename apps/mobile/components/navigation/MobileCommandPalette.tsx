@@ -35,8 +35,9 @@ import {
   LogOut,
   Sun,
   Moon,
-  LayoutDashboard,
+  Home,
   Settings,
+  Banknote,
 } from 'lucide-react-native';
 
 export interface MobileCommandPaletteProps {
@@ -90,12 +91,12 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
       // NAVIGATION ITEMS (All Monorepo Domain Pages)
       {
         id: 'nav-dashboard',
-        title: 'Fleet Operations Dashboard',
+        title: 'Home',
         subtitle: 'Executive overview, fleet utilization KPIs & recent activities',
         category: 'Navigation',
-        icon: LayoutDashboard,
+        icon: Home,
         href: '/(app)/dashboard',
-        keywords: ['dashboard', 'kpi', 'metrics', 'overview', 'analytics', 'home'],
+        keywords: ['home', 'dashboard', 'kpi', 'metrics', 'overview', 'analytics'],
       },
       {
         id: 'nav-machines',
@@ -135,7 +136,17 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         icon: Clock,
         href: '/(app)/operations?tab=logs',
         keywords: ['running hours', 'meter log', 'log history', 'daily log'],
-        roles: ['super_admin', 'admin', 'manager', 'supervisor', 'operator'],
+        roles: ['super_admin', 'admin', 'manager', 'supervisor', 'hr', 'operator'],
+      },
+      {
+        id: 'nav-hr',
+        title: 'HR & Operator Payroll',
+        subtitle: 'Calculate monthly operator compensation and client-lagged overtime wages',
+        category: 'Navigation',
+        icon: Banknote,
+        href: '/(app)/hr',
+        keywords: ['payroll', 'salary', 'wages', 'rates', 'hr', 'operator pay', 'overtime pay', 'compensation'],
+        roles: ['super_admin', 'admin', 'manager', 'hr'],
       },
       {
         id: 'nav-clients',

@@ -118,8 +118,8 @@ export function LandingFooter() {
             <Link href="/terms" className="hover:text-[var(--color-ink)] transition-colors">
               Terms of Service
             </Link>
-            <Link href="/account-deletion" className="hover:text-[var(--color-ink)] transition-colors">
-              Account Deletion
+            <Link href="/account-deletion-guide" className="hover:text-[var(--color-ink)] transition-colors">
+              Deletion Guide
             </Link>
           </div>
         </div>

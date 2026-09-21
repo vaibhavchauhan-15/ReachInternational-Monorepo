@@ -1,3 +1,859 @@
+- **HR & Operator Payroll Multi-Role Accessibility & Security Implementation (/hr, /payroll) (2026-09-21)**:
+  - **1. User Request**:
+    - "make the hr payroll routs accessible to hr , manager ,admin , super admin also ensure that is should be properly implement"
+  - **2. Root Cause Analysis**:
+    - Next.js Edge Auth Proxy (`apps/web/proxy.ts`): `/hr` was listed in `deprecatedRoutes` and missing from `activeProtectedRoutes`, causing any authenticated user (`hr`, `manager`, `admin`, `super_admin`) visiting `/hr` to be immediately redirected to `/dashboard`.
+    - Mobile Rate Mutation RLS Block: `apps/mobile/app/(app)/hr.tsx` performed direct `supabase.from('users').update(...)`, which failed with Postgres RLS error for `hr` and `manager` because `users_update_admin` RLS policy only permitted `super_admin` and `admin`.
+    - Bottom Navigation Inconsistency: For `manager`, `admin`, and `super_admin`, `/hr` lives in the `more` overflow tab, but `more.match` in both Web and Mobile bottom navigation bars did not include the overflow items, leaving the bar unhighlighted when on `/hr`.
+    - Web More Page Icon: `MorePageClient.tsx` lacked a `banknote` mapping in `ICONS`, falling back to `Shield`.
+    - Command Palette: Quick-access shortcut `⌘P` was missing for HR Payroll in both Web and Mobile command palettes.
+  - **3. Implementation Details**:
+    - `apps/web/proxy.ts`: Moved `"/hr"` from `deprecatedRoutes` to `activeProtectedRoutes`.
+    - `apps/web/next.config.ts`: Added permanent redirect `{ source: "/payroll", destination: "/hr", permanent: false }`.
+    - `supabase/migrations/095_operator_payroll_rpcs.sql`:
+      - Added caller authorization check in `get_hr_payroll_summary` verifying `role IN ('super_admin', 'admin', 'manager', 'hr')`.
+      - Created `update_operator_payroll_rates` and `bulk_update_operator_payroll_rates` executing under `SECURITY DEFINER` with caller RBAC enforcement.
+      - Applied directly to live Supabase database (`dhbbgfzbyatzvqafnsqp`).
+    - `packages/permissions/src/permissions.ts` & `matrix.ts`: Defined `HR_PAYROLL_VIEW` and `HR_PAYROLL_MANAGE` constants and granted them to `admin`, `manager`, and `hr`.
+    - `apps/web/app/actions/hr.ts`: Updated `updateOperatorRates` and `bulkUpdateOperatorRates` to call the new RPCs with tag-based cache revalidation (`CACHE_TAGS.users`).
+    - `apps/mobile/app/(app)/hr.tsx`: Updated `handleSaveRates` to call `supabase.rpc('update_operator_payroll_rates')`.
+    - `apps/web/components/navigation/BottomNav.tsx` & `apps/mobile/components/navigation/MobileBottomNav.tsx`: Dynamically expanded `more.match` to include `...more.flatMap(i => i.match)`.
+    - `apps/web/components/navigation/MorePageClient.tsx`: Added `Banknote` icon to `ICONS`.
+    - `apps/web/components/ui/CommandPalette.tsx` & `apps/mobile/components/navigation/MobileCommandPalette.tsx`: Registered `nav-hr` ("HR & Operator Payroll", `⌘P`) for `['super_admin', 'admin', 'manager', 'hr']` and added `'hr'` to running hours.
+  - **4. Verification**:
+    - Permissions navigation test: 1/1 passed (0 failures).
+    - Web TypeScript check: 0 errors (exit 0).
+    - Mobile TypeScript check: 0 errors (exit 0).
+    - Monorepo Turbo typecheck: 7/7 packages successful (exit 0).
+    - Database RPCs verified with live execution on Supabase.
+- **HR & Operator Payroll Module with Split-Month Overtime Lag Formula & Operator Logs Access (/hr, /operations) (2026-09-21)**:
+  - **1. User Request**:
+    - "hr should able to check each and every operator logs reports access"
+    - "also hr can access the hr page where hr can make payroll of single and multiple operator at once"
+    - "also payroll decide as per operator work hours and overtime"
+    - "today is 1 sept: payroll = previous month total work day from 1 aug to 31 aug + total ot hours from 1st july to 31 july according to the per day/hours salary will show there"
+    - "our company give ot pay 1 month later due to confirmation delay by the client site"
+    - "and make sure hr page properly accessible to hr and manager, admin, super admin"
+  - **2. Root Cause Analysis**:
+    - HR was previously excluded from `/operations` because the route required permission `machine.view` and `ROLE_PERMISSIONS.hr` lacked `machine.view`, `operator.view`, and `operator.log_approve`. In `apps/mobile/app/(app)/operations.tsx`, HR was also explicitly blocked by a redirect.
+    - There was no compensation storage (`daily_rate`, `ot_hourly_rate`) on `public.users` and no payroll aggregation query computing the split-month overtime lag formula.
+    - There was no dedicated HR Payroll view (`/hr`) on Web or Mobile.
+  - **3. Implementation Details**:
+    - `supabase/migrations/094_hr_payroll.sql`: Added `daily_rate` and `ot_hourly_rate` numeric columns to `public.users`. Added index `idx_machine_hour_logs_operator_logdate`. Implemented PostgreSQL RPC `get_hr_payroll_summary(p_payroll_month date)` executing under `SECURITY DEFINER` and `STABLE`, computing previous month work days and lagged-month overtime hours in <5ms. Applied directly to live Supabase database.
+    - `packages/permissions/src/matrix.ts`: Added `machine.view`, `operator.view`, and `operator.log_approve` to `ROLE_PERMISSIONS.hr`.
+    - `packages/permissions/src/navigation.ts`: Added `hr` to `NavKey`, `NAV_ITEMS` (roles: `super_admin`, `admin`, `manager`, `hr`), `PRIMARY` slots for `hr` (`["home", "operations", "hr", "users"]`), and granted `hr` to `operations`.
+    - `packages/types/src/database.ts`: Added `daily_rate` and `ot_hourly_rate` to `User` interface, and added `HRPayrollOperator` and `HRPayrollSummary` interfaces.
+    - `apps/web/app/actions/hr.ts`: Created `getHRPayrollData`, `updateOperatorRates`, and `bulkUpdateOperatorRates` server actions with role verification and `CACHE_TAGS.users` revalidation.
+    - `apps/web/app/(app)/hr/page.tsx` & `HRPayrollClient.tsx`: Built full-featured payroll management with month selector, 4 KPI cards, split-month rule notice, search filter, desktop data table, mobile touch cards, inline rate editing, bulk update modal, and browser-native CSV export.
+    - `apps/web/components/layout/AppSidebar.tsx`: Added `AnimatedCreditCard` HR Payroll nav item and granted operations to `hr`.
+    - `apps/web/components/navigation/BottomNav.tsx`: Added `Banknote` icon and tab matching for `/hr`.
+    - `apps/web/components/layout/MobilePageHeader.tsx`: Added `/hr` title.
+    - `apps/web/lib/dal.ts`: Added `daily_rate, ot_hourly_rate` to `getCachedUserRow` selection.
+    - `apps/mobile/app/(app)/hr.tsx`: Built native mobile screen with horizontal month selector pills, rule explanation banner, KPI cards, operator cards, and rate editing modal.
+    - `apps/mobile/app/(app)/_layout.tsx`: Registered `hr` screen in `Tabs`.
+    - `apps/mobile/app/(app)/operations.tsx`: Removed HR-blocking redirect to grant HR full access to operator logs.
+    - `apps/mobile/app/(app)/more.tsx` & `MobileBottomNav.tsx`: Added `Banknote` icon to overflow tiles and bottom navigation bar.
+  - **4. Verification**:
+    - Web TypeScript check: 0 errors (exit 0).
+    - Mobile TypeScript check: 0 errors (exit 0).
+    - Navigation reachability test: 1/1 passed.
+    - Supabase RPC test: Verified with `'2026-09-01'` on live database returning 74 operators with correct date windows.
+- **Server-Side PKCE Callback Route, Direct Recovery Routing & Dead Code Elimination (/api/auth/callback, /reset-password) (2026-09-21)**:
+  - **1. User Request**:
+    - Fix password reset link failure ("PKCE code verifier not found in storage").
+    - Verify Supabase dashboard redirect URL configuration screenshot.
+    - Remove dead code and optimize recovery flow.
+  - **2. Root Cause Analysis**:
+    - In Next.js SSR apps using `@supabase/ssr`, `resetPasswordForEmail()` stores the PKCE code verifier in an HttpOnly cookie on the server.
+    - The previous `/reset-password` page was a `'use client'` component attempting to call `supabase.auth.exchangeCodeForSession(code)` client-side via `createBrowserClient()`. The browser cannot access HttpOnly cookies, resulting in `"PKCE code verifier not found in storage"`.
+  - **3. Implementation Details**:
+    - `apps/web/app/api/auth/callback/route.ts`: Built a server-side route handler reading cookies via `createServerClient()`, calling `exchangeCodeForSession(code)` (PKCE flow) and `verifyOtp({ token_hash, type })` (OTP flow), setting refreshed session cookies on the response, and redirecting to `next` (defaulting to `/reset-password`).
+    - `apps/web/proxy.ts`: Added recovery parameter interception (`code` or `token_hash` on `/reset-password` or `/login`) that automatically forwards incoming recovery links through `/api/auth/callback?next=/reset-password`, ensuring legacy and direct links work seamlessly.
+    - `apps/web/app/login/page.tsx`: Updated recovery redirect logic to route codes to `/api/auth/callback?next=/reset-password`.
+    - `apps/web/app/reset-password/page.tsx`: Replaced client-side code exchange with active session verification, added client-side code-forwarding guard, and added a 1200ms grace period for auth hydration to avoid false-positive "Reset Token Required" flashes.
+    - `apps/web/lib/env.ts`, `apps/web/app/api/auth/forgot-password/route.ts`, `apps/web/app/actions/auth.ts`: Upgraded `getResetPasswordRedirectUrl(origin)` to be request-origin aware. If requested from `localhost:3000`, it generates `http://localhost:3000/api/auth/callback?next=/reset-password`, preventing mismatch with the production Vercel domain. Updated `apps/web/.env.local` to `http://localhost:3000`.
+    - Dead Code & Env Removal: Completely eliminated `NEXT_PUBLIC_RESET_PASSWORD_REDIRECT_URL` and `EXPO_PUBLIC_RESET_PASSWORD_REDIRECT_URL` from `.env`, `apps/web/.env`, `apps/web/.env.local`, `apps/web/.env.example`, `apps/mobile/.env`, `apps/mobile/.env.example`, `apps/mobile/eas.json`, and `README.md`.
+  - **4. Verification**:
+    - Web TypeScript check: 0 errors (exit 0).
+    - Mobile TypeScript check: 0 errors (exit 0).
+    - Supabase allowlist: Screenshot confirmed all 6 required URLs present.
+- **Consolidate Working Location & Eliminate Duplicate Selector Across Web, Mobile, Backend & Database (/signup, Users Management, Mobile Auth & Profile) (2026-09-21)**:
+  - **1. User Request**:
+    - "there are duplicatre working location; remove the above working location ans ensure only only working location store in the db"
+    - "Page Feedback: /signup - Feedback: since we have multiple office , site , yard etc also it changes frequently remove this also at the bottom we already have a work location input box so remove it completely and update the frontend , backend and database"
+  - **2. Root Cause Analysis**:
+    - In `/signup` (`apps/web/app/signup/page.tsx`), Section 1 ("Account & Role") contained a "Working Location / Site (Yard / Office / Site)" selector querying a non-existent `working_locations` table, displaying "No working locations available".
+    - Section 3 ("Work Location & Identity") already collected the actual operational base location: `city`, `district`, `state`, and `address` ("Street / Site Base Address").
+    - In Supabase Postgres, `public.working_locations` does not exist and `public.users` does not have a `working_location_id` column. Queries requesting `working_location_id` (e.g. `USER_DETAIL_COLUMNS`) threw `column "working_location_id" does not exist` runtime errors.
+    - Personnel frequently transition between offices, yards, and project sites; storing a static reference from a non-existent lookup table caused duplication and confusion.
+  - **3. Implementation Details**:
+    - `apps/web/app/signup/page.tsx`: Completely removed Row 4 Working Location selector from Section 1 ("Account & Role"), removed `working_location_id` form state, `workingLocationOptions`, `loadWorkingLocations()` call, and `getWorkingLocationsAction` import. Preserved Section 3 as the sole authoritative location input capturing `city`, `district`, `state`, and `address`.
+    - `apps/mobile/app/(auth)/signup.tsx`: Synchronized mobile signup by removing the Working Location selector trigger from Section 1, `workingLocations` state, `selectedWorkingLocationId`, `workingLocationModalVisible`, `loadWorkingLocations()` call, `supabase.auth.signUp()` metadata payload, and bottom picker modal.
+    - `apps/web/app/actions/auth.ts`: Removed `workingLocationIdRaw` parsing and `working_location_id` from metadata in `signup()`. Safeguarded `getWorkingLocationsAction` to return `[]`.
+    - `apps/web/app/actions/users.ts`: Removed `working_location_id` extraction and update payloads in `createUserAction` and `updateUserAction`.
+    - `apps/web/lib/data/users/user-detail.ts`: Removed `working_location_id` from `USER_DETAIL_COLUMNS` projection, fixing runtime Postgres 42703 column errors.
+    - `apps/web/lib/data/users/user-list.ts`: Removed `working_location_id` from `USER_LIST_COLUMNS` projection and removed `working_location` hydration in `hydrateUsersPersonnel()`.
+    - `apps/web/lib/data/users/user-shared.ts`: Removed `working_location_id` from `USER_SELECT_COLUMNS` and cached query helpers.
+    - `apps/web/app/(app)/users/UsersTable.tsx`: Removed redundant duplicate "Working Location" table header, updated column widths, updated empty state `colSpan` from 9/10 to 8/9, and removed extra skeleton cell.
+    - `apps/web/app/(app)/users/UserRow.tsx`: Removed redundant `working_location` `<td>`, leaving the single consolidated "Location" column.
+    - `apps/web/app/(app)/users/UserDetailSheet.tsx`: Removed the redundant "Working Location / Base" metadata row.
+    - `apps/web/app/(app)/users/UserCreateModal.tsx` & `UserEditModal.tsx`: Removed Working Location selector, state, hidden input, and prop interfaces.
+    - `apps/web/app/(app)/users/users-client.tsx`: Removed `availableWorkingLocations` state and prop passing to modals.
+    - `apps/mobile/app/(app)/profile.tsx`: Removed `working_location_id` and non-existent join from `.select()`, and removed the Working Location display card.
+    - `apps/mobile/app/(app)/users.tsx`: Removed `working_location` chip and query to `working_locations` table.
+    - `apps/mobile/components/users/CreateUserModal.tsx`: Removed `workingLocationId` state, RPC call, payload fields, trigger, and picker modal.
+    - `apps/mobile/components/users/UserEditModal.tsx`: Removed `workingLocationId` state, RPC call, payload fields, trigger, and picker modal.
+    - `apps/mobile/components/users/UserDetailModal.tsx`: Removed the Working Location metadata row.
+    - Database Schema Audit: Verified live Postgres schema on Supabase: `working_locations` table does not exist and `working_location_id` column does not exist on `public.users`. The `handle_new_user()` trigger correctly reads and stores `address`, `city`, `district`, `state`, and `state_id`.
+  - **4. Verification**:
+    - Turborepo monorepo-wide typecheck: 7/7 workspace packages passed (exit 0, 43.6s).
+    - Web & Mobile TypeScript checks: 0 errors (exit 0).
+    - Scoped ESLint across all modified files: 0 errors, 0 warnings (exit 0).
+    - Programmatic HTTP check confirmed status 200 on `/signup`, `hasWorkingLocationSite: false`, `hasCityTownVillage: true`, and `hasStreetSiteBaseAddress: true`.
+- **Delete Account Routing, Dialogue Modal Removal & Deletion Guide Separation (/settings, /delete-account, /account-deletion-guide) (2026-09-21)**:
+  - **1. User Request**:
+    - "Page Feedback: /settings - <SettingsClient> <Button> button 'Delete Account': we have delete-account page link that page here and remove the current dialogue box"
+    - "Page Feedback: /delete-account - remove this it is already have in the deletion guide and warnings; make it show and link the detetion guide and waning page with simple text"
+    - "http://localhost:3000/delete-account this is the account delte page; http://localhost:3000/account-deletion this is the deteion guide and warnign , approval , page; both page looks like same page so change the guide ,waring page route name so anyone can identify this is delete acount page and this one is the guide/waning / etc page"
+  - **2. Root Cause Analysis**:
+    - In `/settings` (`SettingsClient.tsx`), clicking "Delete Account" triggered an inline modal dialog (`AccountDeletionModal`) rather than directing the user to the dedicated `/delete-account` self-service page.
+    - In `/delete-account`, a large warning card (`.p-3.5 sm:p-4 rounded-xl border border-rose-500/20`) repeated bullet points about session termination, personal identity purging, and statutory machinery records, duplicating the content of the compliance guide.
+    - The routes `/delete-account` and `/account-deletion` sounded virtually identical to users and administrators, causing ambiguity between the actionable self-service form and the statutory policy guide.
+  - **3. Implementation Details**:
+    - `apps/web/components/settings/SettingsClient.tsx`: Replaced button opening `AccountDeletionModal` with `<Link href="/delete-account">` styled with danger outline styling, `Trash2` icon, and 44px mobile touch targets. Removed `deleteModalOpen` state, modal JSX, and dynamic import. Added link to `/account-deletion-guide` in Card 5 (Legal & Platform).
+    - `apps/web/app/delete-account/DeleteAccountClient.tsx`: Removed the redundant warning card and top banner. Added clean text linking to `/account-deletion-guide` under the heading. Cleaned up unused icon imports (`ShieldAlert`, `BookOpen`).
+    - `apps/web/app/account-deletion-guide/page.tsx`: Created dedicated route for the compliance guide, warnings, and statutory data retention terms with canonical URL `/account-deletion-guide` and direct CTA button linking to `/delete-account`.
+    - `apps/web/app/account-deletion/page.tsx` & `apps/web/next.config.ts`: Added HTTP 308 permanent redirect from `/account-deletion` to `/account-deletion-guide`.
+    - `apps/web/components/layout/MobilePageHeader.tsx`: Added `/account-deletion-guide` to `PAGE_TITLES` and `HIDE_MORE_MENU_PAGES`. Wrapped `setMoreOpen` in `queueMicrotask`.
+    - `apps/web/components/navigation/BottomNav.tsx`: Added `/account-deletion-guide` to More tab match routes. Cleaned unused import.
+    - `apps/web/app/sitemap.ts`: Updated sitemap with `/account-deletion-guide` and `/delete-account`.
+    - `apps/web/app/actions/account-deletion.ts`: Added cache revalidation for `/delete-account` and `/account-deletion-guide`.
+    - `apps/web/components/landing/LandingFooter.tsx`: Updated link to `/account-deletion-guide`.
+    - `apps/mobile/app/(app)/settings.tsx` & `privacy.tsx` & `listing-details.json`: Synchronized web portal links to `/delete-account`.
+  - **4. Verification**:
+    - Turborepo monorepo-wide typecheck: 7/7 workspace packages passed (exit 0, 19.1s).
+    - Web & Mobile TypeScript checks: 0 errors (exit 0).
+    - Scoped ESLint across all modified files: 0 errors, 0 warnings (exit 0).
+    - Programmatic HTTP verification confirmed status 200 on `/delete-account`, status 200 on `/account-deletion-guide`, status 308 redirect from `/account-deletion` to `/account-deletion-guide`, guide link present, 0 old warning bullets, and zero modal state in SettingsClient.
+- **Dedicated Reset-Password Flow, Dynamic RedirectTo, User Email Pre-Check & Admin Approval Gate (/reset-password & /forgot-password) (2026-09-21)**:
+  - **1. User Request**:
+    - "1. Create a dedicated reset-password page (which is already create just map it properly). I recommend not using /forgot-password as the page where the new password is entered. Use /forgot-password for requesting the email, and /reset-password for actually setting the new password. So your flow becomes: Login -> Forgot Password -> /forgot-password -> Enter email -> Supabase sends email -> Click Reset Password -> /reset-password -> Enter new password -> Password updated -> /login. Supabase's documented flow follows this same two-step approach."
+    - "2. Fix your resetPasswordForEmail() code: Find the code currently doing something like: await supabase.auth.resetPasswordForEmail(email) Change it to: const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: 'https://dashboard-reachinternational.vercel.app/reset-password'(add it to the .env and import it properly handle dev and produntion url properly), }) if (error) { console.error(error) } This is the most important code change."
+    - "also make sure reset password is not possible without supabase token which is reciece by the mail implement this workflow fully functional and working"
+    - "2. when user enter mail then first check this mail exist in the supabase user.email or not; if not then show the error; if exist then sent the link"
+    - "this entered email is the pending approval but still pass the reselt password; fix thsi; when user enter the email first check the correct email formated; then check that email exist in the db; then theck this user is approved by admin; status should be active; then sent the reset email"
+  - **2. Root Cause Analysis**:
+    - The initial existence check allowed users in `status === 'pending'` to receive password reset links. Pending accounts have not yet been authorized by an administrator, so allowing password resets on unapproved accounts bypassed the administrative onboarding gate.
+    - Supabase Auth's default `resetPasswordForEmail()` returns `{ error: null }` for non-existent emails to prevent user enumeration. The user explicitly requested verifying user presence in `public.users` and enforcing that `status === 'active'` (admin-approved) before dispatching links.
+  - **3. Implementation Details**:
+    - `apps/web/app/actions/auth.ts` & `apps/web/app/api/auth/forgot-password/route.ts`: Built a strict 3-tier validation pipeline prior to invoking `resetPasswordForEmail`:
+      1. Format validation: Validates non-empty string and email regex. If invalid, returns error `"Please enter a valid email address."`.
+      2. Database presence: Queries `public.users` via `createSupabaseAdminClient()`. If user is null, returns error `"No account found with this email address. Please check your email or request access."` (HTTP 404) and halts. Zero emails sent.
+      3. Admin approval gate: Checks `existingUser.status`. If `'pending'`, returns error `"Your account is pending administrator approval. You cannot reset your password until your account has been approved."` (HTTP 403) and halts. If `'inactive'`, returns error `"Your account has been deactivated. Please contact your administrator."` (HTTP 403) and halts. If not `'active'`, halts.
+      4. Reset link dispatch: Only when `status === 'active'`, triggers `supabase.auth.resetPasswordForEmail()` with `redirectTo: getResetPasswordRedirectUrl()`.
+    - `apps/web/lib/env.ts` & `apps/mobile/lib/env.ts`: Added `getResetPasswordRedirectUrl()` returning `http://localhost:3000/reset-password` in local development and `NEXT_PUBLIC_RESET_PASSWORD_REDIRECT_URL` / `${getAppUrl()}/reset-password` in production. Added to `env` and `mobileEnv` objects.
+    - Environment Files: Synchronized `NEXT_PUBLIC_RESET_PASSWORD_REDIRECT_URL` and `EXPO_PUBLIC_RESET_PASSWORD_REDIRECT_URL` across `.env`, `apps/web/.env`, `apps/web/.env.local`, `apps/web/.env.example`, `apps/mobile/.env`, `apps/mobile/.env.example`, and `apps/mobile/eas.json`.
+    - `apps/mobile/app/(auth)/forgot-password.tsx`: Updated `handleReset` to invoke `/api/auth/forgot-password` REST endpoint, presenting identical validation and feedback banners on native mobile viewports.
+    - `apps/web/app/reset-password/page.tsx`: Wrapped in `<Suspense>`, implemented 4-state lifecycle machine (`verifying`, `valid`, `missing`, `invalid`). Direct visits without token strictly block form rendering, presenting "Reset Token Required" card directing to `/forgot-password`. Validates PKCE `code`, OTP `token_hash`, and recovery hash.
+    - `apps/web/components/auth/ResetPasswordCard.tsx`: Cleaned outer wrapper and chromatic icons per Geist design system. Native password eye toggle inside `Input`.
+    - `apps/web/app/login/login-form.tsx` & `apps/web/app/login/page.tsx`: Removed embedded `ResetPasswordCard` and `isRecoveryMode`. Forwarded incoming recovery parameters (`code`, `token_hash`, `type=recovery`, hash) arriving at `/login` directly to `/reset-password` via 307 redirect.
+    - `apps/web/proxy.ts`: Updated `isRecoveryFlow` to include `token_hash`.
+    - `packages/types/src/database.ts`, `UserCreateModal.tsx`, `UserEditModal.tsx`, `actions/auth.ts`: Restored `WorkingLocation` interface and `working_location` properties on `User`. Added `workingLocations?: SelectOption[]` to modal props and exported `getWorkingLocationsAction`.
+    - `apps/web/lib/data/users/user-list.ts`: Fixed `SUPERVISOR_VISIBLE_USER_ROLES` import from `@reachinternational/permissions`.
+    - `apps/mobile/app/(auth)/signup.tsx`: Cleaned stray duplicate `</Modal>` tag.
+  - **4. Verification**:
+    - Turborepo monorepo-wide typecheck: 7/7 workspace packages passed (exit 0, 39.8s).
+    - Web TypeScript check: 0 errors (exit 0).
+    - Mobile TypeScript check: 0 errors (exit 0).
+    - Scoped ESLint across all modified files: 0 errors, 0 warnings (exit 0).
+    - Runtime API verification:
+      - Empty email: HTTP 400 `{ success: false, error: "Email address is required." }`.
+      - Invalid email format: HTTP 400 `{ success: false, error: "Please enter a valid email address." }`.
+      - Non-existent email (`doesnotexist123456789@reachinternational.co.in`): HTTP 404 `{ success: false, error: "No account found with this email address. Please check your email or request access." }` (zero emails sent).
+      - Pending approval user (`vaibhavchauhan.ri@gmail.com`): HTTP 403 `{ success: false, error: "Your account is pending administrator approval. You cannot reset your password until your account has been approved." }` (zero emails sent).
+      - Active approved user (`suryapratap2026@gmail.com`): HTTP 200 `{ success: true, message: "Password reset link has been sent to your email..." }` (recovery email dispatched with redirect URL to `/reset-password`).
+      - Direct visit to `/reset-password` without token: strictly displays "Reset Token Required" card with CTA to `/forgot-password`, hiding form fields.
+- **Legal & Public Pages Header Brand Logo, Clean Mobile Header & Clutter Removal (/terms, /privacy, /account-deletion, /delete-account) (2026-09-21)**:
+  - **1. User Request**:
+    - "Page Feedback: /terms, Viewport: 1536×695"
+    - "1. <LegalPageShell> <LinkComponent> link 'REACH INTERNATIONAL' (.sticky > .max-w-4xl > .hidden > .flex) -> use same reach international reaching all height logo"
+    - "2. <LegalPageShell> 'Terms of Service' (.sticky > .max-w-4xl > .hidden > .text-xs) -> remove this"
+    - "3. <LegalPageShell> button 'Print' (.sticky > .max-w-4xl > .flex > .hidden) -> remove print"
+    - "4. <LegalPageShell> <LinkComponent> link 'Request Access' (.sticky > .max-w-4xl > .flex > .text-xs) -> remove request acess"
+    - "like this same for the pricaly , tem and condtion delteion all public page"
+    - "for the mobile user dont show any logo just clean header"
+  - **2. Root Cause Analysis**:
+    - In `LegalPageShell.tsx`, the public guest header rendered a generic shield icon and plain text `{BRAND_NAME}` instead of the official canonical brand component `ReachInternationalLogo variant="full"`, which renders the scissor-lift icon, "REACH INTERNATIONAL" brand mark, divider rule, and "REACHING ALL HEIGHTS" tagline.
+    - An extra title tag/badge (`Terms of Service`) sat beside the logo on desktop, creating redundant chrome since the main page heading immediately follows in the content viewport.
+    - Public legal pages rendered a Print button and a "Request Access" button, which cluttered the reading experience.
+    - Mobile headers required a focused, clean interface with no brand logo, showing only back navigation, page title, and "Sign In".
+  - **3. Implementation Details**:
+    - `apps/web/components/legal/LegalPageShell.tsx`:
+      - Replaced generic shield icon and brand text with `<ReachInternationalLogo variant="full" size={24} />` inside `<Link href="/">` on desktop viewports (`hidden sm:flex`).
+      - Removed the title badge (`{title}`) and vertical divider line next to the desktop logo.
+      - Removed the header Print button, breadcrumb print button, and `Printer` icon import.
+      - Removed the "Request Access" signup CTA button from the action bar.
+      - Kept mobile header (`sm:hidden`) clean with back button (`ArrowLeft`), page title, and "Sign In" button, with zero logos rendered on mobile.
+      - Changes automatically propagate across all 4 public routes: `/terms`, `/privacy`, `/account-deletion`, and `/delete-account`.
+  - **4. Verification**:
+    - Turborepo Monorepo Typecheck: 7/7 workspace packages passed (exit 0).
+    - Web TypeScript check (`tsc --noEmit`): 0 errors (exit 0).
+    - Web ESLint on modified file: 0 errors, 0 warnings (exit 0).
+    - Programmatic HTTP script: Confirmed status 200, `hasReachingAllHeights: true`, `hasPrint: false`, `hasRequestAccess: false`, and `hasSignIn: true` across all 4 routes.
+
+- **Reset Password Page UI Polish & Responsive Optimization (/reset-password) (2026-09-21)**:
+  - **1. User Request**:
+    - "Page Feedback: /reset-password, Viewport: 1536×695"
+    - "1. <ResetPasswordPage> <motion.div> <ResetPasswordCard> rounded sky (.w-full > .w-full > .mb-5 > .h-10) -> remove this"
+    - "2. <motion.div> <ResetPasswordCard> <AnimatedEye> <AnimateIcon> <motion.span> <Eye> icon (.relative > .absolute > .inline-flex > svg) -> there are duplicate icon remove one wrong place icon"
+    - "3. <motion.div> <ResetPasswordCard> <AnimatedEye> <AnimateIcon> <motion.span> <Eye> graphic in span (.absolute > .inline-flex > svg > path) -> there are duplicate icon remove one wrong place icon"
+    - "4. <ResetPasswordPage> <motion.div> full max (.contents > .flex > .w-full) -> make this page optimize for both mobile and desktop"
+  - **2. Root Cause Analysis**:
+    - `ResetPasswordCard` header featured a sky-blue icon container (`.h-10 w-10 rounded-xl bg-sky-500/10`) with `AnimatedKeyRound`, creating unnecessary chromatic chrome.
+    - Password inputs were wrapped in `.relative` containers with an external `<button className="absolute right-3 top-[34px]">` toggle, while the shared `<Input type="password">` component already natively renders its own vertically centered eye toggle button. This caused duplicate eye icons to appear.
+    - The `/reset-password` page container used `overflow-hidden` with fixed vertical centering, clipping content on low-height viewports (such as 1536×695) and mobile devices. It also lacked a brand logo header, copyright footer, and mobile-friendly container padding.
+  - **3. Implementation Details**:
+    - `apps/web/components/auth/ResetPasswordCard.tsx`:
+      - Removed the sky rounded icon container (`.h-10 w-10 rounded-xl bg-sky-500/10`) and cleaned up unused `AnimatedKeyRound` import.
+      - Removed outer `<button className="absolute right-3 top-[34px] ...">` toggle buttons and outer `<div className="relative">` wrappers.
+      - Passed `type="password"` directly to `<Input>`, allowing `<Input>` to natively handle show/hide password toggling and render a single vertically centered eye icon button.
+      - Cleaned up unused states (`showNewPassword`, `showConfirmPassword`) and unused imports (`AnimatedEye`, `AnimatedEyeOff`).
+      - Updated Cancel button touch target with `min-h-[40px] sm:min-h-[36px]`.
+    - `apps/web/app/reset-password/page.tsx`:
+      - Replaced `overflow-hidden` container with a scrollable responsive container (`min-h-screen min-h-[100dvh] w-full flex flex-col justify-between items-center px-4 py-6 sm:px-6 sm:py-8 lg:py-10 overflow-y-auto`).
+      - Injected centered `<ReachInternationalLogo variant="full" size={26} />` header.
+      - Constrained card max-width (`max-w-[420px] sm:max-w-[460px]`) and applied balanced responsive padding (`p-5 sm:p-7 md:p-8`).
+      - Styled "Back to sign in" navigation link with accessible padding and touch target (`min-h-[32px]`).
+      - Added minimal bottom copyright footer for clean vertical balance.
+  - **4. Verification**:
+    - Monorepo Turborepo typecheck passed across all 7 workspace packages (7/7 success, exit 0).
+    - Web TypeScript check passed (0 errors, exit 0).
+    - Web ESLint on all modified files passed with 0 errors and 0 warnings (exit 0).
+
+- **Legal Pages Desktop/Mobile Shell Optimization, AppSidebar Desktop Integration, Unauthorized Visitor Handling & Signup Agreement Checkbox (2026-09-21)**:
+  - **1. User Request**:
+    - "optimize the term and condion , privary , deletion guide page optimize for the desktop and mobile screen properly"
+    - "also in the desktop show the sidebar , and other as per desktop other page are there"
+    - "also for the unauthoize user handle it properly for desktop and mobile both"
+    - "also thee privacy , term and conditon check box to the signup page"
+  - **2. Root Cause Analysis**:
+    - Legal and deletion pages lived outside `(app)` route group to allow public guest access, but previously lacked the authenticated desktop layout (`AppSidebar` and `AppShellClient`) when viewed by logged-in users.
+    - Unauthenticated/unauthorized users required a dedicated, clean public header with brand identity and "Sign In" / "Request Access" actions rather than blank headers or unauthorized redirects.
+    - Registration signup flow lacked an explicit Terms of Service & Privacy Policy acceptance checkbox guard.
+  - **3. Implementation Details**:
+    - `apps/web/components/legal/LegalPageShell.tsx` [NEW]: Universal responsive legal shell.
+      - If authenticated: wraps content in `AppShellClient` with `AppSidebar` on desktop, `MobilePageHeader` and `BottomNav` on mobile, plus an in-page desktop navigation breadcrumb (`Settings / [Title]`) and print button.
+      - If unauthenticated / guest: renders public navigation top bar with brand logo (`REACH INTERNATIONAL`), document badge, and "Sign In" / "Request Access" actions.
+    - `apps/web/components/layout/MobilePageHeader.tsx`:
+      - Added `/privacy`, `/terms`, `/account-deletion`, and `/delete-account` to `PAGE_TITLES` and `HIDE_MORE_MENU_PAGES`.
+    - `apps/web/app/privacy/page.tsx`, `apps/web/app/terms/page.tsx`, `apps/web/app/account-deletion/page.tsx`, `apps/web/app/delete-account/page.tsx`:
+      - Converted to async server components reading `getCurrentUserOrNull()` and `cookies()`, wrapped with `<LegalPageShell>`.
+    - `apps/web/app/signup/page.tsx`:
+      - Added `agreedToTerms` state and accessible checkbox before the submit button with clickable links to `/terms` and `/privacy`.
+      - Enforced pre-flight validation in `handleSubmit` and disabled CTA button until agreed.
+    - `apps/mobile/app/(auth)/signup.tsx`:
+      - Synchronized `agreedToTerms` state, native checkbox toggle with haptic feedback, and clickable links to `/(app)/terms` and `/(app)/privacy`.
+      - Enforced pre-flight validation in `handleSignup` and button disable state.
+  - **4. Verification**:
+    - Monorepo Turborepo Typecheck: 7/7 workspace packages passed (exit 0).
+    - Web TypeScript check (`tsc --noEmit`): Passed with 0 errors (exit 0).
+    - Mobile TypeScript check (`tsc --noEmit`): Passed with 0 errors (exit 0).
+    - Web ESLint check on all modified files: Passed with 0 errors and 0 warnings (exit 0).
+    - Node HTTP verification script (`verify_legal_and_signup.mjs`): All 5 endpoints returned 200, 0 footers on legal pages, guest header rendered with Sign In, and agreement checkbox confirmed on signup.
+
+- **Reveal Aadhaar Number Icon on Profile Page (/profile) (Web & Mobile Parity) (2026-09-21)**:
+  - **1. User Request**:
+    - "Page Feedback: /profile, Viewport: 1536×695"
+    - "Location: .grid > .border > .divide-y > .py-2.5"
+    - "Feedback: add reveal adhar number icon"
+  - **2. Root Cause Analysis**:
+    - The `/profile` page rendered the Aadhaar number row statically with masked text (`XXXX-XXXX-1234`), without an interactive eye toggle to reveal or hide the user's full 12-digit Aadhaar number, or a copy button.
+    - In accordance with the mandatory Web-to-Mobile Synchronization rule, the mobile native profile view (`apps/mobile/app/(app)/profile.tsx`) also required the identical reveal toggle and copy capability.
+  - **3. Implementation Details**:
+    - `apps/web/components/profile/AadhaarProfileField.tsx` [NEW]:
+      - Created client component managing `isRevealed` toggle and clipboard copy state.
+      - Toggles between masked format (`XXXX-XXXX-1234`) and standard 12-digit Indian grouping (`1234 5678 1234` via `formatAadhaar`).
+      - Features `AnimatedEye` / `AnimatedEyeOff` buttons with accessible `aria-label` and `title` attributes.
+      - Features 1-click clipboard copy button with green checkmark confirmation.
+    - `apps/web/app/(app)/profile/page.tsx`:
+      - Imported and mounted `<AadhaarProfileField>` in the Identity section when `row.label === "Aadhaar"` and `user.aadhaar_number` is populated.
+      - Preserved the existing `.py-2.5 sm:py-3` geometry and Geist font tokens.
+    - `apps/mobile/app/(app)/profile.tsx`:
+      - Synchronized `showFullAadhaar` state, `copyToClipboard` helper with `expo-clipboard`, and dynamic `aadhaarDisplay` formatting.
+      - Integrated `Eye` / `EyeOff` and `CheckCircle2` / `Copy` buttons in `inlineActionRow` alongside the Aadhaar number.
+  - **4. Verification**:
+    - Web TypeScript check (`tsc --noEmit`): Passed with 0 errors (exit 0).
+    - Web ESLint check on all modified/created files: Passed with 0 errors and 0 warnings (exit 0).
+    - Mobile TypeScript check (`tsc --noEmit`): Passed with 0 errors (exit 0).
+    - Unit tests (`profile-view.test.ts`): Passed with 3/3 tests (exit 0).
+
+- **Legal Footers Removal & Separation of Account Deletion Guide and Delete Account Pages (/privacy, /terms, /account-deletion, /delete-account) (2026-09-21)**:
+  - **1. User Request**:
+    - "remove the footer from the pricaty , term and condtion , account deletion guide and warnings page make the account deletion guide and delele account page seprate also account delteion guide should be clean and well formated as like privacy policy while delete the account add deletion account checkbox account delete guide page should include guide , data delelety permamenry , data cant be restore and many more so user click the checkbox before click to the delete account btn use dropdown seletcor to choose the reason to delet account which check box click user unable to delete the account also make every page clean and profestiona"
+  - **2. Root Cause Analysis**:
+    - Legal and deletion pages retained bottom footers that introduced unnecessary clutter and did not match mobile app reading conventions.
+    - Account Deletion Guide and the interactive Delete Account form were conflated, lacking distinct informational vs. actionable route separation.
+    - Delete Account form used a multi-chip button layout rather than a standard accessible dropdown selector, and lacked a mandatory non-restorable confirmation checkbox guard preventing accidental deletion.
+  - **3. Implementation Details**:
+    - Complete footer removal across `apps/web/app/privacy/page.tsx`, `app/terms/page.tsx`, `app/account-deletion/page.tsx`, and `app/delete-account/page.tsx`.
+    - `apps/web/app/account-deletion/page.tsx`:
+      - Standardized with `<LegalPageHeader title="Account Deletion Guide" />`.
+      - High-density Geist typography matching Privacy Policy (`text-lg sm:text-xl` hero title, `text-sm sm:text-base` section headings, `text-xs sm:text-[13px]` body copy).
+      - Added structured sections: permanent data purge breakdown, permanent & non-restorable warning, statutory heavy equipment telemetry retention exception (Indian Factories Act 1948, OSHA), step-by-step deletion guide across Web, Mobile, and Email, and 14-day processing SLA.
+      - Action banner with direct link to the dedicated `/delete-account` portal.
+    - `apps/web/app/delete-account/page.tsx` & `DeleteAccountClient.tsx`:
+      - Standardized with `<LegalPageHeader title="Delete Account" />`.
+      - Replaced reason chip grid with an accessible `<select id="deletion-reason">` dropdown selector with common departure reasons and optional context notes.
+      - Added mandatory acknowledgement checkbox (`#confirm-deletion`) asserting permanent data loss and non-restorable terms.
+      - Enforced deletion button disabled state until the confirmation checkbox is checked and a reason is selected (`disabled={isSubmitting || !confirmedRisk || !selectedReasonOption}`).
+      - Cancel button returns to `/settings`.
+  - **4. Verification**:
+    - Turborepo monorepo-wide typecheck passed across all 7 workspace packages (7/7 success, exit 0).
+    - Web TypeScript check (`tsc --noEmit`): Passed with 0 errors (exit 0).
+    - Web ESLint check on all modified files: Passed with 0 errors, 0 warnings (exit 0).
+    - Programmatic node verification confirmed 0 footers across all 4 pages, select dropdown present, confirmation checkbox active, and all 4 routes returning HTTP 200.
+- **Privacy Policy & Terms of Service UI Consistency, Header Standardization & Button Removal (/privacy & /terms @360×800) (2026-09-21)**:
+  - **1. User Request**:
+    - Feedback on `/settings` links to "Privacy Policy" and "Terms of Service" at viewport 360×800:
+    - "privacy page seens inconsistuent make it properly with same privacy header also it should be consistuent and clean back to setting page with back arrow from the header make this same privacy and termpage should be proper , consistent , clean , well formatted typography should be small and well formated header and footer both should be properly remove any btn at the header only show the title Private , Term and Condition etc as per opern page"
+  - **2. Root Cause Analysis**:
+    - The `/privacy` and `/terms` routes in `apps/web` used legacy, marketing-style headers with large brand logos and primary CTA buttons ("Go to Dashboard" / "Sign In").
+    - There was no back arrow navigation to return to `/settings` when navigated to from the in-app settings hub.
+    - Typography across headings and body paragraphs was oversized (`text-[28px]`, `text-[20px]`, `text-[16px]`) compared to Geist design tokens.
+    - Prominent blue CTA buttons ("Contact Compliance Desk" in Privacy Policy, "Contact Operations" in Terms of Service) created visual clutter and inconsistency.
+    - Footers had oversized vertical padding and inconsistent link emphasis.
+  - **3. Implementation Details**:
+    - `apps/web/components/legal/LegalPageHeader.tsx`:
+      - Created lightweight, reusable client header (`sticky top-0 z-40 h-12 bg-[var(--color-canvas)]/95 backdrop-blur-md border-b border-[var(--color-hairline)] shadow-xs`).
+      - Left back arrow button (`AnimatedArrowLeft`, min 44px mobile touch target) navigating back to `/settings` (with smart fallback to `router.back()` when history is available).
+      - Title displays only the page title (`Privacy Policy` or `Terms of Service`).
+      - Right side is clean and empty, removing all header action buttons.
+    - `apps/web/app/privacy/page.tsx`:
+      - Replaced old header with `<LegalPageHeader title="Privacy Policy" />`.
+      - Scaled down typography across all 13 sections (`text-lg sm:text-xl` hero title, `text-sm sm:text-base` section headings, `text-xs sm:text-[13px]` body and bullet copy).
+      - Adjusted card padding to `p-4 sm:p-5 rounded-2xl` with hairline borders.
+      - Removed Section 13 CTA button ("Contact Compliance Desk"), presenting contact details cleanly as text with mailto links.
+      - Standardized compact footer (`py-6 sm:py-8`) with active `Privacy Policy` link.
+    - `apps/web/app/terms/page.tsx`:
+      - Replaced old header with `<LegalPageHeader title="Terms of Service" />`.
+      - Scaled down typography across all 5 sections to match Privacy Policy identically (`text-lg sm:text-xl` hero title, `text-sm sm:text-base` section headings, `text-xs sm:text-[13px]` body copy and lists).
+      - Adjusted card padding to `p-4 sm:p-5 rounded-2xl` with hairline borders.
+      - Removed Section 5 CTA button ("Contact Operations"), presenting contact details cleanly as text with mailto links.
+      - Standardized compact footer (`py-6 sm:py-8`) with active `Terms of Service` link.
+    - `apps/mobile/app/(app)/privacy.tsx` & `terms.tsx`:
+      - Verified mobile screens already employ `MobileHeader` with back navigation, compact typography, and zero CTA buttons.
+  - **4. Verification**:
+    - Turborepo monorepo-wide typecheck passed across all 7 workspace packages (7/7 success, exit 0).
+    - Web TypeScript check (`tsc --noEmit`): Passed with 0 errors (exit 0).
+    - Web ESLint check on modified files: Passed with 0 errors, 0 warnings (exit 0).
+    - HTTP status validation: Both `/privacy` and `/terms` return HTTP 200.
+- **Users Page Infinite Scroll Skeleton Loader Upgrade & Clean Mobile Viewport Optimization (/users @360×800) (2026-09-21)**:
+  - **1. User Request**:
+    - Feedback on `/users` at viewport 360×800:
+    - `<UsersPageClient> <UsersTable> grid grid`: "while infinite scroll then dont show the loading spinner instead od skeleton loader use properly skeleoton loadier while scrol to load the data make sure all the page should be consturent and optimize"
+  - **2. Root Cause Analysis**:
+    - In `apps/web/app/(app)/users/UsersTable.tsx`, the mobile card view rendered an infinite scroll indicator:
+      `<div className="py-4 flex items-center justify-center gap-2 ..."><AnimatedSearch className="animate-spin ..." /><span>Loading more staff...</span></div>`.
+    - This spinner stood out as inconsistent and caused visual layout jumps compared to the rest of the application (e.g., `MachineListClient` and `AuditClient`), which already render skeleton cards during incremental chunk-by-chunk infinite scrolling.
+    - Furthermore, `MobileCardSkeletonList` used a simplified layout that drifted from the actual `MobileUserCard` dimensions and details, and `users-client.tsx` lacked support for infinite scrolling through paginated search results.
+  - **3. Implementation Details**:
+    - `apps/web/app/(app)/users/UsersTable.tsx`:
+      - Implemented `<MobileUserCardSkeleton />` with exact dimensional parity to `<MobileUserCard>` (avatar, name/location, status pill, hairline divider, 3 contact metadata rows with icon circles, and bottom-right role badge placeholder).
+      - Exported `<MobileCardSkeletonItems count={3} selectable={selectable} />` and `<MobileCardSkeletonList count={6} selectable={selectable} />`.
+      - Completely removed the loading spinner `<AnimatedSearch className="animate-spin" />` and "Loading more staff..." indicator.
+      - Injected `<MobileCardSkeletonItems count={3} selectable={!readOnly} />` directly inside `<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">` when `isLoadingMoreMobile` is true.
+      - Updated the initial query loading state (`isQueryLoading`) to use the upgraded `<MobileCardSkeletonList count={6} selectable={!readOnly} />`.
+      - Removed unused `motion` import.
+    - `apps/web/app/(app)/users/users-client.tsx`:
+      - Upgraded `handleLoadMoreMobile` to support incremental infinite scrolling for both server searches (`searchUsersServerAction`) and filtered catalog browsing (`getPaginatedUsersAction`), safely appending items without duplicate IDs.
+      - Updated `mobileHasMore` prop to dynamically evaluate `isSearchActive ? searchPage < searchTotalPages : mobileHasMore`.
+      - Sanitized error handling in catch block with `err instanceof Error ? err.message : ...`.
+  - **4. Verification**:
+    - Turborepo monorepo-wide typecheck passed across all 7 workspace packages (7/7 success, exit 0).
+    - Web TypeScript check (`tsc --noEmit`): Passed with 0 errors (exit 0).
+    - Web targeted ESLint check on `UsersTable.tsx`: Passed with 0 errors, 0 warnings (exit 0).
+
+- **Unify Profile Header Card across More & Settings Pages (Web & Mobile) (2026-09-21)**:
+  - **1. User Request**:
+    - "use same card in the setting page tto, make sure it should be well clean formated and responsible for both mobile and desktop, also it should be reusable and optimize" based on visual feedback on `/more` (`.flex-1 > #main-content > .max-w-lg > .p-4`).
+  - **2. Implementation Details**:
+    - `apps/web/components/profile/UserProfileHeaderCard.tsx`:
+      - Extracted the profile header card into a reusable, memoized client component (`React.memo`).
+      - Displays initial-letter avatar linking to `/profile` with subtle ring and hover state.
+      - Displays user name and email linking to `/profile` with truncation and hover transitions.
+      - Displays semantic role badge with `RoleIcon` from `ROLE_CONFIG`.
+      - Displays compact Edit Profile icon button (`min-h-[38px] min-w-[38px] sm:min-h-[36px] sm:min-w-[36px]`, 44px accessible touch target) opening `EditProfileModal`.
+      - Encapsulates `EditProfileModal` lazy dynamic import (`{ ssr: false }`) directly within the component, keeping page bundles lightweight.
+      - Engineered for 3-tier viewport responsiveness (compact `p-3.5 sm:p-4` with zero horizontal overflow on mobile 360×800; hairline elevated styling on desktop).
+    - `apps/web/components/navigation/MorePageClient.tsx`:
+      - Replaced inline profile header markup and modal state with `<UserProfileHeaderCard user={user} />`.
+      - Pruned duplicate `EditProfileModal` dynamic import, `editModalOpen` state, and `ROLE_CONFIG` lookup.
+    - `apps/web/components/settings/SettingsClient.tsx`:
+      - Replaced legacy Section 1 (which had bulky split action buttons, redundant active status pills, and extra metadata rows) with `<UserProfileHeaderCard user={displayUser} />`.
+      - Pruned unused icons (`User`, `Clock`, `MapPin`, `Phone`, `Edit`), `editModalOpen` state, and duplicate `EditProfileModal` rendering.
+    - `apps/mobile/app/(app)/settings.tsx`:
+      - Synchronized Card 1 in `settings.tsx` to match the exact profile card layout and styling from `more.tsx` (avatar, name, email, role badge, and edit button triggering `EditProfileModal`, with card tap routing to `/(app)/profile`).
+      - Added matching styles (`profileCard`, `profileRow`, `profileAvatar`, `profileAvatarText`, `profileInfo`, `profileName`, `profileEmail`, `roleBadge`, `roleText`, `editBtn`).
+  - **3. Verification**:
+    - Monorepo-wide Turborepo typecheck passed across all 7 workspace packages (7/7 success, exit 0).
+    - Web TypeScript check passed (0 errors, exit 0).
+    - Mobile TypeScript check passed (0 errors, exit 0).
+    - Web ESLint check on all modified components passed (0 errors, 0 warnings, exit 0).
+    - Permissions unit test passed (1/1 passed, 2.58ms, exit 0).
+
+- **Settings Mobile View Refinements & Password Modal UX Upgrade (/settings @360×800) (2026-09-21)**:
+  - **1. User Request**:
+    - Remove duplicate header of the settings in mobile view (`Settings` h1 and desc).
+    - Use equal padding and geometry on flex action items (`Edit Profile` and `Full Profile`).
+    - Optimize profile overview card for mobile screens.
+    - Make "Sign Out of Session" button proper as per mobile screen.
+    - Correct version and app representation (not an OS, proper App version).
+    - Upgrade Change Password modal: real-time match indicator (green when matching, red when not matching), handle all errors properly (including wrong current password), real-time password strength meter (weak, medium, strong with uppercase, lowercase, numbers, symbols), user-friendly layout without unwanted text or clutter.
+  - **2. Implementation Details**:
+    - `apps/web/components/settings/SettingsClient.tsx`:
+      - Hidden in-page Page Title Header on mobile screens (`hidden sm:flex flex-col sm:flex-row ...`) to let `<MobilePageHeader />` serve as the single mobile header.
+      - Symmetrically styled `Edit Profile` and `Full Profile` with `flex-1 sm:flex-initial h-9 sm:h-8.5 px-3.5 rounded-xl text-xs font-semibold justify-center`.
+      - Optimized profile overview card padding (`p-3.5 sm:p-5`) and standardized Phone, Shift, Location items with `p-3 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)]`.
+      - Full-width mobile adaptation for "Sign Out of Session" form and button (`w-full sm:w-auto h-11 sm:h-8.5 px-4 justify-center`).
+      - Corrected platform identity to `"Reach International App"` and version to `"v1.0.0"`.
+      - Change Password Modal:
+        - Real-time password strength meter (Weak/Medium/Strong) evaluating 8+ chars, uppercase, lowercase, numbers, and symbols.
+        - Real-time match indicator: green checkmark (`Passwords match`) / red crossmark (`Passwords do not match`).
+        - Field-level error feedback for current password verification.
+        - Built-in eye toggles for all password fields.
+        - Clean layout without redundant text or clutter.
+    - `apps/mobile/app/(app)/settings.tsx`:
+      - Synchronized Modal 4 with current password verification, real-time strength meter (Weak/Medium/Strong), real-time match indicator (Green/Red), and min 8-character + complexity validation.
+  - **3. Verification**:
+    - Web TypeScript check (`tsc --noEmit`): Passed with 0 errors.
+    - Web ESLint check (`eslint components/settings/SettingsClient.tsx`): Passed with 0 errors, 0 warnings.
+    - Mobile TypeScript check (`node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit`): Passed with 0 errors.
+    - Monorepo Turborepo typecheck (`pnpm turbo run typecheck` across all 7 workspace packages): Passed with 0 errors.
+
+- **Integrate Vercel Web Analytics (@vercel/analytics/next) (2026-09-21)**:
+  - **1. User Request**:
+    - "import { Analytics } from \"@vercel/analytics/next\""
+    - "https://vercel.com/docs/analytics/quickstart?framework=nextjs#add-the-analytics-component-to-your-app"
+    - "read the documentaion properly"
+    - "add it properly"
+  - **2. Documentation & Technical Analysis**:
+    - Under Vercel Web Analytics documentation for Next.js App Router (`nextjs-app`):
+      1. Install package: `pnpm i @vercel/analytics`.
+      2. Import `Analytics` from `@vercel/analytics/next`.
+      3. Render `<Analytics />` within the document `<body>` inside `app/layout.tsx`.
+    - Content-Security-Policy (CSP) Verification:
+      - Vercel Analytics script loads from `https://va.vercel-scripts.com` in development and `/_vercel/insights/script.js` in production, sending telemetry pings to `https://va.vercel-scripts.com` and `https://vitals.vercel-insights.com`.
+      - Missing CSP permissions would cause browser rejection of the analytics script and data beacons.
+  - **3. Implementation Details**:
+    - `apps/web/package.json`: Installed `@vercel/analytics@^2.0.1` dependency via `pnpm --filter @reachinternational/web add @vercel/analytics`.
+    - `apps/web/app/layout.tsx`: Imported `import { Analytics } from "@vercel/analytics/next";` and placed `<Analytics />` inside `RootLayout` in the document `<body>` alongside Google Analytics and Cookie Consent.
+    - `apps/web/next.config.ts`: Added `https://va.vercel-scripts.com` to `scriptSrc`, and `https://va.vercel-scripts.com` & `https://vitals.vercel-insights.com` to `connectSrc` in both development and production CSP definitions, guaranteeing that telemetry is never blocked by browser security headers.
+    - `apps/web/lib/analytics.ts`: Forwarded custom telemetry in `trackEvent()` to `@vercel/analytics` `track()` when in browser environment, providing unified tracking across both GA4 and Vercel Analytics.
+  - **4. Verification**:
+    - Web TypeScript check (`pnpm --filter @reachinternational/web typecheck`): Passed with 0 errors.
+    - Web ESLint check (`eslint app/layout.tsx next.config.ts lib/analytics.ts`): Clean with 0 errors, 0 warnings.
+    - Monorepo-wide Turborepo typecheck (`pnpm turbo run typecheck` across all 7 workspace packages): 7/7 packages successful (0 errors).
+
+- **Eliminate Hardcoded URLs and Centralize Environment Configuration (.env) (2026-09-21)**:
+  - **1. User Request**:
+    - "dont user hardcoded anythings like app url or anythis"
+    - "alwasy use .env file and import it as per need"
+    - "implement this"
+  - **2. Problem & Root Cause**:
+    - Previously, URLs like `https://dashboard-reachinternational.vercel.app` and Supabase endpoints `https://dhbbgfzbyatzvqafnsqp.supabase.co` were hardcoded in multiple components and actions (such as `apps/web/app/actions/auth.ts`, `apps/mobile/app/(auth)/forgot-password.tsx`, `apps/mobile/components/machines/MachineImportModal.tsx`, `apps/mobile/lib/supabase.ts`, and `apps/mobile/shell/webview-config.ts`), leading to configuration drift and violating clean twelve-factor application architecture.
+  - **3. Implementation Details**:
+    - `apps/web/lib/env.ts` [NEW]: Centralized runtime environment accessor module exporting `getAppUrl`, `getSupabaseUrl`, `getSupabasePublishableKey`, `getSupabaseSecretKey`, `getGaMeasurementId`, and typed `env` proxy object. Throws descriptive errors in production if required variables are missing.
+    - `apps/mobile/lib/env.ts` [NEW]: Centralized Expo React Native environment accessor module exporting `getAppUrl`, `getWebAppUrl`, `getSupabaseUrl`, `getSupabaseAnonKey`, and typed `mobileEnv` object.
+    - Refactored consumers to import from `lib/env`:
+      - `apps/web/app/actions/auth.ts`: Removed `defaultAppUrl`; uses `getAppUrl()` for password reset and signup redirect URLs.
+      - `apps/mobile/app/(auth)/forgot-password.tsx`: Uses `redirectTo: `${getAppUrl()}/login``.
+      - `apps/mobile/components/machines/MachineImportModal.tsx`: Uses dynamic `${getAppUrl()}/machines`.
+      - `apps/mobile/lib/supabase.ts`: Removed `FALLBACK_SUPABASE_URL` and `FALLBACK_SUPABASE_ANON_KEY`.
+      - `apps/mobile/shell/webview-config.ts`: Dynamic origin extraction from `getAppUrl()` and `getSupabaseUrl()`.
+      - `apps/web/lib/supabase/client.ts`, `server.ts`, `admin.ts`: Uses `getSupabaseUrl()`, `getSupabasePublishableKey()`, and `getSupabaseSecretKey()`.
+      - `apps/web/proxy.ts`: Uses `getSupabaseUrl()` and `getSupabasePublishableKey()`.
+      - `apps/web/lib/analytics.ts`: Removed `"G-DC126P3SM9"` hardcoded fallback.
+      - `apps/web/lib/email.ts`: Replaced 4 instances of `process.env.NEXT_PUBLIC_APP_URL || ""` with `getAppUrl()`.
+      - `apps/web/app/layout.tsx`: Uses `getAppUrl()` and `getSupabaseUrl()`.
+      - `apps/web/app/sitemap.ts`: Uses `getAppUrl()`.
+    - Environment Files:
+      - Added `EXPO_PUBLIC_APP_URL` and `EXPO_PUBLIC_WEB_APP_URL` to root `.env`, `apps/mobile/.env`, `apps/mobile/.env.example`, and `apps/mobile/eas.json`.
+  - **4. Verification**:
+    - `pnpm turbo run typecheck`: 7/7 workspace packages passed with 0 errors (exit code 0).
+    - `node --test packages/permissions/src/navigation.test.ts`: 1/1 passed.
+    - Grep audit confirmed zero hardcoded URLs in active TypeScript/TSX code in `apps/`.
+
+- **Setup Google Tag (gtag.js) for Universal Telemetry & Event Tracking (2026-09-21)**:
+  - **1. User Request**:
+    - "<!-- Google tag (gtag.js) -->
+<script async src=\"https://www.googletagmanager.com/gtag/js?id=G-DC126P3SM9\"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-DC126P3SM9');
+</script>
+
+set this google tag properly
+so i can tract each and everythings"
+  - **2. Root Cause & Architectural Needs**:
+    - Next.js 16 App Router applications require specialized handling for analytics: client-side SPA navigations (`<Link>`, `router.push()`) do not trigger full browser reloads, meaning static snippet inclusions miss client-side route transitions and query string changes.
+    - Full telemetry tracking ("track each and everything") requires:
+      1. Zero-latency asynchronous loading (`strategy="afterInteractive"`) with preconnect optimization.
+      2. App Router client-side navigation tracking (`usePathname()`, `useSearchParams()`) with `<Suspense>` boundary wrapping.
+      3. Google Consent Mode v2 compliance synchronized with `<CookieConsent />` (`localStorage["cookie-consent"]`).
+      4. Universal event delegation for outbound external links, document downloads (`.pdf`, `.xlsx`, `.csv`), declarative data attributes, and form submissions.
+      5. Core business event instrumentation (login, signup, search, exports, fleet operations).
+      6. Cross-platform mobile parity for Expo Web.
+  - **3. Implementation Details**:
+    - `apps/web/.env`, `apps/web/.env.local`, `apps/web/.env.example`:
+      - Added `NEXT_PUBLIC_GA_MEASUREMENT_ID=G-DC126P3SM9`.
+    - `apps/web/lib/analytics.ts`:
+      - Implemented typed `window.gtag` / `window.dataLayer` execution with SSR safety.
+      - Implemented `updateConsent` for Google Consent Mode v2.
+      - Exported `trackPageView`, `trackEvent`, `trackLogin`, `trackSignUp`, `trackLogout`, `trackSearch`, `trackCtaClick`, `trackFileDownload`, `trackReportExport`, `trackOperationAction`, `trackOutboundLink`, `trackThemeChange`, and `trackException`.
+    - `apps/web/components/analytics/GoogleAnalytics.tsx` & `index.ts`:
+      - Injected official Google Tag script via `next/script` with `strategy="afterInteractive"`.
+      - Injected inline configuration initializing Consent Mode v2 based on stored consent status, timestamp, and `send_page_view: false` to defer page tracking to the SPA tracker.
+      - Built `AnalyticsRouteTracker` wrapped in `<Suspense fallback={null}>` firing `page_view` on every route change with full path, query string, title, and location.
+      - Built `GlobalAnalyticsListener` automatically capturing outbound links, file downloads, declarative attributes (`[data-analytics-click]`, `[data-analytics-event]`), and form submissions (`[data-analytics-form]`).
+    - `apps/web/app/layout.tsx`:
+      - Added `<link rel="preconnect" href="https://www.googletagmanager.com" />` and `dns-prefetch`.
+      - Mounted `<GoogleAnalytics />` in RootLayout.
+    - `apps/web/components/ui/CookieConsent.tsx`:
+      - Integrated `updateConsent(true/false)` and consent events into `handleAccept` / `handleReject`.
+    - `apps/web/app/login/login-form.tsx`:
+      - Added `trackLogin("credentials")` upon redirect and `trackEvent("login_failed")` upon failure.
+    - `apps/web/components/ui/CommandPalette.tsx`:
+      - Added `trackSearch` and `command_palette_execute` event dispatching.
+    - `apps/web/components/layout/PublicNavbar.tsx`:
+      - Added `data-analytics-click` attributes to desktop and mobile CTAs.
+    - `apps/mobile/lib/analytics/index.ts`:
+      - Added isomorphic mobile analytics abstraction matching web API.
+    - `apps/mobile/app/_layout.tsx`:
+      - Added `MobileGoogleAnalytics` script loader for Expo Web target.
+    - `README.md`:
+      - Added "Google Analytics 4 (GA4) & Universal Telemetry Architecture" section.
+  - **4. Verification**:
+    - Web TypeScript checks, mobile synchronization, and documentation verified clean.
+- **Fix Agentation Visibility and Functionality across More, Profile & Settings Pages (2026-09-21)**:
+  - **1. User Request**:
+    - "why agentation are not working in the more, settings , profile page fix this and make the agentation proper visible in above pages"
+  - **2. Root Cause Analysis**:
+    - `apps/web/components/AgentationWrapper.tsx` contained an explicit route-suppression guard:
+      `if (pathname === "/more" || pathname === "/profile" || pathname === "/settings") return null;`
+      which caused Agentation to completely unmount on `/more`, `/settings`, and `/profile`.
+    - This guard was originally added because on mobile viewports (≤ 768px), Agentation's default positioning (`bottom: 1.25rem` / 20px) placed the floating trigger button directly on top of the fixed mobile bottom navigation bar (`BottomNav.tsx`, 56px height), colliding with the "More" / "Account" tab.
+    - Furthermore, if a user dragged the toolbar while on a desktop screen (e.g. 1536px wide), the saved coordinates in `localStorage["feedback-toolbar-position"]` persisted across viewports, pushing the toolbar off-screen out of bounds when switching to mobile emulation or mobile devices.
+  - **3. Implementation Details**:
+    - `apps/web/components/AgentationWrapper.tsx`:
+      - Removed the route exclusion guard, restoring `<Agentation />` on all routes across the web app.
+      - Replaced stateful `useState`/`setMounted` with `React.useSyncExternalStore(emptySubscribe, () => true, () => false)` to satisfy React 19 rules and eliminate cascading render warnings.
+      - Added coordinate bounds sanitization on route changes: clears stale `localStorage["feedback-toolbar-position"]` if stored `x` or `y` coordinates exceed the current screen boundaries (`window.innerWidth - 44` or `window.innerHeight - 44`), preventing off-screen disappearance.
+      - Passed `key={pathname}` and `className="reach-agentation-toolbar"` to ensure route synchronization and page-specific annotation loading (`feedback-annotations-${pathname}`).
+    - `apps/web/app/globals.css`:
+      - Added responsive rules for `.reach-agentation-toolbar` and `[data-agentation-toolbar]`.
+      - On mobile viewports (`@media (max-width: 767px)`), positioned un-dragged toolbar at `bottom: calc(var(--bottom-nav-h, 56px) + 12px) !important; right: 14px !important;` and clamped `max-width: calc(100vw - 24px) !important;`.
+      - Ensures the floating button floats cleanly 12px above the mobile bottom navigation bar, never overlapping the "More" / "Account" tab or page bottom buttons.
+      - Preserved user custom dragging coordinates via `:not([style*="top"])` and desktop placement (`bottom: 1.25rem; right: 1.25rem; z-index: 100000`).
+    - `apps/mobile/app/_layout.tsx`:
+      - Verified `MobileAgentation` is registered without route exclusions for web platform.
+  - **4. Verification**:
+    - Web TypeScript check (`pnpm --filter @reachinternational/web exec tsc --noEmit`): 0 errors (exit code 0).
+    - Web targeted ESLint check (`eslint components/AgentationWrapper.tsx`): 0 errors, 0 warnings (exit code 0).
+- **Fix Password Reset Redirect Link & Public Domain Recovery Flow (2026-09-21)**:
+  - **1. User Request**:
+    - Page Feedback: `/forgot-password` (Viewport: 1536×695)
+    - "this forgot is working but in the email it sent wrong reset password link fix this"
+    - "google.com/url?q=https://dhbbgfzbyatzvqafnsqp.supabase.co/auth/v1/verify?token=pkce_...&type=recovery&redirect_to=https://service-centric-vaibhav-chauhans-projects-aa3b09a3.vercel.app/..."
+    - "via mail it sent this link which is not proper send proeprly link https://dashboard-reachinternational.vercel.app/login this is public domain use this to reset the password"
+  - **2. Root Cause Analysis**:
+    - `apps/web/app/actions/auth.ts`: `forgotPassword` passed `redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || ""}/reset-password``.
+    - When running on `localhost:3000` or without production env, the target was either invalid or not on the Supabase redirect allowlist.
+    - In Supabase Auth URL Configuration, the **Site URL** was configured as `https://service-centric-vaibhav-chauhans-projects-aa3b09a3.vercel.app/`. When Supabase receives an unwhitelisted `redirectTo`, it silently falls back to the Site URL.
+    - Neither `/reset-password` existed nor did `/login` handle password recovery states. Edge Auth Proxy and `LoginPage` would automatically redirect authenticated recovery sessions to `/dashboard` before users could set a new password.
+  - **3. Implementation Details**:
+    - `apps/web/app/actions/auth.ts`:
+      - Updated `forgotPassword` to resolve canonical `appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://dashboard-reachinternational.vercel.app").replace(/\/$/, "")` and pass `redirectTo: `${appUrl}/login``.
+      - Updated `signup` to ensure `emailRedirectTo` always defaults to the public domain.
+      - Implemented `resetPasswordAction`: validates password complexity (min 8 characters, uppercase, lowercase, digit, matching confirmation), updates credentials via `supabase.auth.updateUser({ password })`, and logs structured audit event (`auth.password_reset`).
+    - `apps/web/proxy.ts`:
+      - Added `/reset-password` to `authRoutes`.
+      - Added `isRecoveryFlow` guard checking for `type === "recovery"`, `code`, `reset`, or path starting with `/reset-password`.
+      - Exempted recovery sessions from early redirect to `/dashboard`.
+    - `apps/web/app/login/page.tsx` & `login-form.tsx`:
+      - `LoginPage`: Checks `searchParams` for recovery params before redirecting active users.
+      - `LoginFormClient`: Detects recovery mode via URL query, hash (`#access_token=...&type=recovery`), or Supabase `onAuthStateChange("PASSWORD_RECOVERY")`.
+      - Dynamically renders `ResetPasswordCard` with real-time complexity checklist, show/hide password toggles, and direct `resetPasswordAction` mutation.
+    - `apps/web/app/reset-password/page.tsx`:
+      - Created dedicated standalone `/reset-password` page adhering to Geist design tokens (`#171717` ink, `#fafafa` canvas, `#ffffff` card, hairline borders).
+    - `apps/mobile/app/(auth)/forgot-password.tsx`:
+      - Synchronized `supabase.auth.resetPasswordForEmail` with `redirectTo: 'https://dashboard-reachinternational.vercel.app/login'`.
+    - Environment Files:
+      - Configured `NEXT_PUBLIC_APP_URL=https://dashboard-reachinternational.vercel.app` in `apps/web/.env`, `apps/web/.env.local`, and root `.env`.
+    - `apps/web/lib/supabase/client.ts`:
+      - Implemented `createSupabaseBrowserClient` singleton using `@supabase/ssr` `createBrowserClient`.
+  - **4. Verification**:
+    - Web TypeScript check (`pnpm --filter @reachinternational/web typecheck`): Passed with 0 errors.
+    - Mobile TypeScript check (`pnpm --filter @reachinternational/mobile typecheck`): Passed with 0 errors.
+    - Monorepo-wide Turborepo check (`pnpm turbo run typecheck` across all 7 workspace packages): 7/7 successful (0 errors).
+    - Permissions test suite (`node --test ... navigation.test.ts`): 1/1 passed.
+
+- **Settings Route Resolution & Cross-Platform Visibility (/settings) (2026-09-21)**:
+  - **1. User Request**:
+    - "from the /more or sidebar /settings page are not open check the routs and other codebase properly and make this properly visible and properly working to the all users"
+  - **2. Root Cause**:
+    - In `apps/web/proxy.ts`, `"/settings"` was present in the `deprecatedRoutes` array. When any authenticated user attempted to open `/settings` from the sidebar, `/more` page, or via direct link, `proxy.ts` intercepted the request with `(isDeprecatedRoute || path === "/") && authenticatedUser` and redirected them back to `/dashboard`.
+  - **3. Implementation Details**:
+    - `apps/web/proxy.ts`:
+      - Removed `"/settings"` from `deprecatedRoutes`.
+      - Added `"/settings"`, `"/more"`, and `"/profile"` to `activeProtectedRoutes`.
+      - Confirmed that authenticated users pass cleanly through to `/settings` and unauthenticated users get redirected to `/login?redirectTo=/settings`.
+    - `apps/web/components/profile/UserProfileCard.tsx`:
+      - Added direct `Settings` link (`px-3 py-2 mt-2 rounded-xl`) with `Settings` Lucide icon above the Sign Out button.
+      - Removed redundant "Active" status badge.
+      - Repositioned Edit Profile button to top-right (`absolute top-2.5 right-2.5`).
+      - Scaled typography down (`text-xs font-bold`, `text-[10px]`, `text-[9px]` badge) and sized initial avatar to `h-9 w-9`.
+    - `apps/web/components/ui/CommandPalette.tsx`:
+      - Added `nav-settings` to navigation items for all 6 canonical roles with keywords and `⌘S` shortcut.
+    - `apps/web/components/layout/AppSidebar.tsx`:
+      - Confirmed `Settings` item in `mainNavItems` with `AnimatedSettings` icon for all 6 canonical roles (`super_admin`, `admin`, `manager`, `supervisor`, `hr`, `operator`).
+    - Cross-Platform Parity:
+      - Confirmed `apps/mobile/app/(app)/more.tsx` links to `/(app)/settings`.
+      - Confirmed `apps/mobile/app/(app)/_layout.tsx` registers `settings` tab.
+      - Confirmed `apps/mobile/components/navigation/MobileCommandPalette.tsx` includes `nav-settings`.
+  - **4. Verification**:
+    - All 7 monorepo packages compiled with 0 TypeScript errors.
+    - Permissions unit tests passed.
+
+- **Rename Dashboard to Home Monorepo-Wide (Web & Mobile) (2026-09-21)**:
+  - **1. User Request**:
+    - "## Page Feedback: /dashboard. Viewport: 1536×695"
+    - "### 1. <SidebarGroup> <SidebarMenu> <NavigationItem> <SidebarMenuItem> <LinkComponent> <SidebarMenuButton> "Dashboard""
+    - "Feedback: remove Dashboard page as Home everywhere"
+    - Clarification: "Rename 'Dashboard' to 'Home' everywhere — update the desktop sidebar, command palette, headers, and breadcrumbs to say 'Home' instead of 'Dashboard' across the entire platform"
+  - **2. Implementation Details**:
+    - `apps/web/components/layout/AppSidebar.tsx`: Updated `mainNavItems[0]` to `label: "Home"` and `icon: AnimatedHome`.
+    - `apps/web/components/layout/sidebar/SidebarHeader.tsx`: Updated brand logo link aria-label to `"REACH INTERNATIONAL Home"`.
+    - `apps/web/components/layout/PublicNavbar.tsx`: Updated `appNavItems[0]` to `label: "Home"`, `icon: AnimatedHome`, and desktop/drawer CTA buttons to `Go to Home`.
+    - `apps/web/components/layout/AppHeader.tsx`: Updated `getPageTitle()` for `/dashboard` to `"Home"`.
+    - `apps/web/components/layout/MobilePageHeader.tsx`: Updated `PAGE_TITLES["/dashboard"]` to `"Home"`, `PAGE_TITLES["/dashboard/logs"]` to `"Home Logs"`, and `resolveTitle()` default fallback to `"Home"`.
+    - `apps/web/components/ui/CommandPalette.tsx`: Updated navigation command to `title: "Go to Home"`, `icon: AnimatedHome`, `shortcut: "⌘H"`, and updated search keywords.
+    - `apps/web/app/(app)/dashboard/page.tsx`: Updated page metadata title to `"Home | ReachInternational"`.
+    - `apps/mobile/lib/nav/navItems.ts`: Updated `mobileNavItems[0]` to `label: 'Home'`, `icon: Home`.
+    - `apps/mobile/components/navigation/MobileCommandPalette.tsx`: Updated command item to `title: 'Home'`, `icon: Home`, keywords with `'home'`.
+    - `apps/mobile/components/navigation/MobileBottomNav.tsx`: Mapped `home: Home` in `ICONS` mapping.
+    - `apps/mobile/app/(app)/_layout.tsx`: Updated `Tabs.Screen name="dashboard"` options to `title: 'Home'`.
+    - `packages/permissions/src/navigation.ts`: Unified `key: "home"`, `label: "Home"`, `icon: "home"` verified with reachability test suite.
+  - **3. Verification**:
+    - Turborepo `pnpm turbo run typecheck` across all 7 packages passed (0 errors, exit 0).
+    - `packages/permissions` `node:test` passed (1 test, 1 pass, 0 fail).
+    - Web and mobile `tsc --noEmit` checks passed with 0 errors.
+
+- **UserProfileCard Popover Refinements: Active Badge Removal, Top-Right Edit Button & Compact Typography (2026-09-21)**:
+  - **1. User Request**:
+    - "## Page Feedback: /dashboard. Viewport: 1536×695"
+    - "### 1. UserProfileCard "active" -> remove this"
+    - "### 2. UserProfileCard button [Edit Profile] -> place it top right of the profile card"
+    - "### 3. UserProfileCard min flex -> make all the text small in size so it properly fit here"
+  - **2. Implementation Details**:
+    - `apps/web/components/profile/UserProfileCard.tsx`:
+      - Removed the redundant `<span className="...">{user.status || "Active"}</span>` active status badge.
+      - Placed the Edit Profile button in the top right corner (`absolute top-2.5 right-2.5`, `h-7 w-7 rounded-lg`), with `pr-7` on the user info container to prevent overlap.
+      - Scaled down typography to properly fit long strings without clipping: Name (`text-xs font-bold leading-snug`), Email (`text-[10px] leading-tight`), Role Badge (`text-[9px] px-1.5 py-0.5`).
+      - Scaled down initial avatar from 44px (`h-11 w-11`) to 36px (`h-9 w-9`) with `text-xs font-extrabold`.
+    - `apps/web/components/navigation/MorePageClient.tsx` & `apps/mobile/app/(app)/more.tsx`:
+      - Removed redundant Active status badge from web `/more` and mobile native `more.tsx` to maintain 100% web-mobile parity.
+  - **3. Verification**:
+    - `@reachinternational/web` `tsc --noEmit` passed with 0 errors (exit 0).
+
+- **Desktop User Profile Dropdown, Sidebar Settings & Profile/Settings 3-Tier Optimization (2026-09-21)**:
+  - **1. User Request**:
+    - "just like mobile improve the web destop view also"
+    - "## Page Feedback: /dashboard. Viewport: 1536×695"
+    - "### 1. <AppShellClient> <AppSidebar> <Sidebar> <SidebarFooter> <UserProfileDropdown> <SidebarTooltip> button [User profile menu]"
+    - "Feedback: when i click here then show the profile card with The initial-letter avatar , name , email , role , active status , edit profile icon below the profile card show the logout btn with red color when user click the profile card then open the profile page move the setting page from the profile card to sidebar and everythings should be in the settings page also make sure profile , settings page should optimize for both mobile and desktop"
+  - **2. Implementation Details**:
+    - `apps/web/components/profile/UserProfileCard.tsx`:
+      - Redesigned into a focused card containing: initial-letter avatar, full name, email, role badge, active status pill with pulsing emerald indicator, and edit profile icon.
+      - Profile card is an interactive button: clicking triggers `router.push('/profile')` and closes the popover.
+      - Edit profile button triggers `EditProfileModal` without triggering route navigation.
+      - Rendered red Logout button (`Sign Out`) directly below the profile card.
+      - Removed phone, shift, location, aadhaar, license, and navigation link rows.
+    - `apps/web/components/layout/sidebar/UserProfileDropdown.tsx`:
+      - Adapted bounds and thresholds for the compact card (`width: 300px`, `maxHeight: 360px`).
+    - `apps/web/components/layout/AppSidebar.tsx`:
+      - Added `Settings` (`/settings`) with `AnimatedSettings` to `mainNavItems` across all 6 canonical roles.
+      - Enforced operator ordering: Dashboard, Operations, Machines, Settings.
+    - `apps/web/app/(app)/settings/page.tsx` & `apps/web/components/settings/SettingsClient.tsx`:
+      - Server page fetches `getCurrentUser()` and `getUserDetail(userId)` from DAL.
+      - Client component expanded into full settings hub with 6 organized sections: Profile & Account Overview, Appearance (Light/Dark/System switcher), Notification Preferences (Shift reminders, breakdowns, assignments, log submissions), Security & Password (password update modal with validation, session encryption status), Legal & Platform (`/privacy`, `/terms`, version `v2026.09.07`), and Danger Zone (Account Deletion guard, Sign Out).
+    - `apps/web/app/(app)/profile/page.tsx`:
+      - Expanded layout to `max-w-4xl mx-auto` and organized detail sections into a responsive 2-column grid (`md:grid-cols-2`), eliminating empty screen margins on 1536px viewports while preserving single-column stacked touch cards on mobile.
+    - `apps/mobile/app/(app)/more.tsx` & `apps/web/components/navigation/MorePageClient.tsx`:
+      - Synchronized active status pill alongside role badge for cross-platform visual parity.
+  - **3. Verification**:
+    - Turborepo `turbo run typecheck` across all 7 workspace packages passed (0 errors, exit 0).
+    - Web `tsc --noEmit` passed (0 errors, exit 0).
+    - Mobile `tsc --noEmit` passed (0 errors, exit 0).
+    - Permissions `node:test` passed (1 test, 1 pass, 0 fail).
+
+- **Settings Route Resolution & Cross-Platform Accessibility (/settings) (2026-09-21)**:
+  - **1. User Request**:
+    - "from the /more or sidebar /settings page are not open check the routs and other codebase properly and make this properly visible and properly working to the all users"
+  - **2. Root Cause Analysis**:
+    - `apps/web/proxy.ts`: `/settings` was listed in `deprecatedRoutes`. When any authenticated user attempted to navigate to `/settings` (via the sidebar, mobile `/more`, command palette, or direct URL), the Edge Auth Proxy matched `deprecatedRoutes.some((route) => path.startsWith(route))` and redirected the user to `/dashboard`.
+    - `activeProtectedRoutes` was missing `/settings`, `/more`, and `/profile`.
+    - `apps/web/components/profile/UserProfileCard.tsx` lacked a direct Settings shortcut in the sidebar popover.
+    - `apps/web/components/ui/CommandPalette.tsx` lacked a `nav-settings` entry.
+  - **3. Implementation Details**:
+    - `apps/web/proxy.ts`:
+      - Removed `"/settings"` from `deprecatedRoutes`.
+      - Added `"/settings"`, `"/more"`, and `"/profile"` to `activeProtectedRoutes`.
+    - `apps/web/components/profile/UserProfileCard.tsx`:
+      - Added direct `Settings` link with Lucide `Settings` icon above the Sign Out button.
+    - `apps/web/components/ui/CommandPalette.tsx`:
+      - Added `nav-settings` to navigation items for all 6 canonical roles (`super_admin`, `admin`, `manager`, `supervisor`, `hr`, `operator`).
+    - Verified cross-platform navigation: `/settings` is accessible for all roles from web desktop sidebar, mobile `/more` touch screen, user profile popover, and command palette.
+  - **4. Verification**:
+    - `packages/permissions`: `node:test` passed (1 test, 1 pass, 0 fail).
+    - `@reachinternational/web`: `tsc --noEmit` passed (0 errors, exit 0).
+    - `@reachinternational/mobile`: `tsc --noEmit` passed (0 errors, exit 0).
+    - Turborepo `turbo run typecheck` across all 7 workspace packages passed (0 errors, exit 0).
+
+- **Remove 3-Dot More Menu from Home (/dashboard) and More (/more) Pages (2026-09-21)**:
+  - **1. User Request**:
+    - Page Feedback: `/more` @ 360×800 — `<AppShellClient> <MobilePageHeader> <AnimatedEllipsisVertical> <AnimateIcon> <motion.span> <EllipsisVertical>` graphic: "remove this from the more page"
+    - Page Feedback: `/dashboard` @ 360×800 — `<AppShellClient> <MobilePageHeader> <AnimatedEllipsisVertical> <AnimateIcon> <motion.span> <EllipsisVertical>` icon: "remove this more 3 dot opetion from teh home page"
+    - "remove 3 dot more option from home and more page since this is not usefull"
+  - **2. Implementation Details**:
+    - `apps/web/components/layout/MobilePageHeader.tsx`:
+      - Added `HIDE_MORE_MENU_PAGES = new Set(["/", "/dashboard", "/more"])`.
+      - Computed `showMoreMenu = !HIDE_MORE_MENU_PAGES.has(normalizedPath)`.
+      - Conditionally rendered the 3-dot More button (`AnimatedMoreVertical`), backdrop overlay, and dropdown menu card only when `showMoreMenu` is `true`.
+      - On `/dashboard` (home) and `/more`, the 3-dot menu trigger is eliminated, keeping the header clean and focused. Contextual actions and quick exports on resource screens (`/machines`, `/clients`, `/users`, `/operations`) remain fully intact.
+  - **3. Verification**:
+    - `@reachinternational/web` `tsc --noEmit` passed (0 errors, exit 0).
+    - `@reachinternational/permissions` `test` passed (1 test, 1 pass, 0 fail).
+
+- **Mobile Navigation Redesign: Unified Manifest & ≤2 Taps Reachability (2026-09-21)**:
+  - **1. User Request**:
+    - "Mobile Navigation Redesign: Implementation Plan. Goal: every page a role may open is reachable in 2 taps or fewer, from one navigation definition shared by web and native. first read the existing codebase then implement it, revarify"
+  - **2. Root Cause & Architectural Decisions**:
+    - Previously, web and mobile navigation configurations drifted: web defined inline item arrays with slide-up drawers, while mobile had a separate custom pill bar and route screens. Admin roles with 7 items resulted in crowded bars.
+    - Solution: Created a single shared manifest (`packages/permissions/src/navigation.ts`) driving both platforms. Primary bar contains up to 4 primary slots + 1 last slot (More or Account, max 5 slots total). Roles with overflow get a 2-column grid of touch tiles ($\ge 88$px height) under `/more`. Roles without overflow get Account as the last slot pointing to account actions on the same `/more` route.
+  - **3. Implementation & Changes**:
+    - `packages/permissions/src/navigation.ts`: Single source of truth for navigation structure (`NAV_ITEMS`, `PRIMARY`, `getNavForRole`, `labelFor`, `AUTHORIZED_CLIENT_ROLES`). Self-contained type-level imports ensuring zero bundler friction and instantaneous native tests.
+    - `packages/permissions/src/navigation.test.ts`: Automated test validating reachability, $\le 5$ bar slots, and Home-first ordering across all 6 canonical roles (`operator`, `supervisor`, `hr`, `manager`, `admin`, `super_admin`).
+    - `packages/permissions/src/index.ts`: Re-exported navigation manifest.
+    - `apps/web/components/navigation/BottomNav.tsx`: Clean client component consuming `getNavForRole(role)`. Reuses existing tokens and Lucide icons. Adds focus listener toggling `data-nav-hidden` on `<html>` to hide bar during text input, preventing keyboard and sticky submit collisions.
+    - `apps/web/app/(app)/more/page.tsx` & `apps/web/components/navigation/MorePageClient.tsx`: Dedicated server-driven `/more` route. Shows profile header, `EditProfileModal` trigger, overflow tiles, theme toggle, privacy, terms, account deletion, and sign-out. Zero runtime queries beyond session.
+    - `apps/web/app/globals.css`: Added `--bottom-nav-h` CSS variable and `html[data-nav-hidden]` rules.
+    - `apps/web/components/layout/AppShellClient.tsx` & `Navbar.tsx`: Integrated new `BottomNav`. Removed obsolete `apps/web/components/layout/MobileBottomNav.tsx`.
+    - `apps/web/components/layout/MobilePageHeader.tsx`: Added `/more` to `PAGE_TITLES`.
+    - `apps/mobile/components/navigation/MobileBottomNav.tsx`: Rewritten to consume `getNavForRole(role)` from `@reachinternational/permissions`. Hides floating pill bar when keyboard is open.
+    - `apps/mobile/app/(app)/more.tsx`: Native screen mirroring `/more` with profile header, overflow tiles, settings, profile, appearance toggle, legal links, account deletion, and sign-out alert.
+    - `apps/mobile/app/(app)/_layout.tsx`: Registered `more` tab screen.
+  - **4. Verification**:
+    - `packages/permissions`: `node --test --experimental-strip-types src/navigation.test.ts` passed (1 test, 1 pass, 0 fail).
+    - `turbo run typecheck` across all 7 workspace packages passed (0 errors, exit 0).
+    - Web and Mobile `tsc --noEmit` passed (0 errors, exit 0).
+
+- **Fix Clients Loading RSC Serialization Error & React 19 ThemeScript Warning (2026-09-21)**:
+  - **1. User Request**:
+    - "Event handlers cannot be passed to Client Component props. <... canManageClients={true} totalClients=... onOpenAddModal={function onOpenAddModal} onOpenExportModal=...> at ClientsLoading (app\(app)\clients\loading.tsx:6:7)"
+    - "Encountered a script tag while rendering React component... at ThemeScript (components\theme\ThemeScript.tsx:57:5) at RootLayout (app\layout.tsx:93:9)"
+    - "deeplly analyse the error and fix it"
+  - **2. Root Cause Analysis**:
+    - Issue 1 (`/clients` crash): `apps/web/app/(app)/clients/loading.tsx` is an RSC rendered during streaming for `/clients`. It rendered `<ClientsPageShellLoading />`. In `apps/web/components/clients/ClientsPageShellLoading.tsx`, the component was missing the `"use client";` directive at line 1. Because it was missing `"use client";`, Next.js treated `ClientsPageShellLoading` as a Server Component. Inside, it passed inline callbacks (`onOpenAddModal={() => {}}`, `onOpenExportModal={() => {}}`, `onSearchChange={() => {}}`, `onStatusChange={() => {}}`, `onCityChange={() => {}}`, `onResetFilters={() => {}}`) to Client Components (`ClientsHeader`, `ClientSearch`, `ClientStatusTabs`). In React Server Components, passing functions from a Server Component to a Client Component is strictly prohibited, throwing `Event handlers cannot be passed to Client Component props` and crashing into `app/(app)/error.tsx`.
+    - Issue 2 (`ThemeScript` warning): React 19 emits a development console warning (`Encountered a script tag while rendering React component`) when standard `<script>` tags are rendered inside components. Previous development filters were guarded with `if (typeof window !== "undefined")`, which never ran on the server during SSR (Node.js environment). When React 19 SSR-rendered `ThemeScript` in `RootLayout`, it printed the warning to the server console and forwarded it to Turbopack's dev overlay.
+  - **3. Implementation & Changes**:
+    - `apps/web/components/clients/ClientsPageShellLoading.tsx`:
+      - Added `"use client";` to line 1. `ClientsPageShellLoading` now operates as a Client Component boundary, taking 0 props from `loading.tsx` and passing callbacks entirely within the client component tree.
+    - `apps/web/components/theme/ThemeScript.tsx` & `apps/web/components/theme/ThemeProvider.tsx`:
+      - Replaced `typeof window !== "undefined"` with an idempotent `globalThis.__react19ScriptWarnPatched` guard in `process.env.NODE_ENV === "development"`.
+      - Suppresses the false-positive warning cleanly on both server (SSR in Node.js/Turbopack) and client (browser) without breaking synchronous blocking theme initialization.
+      - Refactored `ThemeProvider.tsx` to declare `applyTheme` with `useCallback` prior to `useEffect` calls, eliminating React Compiler lint errors.
+  - **4. Verification**:
+    - `@reachinternational/web`: `tsc --noEmit` passed (0 errors, exit 0).
+    - `@reachinternational/mobile`: `tsc --noEmit` passed (0 errors, exit 0).
+    - Targeted ESLint check on `ClientsPageShellLoading.tsx`, `ThemeScript.tsx`, and `ThemeProvider.tsx` passed with 0 errors and 0 warnings (exit 0).
+
+- **Role-Based Bottom Mobile Navbar & RBAC Parity (2026-09-21)**:
+  - **1. User Request**:
+    - "in the bottome mobile navbar add all the pages currenly user page are not visible to any role users add the user page to the bottom also make sure bottom navbar should be as per role rbac should properly implemented" (Viewport: 360×800)
+  - **2. Root Cause Analysis**:
+    - Web App: In `apps/web/components/layout/MobileBottomNav.tsx`, the `users` link was gated behind `canAccessUsers && !canAccessClients`. Since `canAccessClients` evaluates to `true` for all admin/manager roles (`super_admin`, `admin`, `manager`), `!canAccessClients` evaluated to `false`. This suppressed the Users page (`/users`) for all admin and manager users. Furthermore, `/audit` was missing from mobile bottom navigation for these roles.
+    - Mobile App: In `apps/mobile/components/navigation/MobileBottomNav.tsx`, the exact same condition suppressed `users` for admin-tier roles. In `apps/mobile/app/(app)/_layout.tsx`, `<Tabs.Screen name="clients">` had `href: null`. Direct route navigation in `clients.tsx`, `users.tsx`, `operations.tsx`, and `machines.tsx` lacked defense-in-depth role check redirects.
+    - Mobile Viewport (360×800): 7 items on web for admin roles required tight horizontal constraints, `truncate max-w-full block`, and `overflow-x-auto no-scrollbar` to avoid double-line text wrapping or layout overflow.
+  - **3. Implementation & Changes**:
+    - `apps/web/components/layout/MobileBottomNav.tsx`:
+      - Reorganized navigation items strictly by role:
+        - `super_admin` / `admin` / `manager`: `Dashboard`, `Machines`, `Operations`, `Clients`, `Users`, `Audit`, `Profile` (7 items).
+        - `supervisor`: `Dashboard`, `Machines`, `Operations`, `Users`, `Profile` (5 items).
+        - `hr`: `Dashboard`, `Users`, `Profile` (3 items).
+        - `operator`: `Dashboard`, `Operations`, `Machines`, `Profile` (4 items).
+      - Added `AnimatedScrollText` for Audit.
+      - Updated `isActive` to handle subroutes (`/machines/[id]`, `/users?page=...`, etc.) via `isRouteActive`.
+      - Optimized for 360×800: `px-1.5 sm:px-3` container padding, `p-1 sm:p-1.5 overflow-x-auto no-scrollbar scroll-smooth` pill bar, `min-h-[44px]` touch target, `text-[8.5px] sm:text-[10px]` typography, `h-[18px] w-[18px] sm:h-5 sm:w-5` icons.
+    - `apps/mobile/components/navigation/MobileBottomNav.tsx`:
+      - Synchronized items per role: both `Clients` and `Users` for admin tier, `Users` for supervisor/HR, and operator restricted to operational tabs.
+      - Micro-optimized for 360×800: `paddingHorizontal: 8`, button `minHeight: 44, paddingHorizontal: 1, paddingVertical: 3`, `fontSize: 9.5`, `Icon size={18}`.
+    - `apps/mobile/app/(app)/_layout.tsx`:
+      - Promoted `clients` to primary tabs (`<Tabs.Screen name="clients" options={{ title: 'Clients' }} />`) without `href: null`.
+    - `apps/mobile/app/(app)/clients.tsx`:
+      - Added redirect guard to `/(app)/dashboard` for non-admin/manager roles (`supervisor`, `hr`, `operator`).
+    - `apps/mobile/app/(app)/users.tsx`:
+      - Added redirect guard to `/(app)/dashboard` for `operator`.
+    - `apps/mobile/app/(app)/operations.tsx`:
+      - Added redirect guard to `/(app)/dashboard` for `hr`.
+    - `apps/mobile/app/(app)/machines.tsx`:
+      - Added redirect guard to `/(app)/dashboard` for `hr`.
+  - **4. Verification**:
+    - Turborepo `pnpm turbo run typecheck` across all 7 workspace packages passed (0 errors, exit 0).
+    - Web `tsc --noEmit` passed (0 errors, exit 0).
+    - Mobile `tsc --noEmit` passed (0 errors, exit 0).
+    - Scoped ESLint check on `MobileBottomNav.tsx` clean (0 errors, 0 warnings, exit 0).
+
+- **Cross-Platform Dashboard Redirection on Every Visit (2026-09-19)**:
+  - **1. User Request**:
+    - "while open the web , mobile app all the user are not redired to the dashboard page only first time they directed to the dashboard page fix this and make sure routs working properly for every visits"
+  - **2. Root Cause Analysis**:
+    - Mobile App: In `apps/mobile/app/(app)/_layout.tsx`, `<Tabs>` did not specify `initialRouteName` and had `<Tabs.Screen name="machines">` as the first tab, while `dashboard` was placed at position #7 with `href: null`. Every time an authenticated user launched or re-entered the app, Expo Router loaded the first tab (`machines`) instead of the dashboard. In addition, `(auth)/_layout.tsx` and `login.tsx` lacked an active session guard.
+    - Web App: `apps/web/proxy.ts` returned `NextResponse.redirect()` without copying refreshed cookies from `response.cookies`. When Supabase Auth refreshed tokens at the edge, returning a bare redirect discarded the cookies, causing downstream page loads to fail session validation and redirect to `/login`.
+    - Web Prerendering: `apps/web/app/page.tsx` was missing `export const dynamic = "force-dynamic"`, risking Next.js static prerendering of unauthenticated redirects.
+    - Web DAL Latency: `getCurrentUserOrNull` in `apps/web/lib/dal.ts` lacked the edge-signed headers fast path (`x-internal-user-id`, `x-internal-user-sig`), causing redundant auth roundtrips on cold page loads.
+  - **3. Implementation & Changes**:
+    - `apps/mobile/app/(app)/_layout.tsx`:
+      - Set `<Tabs initialRouteName="dashboard">`.
+      - Moved `Tabs.Screen name="dashboard"` to the very first tab slot and removed `href: null`.
+    - `apps/mobile/app/(auth)/_layout.tsx`:
+      - Added active session check using `useAuth()`. Active sessions immediately redirect to `/(app)/dashboard` (or `/(auth)/onboarding`).
+    - `apps/mobile/app/(auth)/login.tsx`:
+      - Added defense-in-depth `useEffect` hook redirecting authenticated users to `/(app)/dashboard`.
+    - `apps/mobile/app/index.tsx`:
+      - Updated `NativeGatewayScreen` to check `isProfileComplete` and route cleanly to `/(app)/dashboard`.
+    - `apps/web/proxy.ts`:
+      - Implemented `createRedirectResponse` helper copying all `response.cookies` onto `NextResponse.redirect`.
+      - Wrapped `/dashboard` redirects for auth routes, root `/`, and deprecated routes with `createRedirectResponse`.
+    - `apps/web/app/page.tsx`:
+      - Added `export const dynamic = "force-dynamic"` and `export const revalidate = 0`.
+    - `apps/web/lib/dal.ts`:
+      - Added edge-signed header verification (`x-internal-user-id`, `x-internal-user-sig`) to `getCurrentUserOrNull()`.
+      - Cleaned `any` type assertions to strict safe types.
+    - `apps/web/app/login/page.tsx`:
+      - Added `export const dynamic = "force-dynamic"` and `export const revalidate = 0` with server-side active user check redirecting to `/dashboard`.
+    - `apps/web/app/(app)/dashboard/logs/page.tsx`:
+      - Redirected to `/operations?tab=logs` instead of deprecated `/audit-logs`.
+    - `apps/web/app/(app)/users/page.tsx`:
+      - Redirected unauthorized roles (operators) directly to `/dashboard`.
+  - **4. Verification**:
+    - Turborepo `pnpm turbo run typecheck` across all 7 workspace packages passed (0 errors, exit 0).
+    - `@reachinternational/mobile`: `tsc --noEmit` passed (0 errors, exit 0).
+    - `@reachinternational/web`: `tsc --noEmit` passed (0 errors, exit 0).
+    - Scoped ESLint check across all modified web files passed with 0 errors and 0 warnings (exit 0).
+
 - **Operator Dashboard Single Alert & Duplicate Removal (2026-09-19)**:
   - **1. User Request**:
     - Page Feedback: `/dashboard` (Viewport: 360×800):

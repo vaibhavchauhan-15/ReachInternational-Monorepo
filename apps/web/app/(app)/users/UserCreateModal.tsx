@@ -84,7 +84,7 @@ export function UserCreateModal({
   loading,
   onSubmit,
   supervisors = [],
-  workingLocations = [],
+  workingLocations: _workingLocations = [],
 }: UserCreateModalProps) {
   const [createForm, setCreateForm] = useState({
     full_name: "",
@@ -93,7 +93,6 @@ export function UserCreateModal({
     password: "",
     role: "operator" as UserRole,
     supervisor_id: "",
-    working_location_id: "",
     branch_id: "none",
     shift_time: "Day Shift (08:00 AM - 08:00 PM)",
     address: "",
@@ -212,7 +211,6 @@ export function UserCreateModal({
         <input type="hidden" name="branch_id" value={createForm.branch_id} />
         <input type="hidden" name="role" value={createForm.role} />
         <input type="hidden" name="supervisor_id" value={createForm.supervisor_id} />
-        <input type="hidden" name="working_location_id" value={createForm.working_location_id} />
 
         {/* Informational banner: Direct activation without approval request */}
         <div className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs font-medium text-emerald-800 dark:text-emerald-300">
@@ -399,20 +397,6 @@ export function UserCreateModal({
             </div>
           )}
 
-          {/* Working Location Selector for All Roles */}
-          <div className="pt-2">
-            <SearchableSelect
-              label="Working Location / Site"
-              options={workingLocations}
-              value={createForm.working_location_id}
-              onChange={(val) => setCreateForm((prev) => ({ ...prev, working_location_id: val }))}
-              placeholder={workingLocations.length > 0 ? "Search or select working location..." : "No active working locations available"}
-              clearable
-            />
-            <p className="mt-1.5 text-[11px] text-[var(--color-mute)]">
-              Designate operational site, workshop, yard, or regional office base.
-            </p>
-          </div>
         </div>
 
         {/* Form Action Controls */}

@@ -91,11 +91,6 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
   const [supervisorSearch, setSupervisorSearch] = useState('');
 
   // Working Location State
-  const [workingLocations, setWorkingLocations] = useState<Array<{ id: string; name: string; type?: string; city?: string }>>([]);
-  const [workingLocationId, setWorkingLocationId] = useState('');
-  const [workingLocationPickerVisible, setWorkingLocationPickerVisible] = useState(false);
-  const [workingLocationSearch, setWorkingLocationSearch] = useState('');
-
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -120,7 +115,6 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
       setAadhaarNumber(user.aadhaar_number ? formatAadhaar(user.aadhaar_number) : '');
       setLicenseNumber(user.license_number || '');
       setSupervisorId(user.supervisor_id || (user.supervisor_ids && user.supervisor_ids[0]) || '');
-      setWorkingLocationId(user.working_location_id || (user.working_location ? user.working_location.id : '') || '');
       setError('');
     }
   }, [user]);
@@ -130,12 +124,6 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
       try {
         const { data: sups } = await supabase.rpc('get_active_supervisors_public');
         if (sups) setSupervisors(sups as Array<{ id: string; full_name: string; email?: string }>);
-      } catch {
-        // ignore
-      }
-      try {
-        const { data: locs } = await supabase.rpc('get_active_working_locations_public');
-        if (locs) setWorkingLocations(locs as Array<{ id: string; name: string; type?: string; city?: string }>);
       } catch {
         // ignore
       }
@@ -153,19 +141,14 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
 
   const selectedRoleObj = ALL_ROLES.find((r) => r.value === role) || ALL_ROLES[0];
   const selectedSupervisor = supervisors.find((s) => s.id === supervisorId);
-  const selectedWorkingLocation = workingLocations.find((l) => l.id === workingLocationId);
 
   const filteredStates = INDIAN_STATES.filter((s) =>
     s.name.toLowerCase().includes(stateSearch.toLowerCase())
   );
 
   const filteredSupervisors = supervisors.filter((s) =>
-    s.full_name.toLowerCase().includes(supervisorSearch.toLowerCase())
-  );
-
-  const filteredLocations = workingLocations.filter((l) =>
-    l.name.toLowerCase().includes(workingLocationSearch.toLowerCase()) ||
-    (l.city && l.city.toLowerCase().includes(workingLocationSearch.toLowerCase()))
+    s.full_name.toLowerCase().includes(supervisorSearch.toLowerCase()) ||
+    (s.email && s.email.toLowerCase().includes(supervisorSearch.toLowerCase()))
   );
 
   const handleSave = async () => {
@@ -226,7 +209,6 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
           license_number: formattedLic,
           supervisor_id: primarySupervisorId,
           supervisor_ids: supervisorIdsArray,
-          working_location_id: workingLocationId || null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', user.id);
@@ -438,24 +420,6 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
                   </TouchableOpacity>
                 </View>
               )}
-
-              {/* Working Location Trigger */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Working Location / Site</Text>
-                <TouchableOpacity
-                  onPress={() => setWorkingLocationPickerVisible(true)}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.pickerTrigger,
-                    { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
-                  ]}
-                >
-                  <Text style={[styles.pickerTriggerText, { color: selectedWorkingLocation ? theme.colors.ink : theme.colors.mute }]}>
-                    {selectedWorkingLocation ? `${selectedWorkingLocation.name}${selectedWorkingLocation.city ? ` (${selectedWorkingLocation.city})` : ''}` : 'Select working location...'}
-                  </Text>
-                  <ChevronDown size={16} color={theme.colors.mute} />
-                </TouchableOpacity>
-              </View>
             </View>
           </ScrollView>
 
@@ -617,70 +581,6 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
                           {s.full_name}
                         </Text>
                         {s.email ? <Text style={{ fontSize: 11, color: theme.colors.mute }}>{s.email}</Text> : null}
-                      </View>
-                      {isSelected && <Check size={16} color={theme.colors.link} />}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Working Location Picker Modal */}
-        <Modal visible={workingLocationPickerVisible} animationType="slide" transparent onRequestClose={() => setWorkingLocationPickerVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select Working Location</Text>
-                <TouchableOpacity onPress={() => setWorkingLocationPickerVisible(false)} style={styles.closeBtn}>
-                  <X size={18} color={theme.colors.ink} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={[styles.searchBox, { borderBottomColor: theme.colors.hairline }]}>
-                <Search size={16} color={theme.colors.mute} />
-                <TextInput
-                  style={[styles.searchInput, { color: theme.colors.ink }]}
-                  placeholder="Search working location..."
-                  placeholderTextColor={theme.colors.mute}
-                  value={workingLocationSearch}
-                  onChangeText={setWorkingLocationSearch}
-                />
-              </View>
-
-              <ScrollView style={styles.modalListScroll} showsVerticalScrollIndicator={false}>
-                <TouchableOpacity
-                  onPress={() => {
-                    setWorkingLocationId('');
-                    setWorkingLocationPickerVisible(false);
-                  }}
-                  style={[styles.modalItemRow, { borderBottomColor: theme.colors.hairline }]}
-                >
-                  <Text style={[styles.modalItemText, { color: theme.colors.mute }]}>None (Unassigned)</Text>
-                  {!workingLocationId && <Check size={16} color={theme.colors.link} />}
-                </TouchableOpacity>
-
-                {filteredLocations.map((l) => {
-                  const isSelected = workingLocationId === l.id;
-                  return (
-                    <TouchableOpacity
-                      key={l.id}
-                      onPress={() => {
-                        setWorkingLocationId(l.id);
-                        setWorkingLocationPickerVisible(false);
-                      }}
-                      style={[
-                        styles.modalItemRow,
-                        { borderBottomColor: theme.colors.hairline },
-                        isSelected && { backgroundColor: theme.colors.link + '12' },
-                      ]}
-                    >
-                      <View>
-                        <Text style={[styles.modalItemText, { color: isSelected ? theme.colors.link : theme.colors.ink, fontWeight: isSelected ? '700' : '500' }]}>
-                          {l.name}
-                        </Text>
-                        {l.city ? <Text style={{ fontSize: 11, color: theme.colors.mute }}>{l.city}</Text> : null}
                       </View>
                       {isSelected && <Check size={16} color={theme.colors.link} />}
                     </TouchableOpacity>

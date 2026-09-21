@@ -94,7 +94,7 @@ export function UserEditModal({
   loading,
   onSubmit,
   supervisors = [],
-  workingLocations = [],
+  workingLocations: _workingLocations = [],
 }: UserEditModalProps) {
   const matchedState = user.state_id
     ? getStateById(user.state_id)
@@ -107,7 +107,6 @@ export function UserEditModal({
     phone: user.phone || "+91 ",
     role: user.role,
     supervisor_id: user.supervisor_id || user.supervisor?.id || "",
-    working_location_id: user.working_location_id || user.working_location?.id || "",
     shift_time: user.shift_time || "",
     address: user.address || "",
     city: user.city || "",
@@ -238,7 +237,6 @@ export function UserEditModal({
       >
         <input type="hidden" name="role" value={editForm.role} />
         <input type="hidden" name="supervisor_id" value={editForm.supervisor_id} />
-        <input type="hidden" name="working_location_id" value={editForm.working_location_id} />
         <input type="hidden" name="state" value={editForm.state} />
         <input type="hidden" name="state_id" value={editForm.state_id} />
 
@@ -415,20 +413,6 @@ export function UserEditModal({
             </div>
           )}
 
-          {/* Working Location Selector for All Roles */}
-          <div className="pt-2">
-            <SearchableSelect
-              label="Working Location / Site"
-              options={workingLocations}
-              value={editForm.working_location_id}
-              onChange={(val) => setEditForm((prev) => ({ ...prev, working_location_id: val }))}
-              placeholder={workingLocations.length > 0 ? "Search or select working location..." : "No active working locations available"}
-              clearable
-            />
-            <p className="mt-1.5 text-[11px] text-[var(--color-mute)]">
-              Operational site, workshop, yard, or regional office base.
-            </p>
-          </div>
         </div>
 
         <div className="flex items-center justify-end gap-2.5 pt-2">

@@ -42,14 +42,14 @@ export const UserProfileDropdown = memo(function UserProfileDropdown({
     const updatePosition = () => {
       if (!triggerRef.current) return;
       const rect = triggerRef.current.getBoundingClientRect();
-      const popoverWidth = Math.min(320, window.innerWidth - 24);
+      const popoverWidth = Math.min(300, window.innerWidth - 24);
       const viewportHeight = window.innerHeight;
       const viewportWidth = window.innerWidth;
 
       if (collapsed) {
         // Collapsed mode: place to the right of the sidebar
         const left = Math.max(12, Math.min(rect.right + 12, viewportWidth - popoverWidth - 12));
-        const maxHeight = Math.min(500, Math.max(260, viewportHeight - 32));
+        const maxHeight = Math.min(360, Math.max(160, viewportHeight - 32));
         const bottomOffset = viewportHeight - rect.bottom;
 
         if (bottomOffset + maxHeight > viewportHeight - 12) {
@@ -72,9 +72,9 @@ export const UserProfileDropdown = memo(function UserProfileDropdown({
         const spaceBelow = viewportHeight - rect.bottom - 8;
         const left = Math.max(12, Math.min(rect.left, viewportWidth - popoverWidth - 12));
 
-        if (spaceAbove >= 260 || spaceAbove >= spaceBelow) {
+        if (spaceAbove >= 160 || spaceAbove >= spaceBelow) {
           // Position ABOVE trigger
-          const maxHeight = Math.min(500, Math.max(260, spaceAbove - 16));
+          const maxHeight = Math.min(360, Math.max(160, spaceAbove - 16));
           const bottomOffset = viewportHeight - rect.top + 8;
           setPos({
             bottom: Math.max(12, bottomOffset),
@@ -83,7 +83,7 @@ export const UserProfileDropdown = memo(function UserProfileDropdown({
           });
         } else {
           // Position BELOW trigger if trigger is positioned high
-          const maxHeight = Math.min(500, Math.max(260, spaceBelow - 16));
+          const maxHeight = Math.min(360, Math.max(160, spaceBelow - 16));
           setPos({
             top: Math.max(12, rect.bottom + 8),
             left,
@@ -197,7 +197,7 @@ export const UserProfileDropdown = memo(function UserProfileDropdown({
                   left: `${pos.left}px`,
                   ...(pos.top !== undefined ? { top: `${pos.top}px` } : {}),
                   ...(pos.bottom !== undefined ? { bottom: `${pos.bottom}px` } : {}),
-                  width: "320px",
+                  width: "300px",
                   maxHeight: `${pos.maxHeight}px`,
                 }}
                 className="pointer-events-auto rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3 shadow-2xl shadow-black/10 dark:shadow-black/50 text-[var(--color-ink)] backdrop-blur-xl select-none flex flex-col overflow-hidden"

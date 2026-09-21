@@ -29,3 +29,12 @@ Manages the complete employee lifecycle, onboarding workflows, department & desi
    - HR Managers submit user account creation/deactivation requests to Admins via `public.user_account_requests`.
 6. **Document Repository**:
    - Manage joining, identity, qualification, employment, offer letter, appointment letter, resignation, and experience document metadata via `public.employee_documents`.
+7. **HR & Operator Payroll Engine (`/hr`, `/payroll`) (Migrations 094 & 095)**:
+   - **Accessible Roles**: `super_admin`, `admin`, `manager`, `hr` (guarded at Edge Proxy `proxy.ts`, DAL `requireRole`, and PostgreSQL RPCs).
+   - **Split-Month Overtime Lag Formula**:
+     $$\text{Total Pay} = (\text{Work Days}_{\text{Previous Month}} \times \text{Daily Rate}) + (\text{OT Hours}_{\text{Month Before Previous}} \times \text{Hourly OT Rate})$$
+   - **PostgreSQL RPCs**:
+     - `get_hr_payroll_summary(p_payroll_month)`: Computes previous month work days and lagged 1-month overtime hours in <5ms.
+     - `update_operator_payroll_rates(p_operator_id, p_daily_rate, p_ot_hourly_rate)`: Atomic operator rate update with caller role verification.
+     - `bulk_update_operator_payroll_rates(p_updates)`: Atomic multi-operator rate batch update.
+   - **Cross-Platform Features**: Desktop table + mobile touch cards, month selector, 4 KPI cards, search, inline rate editing, bulk update modal, and CSV export.

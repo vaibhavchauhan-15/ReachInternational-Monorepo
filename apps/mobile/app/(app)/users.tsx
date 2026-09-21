@@ -33,6 +33,7 @@ import { RejectReasonModal } from '../../components/users/RejectReasonModal';
 import { UserExportModal } from '../../components/users/UserExportModal';
 import { UserListSkeleton } from '../../components/users/UserCardSkeleton';
 import { supabase } from '../../lib/supabase';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { notifyUserPasswordReset } from '../../lib/notifications';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -382,16 +383,6 @@ const UserTouchCard = React.memo(function UserTouchCard({
               </Text>
             </View>
           )}
-
-          {u.working_location?.name && (
-            <View style={styles.metaChipRow}>
-              <MapPin size={11} color={theme.colors.link} />
-              <Text style={[styles.metaChipText, { color: theme.colors.ink }]} numberOfLines={1}>
-                Base: {u.working_location.name}
-                {u.working_location.city ? ` (${u.working_location.city})` : ''}
-              </Text>
-            </View>
-          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -401,6 +392,21 @@ const UserTouchCard = React.memo(function UserTouchCard({
 export default function UsersScreen() {
   const { theme, isDark } = useTheme();
   const { role: currentUserRole, user: authUser } = useAuth();
+  const router = useRouter();
+  const localParams = useLocalSearchParams<{ search?: string }>();
+
+  const normalizedRole = (currentUserRole || '').toLowerCase();
+  const canAccessUsers = ['super_admin', 'admin', 'manager', 'hr', 'supervisor'].includes(normalizedRole);
+
+  useEffect(() => {
+    if (currentUserRole && !canAccessUsers) {
+      router.replace('/(app)/dashboard');
+    }
+  }, [currentUserRole, canAccessUsers, router]);
+
+  if (currentUserRole && !canAccessUsers) {
+    return null;
+  }
 
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -411,6 +417,15 @@ export default function UsersScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchInputRef = useRef<TextInput>(null);
+
+  // Synchronize route search param if supplied (e.g. from HR Payroll link)
+  useEffect(() => {
+    if (localParams.search && typeof localParams.search === 'string') {
+      const paramSearch = localParams.search.trim();
+      setSearch(paramSearch);
+      setDebouncedSearch(paramSearch);
+    }
+  }, [localParams.search]);
 
   // 6 Primary Filter Dimensions
   const [roleFilter, setRoleFilter] = useState('all');
@@ -769,7 +784,7 @@ export default function UsersScreen() {
     let query = supabase
       .from('users')
       .select(
-        'id, full_name, email, phone, role, status, city, district, state, state_id, shift_time, address, aadhaar_number, license_number, supervisor_id, supervisor_ids, working_location_id, created_at',
+        'id, full_name, email, phone, role, status, city, district, state, state_id, shift_time, address, aadhaar_number, license_number, supervisor_id, supervisor_ids, created_at',
         { count: 'exact' }
       );
 
@@ -880,16 +895,6 @@ export default function UsersScreen() {
       } else if (data) {
         const userMap = new Map((data as any[]).map((u) => [u.id, u]));
 
-        let workingLocMap = new Map<string, any>();
-        try {
-          const { data: locs } = await supabase.from('working_locations').select('id, name, type, city, state');
-          if (locs) {
-            workingLocMap = new Map(locs.map((l: any) => [l.id, l]));
-          }
-        } catch {
-          // ignore
-        }
-
         const hydrated = (data as any[]).map((u) => {
           const supIds: string[] = Array.isArray(u.supervisor_ids) && u.supervisor_ids.length > 0
             ? u.supervisor_ids
@@ -918,9 +923,6 @@ export default function UsersScreen() {
             supervisor_ids: supIds,
             supervisor: primarySup,
             supervisors: supervisorsList,
-            working_location: u.working_location_id && workingLocMap.has(u.working_location_id)
-              ? workingLocMap.get(u.working_location_id)
-              : null,
           };
         });
 

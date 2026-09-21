@@ -3,7 +3,6 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Info } from "lucide-react";
 import {
@@ -15,7 +14,7 @@ import {
   AnimatedShieldCheck,
   AnimatedCreditCard,
 } from "@/components/ui/animated-icons";
-import { signup, getSupervisorsAction, getWorkingLocationsAction, type AuthFormState } from "@/app/actions/auth";
+import { signup, getSupervisorsAction, type AuthFormState } from "@/app/actions/auth";
 import { isSupervisedRole } from "@reachinternational/permissions";
 import {
   Button,
@@ -57,7 +56,6 @@ export default function SignupPage() {
     phone: "",
     role: "operator",
     supervisor_id: "",
-    working_location_id: "",
     shift_start_time: "08:00 AM",
     shift_end_time: "08:00 PM",
     city: "",
@@ -73,9 +71,7 @@ export default function SignupPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [supervisorOptions, setSupervisorOptions] = useState<SelectOption[]>([]);
   const [loadingSupervisors, setLoadingSupervisors] = useState(false);
-  const [workingLocationOptions, setWorkingLocationOptions] = useState<SelectOption[]>([]);
-  const [loadingWorkingLocations, setLoadingWorkingLocations] = useState(false);
-  const router = useRouter();
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -98,28 +94,7 @@ export default function SignupPage() {
       }
     }
 
-    async function loadWorkingLocations() {
-      setLoadingWorkingLocations(true);
-      try {
-        const locs = await getWorkingLocationsAction();
-        if (isMounted && locs && locs.length > 0) {
-          setWorkingLocationOptions(
-            locs.map((l) => ({
-              value: l.value,
-              label: l.label,
-              description: l.description,
-            }))
-          );
-        }
-      } catch (err) {
-        console.error("Failed to load working locations in signup page:", err);
-      } finally {
-        if (isMounted) setLoadingWorkingLocations(false);
-      }
-    }
-
     loadSupervisors();
-    loadWorkingLocations();
     return () => {
       isMounted = false;
     };
@@ -234,6 +209,9 @@ export default function SignupPage() {
       if (!licRes.isValid) {
         errors.license_number = licRes.error || "Invalid driving licence format.";
       }
+    }
+    if (!agreedToTerms) {
+      errors.terms = "You must agree to the Terms of Service and Privacy Policy to register.";
     }
 
     if (Object.keys(errors).length > 0) {
@@ -512,34 +490,6 @@ export default function SignupPage() {
                     />
                   </div>
                 )}
-
-                {/* Row 4: Working Location Selector for All Users */}
-                <div className="flex flex-col gap-1 w-full pt-1 border-t border-[var(--color-hairline)]/60">
-                  <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none flex items-center justify-between">
-                    <span>
-                      Working Location / Site <span className="text-[11px] text-[var(--color-mute)] font-normal">(Yard / Office / Site)</span>
-                    </span>
-                    <span className="text-[11px] text-[var(--color-mute)] font-normal">
-                      Select your operational base
-                    </span>
-                  </label>
-                  <input type="hidden" name="working_location_id" value={formValues.working_location_id} />
-                  <SearchableSelect
-                    options={workingLocationOptions}
-                    value={formValues.working_location_id}
-                    onChange={(val) => handleChange("working_location_id", val)}
-                    placeholder={
-                      loadingWorkingLocations
-                        ? "Loading working locations..."
-                        : workingLocationOptions.length === 0
-                        ? "No working locations available"
-                        : "Search or scroll to select working location..."
-                    }
-                    clearable={true}
-                    error={fieldErrors.working_location_id}
-                    className="w-full text-xs sm:text-[13px]"
-                  />
-                </div>
               </div>
 
               {/* Section 2: Work Shift Schedule */}
@@ -763,6 +713,61 @@ export default function SignupPage() {
                 </div>
               </div>
 
+              {/* Terms and Privacy Policy Agreement Checkbox */}
+              <div className="space-y-1 pt-1">
+                <label
+                  htmlFor="agree_to_terms"
+                  className="flex items-start gap-2.5 cursor-pointer select-none group"
+                >
+                  <input
+                    type="checkbox"
+                    id="agree_to_terms"
+                    name="agree_to_terms"
+                    checked={agreedToTerms}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setAgreedToTerms(checked);
+                      if (checked) {
+                        setFieldErrors((prev) => {
+                          const copy = { ...prev };
+                          delete copy.terms;
+                          return copy;
+                        });
+                      }
+                    }}
+                    className="mt-0.5 h-4 w-4 rounded border-[var(--color-hairline)] text-sky-600 focus:ring-sky-500/20 focus:ring-2 focus:ring-offset-0 cursor-pointer accent-sky-600 shrink-0"
+                  />
+                  <span className="text-[11px] sm:text-xs text-[var(--color-mute)] leading-relaxed group-hover:text-[var(--color-ink)] transition-colors">
+                    I have read and agree to the{" "}
+                    <Link
+                      href="/terms"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-sky-600 dark:text-sky-400 hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Terms of Service
+                    </Link>{" "}
+                    and{" "}
+                    <Link
+                      href="/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-sky-600 dark:text-sky-400 hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Privacy Policy
+                    </Link>
+                    .
+                  </span>
+                </label>
+                {fieldErrors.terms && (
+                  <p className="text-[11px] text-red-600 dark:text-red-400 font-medium pl-6.5">
+                    {fieldErrors.terms}
+                  </p>
+                )}
+              </div>
+
               {/* Submit CTA Button */}
               <div className="pt-0.5">
                 <Button
@@ -771,6 +776,7 @@ export default function SignupPage() {
                   size="lg"
                   fullWidth
                   loading={pending}
+                  disabled={pending || !agreedToTerms}
                   className="h-11 sm:h-11.5 rounded-xl font-semibold text-xs sm:text-sm shadow-xs justify-center"
                 >
                   {pending ? "Submitting Registration Request..." : "Request Platform Access"}

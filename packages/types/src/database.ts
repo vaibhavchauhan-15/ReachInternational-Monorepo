@@ -116,9 +116,60 @@ export interface User {
     state?: string | null;
     address?: string | null;
   } | null;
+  daily_rate?: number | null;
+  ot_hourly_rate?: number | null;
   email: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface OperatorPayroll {
+  id: string;
+  operator_id: string;
+  payroll_month: string;
+  daily_rate: number;
+  ot_hourly_rate: number;
+  work_days: number;
+  normal_hours: number;
+  ot_hours: number;
+  regular_pay: number;
+  ot_pay: number;
+  total_pay: number;
+  status: "draft" | "reviewed" | "approved" | "paid";
+  paid_at?: string | null;
+  approved_by?: string | null;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+  // Operator profile dynamically joined from public.users (not duplicated in table)
+  operator?: Pick<User, "id" | "full_name" | "phone" | "city" | "state">;
+}
+
+export interface HRPayrollOperator {
+  id?: string;
+  operator_id: string;
+  full_name: string;
+  phone: string | null;
+  city: string | null;
+  state: string | null;
+  daily_rate: number;
+  ot_hourly_rate: number;
+  work_days: number;
+  normal_hours: number;
+  ot_hours: number;
+  regular_pay: number;
+  ot_pay: number;
+  total_pay: number;
+  status?: "draft" | "reviewed" | "approved" | "paid";
+  paid_at?: string | null;
+  notes?: string | null;
+}
+
+export interface HRPayrollSummary {
+  payrollMonth: string;
+  regularPeriod: string;
+  otPeriod: string;
+  operators: HRPayrollOperator[];
 }
 
 export interface WorkingLocation {

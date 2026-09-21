@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -15,11 +15,30 @@ import {
   Alert,
   ReachInternationalLogo,
 } from "@/components/ui";
+import { trackLogin, trackEvent } from "@/lib/analytics";
 
 export function LoginFormClient() {
   const searchParams = useSearchParams();
   const urlError = searchParams.get("error");
   const urlMessage = searchParams.get("message");
+
+  // Forward any recovery parameters arriving at /login to dedicated /reset-password route
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash;
+      const search = window.location.search;
+      if (
+        hash.includes("type=recovery") ||
+        hash.includes("access_token=") ||
+        searchParams.get("type") === "recovery" ||
+        searchParams.has("code") ||
+        searchParams.has("token_hash") ||
+        searchParams.get("reset") === "true"
+      ) {
+        window.location.replace(`/reset-password${search}${hash}`);
+      }
+    }
+  }, [searchParams]);
 
   const resolvedUrlError = urlError
     ? urlError === "account_pending"
@@ -96,13 +115,20 @@ export function LoginFormClient() {
         if (result.fieldValues.password !== undefined) setPassword(result.fieldValues.password);
       }
 
+      if (result.error) {
+        trackEvent("login_failed", { reason: result.error });
+      }
+
       isSubmittingRef.current = false;
       setPending(false);
     } catch (err: unknown) {
       if (isRedirectError(err)) {
+        // Successful login triggered redirect
+        trackLogin("credentials");
         // Keep pending=true and isSubmittingRef=true so button stays disabled & spinning while redirecting
         throw err;
       }
+      trackEvent("login_failed", { reason: "unexpected_exception" });
       isSubmittingRef.current = false;
       setPending(false);
       setState({ error: "An unexpected error occurred. Please try again." });
@@ -125,108 +151,108 @@ export function LoginFormClient() {
 
       {/* Card Header */}
       <div className="mb-4 sm:mb-6">
-        <h2 className="text-xl sm:text-2xl md:text-[26px] font-bold tracking-tight text-[var(--color-ink)]">
-          Welcome back
-        </h2>
-      </div>
+            <h2 className="text-xl sm:text-2xl md:text-[26px] font-bold tracking-tight text-[var(--color-ink)]">
+              Welcome back
+            </h2>
+          </div>
 
-      {/* Global Error Banner */}
-      {(state.error || resolvedUrlError) && Object.keys(fieldErrors).length === 0 && (
-        <div className="mb-4 sm:mb-5">
-          <Alert variant="error">
-            {state.error || resolvedUrlError}
-          </Alert>
-        </div>
-      )}
+          {/* Global Error Banner */}
+          {(state.error || resolvedUrlError) && Object.keys(fieldErrors).length === 0 && (
+            <div className="mb-4 sm:mb-5">
+              <Alert variant="error">
+                {state.error || resolvedUrlError}
+              </Alert>
+            </div>
+          )}
 
-      {/* Global Success Banner */}
-      {urlMessage && !state.error && !resolvedUrlError && (
-        <div className="mb-4 sm:mb-5">
-          <Alert variant="success">
-            {urlMessage}
-          </Alert>
-        </div>
-      )}
+          {/* Global Success Banner */}
+          {urlMessage && !state.error && !resolvedUrlError && (
+            <div className="mb-4 sm:mb-5">
+              <Alert variant="success">
+                {urlMessage}
+              </Alert>
+            </div>
+          )}
 
-      {/* Login Form */}
-      <form onSubmit={handleSubmit} className="flex flex-col gap-3.5 sm:gap-4">
-        {/* Email Address Input */}
-        <Input
-          id="login-email"
-          name="email"
-          label="Email address"
-          type="email"
-          value={email}
-          onChange={(e) => handleEmailChange(e.target.value)}
-          placeholder="user@reachinternational.co.in"
-          required
-          autoComplete="email"
-          error={fieldErrors.email}
-          icon={<AnimatedMail size={15} />}
-        />
-
-        {/* Password Input */}
-        <Input
-          id="login-password"
-          name="password"
-          label="Password"
-          type="password"
-          value={password}
-          onChange={(e) => handlePasswordChange(e.target.value)}
-          placeholder="••••••••••••"
-          required
-          autoComplete="current-password"
-          error={fieldErrors.password}
-          icon={<AnimatedLock size={15} />}
-        />
-
-        {/* Remember Me & Forgot Password Row */}
-        <div className="flex items-center justify-between pt-0.5">
-          <label className="flex items-center gap-2 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              name="remember"
-              className="h-4 w-4 rounded-[4px] border border-[var(--color-hairline)] bg-[var(--color-canvas)] accent-sky-600 cursor-pointer focus:ring-0"
+          {/* Login Form */}
+          <form onSubmit={handleSubmit} className="flex flex-col gap-3.5 sm:gap-4">
+            {/* Email Address Input */}
+            <Input
+              id="login-email"
+              name="email"
+              label="Email address"
+              type="email"
+              value={email}
+              onChange={(e) => handleEmailChange(e.target.value)}
+              placeholder="user@reachinternational.co.in"
+              required
+              autoComplete="email"
+              error={fieldErrors.email}
+              icon={<AnimatedMail size={15} />}
             />
-            <span className="text-xs font-medium text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors">
-              Remember me
+
+            {/* Password Input */}
+            <Input
+              id="login-password"
+              name="password"
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => handlePasswordChange(e.target.value)}
+              placeholder="••••••••••••"
+              required
+              autoComplete="current-password"
+              error={fieldErrors.password}
+              icon={<AnimatedLock size={15} />}
+            />
+
+            {/* Remember Me & Forgot Password Row */}
+            <div className="flex items-center justify-between pt-0.5">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  name="remember"
+                  className="h-4 w-4 rounded-[4px] border border-[var(--color-hairline)] bg-[var(--color-canvas)] accent-sky-600 cursor-pointer focus:ring-0"
+                />
+                <span className="text-xs font-medium text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors">
+                  Remember me
+                </span>
+              </label>
+              <Link
+                href="/forgot-password"
+                className="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline transition-colors"
+              >
+                Forgot password?
+              </Link>
+            </div>
+
+            {/* Sign In Button */}
+            <div className="pt-1.5 sm:pt-2">
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                fullWidth
+                loading={pending}
+                className="h-11 sm:h-11.5 text-xs sm:text-sm font-semibold rounded-lg sm:rounded-[9px]"
+              >
+                Sign in
+              </Button>
+            </div>
+          </form>
+
+          {/* Card Footer: Request Access */}
+          <div className="mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-[var(--color-hairline)] flex items-center justify-center gap-1.5 text-xs sm:text-[13px]">
+            <span className="text-[var(--color-mute)]">
+              Don&apos;t have access?
             </span>
-          </label>
-          <Link
-            href="/forgot-password"
-            className="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline transition-colors"
-          >
-            Forgot password?
-          </Link>
-        </div>
-
-        {/* Sign In Button */}
-        <div className="pt-1.5 sm:pt-2">
-          <Button
-            type="submit"
-            variant="primary"
-            size="lg"
-            fullWidth
-            loading={pending}
-            className="h-11 sm:h-11.5 text-xs sm:text-sm font-semibold rounded-lg sm:rounded-[9px]"
-          >
-            Sign in
-          </Button>
-        </div>
-      </form>
-
-      {/* Card Footer: Request Access */}
-      <div className="mt-5 sm:mt-6 pt-4 sm:pt-5 border-t border-[var(--color-hairline)] flex items-center justify-center gap-1.5 text-xs sm:text-[13px]">
-        <span className="text-[var(--color-mute)]">
-          Don&apos;t have access?
-        </span>
-        <Link
-          href="/signup"
-          className="font-semibold text-sky-600 dark:text-sky-400 hover:underline transition-colors"
-        >
-          Request access
-        </Link>
-      </div>
+            <Link
+              href="/signup"
+              className="font-semibold text-sky-600 dark:text-sky-400 hover:underline transition-colors"
+            >
+              Request access
+            </Link>
+          </div>
     </motion.div>
   );
 }

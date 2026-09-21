@@ -48,7 +48,7 @@ export function AppHeader({ user }: AppHeaderProps) {
     if (pathname.startsWith("/documents")) return "Smart Document Repository";
     if (pathname.startsWith("/reports")) return "Operations & Analytics Reports";
     if (pathname.startsWith("/administration")) return "Administration Console";
-    if (pathname.startsWith("/dashboard")) return "Dashboard Overview";
+    if (pathname.startsWith("/dashboard")) return "Home";
     if (pathname.startsWith("/branches")) return "Branch & Location Directory";
     if (pathname.startsWith("/operations")) return "Operations & Operator Logs";
     if (pathname.startsWith("/notifications")) return "Notifications Hub";

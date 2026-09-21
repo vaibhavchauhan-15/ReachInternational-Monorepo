@@ -4,6 +4,8 @@ import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem } 
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
+import { useRouter } from 'expo-router';
+import { useAuth } from '../../lib/auth/useAuth';
 import { ClientListSkeleton, MobileClientCard } from '../../components/clients';
 import { DropdownFilterSelector, type FilterOption } from '../../components/machines';
 
@@ -61,7 +63,7 @@ const INITIAL_CLIENTS: ClientItem[] = [
   {
     id: 'cli-001',
     code: 'CLI-0001',
-    company_name: 'Pushpa Infracon Pvt Ltd',
+    company_name: 'Metro Construction Corp',
     contact_person: 'Rajesh Sharma',
     phone: '+91 98765 43210',
     gstin: '07AAAAA0000A1Z5',
@@ -107,6 +109,21 @@ interface MobileQueryCacheEntry {
 
 export default function ClientsScreen() {
   const { theme, isDark } = useTheme();
+  const { role } = useAuth();
+  const router = useRouter();
+
+  const normalizedRole = (role || '').toLowerCase();
+  const canAccessClients = ['super_admin', 'admin', 'manager'].includes(normalizedRole);
+
+  useEffect(() => {
+    if (role && !canAccessClients) {
+      router.replace('/(app)/dashboard');
+    }
+  }, [role, canAccessClients, router]);
+
+  if (role && !canAccessClients) {
+    return null;
+  }
 
   const [clients, setClients] = useState<ClientItem[]>(INITIAL_CLIENTS);
   const [totalCount, setTotalCount] = useState<number>(INITIAL_CLIENTS.length);

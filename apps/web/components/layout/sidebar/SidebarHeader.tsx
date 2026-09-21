@@ -68,7 +68,7 @@ export function SidebarHeader({ collapsed, onToggleCollapse }: SidebarHeaderProp
           <Link
             href="/dashboard"
             className="flex items-center group select-none overflow-hidden focus:outline-none focus:ring-2 focus:ring-sky-500/30 rounded-lg p-1"
-            aria-label="REACH INTERNATIONAL Dashboard"
+            aria-label="REACH INTERNATIONAL Home"
           >
             <ReachInternationalLogo variant="full" size={24} />
           </Link>

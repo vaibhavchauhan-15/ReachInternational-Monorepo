@@ -89,17 +89,12 @@ export default function SignupScreen() {
   const [supervisorModalVisible, setSupervisorModalVisible] = useState(false);
   const [supervisorSearch, setSupervisorSearch] = useState('');
 
-  // Working Location Selection State
-  const [workingLocations, setWorkingLocations] = useState<Array<{ id: string; name: string; type: string; city?: string }>>([]);
-  const [selectedWorkingLocationId, setSelectedWorkingLocationId] = useState('');
-  const [workingLocationModalVisible, setWorkingLocationModalVisible] = useState(false);
-  const [workingLocationSearch, setWorkingLocationSearch] = useState('');
-
   const [isLoading, setIsLoading] = useState(false);
   const isSubmittingRef = useRef(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   const clearFieldError = (fieldName: string) => {
     setFieldErrors((prev) => {
@@ -123,19 +118,7 @@ export default function SignupScreen() {
       }
     }
 
-    async function loadWorkingLocations() {
-      try {
-        const { data, error } = await supabase.rpc('get_active_working_locations_public');
-        if (!error && data && isMounted) {
-          setWorkingLocations(data as Array<{ id: string; name: string; type: string; city?: string }>);
-        }
-      } catch (err) {
-        console.warn('Failed to load active working locations for mobile signup:', err);
-      }
-    }
-
     loadSupervisors();
-    loadWorkingLocations();
     return () => {
       isMounted = false;
     };
@@ -143,7 +126,6 @@ export default function SignupScreen() {
 
   const selectedRoleObj = SIGNUP_ROLES.find((r) => r.value === selectedRole) || SIGNUP_ROLES[0];
   const selectedSupervisor = supervisors.find((s) => s.id === selectedSupervisorId);
-  const selectedWorkingLocation = workingLocations.find((l) => l.id === selectedWorkingLocationId);
 
   const shiftSummary = useMemo(() => {
     if (!shiftStartTime || !shiftEndTime) return null;
@@ -259,6 +241,10 @@ export default function SignupScreen() {
       errors.confirm_password = 'Passwords do not match.';
     }
 
+    if (!agreedToTerms) {
+      errors.terms = 'You must agree to the Terms of Service and Privacy Policy.';
+    }
+
     if (Object.keys(errors).length > 0) {
       setFieldErrors(errors);
       setErrorMessage('Please correct the highlighted fields before submitting.');
@@ -287,7 +273,6 @@ export default function SignupScreen() {
             phone: cleanPhone,
             role: safeRole,
             supervisor_id: isSupervisedRole(safeRole) ? selectedSupervisorId || null : null,
-            working_location_id: selectedWorkingLocationId || null,
             shift_time: finalShift,
             shift_start_time: shiftStartTime.trim() || null,
             shift_end_time: shiftEndTime.trim() || null,
@@ -497,35 +482,6 @@ export default function SignupScreen() {
                   </View>
                 )}
 
-                {/* Working Location Selector */}
-                <View style={[styles.selectGroup, { paddingTop: 6, borderTopWidth: 1, borderTopColor: cardBorder }]}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
-                    Working Location / Site <Text style={{ fontSize: 11, fontWeight: '400', color: theme.colors.mute }}>(Optional)</Text>
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setWorkingLocationModalVisible(true)}
-                    activeOpacity={0.7}
-                    style={[
-                      styles.selectTrigger,
-                      {
-                        backgroundColor: isDark ? '#121212' : theme.colors.canvasElevated,
-                        borderColor: isDark ? '#292c2f' : cardBorder,
-                      },
-                    ]}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={[
-                          styles.selectValue,
-                          { color: selectedWorkingLocation ? theme.colors.ink : isDark ? '#525252' : '#9ca3af' },
-                        ]}
-                      >
-                        {selectedWorkingLocation ? selectedWorkingLocation.name : 'Select operational base yard / site...'}
-                      </Text>
-                    </View>
-                    <ChevronDown size={16} color={isDark ? '#737373' : '#9ca3af'} />
-                  </TouchableOpacity>
-                </View>
               </View>
 
               {/* Section 2: Work Shift Schedule */}
@@ -741,15 +697,69 @@ export default function SignupScreen() {
                 </Text>
               </View>
 
+              {/* Terms and Privacy Agreement Checkbox */}
+              <View style={{ marginTop: 14, marginBottom: 6 }}>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}
+                  onPress={() => {
+                    triggerHaptic();
+                    setAgreedToTerms((prev) => {
+                      const next = !prev;
+                      if (next) clearFieldError('terms');
+                      return next;
+                    });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 6,
+                      borderWidth: 1.5,
+                      borderColor: agreedToTerms ? primarySkyBlue : cardBorder,
+                      backgroundColor: agreedToTerms ? primarySkyBlue : 'transparent',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginTop: 1,
+                    }}
+                  >
+                    {agreedToTerms && <Check size={13} color="#ffffff" />}
+                  </View>
+                  <Text style={{ flex: 1, fontSize: 12, color: theme.colors.mute, lineHeight: 18 }}>
+                    I agree to the{' '}
+                    <Text
+                      style={{ color: primarySkyBlue, fontWeight: '600' }}
+                      onPress={() => router.push('/(app)/terms')}
+                    >
+                      Terms of Service
+                    </Text>{' '}
+                    and{' '}
+                    <Text
+                      style={{ color: primarySkyBlue, fontWeight: '600' }}
+                      onPress={() => router.push('/(app)/privacy')}
+                    >
+                      Privacy Policy
+                    </Text>
+                    .
+                  </Text>
+                </TouchableOpacity>
+                {fieldErrors.terms && (
+                  <Text style={{ fontSize: 11, color: '#ef4444', marginTop: 4, marginLeft: 30 }}>
+                    {fieldErrors.terms}
+                  </Text>
+                )}
+              </View>
+
               {/* Submit CTA Button */}
               <TouchableOpacity
                 style={[
                   styles.submitButton,
                   { backgroundColor: primarySkyBlue },
-                  isLoading && styles.buttonDisabled,
+                  (isLoading || !agreedToTerms) && styles.buttonDisabled,
                 ]}
                 onPress={handleSignup}
-                disabled={isLoading}
+                disabled={isLoading || !agreedToTerms}
                 activeOpacity={0.8}
               >
                 {isLoading ? (
@@ -957,74 +967,6 @@ export default function SignupScreen() {
               {supervisors.length === 0 && (
                 <View style={{ padding: 16, alignItems: 'center' }}>
                   <Text style={{ color: theme.colors.mute, fontSize: 13 }}>No active supervisors found</Text>
-                </View>
-              )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Working Location Selection Modal */}
-      <Modal visible={workingLocationModalVisible} animationType="slide" transparent onRequestClose={() => setWorkingLocationModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: cardBackground, borderColor: cardBorder }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: cardBorder }]}>
-              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select Working Location</Text>
-              <TouchableOpacity onPress={() => setWorkingLocationModalVisible(false)} style={styles.modalCloseBtn}>
-                <X size={18} color={theme.colors.ink} />
-              </TouchableOpacity>
-            </View>
-            <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
-              <Input
-                placeholder="Search by location name or city..."
-                value={workingLocationSearch}
-                onChangeText={setWorkingLocationSearch}
-                leftIcon={<Search size={15} color={isDark ? '#737373' : '#9ca3af'} />}
-              />
-            </View>
-            <ScrollView style={styles.modalListScroll} showsVerticalScrollIndicator={false}>
-              {workingLocations
-                .filter((l) => {
-                  const q = workingLocationSearch.toLowerCase().trim();
-                  if (!q) return true;
-                  return (
-                    l.name.toLowerCase().includes(q) ||
-                    (l.city && l.city.toLowerCase().includes(q)) ||
-                    (l.type && l.type.toLowerCase().includes(q))
-                  );
-                })
-                .map((l) => {
-                  const isSelected = selectedWorkingLocationId === l.id;
-                  return (
-                    <TouchableOpacity
-                      key={l.id}
-                      onPress={() => {
-                        setSelectedWorkingLocationId(l.id);
-                        setWorkingLocationModalVisible(false);
-                        setWorkingLocationSearch('');
-                        clearFieldError('working_location_id');
-                      }}
-                      style={[
-                        styles.modalItemRow,
-                        { borderBottomColor: cardBorder },
-                        isSelected && { backgroundColor: 'rgba(14, 165, 233, 0.1)' },
-                      ]}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.modalItemTitle, { color: isSelected ? primarySkyBlue : theme.colors.ink }]}>
-                          {l.name}
-                        </Text>
-                        <Text style={[styles.modalItemDesc, { color: theme.colors.mute }]}>
-                          {[l.type?.toUpperCase(), l.city].filter(Boolean).join(' • ')}
-                        </Text>
-                      </View>
-                      {isSelected && <Check size={18} color={primarySkyBlue} />}
-                    </TouchableOpacity>
-                  );
-                })}
-              {workingLocations.length === 0 && (
-                <View style={{ padding: 16, alignItems: 'center' }}>
-                  <Text style={{ color: theme.colors.mute, fontSize: 13 }}>No active working locations found</Text>
                 </View>
               )}
             </ScrollView>

@@ -13,7 +13,7 @@ import {
   LayoutAnimation,
   UIManager,
 } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Card, Badge, Button, useTheme, MobileHeader, HeaderActionItem } from '../../components/ui';
 import { MeterLogModal } from '../../components/work/MeterLogModal';
 import { MobileConflictResolutionModal } from '../../components/operations/MobileConflictResolutionModal';
@@ -199,7 +199,9 @@ export const MONTH_OPTIONS = [
 export default function OperationsScreen() {
   const { theme, isDark } = useTheme();
   const { role, user, userProfile } = useAuth();
+  const router = useRouter();
 
+  const isHr = (role || '').toLowerCase() === 'hr';
   const isOperator = (role || '').toLowerCase() === 'operator';
   const { data: entryContext, isLoading: isEntryLoading } = useOperatorEntryContext(isOperator ? user?.id : undefined);
   const params = useLocalSearchParams<{ tab?: string }>();

@@ -7,6 +7,7 @@ import { EditProfileModal } from '../../components/profile/EditProfileModal';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { formatDate } from '@reachinternational/utils';
 import { supabase } from '../../lib/supabase';
+import * as Clipboard from 'expo-clipboard';
 import {
   LogOut,
   Sun,
@@ -31,6 +32,9 @@ import {
   Settings,
   ChevronRight,
   Trash2,
+  Eye,
+  EyeOff,
+  Copy,
 } from 'lucide-react-native';
 import {
   getNotificationPermissionStatus,
@@ -52,6 +56,8 @@ export default function ProfileScreen() {
   const [notificationStatus, setNotificationStatus] = useState<PermissionStatus>('undetermined');
   const [permissionModalVisible, setPermissionModalVisible] = useState(false);
   const [feedModalVisible, setFeedModalVisible] = useState(false);
+  const [showFullAadhaar, setShowFullAadhaar] = useState(false);
+  const [copiedField, setCopiedField] = useState<string | null>(null);
 
   const fetchProfileData = useCallback(async () => {
     if (!user?.id) return;
@@ -59,7 +65,7 @@ export default function ProfileScreen() {
       const [userRes, reqRes, notifRes] = await Promise.all([
         supabase
           .from('users')
-          .select('id, full_name, phone, role, status, complete_profile, shift_time, city, district, state, state_id, address, aadhaar_number, license_number, email')
+          .select('id, full_name, phone, role, status, complete_profile, shift_time, city, district, state, state_id, address, aadhaar_number, license_number, email, supervisor_id, supervisor:users!supervisor_id(full_name)')
           .eq('id', user.id)
           .maybeSingle(),
         supabase
@@ -85,6 +91,18 @@ export default function ProfileScreen() {
   useEffect(() => {
     fetchProfileData();
   }, [fetchProfileData]);
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      if (Clipboard && Clipboard.setStringAsync) {
+        await Clipboard.setStringAsync(text.replace(/[\s\-]/g, ''));
+      }
+    } catch {
+      // Fallback
+    }
+    setCopiedField(label);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
 
   const handleLogout = async () => {
     await signOut();
@@ -179,11 +197,18 @@ export default function ProfileScreen() {
     : locationString;
 
   const rawAadhaar = profile.aadhaar_number || metadata.aadhaar_number;
-  const aadhaarDisplay = rawAadhaar
-    ? rawAadhaar.length >= 12
-      ? `XXXX-XXXX-${rawAadhaar.slice(-4)}`
-      : rawAadhaar
-    : 'Not Provided';
+  const cleanAadhaar = rawAadhaar ? String(rawAadhaar).replace(/[\s\-]/g, "") : "";
+  const formattedFullAadhaar = cleanAadhaar
+    ? cleanAadhaar.length >= 12
+      ? `${cleanAadhaar.slice(0, 4)} ${cleanAadhaar.slice(4, 8)} ${cleanAadhaar.slice(8, 12)}`
+      : cleanAadhaar
+    : "Not Provided";
+  const maskedAadhaar = cleanAadhaar
+    ? cleanAadhaar.length >= 12
+      ? `XXXX-XXXX-${cleanAadhaar.slice(-4)}`
+      : cleanAadhaar
+    : "Not Provided";
+  const aadhaarDisplay = showFullAadhaar ? formattedFullAadhaar : maskedAadhaar;
 
   const licenceDisplay = profile.license_number || metadata.license_number || 'Not Provided';
   const currentRole = (profile.role || role || metadata.role || 'operator').replace(/_/g, ' ').toUpperCase();
@@ -323,6 +348,22 @@ export default function ProfileScreen() {
             </Text>
           </View>
 
+          {/* Supervisor (only if set) */}
+          {Boolean(profile.supervisor?.full_name || metadata.supervisor_name) && (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.infoRow}>
+                <User size={14} color={theme.colors.link} />
+                <Text style={[styles.label, { color: theme.colors.mute }]}>Supervisor:</Text>
+                <Text style={[styles.value, { color: theme.colors.ink }]} numberOfLines={1}>
+                  {profile.supervisor?.full_name || metadata.supervisor_name}
+                </Text>
+              </View>
+            </>
+          )}
+
+
+
           <View style={styles.divider} />
 
           {/* Phone */}
@@ -352,6 +393,34 @@ export default function ProfileScreen() {
             <Text style={[styles.value, { color: theme.colors.ink, fontFamily: 'monospace' }]} numberOfLines={1}>
               {aadhaarDisplay}
             </Text>
+            {Boolean(cleanAadhaar) && (
+              <View style={styles.inlineActionRow}>
+                <TouchableOpacity
+                  style={styles.fieldActionBtn}
+                  onPress={() => setShowFullAadhaar((prev) => !prev)}
+                  activeOpacity={0.7}
+                  accessibilityLabel={showFullAadhaar ? "Hide Aadhaar number" : "Reveal Aadhaar number"}
+                >
+                  {showFullAadhaar ? (
+                    <EyeOff size={15} color={theme.colors.mute} />
+                  ) : (
+                    <Eye size={15} color={theme.colors.mute} />
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.fieldActionBtn}
+                  onPress={() => copyToClipboard(cleanAadhaar, "Aadhaar")}
+                  activeOpacity={0.7}
+                  accessibilityLabel="Copy Aadhaar number"
+                >
+                  {copiedField === "Aadhaar" ? (
+                    <CheckCircle2 size={15} color="#10b981" />
+                  ) : (
+                    <Copy size={15} color={theme.colors.mute} />
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
 
           <View style={styles.divider} />
@@ -686,5 +755,17 @@ const styles = StyleSheet.create({
   permSub: {
     fontSize: 11,
     lineHeight: 14,
+  },
+  inlineActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 4,
+  },
+  fieldActionBtn: {
+    padding: 6,
+    borderRadius: radiusNumeric.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
