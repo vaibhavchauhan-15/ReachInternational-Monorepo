@@ -301,6 +301,16 @@ export function DocumentUploadSection({
   // ─── Full-Screen Document Viewer Triggers ─────────────────────────
 
   const openExistingPreview = async (docType: DocumentType, existing: UserDocument) => {
+    // Open modal immediately with existing signed URL or empty URL to trigger skeleton loader without click lag
+    setActiveViewerDoc({
+      id: existing.id,
+      title: docType.label,
+      url: existing.signed_url || "",
+      mimeType: existing.mime_type,
+      fileSizeBytes: existing.file_size_bytes,
+      fileName: existing.storage_path.split("/").pop(),
+    });
+
     try {
       // Secure on-demand short-lived signed URL generation with audit logging
       const res = await getDocumentViewUrlAction({
@@ -577,11 +587,11 @@ export function DocumentUploadSection({
                                 type="button"
                                 variant="primary"
                                 size="sm"
+                                icon={<Upload className="h-3.5 w-3.5 shrink-0" />}
                                 onClick={() => handleUpload(docType.code, docType)}
-                                className="flex-1 min-w-0 h-9 text-xs font-semibold"
+                                className="flex-1 min-w-0 h-9 text-xs font-semibold justify-center"
                               >
-                                <Upload className="h-3.5 w-3.5 mr-1.5 shrink-0" />
-                                <span>Upload</span>
+                                Upload
                               </Button>
                               <Button
                                 type="button"

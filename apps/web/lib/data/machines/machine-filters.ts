@@ -16,120 +16,78 @@ export const getActiveSupervisors = unstable_cache(
   async (): Promise<User[]> => {
     const supabase = createSupabaseAdminClient();
 
-    const { data: usersData } = await supabase
+    const { data: usersData, error } = await supabase
       .from("users")
-      .select("id, full_name, phone, email, role, shift_time")
-      .eq("role", "supervisor")
+      .select("id, full_name, phone, email, role, status, shift_start_time, shift_end_time")
+      .in("role", ["supervisor", "manager", "admin", "super_admin"])
       .neq("status", "inactive")
-      .order("full_name");
+      .order("full_name", { ascending: true });
 
-    const userMap = new Map<string, User>();
+    if (error) {
+      console.error("[machine-filters] Error fetching active supervisors:", error.message || error);
+      return [];
+    }
 
-    (usersData || []).forEach((u: any) => {
-      userMap.set(u.id, {
+    return (usersData || []).map((u: any) => {
+      const shiftTime =
+        u.shift_start_time && u.shift_end_time
+          ? `${String(u.shift_start_time).slice(0, 5)} - ${String(u.shift_end_time).slice(0, 5)}`
+          : null;
+
+      return {
         id: u.id,
         full_name: u.full_name || u.email || "Supervisor",
         phone: u.phone,
         email: u.email,
         role: u.role,
-        shift_time: u.shift_time || null,
-        status: "active",
-      } as User);
+        shift_time: shiftTime,
+        shift_start_time: u.shift_start_time,
+        shift_end_time: u.shift_end_time,
+        status: u.status || "active",
+      } as User;
     });
-
-    const { data: empData } = await supabase
-      .from("employees")
-      .select("id, full_name, phone, email, designation, user_id")
-      .neq("status", "inactive")
-      .order("full_name");
-
-    (empData || []).forEach((e: any) => {
-      const isSupervisorEmp =
-        e.designation && e.designation.toLowerCase().includes("supervisor");
-
-      if (isSupervisorEmp) {
-        const key = e.user_id || e.id;
-        if (!userMap.has(key)) {
-          userMap.set(key, {
-            id: key,
-            full_name: e.full_name || e.email || "Supervisor",
-            phone: e.phone,
-            email: e.email,
-            role: "supervisor",
-            shift_time: null,
-            status: "active",
-          } as User);
-        }
-      }
-    });
-
-    return Array.from(userMap.values()).sort((a, b) =>
-      a.full_name.localeCompare(b.full_name)
-    );
   },
-  ["active-supervisors-v7"],
-  { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta] }
+  ["active-supervisors-v10"],
+  { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta, TAGS.users] }
 );
 
 export const getActiveOperators = unstable_cache(
   async (): Promise<User[]> => {
     const supabase = createSupabaseAdminClient();
 
-    const { data: usersData } = await supabase
+    const { data: usersData, error } = await supabase
       .from("users")
-      .select("id, full_name, phone, email, role, status, shift_time")
+      .select("id, full_name, phone, email, role, status, shift_start_time, shift_end_time")
       .eq("role", "operator")
-      .eq("status", "active")
-      .order("full_name");
+      .neq("status", "inactive")
+      .order("full_name", { ascending: true });
 
-    const userMap = new Map<string, User>();
+    if (error) {
+      console.error("[machine-filters] Error fetching active operators:", error.message || error);
+      return [];
+    }
 
-    (usersData || []).forEach((u: any) => {
-      userMap.set(u.id, {
+    return (usersData || []).map((u: any) => {
+      const shiftTime =
+        u.shift_start_time && u.shift_end_time
+          ? `${String(u.shift_start_time).slice(0, 5)} - ${String(u.shift_end_time).slice(0, 5)}`
+          : null;
+
+      return {
         id: u.id,
         full_name: u.full_name || u.email || "Operator",
         phone: u.phone,
         email: u.email,
         role: u.role,
-        shift_time: u.shift_time || null,
-        status: "active",
-      } as User);
+        shift_time: shiftTime,
+        shift_start_time: u.shift_start_time,
+        shift_end_time: u.shift_end_time,
+        status: u.status || "active",
+      } as User;
     });
-
-    const { data: empData } = await supabase
-      .from("employees")
-      .select("id, full_name, phone, email, designation, user_id")
-      .neq("status", "inactive")
-      .order("full_name");
-
-    (empData || []).forEach((e: any) => {
-      const isOperatorEmp =
-        e.designation &&
-        (e.designation.toLowerCase().includes("operator") ||
-          e.designation.toLowerCase().includes("driver"));
-
-      if (isOperatorEmp) {
-        const key = e.user_id || e.id;
-        if (!userMap.has(key)) {
-          userMap.set(key, {
-            id: key,
-            full_name: e.full_name || e.email || "Operator",
-            phone: e.phone,
-            email: e.email,
-            role: "operator",
-            shift_time: null,
-            status: "active",
-          } as User);
-        }
-      }
-    });
-
-    return Array.from(userMap.values()).sort((a, b) =>
-      a.full_name.localeCompare(b.full_name)
-    );
   },
-  ["active-operators-v7"],
-  { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta] }
+  ["active-operators-v10"],
+  { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta, TAGS.users] }
 );
 
 
@@ -188,10 +146,10 @@ const getCachedMachineFilterOptions = unstable_cache(
       ],
     };
   },
-  ["machine-filter-options-master-v2"],
+  ["machine-filter-options-master-v3"],
   {
     revalidate: CACHE_TIERS.CLASS_B_DIRECTORY,
-    tags: [TAGS.machinesMeta, TAGS.machines],
+    tags: [TAGS.machinesMeta, TAGS.machines, TAGS.users],
   }
 );
 

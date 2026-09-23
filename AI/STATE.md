@@ -3,22 +3,32 @@
 ## Current Status Overview
 - **Phase**: **Production Ready — Google Play Store Compliance & Mobile Deployment Pipeline**
 - **Release Candidate**: `v2026.09.08` (Branch: `main`)
-- [x] **Profile Documents Download Functionality & Upload/Cancel Responsive Fixes (2026-09-23)**:
+- [x] **Server Action Logout Runtime Error Fix ("An unexpected response was received from the server") (2026-09-23)**:
   - **Delivered**:
-    1. Reliable Cross-Format Download Functionality (`apps/web/app/api/documents/[id]/download/route.ts` & `DocumentViewerModal.tsx`):
-       - Solved the browser cross-origin download limitation where `<a href={...} download>` was ignored by modern browsers on signed external URLs (opening in tab instead of saving).
-       - Created dedicated server download API route `/api/documents/[id]/download` using `createSupabaseAdminClient().storage.from("user_files").download(storage_path)`, verifying session and checking owner/privileged access (`super_admin`, `admin`, `hr`), logging `document.downloaded` to `audit_logs`, and streaming the binary file with `Content-Disposition: attachment; filename="..."; filename*=UTF-8''...` headers.
-       - Enhanced `DocumentViewerModal.tsx` `handleDownload`: fetches from same-origin `/api/documents/[id]/download`, creates object URL blob, and triggers native file download for all formats (PDF, PNG, JPG, WEBP, DOC, DOCX, TXT), with fallback to direct attachment route navigation.
-       - Added downloading state with `Loader2` spinner and disabled state to prevent duplicate clicks.
-       - Added 1-tap download trigger to mobile PDF helper strip beneath embedded viewer.
-    2. Upload & Cancel Responsive Buttons & Label Simplification (`apps/web/components/documents/DocumentUploadSection.tsx`):
-       - Fixed responsive button container overflow: removed `fullWidth` (`w-full`), configured `flex-1 min-w-0` on Upload button and `shrink-0 px-4` on Cancel button.
-       - Simplified primary upload button label to strictly `"Upload"` (was `"Upload Driving Licence"` / `"Upload Aadhaar Card"`).
-       - Removed file size and preview subtitle text (`"176 KB • Click to preview"`) during file selection.
-    3. Badge Sizing & Desktop 1-Row Grid (`DocumentUploadSection.tsx` & `MobileDocumentUploadCard.tsx`):
-       - Resized `DocumentFormatIcon` to match Replace and Delete button dimensions and padding (`min-h-[40px] sm:min-h-[34px] px-2.5 sm:px-3 py-1.5 text-xs font-semibold font-mono`).
-       - Configured desktop 1-row layout (`grid grid-cols-1 md:grid-cols-2 gap-4`).
-       - Synced mobile card dimensions (`height: 38, paddingHorizontal: 10, borderRadius: 8`, removed redundant Eye view button).
+    1. Proxy Server Action Interception Safeguard (`apps/web/proxy.ts`):
+       - Detected `isServerAction = Boolean(request.headers.get("next-action"))`.
+       - Prohibited proxy from issuing HTTP 30x navigation redirects (`createRedirectResponse`) for Server Actions, allowing them to reach Next.js App Router where internal DAL authorization checks (`verifySession`) and action redirection format the Flight payload properly without breaking the client-side React DOM action dispatcher.
+    2. Resilient SignOut & Layout Revalidation (`apps/web/app/actions/auth.ts`):
+       - Wrapped `getUser()` and `signOut()` inside defensive `try/catch` blocks to prevent unhandled runtime exceptions from crashing Server Action requests during token expiry or network latency.
+       - Integrated `revalidatePath("/", "layout")` to cleanly purge cached authenticated layouts before redirecting to `/login`.
+  - **Verification**: `pnpm --filter @reachinternational/web typecheck` (0 errors), `pnpm --filter @reachinternational/mobile typecheck` (0 errors), `@reachinternational/permissions` unit tests (3/3 pass), direct HTTP verification (`x-nextjs-action-not-found` instead of 307 redirect).
+- [x] **Profile Documents Zooming, Button Row Alignment & Skeleton Loading (2026-09-23)**:
+  - **Delivered**:
+    1. Document Viewer Zoom & Pan Architecture (`apps/web/components/documents/DocumentViewerModal.tsx`):
+       - Desktop mouse wheel scroll to zoom smoothly between 1x and 4x (`wheel` event with non-passive listener, `preventDefault`, and auto position reset at 1x).
+       - Desktop mouse click-and-drag pan when zoomed in (`scale > 1`), dynamic grab/grabbing cursor, and double-click to reset zoom.
+       - Mobile two-finger pinch-to-zoom and single-finger pan gesture tracking (`onTouchStart`, `onTouchMove`, `onTouchEnd`) with `touchAction: none` when zoomed.
+       - Desktop-only header zoom controls (`ZoomIn`, `ZoomOut`, Reset `%`) with `hidden sm:inline-flex` and increased header padding (`sm:pr-48`) to prevent overlap with the close icon.
+    2. Upload Button Single Row Alignment (`apps/web/components/ui/Button.tsx` & `DocumentUploadSection.tsx`):
+       - Solved vertical icon stacking caused by SVG `display: block` preflight reset inside `<span className="whitespace-nowrap">`.
+       - Updated `Button.tsx` `renderLabel` to use `inline-flex items-center gap-1.5 whitespace-nowrap leading-none`.
+       - Updated `DocumentUploadSection.tsx` to pass `icon={<Upload className="h-3.5 w-3.5 shrink-0" />}` and `"Upload"` as children, placing the upload arrow and label in a single horizontal row on all viewports.
+    3. Shimmer Skeleton Loading (`DocumentViewerModal.tsx` & `DocumentUploadSection.tsx`):
+       - Implemented animated pulsing shimmer skeleton placeholder with centered icon, loading spinner, and detail bars while document data or image bytes load.
+       - Background image loading with zero layout shift (`imageLoading ? "hidden" : "block"`).
+       - Immediate modal display in `openExistingPreview` with skeleton placeholder, removing perceived click lag while generating fresh signed URLs.
+    4. Reliable Cross-Format Download Functionality (`apps/web/app/api/documents/[id]/download/route.ts` & `DocumentViewerModal.tsx`):
+       - Dedicated server download API route `/api/documents/[id]/download` streaming binary files with `Content-Disposition: attachment` headers and audit logging.
   - **Verification**: `pnpm --filter @reachinternational/web typecheck` (0 errors), `pnpm --filter @reachinternational/mobile typecheck` (0 errors), `@reachinternational/permissions` unit tests (3/3 pass).
 - [x] **Document Viewer Modal Harmonization & Website Design Consistency (2026-09-23)**:
   - **Delivered**:

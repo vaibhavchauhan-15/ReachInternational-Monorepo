@@ -1,37 +1,69 @@
-# Current Task: Profile Documents Download Functionality & Responsive Layout Fixes
+# Current Task: Machines Page Personnel Assignment — Display All Operators & Supervisors from Database (/machines)
 
 Status: COMPLETED (2026-09-23)
 
 ## Goal
-Address user feedback on `/profile`:
-1. **Modal Download Functionality**: Ensure clicking the "Download" button in `DocumentViewerModal` reliably downloads any file format (image, PDF, DOC, DOCX, TXT) to the user's local device instead of opening it in a new tab or failing cross-origin.
-2. **Responsive Upload & Cancel Buttons**: Eliminate button container overflow where Cancel spilled out of the card.
-3. **Upload Button Label**: Simplify label to strictly **"Upload"**.
-4. **Remove File Size and Preview Subtitle**: Remove `"176 KB • Click to preview"` subtitle text during file selection.
-5. **Format Badge Sizing & Desktop Grid**: Match Replace/Delete button dimensions and align cards in a 2-column grid on desktop.
+Address user feedback on `/machines`:
+> "while assign personel show the all list of operator and supervisor from the database"
+(Viewport: 1536×695, Component: `<MultiUserSelect>` inside "Assign Shift Personnel" modal)
+
+## Root Cause
+1. **Schema Mismatch on PostgreSQL `public.users` in Machine DAL**:
+   - `getActiveSupervisors()` and `getActiveOperators()` in `apps/web/lib/data/machines/machine-filters.ts` queried `shift_time` from `public.users` (which was dropped in migration 100 in favor of `shift_start_time` and `shift_end_time`) and queried non-existent `public.employees` table.
+   - This caused PostgREST to return PostgreSQL errors `42703: column "shift_time" does not exist` and `42P01: relation "public.employees" does not exist`, resulting in `usersData = null` and empty arrays `[]` being cached and returned monorepo-wide.
+2. **Missing Self-Hydrating On-Demand Load in `MachinePersonnelModal`**:
+   - `MachinePersonnelModal` in `apps/web/components/machines/MachineEditModals.tsx` only accepted `supervisors = []` and `operators = []` as props and had no internal fetch or fallback to load options on demand.
+   - When opened from `MachineListClient.tsx` (where options were not awaited before opening), `supervisors` and `operators` were empty arrays, causing `allSupervisors` and `allOperators` to only show the machine's currently assigned personnel (or empty) rather than the complete database roster.
+3. **Obsolete `shift_time` Projection in Machine Details & Exports**:
+   - `machine-detail.ts`, `machine-export.ts`, and `operations-log-detail.ts` still included obsolete `shift_time` in embedded user relations.
 
 ## Delivered Solution
 
-### 1. Web Application (`apps/web`)
-- `apps/web/app/api/documents/[id]/download/route.ts`:
-  - Created dedicated server-side download API route.
-  - Verifies user authentication and checks ownership / staff permissions (`super_admin`, `admin`, `hr`).
-  - Fetches binary file from Supabase storage using `createSupabaseAdminClient().storage.from("user_files").download(storage_path)`.
-  - Streams the file with `Content-Disposition: attachment; filename="..."; filename*=UTF-8''...` headers to force browser file download.
-  - Logs `document.downloaded` to `public.audit_logs`.
-- `apps/web/components/documents/DocumentViewerModal.tsx`:
-  - Enhanced `handleDownload` to fetch from `/api/documents/${doc.id}/download`, create an object URL blob, and trigger native download with correct filename.
-  - Added loading spinner and disabled state to download button while downloading.
-  - Added 1-tap download trigger to mobile PDF helper strip.
-- `apps/web/components/documents/DocumentUploadSection.tsx`:
-  - Upload actions flex container: `flex items-center gap-2 pt-1 w-full`.
-  - Upload button: `flex-1 min-w-0 h-9 text-xs font-semibold` with strictly `"Upload"` label.
-  - Cancel button: `h-9 px-4 text-xs shrink-0`.
-  - Removed file size and preview subtitle text during upload.
-  - Sized `DocumentFormatIcon` to match action buttons.
-  - Desktop 1-row grid: `grid grid-cols-1 md:grid-cols-2 gap-4`.
+### 1. Data Access Layer (`apps/web/lib/data/machines/machine-filters.ts`)
+- Refactored `getActiveSupervisors`:
+  - Queries `public.users` for valid columns: `id, full_name, phone, email, role, status, shift_start_time, shift_end_time`.
+  - Filters by `.in("role", ["supervisor", "manager", "admin", "super_admin"])` and `.neq("status", "inactive")`.
+  - Formats canonical `shift_time` string `${shift_start_time.slice(0, 5)} - ${shift_end_time.slice(0, 5)}` for display in `<MultiUserSelect>`.
+  - Removed all queries to non-existent `employees` table.
+  - Added error handling and bumped cache tag to `active-supervisors-v10` with `TAGS.users`.
+- Refactored `getActiveOperators`:
+  - Queries `public.users` for valid columns: `id, full_name, phone, email, role, status, shift_start_time, shift_end_time`.
+  - Filters by `.eq("role", "operator")` and `.neq("status", "inactive")` (returns all 74 active operators).
+  - Formats canonical `shift_time` string.
+  - Removed all queries to non-existent `employees` table.
+  - Added error handling and bumped cache tag to `active-operators-v10` with `TAGS.users`.
+- Bumped `getCachedMachineFilterOptions` cache key to `machine-filter-options-master-v3` with `TAGS.users`.
 
-### 2. Verification & Quality Gates
-- `pnpm --filter @reachinternational/web typecheck`: Passed with 0 errors.
-- `pnpm --filter @reachinternational/mobile typecheck`: Passed with 0 errors.
+### 2. Machine Edit Modals (`apps/web/components/machines/MachineEditModals.tsx`)
+- In `MachinePersonnelModal`:
+  - Added `lazySupervisors` and `lazyOperators` state initialized from props.
+  - Added on-demand fetch via `getMachineModalOptionsAction()` when modal is open and options are empty, with `isLoadingOptions` state.
+  - Updated `<MultiUserSelect>` placeholders with dynamic loading status:
+    `isLoadingOptions && allSupervisors.length === 0 ? "Loading supervisors from database..." : "Search & assign supervisors..."`
+    `isLoadingOptions && allOperators.length === 0 ? "Loading operators from database..." : "Search & assign operators..."`
+  - Synced props whenever parent updates options.
+- In `MachineClientModal`:
+  - Added `lazyClients` state and on-demand fetch via `getClientSelectOptionsAction()`.
+  - Added dynamic loading placeholder for `<ClientSelect>`.
+
+### 3. Machine Edit Client (`apps/web/app/(app)/machines/[id]/edit/machine-edit-client.tsx`)
+- Added `lazySupervisors`, `lazyOperators`, and `lazyClients` state with automatic on-demand fetch fallback via `getMachineModalOptionsAction()`.
+
+### 4. Machine Details, Export & Logs Data Layer Fixes
+- `apps/web/lib/data/machines/machine-detail.ts`:
+  - Aligned PostgREST embedded user projections from `shift_time` to `shift_start_time, shift_end_time`.
+  - Updated `hydrateMachinePersonnelSingle` to derive `shift_time` safely.
+  - Updated `getMachineAssignments` operator query projection.
+- `apps/web/lib/data/machines/machine-export.ts`:
+  - Aligned PostgREST embedded user projections and `hydrateExportPersonnel` to select `shift_start_time, shift_end_time`.
+- `apps/web/lib/data/operations/operations-log-detail.ts`:
+  - Aligned `LOG_SUMMARY_PROJECTION` and `getLogAssignments` embedded operator projections to select `shift_start_time, shift_end_time`.
+
+## Verification & Quality Gates
+- `pnpm --filter @reachinternational/web typecheck`: 0 errors.
+- `pnpm --filter @reachinternational/mobile typecheck`: 0 errors.
 - `pnpm --filter @reachinternational/permissions test`: 3/3 passed.
+- Supabase Live Database Verification:
+  - 8 supervisors/managers/admins (`status != 'inactive'`).
+  - 74 operators (`status != 'inactive'`).
+  - Zero SQL errors on column projections.

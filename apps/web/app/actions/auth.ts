@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -126,21 +127,32 @@ function formatRetryAfter(seconds: number): string {
 
 export async function logout() {
   const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
 
-  if (user) {
-    await logAudit({
-      action: "auth.logout",
-      entity_type: "user",
-      entity_id: user.id,
-      user_id: user.id,
-      metadata: { user_email: user.email },
-    });
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user) {
+      await logAudit({
+        action: "auth.logout",
+        entity_type: "user",
+        entity_id: user.id,
+        user_id: user.id,
+        metadata: { user_email: user.email },
+      });
+    }
+  } catch (auditErr) {
+    console.warn("[Auth] Failed to audit logout:", auditErr);
   }
 
-  await supabase.auth.signOut();
+  try {
+    await supabase.auth.signOut();
+  } catch (signOutErr) {
+    console.error("[Auth] Error signing out from Supabase:", signOutErr);
+  }
+
+  revalidatePath("/", "layout");
   redirect("/login");
 }
 
@@ -282,6 +294,8 @@ export async function signup(
   const shiftEndTimeRaw = ((formData.get("shift_end_time") as string) || "").trim();
   const shiftTimeRaw = ((formData.get("shift_time") as string) || "").trim();
   const supervisorIdRaw = ((formData.get("supervisor_id") as string) || "").trim();
+  const rawMonthlySalary = formData.get("monthly_salary");
+  const monthlySalary = rawMonthlySalary !== null && rawMonthlySalary !== "" && !isNaN(Number(rawMonthlySalary)) ? Number(rawMonthlySalary) : null;
 
   const resolvedShiftTime =
     shiftTimeRaw ||
@@ -318,6 +332,7 @@ export async function signup(
     district,
     state: resolvedStateName,
     state_id: resolvedStateId ? String(resolvedStateId) : "",
+    monthly_salary: rawMonthlySalary ? String(rawMonthlySalary) : "",
     aadhaar_number: aadhaarNumber,
     license_number: licenseNumber,
     password,
@@ -552,6 +567,7 @@ export async function signup(
         state: resolvedStateName,
         state_id: resolvedStateId,
         location: `${address ? `${address}, ` : ""}${city}, ${district}, ${resolvedStateName}`,
+        monthly_salary: monthlySalary,
         aadhaar_number: cleanAadhaar,
         license_number: formattedLicense,
         supervisor_id: supervisorIdRaw || null,

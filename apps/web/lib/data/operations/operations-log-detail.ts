@@ -201,7 +201,7 @@ const LOG_DETAILS_PROJECTION = `
   idempotency_key,
   machine:machines!machine_hour_logs_machine_id_fkey(id, machine_id, model, serial_number, hour_meter, status, health_status, manufacturer, year_of_mfg),
   client:clients!machine_hour_logs_client_id_fkey(id, code, company_name, contact_person, phone, street, city, district, state, pincode),
-  operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone, email, shift_time, role)
+  operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone, email, shift_start_time, shift_end_time, role)
 `;
 
 // ─── 1. Log Summary (Immediate / Core Identity) ──────────────────────────────
@@ -400,7 +400,7 @@ export function getCachedLogAssignments(logId: string) {
           ended_at,
           ended_by,
           end_reason,
-          operator:users!operator_machine_assignments_operator_id_fkey(id, full_name, phone, email, shift_time, role),
+          operator:users!operator_machine_assignments_operator_id_fkey(id, full_name, phone, email, shift_start_time, shift_end_time, role),
           assigner:users!operator_machine_assignments_assigned_by_fkey(id, full_name)
         `)
         .eq("machine_id", targetLog.machine_id)

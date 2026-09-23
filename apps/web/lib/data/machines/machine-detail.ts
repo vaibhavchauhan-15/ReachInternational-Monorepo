@@ -23,8 +23,8 @@ const MACHINE_DETAIL_COLUMNS = `
   status,
   created_at,
   updated_at,
-  current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email, shift_time),
-  current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email, shift_time),
+  current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email, shift_start_time, shift_end_time),
+  current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email, shift_start_time, shift_end_time),
   client:clients!machines_client_id_fkey(
     id, code, company_name, city, district, state, pincode, phone,
     contact_person, street, gstin, pan_number, is_billing_address_different,
@@ -128,13 +128,16 @@ async function hydrateMachinePersonnelSingle(machine: any, supabase: any): Promi
       const user = usersMap.get(id) || (machine.current_operator?.id === id ? machine.current_operator : null);
       if (!user) return null;
       const assignment = assignmentMapByOpId.get(id);
-      let shift_time = user.shift_time;
+      let shift_time =
+        user.shift_start_time && user.shift_end_time
+          ? `${String(user.shift_start_time).slice(0, 5)} - ${String(user.shift_end_time).slice(0, 5)}`
+          : user.shift_time || null;
       if (!shift_time && assignment?.shift_start_time && assignment?.shift_end_time) {
-        shift_time = `${assignment.shift_start_time.slice(0, 5)} - ${assignment.shift_end_time.slice(0, 5)}`;
+        shift_time = `${String(assignment.shift_start_time).slice(0, 5)} - ${String(assignment.shift_end_time).slice(0, 5)}`;
       }
       return {
         ...user,
-        shift_time: shift_time || user.shift_time || null,
+        shift_time,
       };
     })
     .filter(Boolean);
@@ -228,7 +231,7 @@ export const getMachineAssignments = cache(async (machineId: string): Promise<Op
           end_reason,
           created_at,
           updated_at,
-          operator:users!operator_machine_assignments_operator_id_fkey(id, full_name, phone, email, shift_time)
+          operator:users!operator_machine_assignments_operator_id_fkey(id, full_name, phone, email, shift_start_time, shift_end_time)
         `)
         .eq("machine_id", machineId)
         .order("is_active", { ascending: false })

@@ -143,9 +143,9 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
     const renderLabel = () => {
       if (!children) return null;
       if (isResponsive && (icon || effectiveLoading)) {
-        return <span className="hidden sm:inline whitespace-nowrap leading-none">{children}</span>;
+        return <span className="hidden sm:inline-flex items-center gap-1.5 whitespace-nowrap leading-none">{children}</span>;
       }
-      return <span className="whitespace-nowrap leading-none">{children}</span>;
+      return <span className="inline-flex items-center gap-1.5 whitespace-nowrap leading-none">{children}</span>;
     };
 
     const content = (

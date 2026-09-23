@@ -72,6 +72,10 @@ export async function completeOnboardingAction(
 
   const aadhaar_number = (raw.aadhaar_number || "").trim();
   const license_number = (raw.license_number || "").trim();
+  const monthlySalaryRaw = raw.monthly_salary;
+  const monthly_salary = monthlySalaryRaw !== undefined && monthlySalaryRaw !== "" && !isNaN(Number(monthlySalaryRaw))
+    ? Number(monthlySalaryRaw)
+    : null;
 
   const fieldValues: Record<string, string> = {
     ...raw,
@@ -87,6 +91,7 @@ export async function completeOnboardingAction(
     address: street,
     state,
     state_id: state_id ? String(state_id) : "",
+    monthly_salary: monthly_salary !== null ? String(monthly_salary) : "",
     aadhaar_number,
     license_number,
   };
@@ -104,6 +109,7 @@ export async function completeOnboardingAction(
     state_id,
     street,
     address: street,
+    monthly_salary,
     aadhaar_number,
     license_number: license_number || null,
   });
@@ -145,23 +151,27 @@ export async function completeOnboardingAction(
       console.warn("[Onboarding] complete_user_onboarding_atomic RPC returned error, attempting direct table update via admin client:", rpcError.message);
       const adminClient = createSupabaseAdminClient();
       // SECURITY (REV-C01): Do NOT include role in update payload. Role is established on signup/approval.
+      const updatePayload: Record<string, any> = {
+        full_name,
+        phone,
+        shift_start_time: shift_start_time || null,
+        shift_end_time: shift_end_time || null,
+        street,
+        city,
+        district,
+        state,
+        state_id,
+        aadhaar_number: cleanAadhaar,
+        license_number: license_number || null,
+        complete_profile: true,
+        updated_at: new Date().toISOString(),
+      };
+      if (monthly_salary !== null) {
+        updatePayload.monthly_salary = monthly_salary;
+      }
       const { error: directError } = await adminClient
         .from("users")
-        .update({
-          full_name,
-          phone,
-          shift_start_time: shift_start_time || null,
-          shift_end_time: shift_end_time || null,
-          street,
-          city,
-          district,
-          state,
-          state_id,
-          aadhaar_number: cleanAadhaar,
-          license_number: license_number || null,
-          complete_profile: true,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq("id", user.id);
 
       if (directError) {
@@ -171,6 +181,15 @@ export async function completeOnboardingAction(
           fieldValues,
         };
       }
+    } else if (monthly_salary !== null) {
+      const adminClient = createSupabaseAdminClient();
+      await adminClient
+        .from("users")
+        .update({
+          monthly_salary,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id);
     }
 
     // Process document uploads if attached to onboarding formData

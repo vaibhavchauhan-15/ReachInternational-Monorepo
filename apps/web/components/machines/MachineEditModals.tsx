@@ -18,6 +18,8 @@ import {
   updateMachineOperatorsAction,
   updateMachineClientAssignmentAction,
   checkMachineSerialNumberAvailable,
+  getMachineModalOptionsAction,
+  getClientSelectOptionsAction,
 } from "@/app/actions/machines";
 import type { MachineWithEngineer } from "@/lib/types/database";
 import type { User, UserRole } from "@reachinternational/types";
@@ -427,6 +429,52 @@ export function MachinePersonnelModal({
   const [operatorIds, setOperatorIds] = useState<string[]>(initialOperatorIds);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Lazy-loaded options state with props fallback
+  const [lazySupervisors, setLazySupervisors] = useState<User[]>(() => supervisors || []);
+  const [lazyOperators, setLazyOperators] = useState<User[]>(() => operators || []);
+  const [isLoadingOptions, setIsLoadingOptions] = useState(false);
+
+  useEffect(() => {
+    if (supervisors && supervisors.length > 0) {
+      setLazySupervisors(supervisors);
+    }
+  }, [supervisors]);
+
+  useEffect(() => {
+    if (operators && operators.length > 0) {
+      setLazyOperators(operators);
+    }
+  }, [operators]);
+
+  // On-demand fetch when modal is open and options are empty
+  useEffect(() => {
+    if (!isOpen) return;
+    if (lazySupervisors.length > 0 && lazyOperators.length > 0) return;
+
+    let isMounted = true;
+    setIsLoadingOptions(true);
+    getMachineModalOptionsAction()
+      .then((data) => {
+        if (!isMounted) return;
+        if (data.supervisors && data.supervisors.length > 0) {
+          setLazySupervisors(data.supervisors);
+        }
+        if (data.operators && data.operators.length > 0) {
+          setLazyOperators(data.operators);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load personnel options for MachinePersonnelModal", err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingOptions(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, lazySupervisors.length, lazyOperators.length]);
+
   useEffect(() => {
     if (isOpen) {
       const supIds = Array.isArray(machine.supervisor_ids) && machine.supervisor_ids.length > 0
@@ -450,7 +498,7 @@ export function MachinePersonnelModal({
     shift_time?: string | null;
     role?: string | null;
     status?: string | null;
-  }> = (supervisors || []).map((s) => ({
+  }> = (lazySupervisors || []).map((s) => ({
     ...s,
     full_name: s.full_name || (s as any).name || "Supervisor",
     role: s.role || "supervisor",
@@ -494,7 +542,7 @@ export function MachinePersonnelModal({
     shift_time?: string | null;
     role?: string | null;
     status?: string | null;
-  }> = (operators || []).map((o) => ({
+  }> = (lazyOperators || []).map((o) => ({
     ...o,
     full_name: o.full_name || (o as any).name || "Operator",
     role: o.role || "operator",
@@ -628,7 +676,7 @@ export function MachinePersonnelModal({
             users={allSupervisors}
             values={supervisorIds}
             onChange={setSupervisorIds}
-            placeholder="Search & assign supervisors..."
+            placeholder={isLoadingOptions && allSupervisors.length === 0 ? "Loading supervisors from database..." : "Search & assign supervisors..."}
             disabled={!canEditSupervisor || isSaving}
           />
         </div>
@@ -646,7 +694,7 @@ export function MachinePersonnelModal({
             users={allOperators}
             values={operatorIds}
             onChange={setOperatorIds}
-            placeholder="Search & assign operators..."
+            placeholder={isLoadingOptions && allOperators.length === 0 ? "Loading operators from database..." : "Search & assign operators..."}
             disabled={isSaving}
           />
         </div>
@@ -710,6 +758,39 @@ export function MachineClientModal({
 
   const [clientId, setClientId] = useState<string>(machine.client_id || "");
   const [isSaving, setIsSaving] = useState(false);
+  const [lazyClients, setLazyClients] = useState<ClientSelectItem[]>(() => clients || []);
+  const [isLoadingClients, setIsLoadingClients] = useState(false);
+
+  useEffect(() => {
+    if (clients && clients.length > 0) {
+      setLazyClients(clients);
+    }
+  }, [clients]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (lazyClients.length > 0) return;
+
+    let isMounted = true;
+    setIsLoadingClients(true);
+    getClientSelectOptionsAction()
+      .then((data) => {
+        if (!isMounted) return;
+        if (data && data.length > 0) {
+          setLazyClients(data as unknown as ClientSelectItem[]);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load clients for MachineClientModal", err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingClients(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, lazyClients.length]);
 
   useEffect(() => {
     if (isOpen) {
@@ -717,7 +798,7 @@ export function MachineClientModal({
     }
   }, [isOpen, machine]);
 
-  const allClients: ClientSelectItem[] = [...clients];
+  const allClients: ClientSelectItem[] = [...lazyClients];
   if (machine.client && machine.client_id) {
     if (!allClients.some((c) => c.id === machine.client_id)) {
       allClients.push(machine.client as ClientSelectItem);
@@ -792,7 +873,7 @@ export function MachineClientModal({
             clients={allClients}
             value={clientId}
             onChange={(selectedId) => setClientId(selectedId || "")}
-            placeholder="Search and select client renting this machine..."
+            placeholder={isLoadingClients && allClients.length === 0 ? "Loading clients from database..." : "Search and select client renting this machine..."}
             clearable
             disabled={isSaving}
           />

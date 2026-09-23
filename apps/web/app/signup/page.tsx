@@ -27,6 +27,12 @@ import {
   type SelectOption,
 } from "@/components/ui";
 import {
+  UserAddressSection,
+  UserSalaryField,
+  FormSectionCard,
+  FormSubmitButton,
+} from "@/components/forms";
+import {
   validateAadhaarNumber,
   validateLicenseNumber,
   formatAadhaar,
@@ -59,11 +65,13 @@ export default function SignupPage() {
     supervisor_id: "",
     shift_start_time: "08:00 AM",
     shift_end_time: "08:00 PM",
+    street: "",
     city: "",
     district: "",
     state: "",
     state_id: "",
     address: "",
+    monthly_salary: "",
     aadhaar_number: "",
     license_number: "",
     password: "",
@@ -165,6 +173,79 @@ export default function SignupPage() {
     });
   }, [formValues.shift_start_time, formValues.shift_end_time]);
 
+  const section1Complete = useMemo(() => {
+    return (
+      formValues.full_name.trim().length >= 2 &&
+      formValues.email.trim().includes("@") &&
+      formValues.phone.trim().replace(/\D/g, "").length >= 10 &&
+      Boolean(formValues.role) &&
+      (!isSupervisedRole(formValues.role) || formValues.supervisor_id.trim().length > 0)
+    );
+  }, [formValues.full_name, formValues.email, formValues.phone, formValues.role, formValues.supervisor_id]);
+
+  const section2Complete = useMemo(() => {
+    return (
+      formValues.shift_start_time.trim().length > 0 &&
+      formValues.shift_end_time.trim().length > 0
+    );
+  }, [formValues.shift_start_time, formValues.shift_end_time]);
+
+  const section3Complete = useMemo(() => {
+    const hasStreet = (formValues.street || formValues.address).trim().length >= 2;
+    const hasCity = formValues.city.trim().length >= 2;
+    const hasDistrict = formValues.district.trim().length >= 2;
+    const hasState = formValues.state.trim().length >= 2 || Boolean(formValues.state_id);
+    const hasAadhaar = formValues.aadhaar_number.trim().replace(/\D/g, "").length === 12;
+    const hasSalary = formValues.role !== "operator" || (formValues.monthly_salary.trim().length > 0 && Number(formValues.monthly_salary) > 0);
+    return hasStreet && hasCity && hasDistrict && hasState && hasAadhaar && hasSalary;
+  }, [formValues.street, formValues.address, formValues.city, formValues.district, formValues.state, formValues.state_id, formValues.aadhaar_number, formValues.role, formValues.monthly_salary]);
+
+  const section4Complete = useMemo(() => {
+    return (
+      formValues.password.length >= 8 &&
+      formValues.confirm_password.length >= 8 &&
+      formValues.password === formValues.confirm_password &&
+      agreedToTerms
+    );
+  }, [formValues.password, formValues.confirm_password, agreedToTerms]);
+
+  const isAllMandatoryFilled = useMemo(() => {
+    return section1Complete && section2Complete && section3Complete && section4Complete;
+  }, [section1Complete, section2Complete, section3Complete, section4Complete]);
+
+  const missingMandatoryCount = useMemo(() => {
+    let count = 0;
+    if (!section1Complete) count++;
+    if (!section2Complete) count++;
+    if (!section3Complete) count++;
+    if (!section4Complete) count++;
+    return count;
+  }, [section1Complete, section2Complete, section3Complete, section4Complete]);
+
+  const handleAddressChange = (field: "street" | "city" | "district" | "state" | "state_id", value: string) => {
+    if (field === "street") {
+      setFormValues((prev) => ({ ...prev, street: value, address: value }));
+    } else if (field === "state_id") {
+      const matchedState = getStateById(value);
+      setFormValues((prev) => ({
+        ...prev,
+        state_id: value,
+        state: matchedState ? matchedState.name : prev.state,
+      }));
+    } else {
+      setFormValues((prev) => ({ ...prev, [field]: value }));
+    }
+
+    if (fieldErrors[field] || (field === "state_id" && fieldErrors.state)) {
+      setFieldErrors((prev) => {
+        const copy = { ...prev };
+        delete copy[field];
+        if (field === "state_id") delete copy.state;
+        return copy;
+      });
+    }
+  };
+
   const handleChange = (field: string, value: string) => {
     let formattedVal = value;
     if (field === "aadhaar_number") {
@@ -180,6 +261,10 @@ export default function SignupPage() {
         state_id: value,
         state: matchedState ? matchedState.name : prev.state,
       }));
+    } else if (field === "street") {
+      setFormValues((prev) => ({ ...prev, street: formattedVal, address: formattedVal }));
+    } else if (field === "address") {
+      setFormValues((prev) => ({ ...prev, address: formattedVal, street: formattedVal }));
     } else {
       setFormValues((prev) => ({ ...prev, [field]: formattedVal }));
     }
@@ -444,16 +529,12 @@ export default function SignupPage() {
               />
 
               {/* Section 1: Account Information & Role */}
-              <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 p-3 sm:p-3.5 space-y-2 sm:space-y-2.5">
-                <div className="flex items-center justify-between pb-1.5 border-b border-[var(--color-hairline)]">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="flex items-center justify-center w-5 h-5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold">1</span>
-                    <h3 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-                      Account & Role
-                    </h3>
-                  </div>
-                </div>
-
+              <FormSectionCard
+                stepNumber={1}
+                title="Account & Role"
+                isMandatory={true}
+                isCompleted={section1Complete}
+              >
                 {/* Row 1: Full Name | Email */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
                   <Input
@@ -553,24 +634,22 @@ export default function SignupPage() {
                     />
                   </div>
                 )}
-              </div>
+              </FormSectionCard>
 
               {/* Section 2: Work Shift Schedule */}
-              <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 p-3 sm:p-3.5 space-y-2 sm:space-y-2.5">
-                <div className="flex items-center justify-between pb-1.5 border-b border-[var(--color-hairline)]">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="flex items-center justify-center w-5 h-5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold">2</span>
-                    <h3 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-                      Work Shift Schedule
-                    </h3>
-                  </div>
-                  {shiftTimingSummary?.isValid && (
+              <FormSectionCard
+                stepNumber={2}
+                title="Work Shift Schedule"
+                isMandatory={true}
+                isCompleted={section2Complete}
+                headerAction={
+                  shiftTimingSummary?.isValid ? (
                     <span className="inline-flex items-center gap-1 text-[10px] font-semibold font-mono text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
                       {shiftTimingSummary.isOvernight ? "🌙 Overnight" : "☀️ Standard"} · {shiftTimingSummary.durationFormatted}
                     </span>
-                  )}
-                </div>
-
+                  ) : null
+                }
+              >
                 {/* Shift Start Time | Shift End Time */}
                 <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
                   <CustomTimePicker
@@ -592,278 +671,217 @@ export default function SignupPage() {
                     error={fieldErrors.shift_end_time}
                   />
                 </div>
-                <p className="text-[11px] text-[var(--color-mute)] leading-normal">
+                <p className="text-[11px] text-[var(--color-mute)] leading-normal mt-2">
                   Assigned daily operational work hours. This schedule is recorded on your profile and daily duty logs.
                 </p>
-              </div>
+              </FormSectionCard>
 
-              {/* Section 3: Work Location & Identity */}
-              <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 p-3 sm:p-3.5 space-y-2 sm:space-y-2.5">
-                <div className="flex items-center justify-between pb-1.5 border-b border-[var(--color-hairline)]">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="flex items-center justify-center w-5 h-5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold">3</span>
-                    <h3 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-                      Work Location & Identity
-                    </h3>
-                  </div>
-                </div>
-
-                {/* City/Town/Village | District | State (3-Column layout) */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
-                  <Input
-                    id="signup-city"
-                    name="city"
-                    label="City/Town/Village"
-                    type="text"
-                    value={formValues.city}
-                    onChange={(e) => handleChange("city", e.target.value)}
-                    placeholder="Pune"
-                    required
-                    autoComplete="address-level2"
-                    error={fieldErrors.city}
-                    icon={<AnimatedMapPin size={15} />}
+              {/* Section 3: Work Location, Salary & Identity */}
+              <FormSectionCard
+                stepNumber={3}
+                title="Work Location, Salary & Identity"
+                isMandatory={true}
+                isCompleted={section3Complete}
+              >
+                <div className="space-y-3">
+                  {/* Standardized Address Section: street + city/town/village + district + state */}
+                  <UserAddressSection
+                    street={formValues.street || formValues.address}
+                    city={formValues.city}
+                    district={formValues.district}
+                    state={formValues.state}
+                    stateId={formValues.state_id}
+                    onChange={handleAddressChange}
+                    errors={fieldErrors}
+                    required={true}
+                    idPrefix="signup"
                   />
 
-                  <Input
-                    id="signup-district"
-                    name="district"
-                    label="District"
-                    type="text"
-                    value={formValues.district}
-                    onChange={(e) => handleChange("district", e.target.value)}
-                    placeholder="Pune"
-                    required
-                    autoComplete="address-level2"
-                    error={fieldErrors.district}
-                    icon={<AnimatedMapPin size={15} />}
+                  {/* Standardized Monthly Salary Box */}
+                  <UserSalaryField
+                    value={formValues.monthly_salary}
+                    onChange={(val) => handleChange("monthly_salary", val)}
+                    role={formValues.role}
+                    error={fieldErrors.monthly_salary}
+                    id="signup-salary"
                   />
 
-                  {/* State Dropdown Selector */}
-                  <div className="flex flex-col gap-1 w-full" id="signup-state-container">
-                    <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none">
-                      State <span className="text-rose-500 font-semibold">*</span>
-                    </label>
-                    <input type="hidden" name="state" value={formValues.state} />
-                    <input type="hidden" name="state_id" value={formValues.state_id} />
-                    <SearchableSelect
-                      options={stateSelectOptions}
-                      value={formValues.state_id}
-                      onChange={(val, opt) => {
-                        setFormValues((prev) => ({
-                          ...prev,
-                          state_id: val,
-                          state: opt?.label || prev.state,
-                        }));
-                        if (fieldErrors.state) {
-                          setFieldErrors((prev) => {
-                            const copy = { ...prev };
-                            delete copy.state;
-                            return copy;
-                          });
-                        }
-                      }}
-                      placeholder="Select state..."
-                      clearable={false}
-                      error={fieldErrors.state}
-                      className="w-full text-xs sm:text-[13px]"
+                  {/* Aadhaar Card Number | Driving Licence Number */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 pt-1 border-t border-[var(--color-hairline)]/60">
+                    <Input
+                      id="signup-aadhaar"
+                      name="aadhaar_number"
+                      label="Aadhaar Card Number"
+                      type="text"
+                      value={formValues.aadhaar_number}
+                      onChange={(e) => handleChange("aadhaar_number", e.target.value)}
+                      onBlur={() => handleBlur("aadhaar_number")}
+                      placeholder="12-digit Aadhaar Number"
+                      maxLength={14}
+                      required
+                      error={fieldErrors.aadhaar_number}
+                      icon={<AnimatedShieldCheck size={15} />}
+                    />
+
+                    <Input
+                      id="signup-license"
+                      name="license_number"
+                      label={
+                        <span>
+                          Driving Licence Number <span className="text-[11px] font-normal text-[var(--color-mute)]">(Optional)</span>
+                        </span>
+                      }
+                      type="text"
+                      value={formValues.license_number}
+                      onChange={(e) => handleChange("license_number", e.target.value)}
+                      onBlur={() => handleBlur("license_number")}
+                      placeholder="e.g. MH12 20110012345"
+                      maxLength={25}
+                      error={fieldErrors.license_number}
+                      icon={<AnimatedCreditCard size={15} />}
                     />
                   </div>
-                </div>
 
-                {/* Street / Building Address */}
-                <Input
-                  id="signup-address"
-                  name="address"
-                  label="Street / Site Base Address"
-                  type="text"
-                  value={formValues.address}
-                  onChange={(e) => handleChange("address", e.target.value)}
-                  placeholder="Plot No. 42, MIDC Industrial Area, Chakan"
-                  required
-                  error={fieldErrors.address}
-                  icon={<AnimatedMapPin size={15} />}
-                />
-                <input type="hidden" name="street" value={formValues.address} />
+                  {/* Document Uploads: Aadhaar Card & Driving Licence */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 pt-1">
+                    {/* Aadhaar Upload Card */}
+                    <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
+                          <AnimatedShieldCheck size={14} className="text-sky-600 dark:text-sky-400" />
+                          Aadhaar Document <span className="text-[10px] font-normal text-[var(--color-mute)]">(Front Photo / PDF)</span>
+                        </span>
+                        <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
+                      </div>
 
-                {/* Aadhaar Card Number | Driving Licence Number */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
-                  <Input
-                    id="signup-aadhaar"
-                    name="aadhaar_number"
-                    label="Aadhaar Card Number"
-                    type="text"
-                    value={formValues.aadhaar_number}
-                    onChange={(e) => handleChange("aadhaar_number", e.target.value)}
-                    onBlur={() => handleBlur("aadhaar_number")}
-                    placeholder="12-digit Aadhaar Number"
-                    maxLength={14}
-                    required
-                    error={fieldErrors.aadhaar_number}
-                    icon={<AnimatedShieldCheck size={15} />}
-                  />
+                      {!aadhaarFile ? (
+                        <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
+                          <Upload className="h-4 w-4 text-[var(--color-mute)] group-hover:text-sky-600 transition-colors" />
+                          <span className="text-xs text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
+                            Upload Aadhaar (JPG, PNG, PDF)
+                          </span>
+                          <input
+                            type="file"
+                            name="aadhaar_file"
+                            className="hidden"
+                            accept="image/*,application/pdf,.doc,.docx,.txt"
+                            onChange={(e) => handleAadhaarFileChange(e.target.files?.[0] || null)}
+                          />
+                        </label>
+                      ) : (
+                        <div className="flex items-center gap-2.5 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
+                          {aadhaarPreviewUrl ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                              src={aadhaarPreviewUrl}
+                              alt="Aadhaar preview"
+                              className="h-10 w-10 rounded-lg object-cover border border-[var(--color-hairline)] shrink-0"
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-lg bg-[var(--color-hairline)] flex items-center justify-center shrink-0">
+                              <FileText className="h-5 w-5 text-sky-600" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-[var(--color-ink)] truncate">
+                              {aadhaarFile.name}
+                            </p>
+                            <p className="text-[10px] text-[var(--color-mute)] font-mono">
+                              {(aadhaarFile.size / 1024).toFixed(0)} KB · Attached
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleAadhaarFileChange(null)}
+                            className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors"
+                            title="Remove file"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
 
-                  <Input
-                    id="signup-license"
-                    name="license_number"
-                    label={
-                      <span>
-                        Driving Licence Number <span className="text-[11px] font-normal text-[var(--color-mute)]">(Optional)</span>
-                      </span>
-                    }
-                    type="text"
-                    value={formValues.license_number}
-                    onChange={(e) => handleChange("license_number", e.target.value)}
-                    onBlur={() => handleBlur("license_number")}
-                    placeholder="e.g. MH12 20110012345"
-                    maxLength={25}
-                    error={fieldErrors.license_number}
-                    icon={<AnimatedCreditCard size={15} />}
-                  />
-                </div>
-
-                {/* Document Uploads: Aadhaar Card & Driving Licence */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 pt-1">
-                  {/* Aadhaar Upload Card */}
-                  <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
-                        <AnimatedShieldCheck size={14} className="text-sky-600 dark:text-sky-400" />
-                        Aadhaar Document <span className="text-[10px] font-normal text-[var(--color-mute)]">(Front Photo / PDF)</span>
-                      </span>
-                      <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
+                      {aadhaarFileError && (
+                        <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1">
+                          {aadhaarFileError}
+                        </p>
+                      )}
                     </div>
 
-                    {!aadhaarFile ? (
-                      <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
-                        <Upload className="h-4 w-4 text-[var(--color-mute)] group-hover:text-sky-600 transition-colors" />
-                        <span className="text-xs text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
-                          Upload Aadhaar (JPG, PNG, PDF)
+                    {/* Licence Upload Card */}
+                    <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
+                          <AnimatedCreditCard size={14} className="text-sky-600 dark:text-sky-400" />
+                          Licence Document <span className="text-[10px] font-normal text-[var(--color-mute)]">(Front Photo / PDF)</span>
                         </span>
-                        <input
-                          type="file"
-                          name="aadhaar_file"
-                          className="hidden"
-                          accept="image/*,application/pdf,.doc,.docx,.txt"
-                          onChange={(e) => handleAadhaarFileChange(e.target.files?.[0] || null)}
-                        />
-                      </label>
-                    ) : (
-                      <div className="flex items-center gap-2.5 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
-                        {aadhaarPreviewUrl ? (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img
-                            src={aadhaarPreviewUrl}
-                            alt="Aadhaar preview"
-                            className="h-10 w-10 rounded-lg object-cover border border-[var(--color-hairline)] shrink-0"
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded-lg bg-[var(--color-hairline)] flex items-center justify-center shrink-0">
-                            <FileText className="h-5 w-5 text-sky-600" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-[var(--color-ink)] truncate">
-                            {aadhaarFile.name}
-                          </p>
-                          <p className="text-[10px] text-[var(--color-mute)] font-mono">
-                            {(aadhaarFile.size / 1024).toFixed(0)} KB · Attached
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleAadhaarFileChange(null)}
-                          className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors"
-                          title="Remove file"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
+                        <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
                       </div>
-                    )}
 
-                    {aadhaarFileError && (
-                      <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1">
-                        {aadhaarFileError}
-                      </p>
-                    )}
-                  </div>
+                      {!licenseFile ? (
+                        <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
+                          <Upload className="h-4 w-4 text-[var(--color-mute)] group-hover:text-sky-600 transition-colors" />
+                          <span className="text-xs text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
+                            Upload Licence (JPG, PNG, PDF)
+                          </span>
+                          <input
+                            type="file"
+                            name="license_file"
+                            className="hidden"
+                            accept="image/*,application/pdf,.doc,.docx,.txt"
+                            onChange={(e) => handleLicenseFileChange(e.target.files?.[0] || null)}
+                          />
+                        </label>
+                      ) : (
+                        <div className="flex items-center gap-2.5 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
+                          {licensePreviewUrl ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                              src={licensePreviewUrl}
+                              alt="Licence preview"
+                              className="h-10 w-10 rounded-lg object-cover border border-[var(--color-hairline)] shrink-0"
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-lg bg-[var(--color-hairline)] flex items-center justify-center shrink-0">
+                              <FileText className="h-5 w-5 text-sky-600" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-[var(--color-ink)] truncate">
+                              {licenseFile.name}
+                            </p>
+                            <p className="text-[10px] text-[var(--color-mute)] font-mono">
+                              {(licenseFile.size / 1024).toFixed(0)} KB · Attached
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleLicenseFileChange(null)}
+                            className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors"
+                            title="Remove file"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
 
-                  {/* Licence Upload Card */}
-                  <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
-                        <AnimatedCreditCard size={14} className="text-sky-600 dark:text-sky-400" />
-                        Licence Document <span className="text-[10px] font-normal text-[var(--color-mute)]">(Front Photo / PDF)</span>
-                      </span>
-                      <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
+                      {licenseFileError && (
+                        <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1">
+                          {licenseFileError}
+                        </p>
+                      )}
                     </div>
-
-                    {!licenseFile ? (
-                      <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
-                        <Upload className="h-4 w-4 text-[var(--color-mute)] group-hover:text-sky-600 transition-colors" />
-                        <span className="text-xs text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
-                          Upload Licence (JPG, PNG, PDF)
-                        </span>
-                        <input
-                          type="file"
-                          name="license_file"
-                          className="hidden"
-                          accept="image/*,application/pdf,.doc,.docx,.txt"
-                          onChange={(e) => handleLicenseFileChange(e.target.files?.[0] || null)}
-                        />
-                      </label>
-                    ) : (
-                      <div className="flex items-center gap-2.5 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
-                        {licensePreviewUrl ? (
-                          /* eslint-disable-next-line @next/next/no-img-element */
-                          <img
-                            src={licensePreviewUrl}
-                            alt="Licence preview"
-                            className="h-10 w-10 rounded-lg object-cover border border-[var(--color-hairline)] shrink-0"
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded-lg bg-[var(--color-hairline)] flex items-center justify-center shrink-0">
-                            <FileText className="h-5 w-5 text-sky-600" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-[var(--color-ink)] truncate">
-                            {licenseFile.name}
-                          </p>
-                          <p className="text-[10px] text-[var(--color-mute)] font-mono">
-                            {(licenseFile.size / 1024).toFixed(0)} KB · Attached
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleLicenseFileChange(null)}
-                          className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors"
-                          title="Remove file"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    )}
-
-                    {licenseFileError && (
-                      <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1">
-                        {licenseFileError}
-                      </p>
-                    )}
                   </div>
                 </div>
-              </div>
+              </FormSectionCard>
 
               {/* Section 4: Security Credentials */}
-              <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 p-3 sm:p-3.5 space-y-2 sm:space-y-2.5">
-                <div className="flex items-center justify-between pb-1.5 border-b border-[var(--color-hairline)]">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="flex items-center justify-center w-5 h-5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold">4</span>
-                    <h3 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-                      Security Credentials
-                    </h3>
-                  </div>
-                </div>
-
+              <FormSectionCard
+                stepNumber={4}
+                title="Security Credentials"
+                isMandatory={true}
+                isCompleted={section4Complete}
+              >
                 {/* Password | Confirm Password */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
                   <Input
@@ -894,10 +912,10 @@ export default function SignupPage() {
                     icon={<AnimatedLock size={15} />}
                   />
                 </div>
-                <p className="text-[11px] text-[var(--color-mute)]">
+                <p className="text-[11px] text-[var(--color-mute)] mt-2">
                   Password must be at least 8 characters long. Make sure both passwords match.
                 </p>
-              </div>
+              </FormSectionCard>
 
               {/* Note banner */}
               <div className="flex items-start gap-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 p-2.5 sm:p-3 text-[11px] sm:text-xs leading-relaxed text-sky-800 dark:text-sky-200">
@@ -963,19 +981,15 @@ export default function SignupPage() {
                 )}
               </div>
 
-              {/* Submit CTA Button */}
+              {/* Submit CTA Button with mandatory completeness gating & double-click guard */}
               <div className="pt-0.5">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="lg"
-                  fullWidth
+                <FormSubmitButton
+                  isReady={isAllMandatoryFilled}
                   loading={pending}
-                  disabled={pending || !agreedToTerms}
-                  className="h-11 sm:h-11.5 rounded-xl font-semibold text-xs sm:text-sm shadow-xs justify-center"
-                >
-                  {pending ? "Submitting Registration Request..." : "Request Platform Access"}
-                </Button>
+                  label="Request Platform Access"
+                  loadingLabel="Submitting Registration Request..."
+                  missingCount={missingMandatoryCount}
+                />
               </div>
             </form>
 

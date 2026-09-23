@@ -36,8 +36,8 @@ const MACHINE_EXPORT_COLUMNS = `
   status,
   created_at,
   updated_at,
-  current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email, shift_time),
-  current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email, shift_time),
+  current_operator:users!machines_current_operator_id_fkey(id, full_name, phone, email, shift_start_time, shift_end_time),
+  current_supervisor:users!machines_current_supervisor_id_fkey(id, full_name, phone, email, shift_start_time, shift_end_time),
   client:clients!machines_client_id_fkey(id, code, company_name, city, state)
 `;
 
@@ -70,7 +70,7 @@ async function hydrateExportPersonnel(machines: any[], supabase: any): Promise<a
     allUserIds.size > 0
       ? await supabase
           .from("users")
-          .select("id, full_name, phone, email, shift_time, role")
+          .select("id, full_name, phone, email, shift_start_time, shift_end_time, role")
           .in("id", Array.from(allUserIds))
       : { data: [] };
 

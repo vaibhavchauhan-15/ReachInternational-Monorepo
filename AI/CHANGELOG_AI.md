@@ -1,28 +1,49 @@
-- **Profile Documents Download Functionality & Upload/Cancel Responsive Fixes (2026-09-23)**:
+- **Server Action Logout Runtime Error Fix ("An unexpected response was received from the server") (2026-09-23)**:
+  - **1. Incident & Stack Trace**:
+    - `Runtime Error: An unexpected response was received from the server.`
+    - `at form (<anonymous>:null:null)`
+    - `at UserProfileCard (components/profile/UserProfileCard.tsx:164:7)`
+    - `at UserProfileDropdown (components/layout/sidebar/UserProfileDropdown.tsx:205:17)`
+    - `at AppSidebar (components/layout/AppSidebar.tsx:150:11)`
+    - `at AppShellClient (components/layout/AppShellClient.tsx:94:9)`
+    - `at AppLayout (app\(app)\layout.tsx:42:5)`
+  - **2. Root Cause**:
+    - Proxy middleware (`apps/web/proxy.ts`) was intercepting Server Action POST requests (carrying `next-action` header) and returning HTTP 307 redirects (`NextResponse.redirect`). React DOM's Server Action dispatcher expects a React Server Component flight stream (`text/x-component`), and receiving an HTTP redirect causes React DOM to fail parsing and throw `An unexpected response was received from the server.`
+    - Server Action `logout()` in `apps/web/app/actions/auth.ts` lacked defensive error handling around `getUser()` and `signOut()`, and did not invoke `revalidatePath("/", "layout")` to clear cached authenticated layout states before redirecting.
+  - **3. Delivered Changes**:
+    - **Proxy Server Action Bypass (`apps/web/proxy.ts`)**:
+      - Added check `const isServerAction = Boolean(request.headers.get("next-action"));`.
+      - Prevented proxy from returning navigation redirects (`createRedirectResponse`) on Server Actions, allowing them to pass through to Next.js App Router for native action handling.
+    - **Resilient Logout Server Action (`apps/web/app/actions/auth.ts`)**:
+      - Wrapped `getUser()` and `signOut()` in defensive `try/catch` blocks.
+      - Added `revalidatePath("/", "layout")` before `redirect("/login")`.
+  - **4. Verification**:
+    - `pnpm --filter @reachinternational/web typecheck` (0 errors).
+    - `pnpm --filter @reachinternational/mobile typecheck` (0 errors).
+    - `@reachinternational/permissions` unit tests (3/3 pass).
+    - Direct HTTP test confirmed `POST /profile` with `next-action` no longer returns HTTP 307 redirect.
+
+- **Profile Documents Zooming, Button Row Alignment & Skeleton Loading (2026-09-23)**:
   - **1. User Feedback & Request**:
-    - "this should work properly if this download btn click then download the image/pdf / doc etc documents" (Viewport: 1396×632)
-    - "upload and cancel btn shoul properly responsive for desktop and mobile secreen" (Viewport: 360×800)
-    - "Keep Only Upload Label" (on Button "Upload Driving Licence") (Viewport: 360×800)
-    - "remove this text", "remove size and click to preview text while uploading" (paragraph: "176 KB • Click to preview") (Viewport: 360×800)
-    - "make the this icon size as per replace , delete btn size use same padding like replace and delete" (Viewport: 1396×632)
-    - "only in the desktop show adhar and licence in one row" (Viewport: 1396×632)
+    - "while viewwint the document add scroll mouse to zoom in desktop and use two finger to zoom in and out to the mobile make srue it should be working smoothly and optimized add zoom in and out btn in the header only for the desktop view" (Viewport: 1536×695)
+    - "place the upload icon and upload label in one row" (on Button "Upload") (Viewport: 1536×695)
+    - "use skeleton loading while load the data" (Viewport: 1536×695)
   - **2. Delivered Changes**:
-    - **Reliable Cross-Format File Download API & Client Handler (`apps/web/app/api/documents/[id]/download/route.ts` & `DocumentViewerModal.tsx`)**:
-      - Solved browser cross-origin download limitation where `<a href={...} download>` was ignored by browsers on signed cloud URLs.
-      - Created `/api/documents/[id]/download` route using `createSupabaseAdminClient().storage.from("user_files").download(storage_path)`, verifying session and checking owner/privileged access (`super_admin`, `admin`, `hr`), logging `document.downloaded` to `audit_logs`, and streaming the binary file with `Content-Disposition: attachment; filename="..."; filename*=UTF-8''...` headers.
-      - Enhanced `DocumentViewerModal.tsx` `handleDownload`: fetches from same-origin `/api/documents/[id]/download`, creates object URL blob, and triggers native file download for all formats (PDF, PNG, JPG, WEBP, DOC, DOCX, TXT), with fallback to direct attachment route navigation.
-      - Added downloading state with `Loader2` spinner and disabled state to prevent duplicate clicks.
-      - Added 1-tap download trigger to mobile PDF helper strip beneath embedded viewer.
-    - **Upload & Cancel Responsive Buttons (`apps/web/components/documents/DocumentUploadSection.tsx`)**:
-      - Fixed responsive button container overflow: removed `fullWidth` (`w-full`), configured `flex-1 min-w-0` on Upload button and `shrink-0 px-4` on Cancel button.
-      - Simplified primary upload button label to strictly `"Upload"`.
-      - Removed file size and preview subtitle text (`"176 KB • Click to preview"`) during file selection.
-    - **Badge Sizing & Desktop 1-Row Grid (`DocumentUploadSection.tsx` & `MobileDocumentUploadCard.tsx`)**:
-      - Resized `DocumentFormatIcon` to match Replace and Delete button dimensions and padding (`min-h-[40px] sm:min-h-[34px] px-2.5 sm:px-3 py-1.5 text-xs font-semibold font-mono`).
-      - Configured desktop 1-row layout (`grid grid-cols-1 md:grid-cols-2 gap-4`).
-      - Synced mobile card dimensions (`height: 38, paddingHorizontal: 10, borderRadius: 8`, removed redundant Eye view button).
+    - **Desktop Scroll & Mobile Pinch Zoom (`apps/web/components/documents/DocumentViewerModal.tsx`)**:
+      - Added smooth desktop mouse wheel zoom (`wheel` event listener with non-passive registration and `preventDefault`).
+      - Added desktop mouse click-and-drag panning when `scale > 1` with grab/grabbing cursor and double-click to reset zoom.
+      - Added mobile two-finger pinch-to-zoom and single-finger pan gesture tracking (`onTouchStart`, `onTouchMove`, `onTouchEnd`).
+      - Added desktop-only header zoom controls (`ZoomIn`, `ZoomOut`, Reset `%`) with `hidden sm:inline-flex` and increased header padding (`sm:pr-48`).
+    - **Upload Button Single Row Alignment (`apps/web/components/ui/Button.tsx` & `DocumentUploadSection.tsx`)**:
+      - Updated `Button.tsx` `renderLabel` to use `inline-flex items-center gap-1.5 whitespace-nowrap leading-none`, preventing children containing SVG icons from breaking onto multiple lines.
+      - Passed `icon={<Upload className="h-3.5 w-3.5 shrink-0" />}` and `"Upload"` to `<Button>` in `DocumentUploadSection.tsx`, guaranteeing the upload arrow and label stay side-by-side in one row.
+    - **Shimmer Skeleton Loading UI (`DocumentViewerModal.tsx` & `DocumentUploadSection.tsx`)**:
+      - Added animated pulsing shimmer skeleton placeholder with centered icon, loading spinner, and detail bars while document data or image bytes load.
+      - Updated `openExistingPreview` to display modal immediately with skeleton placeholder, removing perceived click latency while fetching fresh signed URLs.
   - **3. Verification**:
     - `pnpm --filter @reachinternational/web typecheck` passed (0 errors).
+    - `pnpm --filter @reachinternational/mobile typecheck` passed (0 errors).
+    - `@reachinternational/permissions` unit tests passed (3/3 pass).
     - `pnpm --filter @reachinternational/mobile typecheck` passed (0 errors).
     - `@reachinternational/permissions` unit tests passed (3/3 pass).
       - Removed "All document formats • 2 MB max" from the document type header row.

@@ -131,6 +131,14 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  // React Server Actions (requests carrying 'next-action' header) handle their own redirects,
+  // mutations, and authorization in App Router. Intercepting a Server Action with an HTTP 30x redirect
+  // causes Next.js React DOM action dispatcher to crash with "An unexpected response was received from the server."
+  const isServerAction = Boolean(request.headers.get("next-action"));
+  if (isServerAction) {
+    return response;
+  }
+
   // Helper to preserve response cookies (session tokens refreshed by Supabase Auth) on redirects
   const createRedirectResponse = (targetPath: string) => {
     const redirectRes = NextResponse.redirect(new URL(targetPath, request.nextUrl));

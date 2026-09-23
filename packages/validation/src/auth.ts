@@ -76,6 +76,7 @@ export const SignupSchema = z.object({
   shift_end_time: z.string().trim().min(1, "Shift end time is required").max(50),
   supervisor_id: z.string().trim().max(100).optional().nullable(),
   working_location_id: z.string().trim().max(100).optional().nullable(),
+  monthly_salary: z.number().min(0, "Monthly salary must be positive").optional().nullable(),
   aadhaar_number: AadhaarRequiredFieldSchema,
   license_number: LicenseFieldSchema,
 }).superRefine((data, ctx) => {
@@ -158,6 +159,7 @@ export const ProfileUpdateSchema = z.object({
   district: z.string().trim().min(2, "District is required").max(100, "District name cannot exceed 100 characters"),
   state: z.string().trim().min(2, "State is required").max(100, "State name cannot exceed 100 characters"),
   state_id: z.number().int().positive().optional().nullable(),
+  monthly_salary: z.number().min(0, "Monthly salary must be positive").optional().nullable(),
   aadhaar_number: AadhaarFieldSchema,
   license_number: LicenseFieldSchema,
 });
@@ -188,6 +190,7 @@ export const OnboardingProfileSchema = z.object({
   district: z.string().trim().min(2, "District is required").max(100, "District name cannot exceed 100 characters"),
   state: z.string().trim().min(2, "State is required").max(100, "State name cannot exceed 100 characters"),
   state_id: z.number().int().positive().optional().nullable(),
+  monthly_salary: z.number().min(0, "Monthly salary must be positive").optional().nullable(),
   aadhaar_number: AadhaarRequiredFieldSchema,
   license_number: LicenseFieldSchema,
 }).superRefine((data, ctx) => {

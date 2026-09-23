@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -25,6 +25,7 @@ import {
   updateMachineClientAssignmentAction,
   checkMachineSerialNumberAvailable,
   deleteMachine,
+  getMachineModalOptionsAction,
 } from "@/app/actions/machines";
 import type { Machine, User, UserRole } from "@/lib/types/database";
 import { isManagerOrAbove } from "@reachinternational/permissions";
@@ -107,7 +108,39 @@ export function MachineEditClient({
   // -------------------------------------------------------------
   // Option Lists Hydration (Supervisors, Operators, Clients)
   // -------------------------------------------------------------
-  const allSupervisors: Array<{ id: string; full_name: string; phone?: string | null; email?: string | null; shift_time?: string | null }> = [...supervisors];
+  const [lazySupervisors, setLazySupervisors] = useState<User[]>(() => supervisors || []);
+  const [lazyOperators, setLazyOperators] = useState<User[]>(() => operators || []);
+  const [lazyClients, setLazyClients] = useState<ClientSelectItem[]>(() => clients || []);
+
+  useEffect(() => {
+    if (supervisors && supervisors.length > 0) setLazySupervisors(supervisors);
+  }, [supervisors]);
+
+  useEffect(() => {
+    if (operators && operators.length > 0) setLazyOperators(operators);
+  }, [operators]);
+
+  useEffect(() => {
+    if (clients && clients.length > 0) setLazyClients(clients);
+  }, [clients]);
+
+  useEffect(() => {
+    if (lazySupervisors.length > 0 && lazyOperators.length > 0 && lazyClients.length > 0) return;
+    let isMounted = true;
+    getMachineModalOptionsAction()
+      .then((data) => {
+        if (!isMounted) return;
+        if (data.supervisors && data.supervisors.length > 0) setLazySupervisors(data.supervisors);
+        if (data.operators && data.operators.length > 0) setLazyOperators(data.operators);
+        if (data.clients && data.clients.length > 0) setLazyClients(data.clients as unknown as ClientSelectItem[]);
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [lazySupervisors.length, lazyOperators.length, lazyClients.length]);
+
+  const allSupervisors: Array<{ id: string; full_name: string; phone?: string | null; email?: string | null; shift_time?: string | null }> = [...lazySupervisors];
   if (Array.isArray(machine.supervisors)) {
     machine.supervisors.forEach((s) => {
       if (s && !allSupervisors.some((item) => item.id === s.id)) {
@@ -121,7 +154,7 @@ export function MachineEditClient({
     }
   }
 
-  const allOperators: Array<{ id: string; full_name: string; phone?: string | null; email?: string | null; shift_time?: string | null }> = [...operators];
+  const allOperators: Array<{ id: string; full_name: string; phone?: string | null; email?: string | null; shift_time?: string | null }> = [...lazyOperators];
   if (Array.isArray(machine.operators)) {
     machine.operators.forEach((o) => {
       if (o && !allOperators.some((item) => item.id === o.id)) {
@@ -135,7 +168,7 @@ export function MachineEditClient({
     }
   }
 
-  const allClients: ClientSelectItem[] = [...clients];
+  const allClients: ClientSelectItem[] = [...lazyClients];
   if (machine.client && machine.client_id) {
     if (!allClients.some((c) => c.id === machine.client_id)) {
       allClients.push(machine.client as ClientSelectItem);

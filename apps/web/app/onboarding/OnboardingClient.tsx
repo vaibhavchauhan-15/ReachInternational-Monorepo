@@ -35,6 +35,12 @@ import {
 } from "@reachinternational/utils";
 import { completeOnboardingAction, type OnboardingFormState } from "@/app/actions/onboarding";
 import type { User } from "@/lib/types/database";
+import {
+  FormSectionCard,
+  UserAddressSection,
+  UserSalaryField,
+  FormSubmitButton,
+} from "@/components/forms";
 
 const onboardingRoleOptions: SelectOption[] = [
   { value: "manager", label: "Manager" },
