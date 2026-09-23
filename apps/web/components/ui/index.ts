@@ -41,6 +41,7 @@ export { CustomDatePicker, type CustomDatePickerProps } from "./CustomDatePicker
 export { DateRangePicker, type DateRangePickerProps, type DateRange } from "./DateRangePicker";
 export { CustomTimePicker, TimeInput, type CustomTimePickerProps, type TimeInputProps } from "./CustomTimePicker";
 export { DateTimePicker, type DateTimePickerProps } from "./DateTimePicker";
+export { MonthSelect, type MonthSelectProps } from "./MonthSelect";
 
 
 // 5. Search & Filtering Controls
@@ -195,8 +196,15 @@ export {
   AnimatedProgress,
   AnimatePresence,
 } from "./Motion";
-export { AnimateIcon, AnimatedIcon, createAnimatedIcon } from "./animated-icon";
-export type { IconAnimationVariant, IconTrigger, AnimateIconProps, AnimatedIconProps } from "./animated-icon";
+export { AnimateIcon, AnimatedIcon, createAnimatedIcon, InteractiveIcon, getIconInteractionClass } from "./animated-icon";
+export type {
+  IconAnimationVariant,
+  IconInteractionVariant,
+  IconTrigger,
+  AnimateIconProps,
+  AnimatedIconProps,
+  InteractiveIconProps,
+} from "./animated-icon";
 
 // 11. Branding
 export { Logo, ReachInternationalLogo, ScissorLiftLogoIcon, type LogoProps } from "./Logo";

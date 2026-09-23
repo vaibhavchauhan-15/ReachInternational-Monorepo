@@ -33,19 +33,7 @@ export default async function OperationsPage(props: {
   }
   const searchParams = await props.searchParams;
   const tab = searchParams?.tab;
-
-  if (user?.role === "operator" && tab !== "entry" && tab !== "history") {
-    redirect("/operations?tab=entry");
-  }
-
-  if (
-    user?.role !== "operator" &&
-    (!tab || !["logs", "site-movement", "operators"].includes(tab))
-  ) {
-    redirect("/operations?tab=logs");
-  }
-
-  const effectiveTab = user?.role === "operator" ? (tab || "entry") : (tab || "logs");
+  const effectiveTab = user?.role === "operator" ? (tab === "history" ? "history" : "entry") : "logs";
 
   // Fast Path: Operator Entry/History landing loads ONLY the tiny entry context
   if (user?.role === "operator") {

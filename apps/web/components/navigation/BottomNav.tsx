@@ -13,6 +13,7 @@ import {
   Menu,
   User,
   Banknote,
+  CalendarCheck,
 } from "lucide-react";
 import {
   getNavForRole,
@@ -31,6 +32,7 @@ const ICONS: Record<string, React.ComponentType<{ size?: number; className?: str
   menu: Menu,
   user: User,
   banknote: Banknote,
+  "calendar-check": CalendarCheck,
 };
 
 // CSS selector for focusable text fields (hide bar when keyboard is open)
@@ -111,21 +113,23 @@ export function BottomNav({ role }: { role: UserRole }) {
                 aria-selected={active}
                 aria-current={active ? "page" : undefined}
                 aria-label={t.label}
-                className={`relative flex flex-col items-center justify-center h-14 min-h-[44px] gap-0.5 text-[10px] tracking-tight transition-colors duration-150 ${
+                className={`group group/nav interactive-parent relative flex flex-col items-center justify-center h-14 min-h-[44px] gap-0.5 text-[10px] tracking-tight transition-colors duration-150 ${
                   active
                     ? "text-[var(--color-ink)] font-semibold"
                     : "text-[var(--color-mute)] font-medium"
                 }`}
               >
-                <Icon
-                  size={20}
-                  className={`shrink-0 transition-colors duration-150 ${
-                    active
-                      ? "text-[var(--color-ink)]"
-                      : "text-[var(--color-mute)]"
-                  }`}
-                  aria-hidden
-                />
+                <span className="interactive-icon icon-bounce flex items-center justify-center">
+                  <Icon
+                    size={20}
+                    className={`shrink-0 transition-colors duration-150 ${
+                      active
+                        ? "text-[var(--color-ink)]"
+                        : "text-[var(--color-mute)]"
+                    }`}
+                    aria-hidden
+                  />
+                </span>
                 <span className="truncate max-w-full leading-none">
                   {t.label}
                 </span>

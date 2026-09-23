@@ -53,8 +53,18 @@ export function OperatorEntryClient({
     urlTab === "history" || (initialTab === "history" && !urlTab) ? "history" : "entry";
 
   const handleTabChange = (tab: "entry" | "history") => {
-    router.push(tab === "history" ? "/operations?tab=history" : "/operations?tab=entry", { scroll: false });
+    router.push(tab === "history" ? "/operations?tab=history" : "/operations", { scroll: false });
   };
+
+  // Strip legacy tab=entry parameter to normalize URL to clean /operations
+  useEffect(() => {
+    if (searchParams?.get("tab") === "entry") {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("tab");
+      const newQuery = params.toString();
+      router.replace(newQuery ? `/operations?${newQuery}` : "/operations", { scroll: false });
+    }
+  }, [searchParams, router]);
 
   // Form State initialized directly from fast read-model
   const initialHmrStr = initialContext.last_hmr !== undefined && initialContext.last_hmr !== null

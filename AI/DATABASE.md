@@ -1,16 +1,38 @@
-gi# Database Map — Supabase PostgreSQL Schema
+# Database Map — Supabase PostgreSQL Schema
 
 ## Schema & Tables Overview
 
 ### 1. `users` (User Profiles — mirrors auth.users)
 - `id` (uuid, PK, references `auth.users`)
 - `full_name` (text, NOT NULL)
-- `phone` (text)
-- `email` (text, NOT NULL, unique, synced with auth.users)
-- `role` (text: `super_admin`, `admin`, `engineer`)
-- `status` (text: `active`, `inactive`)
-- `created_at` (timestamptz)
-- `updated_at` (timestamptz)
+- `phone` (text, NOT NULL)
+- `email` (text, NOT NULL, case-insensitive unique index `lower(btrim(email))`)
+- `role` (text: `super_admin`, `admin`, `manager`, `supervisor`, `hr`, `operator`)
+- `status` (text: `active`, `inactive`, `pending`)
+- `city` (text, NOT NULL, default '')
+- `district` (text, NOT NULL, default '')
+- `state` (text, NOT NULL, default '')
+- `state_id` (smallint, FK `states.id`)
+- `street` (text, nullable — canonical address field)
+- `shift_start_time` (time without time zone, nullable)
+- `shift_end_time` (time without time zone, nullable)
+- `supervisor_id` (uuid, nullable, FK `users.id` — primary designated supervisor)
+- `monthly_salary` (numeric(10, 2), mandatory >= 0 for `role = 'operator'`)
+- `daily_rate` (numeric(10, 2), default 0)
+- `ot_hourly_rate` (numeric(10, 2), default 0)
+- `complete_profile` (boolean, NOT NULL, default false)
+- `aadhaar_number` (text, nullable, B-tree index)
+- `license_number` (text, nullable, B-tree index)
+- `created_at` (timestamptz, default now())
+- `updated_at` (timestamptz, default now())
+
+### 1b. `user_supervisors` (Relational Supervisor Junction Table)
+- `user_id` (uuid, FK `users.id` ON DELETE CASCADE)
+- `supervisor_id` (uuid, FK `users.id` ON DELETE CASCADE)
+- `created_at` (timestamptz, default now())
+- PRIMARY KEY (`user_id`, `supervisor_id`)
+- Indexes: `idx_user_supervisors_user_id`, `idx_user_supervisors_supervisor_id`
+- RLS: Authenticated users can view their own supervisor mappings; supervisors can view their assigned operators; admins/managers have full access.
 
 ### 2. `machines` (Industrial Machine Inventory)
 - `id` (uuid, PK)
@@ -76,6 +98,37 @@ gi# Database Map — Supabase PostgreSQL Schema
 - `daily_run_time` (default `08:00`)
 - `default_service_interval_days` (default 90)
 
+### 8. `user_document_types` (Config — Document Type Registry)
+- `code` (text, PK) — e.g. `'aadhaar'`, `'driving_license'` (strictly Aadhaar and Driving Licence only; profile photo removed)
+- `label` (text, NOT NULL) — human-readable display name
+- `visibility` (text, NOT NULL, CHECK `'private'` | `'public'`) — determines storage bucket routing
+- `allowed_mime_types` (text[], NOT NULL) — per-type accepted MIME types
+- `max_size_bytes` (bigint, NOT NULL) — per-type file size limit
+- `created_at` (timestamptz)
+- RLS: SELECT for `authenticated`; no write policies (service_role only)
+- Adding a new document type = one `INSERT` row, no migration needed
+
+### 9. `user_documents` (User File Uploads)
+- `id` (uuid, PK)
+- `user_id` (uuid, FK `users.id`, ON DELETE CASCADE)
+- `document_type_code` (text, FK `user_document_types.code`)
+- `storage_path` (text, NOT NULL) — path within the bucket, e.g. `{user_id}/aadhaar.pdf`
+- `mime_type` (text, NOT NULL)
+- `file_size_bytes` (bigint, NOT NULL)
+- `created_at` (timestamptz)
+- `updated_at` (timestamptz)
+- UNIQUE constraint: `(user_id, document_type_code)` — one file per user per type
+- Indexes: `idx_user_documents_user_id`, `idx_user_documents_type_code`
+- RLS: Users read/write own documents; `super_admin`, `admin`, `hr` can read all
+
+## Storage Buckets
+
+### `user_files` (Private — Signed URL Access Only)
+- **Public**: false
+- **Purpose**: User KYC and identity documents (Aadhaar, Driving Licence photos/PDFs)
+- **Access**: Owner CRUD via `storage.foldername(name)[1] = auth.uid()::text OR storage.foldername(name)[2] = auth.uid()::text`; admin/HR read
+- **Path pattern**: `documents/{user_id}/{type_code}.{ext}` (inside folder `documents`)
+
 ## Stored Procedures (RPCs)
 - `088_dashboard_read_model_rpcs.sql`: High-speed, role-specific dashboard read model RPCs (<5ms, `STABLE`, `SECURITY DEFINER`):
   - `get_super_admin_dashboard()`: Platform-wide counts (users, active machines, clients, assignments, today's logs, audit activity).
@@ -106,4 +159,37 @@ gi# Database Map — Supabase PostgreSQL Schema
 - `090_supervisor_dashboard_action_url.sql`: Point supervisor dashboard breakdown alert actionUrl to `/operations?tab=logs`.
 - `091_dashboard_action_urls.sql`: Canonical dashboard RPC action URLs hardening across all roles.
 - `092_fix_active_machines_dashboard_kpis.sql`: Fix active machinery query in `get_super_admin_dashboard()` and `get_manager_dashboard()` to check `health_status = 'active'` (or `status = 'active'`) excluding inactive machines.
+- `096_operator_payrolls_table.sql`: Normalized operator payrolls table with `UNIQUE (operator_id, payroll_month)`, relational HR payroll summary RPC, single/bulk rate update RPCs.
+- `097_attendance_rpcs.sql`: Zero-table derived attendance RPCs from `machine_hour_logs`.
+- `098_schema_correctness_fixes.sql`: Schema correctness & constraint hardening:
+  - Removed auto-generated `idempotency_key` DEFAULT on `machine_hour_logs` (defeats idempotency on raw inserts).
+  - Added `CHECK (end_meter >= start_meter)` on `machine_hour_logs`.
+  - Added currency precision `numeric(10,2)` on `users.daily_rate`, `users.ot_hourly_rate` and `numeric(10,2)`/`numeric(12,2)` on all `operator_payrolls` monetary columns.
+  - Added `UNIQUE (phone)` on `users`.
+  - Extended `updated_at` triggers (via existing `update_updated_at()`) to 8 secondary tables: `operator_payrolls`, `operator_machine_assignments`, `profile_change_requests`, `states`, `districts`, `cities`, `towns`, `villages`.
+- `099_user_document_upload_system.sql`: Scalable user document upload system:
+  - `user_document_types` config/reference table with seed rows (aadhaar, driving_license).
+  - `user_documents` table with FK to types, UNIQUE(user_id, document_type_code), indexes, RLS.
+  - Storage bucket: `user_files` (private, signed URL, 2MB limit, jpeg/png/pdf).
+  - Storage path convention: `documents/{user_id}/{type_code}.{ext}`.
+  - Storage RLS: owner CRUD via folder check; admin/HR read.
+  - Pure creation migration avoiding direct deletion on `storage.buckets` (`storage.protect_delete()` compliance).
+  - `updated_at` trigger via existing `update_updated_at()`.
+
+## Schema Constraints & Triggers Summary
+
+### `updated_at` Auto-Update Triggers (12 tables total)
+All use `public.update_updated_at()` (`BEFORE UPDATE`, sets `NEW.updated_at = NOW()`):
+- `users` (migration 001), `machines` (migration 002), `clients` (migration 003)
+- `operator_payrolls`, `operator_machine_assignments`, `profile_change_requests`, `states`, `districts`, `cities`, `towns`, `villages` (migration 098)
+- `user_documents` (migration 099)
+
+### Key Constraints
+- `machine_hour_logs.idempotency_key`: TEXT UNIQUE, no DEFAULT (RPC generates fallback via COALESCE)
+- `machine_hour_logs.running_hours`: GENERATED ALWAYS AS (end_meter - start_meter) STORED
+- `machine_hour_logs.chk_end_meter_gte_start`: CHECK (end_meter >= start_meter)
+- `operator_payrolls.uq_operator_payrolls_operator_month`: UNIQUE (operator_id, payroll_month)
+- `users.users_phone_unique`: UNIQUE (phone)
+- `users.daily_rate`, `users.ot_hourly_rate`: numeric(10,2)
+- `operator_payrolls` monetary columns: numeric(10,2) for rates, numeric(12,2) for pay totals
 

@@ -75,6 +75,7 @@ export function RefreshButton({
       aria-label={label}
     >
       <AnimatedRefresh
+        interaction="refresh"
         isSpinning={isPending}
         size={14}
         className={isPending ? "text-blue-500" : "text-[var(--color-mute)]"}

@@ -5,6 +5,8 @@ import { useAuth } from "../lib/auth/useAuth";
 import { useTheme } from "../components/ui/ThemeProvider";
 import { ReachInternationalLogo } from "../components/branding";
 import { AppWebView } from "../shell/AppWebView";
+import { getMobileRoleHomeRoute } from "@reachinternational/permissions";
+
 
 const SHELL_MODE = process.env.EXPO_PUBLIC_SHELL_MODE || "native";
 
@@ -57,13 +59,14 @@ function NativeGatewayScreen() {
         if (!isProfileComplete) {
           router.replace("/(auth)/onboarding");
         } else {
-          router.replace("/(app)/dashboard");
+          router.replace(getMobileRoleHomeRoute(role) as any);
         }
       } else {
         router.replace("/(auth)/login");
       }
     }
   }, [isLoading, session, isProfileComplete, role, router]);
+
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>

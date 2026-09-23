@@ -12,7 +12,8 @@ export type StorageBucket =
   | 'fsr-photos'
   | 'employee-documents'
   | 'customer-documents'
-  | 'delivery-documents';
+  | 'delivery-documents'
+  | 'user_files';
 
 export interface UploadOptions {
   bucket: StorageBucket;
@@ -87,8 +88,8 @@ export async function uploadMediaFileWithRetry(options: UploadOptions): Promise<
 
       if (onProgress) onProgress(100);
 
-      // Private buckets (employee & customer docs) require time-limited signed URLs
-      if (bucket === 'employee-documents' || bucket === 'customer-documents') {
+      // Private buckets (employee & customer docs, user files) require time-limited signed URLs
+      if (bucket === 'employee-documents' || bucket === 'customer-documents' || bucket === 'user_files') {
         const { data: signedData } = await supabase.storage.from(bucket).createSignedUrl(filePath, 3600);
         return {
           path: data.path,

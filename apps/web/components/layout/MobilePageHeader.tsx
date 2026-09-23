@@ -31,7 +31,9 @@ const PAGE_TITLES: Record<string, string> = {
   "/machines": "Machines",
   "/operations": "Operations",
   "/users": "Users",
-  "/hr": "HR Payroll",
+  "/payroll": "Payroll",
+  "/hr": "Payroll",
+  "/attendance": "Attendance",
   "/clients": "Clients",
   "/audit": "Audit Trail",
   "/audit-logs": "Audit Logs",
@@ -57,6 +59,7 @@ const DETAIL_TITLES: Record<string, string> = {
   vendors: "Vendor Details",
   "purchase-orders": "Purchase Order",
   audit: "Audit Details",
+  attendance: "Attendance Details",
 };
 
 const ROOT_PAGES = new Set(["/dashboard"]);

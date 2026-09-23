@@ -9,7 +9,7 @@ import { hydrateUsersPersonnel } from "./user-list";
  * Includes sensitive and heavy fields: aadhaar_number, license_number, address, shift details.
  */
 export const USER_DETAIL_COLUMNS =
-  "id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, address, shift_time, shift_start_time, shift_end_time, complete_profile, supervisor_id, supervisor_ids, created_at, updated_at";
+  "id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, street, shift_start_time, shift_end_time, complete_profile, supervisor_id, monthly_salary, daily_rate, ot_hourly_rate, created_at, updated_at";
 
 /**
  * Fetches a single user by ID with full column projection and in-memory relation hydration.

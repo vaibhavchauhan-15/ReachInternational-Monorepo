@@ -1230,7 +1230,9 @@ export async function hireOperatorAction(payload: {
     return { success: false, error: authError?.message || "Failed to create authentication user." };
   }
 
-  // 2. Insert into public.users with pending status
+  // 2. Insert into public.users with active status
+  const monthlySalary = payload.salary && payload.salary > 0 ? payload.salary : 0;
+  const supervisorId = user.role === "supervisor" ? user.id : null;
   const { error: userError } = await supabase.from("users").insert({
     id: authData.user.id,
     email,
@@ -1238,13 +1240,26 @@ export async function hireOperatorAction(payload: {
     phone: payload.phone,
     role: "operator",
     status: "active",
-    supervisor_id: user.role === "supervisor" ? user.id : null,
-    complete_profile: "no",
+    supervisor_id: supervisorId,
+    monthly_salary: monthlySalary,
+    complete_profile: false,
   });
 
   if (userError) {
     await supabase.auth.admin.deleteUser(authData.user.id);
     return { success: false, error: userError.message };
+  }
+
+  // Maintain user_supervisors junction table
+  if (supervisorId) {
+    try {
+      await supabase.from("user_supervisors").upsert({
+        user_id: authData.user.id,
+        supervisor_id: supervisorId,
+      }, { onConflict: "user_id,supervisor_id" });
+    } catch (supErr: any) {
+      console.warn("user_supervisors insert on operator hire skipped:", supErr?.message || supErr);
+    }
   }
 
   // 3. Store salary if provided

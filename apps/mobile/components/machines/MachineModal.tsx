@@ -169,13 +169,13 @@ export const MachineModal: React.FC<MachineModalProps> = ({
       const [supsRes, opsRes, clientsRes] = await Promise.all([
         supabase
           .from('users')
-          .select('id, full_name, phone, email, shift_time')
+          .select('id, full_name, phone, email, shift_start_time, shift_end_time')
           .in('role', ['supervisor', 'manager', 'admin', 'super_admin'])
           .eq('status', 'active')
           .order('full_name', { ascending: true }),
         supabase
           .from('users')
-          .select('id, full_name, phone, email, shift_time')
+          .select('id, full_name, phone, email, shift_start_time, shift_end_time')
           .eq('role', 'operator')
           .eq('status', 'active')
           .order('full_name', { ascending: true }),
@@ -186,8 +186,15 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           .order('company_name', { ascending: true }),
       ]);
 
-      const sups = supsRes.data || [];
-      const ops = opsRes.data || [];
+      const formatUserShift = (u: any) => ({
+        ...u,
+        shift_time: (u.shift_start_time && u.shift_end_time)
+          ? `${u.shift_start_time.slice(0, 5)} - ${u.shift_end_time.slice(0, 5)}`
+          : null,
+      });
+
+      const sups = (supsRes.data || []).map(formatUserShift);
+      const ops = (opsRes.data || []).map(formatUserShift);
       const cls = clientsRes.data || [];
 
       mobileModalOptionsCache = {

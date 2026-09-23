@@ -1,20 +1,20 @@
 import { requireRole } from "@/lib/dal";
-import { getHRPayrollData } from "@/app/actions/hr";
-import { HRPayrollClient } from "./HRPayrollClient";
+import { getHRPayrollData } from "@/app/actions/payroll";
+import { PayrollClient } from "./PayrollClient";
 
 export const metadata = {
-  title: "HR Payroll | ReachInternational",
+  title: "Payroll | ReachInternational",
   description: "Operator monthly payroll and overtime compensation calculation module.",
 };
 
-interface HRPageProps {
+interface PayrollPageProps {
   searchParams?: Promise<{
     month?: string;
   }>;
 }
 
-export default async function HRPayrollPage({ searchParams }: HRPageProps) {
-  const user = await requireRole("super_admin", "admin", "manager", "hr");
+export default async function PayrollPage({ searchParams }: PayrollPageProps) {
+  const user = await requireRole("super_admin", "admin", "hr");
   const params = searchParams ? await searchParams : {};
 
   // Default to current month YYYY-MM if not provided
@@ -27,7 +27,7 @@ export default async function HRPayrollPage({ searchParams }: HRPageProps) {
   const payrollData = await getHRPayrollData(`${effectiveMonth}-01`);
 
   return (
-    <HRPayrollClient
+    <PayrollClient
       initialData={payrollData}
       currentMonth={effectiveMonth}
       userRole={user.role}

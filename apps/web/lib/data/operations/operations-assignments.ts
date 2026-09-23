@@ -51,7 +51,7 @@ const ASSIGNMENT_EXACT_PROJECTION = `
   end_reason,
   created_at,
   updated_at,
-  operator:users!operator_machine_assignments_operator_id_fkey(id, full_name, phone, email, shift_time, role),
+  operator:users!operator_machine_assignments_operator_id_fkey(id, full_name, phone, email, shift_start_time, shift_end_time, role),
   assigner:users!operator_machine_assignments_assigned_by_fkey(id, full_name, phone, role),
   machine:machines!operator_machine_assignments_machine_id_fkey(id, machine_id, model, serial_number, hour_meter, status)
 `;
@@ -71,7 +71,7 @@ const ASSIGNMENT_HISTORY_PROJECTION = `
   end_reason,
   created_at,
   updated_at,
-  operator:users!operator_machine_assignments_operator_id_fkey(id, full_name, phone, email, shift_time, role),
+  operator:users!operator_machine_assignments_operator_id_fkey(id, full_name, phone, email, shift_start_time, shift_end_time, role),
   assigner:users!operator_machine_assignments_assigned_by_fkey(id, full_name, phone, role),
   ender:users!operator_machine_assignments_ended_by_fkey(id, full_name)
 `;
@@ -90,7 +90,7 @@ async function fetchOperationsAssignmentsData(): Promise<OperationsAssignmentsRe
       .limit(1000),
     supabase
       .from("users")
-      .select("id, full_name, email, phone, role, status, shift_time, shift_start_time, shift_end_time")
+      .select("id, full_name, email, phone, role, status, shift_start_time, shift_end_time")
       .in("role", ["operator", "supervisor", "manager", "admin", "super_admin"])
       .eq("status", "active")
       .order("full_name", { ascending: true }),
@@ -112,9 +112,10 @@ async function fetchOperationsAssignmentsData(): Promise<OperationsAssignmentsRe
   const assignments = rawAssignments.map((ass: any) => {
     const matchedOperator = ass.operator || staffMap.get(ass.operator_id) || null;
     const matchedAssigner = ass.assigner || staffMap.get(ass.assigned_by) || null;
-    const opShift = matchedOperator?.shift_time ? parseProfileShiftTime(matchedOperator.shift_time) : null;
-    const startTime = ass.shift_start_time || opShift?.startTime || "08:00:00";
-    const endTime = ass.shift_end_time || opShift?.endTime || "17:00:00";
+    const opStartTime = matchedOperator?.shift_start_time || (matchedOperator?.shift_time ? parseProfileShiftTime(matchedOperator.shift_time)?.startTime : null);
+    const opEndTime = matchedOperator?.shift_end_time || (matchedOperator?.shift_time ? parseProfileShiftTime(matchedOperator.shift_time)?.endTime : null);
+    const startTime = ass.shift_start_time || opStartTime || "08:00:00";
+    const endTime = ass.shift_end_time || opEndTime || "17:00:00";
     const startMins = parseTimeToMinutes(startTime) ?? 480;
     const endMins = parseTimeToMinutes(endTime) ?? 1020;
     const isOvernight = ass.crosses_midnight ?? (endMins <= startMins);

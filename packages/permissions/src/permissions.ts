@@ -81,6 +81,7 @@ export const PERMISSIONS = {
   EMPLOYEE_DOCUMENT_MANAGE: "employee.document.manage",
   HR_PAYROLL_VIEW: "hr.payroll.view",
   HR_PAYROLL_MANAGE: "hr.payroll.manage",
+  ATTENDANCE_VIEW: "attendance.view",
 
   // Rental Management
   RENTAL_VIEW: "rental.view",

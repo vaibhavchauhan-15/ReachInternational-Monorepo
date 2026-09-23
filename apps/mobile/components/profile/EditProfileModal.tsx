@@ -25,9 +25,18 @@ import {
   getStateById,
   validateAadhaarNumber,
   validateLicenseNumber,
+  parseProfileShiftTime,
 } from '@reachinternational/utils';
 import { ProfileUpdateSchema } from '@reachinternational/validation';
 import { notifyProfileUpdated, notifyProfileRequestSubmitted } from '../../lib/notifications';
+import {
+  MobilePickedDocument,
+  UserDocumentInfo,
+  fetchUserDocuments,
+  uploadUserDocumentDirect,
+  deleteUserDocument,
+} from '../../lib/documents';
+import { MobileDocumentUploadCard } from '../documents/MobileDocumentUploadCard';
 import {
   X,
   Clock,
@@ -84,6 +93,17 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
   const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
 
+  // Documents state
+  const [existingDocs, setExistingDocs] = useState<Record<string, UserDocumentInfo>>({});
+  const [aadhaarDoc, setAadhaarDoc] = useState<MobilePickedDocument | null>(null);
+  const [licenseDoc, setLicenseDoc] = useState<MobilePickedDocument | null>(null);
+  const [aadhaarUploading, setAadhaarUploading] = useState(false);
+  const [licenseUploading, setLicenseUploading] = useState(false);
+  const [aadhaarProgress, setAadhaarProgress] = useState(0);
+  const [licenseProgress, setLicenseProgress] = useState(0);
+  const [aadhaarError, setAadhaarError] = useState<string | null>(null);
+  const [licenseError, setLicenseError] = useState<string | null>(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statePickerVisible, setStatePickerVisible] = useState(false);
   const [stateSearchQuery, setStateSearchQuery] = useState('');
@@ -111,8 +131,105 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
 
       setAadhaarNumber(src.aadhaar_number || meta.aadhaar_number || '');
       setLicenseNumber(src.license_number || meta.license_number || '');
+
+      setAadhaarDoc(null);
+      setLicenseDoc(null);
+      setAadhaarError(null);
+      setLicenseError(null);
+
+      // Fetch user documents
+      const targetUserId = currentUser?.id || user?.id;
+      if (targetUserId) {
+        fetchUserDocuments(targetUserId).then((docs) => {
+          const map: Record<string, UserDocumentInfo> = {};
+          docs.forEach((d) => {
+            map[d.document_type_code] = d;
+          });
+          setExistingDocs(map);
+        });
+      }
     }
   }, [visible, currentUser, authProfile, user]);
+
+  const handleUploadDoc = async (
+    typeCode: 'aadhaar' | 'driving_license',
+    doc: MobilePickedDocument
+  ) => {
+    const targetUserId = currentUser?.id || user?.id;
+    if (!targetUserId) return;
+
+    if (typeCode === 'aadhaar') {
+      setAadhaarUploading(true);
+      setAadhaarProgress(10);
+      setAadhaarError(null);
+    } else {
+      setLicenseUploading(true);
+      setLicenseProgress(10);
+      setLicenseError(null);
+    }
+
+    try {
+      const res = await uploadUserDocumentDirect({
+        userId: targetUserId,
+        documentTypeCode: typeCode,
+        doc,
+        onProgress: (p) => {
+          if (typeCode === 'aadhaar') setAadhaarProgress(p);
+          else setLicenseProgress(p);
+        },
+      });
+
+      if (!res.success) {
+        if (typeCode === 'aadhaar') setAadhaarError(res.error || 'Upload failed');
+        else setLicenseError(res.error || 'Upload failed');
+      } else {
+        const docs = await fetchUserDocuments(targetUserId);
+        const map: Record<string, UserDocumentInfo> = {};
+        docs.forEach((d) => {
+          map[d.document_type_code] = d;
+        });
+        setExistingDocs(map);
+        if (typeCode === 'aadhaar') setAadhaarDoc(null);
+        else setLicenseDoc(null);
+      }
+    } catch (err: any) {
+      if (typeCode === 'aadhaar') setAadhaarError(err.message || 'Upload error');
+      else setLicenseError(err.message || 'Upload error');
+    } finally {
+      if (typeCode === 'aadhaar') setAadhaarUploading(false);
+      else setLicenseUploading(false);
+    }
+  };
+
+  const handleDeleteDoc = async (typeCode: 'aadhaar' | 'driving_license') => {
+    const targetUserId = currentUser?.id || user?.id;
+    const existing = existingDocs[typeCode];
+    if (!targetUserId || !existing) return;
+
+    Alert.alert(
+      'Remove Document',
+      `Are you sure you want to remove this ${typeCode === 'aadhaar' ? 'Aadhaar' : 'Licence'} document?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            const res = await deleteUserDocument(targetUserId, typeCode, existing.storage_path);
+            if (res.success) {
+              setExistingDocs((prev) => {
+                const next = { ...prev };
+                delete next[typeCode];
+                return next;
+              });
+            } else {
+              Alert.alert('Error', res.error || 'Failed to remove document.');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const isSuperAdmin = role === 'super_admin';
   const approverLabel =
@@ -263,12 +380,25 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
 
       if (isSuperAdmin) {
         // Direct update for Super Admin
+        const parsedShift = parsed.data.shift_time ? parseProfileShiftTime(parsed.data.shift_time) : null;
+        const userTablePayload: Record<string, unknown> = {
+          full_name: parsed.data.full_name,
+          phone: parsed.data.phone,
+          street: parsed.data.address || null,
+          city: parsed.data.city,
+          district: parsed.data.district,
+          state: parsed.data.state,
+          state_id: parsed.data.state_id,
+          aadhaar_number: cleanAadhaar,
+          license_number: formattedLicense,
+          updated_at: new Date().toISOString(),
+        };
+        if (parsedShift?.startTime) userTablePayload.shift_start_time = parsedShift.startTime;
+        if (parsedShift?.endTime) userTablePayload.shift_end_time = parsedShift.endTime;
+
         const { error } = await supabase
           .from('users')
-          .update({
-            ...payload,
-            updated_at: new Date().toISOString(),
-          })
+          .update(userTablePayload)
           .eq('id', user?.id);
 
         if (error) throw error;
@@ -437,6 +567,29 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
               maxLength={14}
               containerStyle={styles.inputSpacing}
             />
+
+            <MobileDocumentUploadCard
+              title="Aadhaar Card Document"
+              subtitle="Front page image or PDF (max 2 MB)"
+              docTypeCode="aadhaar"
+              selectedDoc={aadhaarDoc}
+              existingDoc={existingDocs['aadhaar']}
+              onDocSelected={(doc) => {
+                setAadhaarDoc(doc);
+                handleUploadDoc('aadhaar', doc);
+              }}
+              onDocRemoved={() => {
+                if (existingDocs['aadhaar']) {
+                  handleDeleteDoc('aadhaar');
+                } else {
+                  setAadhaarDoc(null);
+                }
+              }}
+              uploading={aadhaarUploading}
+              uploadProgress={aadhaarProgress}
+              errorMessage={aadhaarError}
+            />
+
             <Input
               label="Driving Licence"
               value={licenseNumber}
@@ -444,6 +597,28 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
               placeholder="e.g. MH12 20110012345"
               autoCapitalize="characters"
               containerStyle={styles.inputSpacing}
+            />
+
+            <MobileDocumentUploadCard
+              title="Driving Licence Document"
+              subtitle="Smart card scan or PDF (max 2 MB)"
+              docTypeCode="driving_license"
+              selectedDoc={licenseDoc}
+              existingDoc={existingDocs['driving_license']}
+              onDocSelected={(doc) => {
+                setLicenseDoc(doc);
+                handleUploadDoc('driving_license', doc);
+              }}
+              onDocRemoved={() => {
+                if (existingDocs['driving_license']) {
+                  handleDeleteDoc('driving_license');
+                } else {
+                  setLicenseDoc(null);
+                }
+              }}
+              uploading={licenseUploading}
+              uploadProgress={licenseProgress}
+              errorMessage={licenseError}
             />
 
             {/* Section 2: Shift Timing */}

@@ -59,11 +59,13 @@ export default function AppLayout() {
         <Tabs.Screen name="operations" options={{ title: 'Operations' }} />
         <Tabs.Screen name="clients" options={{ title: 'Clients' }} />
         <Tabs.Screen name="users" options={{ title: 'Users' }} />
-        <Tabs.Screen name="hr" options={{ title: 'HR Payroll' }} />
+        <Tabs.Screen name="attendance" options={{ title: 'Attendance' }} />
+        <Tabs.Screen name="payroll" options={{ title: 'Payroll' }} />
         <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
         <Tabs.Screen name="more" options={{ title: 'More' }} />
 
         {/* Operational Modules Accessible via Settings & Command Palette */}
+        <Tabs.Screen name="hr" options={{ title: 'HR', href: null }} />
         <Tabs.Screen name="profile" options={{ title: 'Profile', href: null }} />
         <Tabs.Screen name="privacy" options={{ title: 'Privacy Policy', href: null }} />
         <Tabs.Screen name="terms" options={{ title: 'Terms of Service', href: null }} />

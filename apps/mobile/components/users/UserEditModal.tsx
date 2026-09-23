@@ -19,6 +19,7 @@ import {
   validateAadhaarNumber,
   validateLicenseNumber,
   formatAadhaar,
+  parseProfileShiftTime,
   INDIAN_STATES,
   getStateById,
   getStateByName,
@@ -89,6 +90,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
   const [supervisorId, setSupervisorId] = useState('');
   const [supervisorPickerVisible, setSupervisorPickerVisible] = useState(false);
   const [supervisorSearch, setSupervisorSearch] = useState('');
+  const [monthlySalary, setMonthlySalary] = useState('');
 
   // Working Location State
   const [isLoading, setIsLoading] = useState(false);
@@ -103,6 +105,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
       setAddress(user.address || '');
       setCity(user.city || '');
       setDistrict(user.district || '');
+      setMonthlySalary(user.monthly_salary ? String(user.monthly_salary) : '');
 
       const matchedState = user.state_id
         ? getStateById(user.state_id)
@@ -167,6 +170,14 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
       return;
     }
 
+    if (role === 'operator') {
+      const sal = Number(monthlySalary);
+      if (!monthlySalary || isNaN(sal) || sal <= 0) {
+        setError('Monthly salary is mandatory for operator accounts and must be greater than 0.');
+        return;
+      }
+    }
+
     let cleanAadhaar: string | null = null;
     if (aadhaarNumber.trim()) {
       const aadhaarRes = validateAadhaarNumber(aadhaarNumber);
@@ -190,7 +201,8 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
     setIsLoading(true);
     try {
       const primarySupervisorId = isSupervisedRole(role) && supervisorId ? supervisorId : null;
-      const supervisorIdsArray = primarySupervisorId ? [primarySupervisorId] : [];
+      const parsedShift = shiftTime.trim() ? parseProfileShiftTime(shiftTime) : null;
+      const sal = role === 'operator' ? Number(monthlySalary) : null;
 
       const { error: updateErr } = await supabase
         .from('users')
@@ -198,22 +210,32 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
           full_name: fullName.trim(),
           phone: cleanPhone,
           role,
-          shift_time: shiftTime.trim() || null,
-          address: address.trim() || null,
+          shift_start_time: parsedShift?.startTime || null,
+          shift_end_time: parsedShift?.endTime || null,
+          street: address.trim() || null,
+          monthly_salary: sal,
           city: city.trim(),
           district: district.trim(),
           state: stateName.trim(),
           state_id: stateId ? Number(stateId) : null,
-          location: `${city.trim()}, ${district.trim()}, ${stateName.trim()}`,
           aadhaar_number: cleanAadhaar,
           license_number: formattedLic,
           supervisor_id: primarySupervisorId,
-          supervisor_ids: supervisorIdsArray,
           updated_at: new Date().toISOString(),
         })
         .eq('id', user.id);
 
       if (updateErr) throw updateErr;
+
+      if (isSupervisedRole(role) && primarySupervisorId) {
+        try {
+          await supabase
+            .from('user_supervisors')
+            .upsert({ user_id: user.id, supervisor_id: primarySupervisorId }, { onConflict: 'user_id,supervisor_id' });
+        } catch {
+          // ignore
+        }
+      }
 
       // Sync employees directory record if present
       try {
@@ -418,6 +440,20 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
                     </Text>
                     <ChevronDown size={16} color={theme.colors.mute} />
                   </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Operator Monthly Salary */}
+              {role === 'operator' && (
+                <View style={{ marginTop: spacingNumeric.sm }}>
+                  <Input
+                    label="Monthly Salary (₹) *"
+                    placeholder="e.g. 25000"
+                    value={monthlySalary}
+                    onChangeText={setMonthlySalary}
+                    keyboardType="number-pad"
+                    leftIcon={<CreditCard size={16} color={theme.colors.mute} />}
+                  />
                 </View>
               )}
             </View>

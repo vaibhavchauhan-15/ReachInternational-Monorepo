@@ -784,7 +784,7 @@ export default function UsersScreen() {
     let query = supabase
       .from('users')
       .select(
-        'id, full_name, email, phone, role, status, city, district, state, state_id, shift_time, address, aadhaar_number, license_number, supervisor_id, supervisor_ids, created_at',
+        'id, full_name, email, phone, role, status, city, district, state, state_id, shift_start_time, shift_end_time, street, aadhaar_number, license_number, supervisor_id, monthly_salary, created_at',
         { count: 'exact' }
       );
 
@@ -919,6 +919,8 @@ export default function UsersScreen() {
 
           return {
             ...u,
+            address: u.street || u.address || null,
+            shift_time: (u.shift_start_time && u.shift_end_time) ? `${u.shift_start_time.slice(0, 5)} - ${u.shift_end_time.slice(0, 5)}` : null,
             supervisor_id: primarySup?.id || null,
             supervisor_ids: supIds,
             supervisor: primarySup,

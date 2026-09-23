@@ -1,6 +1,15 @@
 "use client";
 
-import { AnimatedIcon, AnimatedIconProps, IconAnimationPreset, createAnimatedIcon } from "../animated-icon";
+import {
+  AnimatedIcon,
+  AnimatedIconProps,
+  IconAnimationPreset,
+  createAnimatedIcon,
+  InteractiveIcon,
+  type InteractiveIconProps,
+  type IconInteractionVariant,
+  getIconInteractionClass,
+} from "../animated-icon";
 import * as L from "lucide-react";
 
 // Navigation & Directional Icons
@@ -88,6 +97,7 @@ export const AnimatedMapPin = createAnimatedIcon(L.MapPin, "bounce");
 export const AnimatedCalendar = createAnimatedIcon(L.Calendar, "bounce");
 export const AnimatedClock = createAnimatedIcon(L.Clock, "spin");
 export const AnimatedCalendarClock = createAnimatedIcon(L.CalendarClock, "bounce");
+export const AnimatedCalendarCheck = createAnimatedIcon(L.CalendarCheck, "bounce");
 export const AnimatedStar = createAnimatedIcon(L.Star, "sparkle");
 export const AnimatedActivity = createAnimatedIcon(L.Activity, "pulse");
 export const AnimatedGauge = createAnimatedIcon(L.Gauge, "rotate");
@@ -124,6 +134,7 @@ export const AnimatedTrendingUp = createAnimatedIcon(L.TrendingUp, "bounce");
 export const AnimatedTrendingDown = createAnimatedIcon(L.TrendingDown, "bounce");
 export const AnimatedSearchX = createAnimatedIcon(L.SearchX, "shake");
 
-// Re-export generic AnimatedIcon & Types
-export { AnimatedIcon, createAnimatedIcon };
-export type { AnimatedIconProps, IconAnimationPreset };
+// Re-export generic AnimatedIcon, InteractiveIcon & Types
+export { AnimatedIcon, createAnimatedIcon, InteractiveIcon, getIconInteractionClass };
+export type { AnimatedIconProps, IconAnimationPreset, InteractiveIconProps, IconInteractionVariant };
+

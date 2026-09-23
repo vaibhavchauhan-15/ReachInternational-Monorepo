@@ -22,6 +22,10 @@ import {
 import { isSupervisedRole } from '@reachinternational/permissions';
 import { notifyUserStatusChanged, notifyUserUpdated } from '../../lib/notifications';
 import {
+  MobileDocumentViewerModal,
+  type MobileViewerDoc,
+} from '../documents/MobileDocumentViewerModal';
+import {
   X,
   User,
   Mail,
@@ -44,6 +48,7 @@ import {
   EyeOff,
   Edit2,
   ChevronDown,
+  FileText,
 } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 
@@ -55,7 +60,9 @@ export interface UserRecord {
   role: string;
   status: string;
   shift_time?: string | null;
+  street?: string | null;
   address?: string | null;
+  monthly_salary?: number | null;
   city?: string | null;
   district?: string | null;
   state?: string | null;
@@ -189,6 +196,8 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
   // Supervisor selector state
   const [supervisorModalVisible, setSupervisorModalVisible] = useState(false);
   const [activeSupervisors, setActiveSupervisors] = useState<Array<{ id: string; full_name: string; email?: string }>>([]);
+  const [userDocuments, setUserDocuments] = useState<any[]>([]);
+  const [viewerDoc, setViewerDoc] = useState<MobileViewerDoc | null>(null);
 
   React.useEffect(() => {
     async function loadSupervisors() {
@@ -199,10 +208,43 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
         // ignore
       }
     }
+
+    async function loadDocuments() {
+      if (!user?.id) {
+        setUserDocuments([]);
+        return;
+      }
+      const isStaff = currentUserRole === 'super_admin' || currentUserRole === 'admin' || currentUserRole === 'hr';
+      if (!isStaff) return;
+      try {
+        const { data: docs } = await supabase
+          .from('user_documents')
+          .select('id, user_id, document_type_code, storage_path, mime_type, file_size_bytes, created_at, updated_at')
+          .eq('user_id', user.id);
+
+        if (docs && docs.length > 0) {
+          const withUrls = await Promise.all(
+            docs.map(async (doc: any) => {
+              const { data: urlData } = await supabase.storage
+                .from('user_files')
+                .createSignedUrl(doc.storage_path, 300);
+              return { ...doc, signed_url: urlData?.signedUrl || null };
+            })
+          );
+          setUserDocuments(withUrls);
+        } else {
+          setUserDocuments([]);
+        }
+      } catch {
+        setUserDocuments([]);
+      }
+    }
+
     if (visible) {
       loadSupervisors();
+      loadDocuments();
     }
-  }, [visible]);
+  }, [visible, user?.id, currentUserRole]);
 
   if (!user) return null;
 
@@ -295,11 +337,21 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
         .from('users')
         .update({
           supervisor_id: newSupervisorId || null,
-          supervisor_ids: newSupervisorId ? [newSupervisorId] : [],
           updated_at: new Date().toISOString(),
         })
         .eq('id', user.id);
       if (error) throw error;
+
+      if (newSupervisorId) {
+        try {
+          await supabase
+            .from('user_supervisors')
+            .upsert({ user_id: user.id, supervisor_id: newSupervisorId }, { onConflict: 'user_id,supervisor_id' });
+        } catch {
+          // ignore junction fallback
+        }
+      }
+
       setSupervisorModalVisible(false);
       onSuccess();
       onClose();
@@ -528,14 +580,27 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
               </View>
 
               {/* Street Address */}
-              {user.address ? (
+              {(user.street || user.address) ? (
                 <View style={styles.detailRow}>
                   <View style={styles.detailLabelWrap}>
                     <MapPin size={13} color="#d97706" />
                     <Text style={[styles.detailLabel, { color: theme.colors.mute }]}>Street Address</Text>
                   </View>
                   <Text style={[styles.detailValue, { color: theme.colors.ink, textAlign: 'right', flex: 1 }]}>
-                    {user.address}
+                    {user.street || user.address}
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Monthly Salary */}
+              {user.monthly_salary != null && Number(user.monthly_salary) > 0 ? (
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLabelWrap}>
+                    <CreditCard size={13} color="#10b981" />
+                    <Text style={[styles.detailLabel, { color: theme.colors.mute }]}>Monthly Salary</Text>
+                  </View>
+                  <Text style={[styles.detailValue, { color: '#10b981', fontWeight: '700' }]}>
+                    ₹{Number(user.monthly_salary).toLocaleString('en-IN')} / mo
                   </Text>
                 </View>
               ) : null}
@@ -646,6 +711,57 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                   ) : null}
                 </View>
               </View>
+
+              {/* Identity Documents (Staff View) */}
+              {userDocuments.length > 0 && (
+                <View style={{ marginVertical: 8, paddingVertical: 4 }}>
+                  <Text style={[styles.sectionEyebrow, { color: theme.colors.mute, marginBottom: 8 }]}>
+                    IDENTITY DOCUMENTS
+                  </Text>
+                  {userDocuments.map((doc) => {
+                    const label = doc.document_type_code === 'aadhaar' ? 'Aadhaar Card' : 'Driving Licence';
+                    return (
+                      <View key={doc.id} style={styles.documentItemRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                          <FileText size={15} color={theme.colors.link} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.docName, { color: theme.colors.ink }]}>{label}</Text>
+                            <Text style={[styles.docMeta, { color: theme.colors.mute }]}>
+                              {doc.mime_type?.split('/')[1]?.toUpperCase()} · {(doc.file_size_bytes / 1024).toFixed(0)} KB
+                            </Text>
+                          </View>
+                        </View>
+                        {doc.signed_url ? (
+                          <TouchableOpacity
+                            style={[
+                              styles.viewDocBtn,
+                              {
+                                backgroundColor: theme.colors.link + '15',
+                                borderColor: theme.colors.link + '40',
+                              },
+                            ]}
+                            onPress={() =>
+                              setViewerDoc({
+                                id: doc.id,
+                                title: label,
+                                url: doc.signed_url,
+                                mimeType: doc.mime_type || 'application/octet-stream',
+                                fileSize: doc.file_size_bytes,
+                                fileSizeBytes: doc.file_size_bytes,
+                                updatedAt: doc.updated_at || doc.created_at,
+                              })
+                            }
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[styles.viewDocBtnText, { color: theme.colors.link }]}>View</Text>
+                            <Eye size={12} color={theme.colors.link} />
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
 
               {/* Registered Date & Relative Time */}
               <View style={[styles.detailRow, { borderBottomWidth: 0 }]}>
@@ -916,6 +1032,12 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
             </View>
           </View>
         </Modal>
+
+        {/* In-App Mobile Document Viewer Modal */}
+        <MobileDocumentViewerModal
+          document={viewerDoc}
+          onClose={() => setViewerDoc(null)}
+        />
       </View>
     </Modal>
   );
@@ -1209,5 +1331,44 @@ const styles = StyleSheet.create({
   },
   pickerModalItemText: {
     fontSize: 13,
+  },
+  sectionEyebrow: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginBottom: spacingNumeric.xs,
+  },
+  documentItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: radiusNumeric.sm,
+    backgroundColor: 'rgba(150, 150, 150, 0.06)',
+    marginBottom: 6,
+  },
+  docName: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  docMeta: {
+    fontSize: 10,
+    marginTop: 1,
+    fontFamily: 'monospace',
+  },
+  viewDocBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    minHeight: 32,
+  },
+  viewDocBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

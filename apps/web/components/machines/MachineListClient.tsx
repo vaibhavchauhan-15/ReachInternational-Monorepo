@@ -725,6 +725,17 @@ export function MachineListClient({
     window.addEventListener("reach:quick-add", handleQuickAdd);
     return () => window.removeEventListener("reach:quick-add", handleQuickAdd);
   }, []);
+
+  // Strip legacy tab parameter (e.g. ?tab=inventory or ?tab=assigned) to normalize URL to clean /machines
+  useEffect(() => {
+    if (searchParams?.has("tab")) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("tab");
+      const newQuery = params.toString();
+      router.replace(newQuery ? `/machines?${newQuery}` : "/machines", { scroll: false });
+    }
+  }, [searchParams, router]);
+
   const [deletingMachine, setDeletingMachine] = useState<Machine | null>(null);
   const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
   const [activeAssignmentMachine, setActiveAssignmentMachine] = useState<Machine | null>(null);
@@ -1937,7 +1948,7 @@ export function MachineListClient({
                         Clear Search
                       </Button>
                     ) : (
-                      <Link href="/operations?tab=entry" className="mt-2">
+                      <Link href="/operations" className="mt-2">
                         <Button variant="primary" size="sm" className="min-h-[40px]">
                           Go to Operations Hub
                         </Button>

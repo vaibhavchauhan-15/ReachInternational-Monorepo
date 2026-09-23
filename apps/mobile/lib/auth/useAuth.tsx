@@ -55,7 +55,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { data, error } = await supabase
         .from('users')
-        .select('id, full_name, phone, role, status, complete_profile, shift_time, city, district, state, state_id, address, aadhaar_number, license_number')
+        .select('id, full_name, phone, role, status, complete_profile, shift_start_time, shift_end_time, city, district, state, state_id, street, aadhaar_number, license_number, monthly_salary')
         .eq('id', currentSession.user.id)
         .single();
 
@@ -74,19 +74,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUserProfile(null);
       } else {
         setRole(data.role as UserRole);
-        setUserProfile(data);
+        setUserProfile({
+          ...data,
+          address: data.street || null,
+        });
 
-        // Fast check: if complete_profile === 'yes', skip checking individual fields
-        if (data.complete_profile === 'yes') {
+        // Fast check: if complete_profile === true or 'yes', skip checking individual fields
+        if (data.complete_profile === true || data.complete_profile === 'yes') {
           setIsProfileComplete(true);
         } else {
           // Check if any required field is missing
           const hasName = Boolean(data.full_name && data.full_name.trim().length >= 2);
           const hasPhone = Boolean(data.phone && data.phone.trim().replace(/\D/g, '').length >= 10);
           const hasRole = Boolean(data.role);
-          const hasShift = Boolean(data.shift_time && data.shift_time.trim());
+          const hasShift = Boolean(data.shift_start_time && data.shift_end_time);
           const hasLocation = Boolean(data.city && data.district && data.state);
-          const hasAddress = Boolean(data.address && data.address.trim());
+          const hasAddress = Boolean(data.street && data.street.trim());
           const hasAadhaar = Boolean(data.aadhaar_number && data.aadhaar_number.replace(/\D/g, '').length === 12);
 
           const complete = hasName && hasPhone && hasRole && hasShift && hasLocation && hasAddress && hasAadhaar;

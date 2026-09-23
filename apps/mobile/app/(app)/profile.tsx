@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { Card, Badge, Button, useTheme, MobileHeader, ReachInternationalLogo, HeaderActionItem } from '../../components/ui';
@@ -35,6 +35,8 @@ import {
   Eye,
   EyeOff,
   Copy,
+  ExternalLink,
+  CreditCard,
 } from 'lucide-react-native';
 import {
   getNotificationPermissionStatus,
@@ -58,14 +60,15 @@ export default function ProfileScreen() {
   const [feedModalVisible, setFeedModalVisible] = useState(false);
   const [showFullAadhaar, setShowFullAadhaar] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [userDocuments, setUserDocuments] = useState<any[]>([]);
 
   const fetchProfileData = useCallback(async () => {
     if (!user?.id) return;
     try {
-      const [userRes, reqRes, notifRes] = await Promise.all([
+      const [userRes, reqRes, notifRes, docRes] = await Promise.all([
         supabase
           .from('users')
-          .select('id, full_name, phone, role, status, complete_profile, shift_time, city, district, state, state_id, address, aadhaar_number, license_number, email, supervisor_id, supervisor:users!supervisor_id(full_name)')
+          .select('id, full_name, phone, role, status, complete_profile, shift_start_time, shift_end_time, city, district, state, state_id, street, aadhaar_number, license_number, email, supervisor_id, monthly_salary, supervisor:users!supervisor_id(full_name)')
           .eq('id', user.id)
           .maybeSingle(),
         supabase
@@ -76,13 +79,35 @@ export default function ProfileScreen() {
           .order('created_at', { ascending: false })
           .maybeSingle(),
         getNotificationPermissionStatus(),
+        supabase
+          .from('user_documents')
+          .select('id, user_id, document_type_code, storage_path, mime_type, file_size_bytes, created_at, updated_at')
+          .eq('user_id', user.id)
+          .order('document_type_code'),
       ]);
 
       if (userRes.data) {
-        setDbUser(userRes.data);
+        setDbUser({
+          ...userRes.data,
+          address: userRes.data.street || null,
+        });
       }
       setPendingRequest(reqRes.data || null);
       setNotificationStatus(notifRes);
+
+      if (docRes.data && docRes.data.length > 0) {
+        const docsWithUrls = await Promise.all(
+          docRes.data.map(async (doc: any) => {
+            const { data: urlData } = await supabase.storage
+              .from('user_files')
+              .createSignedUrl(doc.storage_path, 300);
+            return { ...doc, signed_url: urlData?.signedUrl || null };
+          })
+        );
+        setUserDocuments(docsWithUrls);
+      } else {
+        setUserDocuments([]);
+      }
     } catch (err) {
       console.warn('[ProfileScreen] Error fetching profile record:', err);
     }
@@ -384,6 +409,20 @@ export default function ProfileScreen() {
             </Text>
           </View>
 
+          {/* Monthly Salary */}
+          {Boolean(dbUser?.monthly_salary && Number(dbUser.monthly_salary) > 0) && (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.infoRow}>
+                <CreditCard size={14} color="#10b981" />
+                <Text style={[styles.label, { color: theme.colors.mute }]}>Monthly Salary:</Text>
+                <Text style={[styles.value, { color: '#10b981', fontWeight: '700' }]}>
+                  ₹{Number(dbUser?.monthly_salary).toLocaleString('en-IN')} / mo
+                </Text>
+              </View>
+            </>
+          )}
+
           <View style={styles.divider} />
 
           {/* Aadhaar Number */}
@@ -433,6 +472,50 @@ export default function ProfileScreen() {
               {licenceDisplay}
             </Text>
           </View>
+
+          {/* Identity Documents Status / Viewing */}
+          {userDocuments.length > 0 && (
+            <>
+              <View style={styles.divider} />
+              <View style={{ paddingTop: 2, paddingBottom: 2 }}>
+                <Text style={[styles.sectionEyebrow, { color: theme.colors.mute, marginBottom: 8 }]}>
+                  IDENTITY DOCUMENTS
+                </Text>
+                {userDocuments.map((doc) => {
+                  const label = doc.document_type_code === 'aadhaar' ? 'Aadhaar Card' : 'Driving Licence';
+                  return (
+                    <View key={doc.id} style={styles.documentItemRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                        <FileText size={15} color={theme.colors.link} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.docName, { color: theme.colors.ink }]}>{label}</Text>
+                          <Text style={[styles.docMeta, { color: theme.colors.mute }]}>
+                            {doc.mime_type?.split('/')[1]?.toUpperCase()} · {(doc.file_size_bytes / 1024).toFixed(0)} KB
+                          </Text>
+                        </View>
+                      </View>
+                      {doc.signed_url ? (
+                        <TouchableOpacity
+                          style={[
+                            styles.viewDocBtn,
+                            {
+                              backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#eff6ff',
+                              borderColor: isDark ? 'rgba(59, 130, 246, 0.3)' : '#bfdbfe',
+                            },
+                          ]}
+                          onPress={() => Linking.openURL(doc.signed_url)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.viewDocBtnText, { color: theme.colors.link }]}>View</Text>
+                          <ExternalLink size={12} color={theme.colors.link} />
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
+            </>
+          )}
 
           {/* Edit Profile CTA */}
           <Button
@@ -767,5 +850,38 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.sm,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  documentItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: radiusNumeric.sm,
+    backgroundColor: 'rgba(150, 150, 150, 0.06)',
+    marginBottom: 6,
+  },
+  docName: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  docMeta: {
+    fontSize: 10,
+    marginTop: 1,
+    fontFamily: 'monospace',
+  },
+  viewDocBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
+    minHeight: 32,
+  },
+  viewDocBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

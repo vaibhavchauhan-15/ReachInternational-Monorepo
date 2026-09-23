@@ -45,7 +45,7 @@ export async function OperatorDashboardView({
         severity: "warning",
         title: "Today's Log Pending",
         description: "Daily running hours have not been submitted for today.",
-        actionUrl: "/operations?tab=entry",
+        actionUrl: "/operations",
       };
   const alerts: DashboardAlert[] = [statusAlert, ...otherAlerts];
 

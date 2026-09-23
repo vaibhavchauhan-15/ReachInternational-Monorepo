@@ -126,7 +126,7 @@ export default function ClientTab({ machine, activeRental = null, allowEdit }: C
           </Badge>
           {client?.id && (
             <Link
-              href={`/clients?tab=all`}
+              href="/clients"
               className="hidden sm:inline-flex items-center gap-1 text-xs text-[var(--color-link)] hover:underline ml-1 font-medium"
             >
               <span>View Directory</span>

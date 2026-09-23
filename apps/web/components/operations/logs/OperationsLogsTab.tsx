@@ -213,7 +213,16 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
   const [isLoadingMoreMobile, setIsLoadingMoreMobile] = useState<boolean>(false);
   const [loadMoreMobileError, setLoadMoreMobileError] = useState<string | null>(null);
   const isFetchingMobileRef = useRef<boolean>(false);
-  const mobileSentinelRef = useRef<HTMLDivElement>(null);
+  const mobileSentinelRef = useRef<HTMLDivElement | null>(null);
+  // Strip legacy tab parameter (e.g. ?tab=logs) to normalize URL to clean /operations
+  useEffect(() => {
+    if (searchParams?.has("tab")) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("tab");
+      const newQuery = params.toString();
+      window.history.replaceState(null, "", newQuery ? `/operations?${newQuery}` : "/operations");
+    }
+  }, [searchParams]);
 
   const handleOpenHistoryModal = useCallback(() => {
     setShowMachineHistoryModal(true);
@@ -351,9 +360,10 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
   const [activeLogsPageSize, setActiveLogsPageSize] = useState<number>(logsPageSize || 20);
   const [activeMachinesList, setActiveMachinesList] = useState<Machine[]>(machines);
   const [activeDbClients, setActiveDbClients] = useState<CRMClient[]>(dbClients);
+  const [activeOperatorsList, setActiveOperatorsList] = useState<User[]>(operators || []);
   const [isClientDataLoading, setIsClientDataLoading] = useState<boolean>(false);
 
-  // Sub-tab memory session cache: preserves machine & client datasets across toggles
+  // Sub-tab memory session cache: preserves machine, client & operator datasets across toggles
   interface SubTabCacheData {
     hourLogs: MachineHourLog[];
     logsSummary: {
@@ -367,6 +377,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     logsPageSize: number;
     machines?: Machine[];
     dbClients?: CRMClient[];
+    operators?: User[];
     selectedId: string;
   }
 
@@ -390,6 +401,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     logsPageSize: number;
     machines?: Machine[];
     dbClients?: CRMClient[];
+    operators?: User[];
     timestamp: number;
   }
 
@@ -449,6 +461,12 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     }
   }, [initialCustomEnd]);
 
+  useEffect(() => {
+    if (operators && operators.length > 0) {
+      setActiveOperatorsList(operators);
+    }
+  }, [operators]);
+
   // Sync state when props arrive from initial SSR
   useEffect(() => {
     // Only synchronize initial SSR props if active view mode matches initialViewMode
@@ -462,6 +480,9 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     setActiveLogsPageSize(logsPageSize || 20);
     setActiveMachinesList(machines);
     setActiveDbClients(dbClients);
+    if (operators && operators.length > 0) {
+      setActiveOperatorsList(operators);
+    }
 
     const mode = initialViewMode || logsViewMode || "machine";
     subTabCacheRef.current[mode] = {
@@ -472,6 +493,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       logsPageSize: logsPageSize || 20,
       machines,
       dbClients,
+      operators: operators || [],
       selectedId: mode === "machine" ? (initialMachineId || "") : mode === "client" ? (initialClientId || "") : (initialOperatorId || ""),
     };
 
@@ -499,6 +521,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       logsPageSize: logsPageSize || 20,
       machines,
       dbClients,
+      operators: operators || [],
       timestamp: Date.now(),
     });
   }, [hourLogs, logsSummary, totalLogsCount, currentPage, logsPageSize, machines, dbClients, initialViewMode, initialMachineId, initialClientId, initialOperatorId, operators, initialMonth, initialCustomStart, initialCustomEnd, initialSite, initialSearch, initialSort]);
@@ -538,6 +561,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       logsPageSize: activeLogsPageSize,
       machines: activeMachinesList,
       dbClients: activeDbClients,
+      operators: activeOperatorsList,
       selectedId:
         logsViewMode === "machine"
           ? logsSelectedMachineId
@@ -559,6 +583,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       setActiveLogsPageSize(cached.logsPageSize);
       if (cached.machines) setActiveMachinesList(cached.machines);
       if (cached.dbClients) setActiveDbClients(cached.dbClients);
+      if (cached.operators && cached.operators.length > 0) setActiveOperatorsList(cached.operators);
       if (cached.selectedId) {
         if (targetMode === "machine") setLogsSelectedMachineId(cached.selectedId);
         if (targetMode === "client") setLogsSelectedClientId(cached.selectedId);
@@ -567,7 +592,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
 
       // Silent URL sync without full-page server re-render
       const params = new URLSearchParams(window.location.search);
-      params.set("tab", "logs");
+      params.delete("tab");
       params.set("view", targetMode);
       if (cached.selectedId) {
         if (targetMode === "machine") {
@@ -598,7 +623,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       const targetClient = logsSelectedClientId && logsSelectedClientId !== "all" ? logsSelectedClientId : undefined;
 
       const params = new URLSearchParams(window.location.search);
-      params.set("tab", "logs");
+      params.delete("tab");
       params.set("view", "client");
       if (targetClient) params.set("client", targetClient);
       params.delete("machine");
@@ -674,7 +699,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
           setActiveMachinesList(d.machines);
 
           const updatedParams = new URLSearchParams(window.location.search);
-          updatedParams.set("tab", "logs");
+          updatedParams.delete("tab");
           updatedParams.set("view", "client");
           if (targetId) updatedParams.set("client", targetId);
           updatedParams.delete("machine");
@@ -696,7 +721,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       const targetMachine = logsSelectedMachineId && logsSelectedMachineId !== "all" ? logsSelectedMachineId : undefined;
 
       const params = new URLSearchParams(window.location.search);
-      params.set("tab", "logs");
+      params.delete("tab");
       params.set("view", "machine");
       if (targetMachine) params.set("machine", targetMachine);
       params.delete("client");
@@ -754,10 +779,10 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       const targetOperator =
         logsSelectedOperatorId && logsSelectedOperatorId !== "all"
           ? logsSelectedOperatorId
-          : (operators[0]?.id ?? undefined);
+          : (activeOperatorsList[0]?.id ?? operators[0]?.id ?? undefined);
 
       const params = new URLSearchParams(window.location.search);
-      params.set("tab", "logs");
+      params.delete("tab");
       params.set("view", "operator");
       if (targetOperator) params.set("operator", targetOperator);
       params.delete("machine");
@@ -779,8 +804,11 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
 
         if (res.success && res.data) {
           const d = res.data;
-          const targetId = d.activeOperatorId || targetOperator || (operators[0]?.id ?? "");
+          const targetId = d.activeOperatorId || targetOperator || (d.operators?.[0]?.id ?? activeOperatorsList[0]?.id ?? operators[0]?.id ?? "");
           setLogsSelectedOperatorId(targetId);
+          if (d.operators && d.operators.length > 0) {
+            setActiveOperatorsList(d.operators as any);
+          }
 
           const newCache: SubTabCacheData = {
             hourLogs: d.hourLogs,
@@ -790,6 +818,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
             logsPageSize: d.logsPageSize,
             machines: activeMachinesList,
             dbClients: activeDbClients,
+            operators: (d.operators && d.operators.length > 0 ? d.operators : activeOperatorsList) as any,
             selectedId: targetId,
           };
           subTabCacheRef.current["operator"] = newCache;
@@ -816,7 +845,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     logsSelectedClientMachineId,
     logsSelectedClientId,
     logsSelectedOperatorId,
-    operators,
+    operators: activeOperatorsList,
     logsSelectedMonth,
     logsCustomStartDate,
     logsCustomEndDate,
@@ -834,7 +863,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     logsSelectedClientMachineId,
     logsSelectedClientId,
     logsSelectedOperatorId,
-    operators,
+    operators: activeOperatorsList,
     logsSelectedMonth,
     logsCustomStartDate,
     logsCustomEndDate,
@@ -927,7 +956,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
 
       // 4. URL Update Silently (window.history.replaceState)
       const currentParams = new URLSearchParams(window.location.search);
-      currentParams.set("tab", "logs");
+      currentParams.delete("tab");
       currentParams.set("view", targetView);
 
       if (targetView === "machine") {
@@ -973,6 +1002,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
         setActiveLogsPageSize(cached.logsPageSize);
         if (cached.machines) setActiveMachinesList(cached.machines);
         if (cached.dbClients) setActiveDbClients(cached.dbClients);
+        if (cached.operators && cached.operators.length > 0) setActiveOperatorsList(cached.operators);
         setIsClientDataLoading(false);
         return;
       }
@@ -1097,8 +1127,11 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
 
           if (res.success && res.data) {
             const d = res.data;
-            const targetId = d.activeOperatorId || nextOperator || "";
+            const targetId = d.activeOperatorId || nextOperator || (d.operators?.[0]?.id ?? "");
             if (targetId) setLogsSelectedOperatorId(targetId);
+            if (d.operators && d.operators.length > 0) {
+              setActiveOperatorsList(d.operators as any);
+            }
 
             queryCacheRef.current.set(cacheKey, {
               hourLogs: d.hourLogs,
@@ -1106,6 +1139,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
               totalLogsCount: d.totalLogsCount,
               currentPage: d.currentPage,
               logsPageSize: d.logsPageSize,
+              operators: (d.operators && d.operators.length > 0 ? d.operators : s.operators) as any,
               timestamp: Date.now(),
             });
 
@@ -1117,6 +1151,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
               logsPageSize: d.logsPageSize,
               machines: s.activeMachinesList,
               dbClients: s.activeDbClients,
+              operators: (d.operators && d.operators.length > 0 ? d.operators : s.operators) as any,
               selectedId: targetId,
             };
             subTabCacheRef.current["operator"] = newSubCache;
@@ -1182,8 +1217,8 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
 
   // Active operators pool
   const activeOperators = useMemo(() => {
-    return operators.filter((u) => u.status === "active");
-  }, [operators]);
+    return (activeOperatorsList || []).filter((u) => !u.status || u.status === "active");
+  }, [activeOperatorsList]);
 
   // Ordered machines: prioritize machines with logs
   const logMachineIdsInOrder = useMemo(() => {
@@ -1254,9 +1289,11 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
 
   const activeOperatorObj = useMemo(() =>
     orderedOperators.find((op) => op.id === activeOperatorId) ||
+    activeOperators.find((op) => op.id === activeOperatorId) ||
+    activeOperatorsList.find((op) => op.id === activeOperatorId) ||
     operators.find((op) => op.id === activeOperatorId) ||
     (currentLogs.find((l) => l.operator_id === activeOperatorId)?.operator as any),
-    [orderedOperators, operators, currentLogs, activeOperatorId]
+    [orderedOperators, activeOperators, activeOperatorsList, operators, currentLogs, activeOperatorId]
   );
 
   const activeOperatorName = useMemo(() =>
@@ -1963,6 +2000,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
                       {logsViewMode === "operator" && (
                         <UserSelect
                           label="Select Operator"
+                          placeholder="Search or select operator..."
                           count={orderedOperators.length}
                           value={activeOperatorId}
                           onChange={(opId) => {

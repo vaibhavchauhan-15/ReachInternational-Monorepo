@@ -457,7 +457,7 @@ export default function HMRTab({ machineId }: HMRTabProps) {
             title="No Running Meter Logs Logged"
             description="Daily hour meter logbook entries recorded by machine operators for this machine will appear here."
             action={
-              <Link href="/operations?tab=entry">
+              <Link href="/operations">
                 <Button variant="secondary" size="sm">
                   + Add First Meter Log
                 </Button>

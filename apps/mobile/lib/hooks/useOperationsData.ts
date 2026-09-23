@@ -107,7 +107,7 @@ export function useOperationsMasterData(enabled: boolean = true) {
           .limit(200),
         supabase
           .from('users')
-          .select('id, full_name, phone, shift_time')
+          .select('id, full_name, phone, shift_start_time, shift_end_time')
           .eq('role', 'operator')
           .eq('status', 'active')
           .order('full_name'),
@@ -123,7 +123,12 @@ export function useOperationsMasterData(enabled: boolean = true) {
         active_assignments: activeAssList.filter((a) => a.machine_id === m.id),
       }));
 
-      const activeOperators: OperatorRecord[] = (opsRes.data || []) as OperatorRecord[];
+      const activeOperators: OperatorRecord[] = (opsRes.data || []).map((o: any) => ({
+        ...o,
+        shift_time: (o.shift_start_time && o.shift_end_time)
+          ? `${o.shift_start_time.slice(0, 5)} - ${o.shift_end_time.slice(0, 5)}`
+          : null,
+      })) as OperatorRecord[];
       const clientsList: ClientRecord[] = (clientsRes.data || []) as ClientRecord[];
 
       return {

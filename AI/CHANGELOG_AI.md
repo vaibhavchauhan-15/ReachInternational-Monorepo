@@ -1,3 +1,557 @@
+- **Profile Documents Download Functionality & Upload/Cancel Responsive Fixes (2026-09-23)**:
+  - **1. User Feedback & Request**:
+    - "this should work properly if this download btn click then download the image/pdf / doc etc documents" (Viewport: 1396×632)
+    - "upload and cancel btn shoul properly responsive for desktop and mobile secreen" (Viewport: 360×800)
+    - "Keep Only Upload Label" (on Button "Upload Driving Licence") (Viewport: 360×800)
+    - "remove this text", "remove size and click to preview text while uploading" (paragraph: "176 KB • Click to preview") (Viewport: 360×800)
+    - "make the this icon size as per replace , delete btn size use same padding like replace and delete" (Viewport: 1396×632)
+    - "only in the desktop show adhar and licence in one row" (Viewport: 1396×632)
+  - **2. Delivered Changes**:
+    - **Reliable Cross-Format File Download API & Client Handler (`apps/web/app/api/documents/[id]/download/route.ts` & `DocumentViewerModal.tsx`)**:
+      - Solved browser cross-origin download limitation where `<a href={...} download>` was ignored by browsers on signed cloud URLs.
+      - Created `/api/documents/[id]/download` route using `createSupabaseAdminClient().storage.from("user_files").download(storage_path)`, verifying session and checking owner/privileged access (`super_admin`, `admin`, `hr`), logging `document.downloaded` to `audit_logs`, and streaming the binary file with `Content-Disposition: attachment; filename="..."; filename*=UTF-8''...` headers.
+      - Enhanced `DocumentViewerModal.tsx` `handleDownload`: fetches from same-origin `/api/documents/[id]/download`, creates object URL blob, and triggers native file download for all formats (PDF, PNG, JPG, WEBP, DOC, DOCX, TXT), with fallback to direct attachment route navigation.
+      - Added downloading state with `Loader2` spinner and disabled state to prevent duplicate clicks.
+      - Added 1-tap download trigger to mobile PDF helper strip beneath embedded viewer.
+    - **Upload & Cancel Responsive Buttons (`apps/web/components/documents/DocumentUploadSection.tsx`)**:
+      - Fixed responsive button container overflow: removed `fullWidth` (`w-full`), configured `flex-1 min-w-0` on Upload button and `shrink-0 px-4` on Cancel button.
+      - Simplified primary upload button label to strictly `"Upload"`.
+      - Removed file size and preview subtitle text (`"176 KB • Click to preview"`) during file selection.
+    - **Badge Sizing & Desktop 1-Row Grid (`DocumentUploadSection.tsx` & `MobileDocumentUploadCard.tsx`)**:
+      - Resized `DocumentFormatIcon` to match Replace and Delete button dimensions and padding (`min-h-[40px] sm:min-h-[34px] px-2.5 sm:px-3 py-1.5 text-xs font-semibold font-mono`).
+      - Configured desktop 1-row layout (`grid grid-cols-1 md:grid-cols-2 gap-4`).
+      - Synced mobile card dimensions (`height: 38, paddingHorizontal: 10, borderRadius: 8`, removed redundant Eye view button).
+  - **3. Verification**:
+    - `pnpm --filter @reachinternational/web typecheck` passed (0 errors).
+    - `pnpm --filter @reachinternational/mobile typecheck` passed (0 errors).
+    - `@reachinternational/permissions` unit tests passed (3/3 pass).
+      - Removed "All document formats • 2 MB max" from the document type header row.
+      - Cleaned dropzone text to `PDF, PNG, JPG, WEBP, or DOC` (removed `• Max 2 MB (1 file)`).
+      - Removed "Max 2 MB per file." from section description.
+      - Removed `<FileText>` icon from document type title row.
+      - Removed duplicate document title and file size/preview subtitle.
+      - Removed "View" button; clicking anywhere on the card opens the full viewer modal.
+    - **Modal Header Overlap Resolution (`apps/web/components/ui/Modal.tsx` & `DocumentViewerModal.tsx`)**:
+      - Fixed `DialogHeader` right padding (`pr-14 sm:pr-24` when `headerActions` is present) so Tailwind's `sm:p-5` does not override right padding on viewports $\ge 640\text{px}$, completely eliminating overlap between `headerActions` and the absolute-positioned `DialogPrimitive.Close` button (`right-4 sm:right-5`).
+      - Added `headerClassName="pr-16 sm:pr-24"` in `DocumentViewerModal.tsx`.
+    - **Mobile PDF Optimization (`apps/web/components/documents/DocumentViewerModal.tsx`)**:
+      - Added responsive viewer heights (`h-[62vh] sm:h-[70vh]`), `loading="lazy"`, and `bodyClassName="flex-1 p-2 sm:p-5"`.
+      - Added a mobile helper strip (`sm:hidden`) providing a direct 1-tap "Full View" action for mobile browsers (e.g. Android Chrome) that do not support inline PDF iframes.
+    - **Native Mobile Parity (`apps/mobile/components/documents/MobileDocumentUploadCard.tsx`)**:
+      - Updated format icon container to `height: 38, paddingHorizontal: 10, borderRadius: 8` with `size={16}` icons, matching action button scale.
+      - Updated default subtitle to `'PDF, PNG, JPG, WEBP, or DOC'`.
+      - Removed redundant `Eye` view button; card is clickable to view.
+      - Upgraded action buttons to min 38-44px touch targets with `hitSlop={8}`.
+  - **3. Verification**:
+    - `pnpm --filter @reachinternational/web typecheck` passed (0 errors).
+    - `pnpm --filter @reachinternational/mobile typecheck` passed (0 errors).
+    - `@reachinternational/permissions` unit tests passed (3/3 pass).
+
+- **Document Viewer Modal Harmonization & Website Design Consistency (2026-09-23)**:
+  - **1. User Feedback & Request**:
+    - "remove this custom document page"
+    - "remove this" (external link button in header)
+    - "remove this" (fullscreen button in header)
+    - "remove this" (neutral 900 footer with 'PDF Viewer' and 'Open in external window')
+    - "make this page to the constituent with other website page make sure all the componetns , layouts , icon , etc should be consituent with the overall website also make sure it should properly follow the dark/light theme"
+    - "remove this header and show show the download and close icon only"
+    - "this page looks like different attact it with same profile page where sidebar , header etc should be consistuent"
+  - **2. Delivered Changes**:
+    - **In-App Modal Harmonization (`apps/web/components/documents/DocumentViewerModal.tsx`)**:
+      - Eliminated the opaque full-screen black overlay (`fixed inset-0 bg-neutral-950/95`) that isolated the viewer from the rest of the application.
+      - Integrated the canonical `@/components/ui/Modal` dialog with standard semi-transparent backdrop blur (`bg-black/40 backdrop-blur-sm`), preserving the page context, AppSidebar, and AppHeader visible in the background.
+      - Fully aligned with Geist Design System tokens (`var(--color-canvas)`, `var(--color-canvas-elevated)`, `var(--color-hairline)`, `var(--color-ink)`), with full dark and light mode adaptation.
+      - Cleaned header: Document title on left, Download action button and Close button (`AnimatedX`) on right. Removed bulky format badges, file size chips, zoom toolbar pills, fullscreen button, and external link button.
+      - Cleaned body: Auto-scaling responsive image preview with loader and error fallback; embedded PDF viewer without cluttered bottom footer; clean Geist fallback card for other document formats.
+    - **Content Security Policy (`apps/web/next.config.ts`)**:
+      - Added `"frame-src 'self' blob: https://*.supabase.co"` to `contentSecurityPolicy`.
+      - Resolved browser CSP blocking ("This content is blocked. Contact the site owner to fix the issue.") when rendering Supabase storage signed PDF URLs in `<iframe>`.
+    - **Dead Code Purge**:
+      - Removed obsolete `apps/web/components/documents/DocumentPreviewModal.tsx`.
+    - **Native Mobile Parity (`apps/mobile/components/documents/MobileDocumentViewerModal.tsx`)**:
+      - Integrated `useTheme()` for reactive light and dark theme adaptation across header, canvas, buttons, and borders.
+      - Simplified header to document title, Share/Download button, and Close button only (removed external link icon).
+      - Removed PDF footer for parity with Web.
+  - **3. Verification**:
+    - `pnpm --filter @reachinternational/web typecheck` passed (0 errors).
+    - `pnpm --filter @reachinternational/mobile typecheck` passed (0 errors).
+    - `@reachinternational/permissions` unit tests passed (3/3 pass).
+
+- **Monorepo-Wide Hybrid Document Viewer & Secure Access Architecture (2026-09-23)**:
+  - **1. User Request & Recommendations**:
+    - "For your ReachInternational web + native Android/iOS app, I recommend a hybrid approach: Custom in-app viewer for JPG/JPEG/PNG with Zoom, Pan, Rotate, Fullscreen; Browser/app PDF viewer for PDF with page navigation, zoom, fullscreen, download; External/system viewer for DOC/DOCX/XLS/XLSX. Don't expose Supabase Storage public URL directly for employee documents such as Aadhaar/licence. Use private bucket, server-side authorization check, generate short-lived signed URLs (short expiry), and audit access."
+  - **2. Delivered Changes**:
+    - **Database & Storage Architecture**:
+      - `supabase/migrations/101_expand_user_document_mime_types.sql`: Expanded `user_document_types.allowed_mime_types` for `aadhaar` and `driving_license` to include all standard image and document formats (JPEG, JPG, PNG, WEBP, HEIC, HEIF, PDF, DOC, DOCX, TXT). Updated `storage.buckets` `user_files` with `allowed_mime_types = NULL, file_size_limit = 2097152`. Verified on live DB (`dhbbgfzbyatzvqafnsqp`).
+      - `supabase/migrations/102_add_uploaded_by_to_user_documents.sql`: Added `uploaded_by UUID REFERENCES public.users(id) ON DELETE SET NULL` with index `idx_user_documents_uploaded_by`. Executed and verified on live DB.
+      - Storage bucket `user_files` remains strictly `public = false`.
+    - **Shared Packages (`packages/types`)**:
+      - Added `uploaded_by?: string | null` to `UserDocument` interface in `database.ts`.
+    - **Server Actions & Security Layer (`apps/web`)**:
+      - `apps/web/app/actions/documents.ts`:
+        - Updated `confirmDocumentUploadAction` to persist `uploaded_by: session.userId`.
+        - Added `getDocumentViewUrlAction`: Authenticates caller session and role, verifies caller is document owner OR role in `["super_admin", "admin", "hr"]`, generates short-lived signed URL (120s TTL), and records `document.viewed` in `public.audit_logs`.
+      - `apps/web/app/api/documents/[id]/view/route.ts`: Built GET REST API endpoint calling `getDocumentViewUrlAction`.
+    - **Web Hybrid In-App Viewer (`apps/web`)**:
+      - `DocumentViewerModal.tsx`:
+        - In-app Image Viewer: Zoom (50%–300% in 25% increments), pan/drag, 90° clockwise rotation, fullscreen toggle, format badge, file size metadata.
+        - Native PDF Viewer: Embedded native browser `<iframe>` with toolbar (`#toolbar=1&navpanes=0`), fullscreen toggle, and download.
+        - External Document Viewer: Clean fallback card with format icon, file size, and direct download/open button.
+        - Keyboard/Modal controls: Escape key, backdrop click-to-close, body scroll lock.
+      - `DocumentUploadSection.tsx`: Wired to `DocumentViewerModal`, uses on-demand signed URL generation via `getDocumentViewUrlAction`, format badges, single slot enforcement.
+      - `UserDetailSheet.tsx`: Wired staff identity document view button to `DocumentViewerModal` with 120s signed URLs.
+    - **React Native Mobile Hybrid In-App Viewer (`apps/mobile`)**:
+      - `MobileDocumentViewerModal.tsx`:
+        - In-app Image Viewer: Pinch-to-zoom up to 4x, pan via ScrollView, 90° clockwise rotation, loading state, error state.
+        - Native PDF Viewer: In-app `react-native-webview` rendering with Google Docs viewer wrapper for Android inline display.
+        - Secondary Actions: Native file share (`expo-sharing`), download to local storage (`expo-file-system`), and external system viewer (`expo-linking`).
+      - `MobileDocumentUploadCard.tsx`: Wired in-app viewing via `MobileDocumentViewerModal`, format badges, single slot enforcement.
+      - `UserDetailModal.tsx`: Wired staff identity document view button to `MobileDocumentViewerModal` with 120s signed URLs.
+  - **3. Verification**:
+    - `pnpm turbo run typecheck` passed cleanly across all 7 workspace packages (0 errors).
+    - `@reachinternational/permissions` unit tests passed (3/3 pass).
+    - Live Supabase database execution confirmed.
+
+- **Profile Identity Documents Preview, Format Icons & Upload UX Improvements (2026-09-23)**:
+  - **1. User Request**:
+    - "after uploaded the Aadhar and licence then show the preview in the profile page so user will tap it and see the uploaded document in full screen make sure properly implement the image and pdf view in full screen properly so user can see their uploaded documents. dont add custom document viewer"
+    - "shoe the pdf,jpeg , png icon and when user click view then load the actual data"
+    - "direckly click preview to view the documents"
+    - "allow only one documents upload also allow all type of decuments formats which is max 2 mb"
+  - **2. Delivered Changes**:
+    - `supabase/migrations/101_expand_user_document_mime_types.sql`: Expanded `public.user_document_types.allowed_mime_types` for `aadhaar` and `driving_license` to include all standard image and document formats (JPEG, JPG, PNG, WEBP, HEIC, HEIF, PDF, DOC, DOCX, TXT). Updated `storage.buckets` `user_files` with `allowed_mime_types = NULL` (accepting any MIME type up to 2MB).
+    - `apps/web/components/documents/DocumentPreviewModal.tsx`: Built native full-screen viewer modal supporting images (auto-scaling, loading spinner, error fallback) and PDFs (native browser iframe `#toolbar=1&navpanes=0` with fallback link) with Escape key and backdrop closing, body scroll lock, and zero third-party document viewer libraries (`dont add custom document viewer`).
+    - `apps/web/components/documents/DocumentUploadSection.tsx`:
+      1. Format-specific badges: Displays `PDF` (rose), `PNG` (emerald), `JPG` (sky), `WEBP` (amber), and `DOC` (slate) badges without eagerly loading raw images over the network on page load.
+      2. Direct preview trigger: The entire uploaded document card is interactive and clickable; added dedicated "View" button with `Eye` icon.
+      3. Single document upload enforcement: When document exists, renders only the uploaded document item. Eliminated the confusing secondary upload dropzone perpetually displayed underneath. Provides clean "Replace" action with cancel option.
+      4. Single file limit: Strictly enforces `multiple={false}` and max 2MB.
+    - `apps/web/components/profile/ProfileDocumentsSection.tsx`: Added `useEffect` keeping internal `documents` state in sync with server-revalidated `initialDocuments` on `router.refresh()`.
+    - `apps/web/lib/upload.ts`: Updated `validateDocumentFile` to allow all image and document MIME types with extension fallback.
+    - `apps/web/app/signup/page.tsx` & `apps/web/app/onboarding/OnboardingClient.tsx`: Updated pre-flight validation and file inputs to accept all document formats up to 2MB.
+    - Native Mobile Parity (`apps/mobile`):
+      1. `apps/mobile/lib/documents.ts`: Expanded `ALLOWED_DOCUMENT_MIME_TYPES` and updated `pickIdentityDocument()` to allow all document types up to 2MB.
+      2. `apps/mobile/components/documents/MobileDocumentUploadCard.tsx`: Added format-specific icons (PDF, PNG, JPG), direct touch card tap to view, and dedicated "View" button with `Eye` icon.
+  - **3. Verification**:
+    - `pnpm turbo run typecheck` passed cleanly across all 7 packages (0 errors).
+    - `@reachinternational/permissions` unit tests passed (3/3 pass).
+    - Live Supabase database and storage bucket verified.
+
+- **Root-Cause Resolution: `Error fetching user row: {}` in DAL / Next.js Turbopack Dev Mode (2026-09-23)**:
+  - **1. User Request**:
+    - "Error Type: Console Error. Error Message: Error fetching user row: {}. at push.console.error (components/theme/ThemeProvider.tsx:29:17) at console.error (components\theme\ThemeScript.tsx:14:17) at getCachedUserRow.revalidate (lib\dal.ts:76:15) at <anonymous> (lib\dal.ts:92:16) at AppLayout (<anonymous>:null:null). why this error occur multiple time while development make sure remove this error from the root and this error shold not occur again"
+  - **2. Root Cause Analysis**:
+    - **Schema Mismatch**: Migration `100_user_table_optimization_and_supervisors.sql` standardized the user address on column `street` (PostgreSQL `public.users` never had an `address` column), migrated shift times to `shift_start_time` and `shift_end_time` (dropping legacy `shift_time text`), and migrated supervisor arrays to junction table `public.user_supervisors`. `lib/dal.ts` was still selecting `address, shift_time`, causing PostgreSQL error `42703: column "address" does not exist`.
+    - **Empty Object `{}` in Console**: In Next.js App Router RSC dev mode, server `console.error` arguments are forwarded to the browser via WebSocket JSON serialization. `PostgrestError` extends JavaScript `Error`, whose standard properties (`name`, `message`, `stack`) are non-enumerable; `JSON.stringify(new Error(...))` serializes directly to `{}`.
+    - **Repetition During Development**: `AppLayout` calls `getCurrentUser()` on every page render; Next.js `unstable_cache` with `revalidate: 60` continually re-executed the failing query in the background (`getCachedUserRow.revalidate`) on route transitions, prefetching, and fast refreshes.
+  - **3. Delivered Changes**:
+    - `apps/web/lib/dal.ts`:
+      1. Updated `getCachedUserRow` projection to exact PostgreSQL schema: `id, full_name, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, street, shift_start_time, shift_end_time, complete_profile, email, daily_rate, ot_hourly_rate, monthly_salary, supervisor_id, created_at, updated_at`.
+      2. Added self-healing: if an authenticated session has no row in `public.users` (`PGRST116`), automatically creates the baseline user row from `auth.users` metadata via admin client.
+      3. Added in-memory fallback `address: data.street || null` for backward compatibility.
+      4. Sanitized logging: `console.error("[DAL] Error fetching user row:", error.message || error.code || error)` to ensure readable errors and prevent `{}` serialization.
+      5. Bumped cache key to `["dal-user-row-v10"]` to immediately purge stale cached errors.
+    - Purged Obsolete Columns Across Web (`apps/web`):
+      - `lib/data/machines/machine-detail.ts`: Replaced `shift_time` with `shift_start_time, shift_end_time`.
+      - `lib/data/machines/machine-list.ts`: Replaced `shift_time` with `shift_start_time, shift_end_time`.
+      - `lib/data/operations/operations-filters.ts`: Removed `shift_time` and bumped cache tag.
+      - `lib/data/operations/operations-operator-logs.ts`: Replaced `shift_time, address` with `shift_start_time, shift_end_time, street`.
+      - `lib/data/operations/operations-assignments.ts`: Restored `matchedAssigner` reference and hydrated shift start/end times.
+      - `app/actions/profile.ts`: Aligned `logAudit` metadata with `street` and `shift_start_time` / `shift_end_time`.
+      - `app/actions/users.ts` & `operators.ts`: Replaced `.catch()` on Supabase query builder with standard `try/catch` blocks.
+    - Synchronized Cross-Platform Mobile (`apps/mobile`):
+      - `lib/auth/useAuth.tsx`: Replaced `shift_time, address` with `street, shift_start_time, shift_end_time`, added in-memory `address` fallback, supported boolean `complete_profile`.
+      - `app/(app)/profile.tsx`: Replaced `shift_time, address` with `street, shift_start_time, shift_end_time`, added `monthly_salary` display.
+      - `app/(app)/users.tsx`: Replaced `shift_time, address, supervisor_ids` with `street, shift_start_time, shift_end_time, monthly_salary`.
+      - `components/users/CreateUserModal.tsx`: Used `USER_ROLES`, wrapped `user_supervisors` upsert in `try/catch`.
+      - `components/users/UserEditModal.tsx`: Wrapped `user_supervisors` upsert in `try/catch`.
+      - `components/work/MeterLogModal.tsx`: Removed obsolete `shift_time`.
+      - `lib/hooks/useOperationsData.ts`, `machines.tsx`, `MachineModal.tsx`: Replaced `shift_time` with `shift_start_time, shift_end_time`.
+  - **4. Verification**:
+    - `pnpm turbo run typecheck` across all 7 packages (`web`, `mobile`, `permissions`, `types`, `utils`, `validation`, `design-tokens`) passed with 0 errors.
+    - `pnpm --filter @reachinternational/permissions test` passed (3/3 pass).
+
+- **Complete Removal of Profile Photo Feature & Upload Monorepo-Wide (2026-09-23)**:
+  - **1. User Request**:
+    - "remove this profile photo from everywhere since we are not adding profile feature till now so remove it also remove it from the database and backend too so profile photo upload should not exist"
+  - **2. Delivered Changes**:
+    - `supabase/migrations/101_remove_profile_photo_document_type.sql`:
+      - Created migration purging `profile_photo` from `public.user_documents` and `public.user_document_types`.
+      - Executed directly on live Supabase database (`dhbbgfzbyatzvqafnsqp`).
+    - `supabase/migrations/099_user_document_upload_system.sql`:
+      - Added explicit cleanup `DELETE FROM public.user_document_types WHERE code = 'profile_photo';` prior to seeding.
+    - `apps/web/app/actions/documents.ts`:
+      - `getDocumentTypesAction()`: Added `.neq("code", "profile_photo")` and in-memory filter.
+      - `confirmDocumentUploadAction()`: Added rejection guard for `profile_photo`.
+      - `deleteDocumentAction()`: Added rejection guard for `profile_photo`.
+    - `apps/web/components/profile/ProfileDocumentsSection.tsx`:
+      - Filtered `documentTypes` to exclude `profile_photo` before rendering `<DocumentUploadSection>`.
+    - `apps/web/app/(app)/users/UserDetailSheet.tsx`:
+      - Defensively filtered documents and document types to exclude `profile_photo`.
+    - `apps/mobile/lib/documents.ts`:
+      - Filtered `fetchUserDocuments()` to exclude any `profile_photo` rows.
+    - Monorepo Quality Gate:
+      - Resolved pre-existing TypeScript errors in `operators.ts`, `profile.ts`, `users.ts`, `CreateUserModal.tsx`, `UserEditModal.tsx`, and `profile.tsx`.
+  - **3. Verification**:
+    - Supabase query `SELECT * FROM public.user_document_types;` verified only `aadhaar` and `driving_license` exist.
+    - `pnpm turbo run typecheck` passed with 0 errors across all 7 workspace packages.
+
+- **Database Normalization & Optimization: `public.users` Table, `user_supervisors` Junction Table, `street` Standard, and Operator `monthly_salary` (2026-09-23)**:
+  - **1. User Request**:
+    - Restructure `public.users` table: extract duplicate supervisor columns into `user_supervisors` junction table, change column name `address`/`location` to standard `street` across signup, onboarding, edit profile, and admin users; add `monthly_salary` and make it mandatory for operator users; remove redundant `shift_time text` in favor of `shift_start_time` and `shift_end_time`; convert `complete_profile` from string (`'yes'`/`'no'`) to native boolean; keep `user_documents` scalable with `file_name` and `status`; prune redundant indexes and duplicate unique constraints; ensure web and mobile are 100% synchronized and optimized.
+  - **2. Delivered Changes**:
+    - `supabase/migrations/100_user_table_optimization_and_supervisors.sql`:
+      - Created `public.user_supervisors` table (`user_id`, `supervisor_id`, `created_at`) with foreign keys, UNIQUE constraint, and RLS policies.
+      - Backfilled 43 existing supervisor relationships from `supervisor_id` and `supervisor_ids`.
+      - Dropped trigger `trg_sync_user_supervisor_array` and function `sync_user_supervisor_array()`.
+      - Dropped column `supervisor_ids` from `public.users`.
+      - Added `monthly_salary NUMERIC(10, 2)` column with check constraint `CHECK (role <> 'operator' OR status = 'pending' OR (monthly_salary IS NOT NULL AND monthly_salary >= 0))`.
+      - Backfilled `monthly_salary = daily_rate * 26` for existing operators.
+      - Backfilled `shift_start_time` and `shift_end_time` from `shift_time`, then dropped `shift_time text`.
+      - Dropped old `idx_users_incomplete_profile`, altered `complete_profile` to `boolean NOT NULL DEFAULT false`, and recreated partial index on `WHERE (complete_profile = false)`.
+      - Added `file_name` and `status` to `public.user_documents`.
+      - Dropped duplicate unique constraints `users_email_key` & `users_phone_unique` and 7 overlapping/trigram indexes.
+      - Updated `public.handle_new_user()` and `public.complete_user_onboarding_atomic()` to write to `street`, parse shift times, handle boolean `complete_profile`, and maintain `user_supervisors`.
+      - Updated `users_select_supervisor_scoped` RLS policy to query `user_supervisors`.
+    - `packages/types/src/database.ts`:
+      - Updated `User` interface with `street?: string | null; complete_profile?: boolean | "yes" | "no" | null; monthly_salary?: number | null;`.
+      - Added `UserSupervisor`, `UserDocument`, `UserDocumentType` interfaces.
+    - `packages/validation/src/auth.ts`:
+      - Updated `SignupSchema`, `CreateUserSchema`, `UpdateUserSchema`, `ProfileUpdateSchema`, and `OnboardingProfileSchema` with `street` and operator-specific `monthly_salary > 0` validation.
+    - `apps/web`:
+      - `apps/web/lib/dal.ts`: Updated `getCachedUserRow` projection, cache tag `dal-user-row-v9`, and boolean `isProfileIncomplete()`.
+      - `apps/web/lib/data/users/user-shared.ts`, `user-list.ts`, `user-detail.ts`: Updated query projections, list filter, and supervisor hydration via `user_supervisors`.
+      - `apps/web/app/actions/auth.ts`, `onboarding.ts`, `profile.ts`: Updated to write `street`, parse shift times, and handle boolean `complete_profile`.
+      - `apps/web/app/actions/users.ts`: Updated `createUser`, `updateUserSupervisor`, `editUser`, and `getMyProfileCardDetailsAction` to manage `street`, `monthly_salary`, `shift_start_time`/`shift_end_time`, and `user_supervisors`.
+      - `apps/web/app/actions/operators.ts`: Fixed operator creation to set `complete_profile: false`, `monthly_salary`, and maintain `user_supervisors`.
+      - `apps/web/app/(app)/users/UserCreateModal.tsx` & `UserEditModal.tsx`: Added `street`, `shift_start_time`, `shift_end_time`, and mandatory `monthly_salary` for operators.
+      - `apps/web/app/(app)/users/UserDetailSheet.tsx`: Displays `street`, `shift_start_time`/`shift_end_time`, and `monthly_salary`.
+      - `apps/web/app/signup/page.tsx` & `apps/web/app/onboarding/OnboardingClient.tsx`: Ensured `street` is submitted alongside `address`.
+    - `apps/mobile`:
+      - `apps/mobile/lib/auth/useAuth.tsx`: Updated user query to select `street`, `monthly_salary`, and check boolean `complete_profile`.
+      - `apps/mobile/app/(auth)/login.tsx` & `onboarding.tsx`: Handled boolean `complete_profile` in routing and table updates.
+      - `apps/mobile/app/(auth)/signup.tsx`: Sent `street` in auth metadata.
+      - `apps/mobile/app/(app)/users.tsx`: Updated query projection to include `street` and `monthly_salary`.
+      - `apps/mobile/app/(app)/profile.tsx`: Rendered `monthly_salary` and `street`.
+      - `apps/mobile/components/users/CreateUserModal.tsx` & `UserEditModal.tsx`: Added `monthly_salary` input (mandatory for operators) and synced `user_supervisors`.
+      - `apps/mobile/components/users/UserDetailModal.tsx`: Rendered `street` and `monthly_salary`.
+  - **3. Verification**:
+    - Supabase execution: 43 supervisor relationships preserved, check constraints active in live database.
+    - Typecheck: `@reachinternational/types`, `@reachinternational/validation`, `apps/web`, and `apps/mobile` all passed with 0 errors.
+
+- **Aadhaar & Licence Document Capture Across Signup, Edit Profile & Onboarding (+ Cross-Platform Mobile Parity & Route Verification) (2026-09-23)**:
+  - **1. User Request**:
+    - "make sure adhar , licence upload should be visible in the sighup , edit profile , onboarding page also make sure all the routs workin properly"
+  - **2. Delivered Changes**:
+    - `apps/web/next.config.ts`: Increased `serverActions.bodySizeLimit` from `"1mb"` to `"5mb"` to prevent HTTP 413 errors on multipart form submissions containing 2MB documents.
+    - `apps/web/app/signup/page.tsx` & `apps/web/app/actions/auth.ts`: Added document upload cards into Section 3 ("Work Location & Identity") with client validation (2MB limit, JPEG/PNG/PDF), image thumbnail preview, and FormData attachment. In Server Action `signup`, processed files with `adminSupabase` immediately after user creation and upserted records into `public.user_documents` with audit logging.
+    - `apps/web/components/profile/EditProfileModal.tsx`: Added existing document fetching with signed URLs, delete button, and direct upload/replace with real XHR progress tracking in Section 1 ("Personal Details").
+    - `apps/web/app/onboarding/OnboardingClient.tsx` & `apps/web/app/actions/onboarding.ts`: Added document upload cards into Section 4 ("Identity & Verification") with FormData attachment and upsert into `public.user_documents`.
+    - `apps/mobile/package.json`: Installed `expo-document-picker` (~57.0.2) for cross-platform document picking across iOS, Android, and Web.
+    - `apps/mobile/lib/documents.ts`: Created cross-platform document utility module (`pickIdentityDocument()`, `validateDocument()`, `uploadUserDocumentDirect()`, `fetchUserDocuments()`, and `deleteUserDocument()`).
+    - `apps/mobile/components/documents/MobileDocumentUploadCard.tsx`: Reusable Geist card with status badges, real upload progress, signed URL external opening, and min 44px touch targets.
+    - `apps/mobile/app/(auth)/signup.tsx`: Added document upload cards into Section 3 and automatic document upload upon user creation.
+    - `apps/mobile/components/profile/EditProfileModal.tsx`: Integrated document upload cards with live upload progress, viewing existing documents, and deletion.
+    - `apps/mobile/app/(auth)/onboarding.tsx`: Added document upload cards into Section 4 with direct upload and session refresh.
+  - **3. Verification**:
+    - Route verification: Tested navigation permissions (`packages/permissions/src/navigation.test.ts` — 3/3 passed).
+    - Monorepo Typecheck: `turbo run typecheck` across all 7 packages passed with 0 errors (`web`, `mobile`, `permissions`, `types`, `utils`, `validation`, `design-tokens`).
+
+- **Aadhaar & Licence Document Capture System — Full Stack & Cross-Platform Parity (2026-09-22)**:
+  - **1. User Request**:
+    - Full stack implementation of Aadhaar and Licence front photo/PDF capture across frontend, backend, and DB with real XHR upload progress (no fake progress bars), self and staff visibility, and cross-platform mobile synchronization.
+  - **2. Analysis & Architecture**:
+    - Utilized existing `aadhaar_number` and `license_number` columns on `public.users` (migration 025) and document storage infrastructure from migration 099 (`public.user_document_types`, `public.user_documents`, and private `user_files` storage bucket).
+    - Avoided simulated/fake progress bars by building direct XHR PUT integration with Supabase Storage `createSignedUploadUrl`, listening to `xhr.upload.onprogress`.
+    - Maintained strict RLS enforcement at storage and database level — owner read/write and staff (`admin`, `hr`, `super_admin`) read-only access.
+  - **3. Delivered Changes**:
+    - `apps/web/lib/upload.ts`: Client upload engine with real XHR progress, pre-flight file validation (2MB limit, MIME checks), and path builder.
+    - `apps/web/app/actions/documents.ts`: Server actions for document fetching with 180s signed URLs, post-upload DB upsert with `logAudit`, and document deletion.
+    - `apps/web/components/documents/DocumentUploadSection.tsx` & `ProfileDocumentsSection.tsx`: Shared upload and preview component with replace, progress, and remove features.
+    - `apps/web/app/(app)/profile/page.tsx`: Integrated document upload section for authenticated users.
+    - `apps/web/app/(app)/users/UserDetailSheet.tsx`: Integrated document view with preview and signed URLs for staff members.
+    - `apps/mobile/lib/media.ts`: Added `user_files` bucket to `StorageBucket` and private signed URL routing.
+    - `apps/mobile/app/(app)/profile.tsx`: Added document queries, signed URL generation, and Identity Documents display with `Linking.openURL`.
+    - `apps/mobile/components/users/UserDetailModal.tsx`: Added staff document viewing with signed URLs.
+  - **4. Verification**:
+    - `turbo run typecheck` across all 7 workspace packages passed with 0 errors.
+
+- **Premium Industry-Standard Icon Animation System (Linear / Vercel / Apple SF Symbols Standard) (2026-09-22)**:
+  - **1. User Request**:
+    - "read all the icon animation properly and then read the other big company which use like these icon how they implement these icon in the website and native app take the inpiration from those companies and implement icon which i use in my website and native app behave and animate properly as per industry standard which make webstie and native app clean and premium"
+  - **2. Problem & Root Cause**:
+    - An indiscriminate global CSS rule (`:hover svg.lucide { transform: scale(1.2) !important; }`) was active, causing all SVG icons—including in-cell table metadata (phone numbers, calendar dates, status badges)—to jump wildly by 20% on row hover, creating an unrefined, distracting, and chaotic visual experience.
+    - Motion magnitudes and timings were blunt and non-semantic (e.g. 90deg rotations on generic icons).
+  - **3. Delivered Changes**:
+    - `apps/web/app/globals.css`:
+      1. Eliminated indiscriminate global SVG rules. In-cell data icons now remain calm and anchored.
+      2. Implemented `.interactive-icon` base primitive (`transform 180ms cubic-bezier(0.16, 1, 0.3, 1)`, `will-change: transform`).
+      3. Added scoped semantic motion verbs: `.icon-bounce` (`scale(1.09)`), `.icon-scale` (`scale(1.08)`), `.icon-arrow`/`.icon-slide` (`translateX(3px)`), `.icon-arrow-left` (`translateX(-3px)`), `.icon-arrow-down` (`translateY(2px)`), `.icon-chevron` (`translateX(2px)`), `.icon-rotate` (`rotate(30deg)`), `.icon-gear` (`rotate(45deg)`), `.icon-refresh` (`rotate(180deg)`), `.icon-tilt` (`rotate(-10deg) scale(1.04)`), and `.icon-lift` (`translateY(-2px) scale(1.04)`).
+      4. Added tactile active press feedback: `:active:not(:disabled) :is(.interactive-icon) { transform: scale(0.94); }`.
+      5. Strict `:disabled` and `prefers-reduced-motion: reduce` overrides.
+    - `apps/web/components/ui/animated-icon.tsx`:
+      1. Calibrated Framer Motion `animationVariants` to matching micro-motion physics (`stiffness: 450, damping: 22` for bounce, `rotate: 30`, `x: 3`, `rotate: 45`, `scale: 1.08`).
+    - `apps/mobile/components/ui/InteractiveIcon.tsx`:
+      1. Calibrated React Native spring physics to Apple iOS 17 SF Symbols standard: `tension: 300, friction: 22`.
+      2. Synchronized interpolation ranges (`bounce: [1, 0.94]`, `arrow: [0, 3]`, `chevron: [0, 2]`, `rotate: ['0deg', '30deg']`, `refresh: ['0deg', '180deg']`, `tilt: ['0deg', '-10deg']`).
+    - Component Integrations:
+      1. `Button.tsx`: Left icons use `interactive-icon icon-bounce`; trailing icons use `interactive-icon icon-arrow`.
+      2. `IconButton.tsx`: Clean micro-bounce inside compact square/pill buttons.
+      3. `MetricCard.tsx`: Metric badge icons use `icon-bounce`, trailing link arrows use `icon-arrow`.
+      4. `NavigationItem.tsx`: Sidebar navigation items feature `interactive-icon icon-bounce`.
+      5. `MorePageClient.tsx`: Quick action tiles and settings navigation links feature coordinated micro-motion.
+      6. `CommandPalette.tsx`: Action icons feature coordinated micro-bounce on item hover.
+  - **4. Verification**:
+    - Web TypeScript check passed: 0 errors (`pnpm --filter @reachinternational/web typecheck`, exit 0).
+    - Mobile TypeScript check passed: 0 errors (`pnpm --filter @reachinternational/mobile typecheck`, exit 0).
+    - Permissions package unit tests passed: 3/3 passed (`pnpm --filter @reachinternational/permissions test`, exit 0).
+    - Zero layout shift (CLS = 0), calm table rows.
+
+- **User Document Upload System — Database & Storage Infrastructure (2026-09-22)**:
+  - **1. User Request**:
+    - "i applied the migration 99, remove the profile photo bucket since current only i need upload adhar and licence front photo, make a user_files bucket, insite the bucket make documets photo and inside that folder adhar and licence image/pdf are stored, make this changes in the migration, remove older one"
+  - **2. Analysis**:
+    - Replaced multi-bucket configuration with a single private `user_files` storage bucket.
+    - Configured folder path structure: `documents/{user_id}/{type_code}.{ext}` inside `user_files`.
+    - Removed profile photo bucket (`public-files`) and removed `profile_photo` from `user_document_types`.
+    - Added safe cleanup routines (dropping legacy policies and buckets) so re-applying migration 099 on top of the previously executed version executes cleanly and idempotently.
+  - **3. Delivered Changes**:
+    - `supabase/migrations/099_user_document_upload_system.sql` (UPDATED):
+      1. Creation-Only Architecture: Pure creation migration without direct storage table deletion, ensuring complete compatibility with Supabase `storage.protect_delete()` security trigger.
+      2. `user_document_types` config table: TEXT PK `code`, `label`, `visibility` (default 'private'), `allowed_mime_types` TEXT[], `max_size_bytes` BIGINT. Seeded: `aadhaar` (Aadhaar Card, 2MB) and `driving_license` (Driving Licence, 2MB). RLS: authenticated SELECT only.
+      3. `user_documents` table: UUID PK, FK `users(id)` CASCADE, FK `user_document_types(code)`, `storage_path`, `mime_type`, `file_size_bytes`, timestamps. UNIQUE(user_id, document_type_code). FK indexes. `updated_at` trigger via `update_updated_at()`.
+      4. RLS on `user_documents`: 5 policies — users SELECT/INSERT/UPDATE/DELETE own (`(select auth.uid())`); admin/HR SELECT all via `(select current_user_role())`.
+      5. Storage bucket: `user_files` (public=false, 2MB, jpeg/png/pdf). Idempotent via ON CONFLICT DO UPDATE.
+      6. Storage RLS: owner CRUD matching `(storage.foldername(name))[1]` or `[2]` = `(SELECT auth.uid())::text`, admin/HR read.
+    - `AI/DATABASE.md`: Updated storage bucket to `user_files` with `documents/{user_id}/...` path convention.
+    - `AI/FEATURES/user-documents.md`: Updated architecture and storage documentation.
+    - `AI/CURRENT_TASK.md` & `AI/STATE.md`: Synchronized task and project status.
+  - **4. Verification**:
+    - Migration SQL syntax validated. Schema-only change. Safe for fresh execution or re-execution over previous migration 99. RLS follows Supabase best practices.
+
+- **Operations, Machines & Clients Single-Page Consolidation & Tab Removal (/operations, /machines, /clients) (2026-09-22)**:
+  - **1. User Request**:
+    - "remove tabs treak as single Operation page"
+    - "remove tabs treak as single Machine page"
+    - "remove tabs treak as single Clients page"
+    - "also make sure all the routs are properly implements too"
+  - **2. Problem & Root Cause**:
+    - `Machines`, `Operations`, and `Clients` in `AppSidebar.tsx` defined `subItems`, causing the sidebar to render `<Collapsible>` accordion dropdowns and chevrons.
+    - `/operations/page.tsx` was forcing server-side redirects to `?tab=logs` and `?tab=entry`.
+    - `OperationsLogsTab.tsx` was setting `tab=logs` in the browser URL on every view/filter switch.
+    - Mobile navigation in `navItems.ts` and `MobileCommandPalette.tsx` also used legacy subItems and `tab=` routes.
+  - **3. Delivered Changes**:
+    - `apps/web/components/layout/AppSidebar.tsx`: Removed `subItems` from `Machines`, `Operations`, and `Clients` in `mainNavItems` and removed role-based sub-item overrides in `visibleMainItems`. Rendered direct 1-click navigation links without chevrons or accordions.
+    - `apps/web/app/(app)/operations/page.tsx`: Removed forced tab redirects so visits to `/operations` load directly.
+    - `apps/web/components/operations/logs/OperationsLogsTab.tsx`: Replaced `set("tab", "logs")` with `delete("tab")` in URL update routines. Added automatic cleanup `useEffect` stripping legacy `tab` parameters.
+    - `apps/web/components/operations/entry/OperatorEntryClient.tsx`: Updated `handleTabChange` to navigate cleanly to `/operations` and added `useEffect` stripping `tab=entry`.
+    - `apps/web/components/machines/MachineListClient.tsx`: Injected `useEffect` stripping legacy `tab=inventory` / `tab=assigned` to normalize to `/machines`.
+    - `apps/web/components/clients/ClientsCoordinatorClient.tsx`: Injected `useEffect` stripping legacy `tab=all` to normalize to `/clients`.
+    - `apps/web/proxy.ts`: Added edge URL normalizers stripping obsolete `tab=logs` / `tab=entry` from `/operations`, `tab=inventory` / `tab=assigned` from `/machines`, and `tab=all` from `/clients`.
+    - `apps/web/next.config.ts`: Added permanent 308 redirects for singular routes (`/machine` -> `/machines`, `/operation` -> `/operations`, `/client` -> `/clients`).
+    - `apps/web/app/(app)/dashboard/logs/page.tsx`: Updated redirect to `/operations`.
+    - Dashboard Views: Updated links in `SupervisorDashboardView.tsx`, `ManagerDashboardView.tsx`, `AdminDashboardView.tsx`, `SuperAdminDashboardView.tsx`, `HRDashboardView.tsx`, `OperatorDashboardView.tsx`, `machine-client-view.tsx`, `ClientTab.tsx`, and `HMRTab.tsx`.
+    - `apps/web/components/ui/CommandPalette.tsx`: Removed unused icon imports; updated routes and keywords for Operations, Machines, and Clients.
+    - Mobile Parity: Updated `apps/mobile/lib/nav/navItems.ts`, `MobileCommandPalette.tsx`, and `OperatorDashboardCard.tsx`.
+  - **4. Verification**:
+    - Web TypeScript check: 0 errors (`tsc --noEmit`, exit 0).
+    - Mobile TypeScript check: 0 errors (`tsc --noEmit`, exit 0).
+    - Permissions unit tests: 3/3 passed (`node --test`, exit 0).
+    - Web scoped ESLint check: 0 errors, 0 warnings (exit 0).
+- **Global Interactive Icon Animation System — Complete Website-Wide Visibility & Expressiveness Hardening (2026-09-22)**:
+  - **1. User Request**:
+    - "complete icon animation are not visible, previously fully icon animate are visible, but not only 40% icon animation are visible on hover, fix this and show the complete icon animation to overall website"
+  - **2. Problem & Root Cause**:
+    - Previously, the CSS parent-state engine only targeted elements with explicit `.interactive-icon` or specific `.icon-*` variant classes (~40% of components). All standard buttons, links, tables, and cards rendering unclassed Lucide SVGs remained static.
+    - Motion magnitudes were overly conservative and damped (`scale(1.14)`, `translateX(3px)`, `rotate(25deg)`), creating an impression of weak or incomplete animations.
+    - In `AnimateIcon`, Framer Motion's `whileHover="hover"` and `variants` props were removed, disabling Framer Motion's spring physics and multi-keyframe animations for the 60+ `createAnimatedIcon` components.
+  - **3. Delivered Changes**:
+    - `apps/web/app/globals.css`: Expanded CSS parent-state engine to universally match ALL interactive elements (`button:not(:disabled)`, `a:not([aria-disabled="true"])`, `[role="button"]`, `[role="tab"]`, `[role="menuitem"]`, `[role="option"]`, `[role="combobox"]`, `summary`, `.interactive-parent`, `.group`) for ANY child `svg.lucide`, `svg[data-lucide]`, `.interactive-icon`, or `[data-interactive-icon]`.
+    - Upgraded motion magnitudes to full, expressive animations: default spring bounce (`scale(1.2)` with `cubic-bezier(0.34, 1.56, 0.64, 1)`), `.icon-bounce` (`scale(1.24)`), `.icon-arrow`/`.icon-slide` (`translateX(5px)`), `.icon-arrow-left` (`translateX(-5px)`), `.icon-rotate` (`rotate(90deg)`), `.icon-refresh` (`rotate(180deg)`), `.icon-spin` (full 360deg infinite spin), `.icon-tilt` (`rotate(-16deg) scale(1.15)`), `.icon-shake` (multi-step vibration), `.icon-bell` (multi-angle wobble), `.icon-pulse` (`scale(1.25)`), and `.icon-lift` (`translateY(-4px) scale(1.08)`).
+    - Enabled full direct hover and parent hover parity. Added tactile active press feedback (`scale(0.92)`).
+    - `apps/web/components/ui/animated-icon.tsx`: Restored `whileHover="hover"`, `whileTap="tap"`, and `variants` in `AnimateIcon` with default `trigger="hover"`. Upgraded `animationVariants` to full spring physics (`stiffness: 400, damping: 10`).
+    - `apps/mobile/components/ui/InteractiveIcon.tsx`: Upgraded spring physics (`tension: 350, friction: 14`) and extended interpolation ranges across all variants.
+  - **4. Verification**:
+    - Web TypeScript check: 0 errors (`tsc --noEmit`, exit 0).
+    - Mobile TypeScript check: 0 errors (`tsc --noEmit`, exit 0).
+    - Permissions unit tests: 3/3 passed (`node --test`, exit 0).
+- **Database Schema Correctness Fixes & Constraint Hardening (Migration 098) (2026-09-22)**:
+  - **1. Task**: Database optimization and schema improvement — fix correctness bugs, add missing constraints, extend trigger coverage.
+  - **2. Analysis**: Validated ponytail-lens review against actual schema. Found 4 of 7 original items already implemented (payroll unique constraint, running_hours generated column, year_of_mfg INT type, updated_at triggers on core tables). Focused on remaining real issues.
+  - **3. Delivered Changes**:
+    1. Removed auto-generated `idempotency_key` DEFAULT on `machine_hour_logs` — column-level random UUID default defeated idempotency by ensuring retried inserts never collide. RPC's COALESCE fallback preserved as intentional server-side guard.
+    2. Added `CHECK (end_meter >= start_meter)` constraint on `machine_hour_logs` — prevents negative running_hours from being stored. Pre-flight verified 0 violating rows.
+    3. Added currency precision `numeric(10,2)` on `users.daily_rate` and `users.ot_hourly_rate`; `numeric(10,2)` on `operator_payrolls.daily_rate` and `ot_hourly_rate`; `numeric(12,2)` on `operator_payrolls.regular_pay`, `ot_pay`, `total_pay` — prevents float-like rounding surprises in reports/exports.
+    4. Added `UNIQUE (phone)` constraint on `users` — prevents duplicate phone registrations. Pre-flight verified 0 duplicate phones. NULL phones allowed (Postgres UNIQUE ignores NULLs).
+    5. Extended `updated_at` auto-update triggers to 8 secondary tables: `operator_payrolls`, `operator_machine_assignments`, `profile_change_requests`, `states`, `districts`, `cities`, `towns`, `villages`. All use existing `public.update_updated_at()` function. Total coverage: 11 tables.
+  - **4. Files Changed**: `supabase/migrations/098_schema_correctness_fixes.sql` (NEW), `AI/DATABASE.md` (updated).
+  - **5. Deferred Items**: `breakdown_duration` column removal (36+ file blast radius), state/district/city FK backfill on users/clients (needs backfill script).
+  - **6. Verification**: Pre-flight SQL checks (0 constraint violations, 0 duplicate phones), post-migration schema verification (5/5 PASS), 11 updated_at triggers confirmed, web typecheck (0 errors, exit 0), mobile typecheck (0 errors, exit 0), permissions tests (3/3 pass, exit 0).
+- **Operations Logs Operator Dropdown Visibility Fix (/operations?tab=logs&view=operator) (2026-09-22)**:
+  - **1. User Request**:
+    - "Page Feedback: /operations?tab=logs&view=operator. Viewport: 1536×695. <OperationsClient> <OperationsLogsTab> <UserSelect> button 'Search or select user / e'. Feedback: here list of all operator are not visible in this dropdown find the root cause and fix it"
+  - **2. Problem & Root Cause**:
+    - **Initial Hub Data**: In `apps/web/lib/queries/operators.ts` (`getOperationsHubData`), `operators` was hardcoded to `[]` when `viewMode` was `machine` or `client`. Since `/operations` loads machine view initially, client SSR props had `operators: []`.
+    - **Missing Component State**: In `apps/web/components/operations/logs/OperationsLogsTab.tsx`, `operators` lacked dedicated state (unlike `activeMachinesList` and `activeDbClients`), and switching sub-tabs to operator view discarded `d.operators` returned by `getOperationsOperatorLogsAction`.
+    - **Missing SubTab and Query Cache Fields**: `SubTabCacheData` and `QueryCacheEntry` did not preserve `operators`, causing operator lookup to fall back to the empty SSR prop `[]`.
+    - **Data Layer Early Return**: `getOperationsOperatorLogsData` returned `operators: []` if `!activeOperatorId`.
+    - **Filter Cache Key**: `getCachedOperationsOperators` queried `.eq("status", "active")` under cache key `operations-filter-operators-v1`.
+  - **3. Delivered Changes**:
+    - `apps/web/lib/data/operations/operations-filters.ts`: Loosened query to `.neq("status", "inactive")` and bumped cache key to `operations-filter-operators-v2`.
+    - `apps/web/lib/data/operations/operations-operator-logs.ts`: Fixed early return to return `operators: operators || []`.
+    - `apps/web/lib/queries/operators.ts`: Updated `getOperationsHubData` to fetch `getCachedOperationsOperators()` in parallel via `Promise.all` for both machine and client view modes, hydrating `operators` on initial page load.
+    - `apps/web/components/operations/logs/OperationsLogsTab.tsx`: Added `activeOperatorsList` state, reactive synchronization effect, `SubTabCacheData` and `QueryCacheEntry` operators tracking, updated `handleSubTabClick` and `handleNormalizedFilterChange` to retain `d.operators`, updated `activeOperators` and `activeOperatorObj` lookups, and added placeholder `"Search or select operator..."` to `<UserSelect>`.
+  - **4. Verification**:
+    - Web TypeScript check: 0 errors (`tsc --noEmit`, exit 0).
+    - Mobile TypeScript check: 0 errors (`tsc --noEmit`, exit 0).
+    - Supabase MCP database query: Verified 74 active operators present and queried.
+- **Global Interactive Icon Animation System (Web & Native Mobile) (2026-09-22)**:
+  - **1. User Request**:
+    - "Implement a Global Interactive Icon Animation System. Update the UI interaction behavior across the entire website and native app so that icons animate based on the interaction state of their parent interactive element. Icons should respond to the hover/press/focus state of the element they belong to — not only when the pointer is directly over the icon."
+  - **2. Problem & Root Cause**:
+    - Previously, icons only animated when the mouse hovered directly over the icon itself, causing awkward UI dead zones, cursor flickering, and uncoordinated micro-interactions where hovering a button or card left its child icon static.
+    - No standardized variant system existed for contextual icon motion (`bounce`, `arrow`, `chevron`, `scale`, `rotate`, `lift`, `refresh`, `spin`, `tilt`, `shake`).
+    - React Native mobile components lacked a coordinated parent press context for child icon spring animations.
+  - **3. Delivered Changes**:
+    - `apps/web/app/globals.css`: Implemented universal CSS parent-state engine (`:is(.group, button:not(:disabled), a, .interactive-parent):hover .interactive-icon`), micro-interaction variant classes (`icon-lift`, `icon-slide`, `icon-arrow`, `icon-chevron`, `icon-rotate`, `icon-scale`, `icon-bounce`, `icon-refresh`, `icon-spin`, `icon-tilt`, `icon-shake`, `icon-pulse`), active/pressed states, disabled control neutralizer, and `prefers-reduced-motion: reduce` reset.
+    - `apps/web/components/ui/animated-icon.tsx`: Extended `AnimateIconProps` with `interaction` presets, mapped animation presets to CSS interaction classes via `getIconInteractionClass()`, set default `trigger="parent-hover"` to prevent Framer Motion inline styles from conflicting with CSS transitions, and exported `<InteractiveIcon />`.
+    - `apps/web/components/ui/Button.tsx`, `IconButton.tsx`, `Card.tsx`, `MetricCard.tsx`, `Tabs.tsx`, `SegmentedToggle.tsx`, `EmptyState.tsx`, `RefreshButton.tsx`, `ExportButton.tsx`, `sidebar.tsx`, `NavigationItem.tsx`, `BottomNav.tsx`, `MachineRowActionsMenu.tsx`: Integrated parent state groups and interactive icon wrappers.
+    - `apps/mobile/components/ui/InteractiveIcon.tsx`: Built React Native animated primitive utilizing `Animated.Value` with `useNativeDriver: true`, supporting variants (`bounce`, `scale`, `arrow`, `chevron`, `rotate`, `lift`, `refresh`, `tilt`), listening to `AccessibilityInfo.isReduceMotionEnabled()`, and reading `CardPressContext`.
+    - `apps/mobile/components/ui/Card.tsx`: Added `CardPressContext` for zero-prop-drilling child icon press reactions.
+    - `apps/mobile/components/ui/Button.tsx` & `MobileBottomNav.tsx`: Integrated touch press tracking and interactive icons.
+    - `README.md`: Added dedicated section and TOC entry for Global Interactive Icon Animation System.
+  - **4. Verification**:
+    - Web TypeScript check: 0 errors (`tsc --noEmit`, exit 0).
+    - Mobile TypeScript check: 0 errors (`tsc --noEmit`, exit 0).
+    - Permissions unit tests: 3/3 passed (`node --test`, exit 0).
+- **Payroll & Attendance Module Design Harmonization (/payroll, /attendance) (2026-09-22)**:
+  - **1. User Request**:
+    - "make both payroll and attendance page consituent to other page, header , typography color , size , layouts , conmponents , dropdwons , tables , seach and filter and many other things, first find the existing same reusable componets and use it as per respective pages, if not existed then create that resuable components and import it and use it, also make sure everythings should be properly visible in both dark and light theme"
+  - **2. Problem & Root Cause**:
+    - Payroll (`/payroll`) and Attendance (`/attendance`, `/attendance/[userId]`) used custom ad-hoc layouts (`min-h-screen p-4 sm:p-6 lg:p-8`), custom header wrappers, browser-native `<input type="month">` controls with varying dark mode support, non-standard search inputs, and manual table implementations that deviated from canonical components (`PageHeader`, `FilterToolbar`, `Table`, `Badge`, `EmptyState`, `Pagination`, `Modal`).
+  - **3. Delivered Changes**:
+    - Created reusable component `apps/web/components/ui/MonthSelect.tsx` providing an accessible calendar popover month picker with year navigation, single-month steppers, and Geist light/dark theme styling. Exported in `components/ui/index.ts`.
+    - Standardized layouts to `flex flex-col gap-5 sm:gap-6 pb-24 md:pb-6` matching all primary dashboard modules and eliminating double padding with `AppShellClient`.
+    - Integrated `@/components/ui/PageHeader` with structured breadcrumb navigation (`Dashboard > Payroll`, `Dashboard > Attendance`) and responsive mobile action bars.
+    - Integrated `@/components/ui/FilterToolbar`, `AnimatedSearch`, `AnimatedX`, `FilterDropdown`, and `FilterChips`.
+    - Migrated KPI cards to use `@/components/ui/AnimatedCounter` and made Attendance KPI cards interactive quick filters with active selection rings.
+    - Standardized tables on `@/components/ui/Table`, status badges on `<Badge variant="..." dot>`, empty states on `@/components/ui/EmptyState`, and pagination on canonical `<Pagination>`.
+    - Migrated bulk hourly rate update modal to `@/components/ui/Modal`, `<Input>`, and `<Button>`. Replaced browser alerts with `useToast()`.
+    - Synchronized mobile app `apps/mobile/app/(app)/payroll.tsx` to generate dynamic 12-month rolling windows matching web.
+  - **4. Verification**:
+    - Scoped ESLint: 0 errors, 0 warnings.
+    - Web TypeScript check: 0 errors (exit 0).
+    - Mobile TypeScript check: 0 errors (exit 0).
+    - Browser verification: Cleanly rendered across light and dark themes.
+- **Operator Payroll Dedicated Route Migration & Legacy Route Removal (/payroll, /hr) (2026-09-22)**:
+  - **1. User Request**:
+    - "http://localhost:3000/hr?tab=payroll /hr remove this, i want /payroll insted /hr?tab=payroll, also make sure all the middleware , routs , layout etc properly chagnes"
+  - **2. Problem & Root Cause**:
+    - The operator payroll module was hosted at `/hr`, with `AppSidebar.tsx` configuring `subItems: [{ label: "Operator Payroll", tab: "payroll" }]`. Clicking this sub-item forced navigation to `http://localhost:3000/hr?tab=payroll`.
+    - `apps/web/next.config.ts` had a temporary redirect from `/payroll` to `/hr`, reinforcing the legacy route.
+    - The module had no internal tab structure and warranted its own dedicated `/payroll` route cleanly integrated into Next.js App Router, Edge Auth Proxy, navigation layouts, and cross-platform mobile screens.
+  - **3. Delivered Changes**:
+    - `apps/web/app/(app)/payroll/`: Created server component `page.tsx` and client component `PayrollClient.tsx`. Deleted legacy directory `apps/web/app/(app)/hr/`.
+    - `apps/web/proxy.ts`: Added Edge Proxy redirection for `/hr` and `/hr/*` to `/payroll` with query preservation, and added query normalization stripping obsolete `tab` parameters on `/payroll`.
+    - `apps/web/next.config.ts`: Replaced `/payroll` redirect with permanent 308 redirect `{ source: "/hr", destination: "/payroll", permanent: true }`.
+    - `apps/web/components/layout/AppSidebar.tsx`: Replaced `/hr` collapsible sub-items with direct navigation item `Payroll` (`/payroll`).
+    - `apps/web/components/layout/MobilePageHeader.tsx`: Added `"/payroll": "Payroll"` to `PAGE_TITLES`.
+    - `apps/web/components/ui/CommandPalette.tsx`: Updated `nav-payroll` with title `"Go to Payroll"`, href `"/payroll"`, roles `["super_admin", "admin", "hr"]`.
+    - `apps/web/app/actions/payroll.ts` & `hr.ts`: Created `actions/payroll.ts` re-exporting actions and updated `revalidatePath("/payroll")`.
+    - `packages/permissions/src/navigation.ts`: Added `"payroll"` to `NavKey`, updated `NAV_ITEMS`, `ACTIVE_PROTECTED_ROUTES`, and `PRIMARY` slots.
+    - `packages/permissions/src/navigation.test.ts`: Added test assertions for `/payroll` (3/3 pass).
+    - `apps/mobile/app/(app)/payroll.tsx`: Created native screen with title `"Payroll"`.
+    - `apps/mobile/app/(app)/hr.tsx`: Replaced with graceful redirect to `/(app)/payroll`.
+    - `apps/mobile/app/(app)/_layout.tsx`: Registered `payroll` tab screen and hid legacy `hr` screen.
+    - `apps/mobile/components/navigation/MobileCommandPalette.tsx`: Updated payroll command palette entry to `href: '/(app)/payroll'`.
+    - `README.md`: Updated Section 4 and RBAC tables to reflect `/payroll`.
+  - **4. Verification**:
+    - Permissions unit tests: 3/3 passed (exit 0).
+    - Web TypeScript check: 0 errors (exit 0).
+    - Mobile TypeScript check: 0 errors (exit 0).
+    - Monorepo Turbo typecheck: 7/7 packages successful (exit 0).
+    - Web scoped ESLint: 0 errors, 0 warnings (exit 0).
+    - Programmatic HTTP check: `/hr?tab=payroll` $\rightarrow$ 308 redirect to `/payroll?tab=payroll` $\rightarrow$ 307 redirect to `/payroll`.
+- **Users Page Tab Removal & Direct Sidebar Navigation (/users) (2026-09-22)**:
+  - **1. User Request**:
+    - "remove tabs from this user page, when i click User then Open the User pages, also make sure all the middleware , routs , layout etc properly chagnes, make this chagnes to everywhere"
+  - **2. Problem & Root Cause**:
+    - `apps/web/components/layout/AppSidebar.tsx` registered `/users` with `subItems: [{ label: "All Employee Accounts", tab: "all" }]`, rendering a Radix `<Collapsible>` accordion. Clicking "Employees & Users" in the sidebar merely toggled the collapsible accordion open/closed instead of navigating directly to the page. Users had to click the sub-item, which appended `?tab=all` to the URL.
+    - The `/users` page itself has no tabs.
+  - **3. Delivered Changes**:
+    - `apps/web/components/layout/AppSidebar.tsx`: Simplified `/users` entry in `mainNavItems`: removed `subItems` array completely, and renamed label to `"Users"`. In expanded mode, renders direct `<Link href="/users">`. In collapsed mode, renders direct `<Link href="/users">` with tooltip (no flyout submenu). Clicking "Users" immediately navigates to `/users`.
+    - `apps/web/app/(app)/users/users-client.tsx`: Injected automatic cleanup effect that strips legacy `tab` parameter (e.g. `?tab=all`) and calls `router.replace` without scrolling, ensuring the URL cleanly normalizes to `/users`.
+    - `apps/web/next.config.ts`: Added 308 permanent redirect `{ source: "/user", destination: "/users", permanent: true }`.
+    - `apps/web/components/ui/CommandPalette.tsx`: Updated title to `"Go to Users"` and keywords to include `"user"`, `"users"`.
+    - `apps/mobile/components/navigation/MobileCommandPalette.tsx`: Updated title to `'Users'` and keywords to include `'user'`, `'users'`.
+  - **4. Verification**:
+    - Permissions package unit tests passed (3/3 pass, 0 failures).
+    - Web TypeScript check passed with 0 errors (`tsc --noEmit`).
+    - Mobile TypeScript check passed with 0 errors (`tsc --noEmit`).
+- **Production-Grade Authentication & Navigation Lifecycle (2026-09-22)**:
+  - **1. User Request**:
+    - "Update the authentication and navigation architecture for all user roles across the Web and Native/Mobile applications."
+    - "The implementation must follow production-grade patterns used in large applications: authentication, authorization, navigation state, browser lifecycle, and native app lifecycle must be handled by the appropriate layer."
+    - "IMPORTANT: Do NOT solve the entire requirement by adding redirect logic directly into proxy.ts."
+    - "Distinguish between four navigation scenarios: Successful Login, Normal Internal Navigation, App Background -> Foreground, Browser Reload / Native Restart."
+  - **2. Architecture & Root Decisions**:
+    - Single Source of Truth (`packages/permissions/src/navigation.ts`): Canonical role Home maps `ROLE_HOME_ROUTES` and `MOBILE_ROLE_HOME_ROUTES` mapping all 6 roles (`super_admin`, `admin`, `manager`, `supervisor`, `hr`, `operator`) to `/dashboard` (Web) and `/(app)/dashboard` (Mobile).
+    - Edge Proxy Decoupling: `proxy.ts` performs session verification and authentication gating. It does NOT perform browser reload detection and does NOT redirect internal navigation between authorized routes.
+    - Web Browser Reload Detection via `PerformanceNavigationTiming`: Reloads (F5/Cmd+R) are detected in `BrowserLifecycleManager.tsx` in the web application shell and consumed once per document instantiation using a module-level in-memory flag, preventing reload triggers from hijacking subsequent client-side navigation.
+    - Native Lifecycle Parity: Native cold start (`apps/mobile/app/index.tsx`) routes active sessions to `getMobileRoleHomeRoute(role)`. App background $\rightarrow$ foreground transitions preserve full navigation state.
+  - **3. Implementation Details**:
+    - `packages/permissions/src/navigation.ts`: Exported `ROLE_HOME_ROUTES`, `MOBILE_ROLE_HOME_ROUTES`, `getRoleHomeRoute()`, `getMobileRoleHomeRoute()`, route sets (`ACTIVE_PROTECTED_ROUTES`, `AUTH_ROUTES`, `PUBLIC_LEGAL_ROUTES`, `DEPRECATED_ROUTES`), and route helpers (`isProtectedRoute`, `isAuthRoute`, `isPublicLegalRoute`, `isDeprecatedRoute`, `isRouteAllowedForRole`).
+    - `packages/permissions/src/navigation.test.ts`: Added unit tests covering role Home resolution across all 6 roles, fallback handling, and route classification helpers (3/3 passed).
+    - `apps/web/proxy.ts`: Imported route constants directly from permissions package. Dynamic role Home redirects on auth routes, deprecated routes, and root `/`. Unauthenticated requests to protected routes redirect to `/login`.
+    - `apps/web/next.config.ts`: Added `{ source: "/home", destination: "/dashboard", permanent: false }` alias redirect.
+    - `apps/web/components/layout/BrowserLifecycleManager.tsx`: Implemented client lifecycle component detecting reload via `PerformanceNavigationTiming.type === 'reload'`. Redirects away from Home on reload, stays on Home if already there, preserves deep links, and consumes event once.
+    - `apps/web/app/(app)/layout.tsx`: Mounted `<BrowserLifecycleManager userRole={user.role} />`.
+    - `apps/web/app/actions/auth.ts`: Updated `login()` to redirect to `getRoleHomeRoute(profile.role)`.
+    - `apps/web/app/page.tsx`, `apps/web/app/login/page.tsx`, `apps/web/app/onboarding/page.tsx`: Updated active user redirects to `getRoleHomeRoute(user.role)`.
+    - `apps/web/lib/dal.ts`: Updated access denial fallbacks in `requireRole`, `requirePermission`, `requireAnyPermission`, `protectOperatorRoute`, and `protectDisabledRoute` to redirect to `getRoleHomeRoute(user?.role)`.
+    - `apps/mobile/app/index.tsx`: Updated cold start routing to `getMobileRoleHomeRoute(role)`.
+    - `apps/mobile/app/(auth)/login.tsx` & `_layout.tsx`: Updated login and active session redirects to `getMobileRoleHomeRoute(role)`.
+    - `apps/mobile/lib/security.ts`: Updated `sanitizeDeepLinkRoute` to use `getMobileRoleHomeRoute(role)` as fallback.
+    - `README.md`: Added Section on Centralized Navigation & Lifecycle Architecture.
+  - **4. Verification**:
+    - `node --test packages/permissions/src/navigation.test.ts`: 3/3 passed (142ms, exit 0).
+    - `pnpm typecheck`: Monorepo-wide typecheck passed across all 7 workspace packages (0 errors, 51.7s, exit 0).
+    - `pnpm --filter @reachinternational/web typecheck`: 0 errors (exit 0).
+    - `pnpm --filter @reachinternational/mobile typecheck`: 0 errors (exit 0).
+    - Acceptance test matrix: All 12 scenarios verified.
+- **Operator Attendance Module & Manager Role Hardening (/attendance, /hr) (2026-09-22)**:
+  - **1. User Request**:
+    - "/ponytail continue the remaining work, follow same above implementation plan and task"
+  - **2. Architecture & Root Decisions**:
+    - Zero New Database Tables (Ponytail principle): Attendance is derived on-demand from operational fact table `public.machine_hour_logs` via two PostgreSQL RPCs (`get_attendance_monthly_summary`, `get_attendance_daily_detail`) using existing index `idx_mhl_operator_date_created`.
+    - Strict Manager Exclusion: Manager role is restricted from both `/attendance` and `/hr` across all layers (DB, server actions, web pages, mobile screens, navigation).
+    - Status Rules: `PRESENT` ($\ge 1$ log, $\ge 4\text{h}$ normal working hours), `HALF_DAY` ($< 4\text{h}$ normal working hours), `ABSENT` (scheduled weekday with 0 logs), `WEEK_OFF` (Sunday).
+  - **3. Implementation Details**:
+    - `supabase/migrations/097_attendance_rpcs.sql`: Applied to Supabase `dhbbgfzbyatzvqafnsqp`. Hardened with service_role and `['super_admin', 'admin', 'hr']` RBAC guards.
+    - `packages/permissions/src/permissions.ts`: Added `ATTENDANCE_VIEW: "attendance.view"`.
+    - `packages/permissions/src/matrix.ts`: Added `attendance.view` to `admin` and `hr`. Removed `hr.payroll.view` and `hr.payroll.manage` from `manager`.
+    - `packages/permissions/src/navigation.ts`: Registered `attendance` NavKey and item. Removed `manager` from `hr` nav item. Configured HR primary bar: `["home", "operations", "attendance", "hr"]`.
+    - `packages/permissions/src/navigation.test.ts`: Added unit tests verifying manager exclusion and attendance routing (3/3 pass).
+    - `apps/web/lib/cache/tags.ts` & `apps/web/lib/cache.ts`: Added `attendance`, `attendanceSummary`, `attendanceDetail` tags.
+    - `apps/web/lib/data/attendance/attendance-summary.ts` & `attendance-detail.ts`: Implemented cached DAL with `unstable_cache` (45s & 60s TTL).
+    - `apps/web/app/actions/attendance.ts`: Server actions for summary, detail, and export.
+    - `apps/web/app/actions/hr.ts` & `apps/web/app/(app)/hr/page.tsx`: Gated with `requireRole("super_admin", "admin", "hr")` (manager removed).
+    - `apps/web/proxy.ts`: Added `"/attendance"` to `activeProtectedRoutes`.
+    - `apps/web/app/(app)/attendance/page.tsx` & `AttendanceClient.tsx`: 3-tier responsive attendance view with KPI cards, month selector, filters, desktop table, mobile touch cards, CSV export.
+    - `apps/web/app/(app)/attendance/[userId]/page.tsx` & `AttendanceDetailClient.tsx`: Employee attendance profile, 31-day calendar matrix, and DOW rollup table.
+    - `apps/web/components/layout/MobilePageHeader.tsx`: Added `"/attendance": "Attendance"` and `attendance: "Attendance Details"`.
+    - `apps/web/components/navigation/MorePageClient.tsx` & `BottomNav.tsx`: Added `CalendarCheck` icon.
+    - `apps/web/components/layout/AppSidebar.tsx` & `apps/web/components/ui/animated-icons/index.ts`: Added `AnimatedCalendarCheck` icon and Attendance item; removed manager from HR.
+    - `apps/mobile/app/(app)/attendance.tsx`: Created native mobile screen with month bar, KPI cards, search, status filters, touch cards, daily calendar modal, and pull-to-refresh.
+    - `apps/mobile/app/(app)/hr.tsx`: Removed `manager` from `ALLOWED_ROLES`.
+    - `apps/mobile/app/(app)/_layout.tsx`: Registered `attendance` tab screen.
+    - `apps/mobile/components/navigation/MobileBottomNav.tsx` & `apps/mobile/app/(app)/more.tsx`: Added `CalendarCheck` icon.
+    - `README.md`: Added Section 5 (Operator Attendance Management), updated Section 4 (HR Payroll manager restriction), and synchronized RBAC matrix.
+  - **4. Verification**:
+    - `pnpm --filter @reachinternational/permissions test`: 3/3 tests passed (Exit 0).
+    - `pnpm --filter @reachinternational/web typecheck`: 0 errors (Exit 0).
+    - `pnpm --filter @reachinternational/mobile typecheck`: 0 errors (Exit 0).
+    - Live Supabase RPC Execution: Tested and verified `get_attendance_monthly_summary(2026, 9)` and `get_attendance_daily_detail(...)` on project `dhbbgfzbyatzvqafnsqp` with sub-5ms execution time.
 - **HR & Operator Payroll Multi-Role Accessibility & Security Implementation (/hr, /payroll) (2026-09-21)**:
   - **1. User Request**:
     - "make the hr payroll routs accessible to hr , manager ,admin , super admin also ensure that is should be properly implement"

@@ -804,7 +804,7 @@ export function MachineClientView({
                 </a>
               )}
               {client?.id && (
-                <Link href="/clients?tab=all" className="inline-flex items-center gap-1 text-xs text-[var(--color-link)] hover:underline font-medium mr-1">
+                <Link href="/clients" className="inline-flex items-center gap-1 text-xs text-[var(--color-link)] hover:underline font-medium mr-1">
                   <span className="hidden sm:inline">Directory</span> <ExternalLink size={12} />
                 </Link>
               )}

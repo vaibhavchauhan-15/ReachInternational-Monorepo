@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { getUserDetailAction } from "@/app/actions/users";
+import { getUserDocumentsAction, getDocumentTypesAction, getDocumentViewUrlAction, type UserDocument, type DocumentType } from "@/app/actions/documents";
+import { DocumentViewerModal, type ViewerDocument } from "@/components/documents/DocumentViewerModal";
 import {
   AnimatedX,
   AnimatedBuilding2,
@@ -23,7 +25,7 @@ import {
   AnimatedEyeOff,
   AnimatedClock,
 } from "@/components/ui/animated-icons";
-import { Shield, ShieldAlert, ShieldCheck, Copy, Check } from "lucide-react";
+import { Shield, ShieldAlert, ShieldCheck, Copy, Check, FileText, ExternalLink, Eye, Image as ImageIcon } from "lucide-react";
 import { Button, Badge, Select, Dialog, DialogContent, TooltipWrapper, useToast } from "@/components/ui";
 import { formatDate, formatDateTime, formatTimeAgo, maskAadhaar, formatLicenseNumber } from "@reachinternational/utils";
 import { isSupervisedRole } from "@reachinternational/permissions";
@@ -119,6 +121,9 @@ export function UserDetailSheet({
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [showFullAadhaar, setShowFullAadhaar] = useState(false);
   const [detailedUser, setDetailedUser] = useState<User | null>(propUser);
+  const [userDocuments, setUserDocuments] = useState<UserDocument[]>([]);
+  const [docTypes, setDocTypes] = useState<DocumentType[]>([]);
+  const [activeViewerDoc, setActiveViewerDoc] = useState<ViewerDocument | null>(null);
 
   useEffect(() => {
     setDetailedUser(propUser);
@@ -130,6 +135,59 @@ export function UserDetailSheet({
       }).catch(() => {});
     }
   }, [propUser]);
+
+  // Fetch documents for staff viewing
+  useEffect(() => {
+    if (!propUser?.id) {
+      setUserDocuments([]);
+      return;
+    }
+    const isStaff = currentUser.role === "super_admin" || currentUser.role === "admin" || currentUser.role === "hr";
+    if (!isStaff) return;
+
+    Promise.all([
+      getUserDocumentsAction(propUser.id),
+      getDocumentTypesAction(),
+    ]).then(([docs, types]) => {
+      setUserDocuments(docs.filter((d) => d.document_type_code !== "profile_photo"));
+      setDocTypes(types.filter((t) => t.code !== "profile_photo"));
+    }).catch(() => {});
+  }, [propUser?.id, currentUser.role]);
+
+  const handleStaffViewDoc = async (doc: UserDocument) => {
+    try {
+      const res = await getDocumentViewUrlAction({
+        documentId: doc.id,
+        targetUserId: doc.user_id,
+      });
+      if (res.success && res.signedUrl) {
+        setActiveViewerDoc({
+          id: doc.id,
+          title: res.title || doc.document_type_code,
+          url: res.signedUrl,
+          mimeType: res.mimeType || doc.mime_type,
+          fileSizeBytes: res.fileSizeBytes || doc.file_size_bytes,
+          fileName: res.fileName || doc.storage_path.split("/").pop(),
+        });
+        return;
+      }
+    } catch {
+      // fallback
+    }
+
+    if (doc.signed_url) {
+      setActiveViewerDoc({
+        id: doc.id,
+        title: doc.document_type_code === "aadhaar" ? "Aadhaar Card" : "Driving Licence",
+        url: doc.signed_url,
+        mimeType: doc.mime_type,
+        fileSizeBytes: doc.file_size_bytes,
+        fileName: doc.storage_path.split("/").pop(),
+      });
+    } else {
+      toast("error", "Unable to load secure preview for this document");
+    }
+  };
 
   const user = detailedUser || propUser;
 
@@ -181,7 +239,8 @@ export function UserDetailSheet({
         : [])
     : [];
   return (
-    <Dialog open={!!user} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <>
+      <Dialog open={!!user} onOpenChange={(open) => { if (!open) onClose(); }}>
       {user && (
         <DialogContent
           from="bottom"
@@ -334,18 +393,30 @@ export function UserDetailSheet({
                   <AnimatedClock size={14} className="text-sky-500" /> Shift Timing
                 </span>
                 <span className="font-semibold text-[var(--color-ink)]">
-                  {user.shift_time || "Standard / Day Shift"}
+                  {user.shift_time || (user.shift_start_time && user.shift_end_time ? `${user.shift_start_time.slice(0, 5)} - ${user.shift_end_time.slice(0, 5)}` : "Standard / Day Shift")}
                 </span>
               </div>
 
+              {/* Monthly Salary (Operator Compensation) */}
+              {user.monthly_salary != null && Number(user.monthly_salary) > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-[var(--color-mute)] font-medium flex items-center gap-1.5">
+                    <AnimatedCreditCard size={14} className="text-emerald-500" /> Monthly Salary
+                  </span>
+                  <span className="font-semibold font-mono text-emerald-600 dark:text-emerald-400">
+                    ₹{Number(user.monthly_salary).toLocaleString("en-IN")} / mo
+                  </span>
+                </div>
+              )}
+
               {/* Street Address */}
-              {user.address && (
+              {(user.street || user.address) && (
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-[var(--color-mute)] font-medium flex items-center gap-1.5 shrink-0">
                     <AnimatedMapPin size={14} className="text-amber-500" /> Street Address
                   </span>
                   <span className="font-semibold text-[var(--color-ink)] text-right leading-tight max-w-[240px]">
-                    {user.address}
+                    {user.street || user.address}
                   </span>
                 </div>
               )}
@@ -483,6 +554,72 @@ export function UserDetailSheet({
               </div>
             </div>
 
+            {/* ─── Uploaded Documents (staff view) ─── */}
+            {canRevealDocs && userDocuments.length > 0 && (
+              <div className="space-y-2.5 pt-2">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
+                  Identity Documents
+                </h4>
+                <div className="space-y-2">
+                  {userDocuments.map((doc) => {
+                    const docType = docTypes.find((t) => t.code === doc.document_type_code);
+                    return (
+                      <div
+                        key={doc.id}
+                        onClick={() => handleStaffViewDoc(doc)}
+                        className="flex items-center gap-2.5 p-2.5 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:border-[var(--color-link)]/40 hover:bg-[var(--color-canvas-elevated)] transition-all cursor-pointer group"
+                        title="Click to view document in full screen"
+                      >
+                        {/* Format Icon */}
+                        {doc.mime_type === "application/pdf" ? (
+                          <div className="h-10 w-10 rounded-lg bg-rose-500/10 border border-rose-500/25 flex flex-col items-center justify-center shrink-0 text-rose-600 dark:text-rose-400">
+                            <FileText className="h-4 w-4" />
+                            <span className="text-[8px] font-bold font-mono">PDF</span>
+                          </div>
+                        ) : doc.mime_type.includes("png") ? (
+                          <div className="h-10 w-10 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex flex-col items-center justify-center shrink-0 text-emerald-600 dark:text-emerald-400">
+                            <ImageIcon className="h-4 w-4" />
+                            <span className="text-[8px] font-bold font-mono">PNG</span>
+                          </div>
+                        ) : doc.mime_type.includes("jpeg") || doc.mime_type.includes("jpg") ? (
+                          <div className="h-10 w-10 rounded-lg bg-sky-500/10 border border-sky-500/25 flex flex-col items-center justify-center shrink-0 text-sky-600 dark:text-sky-400">
+                            <ImageIcon className="h-4 w-4" />
+                            <span className="text-[8px] font-bold font-mono">JPG</span>
+                          </div>
+                        ) : (
+                          <div className="h-10 w-10 rounded-lg bg-neutral-500/10 border border-neutral-500/25 flex flex-col items-center justify-center shrink-0 text-neutral-600 dark:text-neutral-400">
+                            <FileText className="h-4 w-4" />
+                            <span className="text-[8px] font-bold font-mono uppercase">{doc.mime_type.split("/")[1]?.slice(0, 4) || "DOC"}</span>
+                          </div>
+                        )}
+
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-[var(--color-ink)] group-hover:text-[var(--color-link)] transition-colors truncate">
+                            {docType?.label || doc.document_type_code}
+                          </p>
+                          <p className="text-[10px] text-[var(--color-mute)] font-mono">
+                            {doc.mime_type.split("/")[1]?.toUpperCase()} · {(doc.file_size_bytes / 1024).toFixed(0)} KB · Tap to view
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => handleStaffViewDoc(doc)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline)] text-[var(--color-ink)] border border-[var(--color-hairline)] transition-colors"
+                            title="View in full screen"
+                          >
+                            <Eye className="h-3 w-3 text-[var(--color-link)]" />
+                            <span>View</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Admin Management Section */}
             {showManage && (
               <div className="space-y-3 pt-2">
@@ -619,5 +756,12 @@ export function UserDetailSheet({
         </DialogContent>
       )}
     </Dialog>
+
+    {/* Staff In-App Document Viewer */}
+    <DocumentViewerModal
+      document={activeViewerDoc}
+      onClose={() => setActiveViewerDoc(null)}
+    />
+  </>
   );
 }

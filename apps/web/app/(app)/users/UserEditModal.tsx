@@ -108,7 +108,10 @@ export function UserEditModal({
     role: user.role,
     supervisor_id: user.supervisor_id || user.supervisor?.id || "",
     shift_time: user.shift_time || "",
-    address: user.address || "",
+    shift_start_time: user.shift_start_time || "08:00",
+    shift_end_time: user.shift_end_time || "20:00",
+    street: user.street || user.address || "",
+    monthly_salary: user.monthly_salary ? String(user.monthly_salary) : "",
     city: user.city || "",
     district: user.district || "",
     state: matchedState ? matchedState.name : user.state || "",
@@ -119,12 +122,15 @@ export function UserEditModal({
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (user?.id && user.aadhaar_number === undefined && user.license_number === undefined && user.address === undefined) {
+    if (user?.id) {
       getUserDetailAction(user.id).then((res) => {
         if (res.user) {
           setEditForm((prev) => ({
             ...prev,
-            address: prev.address || res.user?.address || "",
+            street: prev.street || res.user?.street || res.user?.address || "",
+            monthly_salary: prev.monthly_salary || (res.user?.monthly_salary ? String(res.user.monthly_salary) : ""),
+            shift_start_time: prev.shift_start_time || res.user?.shift_start_time || "08:00",
+            shift_end_time: prev.shift_end_time || res.user?.shift_end_time || "20:00",
             aadhaar_number: prev.aadhaar_number || (res.user?.aadhaar_number ? formatAadhaar(res.user.aadhaar_number) : ""),
             license_number: prev.license_number || res.user?.license_number || "",
           }));
@@ -194,6 +200,13 @@ export function UserEditModal({
 
     if (!editForm.state.trim() && !editForm.state_id) {
       newErrors.state = "State is required.";
+    }
+
+    if (editForm.role === "operator") {
+      const sal = Number(editForm.monthly_salary);
+      if (!editForm.monthly_salary || isNaN(sal) || sal <= 0) {
+        newErrors.monthly_salary = "Monthly salary is mandatory for operator accounts and must be greater than 0.";
+      }
     }
 
     if (editForm.aadhaar_number.trim()) {
@@ -279,21 +292,30 @@ export function UserEditModal({
             </h3>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Shift Schedule"
-              name="shift_time"
-              value={editForm.shift_time}
-              onChange={(e) => setEditForm((prev) => ({ ...prev, shift_time: e.target.value }))}
-              placeholder="e.g. Day Shift (08:00 AM - 08:00 PM)"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Input
               label="Street Address"
-              name="address"
-              value={editForm.address}
-              onChange={(e) => setEditForm((prev) => ({ ...prev, address: e.target.value }))}
+              name="street"
+              value={editForm.street}
+              onChange={(e) => setEditForm((prev) => ({ ...prev, street: e.target.value }))}
               placeholder="e.g. Plot 42, MIDC Ind Area"
             />
+            <Input
+              label="Shift Start Time"
+              name="shift_start_time"
+              type="time"
+              value={editForm.shift_start_time}
+              onChange={(e) => setEditForm((prev) => ({ ...prev, shift_start_time: e.target.value }))}
+            />
+            <Input
+              label="Shift End Time"
+              name="shift_end_time"
+              type="time"
+              value={editForm.shift_end_time}
+              onChange={(e) => setEditForm((prev) => ({ ...prev, shift_end_time: e.target.value }))}
+            />
+            <input type="hidden" name="address" value={editForm.street} />
+            <input type="hidden" name="shift_time" value={`${editForm.shift_start_time} - ${editForm.shift_end_time}`} />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -409,6 +431,36 @@ export function UserEditModal({
               />
               <p className="mt-1.5 text-[11px] text-[var(--color-mute)]">
                 Assign or change the supervisor supervising this user.
+              </p>
+            </div>
+          )}
+
+          {/* Conditional Monthly Salary for Operators */}
+          {editForm.role === "operator" && (
+            <div className="pt-2">
+              <Input
+                label="Monthly Salary (₹) *"
+                name="monthly_salary"
+                type="number"
+                min="1"
+                step="100"
+                placeholder="e.g. 25000"
+                value={editForm.monthly_salary}
+                onChange={(e) => {
+                  setEditForm((prev) => ({ ...prev, monthly_salary: e.target.value }));
+                  if (errors.monthly_salary) {
+                    setErrors((prev) => {
+                      const copy = { ...prev };
+                      delete copy.monthly_salary;
+                      return copy;
+                    });
+                  }
+                }}
+                error={errors.monthly_salary}
+                required
+              />
+              <p className="mt-1.5 text-[11px] text-[var(--color-mute)]">
+                Mandatory monthly salary for machine operator personnel.
               </p>
             </div>
           )}

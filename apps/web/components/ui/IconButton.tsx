@@ -46,7 +46,9 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         className={`${sizeMap[size]} ${className}`}
         {...props}
       >
-        {icon}
+        <span className="inline-flex items-center justify-center shrink-0 leading-none interactive-icon icon-bounce">
+          {icon}
+        </span>
       </Button>
     );
 

@@ -174,19 +174,12 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       if (!authData?.user?.id) return;
       const { data: uData } = await supabase
         .from('users')
-        .select('shift_start_time, shift_end_time, shift_time')
+        .select('shift_start_time, shift_end_time')
         .eq('id', authData.user.id)
         .single();
       if (uData) {
         let s = uData.shift_start_time ? formatTo12Hour(uData.shift_start_time) : '';
         let e = uData.shift_end_time ? formatTo12Hour(uData.shift_end_time) : '';
-        if ((!s || !e) && uData.shift_time) {
-          const parsed = parseProfileShiftTime(uData.shift_time);
-          if (parsed) {
-            if (!s) s = formatTo12Hour(parsed.startTime);
-            if (!e) e = formatTo12Hour(parsed.endTime);
-          }
-        }
         if (s) setStartTime(s);
         if (e) setEndTime(e);
       }

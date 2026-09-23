@@ -23,6 +23,14 @@ import {
   parseProfileShiftTime,
 } from '@reachinternational/utils';
 import {
+  MobilePickedDocument,
+  UserDocumentInfo,
+  fetchUserDocuments,
+  uploadUserDocumentDirect,
+  deleteUserDocument,
+} from '../../lib/documents';
+import { MobileDocumentUploadCard } from '../../components/documents/MobileDocumentUploadCard';
+import {
   User as UserIcon,
   Phone,
   MapPin,
@@ -62,6 +70,17 @@ export default function OnboardingScreen() {
   const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
 
+  // Document attachments
+  const [existingDocs, setExistingDocs] = useState<Record<string, UserDocumentInfo>>({});
+  const [aadhaarDoc, setAadhaarDoc] = useState<MobilePickedDocument | null>(null);
+  const [licenseDoc, setLicenseDoc] = useState<MobilePickedDocument | null>(null);
+  const [aadhaarUploading, setAadhaarUploading] = useState(false);
+  const [licenseUploading, setLicenseUploading] = useState(false);
+  const [aadhaarProgress, setAadhaarProgress] = useState(0);
+  const [licenseProgress, setLicenseProgress] = useState(0);
+  const [aadhaarError, setAadhaarError] = useState<string | null>(null);
+  const [licenseError, setLicenseError] = useState<string | null>(null);
+
   const [isLoading, setIsLoading] = useState(false);
   const isSubmittingRef = useRef(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -91,8 +110,85 @@ export default function OnboardingScreen() {
     }
   }, [userProfile, user]);
 
+  // Load existing documents
   useEffect(() => {
-    if (userProfile?.complete_profile === 'yes') {
+    if (user?.id) {
+      fetchUserDocuments(user.id).then((docs) => {
+        const map: Record<string, UserDocumentInfo> = {};
+        docs.forEach((d) => {
+          map[d.document_type_code] = d;
+        });
+        setExistingDocs(map);
+      });
+    }
+  }, [user?.id]);
+
+  const handleUploadDoc = async (
+    typeCode: 'aadhaar' | 'driving_license',
+    doc: MobilePickedDocument
+  ) => {
+    if (!user?.id) return;
+
+    if (typeCode === 'aadhaar') {
+      setAadhaarUploading(true);
+      setAadhaarProgress(10);
+      setAadhaarError(null);
+    } else {
+      setLicenseUploading(true);
+      setLicenseProgress(10);
+      setLicenseError(null);
+    }
+
+    try {
+      const res = await uploadUserDocumentDirect({
+        userId: user.id,
+        documentTypeCode: typeCode,
+        doc,
+        onProgress: (p) => {
+          if (typeCode === 'aadhaar') setAadhaarProgress(p);
+          else setLicenseProgress(p);
+        },
+      });
+
+      if (!res.success) {
+        if (typeCode === 'aadhaar') setAadhaarError(res.error || 'Upload failed');
+        else setLicenseError(res.error || 'Upload failed');
+      } else {
+        const docs = await fetchUserDocuments(user.id);
+        const map: Record<string, UserDocumentInfo> = {};
+        docs.forEach((d) => {
+          map[d.document_type_code] = d;
+        });
+        setExistingDocs(map);
+        if (typeCode === 'aadhaar') setAadhaarDoc(null);
+        else setLicenseDoc(null);
+      }
+    } catch (err: any) {
+      if (typeCode === 'aadhaar') setAadhaarError(err.message || 'Upload error');
+      else setLicenseError(err.message || 'Upload error');
+    } finally {
+      if (typeCode === 'aadhaar') setAadhaarUploading(false);
+      else setLicenseUploading(false);
+    }
+  };
+
+  const handleDeleteDoc = async (typeCode: 'aadhaar' | 'driving_license') => {
+    if (!user?.id) return;
+    const existing = existingDocs[typeCode];
+    if (!existing) return;
+
+    const res = await deleteUserDocument(user.id, typeCode, existing.storage_path);
+    if (res.success) {
+      setExistingDocs((prev) => {
+        const next = { ...prev };
+        delete next[typeCode];
+        return next;
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (userProfile?.complete_profile === true || userProfile?.complete_profile === 'yes') {
       router.replace('/(app)/dashboard' as any);
     }
   }, [userProfile, router]);
@@ -204,15 +300,16 @@ export default function OnboardingScreen() {
           .update({
             full_name: fullName.trim(),
             phone: cleanPhone,
-            shift_time: finalShift,
-            address: address.trim(),
+            shift_start_time: shiftStartTime.trim() || null,
+            shift_end_time: shiftEndTime.trim() || null,
+            street: address.trim(),
             city: city.trim(),
             district: district.trim(),
             state: stateVal.trim(),
             state_id: stateId,
             aadhaar_number: cleanAadhaar,
             license_number: formattedLic,
-            complete_profile: 'yes',
+            complete_profile: true,
             updated_at: new Date().toISOString(),
           })
           .eq('id', user.id);
@@ -436,6 +533,28 @@ export default function OnboardingScreen() {
               leftIcon={<ShieldCheck size={16} color={theme.colors.mute} />}
             />
 
+            <MobileDocumentUploadCard
+              title="Aadhaar Card Document"
+              subtitle="Front image or PDF (max 2 MB)"
+              docTypeCode="aadhaar"
+              selectedDoc={aadhaarDoc}
+              existingDoc={existingDocs['aadhaar']}
+              onDocSelected={(doc) => {
+                setAadhaarDoc(doc);
+                handleUploadDoc('aadhaar', doc);
+              }}
+              onDocRemoved={() => {
+                if (existingDocs['aadhaar']) {
+                  handleDeleteDoc('aadhaar');
+                } else {
+                  setAadhaarDoc(null);
+                }
+              }}
+              uploading={aadhaarUploading}
+              uploadProgress={aadhaarProgress}
+              errorMessage={aadhaarError}
+            />
+
             <Input
               label="Driving Licence Number (Optional)"
               value={licenseNumber}
@@ -444,6 +563,28 @@ export default function OnboardingScreen() {
               autoCapitalize="characters"
               maxLength={25}
               leftIcon={<CreditCard size={16} color={theme.colors.mute} />}
+            />
+
+            <MobileDocumentUploadCard
+              title="Driving Licence Document"
+              subtitle="Front scan or PDF (max 2 MB)"
+              docTypeCode="driving_license"
+              selectedDoc={licenseDoc}
+              existingDoc={existingDocs['driving_license']}
+              onDocSelected={(doc) => {
+                setLicenseDoc(doc);
+                handleUploadDoc('driving_license', doc);
+              }}
+              onDocRemoved={() => {
+                if (existingDocs['driving_license']) {
+                  handleDeleteDoc('driving_license');
+                } else {
+                  setLicenseDoc(null);
+                }
+              }}
+              uploading={licenseUploading}
+              uploadProgress={licenseProgress}
+              errorMessage={licenseError}
             />
           </View>
 

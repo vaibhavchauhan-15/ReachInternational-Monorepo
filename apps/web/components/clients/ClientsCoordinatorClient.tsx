@@ -260,6 +260,16 @@ export function ClientsCoordinatorClient({
     };
   }, []);
 
+  // Strip legacy tab parameter (e.g. ?tab=all) to normalize URL to clean /clients
+  useEffect(() => {
+    if (searchParams?.has("tab")) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("tab");
+      const newQuery = params.toString();
+      router.replace(newQuery ? `/clients?${newQuery}` : "/clients", { scroll: false });
+    }
+  }, [searchParams, router]);
+
   // Mobile Infinite Scroll State for Cards View (Chunk-by-chunk lazy loading)
   const [mobileClientsList, setMobileClientsList] = useState<CRMClient[]>(initialClients);
   const [mobilePage, setMobilePage] = useState<number>(page);

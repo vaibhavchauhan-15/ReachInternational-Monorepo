@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useTheme } from './ThemeProvider';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
+import { InteractiveIcon } from './InteractiveIcon';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger' | 'success';
 export type ButtonSize = 'sm' | 'md' | 'lg';
@@ -47,6 +48,7 @@ export const Button: React.FC<ButtonProps> = ({
   const { theme } = useTheme();
 
   const [internalLoading, setInternalLoading] = useState(false);
+  const [isPressed, setIsPressed] = useState(false);
   const isExecutingRef = useRef(false);
 
   const effectiveLoading = Boolean(isLoading || internalLoading);
@@ -144,6 +146,8 @@ export const Button: React.FC<ButtonProps> = ({
   return (
     <TouchableOpacity
       onPress={handlePress}
+      onPressIn={() => setIsPressed(true)}
+      onPressOut={() => setIsPressed(false)}
       disabled={disabled || effectiveLoading}
       activeOpacity={0.7}
       accessible={true}
@@ -159,7 +163,13 @@ export const Button: React.FC<ButtonProps> = ({
         />
       ) : (
         <>
-          {icon}
+          {icon ? (
+            <InteractiveIcon
+              icon={icon}
+              pressed={isPressed && !disabled && !effectiveLoading}
+              variant="bounce"
+            />
+          ) : null}
           <Text style={getTextStyle()}>{label}</Text>
         </>
       )}

@@ -260,7 +260,7 @@ export const SidebarMenuButton = React.forwardRef<HTMLElement, SidebarMenuButton
         ref={ref}
         type={Component === "button" ? (type || "button") : undefined}
         className={cn(
-          "relative flex items-center gap-3 rounded-xl transition-colors duration-150 cursor-pointer select-none font-semibold text-xs",
+          "group group/nav interactive-parent relative flex items-center gap-3 rounded-xl transition-colors duration-150 cursor-pointer select-none font-semibold text-xs",
           collapsed ? "justify-center h-11 w-11 mx-auto p-0" : "w-full px-3.5 py-2.5",
           active
             ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold border border-sky-500/20 shadow-2xs"
@@ -312,7 +312,7 @@ export const SidebarMenuSubButton = React.forwardRef<HTMLElement, SidebarMenuSub
         ref={ref}
         type={Component === "button" ? (type || "button") : undefined}
         className={cn(
-          "flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer select-none",
+          "group group/nav interactive-parent flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors cursor-pointer select-none",
           active
             ? "text-sky-600 dark:text-sky-400 font-bold bg-sky-500/10"
             : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]",

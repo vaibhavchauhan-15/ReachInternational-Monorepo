@@ -165,6 +165,16 @@ export function UsersPageClient({
     }
   }, [searchParams, readOnly]);
 
+  // Strip legacy tab parameter (e.g. ?tab=all) to normalize URL to clean /users
+  useEffect(() => {
+    if (searchParams?.has("tab")) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("tab");
+      const newQuery = params.toString();
+      router.replace(newQuery ? `/users?${newQuery}` : "/users", { scroll: false });
+    }
+  }, [searchParams, router]);
+
   useEffect(() => {
     if (readOnly) return;
     const handleQuickAddUser = () => {

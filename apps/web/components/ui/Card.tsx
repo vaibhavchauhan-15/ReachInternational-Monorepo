@@ -25,12 +25,13 @@ export function Card({
   id,
   onClick,
 }: CardProps) {
+  const isInteractive = Boolean(onClick || className.includes("card-hover") || className.includes("cursor-pointer"));
+  const interactiveClasses = isInteractive ? "group group/card interactive-parent cursor-pointer card-hover-system" : "";
+
   return (
     <div
       id={id}
-      className={`${elevated ? "card-elevated" : "card-base"} ${paddingClasses[padding]} ${
-        onClick ? "cursor-pointer card-hover-system" : ""
-      } ${className}`}
+      className={`${elevated ? "card-elevated" : "card-base"} ${paddingClasses[padding]} ${interactiveClasses} ${className}`}
       onClick={onClick}
     >
       {children}

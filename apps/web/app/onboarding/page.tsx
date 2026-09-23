@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/dal";
+import { getRoleHomeRoute } from "@reachinternational/permissions";
 import { OnboardingClient } from "./OnboardingClient";
 
 export const dynamic = "force-dynamic";
@@ -12,10 +13,11 @@ export default async function OnboardingPage() {
     redirect("/login");
   }
 
-  // If user already has complete_profile === 'yes', redirect directly to dashboard
-  if (user.complete_profile === "yes") {
-    redirect("/dashboard");
+  // If user already has complete_profile === true or 'yes', redirect directly to role Home
+  if (user.complete_profile === true || user.complete_profile === "yes") {
+    redirect(getRoleHomeRoute(user.role));
   }
+
 
   return <OnboardingClient user={user} />;
 }

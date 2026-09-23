@@ -8,7 +8,7 @@
  * - HR & Finance sensitive data shielding
  */
 
-import { roleHasPermission } from '@reachinternational/permissions';
+import { roleHasPermission, getMobileRoleHomeRoute } from '@reachinternational/permissions';
 import type { UserRole } from '@reachinternational/types';
 
 /**
@@ -44,7 +44,7 @@ export function verifyClientSecurityEnvironment(): { secure: boolean; errors: st
 /**
  * Deep-link route sanitizer: Prevents arbitrary route injection attacks via deep links.
  */
-export function sanitizeDeepLinkRoute(incomingRoute: string): string {
+export function sanitizeDeepLinkRoute(incomingRoute: string, role?: UserRole): string {
   const ALLOWED_ROUTES = [
     '/(app)/dashboard',
     '/(app)/machines',
@@ -62,9 +62,10 @@ export function sanitizeDeepLinkRoute(incomingRoute: string): string {
     return incomingRoute;
   }
 
-  console.warn(`[Security] Blocked unauthorized deep-link target: '${incomingRoute}'. Redirecting to dashboard.`);
-  return '/(app)/dashboard';
+  console.warn(`[Security] Blocked unauthorized deep-link target: '${incomingRoute}'. Redirecting to role home.`);
+  return getMobileRoleHomeRoute(role);
 }
+
 
 /**
  * Permission Guard for Mobile Screens: Evaluates permissions against user's active role.

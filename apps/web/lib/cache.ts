@@ -38,6 +38,7 @@ export const CACHE_TAGS = {
   clientOperations: TAGS.clientOperations,
   machineOperations: TAGS.machineOperations,
   operatorOperations: TAGS.operatorOperations,
+  attendance: TAGS.attendance,
 } as const;
 
 export type CacheTag = string;

@@ -26,6 +26,7 @@ const contentSecurityPolicy = [
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
+  "frame-src 'self' blob: https://*.supabase.co",
   "worker-src 'self' blob:",
   "media-src 'self' data: blob:",
   "manifest-src 'self'",
@@ -41,7 +42,7 @@ const nextConfig: NextConfig = {
       static: 180,
     },
     serverActions: {
-      bodySizeLimit: "1mb",
+      bodySizeLimit: "5mb",
     },
     optimizePackageImports: [
       "lucide-react",
@@ -65,11 +66,37 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       {
-        source: "/payroll",
-        destination: "/hr",
+        source: "/hr",
+        destination: "/payroll",
+        permanent: true,
+      },
+      {
+        source: "/home",
+        destination: "/dashboard",
         permanent: false,
       },
+      {
+        source: "/user",
+        destination: "/users",
+        permanent: true,
+      },
+      {
+        source: "/machine",
+        destination: "/machines",
+        permanent: true,
+      },
+      {
+        source: "/operation",
+        destination: "/operations",
+        permanent: true,
+      },
+      {
+        source: "/client",
+        destination: "/clients",
+        permanent: true,
+      },
     ];
+
   },
   async headers() {
     return [

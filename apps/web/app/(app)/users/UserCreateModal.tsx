@@ -94,8 +94,11 @@ export function UserCreateModal({
     role: "operator" as UserRole,
     supervisor_id: "",
     branch_id: "none",
-    shift_time: "Day Shift (08:00 AM - 08:00 PM)",
-    address: "",
+    shift_time: "08:00 - 20:00",
+    shift_start_time: "08:00",
+    shift_end_time: "20:00",
+    street: "",
+    monthly_salary: "",
     city: "",
     district: "",
     state: "",
@@ -164,6 +167,13 @@ export function UserCreateModal({
       const licRes = validateLicenseNumber(createForm.license_number);
       if (!licRes.isValid) {
         newErrors.license_number = licRes.error || "Invalid driving licence format.";
+      }
+    }
+
+    if (createForm.role === "operator") {
+      const sal = Number(createForm.monthly_salary);
+      if (!createForm.monthly_salary || isNaN(sal) || sal <= 0) {
+        newErrors.monthly_salary = "Monthly salary is mandatory for operator accounts and must be greater than 0.";
       }
     }
 
@@ -280,21 +290,30 @@ export function UserCreateModal({
             </h3>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Shift Schedule"
-              name="shift_time"
-              value={createForm.shift_time}
-              onChange={(e) => setCreateForm((prev) => ({ ...prev, shift_time: e.target.value }))}
-              placeholder="e.g. Day Shift (08:00 AM - 08:00 PM)"
-            />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Input
               label="Street Address"
-              name="address"
-              value={createForm.address}
-              onChange={(e) => setCreateForm((prev) => ({ ...prev, address: e.target.value }))}
+              name="street"
+              value={createForm.street}
+              onChange={(e) => setCreateForm((prev) => ({ ...prev, street: e.target.value }))}
               placeholder="e.g. Plot 42, MIDC Ind Area"
             />
+            <Input
+              label="Shift Start Time"
+              name="shift_start_time"
+              type="time"
+              value={createForm.shift_start_time}
+              onChange={(e) => setCreateForm((prev) => ({ ...prev, shift_start_time: e.target.value }))}
+            />
+            <Input
+              label="Shift End Time"
+              name="shift_end_time"
+              type="time"
+              value={createForm.shift_end_time}
+              onChange={(e) => setCreateForm((prev) => ({ ...prev, shift_end_time: e.target.value }))}
+            />
+            <input type="hidden" name="address" value={createForm.street} />
+            <input type="hidden" name="shift_time" value={`${createForm.shift_start_time} - ${createForm.shift_end_time}`} />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -393,6 +412,36 @@ export function UserCreateModal({
               />
               <p className="mt-1.5 text-[11px] text-[var(--color-mute)]">
                 Assign a designated supervisor to oversee shift duties, site allocations, and maintenance reports.
+              </p>
+            </div>
+          )}
+
+          {/* Conditional Monthly Salary for Operators */}
+          {createForm.role === "operator" && (
+            <div className="pt-2">
+              <Input
+                label="Monthly Salary (₹) *"
+                name="monthly_salary"
+                type="number"
+                min="1"
+                step="100"
+                placeholder="e.g. 25000"
+                value={createForm.monthly_salary}
+                onChange={(e) => {
+                  setCreateForm((prev) => ({ ...prev, monthly_salary: e.target.value }));
+                  if (errors.monthly_salary) {
+                    setErrors((prev) => {
+                      const copy = { ...prev };
+                      delete copy.monthly_salary;
+                      return copy;
+                    });
+                  }
+                }}
+                error={errors.monthly_salary}
+                required
+              />
+              <p className="mt-1.5 text-[11px] text-[var(--color-mute)]">
+                Mandatory monthly salary for machine operator personnel.
               </p>
             </div>
           )}

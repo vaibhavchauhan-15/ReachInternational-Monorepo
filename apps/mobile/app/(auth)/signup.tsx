@@ -33,6 +33,8 @@ import {
   computeShiftTiming,
 } from '@reachinternational/utils';
 import { isSupervisedRole } from '@reachinternational/permissions';
+import { MobilePickedDocument, uploadUserDocumentDirect } from '../../lib/documents';
+import { MobileDocumentUploadCard } from '../../components/documents/MobileDocumentUploadCard';
 import {
   User,
   Mail,
@@ -79,7 +81,11 @@ export default function SignupScreen() {
   const [stateSearch, setStateSearch] = useState('');
 
   const [aadhaarNumber, setAadhaarNumber] = useState('');
+  const [aadhaarDoc, setAadhaarDoc] = useState<MobilePickedDocument | null>(null);
+  const [aadhaarDocError, setAadhaarDocError] = useState<string | null>(null);
   const [licenseNumber, setLicenseNumber] = useState('');
+  const [licenseDoc, setLicenseDoc] = useState<MobilePickedDocument | null>(null);
+  const [licenseDocError, setLicenseDocError] = useState<string | null>(null);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
@@ -264,7 +270,7 @@ export default function SignupScreen() {
     const safeRole = allowedRoleValues.includes(selectedRole) ? selectedRole : 'operator';
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
@@ -293,6 +299,33 @@ export default function SignupScreen() {
         isSubmittingRef.current = false;
         setIsLoading(false);
       } else {
+        // Upload documents if selected and user was created
+        if (data?.user?.id) {
+          const userId = data.user.id;
+          if (aadhaarDoc) {
+            try {
+              await uploadUserDocumentDirect({
+                userId,
+                documentTypeCode: 'aadhaar',
+                doc: aadhaarDoc,
+              });
+            } catch (uErr) {
+              console.warn('[Signup] Aadhaar upload deferred:', uErr);
+            }
+          }
+          if (licenseDoc) {
+            try {
+              await uploadUserDocumentDirect({
+                userId,
+                documentTypeCode: 'driving_license',
+                doc: licenseDoc,
+              });
+            } catch (uErr) {
+              console.warn('[Signup] Licence upload deferred:', uErr);
+            }
+          }
+        }
+
         setSuccessMessage('Registration request submitted! Your account is pending administrator approval.');
         setTimeout(() => {
           router.replace('/(auth)/login');
@@ -626,6 +659,22 @@ export default function SignupScreen() {
                   leftIcon={<ShieldCheck size={16} color={isDark ? '#737373' : '#9ca3af'} />}
                 />
 
+                <MobileDocumentUploadCard
+                  title="Aadhaar Card Document (Front / PDF)"
+                  subtitle="Front page or full e-Aadhaar PDF (max 2 MB)"
+                  docTypeCode="aadhaar"
+                  selectedDoc={aadhaarDoc}
+                  onDocSelected={(doc) => {
+                    setAadhaarDoc(doc);
+                    setAadhaarDocError(null);
+                  }}
+                  onDocRemoved={() => {
+                    setAadhaarDoc(null);
+                    setAadhaarDocError(null);
+                  }}
+                  errorMessage={aadhaarDocError}
+                />
+
                 <Input
                   label="Driving Licence Number (Optional)"
                   placeholder="e.g. MH12 20110012345"
@@ -635,6 +684,22 @@ export default function SignupScreen() {
                   maxLength={25}
                   error={fieldErrors.license_number}
                   leftIcon={<CreditCard size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                />
+
+                <MobileDocumentUploadCard
+                  title="Driving Licence Document (Front / PDF)"
+                  subtitle="Front page or smart card scan (max 2 MB)"
+                  docTypeCode="driving_license"
+                  selectedDoc={licenseDoc}
+                  onDocSelected={(doc) => {
+                    setLicenseDoc(doc);
+                    setLicenseDocError(null);
+                  }}
+                  onDocRemoved={() => {
+                    setLicenseDoc(null);
+                    setLicenseDocError(null);
+                  }}
+                  errorMessage={licenseDocError}
                 />
               </View>
 

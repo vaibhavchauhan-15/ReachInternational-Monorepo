@@ -81,7 +81,7 @@ async function hydrateMachinePersonnelSingle(machine: any, supabase: any): Promi
     allUserIds.size > 0
       ? await supabase
           .from("users")
-          .select("id, full_name, phone, email, shift_time, role")
+          .select("id, full_name, phone, email, shift_start_time, shift_end_time, role")
           .in("id", Array.from(allUserIds))
       : { data: [] };
 
@@ -680,7 +680,7 @@ export const getMachineSupervisorsOnly = cache(async (machineId: string) => {
 
   const { data: users, error } = await supabase
     .from("users")
-    .select("id, full_name, phone, email, shift_time, role")
+    .select("id, full_name, phone, email, shift_start_time, shift_end_time, role")
     .in("id", Array.from(supIds));
 
   if (error) return [];

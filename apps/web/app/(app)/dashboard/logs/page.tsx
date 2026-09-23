@@ -11,5 +11,5 @@ export default async function DashboardLogsPage({ searchParams }: DashboardLogsP
   const searchEntries = Object.entries(params).filter(([k, v]) => v !== undefined && k !== "tab") as [string, string][];
   const queryStr = new URLSearchParams(searchEntries).toString();
 
-  redirect(`/operations?tab=logs${queryStr ? `&${queryStr}` : ""}`);
+  redirect(`/operations${queryStr ? `?${queryStr}` : ""}`);
 }

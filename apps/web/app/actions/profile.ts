@@ -188,17 +188,19 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
 
     const stateInfo = await resolveStateInfo(adminSupabase, parsed.data.state, parsed.data.state_id);
 
+    const resolvedStreet = (parsed.data.street || parsed.data.address || "").trim() || null;
     const payload = {
       full_name: parsed.data.full_name,
       phone: parsed.data.phone,
-      shift_time: parsed.data.shift_time || null,
-      address: parsed.data.address || null,
+      street: resolvedStreet,
       city: parsed.data.city,
       district: parsed.data.district,
       state: stateInfo.state,
       state_id: stateInfo.state_id,
       aadhaar_number: cleanAadhaar,
       license_number: formattedLicense,
+      ...(parsed.data.shift_start_time ? { shift_start_time: parsed.data.shift_start_time } : {}),
+      ...(parsed.data.shift_end_time ? { shift_end_time: parsed.data.shift_end_time } : {}),
     };
 
     // 1. Super Admin bypasses approval and updates immediately
@@ -245,8 +247,9 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
         metadata: {
           full_name: payload.full_name,
           phone: payload.phone,
-          shift_time: payload.shift_time,
-          address: payload.address,
+          shift_start_time: payload.shift_start_time,
+          shift_end_time: payload.shift_end_time,
+          street: payload.street,
           city: payload.city,
           state: payload.state,
           updated_by: currentUser.email,
@@ -456,11 +459,10 @@ export async function approveProfileChangeRequest(requestId: string): Promise<Pr
     const targetUserId = request.user_id;
 
     // 3. Apply changes to public.users
-    const userUpdatePayload = {
+    const userUpdatePayload: Record<string, unknown> = {
       full_name: requestedData.full_name,
       phone: requestedData.phone || null,
-      shift_time: requestedData.shift_time || null,
-      address: requestedData.address || null,
+      street: (requestedData.street || requestedData.address || null),
       city: requestedData.city,
       district: requestedData.district,
       state: requestedData.state,
@@ -469,6 +471,8 @@ export async function approveProfileChangeRequest(requestId: string): Promise<Pr
       license_number: requestedData.license_number || null,
       updated_at: new Date().toISOString(),
     };
+    if (requestedData.shift_start_time) userUpdatePayload.shift_start_time = requestedData.shift_start_time;
+    if (requestedData.shift_end_time) userUpdatePayload.shift_end_time = requestedData.shift_end_time;
 
     const { error: userUpdateErr } = await adminSupabase
       .from("users")

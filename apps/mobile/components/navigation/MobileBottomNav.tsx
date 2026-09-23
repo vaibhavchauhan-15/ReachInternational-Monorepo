@@ -16,6 +16,7 @@ import {
 import { useRouter, usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../ui/ThemeProvider';
+import { InteractiveIcon } from '../ui/InteractiveIcon';
 import { useAuth } from '../../lib/auth/useAuth';
 import {
   getNavForRole,
@@ -32,6 +33,7 @@ import {
   Menu,
   User,
   Banknote,
+  CalendarCheck,
 } from 'lucide-react-native';
 
 // Icon string key → Lucide RN component
@@ -45,6 +47,72 @@ const ICONS: Record<string, React.ComponentType<{ size?: number; color?: string 
   menu: Menu,
   user: User,
   banknote: Banknote,
+  'calendar-check': CalendarCheck,
+};
+interface BottomNavTabItemProps {
+  item: {
+    key: string;
+    label: string;
+    href: string;
+    icon: string;
+    match: readonly string[] | string[];
+  };
+  isActive: boolean;
+  onPress: () => void;
+  theme: any;
+}
+
+const BottomNavTabItem: React.FC<BottomNavTabItemProps> = ({
+  item,
+  isActive,
+  onPress,
+  theme,
+}) => {
+  const [isPressed, setIsPressed] = useState(false);
+  const Icon = ICONS[item.icon] || Menu;
+  const itemColor = isActive ? theme.colors.ink : theme.colors.mute;
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      onPressIn={() => setIsPressed(true)}
+      onPressOut={() => setIsPressed(false)}
+      style={styles.navItemBtn}
+      activeOpacity={0.7}
+      accessibilityRole="tab"
+      accessibilityState={{ selected: isActive }}
+      accessibilityLabel={item.label}
+    >
+      <View style={styles.itemContent}>
+        <InteractiveIcon
+          icon={<Icon size={18} color={itemColor} />}
+          pressed={isPressed}
+          variant="bounce"
+        />
+        <Text
+          style={[
+            styles.itemLabel,
+            {
+              color: itemColor,
+              fontWeight: isActive ? '700' : '500',
+            },
+          ]}
+        >
+          {item.label}
+        </Text>
+
+        {/* Active Dot Indicator */}
+        {isActive && (
+          <View
+            style={[
+              styles.activeDot,
+              { backgroundColor: theme.colors.ink },
+            ]}
+          />
+        )}
+      </View>
+    </TouchableOpacity>
+  );
 };
 
 export interface MobileBottomNavProps {}
@@ -125,50 +193,19 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = memo(
           ]}
         >
           {tabs.map((item) => {
-            const Icon = ICONS[item.icon] || Menu;
-
             // Compute active state
             const isActive = item.match.some(
               (p) => pathname.includes(p.replace('/', '')),
             );
 
-            const itemColor = isActive ? theme.colors.ink : theme.colors.mute;
-
             return (
-              <TouchableOpacity
+              <BottomNavTabItem
                 key={item.key}
+                item={item}
+                isActive={isActive}
                 onPress={() => router.push(item.href as any)}
-                style={styles.navItemBtn}
-                activeOpacity={0.7}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: isActive }}
-                accessibilityLabel={item.label}
-              >
-                <View style={styles.itemContent}>
-                  <Icon size={18} color={itemColor} />
-                  <Text
-                    style={[
-                      styles.itemLabel,
-                      {
-                        color: itemColor,
-                        fontWeight: isActive ? '700' : '500',
-                      },
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-
-                  {/* Active Dot Indicator */}
-                  {isActive && (
-                    <View
-                      style={[
-                        styles.activeDot,
-                        { backgroundColor: theme.colors.ink },
-                      ]}
-                    />
-                  )}
-                </View>
-              </TouchableOpacity>
+                theme={theme}
+              />
             );
           })}
         </View>

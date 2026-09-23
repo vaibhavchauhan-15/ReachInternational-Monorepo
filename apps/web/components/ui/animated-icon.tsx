@@ -34,6 +34,25 @@ export type IconAnimationPreset =
 
 export type IconAnimationVariant = IconAnimationPreset;
 
+export type IconInteractionVariant =
+  | "lift"
+  | "slide"
+  | "arrow"
+  | "arrow-right"
+  | "arrow-left"
+  | "arrow-up"
+  | "arrow-down"
+  | "chevron"
+  | "rotate"
+  | "scale"
+  | "bounce"
+  | "refresh"
+  | "spin"
+  | "tilt"
+  | "shake"
+  | "pulse"
+  | "none";
+
 export type IconTrigger = "hover" | "parent-hover" | "click" | "always" | "continuous" | "none";
 
 export interface AnimateIconProps extends Omit<HTMLMotionProps<"span">, "children"> {
@@ -43,147 +62,202 @@ export interface AnimateIconProps extends Omit<HTMLMotionProps<"span">, "childre
   strokeWidth?: number;
   className?: string;
   animation?: IconAnimationPreset;
+  interaction?: IconInteractionVariant | IconAnimationPreset;
+  motion?: IconInteractionVariant | IconAnimationPreset;
   trigger?: IconTrigger;
   isSpinning?: boolean;
 }
 
 export type AnimatedIconProps = AnimateIconProps;
 
+export function getIconInteractionClass(
+  animation?: IconAnimationPreset | string,
+  interaction?: IconInteractionVariant | IconAnimationPreset | string
+): string {
+  const key = (interaction || animation || "bounce").toLowerCase();
+
+  switch (key) {
+    case "arrow":
+    case "arrow-right":
+      return "icon-arrow";
+    case "arrow-left":
+      return "icon-arrow-left";
+    case "arrow-up":
+      return "icon-arrow-up";
+    case "arrow-down":
+      return "icon-arrow-down";
+    case "chevron":
+      return "icon-chevron";
+    case "lift":
+    case "float":
+      return "icon-lift";
+    case "slide":
+    case "pointing":
+      return "icon-slide";
+    case "rotate":
+    case "gear":
+      return "icon-rotate";
+    case "refresh":
+      return "icon-refresh";
+    case "spin":
+      return "icon-spin";
+    case "tilt":
+      return "icon-tilt";
+    case "shake":
+    case "bell":
+      return "icon-shake";
+    case "pulse":
+    case "glow":
+      return "icon-pulse";
+    case "scale":
+    case "draw":
+    case "sparkle":
+    case "lens":
+      return "icon-scale";
+    case "none":
+      return "";
+    case "bounce":
+    case "default":
+    default:
+      return "icon-bounce";
+  }
+}
+
 const animationVariants: Record<IconAnimationPreset, Variants> = {
   bounce: {
     initial: { scale: 1 },
     animate: { scale: 1 },
-    hover: { scale: 1.18, transition: { type: "spring", stiffness: 400, damping: 12 } },
-    tap: { scale: 0.9 },
+    hover: { scale: 1.1, transition: { type: "spring", stiffness: 450, damping: 22 } },
+    tap: { scale: 0.94 },
   },
   spin: {
     initial: { rotate: 0 },
     animate: { rotate: 0 },
-    hover: { rotate: 180, transition: { type: "spring", stiffness: 200, damping: 15 } },
-    tap: { rotate: 360, transition: { duration: 0.3 } },
+    hover: { rotate: 360, transition: { duration: 0.5, ease: "easeInOut" as const } },
+    tap: { rotate: 720, transition: { duration: 0.3 } },
   },
   rotate: {
     initial: { rotate: 0 },
     animate: { rotate: 0 },
-    hover: { rotate: 90, transition: { type: "spring", stiffness: 300, damping: 15 } },
-    tap: { rotate: 180 },
+    hover: { rotate: 30, transition: { type: "spring", stiffness: 350, damping: 20 } },
+    tap: { rotate: 60, scale: 0.94 },
   },
   "arrow-right": {
     initial: { x: 0 },
     animate: { x: 0 },
-    hover: { x: 4, transition: { type: "spring", stiffness: 400, damping: 15 } },
-    tap: { x: 6 },
+    hover: { x: 3, transition: { type: "spring", stiffness: 400, damping: 20 } },
+    tap: { x: 4, scale: 0.96 },
   },
   "arrow-left": {
     initial: { x: 0 },
     animate: { x: 0 },
-    hover: { x: -4, transition: { type: "spring", stiffness: 400, damping: 15 } },
-    tap: { x: -6 },
+    hover: { x: -3, transition: { type: "spring", stiffness: 400, damping: 20 } },
+    tap: { x: -4, scale: 0.96 },
   },
   "arrow-up": {
     initial: { y: 0 },
     animate: { y: 0 },
-    hover: { y: -4, transition: { type: "spring", stiffness: 400, damping: 15 } },
-    tap: { y: -6 },
+    hover: { y: -2, transition: { type: "spring", stiffness: 400, damping: 20 } },
+    tap: { y: -3, scale: 0.96 },
   },
   "arrow-down": {
     initial: { y: 0 },
     animate: { y: 0 },
-    hover: { y: 4, transition: { type: "spring", stiffness: 400, damping: 15 } },
-    tap: { y: 6 },
+    hover: { y: 2, transition: { type: "spring", stiffness: 400, damping: 20 } },
+    tap: { y: 3, scale: 0.96 },
   },
   gear: {
     initial: { rotate: 0 },
     animate: { rotate: 0 },
-    hover: { rotate: 90, transition: { type: "spring", stiffness: 250, damping: 15 } },
-    tap: { rotate: 180 },
+    hover: { rotate: 45, transition: { type: "spring", stiffness: 300, damping: 18 } },
+    tap: { rotate: 90, scale: 0.94 },
   },
   bell: {
     initial: { rotate: 0 },
     animate: { rotate: 0 },
     hover: {
-      rotate: [0, -14, 14, -10, 10, -4, 4, 0],
-      transition: { duration: 0.6, ease: "easeInOut" as const },
+      rotate: [0, -10, 10, -6, 6, 0],
+      transition: { duration: 0.45, ease: "easeInOut" as const },
     },
-    tap: { scale: 1.15 },
+    tap: { scale: 1.05 },
   },
   pulse: {
     initial: { scale: 1 },
     animate: {
-      scale: [1, 1.1, 1],
-      transition: { repeat: Infinity, duration: 2, ease: "easeInOut" as const },
+      scale: [1, 1.08, 1],
+      transition: { repeat: Infinity, duration: 1.8, ease: "easeInOut" as const },
     },
-    hover: { scale: 1.2 },
-    tap: { scale: 0.9 },
+    hover: { scale: 1.08 },
+    tap: { scale: 0.94 },
   },
   shake: {
     initial: { x: 0 },
     animate: { x: 0 },
     hover: {
-      x: [0, -4, 4, -4, 4, 0],
-      transition: { duration: 0.4 },
+      x: [0, -3, 3, -2, 2, 0],
+      transition: { duration: 0.35 },
     },
-    tap: { scale: 0.9 },
+    tap: { scale: 0.94 },
   },
   draw: {
     initial: { scale: 1, rotate: 0 },
     animate: { scale: 1, rotate: 0 },
-    hover: { scale: 1.15, rotate: 5, transition: { type: "spring", stiffness: 300 } },
-    tap: { scale: 0.95 },
+    hover: { scale: 1.08, rotate: 6, transition: { type: "spring", stiffness: 350, damping: 20 } },
+    tap: { scale: 0.94 },
   },
   sparkle: {
     initial: { scale: 1, rotate: 0 },
     animate: { scale: 1, rotate: 0 },
-    hover: { scale: 1.22, rotate: 18, transition: { type: "spring", stiffness: 350, damping: 12 } },
-    tap: { scale: 0.88 },
+    hover: { scale: 1.1, rotate: 15, transition: { type: "spring", stiffness: 350, damping: 18 } },
+    tap: { scale: 0.94 },
   },
   lens: {
     initial: { scale: 1, rotate: 0 },
     animate: { scale: 1, rotate: 0 },
-    hover: { scale: 1.15, rotate: -10, transition: { type: "spring", stiffness: 300 } },
-    tap: { scale: 0.9 },
+    hover: { scale: 1.08, rotate: -8, transition: { type: "spring", stiffness: 300, damping: 18 } },
+    tap: { scale: 0.94 },
   },
   tilt: {
     initial: { rotate: 0 },
     animate: { rotate: 0 },
-    hover: { rotate: -15, transition: { type: "spring", stiffness: 300 } },
-    tap: { rotate: 0 },
+    hover: { rotate: -10, scale: 1.04, transition: { type: "spring", stiffness: 350, damping: 20 } },
+    tap: { rotate: -15, scale: 0.94 },
   },
   pointing: {
     initial: { x: 0 },
     animate: {
-      x: [0, 4, 0],
+      x: [0, 3, 0],
       transition: { repeat: Infinity, duration: 1.2, ease: "easeInOut" as const },
     },
-    hover: { x: 6 },
-    tap: { x: 8 },
+    hover: { x: 3 },
+    tap: { x: 4 },
   },
   wiggle: {
     initial: { rotate: 0 },
     animate: {
-      rotate: [0, -10, 10, -10, 10, 0],
-      transition: { duration: 0.5, ease: "easeInOut" as const },
+      rotate: [0, -8, 8, -6, 6, 0],
+      transition: { duration: 0.45, ease: "easeInOut" as const },
     },
-    hover: { rotate: 15 },
-    tap: { scale: 0.9 },
+    hover: { rotate: 10 },
+    tap: { scale: 0.94 },
   },
   float: {
     initial: { y: 0 },
     animate: {
-      y: [0, -4, 0],
+      y: [0, -3, 0],
       transition: { repeat: Infinity, duration: 2, ease: "easeInOut" as const },
     },
-    hover: { y: -6 },
+    hover: { y: -3 },
     tap: { y: 0 },
   },
   glow: {
     initial: { opacity: 1 },
     animate: {
-      scale: [1, 1.08, 1],
+      scale: [1, 1.06, 1],
       transition: { repeat: Infinity, duration: 1.8, ease: "easeInOut" as const },
     },
-    hover: { scale: 1.15 },
-    tap: { scale: 0.95 },
+    hover: { scale: 1.08 },
+    tap: { scale: 0.94 },
   },
   flip: {
     initial: { rotateY: 0 },
@@ -194,26 +268,26 @@ const animationVariants: Record<IconAnimationPreset, Variants> = {
   scale: {
     initial: { scale: 1 },
     animate: { scale: 1 },
-    hover: { scale: 1.2, transition: { type: "spring", stiffness: 300 } },
-    tap: { scale: 0.9 },
+    hover: { scale: 1.08, transition: { type: "spring", stiffness: 450, damping: 22 } },
+    tap: { scale: 0.94 },
   },
   path: {
     initial: { scale: 1 },
     animate: { scale: 1 },
-    hover: { scale: 1.15 },
-    tap: { scale: 0.9 },
+    hover: { scale: 1.08 },
+    tap: { scale: 0.94 },
   },
   "path-loop": {
     initial: { scale: 1 },
-    animate: { scale: [1, 1.1, 1], transition: { repeat: Infinity, duration: 1.5 } },
-    hover: { scale: 1.2 },
-    tap: { scale: 0.9 },
+    animate: { scale: [1, 1.06, 1], transition: { repeat: Infinity, duration: 1.5 } },
+    hover: { scale: 1.08 },
+    tap: { scale: 0.94 },
   },
   default: {
     initial: { scale: 1 },
     animate: { scale: 1 },
-    hover: { scale: 1.1, transition: { type: "spring", stiffness: 300 } },
-    tap: { scale: 0.95 },
+    hover: { scale: 1.09, transition: { type: "spring", stiffness: 450, damping: 22 } },
+    tap: { scale: 0.94 },
   },
   none: {
     initial: {},
@@ -232,6 +306,8 @@ export const AnimateIcon = React.forwardRef<HTMLSpanElement, AnimateIconProps>(
       strokeWidth = 2,
       className,
       animation = "bounce",
+      interaction,
+      motion: motionPreset,
       trigger = "hover",
       isSpinning = false,
       style,
@@ -242,6 +318,11 @@ export const AnimateIcon = React.forwardRef<HTMLSpanElement, AnimateIconProps>(
     const prefersReducedMotion = useReducedMotion();
     const effectiveAnimation = prefersReducedMotion ? "none" : animation;
     const variants = animationVariants[effectiveAnimation] || animationVariants.none;
+    const effectiveInteraction = interaction || motionPreset || animation;
+    const interactionClass = prefersReducedMotion
+      ? ""
+      : getIconInteractionClass(animation, effectiveInteraction);
+    const isParentDriven = trigger === "parent-hover" || trigger === "hover";
 
     const motionComponentProps = React.useMemo(() => {
       if (isSpinning) {
@@ -258,10 +339,8 @@ export const AnimateIcon = React.forwardRef<HTMLSpanElement, AnimateIconProps>(
         };
       }
 
-      if (trigger === "hover") {
+      if (trigger === "click") {
         return {
-          initial: "initial",
-          whileHover: "hover",
           whileTap: "tap",
           variants,
         };
@@ -273,14 +352,13 @@ export const AnimateIcon = React.forwardRef<HTMLSpanElement, AnimateIconProps>(
         };
       }
 
-      if (trigger === "click") {
-        return {
-          whileTap: "tap",
-          variants,
-        };
-      }
-
-      return {};
+      // Default: trigger === "hover" (full interactive animation on hover + tap)
+      return {
+        initial: "initial",
+        whileHover: "hover",
+        whileTap: "tap",
+        variants,
+      };
     }, [isSpinning, trigger, variants]);
 
     const iconDimensions = React.useMemo(() => {
@@ -292,7 +370,13 @@ export const AnimateIcon = React.forwardRef<HTMLSpanElement, AnimateIconProps>(
     return (
       <motion.span
         ref={ref}
-        className={cn("inline-flex items-center justify-center shrink-0 leading-none select-none", className)}
+        data-interactive-icon={effectiveInteraction}
+        className={cn(
+          "inline-flex items-center justify-center shrink-0 leading-none select-none",
+          isParentDriven && "interactive-icon",
+          isParentDriven && interactionClass,
+          className
+        )}
         style={{
           display: "inline-flex",
           ...iconDimensions,
@@ -314,6 +398,70 @@ export const AnimateIcon = React.forwardRef<HTMLSpanElement, AnimateIconProps>(
 AnimateIcon.displayName = "AnimateIcon";
 
 export const AnimatedIcon = AnimateIcon;
+
+export interface InteractiveIconProps extends React.HTMLAttributes<HTMLSpanElement> {
+  icon?: LucideIcon;
+  children?: React.ReactNode;
+  variant?: IconInteractionVariant | IconAnimationPreset;
+  interaction?: IconInteractionVariant | IconAnimationPreset;
+  size?: number | string;
+  strokeWidth?: number;
+  className?: string;
+  isSpinning?: boolean;
+}
+
+export const InteractiveIcon = React.forwardRef<HTMLSpanElement, InteractiveIconProps>(
+  (
+    {
+      icon: Icon,
+      children,
+      variant,
+      interaction,
+      size,
+      strokeWidth = 2,
+      className,
+      isSpinning = false,
+      style,
+      ...props
+    },
+    ref
+  ) => {
+    const effectiveVariant = interaction || variant || "bounce";
+    const interactionClass = getIconInteractionClass(effectiveVariant);
+    const iconDimensions = React.useMemo(() => {
+      if (!size) return {};
+      const s = typeof size === "number" ? `${size}px` : size;
+      return { width: s, height: s };
+    }, [size]);
+
+    return (
+      <span
+        ref={ref}
+        data-interactive-icon={effectiveVariant}
+        className={cn(
+          "interactive-icon inline-flex items-center justify-center shrink-0 leading-none select-none",
+          interactionClass,
+          isSpinning && "animate-spin",
+          className
+        )}
+        style={{
+          display: "inline-flex",
+          ...iconDimensions,
+          ...style,
+        }}
+        {...props}
+      >
+        {Icon ? (
+          <Icon size={size} strokeWidth={strokeWidth} className="w-full h-full" aria-hidden="true" />
+        ) : (
+          children
+        )}
+      </span>
+    );
+  }
+);
+
+InteractiveIcon.displayName = "InteractiveIcon";
 
 export function createAnimatedIcon(Icon: LucideIcon, defaultAnimation: IconAnimationPreset = "bounce") {
   const Component = React.forwardRef<HTMLSpanElement, Omit<AnimateIconProps, "icon">>(

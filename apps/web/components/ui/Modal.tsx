@@ -68,7 +68,7 @@ export function Modal({
         }}
       >
         {(title || description || headerActions) && (
-          <DialogHeader className={cn("pr-12", headerClassName)}>
+          <DialogHeader className={cn(headerActions ? "pr-14 sm:pr-24" : "pr-10 sm:pr-12", headerClassName)}>
             <div className="flex items-center justify-between gap-4 w-full">
               <div className="flex flex-col space-y-1.5 min-w-0 flex-1">
                 {title && (

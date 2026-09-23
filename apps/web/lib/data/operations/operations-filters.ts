@@ -131,13 +131,13 @@ export const getCachedOperationsOperators = cache(async (): Promise<OperationsOp
       const supabase = createSupabaseAdminClient();
       const { data, error } = await supabase
         .from("users")
-        .select("id, full_name, phone, email, role, status, shift_time, shift_start_time, shift_end_time")
+        .select("id, full_name, phone, email, role, status, shift_start_time, shift_end_time")
         .eq("role", "operator")
-        .eq("status", "active")
+        .neq("status", "inactive")
         .order("full_name");
 
       if (error || !data) {
-        console.error("[operations-filters] Failed to fetch operators filter options:", error);
+        console.error("[operations-filters] Failed to fetch operators filter options:", error?.message || error);
         return [];
       }
 
@@ -146,7 +146,7 @@ export const getCachedOperationsOperators = cache(async (): Promise<OperationsOp
         name: u.full_name,
       }));
     },
-    ["operations-filter-operators-v1"],
+    ["operations-filter-operators-v3"],
     {
       revalidate: OPERATIONS_CACHE_TTLS.filterOperators,
       tags: [OPERATIONS_CACHE_TAGS.filters, TAGS.users],

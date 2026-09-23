@@ -5,6 +5,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import { Upload, FileText, X } from "lucide-react";
+import { validateDocumentFile, DEFAULT_ALLOWED_DOCUMENT_MIME_TYPES } from "@/lib/upload";
 import {
   AnimatedMail,
   AnimatedUser,
@@ -84,6 +86,62 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
   const [pending, setPending] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const isSubmittingRef = useRef(false);
+
+  const [aadhaarFile, setAadhaarFile] = useState<File | null>(null);
+  const [aadhaarPreviewUrl, setAadhaarPreviewUrl] = useState<string | null>(null);
+  const [aadhaarFileError, setAadhaarFileError] = useState<string | null>(null);
+
+  const [licenseFile, setLicenseFile] = useState<File | null>(null);
+  const [licensePreviewUrl, setLicensePreviewUrl] = useState<string | null>(null);
+  const [licenseFileError, setLicenseFileError] = useState<string | null>(null);
+
+  const handleAadhaarFileChange = (file: File | null) => {
+    if (aadhaarPreviewUrl) URL.revokeObjectURL(aadhaarPreviewUrl);
+    if (!file) {
+      setAadhaarFile(null);
+      setAadhaarPreviewUrl(null);
+      setAadhaarFileError(null);
+      return;
+    }
+    const val = validateDocumentFile(file, DEFAULT_ALLOWED_DOCUMENT_MIME_TYPES, 2097152);
+    if (!val.valid) {
+      setAadhaarFile(null);
+      setAadhaarPreviewUrl(null);
+      setAadhaarFileError(val.error || "Invalid file");
+    } else {
+      setAadhaarFile(file);
+      setAadhaarFileError(null);
+      if (file.type.startsWith("image/")) {
+        setAadhaarPreviewUrl(URL.createObjectURL(file));
+      } else {
+        setAadhaarPreviewUrl(null);
+      }
+    }
+  };
+
+  const handleLicenseFileChange = (file: File | null) => {
+    if (licensePreviewUrl) URL.revokeObjectURL(licensePreviewUrl);
+    if (!file) {
+      setLicenseFile(null);
+      setLicensePreviewUrl(null);
+      setLicenseFileError(null);
+      return;
+    }
+    const val = validateDocumentFile(file, DEFAULT_ALLOWED_DOCUMENT_MIME_TYPES, 2097152);
+    if (!val.valid) {
+      setLicenseFile(null);
+      setLicensePreviewUrl(null);
+      setLicenseFileError(val.error || "Invalid file");
+    } else {
+      setLicenseFile(file);
+      setLicenseFileError(null);
+      if (file.type.startsWith("image/")) {
+        setLicensePreviewUrl(URL.createObjectURL(file));
+      } else {
+        setLicensePreviewUrl(null);
+      }
+    }
+  };
 
   // Dynamic shift duration & classification computation
   const shiftTimingSummary = useMemo(() => {
@@ -221,6 +279,12 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
     setFieldErrors({});
 
     const formData = new FormData(e.currentTarget);
+    if (aadhaarFile) {
+      formData.set("aadhaar_file", aadhaarFile);
+    }
+    if (licenseFile) {
+      formData.set("license_file", licenseFile);
+    }
     try {
       const result = await completeOnboardingAction({}, formData);
       setState(result);
@@ -580,6 +644,7 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
                   error={fieldErrors.address}
                   icon={<AnimatedMapPin size={15} />}
                 />
+                <input type="hidden" name="street" value={formValues.address} />
               </div>
 
               {/* Section 4: Identity Verification */}
@@ -627,6 +692,137 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
                     error={fieldErrors.license_number}
                     icon={<AnimatedCreditCard size={15} />}
                   />
+                </div>
+
+                {/* Document Uploads: Aadhaar Card & Driving Licence */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 pt-1">
+                  {/* Aadhaar Upload Card */}
+                  <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
+                        <AnimatedShieldCheck size={14} className="text-sky-600 dark:text-sky-400" />
+                        Aadhaar Document <span className="text-[10px] font-normal text-[var(--color-mute)]">(Front Photo / PDF)</span>
+                      </span>
+                      <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
+                    </div>
+
+                    {!aadhaarFile ? (
+                      <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
+                        <Upload className="h-4 w-4 text-[var(--color-mute)] group-hover:text-sky-600 transition-colors" />
+                        <span className="text-xs text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
+                          Upload Aadhaar (JPG, PNG, PDF)
+                        </span>
+                        <input
+                          type="file"
+                          name="aadhaar_file"
+                          className="hidden"
+                          accept="image/*,application/pdf,.doc,.docx,.txt"
+                          onChange={(e) => handleAadhaarFileChange(e.target.files?.[0] || null)}
+                        />
+                      </label>
+                    ) : (
+                      <div className="flex items-center gap-2.5 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
+                        {aadhaarPreviewUrl ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={aadhaarPreviewUrl}
+                            alt="Aadhaar preview"
+                            className="h-10 w-10 rounded-lg object-cover border border-[var(--color-hairline)] shrink-0"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-lg bg-[var(--color-hairline)] flex items-center justify-center shrink-0">
+                            <FileText className="h-5 w-5 text-sky-600" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-[var(--color-ink)] truncate">
+                            {aadhaarFile.name}
+                          </p>
+                          <p className="text-[10px] text-[var(--color-mute)] font-mono">
+                            {(aadhaarFile.size / 1024).toFixed(0)} KB · Attached
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleAadhaarFileChange(null)}
+                          className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors"
+                          title="Remove file"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+
+                    {aadhaarFileError && (
+                      <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1">
+                        {aadhaarFileError}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Licence Upload Card */}
+                  <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
+                        <AnimatedCreditCard size={14} className="text-sky-600 dark:text-sky-400" />
+                        Licence Document <span className="text-[10px] font-normal text-[var(--color-mute)]">(Front Photo / PDF)</span>
+                      </span>
+                      <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
+                    </div>
+
+                    {!licenseFile ? (
+                      <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
+                        <Upload className="h-4 w-4 text-[var(--color-mute)] group-hover:text-sky-600 transition-colors" />
+                        <span className="text-xs text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
+                          Upload Licence (JPG, PNG, PDF)
+                        </span>
+                        <input
+                          type="file"
+                          name="license_file"
+                          className="hidden"
+                          accept="image/*,application/pdf,.doc,.docx,.txt"
+                          onChange={(e) => handleLicenseFileChange(e.target.files?.[0] || null)}
+                        />
+                      </label>
+                    ) : (
+                      <div className="flex items-center gap-2.5 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
+                        {licensePreviewUrl ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={licensePreviewUrl}
+                            alt="Licence preview"
+                            className="h-10 w-10 rounded-lg object-cover border border-[var(--color-hairline)] shrink-0"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-lg bg-[var(--color-hairline)] flex items-center justify-center shrink-0">
+                            <FileText className="h-5 w-5 text-sky-600" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-[var(--color-ink)] truncate">
+                            {licenseFile.name}
+                          </p>
+                          <p className="text-[10px] text-[var(--color-mute)] font-mono">
+                            {(licenseFile.size / 1024).toFixed(0)} KB · Attached
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleLicenseFileChange(null)}
+                          className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors"
+                          title="Remove file"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+
+                    {licenseFileError && (
+                      <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1">
+                        {licenseFileError}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
 

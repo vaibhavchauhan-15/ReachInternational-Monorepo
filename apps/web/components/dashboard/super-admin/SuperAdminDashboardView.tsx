@@ -84,7 +84,7 @@ export async function SuperAdminDashboardView({
             label="Logs Today"
             value={todayLogs}
             icon={Clock}
-            href="/operations?tab=logs"
+            href="/operations"
             variant={todayLogs > 0 ? "success" : "default"}
           />
           <KPICard

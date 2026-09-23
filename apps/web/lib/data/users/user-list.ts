@@ -35,7 +35,7 @@ export interface UserListResponse {
  * Reuses the machine-list.ts projection pattern.
  */
 export const USER_LIST_COLUMNS =
-  "id, full_name, email, phone, role, status, address, city, district, state, state_id, aadhaar_number, license_number, shift_time, supervisor_id, supervisor_ids, created_at, updated_at";
+  "id, full_name, email, phone, role, status, street, city, district, state, state_id, aadhaar_number, license_number, shift_start_time, shift_end_time, supervisor_id, monthly_salary, daily_rate, ot_hourly_rate, complete_profile, created_at, updated_at";
 
 export function sanitizeSearchToken(token: string): string {
   return token
@@ -78,72 +78,32 @@ export function applyOptimizedUserSearch<T extends { or: (filters: string) => T 
     }
 
     const conditions: string[] = [];
-    if (phoneDigits.length >= 3) {
-      conditions.push(`phone.ilike.%${phoneDigits}%`);
-    }
+    conditions.push(`phone.ilike.%${phoneDigits}%`);
     if (digits.length >= 4) {
       conditions.push(`aadhaar_number.ilike.%${digits}%`);
     }
-    conditions.push(`license_number.ilike.%${sanitized}%`);
-    conditions.push(`full_name.ilike.%${sanitized}%`);
-
     return query.or(conditions.join(","));
   }
 
-  // 2. Email search: contains @ or domain ending
-  if (trimmed.includes("@") || trimmed.endsWith(".com") || trimmed.endsWith(".in")) {
-    return query.or(`email.ilike.%${sanitized}%,full_name.ilike.%${sanitized}%`);
+  // 2. Email query
+  if (trimmed.includes("@")) {
+    return query.or(`email.ilike.%${sanitized}%`);
   }
 
-  // 3. Multi-token or Role search
-  const words = trimmed.split(/\s+/).map(sanitizeSearchToken).filter((w) => w.length >= 2);
-  const roleSlug = sanitized.toLowerCase().replace(/\s+/g, "_");
-  const isKnownRole = [
-    "super_admin",
-    "admin",
-    "manager",
-    "supervisor",
-    "hr",
-    "operator",
-  ].some((r) => r === roleSlug || r.includes(roleSlug) || roleSlug.includes(r));
-
-  if (words.length > 1) {
-    if (isKnownRole) {
-      return query.or(`role.ilike.%${roleSlug}%,full_name.ilike.%${sanitized}%,email.ilike.%${sanitized}%`);
-    }
-
-    // Composite multi-token AND matching across name, role, city, district, state, email
-    for (const word of words) {
-      const wRole = word.toLowerCase().replace(/s$/, "");
-      query = query.or(
-        `full_name.ilike.%${word}%,role.ilike.%${wRole}%,city.ilike.%${word}%,district.ilike.%${word}%,state.ilike.%${word}%,email.ilike.%${word}%`
-      );
-    }
-    return query;
+  // 3. Multi-token full-text name / role / location search
+  const tokens = trimmed.split(/\s+/).filter(Boolean);
+  if (tokens.length > 1) {
+    const andClauses = tokens.map((t) => {
+      const s = sanitizeSearchToken(t);
+      return `and(or(full_name.ilike.%${s}%,role.ilike.%${s}%,city.ilike.%${s}%,district.ilike.%${s}%,state.ilike.%${s}%))`;
+    });
+    return query.or(andClauses.join(","));
   }
 
-  // 4. Single-token text search
-  const roleVariant = sanitized.toLowerCase().replace(/s$/, "");
-  const conditions = [
-    `full_name.ilike.%${sanitized}%`,
-    `email.ilike.%${sanitized}%`,
-    `role.ilike.%${sanitized}%`,
-    `city.ilike.%${sanitized}%`,
-    `district.ilike.%${sanitized}%`,
-    `state.ilike.%${sanitized}%`,
-    `license_number.ilike.%${sanitized}%`,
-  ];
-
-  if (roleVariant !== sanitized.toLowerCase()) {
-    conditions.push(`role.ilike.%${roleVariant}%`);
-  }
-
-  if (digits.length >= 3) {
-    conditions.push(`phone.ilike.%${digits}%`);
-    conditions.push(`aadhaar_number.ilike.%${digits}%`);
-  }
-
-  return query.or(conditions.join(","));
+  // 4. Default: single-token broad text search across indexed name, email, role, and address
+  return query.or(
+    `full_name.ilike.%${sanitized}%,email.ilike.%${sanitized}%,role.ilike.%${sanitized}%,city.ilike.%${sanitized}%,district.ilike.%${sanitized}%,state.ilike.%${sanitized}%,street.ilike.%${sanitized}%`
+  );
 }
 
 /**
@@ -159,12 +119,35 @@ export async function hydrateUsersPersonnel(rawUsers: User[]): Promise<User[]> {
   const activeSupervisors = await getActiveSupervisorsCached();
   const supervisorMap = new Map<string, CachedSupervisor>(activeSupervisors.map((s) => [s.id, s]));
 
+  // Query user_supervisors junction table for all users
+  const userIds = rawUsers.map((u) => u.id);
+  const userToSupsMap = new Map<string, string[]>();
+  if (userIds.length > 0) {
+    try {
+      const adminClient = createSupabaseAdminClient();
+      const { data: userSupsRes } = await adminClient
+        .from("user_supervisors")
+        .select("user_id, supervisor_id")
+        .in("user_id", userIds);
+      if (userSupsRes) {
+        for (const rel of userSupsRes as Array<{ user_id: string; supervisor_id: string }>) {
+          const existing = userToSupsMap.get(rel.user_id) || [];
+          existing.push(rel.supervisor_id);
+          userToSupsMap.set(rel.user_id, existing);
+        }
+      }
+    } catch {
+      // Fallback to u.supervisor_id
+    }
+  }
+
   // Check for any edge-case supervisor IDs not present in the active cache (e.g. inactive supervisors)
   const missingSupIds = new Set<string>();
   rawUsers.forEach((u) => {
+    const junctionSupIds = userToSupsMap.get(u.id) || [];
     const supIds =
-      u.supervisor_ids && u.supervisor_ids.length > 0
-        ? u.supervisor_ids
+      junctionSupIds.length > 0
+        ? junctionSupIds
         : u.supervisor_id
         ? [u.supervisor_id]
         : [];
@@ -191,9 +174,10 @@ export async function hydrateUsersPersonnel(rawUsers: User[]): Promise<User[]> {
   }
 
   return rawUsers.map((u) => {
+    const junctionSupIds = userToSupsMap.get(u.id) || [];
     const supIds: string[] =
-      u.supervisor_ids && u.supervisor_ids.length > 0
-        ? u.supervisor_ids
+      junctionSupIds.length > 0
+        ? junctionSupIds
         : u.supervisor_id
         ? [u.supervisor_id]
         : [];
@@ -209,6 +193,7 @@ export async function hydrateUsersPersonnel(rawUsers: User[]): Promise<User[]> {
 
     return {
       ...u,
+      address: u.street || u.address || null,
       supervisor_id: primarySup?.id ?? null,
       supervisor_ids: supIds,
       supervisor: primarySup,
@@ -261,8 +246,21 @@ export async function getUserList(params: UserListParams = {}): Promise<UserList
   query = query.order("id", { ascending: true });
 
   if (isSupervisor) {
-    // Supervisor scope: assigned via primary supervisor_id or supervisor_ids array
-    query = query.or(`supervisor_id.eq.${currentUser.id},supervisor_ids.cs.{${currentUser.id}}`);
+    // Supervisor scope: assigned via primary supervisor_id or user_supervisors junction table
+    let assignedIds: string[] = [];
+    try {
+      const { data: supRows } = await supabase
+        .from("user_supervisors")
+        .select("user_id")
+        .eq("supervisor_id", currentUser.id);
+      assignedIds = (supRows || []).map((r: any) => r.user_id);
+    } catch {}
+
+    if (assignedIds.length > 0) {
+      query = query.or(`supervisor_id.eq.${currentUser.id},id.in.(${assignedIds.join(",")})`);
+    } else {
+      query = query.eq("supervisor_id", currentUser.id);
+    }
 
     // Clamp role filter to supervisor visible roles only
     if (role && role !== "all") {

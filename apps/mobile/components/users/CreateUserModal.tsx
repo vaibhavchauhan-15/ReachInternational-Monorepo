@@ -17,6 +17,7 @@ import {
   validateAadhaarNumber,
   validateLicenseNumber,
   formatAadhaar,
+  parseProfileShiftTime,
   INDIAN_STATES,
 } from '@reachinternational/utils';
 import { isSupervisedRole } from '@reachinternational/permissions';
@@ -38,7 +39,7 @@ import {
   CheckCircle2,
 } from 'lucide-react-native';
 
-const USER_ROLES = [
+const USER_ROLES: Array<{ value: string; label: string }> = [
   { value: 'operator', label: 'Operator' },
   { value: 'supervisor', label: 'Supervisor' },
   { value: 'hr', label: 'HR' },
@@ -79,6 +80,8 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   const [licenseNumber, setLicenseNumber] = useState('');
   const [password, setPassword] = useState('Welcome@123');
 
+  const [monthlySalary, setMonthlySalary] = useState('');
+
   // Supervisor State
   const [supervisors, setSupervisors] = useState<Array<{ id: string; full_name: string; email?: string }>>([]);
   const [supervisorId, setSupervisorId] = useState('');
@@ -88,39 +91,40 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   React.useEffect(() => {
     async function loadSupervisors() {
       try {
-        const { data, error } = await supabase.rpc('get_active_supervisors_public');
-        if (!error && data) {
-          setSupervisors(data as Array<{ id: string; full_name: string; email?: string }>);
-        }
-      } catch (err) {
-        console.warn('Note: failed to load active supervisors for CreateUserModal:', err);
+        const { data: sups } = await supabase.rpc('get_active_supervisors_public');
+        if (sups) setSupervisors(sups as Array<{ id: string; full_name: string; email?: string }>);
+      } catch {
+        // ignore
       }
     }
-
-    loadSupervisors();
-  }, []);
+    if (visible) {
+      loadSupervisors();
+    }
+  }, [visible]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const selectedSupervisor = supervisors.find((s) => s.id === supervisorId);
 
   const availableRoles = isSuperAdmin
     ? USER_ROLES
     : USER_ROLES.filter((r) => r.value !== 'super_admin');
 
+  const selectedRoleObj = availableRoles.find((r) => r.value === role) || availableRoles[0];
+  const selectedSupervisor = supervisors.find((s) => s.id === supervisorId);
+
   const filteredStates = INDIAN_STATES.filter((s) =>
     s.name.toLowerCase().includes(stateSearch.toLowerCase())
+  );
+
+  const filteredSupervisors = supervisors.filter((s) =>
+    s.full_name.toLowerCase().includes(supervisorSearch.toLowerCase()) ||
+    (s.email && s.email.toLowerCase().includes(supervisorSearch.toLowerCase()))
   );
 
   const handleCreate = async () => {
     setError('');
     if (!fullName.trim() || fullName.trim().length < 2) {
-      setError('Full Name is required.');
-      return;
-    }
-    if (!email.trim() || !email.includes('@')) {
-      setError('Valid Email Address is required.');
+      setError('Full Name is required (minimum 2 characters).');
       return;
     }
     const cleanPhone = phone.replace(/[^0-9+]/g, '');
@@ -128,9 +132,25 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
       setError('Valid 10-digit mobile phone number is required.');
       return;
     }
+    if (!email.trim() || !email.includes('@')) {
+      setError('Valid email address is required.');
+      return;
+    }
+    if (!password.trim() || password.length < 6) {
+      setError('Password must be at least 6 characters.');
+      return;
+    }
     if (!city.trim() || !district.trim() || !stateVal.trim()) {
       setError('City, District, and State are required.');
       return;
+    }
+
+    if (role === 'operator') {
+      const sal = Number(monthlySalary);
+      if (!monthlySalary || isNaN(sal) || sal <= 0) {
+        setError('Monthly salary is mandatory for operator accounts and must be greater than 0.');
+        return;
+      }
     }
 
     let cleanAadhaar: string | null = null;
@@ -155,6 +175,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
 
     setIsLoading(true);
     try {
+      const sal = role === 'operator' ? Number(monthlySalary) : null;
       // 1. Direct Supabase Admin/Auth creation
       const { data, error: signUpErr } = await supabase.auth.signUp({
         email: email.trim(),
@@ -165,9 +186,11 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
             phone: cleanPhone,
             role,
             supervisor_id: isSupervisedRole(role) ? supervisorId || null : null,
-            supervisor_ids: isSupervisedRole(role) && supervisorId ? [supervisorId] : [],
             shift_time: shiftTime.trim() || null,
+            street: address.trim() || null,
             address: address.trim() || null,
+            monthly_salary: sal,
+            complete_profile: true,
             city: city.trim(),
             district: district.trim(),
             state: stateVal.trim(),
@@ -185,15 +208,18 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
       // Ensure status is active in users table
       if (data.user) {
         try {
+          const parsedShift = shiftTime.trim() ? parseProfileShiftTime(shiftTime) : null;
           await supabase
             .from('users')
             .update({
               status: 'active',
               role,
               supervisor_id: isSupervisedRole(role) ? supervisorId || null : null,
-              supervisor_ids: isSupervisedRole(role) && supervisorId ? [supervisorId] : [],
-              shift_time: shiftTime.trim() || null,
-              address: address.trim() || null,
+              shift_start_time: parsedShift?.startTime || null,
+              shift_end_time: parsedShift?.endTime || null,
+              street: address.trim() || null,
+              monthly_salary: sal,
+              complete_profile: true,
               city: city.trim(),
               district: district.trim(),
               state: stateVal.trim(),
@@ -202,6 +228,16 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
               license_number: formattedLic,
             })
             .eq('id', data.user.id);
+
+          if (isSupervisedRole(role) && supervisorId) {
+            try {
+              await supabase
+                .from('user_supervisors')
+                .upsert({ user_id: data.user.id, supervisor_id: supervisorId }, { onConflict: 'user_id,supervisor_id' });
+            } catch {
+              // ignore
+            }
+          }
         } catch {
           // ignore
         }
@@ -216,8 +252,6 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
       setIsLoading(false);
     }
   };
-
-  const selectedRoleObj = availableRoles.find((r) => r.value === role) || availableRoles[0];
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -322,6 +356,18 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
                   <ChevronDown size={16} color={theme.colors.mute} />
                 </TouchableOpacity>
               </View>
+            )}
+
+            {/* Operator Monthly Salary Input */}
+            {role === 'operator' && (
+              <Input
+                label="Monthly Salary (₹) *"
+                placeholder="e.g. 25000"
+                value={monthlySalary}
+                onChangeText={setMonthlySalary}
+                keyboardType="number-pad"
+                leftIcon={<CreditCard size={16} color={theme.colors.mute} />}
+              />
             )}
 
             <Input

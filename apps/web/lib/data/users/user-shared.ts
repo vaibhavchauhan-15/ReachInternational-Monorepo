@@ -19,7 +19,7 @@ export interface UserListAggregates {
 }
 
 export const USER_SELECT_COLUMNS =
-  "id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, address, shift_time, supervisor_id, supervisor_ids, created_at, updated_at";
+  "id, full_name, email, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, street, shift_start_time, shift_end_time, supervisor_id, monthly_salary, daily_rate, ot_hourly_rate, complete_profile, created_at, updated_at";
 
 export const getActiveSupervisorsCached = unstable_cache(
   async (): Promise<Pick<User, "id" | "full_name" | "email" | "phone" | "role">[]> => {
@@ -193,7 +193,14 @@ export async function getSupervisorUserListAggregatesCached(
       }
 
       // 2. Secondary fallback parallel queries
-      const scopeFilter = `supervisor_id.eq.${supId},supervisor_ids.cs.{${supId}}`;
+      const { data: supRelRows } = await supabase
+        .from("user_supervisors")
+        .select("user_id")
+        .eq("supervisor_id", supId);
+      const assignedIds = (supRelRows || []).map((r: any) => r.user_id);
+      const scopeFilter = assignedIds.length > 0
+        ? `supervisor_id.eq.${supId},id.in.(${assignedIds.join(",")})`
+        : `supervisor_id.eq.${supId}`;
 
       const [totalRes, activeRes, operatorRes, statesRes] = await Promise.all([
         supabase
@@ -255,7 +262,7 @@ export async function getSupervisorUserListAggregatesCached(
         states: sortedStates,
       };
     },
-    [`supervisor-user-aggregates-v3-${supervisorId}`],
+    [`supervisor-user-aggregates-v4-${supervisorId}`],
     { revalidate: CACHE_TIERS.CLASS_C_OPERATIONAL, tags: [TAGS.users] }
   );
 
@@ -265,17 +272,17 @@ export async function getSupervisorUserListAggregatesCached(
 export const getAllUsersCached = unstable_cache(
   async (): Promise<User[]> => {
     const supabase = createSupabaseAdminClient();
-    const { data, error } = await supabase
-      .from("users")
-      .select(USER_SELECT_COLUMNS)
-      .order("created_at", { ascending: false });
+    const [usersRes, userSupsRes] = await Promise.all([
+      supabase.from("users").select(USER_SELECT_COLUMNS).order("created_at", { ascending: false }),
+      supabase.from("user_supervisors").select("user_id, supervisor_id"),
+    ]);
 
-    if (error) {
-      console.error("[DAL] Error in getAllUsersCached:", error.message || error);
+    if (usersRes.error) {
+      console.error("[DAL] Error in getAllUsersCached:", usersRes.error.message || usersRes.error);
       return [];
     }
 
-    const rawUsers = (data as unknown as User[]) || [];
+    const rawUsers = (usersRes.data as unknown as User[]) || [];
     const supervisorMap = new Map<string, { id: string; full_name: string; email?: string | null; phone?: string | null }>();
     for (const u of rawUsers) {
       if (u.role === "supervisor") {
@@ -288,9 +295,17 @@ export const getAllUsersCached = unstable_cache(
       }
     }
 
+    const userToSupsMap = new Map<string, string[]>();
+    for (const rel of (userSupsRes.data || []) as Array<{ user_id: string; supervisor_id: string }>) {
+      const existing = userToSupsMap.get(rel.user_id) || [];
+      existing.push(rel.supervisor_id);
+      userToSupsMap.set(rel.user_id, existing);
+    }
+
     return rawUsers.map((u) => {
-      const supIds = (u.supervisor_ids && u.supervisor_ids.length > 0)
-        ? u.supervisor_ids
+      const junctionSupIds = userToSupsMap.get(u.id) || [];
+      const supIds = junctionSupIds.length > 0
+        ? junctionSupIds
         : (u.supervisor_id ? [u.supervisor_id] : []);
       const supervisorsList = supIds
         .map((id) => supervisorMap.get(id))
@@ -301,6 +316,7 @@ export const getAllUsersCached = unstable_cache(
 
       return {
         ...u,
+        address: u.street || u.address || null,
         supervisor_id: primarySup?.id ?? null,
         supervisor_ids: supIds,
         supervisor: primarySup,
@@ -308,7 +324,7 @@ export const getAllUsersCached = unstable_cache(
       };
     });
   },
-  ["all-users-directory-v5"],
+  ["all-users-directory-v6"],
   { revalidate: CACHE_TIERS.CLASS_C_OPERATIONAL, tags: [TAGS.users] }
 );
 
@@ -328,7 +344,7 @@ export const getPendingUsersCached = unstable_cache(
 
     return (data as unknown as User[]) || [];
   },
-  ["pending-users-list-v1"],
+  ["pending-users-list-v2"],
   { revalidate: 30, tags: [TAGS.users] }
 );
 
@@ -351,7 +367,7 @@ export const getPendingProfileChangeRequests = unstable_cache(
         rejection_reason,
         created_at,
         updated_at,
-        user:users!profile_change_requests_user_id_fkey(id, full_name, email, role, phone, shift_time, address, city, district, state, aadhaar_number, license_number)
+        user:users!profile_change_requests_user_id_fkey(id, full_name, email, role, phone, street, city, district, state, aadhaar_number, license_number)
       `)
       .eq("status", "pending")
       .order("created_at", { ascending: false });

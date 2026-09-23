@@ -73,7 +73,7 @@ export function NavigationItem({
                 }}
                 className="focus:outline-none focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
               >
-                <Icon className={`h-4 w-4 shrink-0 ${(isActive || isFlyoutOpen) ? "text-sky-600 dark:text-sky-400 font-bold" : ""}`} />
+                <Icon className={`h-4 w-4 shrink-0 interactive-icon icon-bounce ${(isActive || isFlyoutOpen) ? "text-sky-600 dark:text-sky-400 font-bold" : ""}`} />
               </SidebarMenuButton>
             ) : (
               <Link href={item.href} className="w-full flex justify-center focus:outline-none">
@@ -84,7 +84,7 @@ export function NavigationItem({
                   aria-label={item.label}
                   className="focus:outline-none focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
                 >
-                  <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-sky-600 dark:text-sky-400 font-bold" : ""}`} />
+                  <Icon className={`h-4 w-4 shrink-0 interactive-icon icon-bounce ${isActive ? "text-sky-600 dark:text-sky-400 font-bold" : ""}`} />
                 </SidebarMenuButton>
               </Link>
             )}
@@ -116,14 +116,14 @@ export function NavigationItem({
         >
           <div
             onClick={() => onToggleMenu(!isMenuOpen)}
-            className={`relative flex items-center justify-between rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all duration-150 cursor-pointer ${
+            className={`group group/nav interactive-parent relative flex items-center justify-between rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all duration-150 cursor-pointer ${
               isActive
                 ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold border border-sky-500/20 shadow-2xs"
                 : "text-[var(--color-body)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
             }`}
           >
             <div className="flex items-center gap-3 min-w-0 flex-1 select-none">
-              <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-sky-600 dark:text-sky-400" : ""}`} />
+              <Icon className={`h-4 w-4 shrink-0 interactive-icon icon-bounce ${isActive ? "text-sky-600 dark:text-sky-400" : ""}`} />
               <span className="truncate">{item.label}</span>
             </div>
 
@@ -161,7 +161,7 @@ export function NavigationItem({
       ) : (
         <Link href={item.href} className="focus:outline-none">
           <SidebarMenuButton as="div" active={isActive}>
-            <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-sky-600 dark:text-sky-400 font-bold" : ""}`} />
+            <Icon className={`h-4 w-4 shrink-0 interactive-icon icon-bounce ${isActive ? "text-sky-600 dark:text-sky-400 font-bold" : ""}`} />
             <span className="truncate">{item.label}</span>
           </SidebarMenuButton>
         </Link>

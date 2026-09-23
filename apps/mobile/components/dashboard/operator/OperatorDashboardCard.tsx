@@ -30,7 +30,7 @@ export const OperatorDashboardCard: React.FC<OperatorDashboardCardProps> = ({ da
           router.push(
             (isSubmitted
               ? '/(app)/operations?tab=history'
-              : '/(app)/operations?tab=entry') as any
+              : '/(app)/operations') as any
           )
         }
         activeOpacity={0.85}

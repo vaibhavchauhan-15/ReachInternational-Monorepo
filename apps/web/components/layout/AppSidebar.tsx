@@ -10,6 +10,7 @@ import {
   AnimatedScrollText,
   AnimatedSettings,
   AnimatedCreditCard,
+  AnimatedCalendarCheck,
 } from "@/components/ui/animated-icons";
 import dynamic from "next/dynamic";
 import {
@@ -51,45 +52,36 @@ export const mainNavItems: NavItem[] = [
     label: "Machines",
     icon: AnimatedWrench,
     roles: ["super_admin", "admin", "manager", "supervisor", "operator"],
-    subItems: [
-      { label: "Machine Directory", tab: "inventory" },
-    ],
   },
   {
     href: "/operations",
     label: "Operations",
     icon: AnimatedGauge,
     roles: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"],
-    subItems: [
-      { label: "Running Hours", tab: "logs" },
-    ],
   },
   {
     href: "/clients",
     label: "Clients",
     icon: AnimatedBuilding2,
     roles: ["super_admin", "admin", "manager"],
-    subItems: [
-      { label: "Client Directory", tab: "all" },
-    ],
   },
   {
     href: "/users",
-    label: "Employees & Users",
+    label: "Users",
     icon: AnimatedUsers,
     roles: ["super_admin", "admin", "manager", "hr", "supervisor"],
-    subItems: [
-      { label: "All Employee Accounts", tab: "all" },
-    ],
   },
   {
-    href: "/hr",
-    label: "HR Payroll",
+    href: "/attendance",
+    label: "Attendance",
+    icon: AnimatedCalendarCheck,
+    roles: ["super_admin", "admin", "hr"],
+  },
+  {
+    href: "/payroll",
+    label: "Payroll",
     icon: AnimatedCreditCard,
-    roles: ["super_admin", "admin", "manager", "hr"],
-    subItems: [
-      { label: "Operator Payroll", tab: "payroll" },
-    ],
+    roles: ["super_admin", "admin", "hr"],
   },
   {
     href: "/audit",
@@ -110,40 +102,9 @@ export function AppSidebar({ user, collapsed, onToggleCollapse }: AppSidebarProp
   const { mobileOpen, setMobileOpen } = useSidebar();
 
   const visibleMainItems = useMemo(() => {
-    const filtered = mainNavItems
-      .filter((item) => !item.roles || item.roles.includes(user.role))
-      .map((item) => {
-        if (item.href === "/machines") {
-          if (user.role === "operator") {
-            return {
-              ...item,
-              subItems: [
-                { label: "Assigned Machine", tab: "assigned" },
-              ],
-            };
-          }
-        }
-        if (item.href === "/operations") {
-          if (user.role === "operator") {
-            return {
-              ...item,
-              subItems: [
-                { label: "Log Entry", tab: "entry" },
-                { label: "Log History", tab: "history" },
-              ],
-            };
-          }
-          return {
-            ...item,
-            subItems: [
-              { label: "Running Hours", tab: "logs" },
-              // { label: "Site Movement / Loading-Unloading", tab: "site-movement" }, // Soft-removed per user request
-              // { label: "Operator Roster & Salary", tab: "operators" }, // Soft-removed per user request
-            ],
-          };
-        }
-        return item;
-      });
+    const filtered = mainNavItems.filter(
+      (item) => !item.roles || item.roles.includes(user.role)
+    );
 
     if (user.role === "operator") {
       filtered.sort((a, b) => {

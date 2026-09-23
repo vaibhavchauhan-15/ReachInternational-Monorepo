@@ -4,7 +4,7 @@
 - `EnterpriseTable.tsx` & `Table.tsx`: Virtualized/paginated enterprise tables with filtering & column sorting.
 - `MetricCard.tsx` & `Card.tsx`: Glassmorphism KPI statistic containers.
 - `Button.tsx` & `Badge.tsx`: Tailwind v4 styled interactive buttons & status badges.
-- `Input.tsx`, `Select.tsx`, `SearchableSelect.tsx`: Form inputs with validation error states.
+- `Input.tsx`, `Select.tsx`, `SearchableSelect.tsx`, `MonthSelect.tsx`: Form inputs, month picker popover, and selects with validation states.
 - `Modal.tsx` & `ConfirmationDialog.tsx`: Accessible dialog overlays.
 - `CommandPalette.tsx`: Global `Cmd+K` keyboard shortcut navigation and quick action search.
 - `Motion.tsx`: Wrapper for Framer Motion transitions (fade, slide, scale).

@@ -799,6 +799,363 @@ html {
   border-color: var(--color-mute);
 }
 
+/* ============================================
+   Global Interactive Icon Animation System
+   Industry-Standard Micro-Interaction Engine (Linear / Vercel / Apple Standard)
+   ============================================ */
+
+/* Base interactive icon primitive */
+.interactive-icon,
+[data-interactive-icon],
+.icon-lift,
+.icon-slide,
+.icon-rotate,
+.icon-scale,
+.icon-bounce,
+.icon-arrow,
+.icon-arrow-left,
+.icon-arrow-up,
+.icon-arrow-down,
+.icon-chevron,
+.icon-refresh,
+.icon-spin,
+.icon-tilt,
+.icon-shake,
+.icon-bell,
+.icon-pulse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transform-origin: center center;
+  pointer-events: none;
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 150ms ease,
+              color 150ms ease;
+  will-change: transform;
+}
+
+/* Keyframes for refined, physics-based micro-interactions */
+@keyframes iconSmoothSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes iconSubtleBell {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(-10deg) scale(1.04); }
+  40% { transform: rotate(10deg) scale(1.04); }
+  60% { transform: rotate(-5deg); }
+  80% { transform: rotate(5deg); }
+}
+
+@keyframes iconSubtleShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3px); }
+  40% { transform: translateX(3px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+
+@keyframes iconSubtlePulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.08); opacity: 0.85; }
+}
+
+/* ==========================================================================
+   SEMANTIC MOTION VERBS (Parent-Driven Hover & Focus-Visible States)
+   Only intentional interactive controls trigger icon micro-motion.
+   ========================================================================== */
+
+/* 1. Spring / Bounce (Primary buttons, CTAs, bookmark, action triggers) */
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group,
+  .group\/btn,
+  .group\/card,
+  .group\/tab
+):is(:hover, :focus-visible):not(:disabled) :is(.icon-bounce, [data-interactive-icon="bounce"], .icon-spring),
+.group-hover\:icon-bounce:is(.group:hover *) {
+  transform: scale(1.09) !important;
+}
+
+/* 2. Scale (Segmented toggles, view switchers, selection chips) */
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group,
+  .group\/btn,
+  .group\/tab
+):is(:hover, :focus-visible):not(:disabled) :is(.icon-scale, [data-interactive-icon="scale"]),
+.group-hover\:icon-scale:is(.group:hover *) {
+  transform: scale(1.08) !important;
+}
+
+/* 3. Advance / Arrow (Directional links, next steps, action buttons with disclosure) */
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group,
+  .group\/btn,
+  .group\/card,
+  .group\/nav,
+  .group\/menu
+):is(:hover, :focus-visible):not(:disabled) :is(.icon-slide, .icon-arrow, .icon-arrow-right, [data-interactive-icon="arrow"], [data-interactive-icon="arrow-right"], [data-interactive-icon="slide"]),
+.group-hover\:icon-arrow:is(.group:hover *),
+.group-hover\:icon-slide:is(.group:hover *) {
+  transform: translateX(3px) !important;
+}
+
+/* 4. Arrow Left (Back buttons, previous pagination) */
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group,
+  .group\/btn,
+  .group\/nav
+):is(:hover, :focus-visible):not(:disabled) :is(.icon-arrow-left, [data-interactive-icon="arrow-left"]) {
+  transform: translateX(-3px) !important;
+}
+
+/* 5. Arrow Up / Down (Export download, upload, directional indicators) */
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group,
+  .group\/btn
+):is(:hover, :focus-visible):not(:disabled) :is(.icon-arrow-up, [data-interactive-icon="arrow-up"]) {
+  transform: translateY(-2px) !important;
+}
+
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group,
+  .group\/btn
+):is(:hover, :focus-visible):not(:disabled) :is(.icon-arrow-down, [data-interactive-icon="arrow-down"]) {
+  transform: translateY(2px) !important;
+}
+
+/* 6. Chevron (Collapsible accordions, dropdown triggers) */
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group,
+  .group\/btn,
+  .group\/nav
+):is(:hover, :focus-visible):not(:disabled) :is(.icon-chevron, [data-interactive-icon="chevron"]),
+.group-hover\:icon-chevron:is(.group:hover *) {
+  transform: translateX(2px) !important;
+}
+
+/* 7. Turn / Rotate (Settings cogs, tools, filter triggers) */
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group,
+  .group\/btn,
+  .group\/nav
+):is(:hover, :focus-visible):not(:disabled) :is(.icon-rotate, [data-interactive-icon="rotate"]),
+.group-hover\:icon-rotate:is(.group:hover *) {
+  transform: rotate(30deg) !important;
+}
+
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group,
+  .group\/btn
+):is(:hover, :focus-visible):not(:disabled) :is(.icon-gear, [data-interactive-icon="gear"]) {
+  transform: rotate(45deg) !important;
+}
+
+/* 8. Refresh (Data table refresh, sync triggers) */
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group,
+  .group\/btn
+):is(:hover, :focus-visible):not(:disabled) :is(.icon-refresh, [data-interactive-icon="refresh"]),
+.group-hover\:icon-refresh:is(.group:hover *) {
+  transform: rotate(180deg) !important;
+}
+
+/* 9. Spin (Loading and continuous sync) */
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group
+):is(:hover, :focus-visible):not(:disabled) :is(.icon-spin, [data-interactive-icon="spin"]),
+.group-hover\:icon-spin:is(.group:hover *) {
+  animation: iconSmoothSpin 0.75s linear infinite !important;
+}
+
+/* 10. Tilt (Destructive actions, delete, trash) */
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group,
+  .group\/btn
+):is(:hover, :focus-visible):not(:disabled) :is(.icon-tilt, [data-interactive-icon="tilt"]),
+.group-hover\:icon-tilt:is(.group:hover *) {
+  transform: rotate(-10deg) scale(1.04) !important;
+}
+
+/* 11. Lift (Cards, elevated metric tiles) */
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group,
+  .group\/card
+):is(:hover, :focus-visible):not(:disabled) :is(.icon-lift, [data-interactive-icon="lift"]),
+.group-hover\:icon-lift:is(.group:hover *) {
+  transform: translateY(-2px) scale(1.04) !important;
+}
+
+/* 12. Bell / Shake (Alerts, notifications) */
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group
+):is(:hover, :focus-visible):not(:disabled) :is(.icon-bell, [data-interactive-icon="bell"]) {
+  animation: iconSubtleBell 0.45s ease-in-out !important;
+}
+
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group
+):is(:hover, :focus-visible):not(:disabled) :is(.icon-shake, [data-interactive-icon="shake"]) {
+  animation: iconSubtleShake 0.35s ease-in-out !important;
+}
+
+/* 13. Pulse (Active beacons, live status) */
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group
+):is(:hover, :focus-visible):not(:disabled) :is(.icon-pulse, [data-interactive-icon="pulse"]) {
+  animation: iconSubtlePulse 1.8s ease-in-out infinite !important;
+}
+
+/* Standalone direct hover on interactive icons */
+.interactive-icon:hover,
+[data-interactive-icon]:hover {
+  transform: scale(1.09);
+}
+:is(.icon-arrow, .icon-arrow-right, [data-interactive-icon="arrow"]):hover {
+  transform: translateX(3px);
+}
+:is(.icon-arrow-left, [data-interactive-icon="arrow-left"]):hover {
+  transform: translateX(-3px);
+}
+:is(.icon-rotate, [data-interactive-icon="rotate"]):hover {
+  transform: rotate(30deg);
+}
+:is(.icon-refresh, [data-interactive-icon="refresh"]):hover {
+  transform: rotate(180deg);
+}
+:is(.icon-tilt, [data-interactive-icon="tilt"]):hover {
+  transform: rotate(-10deg) scale(1.04);
+}
+
+/* ==========================================================================
+   TACTILE ACTIVE / PRESSED STATES (Click Compression & Physical Feedback)
+   ========================================================================== */
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group
+):active:not(:disabled) :is(.interactive-icon, [data-interactive-icon]) {
+  transform: scale(0.94) !important;
+  transition-duration: 80ms !important;
+}
+
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group
+):active:not(:disabled) :is(.icon-arrow, .icon-arrow-right, [data-interactive-icon="arrow"], [data-interactive-icon="arrow-right"]) {
+  transform: translateX(4px) scale(0.96) !important;
+  transition-duration: 80ms !important;
+}
+
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group
+):active:not(:disabled) :is(.icon-rotate, [data-interactive-icon="rotate"]) {
+  transform: rotate(60deg) scale(0.94) !important;
+  transition-duration: 80ms !important;
+}
+
+:is(
+  button:not(:disabled),
+  a:not([aria-disabled="true"]),
+  [role="button"]:not([aria-disabled="true"]),
+  .interactive-parent,
+  .group
+):active:not(:disabled) :is(.icon-refresh, [data-interactive-icon="refresh"]) {
+  transform: rotate(270deg) scale(0.94) !important;
+  transition-duration: 80ms !important;
+}
+
+/* Strict Disabled Guard — Prevents animation on disabled controls */
+button:disabled .interactive-icon,
+button[disabled] .interactive-icon,
+button[aria-disabled="true"] .interactive-icon,
+a[aria-disabled="true"] .interactive-icon,
+[role="button"][aria-disabled="true"] .interactive-icon,
+.disabled .interactive-icon,
+:is(button:disabled, button[disabled], [aria-disabled="true"], .disabled) :is(.interactive-icon, [data-interactive-icon]) {
+  transform: none !important;
+  transition: none !important;
+  animation: none !important;
+}
+
 /* Form error entrance */
 @keyframes formErrorEnter {
   from {
@@ -1103,6 +1460,28 @@ html {
 
   ::view-transition-old(root),
   ::view-transition-new(root) {
+    animation: none !important;
+  }
+
+  .interactive-icon,
+  [data-interactive-icon],
+  .icon-lift,
+  .icon-slide,
+  .icon-rotate,
+  .icon-scale,
+  .icon-bounce,
+  .icon-arrow,
+  .icon-arrow-left,
+  .icon-arrow-up,
+  .icon-arrow-down,
+  .icon-chevron,
+  .icon-refresh,
+  .icon-spin,
+  .icon-tilt,
+  .icon-shake,
+  .icon-pulse {
+    transform: none !important;
+    transition: none !important;
     animation: none !important;
   }
 }

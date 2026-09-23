@@ -14,6 +14,7 @@ import {
   getOperationsClientLogsData,
   getOperationsOperatorLogsData,
   getOperationsAssignmentsData,
+  getCachedOperationsOperators,
 } from "@/lib/data/operations";
 
 /**
@@ -754,22 +755,25 @@ export const getOperationsHubData = cache(async (
       (params.clientId ? "client" : params.operatorId ? "operator" : "machine");
 
     if (viewMode === "machine") {
-      const res = await getOperationsMachineLogsData({
-        machineId: params.machineId,
-        month: params.month,
-        customStart: params.customStart,
-        customEnd: params.customEnd,
-        site: params.site,
-        search: params.search,
-        sort: params.sort,
-        page: params.page,
-        pageSize: params.pageSize || 20,
-      });
+      const [res, opsList] = await Promise.all([
+        getOperationsMachineLogsData({
+          machineId: params.machineId,
+          month: params.month,
+          customStart: params.customStart,
+          customEnd: params.customEnd,
+          site: params.site,
+          search: params.search,
+          sort: params.sort,
+          page: params.page,
+          pageSize: params.pageSize || 20,
+        }),
+        getCachedOperationsOperators(),
+      ]);
 
       return {
         machines: res.machines as unknown as Machine[],
         dbClients: [],
-        operators: [],
+        operators: (opsList || []) as unknown as User[],
         assignments: [],
         hourLogs: res.hourLogs,
         siteMovements: [],
@@ -786,24 +790,27 @@ export const getOperationsHubData = cache(async (
     }
 
     if (viewMode === "client") {
-      const res = await getOperationsClientLogsData({
-        clientId: params.clientId,
-        machineId: params.machineId,
-        site: params.site,
-        month: params.month,
-        customStart: params.customStart,
-        customEnd: params.customEnd,
-        search: params.search,
-        sort: params.sort,
-        page: params.page,
-        pageSize: params.pageSize || 20,
-        fetchLogs: true,
-      });
+      const [res, opsList] = await Promise.all([
+        getOperationsClientLogsData({
+          clientId: params.clientId,
+          machineId: params.machineId,
+          site: params.site,
+          month: params.month,
+          customStart: params.customStart,
+          customEnd: params.customEnd,
+          search: params.search,
+          sort: params.sort,
+          page: params.page,
+          pageSize: params.pageSize || 20,
+          fetchLogs: true,
+        }),
+        getCachedOperationsOperators(),
+      ]);
 
       return {
         machines: res.machines as unknown as Machine[],
         dbClients: res.dbClients as any,
-        operators: [],
+        operators: (opsList || []) as unknown as User[],
         assignments: [],
         hourLogs: res.hourLogs,
         siteMovements: [],

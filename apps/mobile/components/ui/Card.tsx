@@ -15,8 +15,11 @@ export interface CardProps {
   style?: StyleProp<ViewStyle>;
 }
 
+export const CardPressContext = React.createContext<{ isPressed: boolean }>({ isPressed: false });
+
 export const Card: React.FC<CardProps> = ({ children, variant = 'base', onPress, style }) => {
   const { theme } = useTheme();
+  const [isPressed, setIsPressed] = React.useState(false);
 
   const isElevated = variant === 'elevated';
   const shadowProps = isElevated ? theme.shadows.floating : theme.shadows.whisper;
@@ -33,9 +36,17 @@ export const Card: React.FC<CardProps> = ({ children, variant = 'base', onPress,
 
   if (onPress) {
     return (
-      <TouchableOpacity onPress={onPress} activeOpacity={0.7} style={[cardStyle, style]}>
-        {children}
-      </TouchableOpacity>
+      <CardPressContext.Provider value={{ isPressed }}>
+        <TouchableOpacity
+          onPress={onPress}
+          onPressIn={() => setIsPressed(true)}
+          onPressOut={() => setIsPressed(false)}
+          activeOpacity={0.7}
+          style={[cardStyle, style]}
+        >
+          {children}
+        </TouchableOpacity>
+      </CardPressContext.Provider>
     );
   }
 

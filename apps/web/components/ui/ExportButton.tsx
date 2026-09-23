@@ -40,27 +40,27 @@ export const ExportButton = forwardRef<HTMLButtonElement, ExportButtonProps>(
   ) => {
     const configMap: Record<ExportFormat, { icon: React.ReactNode; defaultLabel: string; defaultTooltip: string }> = {
       xlsx: {
-        icon: <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />,
+        icon: <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 interactive-icon icon-lift" />,
         defaultLabel: "Export Excel",
         defaultTooltip: "Export to Excel (.xlsx)",
       },
       csv: {
-        icon: <FileText className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0" />,
+        icon: <FileText className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0 interactive-icon icon-lift" />,
         defaultLabel: "Export CSV",
         defaultTooltip: "Export to CSV (.csv)",
       },
       pdf: {
-        icon: <FileText className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />,
+        icon: <FileText className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 interactive-icon icon-lift" />,
         defaultLabel: "Export PDF",
         defaultTooltip: "Export to PDF (.pdf)",
       },
       print: {
-        icon: <Printer className="h-4 w-4 text-[var(--color-ink)] shrink-0" />,
+        icon: <Printer className="h-4 w-4 text-[var(--color-ink)] shrink-0 interactive-icon icon-lift" />,
         defaultLabel: "Print",
         defaultTooltip: "Print document",
       },
       generic: {
-        icon: <Download className="h-4 w-4 text-[var(--color-ink)] shrink-0" />,
+        icon: <Download className="h-4 w-4 text-[var(--color-ink)] shrink-0 interactive-icon icon-arrow-down" />,
         defaultLabel: "Export",
         defaultTooltip: "Export data",
       },

@@ -104,7 +104,7 @@ export async function ManagerDashboardView({
             label="Total Logs Submitted Today"
             value={todayLogs}
             icon={FileSpreadsheet}
-            href="/operations?tab=logs"
+            href="/operations"
             variant="default"
             subtitle="Daily running log reports received"
           />
@@ -112,7 +112,7 @@ export async function ManagerDashboardView({
             label="Total Running Hours Today"
             value={`${todayHours.toFixed(1)} hrs`}
             icon={Gauge}
-            href="/operations?tab=logs"
+            href="/operations"
             variant="info"
             subtitle="Aggregated engine runtime today"
           />

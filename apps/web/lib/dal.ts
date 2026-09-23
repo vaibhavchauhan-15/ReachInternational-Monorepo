@@ -6,7 +6,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { CACHE_TAGS } from "@/lib/cache";
 import type { User, UserRole } from "@/lib/types/database";
-import { roleHasPermission } from "@reachinternational/permissions";
+import { roleHasPermission, getRoleHomeRoute } from "@reachinternational/permissions";
+
 
 import { headers } from "next/headers";
 import { verifyInternalUser } from "@/lib/security/internal-auth-token";
@@ -67,22 +68,69 @@ const getCachedUserRow = unstable_cache(
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase
       .from("users")
-      .select("id, full_name, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, address, shift_time, shift_start_time, shift_end_time, complete_profile, email, daily_rate, ot_hourly_rate, created_at, updated_at")
+      .select("id, full_name, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, street, shift_start_time, shift_end_time, complete_profile, email, daily_rate, ot_hourly_rate, monthly_salary, supervisor_id, created_at, updated_at")
       .eq("id", userId)
       .single();
 
-    if (error || !data) {
-      console.error("Error fetching user row:", error);
+    if (error) {
+      // Self-heal: If auth user exists in auth.users but has no row in public.users (PGRST116: 0 rows)
+      if (error.code === "PGRST116") {
+        try {
+          const { data: authData, error: authErr } = await supabase.auth.admin.getUserById(userId);
+          if (!authErr && authData?.user) {
+            const meta = authData.user.user_metadata || {};
+            const fallbackUser = {
+              id: userId,
+              email: authData.user.email || "",
+              full_name: (meta.full_name as string) || authData.user.email || "User",
+              role: (meta.role as string) || "operator",
+              status: "active",
+              street: (meta.street as string) || (meta.address as string) || null,
+              city: (meta.city as string) || null,
+              district: (meta.district as string) || null,
+              state: (meta.state as string) || null,
+              complete_profile: false,
+            };
+            const { data: inserted, error: insertErr } = await supabase
+              .from("users")
+              .insert(fallbackUser)
+              .select("id, full_name, phone, role, status, city, district, state, state_id, aadhaar_number, license_number, street, shift_start_time, shift_end_time, complete_profile, email, daily_rate, ot_hourly_rate, monthly_salary, supervisor_id, created_at, updated_at")
+              .single();
+
+            if (!insertErr && inserted) {
+              return {
+                ...inserted,
+                address: inserted.street || null,
+              };
+            }
+          }
+        } catch (healErr) {
+          console.warn("[DAL] Self-healing user row failed:", healErr);
+        }
+      }
+
+      console.error("[DAL] Error fetching user row for userId " + userId + ":", error.message || error.code || error);
       return null;
     }
 
-    return data;
+    if (!data) {
+      console.warn("[DAL] User row not found in public.users for userId:", userId);
+      return null;
+    }
+
+    return {
+      ...data,
+      address: data.street || null,
+    };
   },
-  ["dal-user-row-v8"],
+  ["dal-user-row-v10"],
   { revalidate: 60, tags: [CACHE_TAGS.users] }
 );
 
 export function isProfileIncomplete(user: User): boolean {
+  if (typeof user.complete_profile === "boolean") {
+    return !user.complete_profile;
+  }
   return user.complete_profile !== "yes";
 }
 
@@ -95,12 +143,12 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
 
 export function protectOperatorRoute(role?: string) {
   if (role === "operator") {
-    redirect("/dashboard");
+    redirect(getRoleHomeRoute("operator"));
   }
 }
 
-export function protectDisabledRoute() {
-  redirect("/dashboard");
+export function protectDisabledRoute(role?: string) {
+  redirect(getRoleHomeRoute(role));
 }
 
 export const getCurrentUserRole = cache(async (): Promise<UserRole | null> => {
@@ -125,7 +173,7 @@ export const requireRole = cache(async (...roles: UserRole[]) => {
   }
 
   if (!roles.includes(user.role)) {
-    redirect("/dashboard");
+    redirect(getRoleHomeRoute(user.role));
   }
 
   return user;
@@ -143,7 +191,7 @@ export const requirePermission = cache(async (permissionCode: string) => {
   }
 
   if (!roleHasPermission(user.role, permissionCode)) {
-    redirect("/dashboard");
+    redirect(getRoleHomeRoute(user.role));
   }
 
   return user;
@@ -164,11 +212,12 @@ export const requireAnyPermission = cache(async (...permissionCodes: string[]) =
 
   const hasAny = permissionCodes.some((code) => roleHasPermission(user.role, code));
   if (!hasAny) {
-    redirect("/dashboard");
+    redirect(getRoleHomeRoute(user.role));
   }
 
   return user;
 });
+
 
 export const getUserBranchIds = cache(async (): Promise<string[] | null> => {
   return null;

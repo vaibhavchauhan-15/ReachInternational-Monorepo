@@ -309,8 +309,19 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
     const city = (formData.get("city") as string)?.trim() || "";
     const district = (formData.get("district") as string)?.trim() || "";
     const state = (formData.get("state") as string)?.trim() || "";
-    const address = (formData.get("address") as string)?.trim() || null;
-    const shiftTime = (formData.get("shift_time") as string)?.trim() || null;
+    const street = ((formData.get("street") as string) || (formData.get("address") as string))?.trim() || null;
+    const rawShiftTime = (formData.get("shift_time") as string)?.trim() || null;
+    let shiftStartTime = (formData.get("shift_start_time") as string)?.trim() || null;
+    let shiftEndTime = (formData.get("shift_end_time") as string)?.trim() || null;
+    if (rawShiftTime && (!shiftStartTime || !shiftEndTime)) {
+      const parts = rawShiftTime.split("-").map((s) => s.trim());
+      if (parts.length === 2) {
+        shiftStartTime = shiftStartTime || (parts[0].length === 5 ? `${parts[0]}:00` : parts[0]);
+        shiftEndTime = shiftEndTime || (parts[1].length === 5 ? `${parts[1]}:00` : parts[1]);
+      }
+    }
+    const rawMonthlySalary = formData.get("monthly_salary");
+    const monthlySalary = rawMonthlySalary !== null && rawMonthlySalary !== "" ? Number(rawMonthlySalary) : null;
     const aadhaarNumber = (formData.get("aadhaar_number") as string)?.trim() || "";
     const licenseNumber = (formData.get("license_number") as string)?.trim() || "";
     const supervisorId = (formData.get("supervisor_id") as string)?.trim() || null;
@@ -321,6 +332,13 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
 
     if (!city || !district || !state) {
       return { error: "City, District, and State are required address fields." };
+    }
+
+    // Operator specific salary check: monthly salary is mandatory for operator accounts
+    if (role === "operator") {
+      if (monthlySalary === null || isNaN(monthlySalary) || monthlySalary <= 0) {
+        return { error: "Monthly salary is mandatory for operator accounts and must be greater than 0." };
+      }
     }
 
     const digitsOnly = phone.replace(/\D/g, "");
@@ -425,10 +443,13 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
         full_name: fullName,
         role: role,
         supervisor_id: supervisorId || null,
-        supervisor_ids: supervisorId ? [supervisorId] : [],
         phone: phone || null,
-        address: address || null,
-        shift_time: shiftTime || null,
+        street: street || null,
+        address: street || null,
+        shift_start_time: shiftStartTime,
+        shift_end_time: shiftEndTime,
+        monthly_salary: monthlySalary,
+        complete_profile: true,
         city,
         district,
         state: stateInfo.state,
@@ -453,17 +474,19 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
       return { error: "Failed to create user. Please try again." };
     }
 
-    // Update status to active and sync role, phone, city, district, state, state_id, aadhaar_number, license_number, address, shift_time, supervisor_id, working_location_id
+    // Update status to active and sync role, phone, city, district, state, state_id, aadhaar_number, license_number, street, shift times, supervisor_id, monthly_salary
     const { error: updateError } = await adminSupabase
       .from("users")
       .update({
         status: "active",
         role: role,
         supervisor_id: supervisorId || null,
-        supervisor_ids: supervisorId ? [supervisorId] : [],
         phone: phone || null,
-        address: address || null,
-        shift_time: shiftTime || null,
+        street: street || null,
+        shift_start_time: shiftStartTime,
+        shift_end_time: shiftEndTime,
+        monthly_salary: monthlySalary,
+        complete_profile: true,
         city,
         district,
         state: stateInfo.state,
@@ -475,6 +498,17 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
 
     if (updateError) {
       console.error("Error updating user profile:", updateError);
+    }
+
+    // Maintain user_supervisors relational table
+    if (supervisorId) {
+      try {
+        await adminSupabase
+          .from("user_supervisors")
+          .upsert({ user_id: data.user.id, supervisor_id: supervisorId }, { onConflict: "user_id,supervisor_id" });
+      } catch (supErr: any) {
+        console.warn("Note: user_supervisors upsert skipped:", supErr?.message || supErr);
+      }
     }
 
     // Synchronize user account into public.employees directory table
@@ -786,7 +820,7 @@ export async function updateUserSupervisor(
     // Fast target user fetch
     const { data: targetUser, error: fetchError } = await supabase
       .from("users")
-      .select("id, full_name, email, role, supervisor_id, supervisor_ids")
+      .select("id, full_name, email, role, supervisor_id")
       .eq("id", userId)
       .single();
 
@@ -809,19 +843,24 @@ export async function updateUserSupervisor(
 
     const primarySupervisorId = cleanSupervisorIds[0] ?? null;
 
+    // Fetch existing supervisors from user_supervisors table
+    const { data: existingSupervisors } = await adminSupabase
+      .from("user_supervisors")
+      .select("supervisor_id")
+      .eq("user_id", userId);
+    const oldSupervisorIds = existingSupervisors?.map((s) => s.supervisor_id) || (targetUser.supervisor_id ? [targetUser.supervisor_id] : []);
+
     // Parallel atomic updates to auth metadata and database users table
     const [authRes, dbRes] = await Promise.all([
       adminSupabase.auth.admin.updateUserById(userId, {
         user_metadata: {
           supervisor_id: primarySupervisorId,
-          supervisor_ids: cleanSupervisorIds,
         },
       }),
       adminSupabase
         .from("users")
         .update({
           supervisor_id: primarySupervisorId,
-          supervisor_ids: cleanSupervisorIds,
         })
         .eq("id", userId),
     ]);
@@ -829,6 +868,20 @@ export async function updateUserSupervisor(
     if (dbRes.error) {
       console.error("Error updating user supervisor in users table:", dbRes.error);
       return { error: "Failed to update supervisor in database." };
+    }
+
+    // Synchronize user_supervisors junction table
+    await adminSupabase.from("user_supervisors").delete().eq("user_id", userId);
+    if (cleanSupervisorIds.length > 0) {
+      const { error: insSupError } = await adminSupabase.from("user_supervisors").insert(
+        cleanSupervisorIds.map((sid) => ({
+          user_id: userId,
+          supervisor_id: sid,
+        }))
+      );
+      if (insSupError) {
+        console.error("Error updating user_supervisors junction table:", insSupError);
+      }
     }
 
     if (authRes.error) {
@@ -847,7 +900,7 @@ export async function updateUserSupervisor(
         role: targetUser.role,
         old_supervisor_id: targetUser.supervisor_id,
         new_supervisor_id: primarySupervisorId,
-        old_supervisor_ids: targetUser.supervisor_ids || (targetUser.supervisor_id ? [targetUser.supervisor_id] : []),
+        old_supervisor_ids: oldSupervisorIds,
         new_supervisor_ids: cleanSupervisorIds,
         updated_by_name: currentUser.full_name,
         updated_by_email: currentUser.email,
@@ -960,8 +1013,19 @@ export async function editUser(userId: string, formData: FormData): Promise<User
     const city = (formData.get("city") as string)?.trim() || "";
     const district = (formData.get("district") as string)?.trim() || "";
     const state = (formData.get("state") as string)?.trim() || "";
-    const address = (formData.get("address") as string)?.trim() || null;
-    const shiftTime = (formData.get("shift_time") as string)?.trim() || null;
+    const street = ((formData.get("street") as string) || (formData.get("address") as string))?.trim() || null;
+    const rawShiftTime = (formData.get("shift_time") as string)?.trim() || null;
+    let shiftStartTime = (formData.get("shift_start_time") as string)?.trim() || null;
+    let shiftEndTime = (formData.get("shift_end_time") as string)?.trim() || null;
+    if (rawShiftTime && (!shiftStartTime || !shiftEndTime)) {
+      const parts = rawShiftTime.split("-").map((s) => s.trim());
+      if (parts.length === 2) {
+        shiftStartTime = shiftStartTime || (parts[0].length === 5 ? `${parts[0]}:00` : parts[0]);
+        shiftEndTime = shiftEndTime || (parts[1].length === 5 ? `${parts[1]}:00` : parts[1]);
+      }
+    }
+    const rawMonthlySalary = formData.get("monthly_salary");
+    const monthlySalary = rawMonthlySalary !== null && rawMonthlySalary !== "" ? Number(rawMonthlySalary) : null;
     const aadhaarNumber = (formData.get("aadhaar_number") as string)?.trim() || "";
     const licenseNumber = (formData.get("license_number") as string)?.trim() || "";
     const supervisorId = (formData.get("supervisor_id") as string)?.trim() || null;
@@ -976,6 +1040,14 @@ export async function editUser(userId: string, formData: FormData): Promise<User
 
     if (!role) {
       return { error: "User access role is required." };
+    }
+
+    const effectiveRole = role || targetUser.role;
+    if (effectiveRole === "operator") {
+      const currentSalary = monthlySalary !== null ? monthlySalary : targetUser.monthly_salary;
+      if (currentSalary === null || isNaN(currentSalary) || currentSalary <= 0) {
+        return { error: "Monthly salary is mandatory for operator accounts and must be greater than 0." };
+      }
     }
 
     const digitsOnly = phone.replace(/\D/g, "");
@@ -1054,18 +1126,17 @@ export async function editUser(userId: string, formData: FormData): Promise<User
     
     // Resolve state_id and normalized state name from states table
     const stateInfo = await resolveStateInfo(adminSupabase, state, formData.get("state_id") as string);
-    
-    const editSupervisorIds = supervisorId
-      ? Array.from(new Set([supervisorId, ...(targetUser.supervisor_ids || [])]))
-      : [];
 
     // Update auth user metadata
     const { error: authError } = await adminSupabase.auth.admin.updateUserById(userId, {
       user_metadata: { 
         full_name: fullName, 
         phone: phone || null,
-        address: address || null,
-        shift_time: shiftTime || null,
+        street: street || null,
+        address: street || null,
+        shift_start_time: shiftStartTime,
+        shift_end_time: shiftEndTime,
+        monthly_salary: monthlySalary,
         city,
         district,
         state: stateInfo.state,
@@ -1074,7 +1145,6 @@ export async function editUser(userId: string, formData: FormData): Promise<User
         aadhaar_number: cleanAadhaar,
         license_number: formattedLicense,
         supervisor_id: supervisorId,
-        supervisor_ids: editSupervisorIds,
         ...(role && (currentUser.role === "super_admin" || role !== "super_admin") ? { role } : {}),
       }
     });
@@ -1087,8 +1157,9 @@ export async function editUser(userId: string, formData: FormData): Promise<User
     const updatePayload: Record<string, unknown> = {
       full_name: fullName,
       phone: phone || null,
-      address: address || null,
-      shift_time: shiftTime || null,
+      street: street || null,
+      shift_start_time: shiftStartTime,
+      shift_end_time: shiftEndTime,
       city,
       district,
       state: stateInfo.state,
@@ -1096,8 +1167,10 @@ export async function editUser(userId: string, formData: FormData): Promise<User
       aadhaar_number: cleanAadhaar,
       license_number: formattedLicense,
       supervisor_id: supervisorId,
-      supervisor_ids: editSupervisorIds,
     };
+    if (monthlySalary !== null && !isNaN(monthlySalary)) {
+      updatePayload.monthly_salary = monthlySalary;
+    }
     if (role && (currentUser.role === "super_admin" || role !== "super_admin")) {
       updatePayload.role = role;
     }
@@ -1111,6 +1184,17 @@ export async function editUser(userId: string, formData: FormData): Promise<User
     if (updateError) {
       console.error("Error updating user profile:", updateError);
       return { error: "Failed to update user profile. Please try again." };
+    }
+
+    // Maintain user_supervisors table
+    if (supervisorId) {
+      try {
+        await adminSupabase
+          .from("user_supervisors")
+          .upsert({ user_id: userId, supervisor_id: supervisorId }, { onConflict: "user_id,supervisor_id" });
+      } catch (supErr: any) {
+        console.warn("Note: user_supervisors upsert skipped:", supErr?.message || supErr);
+      }
     }
 
     // Sync changes with public.employees directory table if linked
@@ -1604,10 +1688,14 @@ export interface UserProfileCardData {
   city: string | null;
   district: string | null;
   state: string | null;
+  street: string | null;
   address: string | null;
   aadhaar_number: string | null;
   license_number: string | null;
   shift_time: string | null;
+  shift_start_time: string | null;
+  shift_end_time: string | null;
+  monthly_salary: number | null;
 }
 
 /**
@@ -1629,7 +1717,7 @@ export async function getMyProfileCardDetailsAction(): Promise<{
     const { data, error } = await adminClient
       .from("users")
       .select(
-        "id, full_name, email, phone, role, city, district, state, address, aadhaar_number, license_number, shift_time"
+        "id, full_name, email, phone, role, city, district, state, street, aadhaar_number, license_number, shift_start_time, shift_end_time, monthly_salary"
       )
       .eq("id", currentUser.id)
       .single();
@@ -1637,6 +1725,10 @@ export async function getMyProfileCardDetailsAction(): Promise<{
     if (error || !data) {
       return { profile: null, error: error?.message || "Failed to load profile details" };
     }
+
+    const formattedShift = (data.shift_start_time && data.shift_end_time)
+      ? `${data.shift_start_time.slice(0, 5)} - ${data.shift_end_time.slice(0, 5)}`
+      : null;
 
     return {
       profile: {
@@ -1648,10 +1740,14 @@ export async function getMyProfileCardDetailsAction(): Promise<{
         city: data.city,
         district: data.district,
         state: data.state,
-        address: data.address,
+        street: data.street,
+        address: data.street,
         aadhaar_number: data.aadhaar_number,
         license_number: data.license_number,
-        shift_time: data.shift_time,
+        shift_time: formattedShift,
+        shift_start_time: data.shift_start_time,
+        shift_end_time: data.shift_end_time,
+        monthly_salary: data.monthly_salary,
       },
     };
   } catch (err: any) {

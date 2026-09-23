@@ -344,11 +344,16 @@ export default function MachinesScreen() {
           try {
             const { data: usersData } = await supabase
               .from('users')
-              .select('id, full_name, phone, email, shift_time, role')
+              .select('id, full_name, phone, email, shift_start_time, shift_end_time, role')
               .in('id', Array.from(allUserIds));
 
             (usersData || []).forEach((u: any) => {
-              usersMap.set(u.id, u);
+              usersMap.set(u.id, {
+                ...u,
+                shift_time: (u.shift_start_time && u.shift_end_time)
+                  ? `${u.shift_start_time.slice(0, 5)} - ${u.shift_end_time.slice(0, 5)}`
+                  : null,
+              });
             });
           } catch (uErr) {
             console.warn('Failed to hydrate machine personnel users:', uErr);

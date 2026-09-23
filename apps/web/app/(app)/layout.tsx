@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { getCurrentUser, isProfileIncomplete } from "@/lib/dal";
 import { AppShellClient } from "@/components/layout/AppShellClient";
+import { BrowserLifecycleManager } from "@/components/layout/BrowserLifecycleManager";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -26,9 +27,10 @@ export default async function AppLayout({
   }
 
   // Fast zero-latency profile completion check:
-  // If complete_profile === 'yes', skip immediately (0 CPU overhead).
-  // Only check completeness if complete_profile !== 'yes'.
-  if (user.complete_profile !== "yes" && isProfileIncomplete(user)) {
+  // If complete_profile === true or 'yes', skip immediately (0 CPU overhead).
+  // Only check completeness if not complete.
+  const isProfileComplete = user.complete_profile === true || user.complete_profile === "yes";
+  if (!isProfileComplete && isProfileIncomplete(user)) {
     redirect("/onboarding");
   }
 
@@ -38,7 +40,9 @@ export default async function AppLayout({
 
   return (
     <AppShellClient user={user} defaultCollapsed={defaultCollapsed}>
+      <BrowserLifecycleManager userRole={user.role} />
       {children}
     </AppShellClient>
   );
-}
+}
+

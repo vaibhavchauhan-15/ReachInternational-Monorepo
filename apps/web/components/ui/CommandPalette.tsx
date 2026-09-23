@@ -4,19 +4,15 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   AnimatedSearch,
-  AnimatedDashboard,
   AnimatedHome,
   AnimatedClock,
   AnimatedWrench,
   AnimatedClipboardList,
-  AnimatedBell,
   AnimatedUsers,
-  AnimatedFileText,
   AnimatedSettings,
   AnimatedPlus,
   AnimatedArrowRight,
   AnimatedSparkles,
-  AnimatedPackage,
   AnimatedBuilding2,
   AnimatedGauge,
   AnimatedScrollText,
@@ -68,13 +64,13 @@ export function CommandPalette({
       },
       {
         id: "nav-machines",
-        title: "Go to Machines Directory",
+        title: "Go to Machines",
         subtitle: "Browse and manage tracked equipment fleet (add, edit, delete)",
         category: "Navigation",
         icon: AnimatedWrench,
         href: "/machines",
         shortcut: "⌘M",
-        keywords: ["equipment", "devices", "inventory", "assets", "machine list"],
+        keywords: ["machines", "machine", "equipment", "devices", "inventory", "assets", "fleet"],
         roles: ["super_admin", "admin", "manager", "supervisor"],
       },
       {
@@ -85,7 +81,7 @@ export function CommandPalette({
         icon: AnimatedWrench,
         href: "/machines",
         shortcut: "⌘M",
-        keywords: ["equipment", "machine", "assigned machine", "specs", "details"],
+        keywords: ["equipment", "machine", "machines", "assigned machine", "specs", "details"],
         roles: ["operator"],
       },
       {
@@ -94,8 +90,8 @@ export function CommandPalette({
         subtitle: "Submit daily machine running hour log entries",
         category: "Navigation",
         icon: AnimatedGauge,
-        href: "/operations?tab=entry",
-        keywords: ["running hours", "meter log", "log entry", "duty", "work log"],
+        href: "/operations",
+        keywords: ["running hours", "meter log", "log entry", "duty", "work log", "operations", "operation"],
         roles: ["operator"],
       },
       {
@@ -105,29 +101,30 @@ export function CommandPalette({
         category: "Navigation",
         icon: AnimatedClock,
         href: "/operations?tab=history",
-        keywords: ["log history", "reports", "export pdf", "print logbook"],
+        keywords: ["log history", "reports", "export pdf", "print logbook", "operations"],
         roles: ["operator"],
       },
       {
         id: "nav-operations-running-hours",
-        title: "Running Hours & Fleet Logs",
-        subtitle: "View daily machine running hour logs and operator field entries",
+        title: "Go to Operations",
+        subtitle: "Daily machine running hour logs, client sites, and fleet operations",
         category: "Navigation",
         icon: AnimatedClipboardList,
-        href: "/operations?tab=logs",
-        keywords: ["running hours", "meter log", "log history", "operations"],
+        href: "/operations",
+        shortcut: "⌘O",
+        keywords: ["running hours", "meter log", "log history", "operations", "operation"],
         roles: ["super_admin", "admin", "manager", "supervisor", "hr"],
       },
       {
-        id: "nav-hr",
-        title: "Go to HR & Operator Payroll",
+        id: "nav-payroll",
+        title: "Go to Payroll",
         subtitle: "Calculate monthly operator compensation and client-lagged overtime wages",
         category: "Navigation",
         icon: AnimatedCreditCard,
-        href: "/hr",
+        href: "/payroll",
         shortcut: "⌘P",
         keywords: ["payroll", "salary", "wages", "rates", "hr", "operator pay", "overtime pay", "compensation"],
-        roles: ["super_admin", "admin", "manager", "hr"],
+        roles: ["super_admin", "admin", "hr"],
       },
       {
         id: "nav-audit-logs",
@@ -142,24 +139,24 @@ export function CommandPalette({
       },
       {
         id: "nav-clients",
-        title: "Go to Client Directory",
+        title: "Go to Clients",
         subtitle: "Browse and manage registered client and customer accounts",
         category: "Navigation",
         icon: AnimatedBuilding2,
         href: "/clients",
         shortcut: "⌘C",
-        keywords: ["clients", "customers", "accounts", "directory", "companies"],
+        keywords: ["clients", "client", "customers", "accounts", "directory", "companies"],
         roles: ["super_admin", "admin", "manager"],
       },
       {
         id: "nav-users",
-        title: "Go to Employee & User Management",
+        title: "Go to Users",
         subtitle: "Manage employee accounts, staff roles, and access credentials",
         category: "Navigation",
         icon: AnimatedUsers,
         href: "/users",
         shortcut: "⌘U",
-        keywords: ["employees", "staff", "team", "admins", "operators", "supervisors", "accounts", "roles", "users"],
+        keywords: ["users", "user", "employees", "staff", "team", "admins", "operators", "supervisors", "accounts", "roles"],
         roles: ["super_admin", "admin", "manager", "hr", "supervisor"],
       },
       {
@@ -360,7 +357,7 @@ export function CommandPalette({
                       type="button"
                       onClick={() => executeItem(item)}
                       onMouseEnter={() => setSelectedIndex(idx)}
-                      className={`group w-full flex items-center justify-between px-3 py-2.5 rounded-[var(--radius-md)] text-left transition-all ${
+                      className={`group interactive-parent w-full flex items-center justify-between px-3 py-2.5 rounded-[var(--radius-md)] text-left transition-all ${
                         isSelected
                           ? "bg-muted text-foreground font-medium"
                           : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
@@ -374,7 +371,9 @@ export function CommandPalette({
                               : "bg-muted text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground"
                           }`}
                         >
-                          <Icon size={16} />
+                          <span className="interactive-icon icon-bounce flex items-center justify-center">
+                            <Icon size={16} />
+                          </span>
                         </div>
                         <div className="flex flex-col truncate">
                           <span className="text-xs font-semibold text-foreground group-hover:text-foreground transition-colors">

@@ -11,6 +11,7 @@ import {
   Settings,
   ChevronRight,
   Banknote,
+  CalendarCheck,
 } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { Button } from "@/components/ui";
@@ -27,6 +28,7 @@ const ICONS: Record<
   users: Users,
   shield: Shield,
   banknote: Banknote,
+  "calendar-check": CalendarCheck,
 };
 
 interface OverflowItem {
@@ -64,11 +66,11 @@ export function MorePageClient({ user, overflowItems }: MorePageClientProps) {
                 <Link
                   key={item.key}
                   href={item.href}
-                  className="flex items-center gap-3 p-4 min-h-[88px] rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors group"
+                  className="flex items-center gap-3 p-4 min-h-[88px] rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors group group/tile interactive-parent"
                 >
                   <Icon
                     size={22}
-                    className="text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors shrink-0"
+                    className="text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors shrink-0 interactive-icon icon-bounce"
                   />
                   <span className="text-sm font-medium text-[var(--color-ink)] leading-tight">
                     {item.label}
@@ -84,13 +86,13 @@ export function MorePageClient({ user, overflowItems }: MorePageClientProps) {
       <div className="border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] rounded-2xl overflow-hidden shadow-xs">
         <Link
           href="/settings"
-          className="flex items-center justify-between px-4 py-3.5 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors group"
+          className="flex items-center justify-between px-4 py-3.5 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors group interactive-parent"
         >
           <span className="flex items-center gap-2.5">
-            <Settings size={17} className="text-[var(--color-mute)] group-hover:text-sky-500 transition-colors shrink-0" />
+            <Settings size={17} className="text-[var(--color-mute)] group-hover:text-sky-500 transition-colors shrink-0 interactive-icon icon-rotate" />
             Settings
           </span>
-          <ChevronRight size={16} className="text-[var(--color-mute)] shrink-0" />
+          <ChevronRight size={16} className="text-[var(--color-mute)] shrink-0 interactive-icon icon-chevron" />
         </Link>
       </div>
 

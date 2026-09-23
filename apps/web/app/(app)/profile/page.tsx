@@ -1,20 +1,24 @@
 import { redirect } from "next/navigation";
 import { verifySession } from "@/lib/dal";
 import { getUserDetail, getMyPendingProfileRequest } from "@/lib/data/users";
+import { getUserDocumentsAction, getDocumentTypesAction } from "@/app/actions/documents";
 import { toProfileView } from "@/lib/profile-view";
 import { ROLE_CONFIG } from "@/components/profile/UserProfileCard";
 import { ProfileEditButton } from "@/components/profile/ProfileEditButton";
 import { ProfilePendingBanner } from "@/components/profile/ProfilePendingBanner";
 import { AadhaarProfileField } from "@/components/profile/AadhaarProfileField";
+import { ProfileDocumentsSection } from "@/components/profile/ProfileDocumentsSection";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function ProfilePage() {
   const { userId } = await verifySession();
-  const [user, pending] = await Promise.all([
+  const [user, pending, documents, documentTypes] = await Promise.all([
     getUserDetail(userId),
     getMyPendingProfileRequest(userId),
+    getUserDocumentsAction(),
+    getDocumentTypesAction(),
   ]);
 
   if (!user) {
@@ -120,6 +124,15 @@ export default async function ProfilePage() {
           </section>
         ))}
       </div>
+
+      {/* ─── Identity Document Uploads ─── */}
+      {documentTypes.length > 0 && (
+        <ProfileDocumentsSection
+          userId={userId}
+          documentTypes={documentTypes}
+          initialDocuments={documents}
+        />
+      )}
     </div>
   );
 }

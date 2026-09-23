@@ -62,14 +62,14 @@ export async function SupervisorDashboardView({
             label="Field Operators"
             value={assignedOperators}
             icon={Users}
-            href="/operations?tab=logs"
+            href="/operations"
             variant="info"
           />
           <KPICard
             label="Logs Submitted Today"
             value={submitted}
             icon={CheckCircle2}
-            href="/operations?tab=logs"
+            href="/operations"
             variant="success"
             subtitle={`${submitted} of ${assignedOperators} received`}
           />
@@ -77,7 +77,7 @@ export async function SupervisorDashboardView({
             label="Submissions Pending"
             value={pending}
             icon={Clock}
-            href="/operations?tab=logs"
+            href="/operations"
             variant={pending > 0 ? "warning" : "default"}
             subtitle={pending > 0 ? "Awaiting operator entry" : "All logs submitted"}
           />
@@ -104,7 +104,7 @@ export async function SupervisorDashboardView({
             label="Overtime Shifts"
             value={overtimeEntries}
             icon={Timer}
-            href="/operations?tab=logs"
+            href="/operations"
             variant={overtimeEntries > 0 ? "info" : "default"}
             subtitle="Operators logging extended work hours"
           />
@@ -120,7 +120,7 @@ export async function SupervisorDashboardView({
           <PrimaryAction
             title="Review Daily Shift Logs"
             description="Examine operator entries, verify start/end meter readings, and approve logs"
-            href="/operations?tab=logs"
+            href="/operations"
             icon={FileSpreadsheet}
             variant="primary"
           />

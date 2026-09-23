@@ -3,61 +3,22 @@ import { createServerClient } from "@supabase/ssr";
 import { getSupabaseUrl, getSupabasePublishableKey } from "@/lib/env";
 import { checkRateLimitAsync, getClientIp, RATE_LIMIT_PROFILES } from "@/lib/security/rate-limiter";
 import { signInternalUser } from "@/lib/security/internal-auth-token";
-
-const activeProtectedRoutes = [
-  "/dashboard",
-  "/machines",
-  "/operations",
-  "/clients",
-  "/users",
-  "/hr",
-  "/audit",
-  "/settings",
-  "/more",
-  "/profile",
-  "/onboarding",
-];
-
-const deprecatedRoutes = [
-  "/crm",
-  "/inventory",
-  "/finance",
-  "/tasks",
-  "/documents",
-  "/challans",
-  "/purchase-orders",
-  "/rentals",
-  "/reports",
-  "/vendors",
-  "/administration",
-  "/branches",
-  "/complaints",
-  "/services",
-  "/service",
-  "/notifications",
-  "/notification",
-  "/audit-logs",
-  "/my-work",
-  "/docs",
-];
-
-const authRoutes = ["/login", "/forgot-password", "/signup", "/reset-password"];
-const publicLegalRoutes = [
-  "/privacy",
-  "/terms",
-  "/account-deletion",
-  "/delete-account",
-  "/account-deletion-guide",
-];
-const publicRoutes = [...authRoutes, ...publicLegalRoutes];
+import {
+  isProtectedRoute as checkProtectedRoute,
+  isDeprecatedRoute as checkDeprecatedRoute,
+  isAuthRoute as checkAuthRoute,
+  isPublicLegalRoute as checkPublicLegalRoute,
+  getRoleHomeRoute,
+} from "@reachinternational/permissions";
 
 export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  const isProtectedRoute =
-    activeProtectedRoutes.some((route) => path.startsWith(route)) ||
-    deprecatedRoutes.some((route) => path.startsWith(route));
-  const isDeprecatedRoute = deprecatedRoutes.some((route) => path.startsWith(route));
-  const isPublicRoute = publicRoutes.some((route) => path.startsWith(route));
+  const isProtectedRoute = checkProtectedRoute(path);
+  const isDeprecatedRoute = checkDeprecatedRoute(path);
+  const isAuthRoute = checkAuthRoute(path);
+  const isPublicLegal = checkPublicLegalRoute(path);
+  const isPublicRoute = isAuthRoute || isPublicLegal;
+
 
   // Step 1: LPDoS Edge Rate Limiting Guard
   const clientIp = getClientIp(request);
@@ -179,6 +140,42 @@ export async function proxy(request: NextRequest) {
     return redirectRes;
   };
 
+  // Redirect legacy /hr visits directly to /payroll (preserving query params like month, removing obsolete tab=payroll)
+  if (path === "/hr" || path.startsWith("/hr/")) {
+    const targetUrl = new URL(request.nextUrl);
+    targetUrl.pathname = targetUrl.pathname.replace(/^\/hr(\/|$)/, "/payroll$1");
+    targetUrl.searchParams.delete("tab");
+    return createRedirectResponse(targetUrl.pathname + (targetUrl.search || ""));
+  }
+
+  // Normalize /payroll by stripping obsolete ?tab= parameter (e.g., from old bookmarks or next.config redirect preservation)
+  if (path === "/payroll" && request.nextUrl.searchParams.has("tab")) {
+    const targetUrl = new URL(request.nextUrl);
+    targetUrl.searchParams.delete("tab");
+    return createRedirectResponse(targetUrl.pathname + (targetUrl.search || ""));
+  }
+
+  // Normalize /operations by stripping obsolete ?tab=logs / ?tab=entry parameter
+  if (path === "/operations" && (request.nextUrl.searchParams.get("tab") === "logs" || request.nextUrl.searchParams.get("tab") === "entry")) {
+    const targetUrl = new URL(request.nextUrl);
+    targetUrl.searchParams.delete("tab");
+    return createRedirectResponse(targetUrl.pathname + (targetUrl.search || ""));
+  }
+
+  // Normalize /machines by stripping obsolete ?tab= parameter
+  if (path === "/machines" && request.nextUrl.searchParams.has("tab")) {
+    const targetUrl = new URL(request.nextUrl);
+    targetUrl.searchParams.delete("tab");
+    return createRedirectResponse(targetUrl.pathname + (targetUrl.search || ""));
+  }
+
+  // Normalize /clients by stripping obsolete ?tab= parameter
+  if (path === "/clients" && request.nextUrl.searchParams.has("tab")) {
+    const targetUrl = new URL(request.nextUrl);
+    targetUrl.searchParams.delete("tab");
+    return createRedirectResponse(targetUrl.pathname + (targetUrl.search || ""));
+  }
+
   // Redirect unauthenticated user accessing protected or deprecated route to /login
   if (isProtectedRoute && !authenticatedUser) {
     return createRedirectResponse("/login");
@@ -214,17 +211,19 @@ export async function proxy(request: NextRequest) {
     return createRedirectResponse(callbackUrl.pathname + callbackUrl.search);
   }
 
-  // Redirect authenticated user visiting auth entry routes (/login, /signup, /forgot-password, /reset-password) to /dashboard
+  // Resolve authenticated user's configured Home route from centralized configuration
+  const roleHome = getRoleHomeRoute(authenticatedUser?.user_metadata?.role);
+
+  // Redirect authenticated user visiting auth entry routes (/login, /signup, /forgot-password, /reset-password) to role Home
   // UNLESS they arrived with an error/status parameter or are in an active recovery flow.
   // Public legal routes (/privacy, /terms, /account-deletion) remain accessible to both authenticated and guest users.
-  const isAuthRoute = authRoutes.some((route) => path.startsWith(route));
   if (isAuthRoute && authenticatedUser && !hasAuthErrorParam && !isRecoveryFlow) {
-    return createRedirectResponse("/dashboard");
+    return createRedirectResponse(roleHome);
   }
 
-  // Redirect authenticated user visiting deprecated routes or root '/' to /dashboard
+  // Redirect authenticated user visiting deprecated routes or root '/' to role Home
   if ((isDeprecatedRoute || path === "/") && authenticatedUser) {
-    return createRedirectResponse("/dashboard");
+    return createRedirectResponse(roleHome);
   }
 
   return response;

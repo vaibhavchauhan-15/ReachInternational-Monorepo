@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { LoginFormClient } from "./login-form";
 import { ReachInternationalLogo } from "@/components/ui";
 import { getCurrentUserOrNull } from "@/lib/dal";
+import { getRoleHomeRoute } from "@reachinternational/permissions";
+
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -37,8 +39,9 @@ export default async function LoginPage({
 
   const user = await getCurrentUserOrNull();
   if (user && user.status === "active") {
-    redirect("/dashboard");
+    redirect(getRoleHomeRoute(user.role));
   }
+
 
   return (
     <div className="min-h-screen min-h-[100dvh] w-full flex flex-col lg:flex-row bg-[var(--color-canvas)] text-[var(--color-ink)] lg:h-screen lg:max-h-screen lg:overflow-hidden select-none">

@@ -78,7 +78,7 @@ export async function HRDashboardView({
             label="Logs Recorded Today"
             value={todayLogsCount}
             icon={Clock}
-            href="/operations?tab=logs"
+            href="/operations"
             variant={todayLogsCount > 0 ? "success" : "default"}
             subtitle="Daily attendance indicator"
           />

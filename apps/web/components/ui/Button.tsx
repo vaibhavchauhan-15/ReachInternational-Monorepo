@@ -136,7 +136,7 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
 
     const widthClass = fullWidth ? "w-full justify-center" : "";
 
-    const classes = `inline-flex items-center justify-center gap-1.5 shrink-0 select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/30 dark:focus-visible:ring-sky-400/30 ${
+    const classes = `group group/btn interactive-parent inline-flex items-center justify-center gap-1.5 shrink-0 select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/30 dark:focus-visible:ring-sky-400/30 ${
       variantClasses[variant]
     } ${variant === "link" ? "" : sizeClasses[effectiveSize]} ${widthClass} ${responsiveClasses} ${className}`;
 
@@ -155,11 +155,11 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
             <AnimatedLoader isSpinning size={16} />
           </span>
         ) : iconPosition === "left" && icon ? (
-          <span className="inline-flex items-center justify-center shrink-0 leading-none">{icon}</span>
+          <span className="inline-flex items-center justify-center shrink-0 leading-none interactive-icon icon-bounce">{icon}</span>
         ) : null}
         {renderLabel()}
         {!effectiveLoading && (iconPosition === "right" || trailingIcon) ? (
-          <span className="inline-flex items-center justify-center shrink-0 leading-none">{trailingIcon || icon}</span>
+          <span className="inline-flex items-center justify-center shrink-0 leading-none interactive-icon icon-arrow">{trailingIcon || icon}</span>
         ) : null}
       </>
     );

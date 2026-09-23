@@ -25,11 +25,13 @@ import { supabase } from '../../lib/supabase';
 import { Input, Alert, useTheme } from '../../components/ui';
 import { ReachInternationalLogo } from '../../components/branding/ReachInternationalLogo';
 import { useAuth } from '../../lib/auth/useAuth';
+import { getMobileRoleHomeRoute } from '@reachinternational/permissions';
+
 
 export default function LoginScreen() {
   const router = useRouter();
   const { theme, isDark, setMode } = useTheme();
-  const { session, isLoading: authLoading, isProfileComplete } = useAuth();
+  const { session, isLoading: authLoading, isProfileComplete, role } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,16 +39,17 @@ export default function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const isSubmittingRef = useRef(false);
 
-  // Redirect authenticated user away from login to dashboard or onboarding
+  // Redirect authenticated user away from login to role Home or onboarding
   React.useEffect(() => {
     if (!authLoading && session) {
       if (!isProfileComplete) {
         router.replace('/(auth)/onboarding');
       } else {
-        router.replace('/(app)/dashboard');
+        router.replace(getMobileRoleHomeRoute(role) as any);
       }
     }
-  }, [authLoading, session, isProfileComplete, router]);
+  }, [authLoading, session, isProfileComplete, role, router]);
+
 
   const [errorMessage, setErrorMessage] = useState('');
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
@@ -180,12 +183,14 @@ export default function LoginScreen() {
         }
 
         // Routing based on onboarding and role
-        if (profile.complete_profile !== 'yes') {
+        const isProfileComplete = profile.complete_profile === true || profile.complete_profile === 'yes';
+        if (!isProfileComplete) {
           router.replace('/(auth)/onboarding');
         } else {
-          router.replace('/(app)/dashboard');
+          router.replace(getMobileRoleHomeRoute(profile.role) as any);
         }
       }
+
     } catch (err: unknown) {
       setErrorMessage('An unexpected error occurred during login. Please try again.');
       isSubmittingRef.current = false;

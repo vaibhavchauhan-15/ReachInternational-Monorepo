@@ -35,6 +35,7 @@ import {
   Moon,
   ChevronRight,
   Banknote,
+  CalendarCheck,
 } from 'lucide-react-native';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
@@ -55,6 +56,7 @@ const ICONS: Record<string, React.ComponentType<{ size?: number; color?: string 
   users: Users,
   shield: Shield,
   banknote: Banknote,
+  'calendar-check': CalendarCheck,
 };
 
 export default function MoreScreen() {

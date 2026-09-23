@@ -8,6 +8,8 @@ export type NavKey =
   | "clients"
   | "users"
   | "audit"
+  | "payroll"
+  | "attendance"
   | "hr";
 
 // ─── Nav item definition ───────────────────────────────────────
@@ -120,26 +122,172 @@ export const NAV_ITEMS: NavItem[] = [
     roles: AUDIT_ROLES,
   },
   {
-    key: "hr",
+    key: "payroll",
     label: "Payroll",
-    href: "/hr",
+    href: "/payroll",
     icon: "banknote",
-    match: ["/hr"],
+    match: ["/payroll", "/hr"],
     roles: [
       "super_admin",
       "admin",
-      "manager",
+      "hr",
+    ],
+  },
+  {
+    key: "attendance",
+    label: "Attendance",
+    href: "/attendance",
+    icon: "calendar-check",
+    match: ["/attendance"],
+    roles: [
+      "super_admin",
+      "admin",
       "hr",
     ],
   },
 ];
+
+// ─── Centralized Role Home Routes ───────────────────────────────
+export const ROLE_HOME_ROUTES: Record<UserRole, string> = {
+  super_admin: "/dashboard",
+  admin: "/dashboard",
+  manager: "/dashboard",
+  supervisor: "/dashboard",
+  hr: "/dashboard",
+  operator: "/dashboard",
+};
+
+export const MOBILE_ROLE_HOME_ROUTES: Record<UserRole, string> = {
+  super_admin: "/(app)/dashboard",
+  admin: "/(app)/dashboard",
+  manager: "/(app)/dashboard",
+  supervisor: "/(app)/dashboard",
+  hr: "/(app)/dashboard",
+  operator: "/(app)/dashboard",
+};
+
+export function getRoleHomeRoute(role?: UserRole | string | null): string {
+  if (role && role in ROLE_HOME_ROUTES) {
+    return ROLE_HOME_ROUTES[role as UserRole];
+  }
+  return "/dashboard";
+}
+
+export function getMobileRoleHomeRoute(role?: UserRole | string | null): string {
+  if (role && role in MOBILE_ROLE_HOME_ROUTES) {
+    return MOBILE_ROLE_HOME_ROUTES[role as UserRole];
+  }
+  return "/(app)/dashboard";
+}
+
+// ─── Route Categorization Standards ─────────────────────────────
+export const ACTIVE_PROTECTED_ROUTES: readonly string[] = [
+  "/dashboard",
+  "/machines",
+  "/operations",
+  "/clients",
+  "/users",
+  "/payroll",
+  "/attendance",
+  "/audit",
+  "/settings",
+  "/more",
+  "/profile",
+  "/onboarding",
+];
+
+export const AUTH_ROUTES: readonly string[] = [
+  "/login",
+  "/forgot-password",
+  "/signup",
+  "/reset-password",
+];
+
+export const PUBLIC_LEGAL_ROUTES: readonly string[] = [
+  "/privacy",
+  "/terms",
+  "/account-deletion",
+  "/delete-account",
+  "/account-deletion-guide",
+];
+
+export const DEPRECATED_ROUTES: readonly string[] = [
+  "/crm",
+  "/inventory",
+  "/finance",
+  "/tasks",
+  "/documents",
+  "/challans",
+  "/purchase-orders",
+  "/rentals",
+  "/reports",
+  "/vendors",
+  "/administration",
+  "/branches",
+  "/complaints",
+  "/services",
+  "/service",
+  "/notifications",
+  "/notification",
+  "/audit-logs",
+  "/my-work",
+  "/docs",
+];
+
+export function isProtectedRoute(pathname: string): boolean {
+  return (
+    ACTIVE_PROTECTED_ROUTES.some((route) => pathname.startsWith(route)) ||
+    DEPRECATED_ROUTES.some((route) => pathname.startsWith(route))
+  );
+}
+
+export function isAuthRoute(pathname: string): boolean {
+  return AUTH_ROUTES.some((route) => pathname.startsWith(route));
+}
+
+export function isPublicLegalRoute(pathname: string): boolean {
+  return PUBLIC_LEGAL_ROUTES.some((route) => pathname.startsWith(route));
+}
+
+export function isDeprecatedRoute(pathname: string): boolean {
+  return DEPRECATED_ROUTES.some((route) => pathname.startsWith(route));
+}
+
+export function isRouteAllowedForRole(pathname: string, role: UserRole): boolean {
+  // Super admin has unrestricted access to all routes
+  if (role === "super_admin") return true;
+
+  // Universal authenticated routes
+  if (
+    pathname === "/" ||
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/settings") ||
+    pathname.startsWith("/profile") ||
+    pathname.startsWith("/more") ||
+    pathname.startsWith("/onboarding")
+  ) {
+    return true;
+  }
+
+  // Check matching nav item permissions
+  const matchingItem = NAV_ITEMS.find((item) =>
+    item.match.some((prefix) => pathname.startsWith(prefix))
+  );
+
+  if (matchingItem) {
+    return matchingItem.roles.includes(role);
+  }
+
+  // Default to allowing if not explicitly restricted by known nav items
+  return true;
+}
 
 // ─── Bar slot order per role (max 4 primary + More/Account) ─────
 // ponytail: hand-picked per role; derive from usage data only if it ever matters.
 export const PRIMARY: Record<UserRole, NavKey[]> = {
   operator: ["home", "operations", "machines"],
   supervisor: ["home", "operations", "machines", "users"],
-  hr: ["home", "operations", "hr", "users"],
+  hr: ["home", "operations", "attendance", "payroll"],
   manager: ["home", "operations", "machines", "clients"],
   admin: ["home", "operations", "machines", "users"],
   super_admin: ["home", "operations", "machines", "users"],
@@ -169,3 +317,4 @@ export function getNavForRole(role: UserRole): NavForRole {
 export function labelFor(item: NavItem, role: UserRole): string {
   return item.roleLabel?.[role] ?? item.label;
 }
+

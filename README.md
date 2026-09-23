@@ -8,6 +8,7 @@
 
 - [Project Overview](#-project-overview)
 - [Active Core Modules](#-active-core-modules)
+- [Global Interactive Icon Animation System](#-global-interactive-icon-animation-system)
 - [Monorepo Architecture](#-monorepo-architecture)
 - [Tech Stack](#-tech-stack)
 - [Getting Started](#-getting-started)
@@ -72,7 +73,7 @@
 
 ### 2. 👥 User & Employee Management (`/users` & `/signup`)
 - **System Accounts Directory**: Unified management of system users and staff accounts with active status tracking.
-- **Mandatory Profile, Shift & Address Fields**: Strictly enforces Full Name, Email Address, 10-digit Mobile Phone Number, System Role, Shift Timing (`shift_time` e.g. Day Shift 08:00 AM - 08:00 PM), Street / Site Base Address (`address`, e.g. "Plot No. 42, MIDC Industrial Area, Chakan"), Normalized Location (**City/Town/Village**, **District**, and **State / Union Territory** referencing canonical `public.states` with `state_id`), and Regulatory Identity Details (Aadhaar Card Number with mathematical Verhoeff checksum & masked `XXXX-XXXX-1294` PII formatting and Driving Licence Number) across user profiles, admin modals, and self-registration.
+- **Mandatory Profile, Shift & Address Fields**: Strictly enforces Full Name, Email Address, 10-digit Mobile Phone Number, System Role, Shift Timing (`shift_start_time` and `shift_end_time` e.g. 08:00:00 – 20:00:00), Operator Compensation (`monthly_salary` strictly enforced for operators via PostgreSQL check constraint and frontend validation, alongside `daily_rate` and `ot_hourly_rate`), Street / Base Worksite Address (`street`, e.g. "Plot No. 42, MIDC Industrial Area, Chakan"), Normalized Location (**City/Town/Village**, **District**, and **State / Union Territory** referencing canonical `public.states` with `state_id`), and Regulatory Identity Details (Aadhaar Card Number with mathematical Verhoeff checksum & masked `XXXX-XXXX-1294` PII formatting and Driving Licence Number) across user profiles, admin modals, and self-registration.
 - **Self-Service Profile Edits & Hierarchical Approval Workflow**: Users across all roles can edit their personal profile information (name, phone, shift schedule, address, Aadhaar, driving licence). Edits are routed through a strict multi-tier organizational approval workflow:
   - `super_admin`: Direct instant database update (no approval needed). Super Admin can approve changes for all roles.
   - `admin`: Request routed to `super_admin`. Admin can approve requests from all lower roles.
@@ -80,8 +81,8 @@
   - `supervisor`: Requests routed to `manager`. **Supervisor has 0 approval access**.
   - `operator`: Requests routed to `manager` or `hr`.
 - **Dedicated Profile Change Requests Section on `/users`**: Renders pending profile modification requests in a dedicated review section completely separate from new registration requests (`status = 'pending'`), displaying clear side-by-side diffs (Old Value vs Requested Value), individual Approve/Reject actions, and batch Accept All / Reject All actions.
-- **Self-Service Registration & Admin Access Governance**: Users request platform access via `/signup` choosing their functional role (`operator`, `supervisor`, `manager`, `hr`), their working shift timing via interactive time pickers (`shift_start_time` and `shift_end_time`, defaulting to 12h day shift 08:00 AM - 08:00 PM), their street base address (`address`), and selecting their State/UT from a standardized dropdown linked to `public.states(id)`. The chosen role, shift timing, street address, and `state_id` are preserved in `public.users` in `pending` status, displayed in the Admin Pending User Approvals panel with distinct role badges, and maintained without modification upon administrator approval. All complete registrations are automatically flagged for zero-latency dashboard access upon admin activation.
-- **Dynamic Supervisor Selection for Supervised Roles**: When registering or creating/editing a user account with a supervised role (`operator`), the system dynamically renders a searchable and scrollable Supervisor selector. On `/signup` (both Web and Mobile), supervised personnel choose from active supervisors loaded via `get_active_supervisors_public()` RPC. In `/users`, the desktop table features a dedicated `Supervisor` column, and admin modals (`UserCreateModal`, `UserEditModal`) provide direct supervisor assignment and updates with full export support.
+- **Self-Service Registration & Admin Access Governance**: Users request platform access via `/signup` choosing their functional role (`operator`, `supervisor`, `manager`, `hr`), their working shift timing via interactive time pickers (`shift_start_time` and `shift_end_time`, defaulting to 12h day shift 08:00 AM - 08:00 PM), their street base address (`street`), and selecting their State/UT from a standardized dropdown linked to `public.states(id)`. The chosen role, shift timing, street address, and `state_id` are preserved in `public.users` in `pending` status, displayed in the Admin Pending User Approvals panel with distinct role badges, and maintained without modification upon administrator approval. All complete registrations are automatically flagged for zero-latency dashboard access upon admin activation.
+- **Dynamic Supervisor Selection for Supervised Roles**: When registering or creating/editing a user account with a supervised role (`operator`), the system dynamically renders a searchable and scrollable Supervisor selector. On `/signup` (both Web and Mobile), supervised personnel choose from active supervisors loaded via `get_active_supervisors_public()` RPC. In `/users`, the desktop table features a dedicated `Supervisor` column, and admin modals (`UserCreateModal`, `UserEditModal`) provide direct supervisor assignment and updates with full export support. Supervisor assignments are managed through the normalized relational junction table `public.user_supervisors` (`user_id`, `supervisor_id`), replacing legacy arrays and synchronizing seamlessly across Web and Mobile.
 - **Multi-Selection & Unified Multi-Format Export (Excel, CSV, PDF)**: Select individual or all filtered user accounts with a master checkbox and floating bulk actions bar. Perform instant downloads across formatted Excel (`.xlsx` with metadata, statistics summary row, and auto-adjusted column widths), clean CSV files (`.csv` with UTF-8 BOM), and print-ready landscape A4 PDF reports. Guarantees 100% data consistency across all three export formats with a unified 11-column structure (`S.No`, `Full Name`, `Email Address`, `Mobile Number`, `Role`, `Supervisor`, `Status`, `Address` [smartly merged street + city + district + state with duplicate deduplication], `Aadhaar Number`, `Driving Licence`, `Joined Date`). Features high-concurrency Bulk Deletions with safety self-delete guards, super admin protection, optimistic UI removals, and audit logging.
 - **Full React Native Mobile Parity (`apps/mobile/app/(app)/users.tsx`, `apps/mobile/components/users/*`)**: Complete mobile replication across iOS and Android with 100% feature parity: 4 interactive KPI metric cards (Total, Active, Operators, Pending), 6-dimension custom filter modal selector (Role, Status, State covering all 36 Indian states & UTs, KYC, Joined Date, Sort By), mobile touch card feed with role-accent left borders, User Detail bottom sheet with quick contact CTAs (`Email User` & `Call Phone`), ACCOUNT DETAILS well (ID, Email, Phone, Shift, Address, Location, Aadhaar with eye reveal toggle, Licence, Registered Date with relative time), MANAGEMENT ACTIONS well (Role selector, Supervisor selector, Edit Account, Reset Password, Activate/Deactivate, Delete Account), User Edit sheet, Password Reset modal with temporary credential generator, Reject Reason modal, native multi-format directory export modal (`UserExportModal.tsx`) supporting both CSV download and landscape A4 PDF generation/sharing via `expo-print` and `expo-sharing` with identical structure, Profile Change Requests diff review, and floating bulk actions bar.
 - **Mobile Profile Screen & Validation Parity (`apps/mobile/app/(app)/profile.tsx`, `apps/mobile/components/profile/EditProfileModal.tsx`)**: Reads authoritative account data directly from the PostgreSQL `users` table, renders real-time pending profile modification request banners with withdrawal capabilities, and enforces Zod `ProfileUpdateSchema` alongside strict database uniqueness validation for mobile phone, 12-digit Aadhaar, and driving licence.
@@ -91,6 +92,18 @@
 - **Sub-Millisecond Directory Summary KPI RPC (Phase 3 Performance Program)**: Scalar KPI calculations powered by PostgreSQL RPC `get_users_directory_summary(p_supervisor_id)` returning single JSON `{ total, active, engineers, new_registrations, states }` backed by composite B-tree index `idx_users_status_created_at`. Completely eliminates client-side JavaScript `.filter()` / `.reduce()` computations on browser slices and provides real database-wide counts across all 4 KPI cards.
 - **Modular Component Decomposition (Phase 4 Performance Program)**: Decomposed monolithic 2,866-line client component into clean, focused single-responsibility files following the proven `OperationsClient.tsx` pattern: `UsersHeader.tsx` (KPI cards, exports, title), `UsersFilters.tsx` (search, 6 filter dropdowns, active chips), `UsersTable.tsx` (desktop data table, mobile infinite feed, pagination), `PendingApprovalsSection.tsx` (registration approvals), `ProfileChangeRequests.tsx` (profile diff reviews), and `users-helpers.tsx` (filter options & badge helpers), leaving a thin coordinator in `users-client.tsx` orchestrating state and actions.
 - **Dedicated Password Recovery & Email Pre-Check (`/forgot-password` & `/reset-password`)**: Structured two-step password recovery workflow mirroring Supabase's documented flow. When a user requests a recovery link on `/forgot-password`, the system queries `public.users` via `createSupabaseAdminClient()` to verify account existence. If no account matches the entered email, the request immediately halts with an error banner (`No account found with this email address`), preventing unauthorized email dispatch or confusion. If the user exists, a secure email link is sent with dynamic `redirectTo` resolution (`getResetPasswordRedirectUrl()`, pointing to canonical `${getAppUrl()}/reset-password`). The dedicated `/reset-password` page features a strict 4-state lifecycle guard (`verifying`, `valid`, `missing`, `invalid`) blocking unauthorized form access without a verified Supabase recovery token/code. Upon successful password reset, the recovery session is securely terminated and the user is redirected to `/login` with a confirmation notification. Fully synchronized across Web and Mobile (`apps/mobile/app/(auth)/forgot-password.tsx`).
+- **Aadhaar & Licence Document Capture & Hybrid In-App Viewer System (Signup, Edit Profile, Onboarding & User Detail)**: Config-driven document infrastructure (`public.user_document_types`, `public.user_documents`, private `user_files` storage bucket) supporting Aadhaar, Driving Licence, and operational identity documents with format-specific badges, single-slot upload enforcement, and strict zero-public-URL security:
+  - **Security & Short-Lived Access Architecture**: Sensitive identity documents (Aadhaar, Licence) are stored in a private bucket (`public = false`). Supabase public URLs and permanent signed URLs are strictly prohibited. Access is gated by server-side authorization (`getDocumentViewUrlAction` / `/api/documents/[id]/view`), generating short-lived signed URLs (120-second TTL) strictly on-demand for the document owner or privileged staff (`super_admin`, `admin`, `hr`), with every view logged as `document.viewed` in `public.audit_logs`. Database tracks `uploaded_by UUID` (Migration 102).
+  - **Hybrid In-App Document Viewer (`DocumentViewerModal` & `MobileDocumentViewerModal`)**: Custom in-app viewer experience powered by mature native rendering engines underneath without heavy third-party PDF parser bloat:
+    - **Image Viewer (JPG/JPEG, PNG, WEBP)**: Interactive zoom (50%–300% on Web, pinch-to-zoom on Mobile), pan/drag, 90° rotation, and fullscreen toggle.
+    - **PDF Viewer**: Embedded native browser `<iframe>` on Web and `react-native-webview` on Mobile with toolbar controls, page navigation, and download shortcuts.
+    - **DOC/DOCX/Other Files**: External system viewer, download, and native OS share sheet (`expo-sharing`, `expo-file-system`).
+  - **Signup Page Integration (`/signup` & `/(auth)/signup`)**: Section 3 ("Work Location & Identity") displays dedicated Aadhaar and Licence upload cards with pre-flight file size checks (2MB cap), format badges, and automatic document upload via `adminSupabase` immediately upon account registration.
+  - **Edit Profile Modal Integration (`EditProfileModal`)**: Section 1 ("Personal Details") displays existing uploaded identity documents with secure signed URLs, one-click replacement with real XHR progress tracking, in-app full-screen viewing, and deletion confirmation.
+  - **Onboarding Page Integration (`/onboarding` & `/(auth)/onboarding`)**: Section 4 ("Identity & Verification") incorporates Aadhaar and Driving Licence document uploads for newly registered users completing initial profile setup.
+  - **Staff User Inspection (`UserDetailSheet` on Web & `UserDetailModal` on Mobile)**: Privileged staff (`super_admin`, `admin`, `hr`) inspect employee identity documents directly in the in-app viewer modal with audit logging.
+  - **Cross-Platform Mobile Parity (`apps/mobile`)**: Native document picker via `expo-document-picker` (~57.0.2), `MobileDocumentUploadCard`, and `MobileDocumentViewerModal` with Vercel Geist design tokens, min 44px touch targets, and full Android/iOS compatibility.
+
 
 ### 3. ⏱️ Operations Hub (`/operations`)
 - **Running Hours Logs (`/operations?tab=logs`)**:
@@ -193,7 +206,7 @@
     - **Audit Trail Direct Index Seek**: Replaced unindexed JSONB extraction queries in `getCachedLogAudit` with indexed `entity_id` lookups backed by `idx_audit_logs_entity_id_created`, dropping log audit query time from $71.6\text{ms}$ to **$0.084\text{ms}$ (852x faster)**.
     - **Index Hygiene & Bloat Prevention**: Dropped legacy redundant prefix indexes (`idx_machine_hour_logs_machine_date`, `idx_machine_hour_logs_client_date`, `idx_machine_hour_logs_operator_date`), saving index write overhead and storage bloat on every insert.
 
-### 4. 💰 HR & Operator Payroll (`/hr`)
+### 4. 💰 Operator Payroll (`/payroll`)
 - **Split-Month Overtime Lag Payroll Engine (Migration 094)**:
   - **Authoritative Business Formula**:
     $$\text{Total Payroll} = (\text{Work Days}_{\text{Previous Month}} \times \text{Daily Rate}) + (\text{OT Hours}_{\text{Month Before Previous}} \times \text{Hourly OT Rate})$$
@@ -201,25 +214,58 @@
   - **High-Performance PostgreSQL RPCs (`get_hr_payroll_summary`, `update_operator_payroll_rates`, `bulk_update_operator_payroll_rates`) (Migration 094 & 095)**:
     - Sub-millisecond read model function executing under `SECURITY DEFINER` and `STABLE` mode with built-in caller authorization checking (`super_admin`, `admin`, `manager`, `hr`).
     - Dedicated rate mutation RPCs (`update_operator_payroll_rates` and `bulk_update_operator_payroll_rates`) executing under `SECURITY DEFINER` with strict RBAC guards, eliminating client-side RLS permission blocks on Mobile for HR and Manager roles.
-  - **Operator Wage Governance (`public.users`)**: `daily_rate` (₹ per day) and `ot_hourly_rate` (₹ per hour) columns added directly to `public.users`. Enables HR, Managers, Admins, and Super Admins to configure individual operator compensation inline or in bulk.
-  - **Full 4-Role Accessibility Across Web & Mobile**:
-    - Accessible to `super_admin`, `admin`, `manager`, and `hr`.
-    - Whitelisted in Next.js Edge Auth Proxy (`apps/web/proxy.ts` `activeProtectedRoutes`) and aliased via `/payroll` redirect.
+  - **Operator Wage Governance (`public.users`)**: `daily_rate` (₹ per day) and `ot_hourly_rate` (₹ per hour) columns added directly to `public.users`. Enables HR, Admins, and Super Admins to configure individual operator compensation inline or in bulk.
+  - **Accessibility Restricted to HR & Admins (Manager Excluded)**:
+    - Accessible strictly to `super_admin`, `admin`, and `hr`.
+    - **Manager role is explicitly restricted** from `/payroll` and `/attendance` across RBAC matrices, Server Actions, database RPCs, and UI navigation bars.
+    - Whitelisted in Next.js Edge Auth Proxy (`apps/web/proxy.ts` `activeProtectedRoutes`) as `/payroll`, with legacy `/hr` automatically redirected to `/payroll`.
     - Integrated into Command Palette (`⌘P`) on both Web (`CommandPalette.tsx`) and Mobile (`MobileCommandPalette.tsx`).
     - Dynamic bottom navigation highlight for overflow roles (`BottomNav.tsx` and `MobileBottomNav.tsx`) linking via "More" menu and Lucide `Banknote` icon.
-  - **Interactive Web Management (`apps/web/app/(app)/hr/`)**:
+  - **Interactive Web Management (`apps/web/app/(app)/payroll/`)**:
     - Month selector navigating across calendar payroll cycles with automatic date range resolution.
     - 4 real-time KPI metric cards: Active Operators with Submitted Logs, Total Work Days, Approved Overtime Hours, and Estimated Total Payroll (INR).
     - Multi-select capability with floating bulk action bar: batch update daily rates and OT rates across selected operators in one click.
     - Inline quick-edit mode: update daily or OT rates directly in table rows or mobile cards with immediate recalculation.
     - 1-click browser-native CSV export generating complete audit-ready compensation worksheets.
-  - **Full Cross-Platform React Native Mobile Parity (`apps/mobile/app/(app)/hr.tsx`)**:
+  - **Full Cross-Platform React Native Mobile Parity (`apps/mobile/app/(app)/payroll.tsx`)**:
     - Dedicated native screen with month selector horizontal pill strip, rule explanation banner, KPI cards, search bar, and operator touch cards.
     - Native rate editing modal with numeric inputs and immediate state updates via `update_operator_payroll_rates` RPC.
-    - Primary bottom bar navigation access for HR (`["home", "operations", "hr", "users"]`) and More menu tiles for Manager, Admin, and Super Admin.
+    - Primary bottom bar navigation access for HR (`["home", "operations", "attendance", "payroll"]`) and More menu tiles for Admin and Super Admin.
+    - Legacy route `apps/mobile/app/(app)/hr.tsx` provides automatic redirect to `/(app)/payroll`.
   - **Operator Logs & Running Hours Report Access for HR**:
     - Granted `machine.view`, `operator.view`, and `operator.log_approve` permissions to the `hr` role in `@reachinternational/permissions`.
     - HR has full read-only access to `/operations?tab=logs` on both Web and Mobile, allowing complete verification of operator running hours across Machine, Client, and Operator views.
+
+### 5. 📅 Operator Attendance Management (`/attendance`)
+- **Zero-Table Architecture Derived from Operational Machine Hour Logs (Migration 097)**:
+  - **Direct Truth Source**: Derives attendance records on demand directly from `public.machine_hour_logs` via high-performance PostgreSQL RPCs, eliminating duplicated tables, sync jobs, and dual-write divergence:
+    - `PRESENT`: Operator submitted $\ge 1$ shift log on that calendar day with normal working hours $\ge 4\text{h}$.
+    - `HALF_DAY`: Operator worked $< 4\text{h}$ of normal working hours across logs on that day.
+    - `ABSENT`: Scheduled weekday with 0 submitted operator hour logs.
+    - `WEEK_OFF`: Fixed weekly off-day (Sunday).
+  - **Sub-5ms PostgreSQL Kernel RPCs (`get_attendance_monthly_summary`, `get_attendance_daily_detail`)**:
+    - `get_attendance_monthly_summary(p_year, p_month, p_role, p_search, p_status, p_page, p_page_size)`: Paginated operator directory with scheduled days, present days, absent days, half-days, worked minutes, overtime minutes, and fleet KPI summary cards. Leverages composite index `idx_mhl_operator_date_created` on `(operator_id, log_date DESC, created_at DESC, id DESC)`.
+    - `get_attendance_daily_detail(p_employee_id, p_year, p_month)`: Calendar-day breakdown (1st through 31st) for a single operator including shift intervals, breakdown minutes, individual log entries, machine IDs, and day-of-week rollup averages (`dow` 0–6).
+    - Hardened under `SECURITY DEFINER` and `STABLE` with caller authorization checks allowing `service_role` and authenticated `super_admin`, `admin`, and `hr`.
+- **Targeted Cache Strategy & Next.js Data Access Layer**:
+  - `apps/web/lib/data/attendance/`: Cached with Next.js `unstable_cache` (45s TTL for monthly summary tagged `attendance:summary:${yearMonth}`, 60s TTL for operator daily detail tagged `attendance:detail:${userId}:${yearMonth}`).
+  - Server actions in `apps/web/app/actions/attendance.ts` gated strictly via `requireRole("super_admin", "admin", "hr")`.
+- **Interactive 3-Tier Responsive Web Experience (`/attendance` & `/attendance/[userId]`)**:
+  - **KPI Summary Strip**: 4 real-time cards (Total Operators, Present Count, Absent Count, Half-Day Count) calculating attendance dynamically.
+  - **Month Navigation**: URL-synced calendar selector (`?month=YYYY-MM`).
+  - **Fuzzy Search & Status Filter Chips**: Filter operators across name, mobile phone number, city, and status (`all`, `present`, `absent`, `half_day`).
+  - **High-Density Desktop Table (`hidden md:block`)**: Tabular view with Operator Name (links to `/attendance/[userId]`), Phone, Role, Scheduled Days, Present Days, Absent Days, Half Days, Worked Hours, Overtime, and color-coded status badges.
+  - **Mobile Touch Cards (`block md:hidden`)**: Minimum 44px touch targets with operator name, contact chip, day counts grid, and worked/OT time badges.
+  - **Server-Side Pagination & Browser-Native CSV Export**: On-demand unpaginated CSV export streaming filtered records directly in browser.
+  - **Employee Attendance Detail Route (`/attendance/[userId]`)**: Operator profile hero card with shift schedules, 31-day visual calendar grid with status badges, and day-of-week average work hour rollup table.
+- **Full React Native Mobile Parity (`apps/mobile/app/(app)/attendance.tsx`)**:
+  - Native mobile screen with horizontal month selector bar, 4 KPI cards, search input, status filter pill strip, operator touch cards, and pull-to-refresh (`RefreshControl`).
+  - Detailed daily calendar modal showing operator shift timings, month summary stat cards, total worked/OT hours, and day-by-day log entries.
+  - Direct integration into `MobileBottomNav` for HR (`["home", "operations", "attendance", "hr"]`) and `More` screen tiles with Lucide `CalendarCheck` icon.
+- **Strict RBAC Enforcement**:
+  - Accessible strictly to `super_admin`, `admin`, and `hr`.
+  - **Manager role is blocked** from `/attendance` across Edge Proxy, Server Actions, PostgreSQL RPCs, and UI navigation bars.
+
 
 ### 6. 🏢 Client Directory & Reference Master Module (`/clients`)
 - **World-Class Customer Master Reference Module (Milestones C0 — C21)**:
@@ -305,8 +351,8 @@
     - Selects exact database column projection, displays all 4 KPI Summary Cards matching Web, maintains 280ms search debounce, status filter chips with dynamic count badges (`ALL (2)`, `ACTIVE (2)`, `INACTIVE (0)`), mobile in-memory session cache, and pull-to-refresh.
 
 ### 7. 🚀 User Profile Onboarding & Fast Validation (`/onboarding`)
-- **Incomplete Profile Interception**: Detects users missing essential details (`full_name`, `phone`, `role`, `shift_time`, `address`, `city`, `district`, `state`, `aadhaar_number`) and routes them directly to `/onboarding`.
-- **Ultra-Fast Zero-Latency Bypass**: Employs a single `complete_profile = 'yes'` flag in `public.users`. Once completed, subsequent logins and requests verify in a single string comparison (`if (user.complete_profile === 'yes')`) with zero CPU overhead, completely skipping multi-field inspection.
+- **Incomplete Profile Interception**: Detects users missing essential details (`full_name`, `phone`, `role`, `shift_start_time`, `shift_end_time`, `street`, `city`, `district`, `state`, `aadhaar_number`) and routes them directly to `/onboarding`.
+- **Ultra-Fast Zero-Latency Bypass**: Employs a single native PostgreSQL `complete_profile boolean` flag (default `false`) in `public.users` backed by partial index `idx_users_incomplete_profile WHERE (complete_profile = false)`. Once completed, subsequent logins and requests verify in a single boolean check (`if (user.complete_profile)`) with zero CPU overhead, completely skipping multi-field inspection.
 - **Unified UX**: Reuses the battle-tested 4-section architecture from `/signup` with pre-filled profile information, `<CustomTimePicker>` / `<TimeInput>` integration, live shift duration calculations, and Verhoeff Aadhaar validation across Web and Mobile.
 
 ### 8. 🎨 Centralized UI Design System (`apps/web/components/ui/`)
@@ -360,6 +406,40 @@
   - **Zero Keyboard Collision**: The bar hides automatically while any text input is focused (`data-nav-hidden` attribute on Web, `Keyboard.addListener` on Native) to eliminate collisions with virtual keyboards and sticky submit buttons.
   - **Dedicated `/more` Route**: Unified server-driven route on Web (`app/(app)/more/page.tsx`) and Native (`apps/mobile/app/(app)/more.tsx`) displaying profile header, dynamic `EditProfileModal`, 2-column overflow touch cards ($\ge 88$px tall), theme toggle, legal links (`/privacy`, `/terms`), account deletion, and sign-out.
   - **Automated Reachability Test**: Enforced by `packages/permissions/src/navigation.test.ts` via `node:test`, verifying 100% route reachability, home-first ordering, and bar length $\le 5$ across all roles.
+
+---
+
+## 🎨 Global Interactive Icon Animation System
+
+The ReachInternational platform employs a refined, industry-standard micro-interaction engine across the Web (`apps/web`) and Native Mobile (`apps/mobile`) applications, inspired by the design systems of **Linear, Vercel Geist, Stripe, and Apple iOS 17 SF Symbols**. Rather than animating only when the cursor is directly over an icon, icons dynamically react to the hover, focus, and active/pressed states of their parent container.
+
+### Core Architectural Principles
+1. **Parent State Ownership**: The interactive parent (`<Button>`, `<Card>`, `<Tabs>`, `SidebarMenuButton`, `<NavigationItem>`, `<BottomNav>`, table action rows, dropdown menu items) owns the interaction state. Child icons automatically respond to parent `:hover`, `:focus-visible`, `:active`, and touch press events.
+2. **Table Data Anchoring (No Jitter)**: Only functional interactive controls animate. In-cell informational icons (phone numbers, calendar dates, location pins, and status dots) remain anchored and calm on row hover, preventing distraction during data audit workflows.
+3. **Subtlety & Restraint**: Micro-magnitudes (3px translations, 1.09x scale, 30° rotations) ensure zero visual distortion or text displacement while delivering unmistakable tactile feedback.
+4. **Crisp Physics & Tactile Press**: Uses 180ms cubic-bezier spring curves (`cubic-bezier(0.16, 1, 0.3, 1)`) on web and Apple iOS 17 spring physics (`tension: 300, friction: 22`) on mobile. Clicking or tapping produces an instant `scale(0.94)` tactile compression.
+5. **Zero Layout Shifts (CLS = 0)**: Animations exclusively manipulate GPU-accelerated CSS/native transform properties (`transform: translate3d()`, `scale()`, `rotate()`).
+6. **No Pointer Event Conflicts**: Icon wrappers enforce `pointer-events: none` on desktop, eliminating boundary cursor flickering.
+7. **Strict Disabled & Reduced Motion Guards**: Disabled controls enforce `transform: none !important; animation: none !important;`. Automatically respects `prefers-reduced-motion: reduce` on Web and `AccessibilityInfo.isReduceMotionEnabled()` on Mobile.
+
+### Semantic Verb Library
+| Semantic Verb | Web CSS Preset | Mobile Native Range | Primary Use Case |
+|---|---|---|---|
+| `bounce` | `.icon-bounce` (`scale(1.09)`) | `outputRange: [1, 0.94]` | Primary buttons, bookmarks, CTAs, empty states |
+| `scale` | `.icon-scale` (`scale(1.08)`) | `outputRange: [1, 0.94]` | Segmented toggles, view switchers, selection chips |
+| `arrow` | `.icon-arrow` (`translateX(3px)`) | `translateX: [0, 3]` | Trailing disclosure arrows, next links, forward actions |
+| `arrow-left` | `.icon-arrow-left` (`translateX(-3px)`) | `translateX: [0, -3]` | Back buttons, previous pagination controls |
+| `chevron` | `.icon-chevron` (`translateX(2px)`) | `translateX: [0, 2]` | Collapsible headers, accordions, dropdown triggers |
+| `rotate` | `.icon-rotate` (`rotate(30deg)`) | `rotate: ['0deg', '30deg']` | Settings, filter buttons, tool triggers |
+| `gear` | `.icon-gear` (`rotate(45deg)`) | `rotate: ['0deg', '45deg']` | Administration cogs, advanced preferences |
+| `refresh` | `.icon-refresh` (`rotate(180deg)`) | `rotate: ['0deg', '180deg']` | Sync buttons, data table refresh, pull-to-refresh |
+| `tilt` | `.icon-tilt` (`rotate(-10deg) scale(1.04)`) | `rotate: ['0deg', '-10deg']` | Destructive actions, delete confirmations, trash triggers |
+| `lift` | `.icon-lift` (`translateY(-2px) scale(1.04)`) | `translateY: [0, -2]`, `scale: [1, 0.96]` | Metric cards, export actions, KPI indicators |
+| `spin` | `.icon-spin` (360deg infinite) | Continuous rotation | Loading spinners, background sync |
+
+### Cross-Platform Native Parity
+- **Web (`apps/web`)**: Integrated into `globals.css`, `InteractiveIcon` (`components/ui/animated-icon.tsx`), `Button`, `IconButton`, `Card`, `MetricCard`, `Tabs`, `SegmentedToggle`, `BottomNav`, `AppSidebar`, `MorePageClient`, `CommandPalette`, and `EmptyState`.
+- **Mobile (`apps/mobile`)**: Implemented via `<InteractiveIcon />` (`components/ui/InteractiveIcon.tsx`), utilizing `Animated.Value` with `useNativeDriver: true`. Synchronized with `Button.tsx` (`onPressIn`/`onPressOut`), `Card.tsx` (`CardPressContext`), and `MobileBottomNav.tsx`.
 
 ---
 
@@ -455,47 +535,77 @@ ReachInternational-Monorepo/
 
 | Role | Operational Scope | Access Rights |
 |------|-------------------|---------------|
-| `super_admin` | Global System | Full control over machines, operations, payroll, user accounts, security enforcement, and system configuration. |
-| `admin` | Global Operations | Add/edit/delete machines, manage users, review running hour logs, oversee client master, configure and review operator payroll. |
-| `manager` | Operations & Business | Fleet management, client contracts, running hour logs review, shift approvals, operator payroll governance, and personnel oversight. |
+| `super_admin` | Global System | Full control over machines, operations, attendance, payroll, user accounts, security enforcement, and system configuration. |
+| `admin` | Global Operations | Add/edit/delete machines, manage users, review running hour logs, oversee client master, configure and review operator payroll, inspect operator attendance. |
+| `manager` | Operations & Fleet | Fleet management, client contracts, running hour logs review, shift approvals, and personnel oversight. Strictly restricted from `/payroll` and `/attendance` per business policy. |
 | `supervisor` | Site Operations | Monitor daily running hour logs, track operator machine assignments, record machine HMR. |
-| `hr` | Human Resources | Operator monthly payroll calculations (split-month overtime lag formula), operator wage configuration (daily rate & OT rate), inspect operator running hours logs reports, employee lifecycle management, and profile approvals. |
+| `hr` | Human Resources | Operator monthly payroll calculations (split-month overtime lag formula), operator wage configuration (daily rate & OT rate), operator attendance audit & calendar breakdowns, inspect operator running hours logs reports, employee lifecycle management, and profile approvals. |
 | `operator` | Field Operations | Submit daily machine running hour logs (`/operations?tab=entry`), view log history (`/operations?tab=history`), and view assigned machine specifications (`/machines`). |
 
 ### 📱 Mobile Bottom Navigation & RBAC Matrix
 
 | Role | Accessible Bottom Navigation Tabs (Web & Mobile) | Restricted Routes |
 |------|--------------------------------------------------|-------------------|
-| `super_admin` | Dashboard, Machines, Operations, Users, HR Payroll (`/hr`), Clients, Audit, Profile/Settings | None (Full System Access) |
-| `admin` | Dashboard, Machines, Operations, Users, HR Payroll (`/hr`), Clients, Audit, Profile/Settings | None |
-| `manager` | Dashboard, Machines, Operations, Clients, Users, HR Payroll (`/hr`), Audit, Profile/Settings | None |
-| `supervisor` | Dashboard, Machines, Operations, Users, Profile/Settings | Clients (`/clients`), HR Payroll (`/hr`), Audit (`/audit`) |
-| `hr` | Dashboard, Operations (`/operations?tab=logs`), HR Payroll (`/hr`), Users (`/users`), Profile/Settings | Machines (`/machines`), Clients (`/clients`), Audit (`/audit`) |
-| `operator` | Dashboard, Operations, Machines, Profile/Settings | Users (`/users`), Clients (`/clients`), HR Payroll (`/hr`), Audit (`/audit`) |
+| `super_admin` | Dashboard, Machines, Operations, Users, Attendance (`/attendance`), Payroll (`/payroll`), Clients, Audit, Profile/Settings | None (Full System Access) |
+| `admin` | Dashboard, Machines, Operations, Users, Attendance (`/attendance`), Payroll (`/payroll`), Clients, Audit, Profile/Settings | None |
+| `manager` | Dashboard, Machines, Operations, Clients, Users, Audit, Profile/Settings | Payroll (`/payroll`), Attendance (`/attendance`) |
+| `supervisor` | Dashboard, Machines, Operations, Users, Profile/Settings | Clients (`/clients`), Payroll (`/payroll`), Attendance (`/attendance`), Audit (`/audit`) |
+| `hr` | Dashboard, Operations (`/operations?tab=logs`), Attendance (`/attendance`), Payroll (`/payroll`), Users (`/users`), Profile/Settings | Machines (`/machines`), Clients (`/clients`), Audit (`/audit`) |
+| `operator` | Dashboard, Operations, Machines, Profile/Settings | Users (`/users`), Clients (`/clients`), Payroll (`/payroll`), Attendance (`/attendance`), Audit (`/audit`) |
 
 All bottom navigation bars are micro-optimized for 360×800 mobile viewports with minimum 44px touch targets, single-line text truncation, centered active dot indicators, and automatic subroute matching (`/machines/[id]`, `/users?page=...`).
+
+### 🧭 Centralized Navigation & Lifecycle Architecture
+
+Navigation and session lifecycle are governed by `@reachinternational/permissions/navigation` and enforced across 5 dedicated architectural layers:
+
+1. **Authoritative Role Home Mapping (`ROLE_HOME_ROUTES` & `MOBILE_ROLE_HOME_ROUTES`)**:
+   - `super_admin`: `/dashboard` (Web) \| `/(app)/dashboard` (Mobile)
+   - `admin`: `/dashboard` (Web) \| `/(app)/dashboard` (Mobile)
+   - `manager`: `/dashboard` (Web) \| `/(app)/dashboard` (Mobile)
+   - `supervisor`: `/dashboard` (Web) \| `/(app)/dashboard` (Mobile)
+   - `hr`: `/dashboard` (Web) \| `/(app)/dashboard` (Mobile)
+   - `operator`: `/dashboard` (Web) \| `/(app)/dashboard` (Mobile)
+   - Alias redirect: `/home` $\rightarrow$ `/dashboard` configured in `next.config.ts`.
+
+2. **The Four Lifecycle Scenarios**:
+   - **Scenario 1 — Successful Login**: User credentials verified via Supabase Auth; role resolved from user profile; redirects to `getRoleHomeRoute(role)`. Previous navigation state is cleared.
+   - **Scenario 2 — Normal Internal Navigation**: Authenticated users navigate freely between authorized routes (e.g. `/dashboard` $\rightarrow$ `/operations?tab=logs&page=2` $\rightarrow$ `/users`). Full pathname, search parameters, pagination, and tabs are preserved without proxy interference or unnecessary DB roundtrips.
+   - **Scenario 3 — Background $\rightarrow$ Foreground / Tab Switch**: Browser tab switching or native app backgrounding preserves in-memory state; zero redirection is triggered.
+   - **Scenario 4 — Browser Reload / Native Restart**:
+     - *Web*: Browser refresh (F5 / Cmd+R) is detected via `PerformanceNavigationTiming.type === 'reload'` in `BrowserLifecycleManager.tsx` and consumed once per document load. Redirects authenticated users to their role Home (`/dashboard`), preventing redirect loops if already on Home and preserving direct deep links (`type === 'navigate'`).
+     - *Native*: Cold restart / process relaunch runs `apps/mobile/app/index.tsx`, resolves the active session, and opens at `getMobileRoleHomeRoute(role)`.
+
+3. **Layered Separation of Concerns**:
+   - **Edge Proxy (`proxy.ts`)**: Session validation, rate limiting, and unauthenticated redirects to `/login`. Does not perform browser reload detection or interfere with internal route navigation.
+   - **Authentication / Session Layer (`actions/auth.ts`, `dal.ts`)**: Credentials verification, session cookie management, and role-based access denial redirects to `getRoleHomeRoute()`.
+   - **Web Application Shell (`BrowserLifecycleManager.tsx`)**: Client-side reload detection and single-shot redirection to role Home.
+   - **Native Navigation Layer (`apps/mobile/app/index.tsx`, `login.tsx`)**: Cold start routing and deep link fallback handling.
 
 ---
 
 ## 🗄 Database Schema
 
-The core database is built on 7 central tables in Supabase PostgreSQL:
+The core database is built on normalized relational tables in Supabase PostgreSQL:
 
-1. `public.users`: System user accounts (email, phone, role, supervisor_id references users(id), supervisor_ids uuid[] (multi-supervisor roster with GIN index and parity sync trigger), city, district, state, state_id references states(id), aadhaar_number, license_number, address, shift_time, shift_start_time, shift_end_time, complete_profile ['yes', 'no'], status, role-aware RLS with supervisor scoping).
-2. `public.machines`: Machine fleet master (machine_code, model, serial_number, manufacturer, year_of_manufacture, hour_meter, customer_name, status, health_status, current_operator_id; indexed with `idx_machines_created_at_desc` on `created_at DESC, id DESC`).
-3. `public.machine_hour_logs`: Daily running hour logs (machine_id, client_id, operator_id, supervisor_id, log_date, start_time, end_time, start_meter, end_meter, running_hours, normal_working_hours, overtime_hours, is_breakdown, breakdown_start_time, breakdown_end_time, breakdown_duration, breakdown_hours, location, remarks, conflict_flag, conflict_reason, conflict_status, conflict_resolved_by, conflict_resolved_at, conflict_resolution_notes, idempotency_key; optimized with 4-column composite B-tree indexes `idx_mhl_machine_date_created`, `idx_mhl_client_date_created`, and `idx_mhl_operator_date_created` on `(entity_id, log_date DESC, created_at DESC, id DESC)` eliminating quicksorts; served via high-performance read model RPC `public.get_operation_logs(...)` from Migration 076).
-4. `public.operator_machine_assignments`: Authoritative multi-shift operator assignment roster with recurring daily shift windows (id, machine_id, operator_id, shift_start_time, shift_end_time, crosses_midnight, is_active, assigned_by, assigned_at, ended_at, ended_by, end_reason; indexed with partial index `idx_oma_active_assigned` on `(assigned_at DESC) WHERE (is_active = true AND ended_at IS NULL)` and composite history indexes `idx_oma_machine_assigned_at`, `idx_oma_operator_assigned_at`). Enforces max 3 distinct active operators per machine via advisory transaction locks.
-5. `public.operator_shift_ranges`: Normalized 0–1440 circular minute mapping unrolled across midnight with PostgreSQL GiST exclusion constraint (`EXCLUDE USING GIST (operator_id WITH =, minute_range WITH &&) WHERE (is_active)`) preventing double-booked operators across overlapping shifts.
-6. `public.clients`: Registered clients & customer sites (client_code, client_name, contact_person, phone, email, address, city, state; indexed with GIN trigram indexes and keyset cursor indexes).
-7. `public.states`: Official Indian State and Union Territory directory with official smallint LGD codes (36 entities).
-8. `public.districts`: Official Indian Administrative Districts directory (784 districts mapped to `states(id)` with smallint LGD codes).
-9. `public.cities`: Statutory Cities, Municipal Corporations, City Municipal Councils, and Major Urban Centers (466 entities mapped to `districts(id)` with Census location codes).
-10. `public.towns`: Statutory Municipal Councils, Nagar Palika Parishads, Nagar Panchayats, Town Panchayats, Census Towns, and Sub-District/Tehsil/Taluka hubs (15,081 entities mapped to `districts(id)`).
-11. `public.villages`: Complete Census Revenue Village directory (640,787 villages mapped to `districts(id)` with 6-digit Census village codes).
-12. `public.master_location`: Unified high-speed location lookup and autocomplete master (15,331 records) indexed with composite B-Tree and `pg_trgm` GIN indexes (`search_text`).
-13. `public.idempotency_keys`: Replay attack protection & state mutation deduplication key ledger (idempotency_key, user_id, action_name, request_hash, status, response_payload, created_at, expires_at).
-14. `public.audit_logs`: Immutable, append-only security & compliance audit trail (id, user_id, action, entity_type, entity_id, metadata, details, ip_address, created_at; indexed with `idx_audit_logs_entity_id_created` on `(entity_id, created_at DESC)` for sub-millisecond entity history retrieval).
-15. Operational Work Locations: User operational locations, sites, and offices are stored directly on the user record via normalized `address`, `city`, `district`, `state`, and `state_id` linked to the Indian administrative master directories, supporting dynamic relocation across yards, workshops, and project sites without static foreign key constraints.
+1. `public.users`: System user accounts (email, phone, role, supervisor_id references users(id) [primary legacy reference], city, district, state, state_id references states(id), aadhaar_number, license_number, street [canonical address], shift_start_time, shift_end_time, monthly_salary NUMERIC(10, 2) [strictly enforced for operators via PostgreSQL check constraint], daily_rate, ot_hourly_rate, complete_profile boolean [true/false, default false; indexed with partial index `idx_users_incomplete_profile WHERE (complete_profile = false)`], status, role-aware RLS with supervisor scoping).
+2. `public.user_supervisors`: Normalized operator-to-supervisor junction table (`user_id` UUID references `users(id)` ON DELETE CASCADE, `supervisor_id` UUID references `users(id)` ON DELETE CASCADE, `created_at` TIMESTAMPTZ, PRIMARY KEY (`user_id`, `supervisor_id`); indexed with composite B-trees; protected by RLS for user self-visibility, supervisor scoping, and admin/manager management).
+3. `public.user_documents`: Statutory KYC document metadata table (`user_id` UUID references `users(id)` ON DELETE CASCADE, `document_type_id` UUID references `user_document_types(id)`, `file_path`, `file_name`, `file_size`, `mime_type`, `status`, `created_at`, `updated_at`; protected by RLS for user self-access and administrative staff review).
+4. `public.user_document_types`: Authorized KYC document registry (`code`, `name`, `description`, `required`, `is_active`) strictly restricted to `aadhaar` and `driving_license`.
+5. `public.machines`: Machine fleet master (machine_code, model, serial_number, manufacturer, year_of_manufacture, hour_meter, customer_name, status, health_status, current_operator_id; indexed with `idx_machines_created_at_desc` on `created_at DESC, id DESC`).
+6. `public.machine_hour_logs`: Daily running hour logs (machine_id, client_id, operator_id, supervisor_id, log_date, start_time, end_time, start_meter, end_meter, running_hours, normal_working_hours, overtime_hours, is_breakdown, breakdown_start_time, breakdown_end_time, breakdown_duration, breakdown_hours, location, remarks, conflict_flag, conflict_reason, conflict_status, conflict_resolved_by, conflict_resolved_at, conflict_resolution_notes, idempotency_key; optimized with 4-column composite B-tree indexes `idx_mhl_machine_date_created`, `idx_mhl_client_date_created`, and `idx_mhl_operator_date_created` on `(entity_id, log_date DESC, created_at DESC, id DESC)` eliminating quicksorts; served via high-performance read model RPC `public.get_operation_logs(...)` from Migration 076).
+7. `public.operator_machine_assignments`: Authoritative multi-shift operator assignment roster with recurring daily shift windows (id, machine_id, operator_id, shift_start_time, shift_end_time, crosses_midnight, is_active, assigned_by, assigned_at, ended_at, ended_by, end_reason; indexed with partial index `idx_oma_active_assigned` on `(assigned_at DESC) WHERE (is_active = true AND ended_at IS NULL)` and composite history indexes `idx_oma_machine_assigned_at`, `idx_oma_operator_assigned_at`). Enforces max 3 distinct active operators per machine via advisory transaction locks.
+8. `public.operator_shift_ranges`: Normalized 0–1440 circular minute mapping unrolled across midnight with PostgreSQL GiST exclusion constraint (`EXCLUDE USING GIST (operator_id WITH =, minute_range WITH &&) WHERE (is_active)`) preventing double-booked operators across overlapping shifts.
+9. `public.clients`: Registered clients & customer sites (client_code, client_name, contact_person, phone, email, address, city, state; indexed with GIN trigram indexes and keyset cursor indexes).
+10. `public.states`: Official Indian State and Union Territory directory with official smallint LGD codes (36 entities).
+11. `public.districts`: Official Indian Administrative Districts directory (784 districts mapped to `states(id)` with smallint LGD codes).
+12. `public.cities`: Statutory Cities, Municipal Corporations, City Municipal Councils, and Major Urban Centers (466 entities mapped to `districts(id)` with Census location codes).
+13. `public.towns`: Statutory Municipal Councils, Nagar Palika Parishads, Nagar Panchayats, Town Panchayats, Census Towns, and Sub-District/Tehsil/Taluka hubs (15,081 entities mapped to `districts(id)`).
+14. `public.villages`: Complete Census Revenue Village directory (640,787 villages mapped to `districts(id)` with 6-digit Census village codes).
+15. `public.master_location`: Unified high-speed location lookup and autocomplete master (15,331 records) indexed with composite B-Tree and `pg_trgm` GIN indexes (`search_text`).
+16. `public.idempotency_keys`: Replay attack protection & state mutation deduplication key ledger (idempotency_key, user_id, action_name, request_hash, status, response_payload, created_at, expires_at).
+17. `public.audit_logs`: Immutable, append-only security & compliance audit trail (id, user_id, action, entity_type, entity_id, metadata, details, ip_address, created_at; indexed with `idx_audit_logs_entity_id_created` on `(entity_id, created_at DESC)` for sub-millisecond entity history retrieval).
+18. Operational Work Locations: User operational locations, sites, and offices are stored directly on the user record via normalized `street`, `city`, `district`, `state`, and `state_id` linked to the Indian administrative master directories, supporting dynamic relocation across yards, workshops, and project sites without static foreign key constraints.
 
 ---
 
@@ -598,6 +708,14 @@ The monorepo enforces enterprise-grade performance optimizations across Web and 
   - Added composite partial index `idx_oma_machine_active_shift` on `operator_machine_assignments(machine_id, shift_start_time ASC) WHERE is_active = true` for pre-sorted shift hydration.
   - Optimized RLS policies on `operator_machine_assignments` to use single-evaluation InitPlans (11.4x faster evaluation).
   - Deployed `get_machines_directory_summary` RPC for real-time fleet KPI metrics in <0.2ms.
+- **Migration 100 (User Table Optimization & Supervisor Relational Normalization)**:
+  - Extracted supervisor arrays into normalized junction table `public.user_supervisors` (`user_id`, `supervisor_id`, `created_at`) with composite primary key, cascade foreign keys, and scoped RLS policies.
+  - Standardized user address storage on `street`, eliminating legacy `location`/`address` divergence across auth, onboarding, profile, and admin workflows.
+  - Added `monthly_salary NUMERIC(10, 2)` column with PostgreSQL check constraint (`CHECK (role <> 'operator' OR status = 'pending' OR (monthly_salary IS NOT NULL AND monthly_salary >= 0))`) and frontend enforcement.
+  - Dropped redundant `shift_time text` column in favor of canonical `shift_start_time` and `shift_end_time` (time without time zone).
+  - Converted `complete_profile` from string (`'yes'`/`'no'`) to native PostgreSQL boolean (`true`/`false`, default `false`) backed by partial index `idx_users_incomplete_profile WHERE (complete_profile = false)`.
+  - Added `file_name` and `status` to `public.user_documents` KYC metadata table.
+  - Dropped duplicate unique constraints (`users_email_key`, `users_phone_unique`) and pruned 7 redundant/overlapping trigram indexes, drastically cutting write amplification and table bloat.
 
 ### 5. Mobile Data Architecture (TanStack Query v5)
 - **`apps/mobile/lib/hooks/useOperationsData.ts`**: Connected TanStack Query v5 hooks (`useOperationsMasterData`, `useOperationsLogs`) providing a 5-minute cache for equipment, active operators, and clients, and a 1-minute cache for operational logs. Eliminates the 5-query cascade on every screen focus and filter tap while preserving seamless pull-to-refresh.

@@ -87,7 +87,7 @@ export async function AdminDashboardView({
             label="Logs Today"
             value={todayLogs}
             icon={Clock}
-            href="/operations?tab=logs"
+            href="/operations"
             variant={todayLogs > 0 ? "success" : "default"}
           />
         </KPIGrid>
@@ -103,7 +103,7 @@ export async function AdminDashboardView({
             label="Breakdowns Reported"
             value={breakdowns}
             icon={AlertTriangle}
-            href="/operations?tab=logs"
+            href="/operations"
             variant={breakdowns > 0 ? "error" : "default"}
             subtitle={breakdowns > 0 ? "Immediate inspection required" : "Zero breakdown events"}
           />
@@ -111,7 +111,7 @@ export async function AdminDashboardView({
             label="Overtime Entries"
             value={overtime}
             icon={Timer}
-            href="/operations?tab=logs"
+            href="/operations"
             variant={overtime > 0 ? "warning" : "default"}
             subtitle="Shifts exceeding standard hours"
           />
@@ -119,7 +119,7 @@ export async function AdminDashboardView({
             label="Shift Schedule Conflicts"
             value={overlappingLogs}
             icon={Layers}
-            href="/operations?tab=logs"
+            href="/operations"
             variant={overlappingLogs > 0 ? "error" : "default"}
             subtitle="Timeline overlap flags"
           />

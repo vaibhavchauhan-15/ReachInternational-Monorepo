@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentUserOrNull } from "@/lib/dal";
+import { getRoleHomeRoute } from "@reachinternational/permissions";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -37,7 +38,7 @@ export default async function Home() {
   const user = await getCurrentUserOrNull();
 
   if (user && user.status === "active") {
-    redirect("/dashboard");
+    redirect(getRoleHomeRoute(user.role));
   }
 
   redirect("/login");

@@ -7,7 +7,8 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { getAppUrl, getResetPasswordRedirectUrl } from "@/lib/env";
 import { validateAadhaarNumber, validateLicenseNumber, getStateById, getStateByName } from "@reachinternational/utils";
-import { isSupervisedRole } from "@reachinternational/permissions";
+import { isSupervisedRole, getRoleHomeRoute } from "@reachinternational/permissions";
+
 
 export interface AuthFormState {
   error?: string;
@@ -98,12 +99,17 @@ export async function login(state: AuthFormState, formData: FormData): Promise<A
     metadata: { user_email: email },
   });
 
-  if (profile.complete_profile !== "yes") {
+  const isComplete = typeof profile.complete_profile === "boolean"
+    ? profile.complete_profile
+    : profile.complete_profile === "yes";
+
+  if (!isComplete) {
     redirect("/onboarding");
   }
 
-  redirect("/dashboard");
+  redirect(getRoleHomeRoute(profile.role));
 }
+
 
 function formatRetryAfter(seconds: number): string {
   if (seconds < 60) {
@@ -539,6 +545,7 @@ export async function signup(
         shift_time: resolvedShiftTime || null,
         shift_start_time: shiftStartTimeRaw || null,
         shift_end_time: shiftEndTimeRaw || null,
+        street: address || null,
         address: address || null,
         city,
         district,
@@ -615,6 +622,74 @@ export async function signup(
   }
 
   const userId = data.user.id;
+
+  // Upload Aadhaar & Driving Licence documents if provided during signup
+  const aadhaarFile = formData.get("aadhaar_file") as File | null;
+  const licenseFile = formData.get("license_file") as File | null;
+
+  if (aadhaarFile && aadhaarFile.size > 0) {
+    try {
+      const ext = aadhaarFile.name.split(".").pop()?.toLowerCase() || "bin";
+      const storagePath = `documents/${userId}/aadhaar.${ext}`;
+      const fileBytes = await aadhaarFile.arrayBuffer();
+
+      const { error: uploadErr } = await adminSupabase.storage
+        .from("user_files")
+        .upload(storagePath, fileBytes, {
+          contentType: aadhaarFile.type,
+          upsert: true,
+        });
+
+      if (!uploadErr) {
+        await adminSupabase.from("user_documents").upsert(
+          {
+            user_id: userId,
+            document_type_code: "aadhaar",
+            storage_path: storagePath,
+            mime_type: aadhaarFile.type,
+            file_size_bytes: aadhaarFile.size,
+          },
+          { onConflict: "user_id,document_type_code" }
+        );
+      } else {
+        console.error("Failed to upload signup Aadhaar file:", uploadErr);
+      }
+    } catch (err) {
+      console.error("Exception uploading signup Aadhaar file:", err);
+    }
+  }
+
+  if (licenseFile && licenseFile.size > 0) {
+    try {
+      const ext = licenseFile.name.split(".").pop()?.toLowerCase() || "bin";
+      const storagePath = `documents/${userId}/driving_license.${ext}`;
+      const fileBytes = await licenseFile.arrayBuffer();
+
+      const { error: uploadErr } = await adminSupabase.storage
+        .from("user_files")
+        .upload(storagePath, fileBytes, {
+          contentType: licenseFile.type,
+          upsert: true,
+        });
+
+      if (!uploadErr) {
+        await adminSupabase.from("user_documents").upsert(
+          {
+            user_id: userId,
+            document_type_code: "driving_license",
+            storage_path: storagePath,
+            mime_type: licenseFile.type,
+            file_size_bytes: licenseFile.size,
+          },
+          { onConflict: "user_id,document_type_code" }
+        );
+      } else {
+        console.error("Failed to upload signup Licence file:", uploadErr);
+      }
+    } catch (err) {
+      console.error("Exception uploading signup Licence file:", err);
+    }
+  }
 
   // Use the existing admin client to fetch admin emails for notification
   const { data: adminUsers } = await adminSupabase

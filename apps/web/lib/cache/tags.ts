@@ -87,6 +87,11 @@ export const TAGS = {
   machineOperations: (machineId: string) => `operations:machine:${machineId}`,
   operatorOperations: (operatorId: string) => `operations:operator:${operatorId}`,
 
+  // Attendance Domain
+  attendance: "attendance",
+  attendanceSummary: (yearMonth: string) => `attendance:summary:${yearMonth}`,
+  attendanceDetail: (userId: string, yearMonth: string) => `attendance:detail:${userId}:${yearMonth}`,
+
   // Class D / User Scoped
   users: "users",
 } as const;

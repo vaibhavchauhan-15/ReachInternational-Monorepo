@@ -82,13 +82,13 @@ export function Tabs({
               type="button"
               disabled={tab.disabled}
               onClick={() => handleTabClick(tab.id)}
-              className={`relative pb-3 text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+              className={`group group/tab interactive-parent relative pb-3 text-xs sm:text-sm font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                 isActive
                   ? "text-sky-600 dark:text-sky-400 font-bold"
                   : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
               } ${tab.disabled ? "opacity-40 cursor-not-allowed" : ""}`}
             >
-              {tab.icon}
+              {tab.icon && <span className="interactive-icon icon-bounce">{tab.icon}</span>}
               <span>{tab.label}</span>
               {tab.count !== undefined && (
                 <span
@@ -130,13 +130,13 @@ export function Tabs({
             type="button"
             disabled={tab.disabled}
             onClick={() => handleTabClick(tab.id)}
-            className={`relative px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all select-none whitespace-nowrap cursor-pointer ${
+            className={`group group/tab interactive-parent relative px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all select-none whitespace-nowrap cursor-pointer ${
               isActive
                 ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-xs font-bold"
                 : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas)]/50"
             } ${tab.disabled ? "opacity-40 cursor-not-allowed" : ""}`}
           >
-            {tab.icon}
+            {tab.icon && <span className="interactive-icon icon-bounce">{tab.icon}</span>}
             <span>{tab.label}</span>
             {tab.count !== undefined && (
               <span

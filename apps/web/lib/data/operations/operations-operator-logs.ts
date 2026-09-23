@@ -130,7 +130,7 @@ export const getOperationsOperatorLogsData = cache(
       return {
         machines: [],
         dbClients: [],
-        operators: [],
+        operators: operators || [],
         assignments: [],
         hourLogs: [],
         totalLogsCount: 0,
@@ -389,7 +389,7 @@ export const getOperatorHistoryData = cache(
         const [userRes, lifetimeRpc, assignmentsRes, recentLogsRes] = await Promise.all([
           supabase
             .from("users")
-            .select("id, full_name, phone, email, role, status, shift_time, address, created_at")
+            .select("id, full_name, phone, email, role, status, shift_start_time, shift_end_time, street, created_at")
             .eq("id", operatorId)
             .single(),
           supabase.rpc("get_operations_summary", {
@@ -406,13 +406,15 @@ export const getOperatorHistoryData = cache(
               id,
               shift_start_time,
               shift_end_time,
-              assigned_at,
+              crosses_midnight,
               is_active,
-              machine:machines(id, machine_id, model)
+              assigned_at,
+              ended_at,
+              machine:machines!operator_machine_assignments_machine_id_fkey(id, machine_id, model)
             `)
             .eq("operator_id", operatorId)
             .order("assigned_at", { ascending: false })
-            .limit(5),
+            .limit(10),
           supabase
             .from("machine_hour_logs")
             .select(`
@@ -438,7 +440,7 @@ export const getOperatorHistoryData = cache(
         const lifetime = lifetimeRpc.data;
 
         return {
-          profile: userRes.data || null,
+          profile: userRes.data ? { ...userRes.data, address: userRes.data.street || null } : null,
           lifetimeStats: {
             totalRunHours: Number(lifetime?.total_run_hours) || 0,
             totalOtHours: Number(lifetime?.total_ot_hours) || 0,
@@ -468,7 +470,7 @@ export const getOperatorHistoryData = cache(
           })),
         };
       },
-      [`operator-history-p6-${operatorId}`],
+      [`operator-history-p7-${operatorId}`],
       {
         tags: [TAGS.operatorOperations(operatorId), TAGS.hourLogs],
         revalidate: 60,

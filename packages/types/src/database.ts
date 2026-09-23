@@ -82,6 +82,7 @@ export interface User {
   status: UserStatus;
   branch_id?: string | null;
   location?: string | null;
+  street?: string | null;
   address?: string | null;
   shift_time?: string | null;
   shift_start_time?: string | null;
@@ -92,7 +93,7 @@ export interface User {
   state_id?: number | null;
   aadhaar_number?: string | null;
   license_number?: string | null;
-  complete_profile?: "yes" | "no" | string | null;
+  complete_profile?: boolean | "yes" | "no" | null;
   supervisor_id?: string | null;
   supervisor_ids?: string[] | null;
   supervisor?: {
@@ -118,9 +119,44 @@ export interface User {
   } | null;
   daily_rate?: number | null;
   ot_hourly_rate?: number | null;
+  monthly_salary?: number | null;
   email: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface UserSupervisor {
+  id: string;
+  user_id: string;
+  supervisor_id: string;
+  created_at: string;
+  user?: Pick<User, "id" | "full_name" | "role" | "phone" | "email"> | null;
+  supervisor?: Pick<User, "id" | "full_name" | "role" | "phone" | "email"> | null;
+}
+
+export interface UserDocumentType {
+  code: string;
+  label: string;
+  visibility: "private" | "public";
+  allowed_mime_types: string[];
+  max_size_bytes: number;
+  created_at: string;
+}
+
+export interface UserDocument {
+  id: string;
+  user_id: string;
+  document_type_code: string;
+  storage_path: string;
+  file_name?: string | null;
+  mime_type: string;
+  file_size_bytes: number;
+  status: "pending" | "verified" | "rejected";
+  uploaded_by?: string | null;
+  created_at: string;
+  updated_at: string;
+  signed_url?: string | null;
+  document_type?: UserDocumentType | null;
 }
 
 export interface OperatorPayroll {

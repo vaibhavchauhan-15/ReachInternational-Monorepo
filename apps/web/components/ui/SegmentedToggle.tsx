@@ -142,7 +142,7 @@ export function SegmentedToggle<T extends string = string>({
               }
             }}
             className={cn(
-              "relative flex items-center justify-center transition-colors cursor-pointer text-center select-none",
+              "group group/tab interactive-parent relative flex items-center justify-center transition-colors cursor-pointer text-center select-none",
               isVertical ? "flex-1 min-h-0 py-0 px-0.5" : config.item,
               config.text,
               isActive
@@ -170,7 +170,7 @@ export function SegmentedToggle<T extends string = string>({
               )}
             >
               {item.icon && (
-                <span className="shrink-0 flex items-center justify-center">
+                <span className="shrink-0 flex items-center justify-center interactive-icon icon-scale">
                   {item.icon}
                 </span>
               )}
