@@ -1,3 +1,30 @@
+- **Dev/Prod CI/CD Pipeline Implementation (2026-09-24)**:
+  - **1. Delivered**:
+    - Created `.github/workflows/supabase-migrate.yml`: single reusable workflow for Supabase migration automation. On push to `development`/`Production`, applies `supabase db push`. On PR to `Production`, runs `supabase db diff --linked` dry-run as a required check. Uses GitHub Environments for secret scoping.
+    - Updated `.github/workflows/ci.yml`: branch targets changed from `main`/`develop` to `development`/`Production`.
+    - Deleted `.github/workflows/deploy-web.yml`: redundant — Vercel's native Git integration handles deployments automatically.
+  - **2. Architecture**: `development` branch → Dev Supabase (`vlmxciuogczumumrwyot`) + Vercel Dev. `Production` branch → Prod Supabase (`dhbbgfzbyatzvqafnsqp`) + Vercel Prod. One workflow file, one environment variable decides the target.
+  - **3. Remaining Manual Steps**: Branch rename (`main` → `development`), GitHub Environments with secrets, Vercel project setup, branch protection rules on `Production`. Documented in setup guide artifact.
+  - **4. Ponytail Notes**: Merged two duplicate workflow files into one. Replaced hand-rolled secret prefixes with GitHub Environments. Deleted Vercel deploy workflow (Vercel native Git integration). Skipped Supabase Branching (not needed at current team size). Skipped custom test framework (dry-run diff is the safety net).
+- **Make All ClientModal Input Fields Mandatory with Red Asterisks (/clients) (2026-09-24)**:
+  - **1. User Request**:
+    - Make all input fields in the Client Modal mandatory and show red asterisks on labels.
+  - **2. Root Cause Analysis**:
+    - Only 4 of 15 fields (Company Name, Street/Area, City, State) had `required` prop and validation. The remaining 11 fields (Contact Person, Phone, GSTIN, PAN, District, Pincode, and all 5 billing fields when toggled) were optional with no visual indicator.
+  - **3. Delivered Solution**:
+    - **apps/web/components/clients/ClientModal.tsx**:
+      - Added `required` prop to Contact Person, Phone Number, GSTIN Number, PAN Number, District, and Pincode inputs (all show red `*` asterisk via existing `Input` component logic).
+      - Added `required` prop to all 5 billing address inputs (Billing Street, City, District, State, Pincode) — shown when billing toggle is active.
+      - Updated `handleSubmit` client-side validation to check all 10 main fields + 5 conditional billing fields, with a clear error message listing all missing fields.
+    - **packages/validation/src/client.ts**:
+      - `CreateClientSchema` and `UpdateClientSchema`: Changed `contactPerson`, `phone`, `gstin`, `panNumber`, `district`, `pincode` from `.optional().nullable()` to `.min(1, "... is required")`.
+      - Added `.refine()` validators for all 5 billing fields when `isBillingAddressDifferent` is true.
+    - **apps/web/lib/data/clients/client-mutations.ts**:
+      - Updated `createClient` and `updateClient` insert/update payloads to remove `|| null` fallbacks for newly-required fields.
+  - **4. Verification**:
+    - All Input components render red `*` via existing `Input.tsx` line 30: `{required && <span className="text-rose-500 font-semibold">*</span>}`.
+    - Client-side validation catches empty mandatory fields before server round-trip.
+    - Server-side Zod schemas enforce the same constraints as a second defense layer.
 - **Standardize Machine Detail & Personnel Modal Card Hover Animations & Proportional Icon Sizing (/machines/[id]) (2026-09-24)**:
   - **1. User Request**:
     - Feedback on `/machines/d2390003-21f5-40db-af94-dd9f036de0e5`:
