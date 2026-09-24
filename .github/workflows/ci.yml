@@ -2,9 +2,9 @@ name: ReachInternational Monorepo — CI Pipeline
 
 on:
   push:
-    branches: [development, Production]
+    branches: [development, production]
   pull_request:
-    branches: [Production]
+    branches: [production]
 
 jobs:
   validate:

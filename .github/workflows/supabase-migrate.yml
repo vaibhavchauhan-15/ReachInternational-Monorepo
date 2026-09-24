@@ -2,16 +2,16 @@ name: Supabase Migrate
 
 on:
   push:
-    branches: [development, Production]
+    branches: [development, production]
     paths:
       - "supabase/migrations/**"
   pull_request:
-    branches: [Production]
+    branches: [production]
     paths:
       - "supabase/migrations/**"
 
 jobs:
-  # Runs on every PR into Production — no writes, just a dry-run diff.
+  # Runs on every PR into production — no writes, just a dry-run diff.
   dry-run:
     if: github.event_name == 'pull_request'
     name: Migration Dry-Run (Production)
@@ -30,12 +30,12 @@ jobs:
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
-  # Runs on real pushes to development or Production — applies migrations.
+  # Runs on real pushes to development or production — applies migrations.
   migrate:
     if: github.event_name == 'push'
     name: Apply Migrations
     runs-on: ubuntu-latest
-    environment: ${{ github.ref_name == 'Production' && 'production' || 'development' }}
+    environment: ${{ github.ref_name == 'production' && 'production' || 'development' }}
     steps:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
