@@ -1,26 +1,17 @@
 "use client";
 
-import { useState, memo } from "react";
+import { memo } from "react";
 import { useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   AnimatedShield,
   AnimatedShieldCheck,
   AnimatedShieldAlert,
 } from "@/components/ui/animated-icons";
-import { LogOut, Edit, Settings, ChevronRight } from "lucide-react";
+import { LogOut, Settings, ChevronRight } from "lucide-react";
 import type { User as UserType } from "@/lib/types/database";
 import { logout } from "@/app/actions/auth";
 import { Button } from "@/components/ui";
-
-const EditProfileModal = dynamic(
-  () =>
-    import("@/components/profile/EditProfileModal").then(
-      (mod) => mod.EditProfileModal
-    ),
-  { ssr: false }
-);
 
 export const ROLE_CONFIG: Record<
   string,
@@ -73,7 +64,6 @@ export const UserProfileCard = memo(function UserProfileCard({
   onClose,
 }: UserProfileCardProps) {
   const router = useRouter();
-  const [editModalOpen, setEditModalOpen] = useState(false);
 
   const roleMeta = ROLE_CONFIG[user.role] || {
     label: user.role.replace("_", " "),
@@ -85,11 +75,6 @@ export const UserProfileCard = memo(function UserProfileCard({
   const handleCardClick = () => {
     router.push("/profile");
     onClose?.();
-  };
-
-  const handleEditClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditModalOpen(true);
   };
 
   return (
@@ -106,45 +91,42 @@ export const UserProfileCard = memo(function UserProfileCard({
           }
         }}
         aria-label={`View profile for ${user.full_name}`}
-        className="relative w-full flex items-start gap-2.5 p-2.5 border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] rounded-xl transition-all duration-150 cursor-pointer group text-left shadow-2xs focus:outline-none focus:ring-2 focus:ring-sky-500/30"
+        className="w-full flex items-center justify-between gap-2.5 p-2.5 border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] rounded-xl transition-all duration-150 cursor-pointer group text-left shadow-2xs focus:outline-none focus:ring-2 focus:ring-sky-500/30"
       >
-        {/* Initial-letter avatar */}
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-ink)] text-[var(--color-canvas)] text-xs font-extrabold shadow-2xs ring-1 ring-black/5 dark:ring-white/10 group-hover:scale-105 transition-transform duration-150 mt-0.5">
-          {user.full_name?.charAt(0)?.toUpperCase() || "U"}
-        </div>
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          {/* Initial-letter avatar */}
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--color-ink)] text-[var(--color-canvas)] text-xs font-extrabold shadow-2xs ring-1 ring-black/5 dark:ring-white/10 group-hover:scale-105 transition-transform duration-150">
+            {user.full_name?.charAt(0)?.toUpperCase() || "U"}
+          </div>
 
-        {/* User Info Container: Scaled down text for proper fit */}
-        <div className="min-w-0 flex-1 pr-7">
-          {/* User Name */}
-          <p className="text-xs font-bold text-[var(--color-ink)] group-hover:text-sky-600 dark:group-hover:text-sky-400 truncate leading-snug transition-colors">
-            {user.full_name}
-          </p>
-          {/* User Email */}
-          <p className="text-[10px] text-[var(--color-mute)] truncate mt-0.5 leading-tight">
-            {user.email || "No email"}
-          </p>
+          {/* User Info Container: Scaled down text for proper fit */}
+          <div className="min-w-0 flex-1">
+            {/* User Name */}
+            <p className="text-xs font-bold text-[var(--color-ink)] group-hover:text-sky-600 dark:group-hover:text-sky-400 truncate leading-snug transition-colors">
+              {user.full_name}
+            </p>
+            {/* User Email */}
+            <p className="text-[10px] text-[var(--color-mute)] truncate mt-0.5 leading-tight">
+              {user.email || "No email"}
+            </p>
 
-          {/* Role Badge (Active status removed) */}
-          <div className="mt-1.5 flex items-center">
-            <span
-              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold border ${roleMeta.badgeClass}`}
-            >
-              <RoleIcon size={9.5} />
-              {roleMeta.label}
-            </span>
+            {/* Role Badge (Active status removed) */}
+            <div className="mt-1.5 flex items-center">
+              <span
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold border ${roleMeta.badgeClass}`}
+              >
+                <RoleIcon size={9.5} />
+                {roleMeta.label}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Edit Profile Icon Button - Positioned Top Right */}
-        <button
-          type="button"
-          onClick={handleEditClick}
-          title="Edit Profile"
-          aria-label="Edit Profile"
-          className="absolute top-2.5 right-2.5 flex h-7 w-7 items-center justify-center rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] hover:text-sky-500 transition-colors cursor-pointer shadow-2xs shrink-0 focus:outline-none focus:ring-1 focus:ring-sky-500"
-        >
-          <Edit size={13} />
-        </button>
+        {/* Navigation Affordance to /profile */}
+        <ChevronRight
+          size={14}
+          className="text-[var(--color-mute)] group-hover:text-[var(--color-ink)] group-hover:translate-x-0.5 transition-all shrink-0 ml-1"
+        />
       </div>
 
       {/* ─── Settings Link ─── */}
@@ -173,19 +155,6 @@ export const UserProfileCard = memo(function UserProfileCard({
           Sign Out
         </Button>
       </form>
-
-      {/* ─── Dynamic Edit Profile Modal ─── */}
-      {editModalOpen && (
-        <EditProfileModal
-          user={user}
-          isOpen={editModalOpen}
-          onClose={() => setEditModalOpen(false)}
-          onSuccess={() => {
-            setEditModalOpen(false);
-            onClose?.();
-          }}
-        />
-      )}
     </div>
   );
 });

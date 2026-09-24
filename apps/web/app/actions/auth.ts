@@ -42,7 +42,7 @@ export async function login(state: AuthFormState, formData: FormData): Promise<A
   });
 
   if (error) {
-    // Distinguish between unconfirmed email and invalid credentials
+    // Distinguish between unconfirmed email, server errors, and invalid credentials
     if (error.message.toLowerCase().includes("email not confirmed")) {
       return {
         error: "Your email is not confirmed yet. Please wait for an administrator to approve your account.",
@@ -50,6 +50,14 @@ export async function login(state: AuthFormState, formData: FormData): Promise<A
         fieldValues: { email },
       };
     }
+
+    if (error.status && error.status >= 500) {
+      return {
+        error: "Authentication service encountered a server error. Please try again shortly.",
+        fieldValues: { email },
+      };
+    }
+
     return {
       error: "Invalid email or password.",
       fieldErrors: { email: "Invalid email or password.", password: "Invalid email or password." },
@@ -353,6 +361,9 @@ export async function signup(
   if (!city) fieldErrors.city = "City/Town/Village is required.";
   if (!district) fieldErrors.district = "District is required.";
   if (!resolvedStateName) fieldErrors.state = "State is required.";
+  if (monthlySalary === null || monthlySalary <= 0) {
+    fieldErrors.monthly_salary = "Monthly salary is required and must be greater than 0.";
+  }
   if (!aadhaarNumber) fieldErrors.aadhaar_number = "Aadhaar card number is required.";
   if (!password) fieldErrors.password = "Password is required.";
   if (!confirmPassword) fieldErrors.confirm_password = "Confirm password is required.";
@@ -705,24 +716,6 @@ export async function signup(
     } catch (err) {
       console.error("Exception uploading signup Licence file:", err);
     }
-  }
-
-  // Use the existing admin client to fetch admin emails for notification
-  const { data: adminUsers } = await adminSupabase
-    .from("users")
-    .select("email")
-    .in("role", ["super_admin", "admin"])
-    .eq("status", "active");
-
-  // Send notification emails to admins
-  if (adminUsers && adminUsers.length > 0) {
-    const adminEmails = adminUsers.map((u) => u.email).filter((e): e is string => e !== null);
-
-    // Import email functions dynamically to avoid circular dependencies
-    const { sendPendingApprovalEmailToAdmins } = await import("@/lib/email");
-    sendPendingApprovalEmailToAdmins(adminEmails, fullName, email, role).catch((err) =>
-      console.error("Failed to send pending approval emails:", err)
-    );
   }
 
   await logAudit({

@@ -57,3 +57,17 @@ Every AI session, task, user prompt, and code edit MUST strictly adhere to the f
 1. **Zero Shortcuts**: AI agents must never assume rules are optional or skip reading rule files based on prior context.
 2. **Ground Truth Consistency**: If code or documentation conflicts with rule files, the AI agent must resolve the ambiguity while upholding the strict standard defined in the authoritative rules.
 3. **Continuous Enforcement**: All generated code, migrations, API routes, components, and documentation are subject to strict compliance auditing against `AI/RULES/` and `.agents/rules/`.
+
+---
+
+## 4. Strict Supabase Environment Isolation & Project Protection Policy
+
+- **Organization**: `ljzofzlvjtfiqoffaaua`
+- **Development Project (Target)**: `vlmxciuogczumumrwyot` (`Reach International Dev`)
+- **Production Project (Protected)**: `dhbbgfzbyatzvqafnsqp` (`Reach International Production`) — **STRICTLY UNTOUCHED DURING DEVELOPMENT**.
+
+### Binding Operational Rules:
+1. **Never Touch Production in Development**: During feature development, debugging, testing, data seeding, SQL script execution, migration creation, or stored procedure testing, AI agents MUST **NEVER execute queries, mutations, DDL, or migrations on the Production project (`dhbbgfzbyatzvqafnsqp`)**.
+2. **Exclusively Target Development**: All database mutations, schema migrations, seed scripts, SQL statements, and RPC tests MUST ONLY be executed against the Development project (`vlmxciuogczumumrwyot`).
+3. **Mandatory MCP Argument Verification**: Any invocation of Supabase MCP tools (`execute_sql`, `apply_migration`, `deploy_edge_function`, etc.) MUST explicitly specify `project_id: "vlmxciuogczumumrwyot"`. Targeting `dhbbgfzbyatzvqafnsqp` during development tasks is strictly prohibited.
+

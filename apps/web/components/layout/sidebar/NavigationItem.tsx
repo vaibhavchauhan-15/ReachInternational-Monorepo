@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
-import { AnimatedChevronDown } from "@/components/ui/animated-icons";
+import { ChevronDown } from "lucide-react";
 import { SidebarTooltip } from "@/components/ui";
+import { cn } from "@/lib/utils";
 import {
   SidebarMenuItem,
   SidebarMenuButton,
@@ -39,7 +40,16 @@ export function NavigationItem({
   setFlyoutHref,
 }: NavigationItemProps) {
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const iconRef = useRef<{ startAnimation: () => void; stopAnimation: () => void } | null>(null);
   const Icon = item.icon;
+
+  const handleIconMouseEnter = () => {
+    iconRef.current?.startAnimation?.();
+  };
+
+  const handleIconMouseLeave = () => {
+    iconRef.current?.stopAnimation?.();
+  };
 
   let isActive = false;
   if (item.href.includes("?")) {
@@ -56,42 +66,120 @@ export function NavigationItem({
   const hasSubItems = Boolean(item.subItems && item.subItems.length > 0);
   const isFlyoutOpen = flyoutHref === item.href;
 
-  // Collapsed Mode Renderer
-  if (collapsed) {
-    return (
-      <SidebarMenuItem key={item.href}>
-        <div className="w-full flex justify-center relative">
-          <SidebarTooltip content={item.label} enabled={!isFlyoutOpen}>
-            {hasSubItems ? (
-              <SidebarMenuButton
-                ref={setAnchorEl}
-                active={isActive || isFlyoutOpen}
-                aria-expanded={isFlyoutOpen}
-                aria-label={item.label}
-                onClick={() => {
-                  setFlyoutHref(isFlyoutOpen ? null : item.href);
-                }}
-                className="focus:outline-none focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
-              >
-                <Icon className={`h-4 w-4 shrink-0 interactive-icon icon-bounce ${(isActive || isFlyoutOpen) ? "text-sky-600 dark:text-sky-400 font-bold" : ""}`} />
-              </SidebarMenuButton>
-            ) : (
-              <Link href={item.href} className="w-full flex justify-center focus:outline-none">
-                <SidebarMenuButton
-                  as="div"
-                  ref={setAnchorEl}
-                  active={isActive}
-                  aria-label={item.label}
-                  className="focus:outline-none focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
-                >
-                  <Icon className={`h-4 w-4 shrink-0 interactive-icon icon-bounce ${isActive ? "text-sky-600 dark:text-sky-400 font-bold" : ""}`} />
-                </SidebarMenuButton>
-              </Link>
-            )}
-          </SidebarTooltip>
+  const handleSubItemTriggerClick = (e: React.MouseEvent) => {
+    if (collapsed) {
+      e.preventDefault();
+      setFlyoutHref(isFlyoutOpen ? null : item.href);
+    } else {
+      onToggleMenu(!isMenuOpen);
+    }
+  };
 
-          {/* Floating Flyout Submenu */}
-          {hasSubItems && (
+  return (
+    <SidebarMenuItem key={item.href}>
+      <SidebarTooltip content={item.label} enabled={collapsed && !isFlyoutOpen}>
+        <div className="relative w-full">
+          {hasSubItems ? (
+            <Collapsible open={!collapsed && isMenuOpen} onOpenChange={onToggleMenu}>
+              <div
+                ref={setAnchorEl}
+                onClick={handleSubItemTriggerClick}
+                onMouseEnter={handleIconMouseEnter}
+                onMouseLeave={handleIconMouseLeave}
+                aria-expanded={collapsed ? isFlyoutOpen : isMenuOpen}
+                className={cn(
+                  "group group/nav interactive-parent relative flex items-center w-full h-10 rounded-xl px-3 text-xs font-semibold transition-all duration-200 cursor-pointer select-none overflow-hidden",
+                  isActive || isFlyoutOpen
+                    ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold border border-sky-500/20 shadow-2xs"
+                    : "text-[var(--color-body)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
+                )}
+              >
+                <div className="flex items-center justify-center shrink-0 w-4 h-4">
+                  <Icon ref={iconRef} size={16} className={cn("h-4 w-4 shrink-0 transition-colors", (isActive || isFlyoutOpen) && "text-sky-600 dark:text-sky-400")} />
+                </div>
+
+                <span
+                  className={cn(
+                    "truncate transition-all duration-200 whitespace-nowrap overflow-hidden text-left",
+                    collapsed ? "opacity-0 w-0 max-w-0 ml-0 pointer-events-none" : "opacity-100 flex-1 ml-3"
+                  )}
+                >
+                  {item.label}
+                </span>
+
+                <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    aria-label={`Toggle ${item.label} sub-menu`}
+                    className={cn(
+                      "p-1 rounded-md text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-all duration-200 cursor-pointer shrink-0 focus:outline-none focus:ring-2 focus:ring-sky-500/30",
+                      collapsed ? "opacity-0 w-0 overflow-hidden pointer-events-none p-0" : "opacity-100"
+                    )}
+                  >
+                    <ChevronDown
+                      size={15}
+                      className={cn(
+                        "transition-transform duration-200",
+                        isMenuOpen ? "rotate-180" : ""
+                      )}
+                    />
+                  </button>
+                </CollapsibleTrigger>
+              </div>
+
+              {!collapsed && (
+                <CollapsibleContent>
+                  <SidebarMenuSub>
+                    {item.subItems?.map((sub) => {
+                      const isSubActive = isActive && currentTab === sub.tab;
+                      return (
+                        <SidebarMenuSubItem key={sub.tab}>
+                          <Link href={`${item.href}?tab=${sub.tab}`} className="focus:outline-none">
+                            <SidebarMenuSubButton as="div" active={isSubActive}>
+                              <span className="truncate">{sub.label}</span>
+                            </SidebarMenuSubButton>
+                          </Link>
+                        </SidebarMenuSubItem>
+                      );
+                    })}
+                  </SidebarMenuSub>
+                </CollapsibleContent>
+              )}
+            </Collapsible>
+          ) : (
+            <Link href={item.href} className="w-full block focus:outline-none">
+              <SidebarMenuButton
+                as="div"
+                ref={setAnchorEl}
+                active={isActive}
+                aria-label={item.label}
+                onMouseEnter={handleIconMouseEnter}
+                onMouseLeave={handleIconMouseLeave}
+                className={cn(
+                  "w-full h-10 px-3 flex items-center rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer select-none overflow-hidden",
+                  isActive
+                    ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold border border-sky-500/20 shadow-2xs"
+                    : "text-[var(--color-body)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
+                )}
+              >
+                <div className="flex items-center justify-center shrink-0 w-4 h-4">
+                  <Icon ref={iconRef} size={16} className={cn("h-4 w-4 shrink-0 transition-colors", isActive && "text-sky-600 dark:text-sky-400 font-bold")} />
+                </div>
+
+                <span
+                  className={cn(
+                    "truncate transition-all duration-200 whitespace-nowrap overflow-hidden text-left",
+                    collapsed ? "opacity-0 w-0 max-w-0 ml-0 pointer-events-none" : "opacity-100 flex-1 ml-3"
+                  )}
+                >
+                  {item.label}
+                </span>
+              </SidebarMenuButton>
+            </Link>
+          )}
+
+          {/* Floating Flyout Submenu when collapsed */}
+          {hasSubItems && collapsed && (
             <CollapsedSidebarFlyout
               item={item}
               anchorEl={anchorEl}
@@ -102,70 +190,7 @@ export function NavigationItem({
             />
           )}
         </div>
-      </SidebarMenuItem>
-    );
-  }
-
-  // Expanded Mode Renderer
-  return (
-    <SidebarMenuItem key={item.href}>
-      {hasSubItems ? (
-        <Collapsible
-          open={isMenuOpen}
-          onOpenChange={onToggleMenu}
-        >
-          <div
-            onClick={() => onToggleMenu(!isMenuOpen)}
-            className={`group group/nav interactive-parent relative flex items-center justify-between rounded-xl px-3.5 py-2.5 text-xs font-semibold transition-all duration-150 cursor-pointer ${
-              isActive
-                ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold border border-sky-500/20 shadow-2xs"
-                : "text-[var(--color-body)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
-            }`}
-          >
-            <div className="flex items-center gap-3 min-w-0 flex-1 select-none">
-              <Icon className={`h-4 w-4 shrink-0 interactive-icon icon-bounce ${isActive ? "text-sky-600 dark:text-sky-400" : ""}`} />
-              <span className="truncate">{item.label}</span>
-            </div>
-
-            <CollapsibleTrigger asChild onClick={(e) => e.stopPropagation()}>
-              <button
-                type="button"
-                aria-label={`Toggle ${item.label} sub-menu`}
-                className="p-1 rounded-md text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer shrink-0 focus:outline-none focus:ring-2 focus:ring-sky-500/30"
-              >
-                <AnimatedChevronDown
-                  size={16}
-                  className="transition-transform duration-300 group-data-[state=open]/collapsible:rotate-180"
-                />
-              </button>
-            </CollapsibleTrigger>
-          </div>
-
-          <CollapsibleContent>
-            <SidebarMenuSub>
-              {item.subItems?.map((sub) => {
-                const isSubActive = isActive && currentTab === sub.tab;
-                return (
-                  <SidebarMenuSubItem key={sub.tab}>
-                    <Link href={`${item.href}?tab=${sub.tab}`} className="focus:outline-none">
-                      <SidebarMenuSubButton as="div" active={isSubActive}>
-                        <span className="truncate">{sub.label}</span>
-                      </SidebarMenuSubButton>
-                    </Link>
-                  </SidebarMenuSubItem>
-                );
-              })}
-            </SidebarMenuSub>
-          </CollapsibleContent>
-        </Collapsible>
-      ) : (
-        <Link href={item.href} className="focus:outline-none">
-          <SidebarMenuButton as="div" active={isActive}>
-            <Icon className={`h-4 w-4 shrink-0 interactive-icon icon-bounce ${isActive ? "text-sky-600 dark:text-sky-400 font-bold" : ""}`} />
-            <span className="truncate">{item.label}</span>
-          </SidebarMenuButton>
-        </Link>
-      )}
+      </SidebarTooltip>
     </SidebarMenuItem>
   );
 }

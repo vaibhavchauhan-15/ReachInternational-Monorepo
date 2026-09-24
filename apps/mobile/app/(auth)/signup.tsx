@@ -36,6 +36,12 @@ import { isSupervisedRole } from '@reachinternational/permissions';
 import { MobilePickedDocument, uploadUserDocumentDirect } from '../../lib/documents';
 import { MobileDocumentUploadCard } from '../../components/documents/MobileDocumentUploadCard';
 import {
+  MobileFormSectionCard,
+  MobileAddressFields,
+  MobileSalaryField,
+  MobileSubmitButton,
+} from '../../components/forms';
+import {
   User,
   Mail,
   Phone,
@@ -68,17 +74,16 @@ export default function SignupScreen() {
   const [phone, setPhone] = useState('');
   const [selectedRole, setSelectedRole] = useState('operator');
   const [roleModalVisible, setRoleModalVisible] = useState(false);
+  const [monthlySalary, setMonthlySalary] = useState('');
 
   const [shiftStartTime, setShiftStartTime] = useState('08:00 AM');
   const [shiftEndTime, setShiftEndTime] = useState('08:00 PM');
 
+  const [street, setStreet] = useState('');
   const [city, setCity] = useState('');
   const [district, setDistrict] = useState('');
-  const [address, setAddress] = useState('');
   const [stateVal, setStateVal] = useState('');
   const [stateId, setStateId] = useState<number | null>(null);
-  const [stateModalVisible, setStateModalVisible] = useState(false);
-  const [stateSearch, setStateSearch] = useState('');
 
   const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [aadhaarDoc, setAadhaarDoc] = useState<MobilePickedDocument | null>(null);
@@ -212,8 +217,12 @@ export default function SignupScreen() {
     if (!stateVal.trim() && !stateId) {
       errors.state = 'State is required.';
     }
-    if (!address.trim()) {
-      errors.address = 'Street / site base address is required.';
+
+    if (selectedRole === 'operator') {
+      const sal = Number(monthlySalary);
+      if (!monthlySalary || isNaN(sal) || sal <= 0) {
+        errors.monthly_salary = 'Monthly salary is mandatory for operator accounts and must be greater than 0.';
+      }
     }
 
     if (!aadhaarNumber.trim()) {
@@ -282,12 +291,14 @@ export default function SignupScreen() {
             shift_time: finalShift,
             shift_start_time: shiftStartTime.trim() || null,
             shift_end_time: shiftEndTime.trim() || null,
-            address: address.trim(),
+            street: street.trim(),
+            address: street.trim(),
             city: city.trim(),
             district: district.trim(),
             state: stateVal.trim(),
             state_id: stateId,
-            location: `${address.trim() ? `${address.trim()}, ` : ''}${city.trim()}, ${district.trim()}, ${stateVal.trim()}`,
+            location: `${street.trim() ? `${street.trim()}, ` : ''}${city.trim()}, ${district.trim()}, ${stateVal.trim()}`,
+            monthly_salary: monthlySalary ? Number(monthlySalary) : null,
             aadhaar_number: aadhaarNumber.replace(/\D/g, ''),
             license_number: licenseNumber.trim().toUpperCase() || null,
           },
@@ -338,15 +349,65 @@ export default function SignupScreen() {
     }
   };
 
+  const cleanPhone = phone.replace(/[^0-9+]/g, '');
+
+  const section1Complete = Boolean(
+    fullName.trim().length >= 2 &&
+    email.trim().length > 0 &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim().toLowerCase()) &&
+    cleanPhone.length >= 10 &&
+    (!isSupervisedRole(selectedRole) || supervisors.length === 0 || selectedSupervisorId) &&
+    (selectedRole !== 'operator' || (monthlySalary && Number(monthlySalary) > 0))
+  );
+
+  const section2Complete = Boolean(
+    shiftStartTime.trim().length > 0 &&
+    shiftEndTime.trim().length > 0
+  );
+
+  const section3Complete = Boolean(
+    city.trim().length >= 2 &&
+    district.trim().length >= 2 &&
+    (stateVal.trim().length > 0 || stateId !== null) &&
+    aadhaarNumber.replace(/\D/g, '').length === 12
+  );
+
+  const section4Complete = Boolean(
+    password.length >= 8 &&
+    confirmPassword.length >= 8 &&
+    password === confirmPassword &&
+    agreedToTerms
+  );
+
+  const isAllMandatoryFilled = Boolean(
+    section1Complete && section2Complete && section3Complete && section4Complete
+  );
+
+  const missingFields: string[] = [];
+  if (!fullName.trim() || fullName.trim().length < 2) missingFields.push('Full Name');
+  if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim().toLowerCase())) missingFields.push('Valid Email');
+  if (cleanPhone.length < 10) missingFields.push('10-digit Phone');
+  if (selectedRole === 'operator' && (!monthlySalary || Number(monthlySalary) <= 0)) missingFields.push('Monthly Salary');
+  if (isSupervisedRole(selectedRole) && supervisors.length > 0 && !selectedSupervisorId) missingFields.push('Supervisor');
+  if (!shiftStartTime.trim() || !shiftEndTime.trim()) missingFields.push('Shift Hours');
+  if (!city.trim() || city.trim().length < 2) missingFields.push('City/Town');
+  if (!district.trim() || district.trim().length < 2) missingFields.push('District');
+  if (!stateVal.trim() && !stateId) missingFields.push('State');
+  if (aadhaarNumber.replace(/\D/g, '').length !== 12) missingFields.push('12-digit Aadhaar');
+  if (!password || password.length < 8) missingFields.push('Password (8+ chars)');
+  if (password !== confirmPassword) missingFields.push('Matching Passwords');
+  if (!agreedToTerms) missingFields.push('Terms Agreement');
+
+  const missingMandatoryCount = missingFields.length;
+
   const canvasBackground = isDark ? '#0a0a0a' : '#fafafa';
   const cardBackground = isDark ? '#171717' : '#ffffff';
   const cardBorder = isDark ? '#262626' : '#ebebeb';
-  const sectionBg = isDark ? 'rgba(10, 10, 10, 0.6)' : 'rgba(250, 250, 250, 0.8)';
   const primarySkyBlue = '#0ea5e9';
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: canvasBackground }]}>
-      {/* Dynamic Status Bar — Ensures battery, wifi, notifications & time are dark in light theme and light in dark theme */}
+      {/* Dynamic Status Bar */}
       <StatusBar style={isDark ? 'light' : 'dark'} />
 
       <KeyboardAvoidingView
@@ -394,18 +455,13 @@ export default function SignupScreen() {
               ) : null}
 
               {/* Section 1: Account & Role */}
-              <View style={[styles.sectionCard, { backgroundColor: sectionBg, borderColor: cardBorder }]}>
-                <View style={[styles.sectionHeader, { borderBottomColor: cardBorder }]}>
-                  <View style={styles.sectionHeaderTitleRow}>
-                    <View style={styles.sectionBadge}>
-                      <Text style={styles.sectionBadgeText}>1</Text>
-                    </View>
-                    <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
-                      Account & Role
-                    </Text>
-                  </View>
-                </View>
-
+              <MobileFormSectionCard
+                stepNumber={1}
+                title="Account & Role"
+                description="Your personal information, login email, and company operational role."
+                isMandatory={true}
+                isCompleted={section1Complete}
+              >
                 <Input
                   label="Full Name"
                   required
@@ -515,28 +571,30 @@ export default function SignupScreen() {
                   </View>
                 )}
 
-              </View>
+                {/* Monthly Salary Input for Operators */}
+                {selectedRole === 'operator' && (
+                  <View style={{ paddingTop: 6, borderTopWidth: 1, borderTopColor: cardBorder }}>
+                    <MobileSalaryField
+                      value={monthlySalary}
+                      onChangeText={(val) => {
+                        setMonthlySalary(val);
+                        clearFieldError('monthly_salary');
+                      }}
+                      role={selectedRole}
+                      error={fieldErrors.monthly_salary}
+                    />
+                  </View>
+                )}
+              </MobileFormSectionCard>
 
               {/* Section 2: Work Shift Schedule */}
-              <View style={[styles.sectionCard, { backgroundColor: sectionBg, borderColor: cardBorder }]}>
-                <View style={[styles.sectionHeader, { borderBottomColor: cardBorder }]}>
-                  <View style={styles.sectionHeaderTitleRow}>
-                    <View style={styles.sectionBadge}>
-                      <Text style={styles.sectionBadgeText}>2</Text>
-                    </View>
-                    <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
-                      Work Shift Schedule
-                    </Text>
-                  </View>
-                  {shiftSummary?.isValid && (
-                    <View style={styles.shiftPill}>
-                      <Text style={styles.shiftPillText}>
-                        {shiftSummary.isOvernight ? '🌙 Overnight' : '☀️ Standard'} · {shiftSummary.durationFormatted}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-
+              <MobileFormSectionCard
+                stepNumber={2}
+                title="Work Shift Schedule"
+                description="Assigned daily operational work hours recorded on your profile."
+                isMandatory={true}
+                isCompleted={section2Complete}
+              >
                 <View style={styles.twoColumnRow}>
                   <View style={{ flex: 1 }}>
                     <TimeInput
@@ -554,97 +612,53 @@ export default function SignupScreen() {
                   </View>
                 </View>
 
-                <Text style={[styles.helperCaption, { color: theme.colors.mute }]}>
-                  Assigned daily operational work hours. This schedule is recorded on your profile and daily duty logs.
-                </Text>
-              </View>
+                {shiftSummary?.isValid && (
+                  <View style={styles.shiftPill}>
+                    <Text style={styles.shiftPillText}>
+                      {shiftSummary.isOvernight ? '🌙 Overnight' : '☀️ Standard'} · {shiftSummary.durationFormatted}
+                    </Text>
+                  </View>
+                )}
+              </MobileFormSectionCard>
 
               {/* Section 3: Work Location & Identity */}
-              <View style={[styles.sectionCard, { backgroundColor: sectionBg, borderColor: cardBorder }]}>
-                <View style={[styles.sectionHeader, { borderBottomColor: cardBorder }]}>
-                  <View style={styles.sectionHeaderTitleRow}>
-                    <View style={styles.sectionBadge}>
-                      <Text style={styles.sectionBadgeText}>3</Text>
-                    </View>
-                    <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
-                      Work Location & Identity
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.twoColumnRow}>
-                  <View style={{ flex: 1 }}>
-                    <Input
-                      label="City / Town"
-                      required
-                      placeholder="Pune"
-                      value={city}
-                      onChangeText={(val) => {
-                        setCity(val);
-                        clearFieldError('city');
-                      }}
-                      error={fieldErrors.city}
-                      leftIcon={<MapPin size={16} color={isDark ? '#737373' : '#9ca3af'} />}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Input
-                      label="District"
-                      required
-                      placeholder="Pune"
-                      value={district}
-                      onChangeText={(val) => {
-                        setDistrict(val);
-                        clearFieldError('district');
-                      }}
-                      error={fieldErrors.district}
-                      leftIcon={<MapPin size={16} color={isDark ? '#737373' : '#9ca3af'} />}
-                    />
-                  </View>
-                </View>
-
-                {/* State Picker Trigger */}
-                <View style={styles.selectGroup}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
-                    State <Text style={{ color: '#ef4444', fontWeight: '700' }}>*</Text>
-                  </Text>
-                  <TouchableOpacity
-                    onPress={() => setStateModalVisible(true)}
-                    activeOpacity={0.7}
-                    style={[
-                      styles.selectTrigger,
-                      {
-                        backgroundColor: isDark ? '#121212' : theme.colors.canvasElevated,
-                        borderColor: fieldErrors.state ? '#ef4444' : isDark ? '#292c2f' : cardBorder,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.selectValue,
-                        { color: stateVal ? theme.colors.ink : isDark ? '#525252' : '#9ca3af' },
-                      ]}
-                    >
-                      {stateVal || 'Select state...'}
-                    </Text>
-                    <ChevronDown size={16} color={isDark ? '#737373' : '#9ca3af'} />
-                  </TouchableOpacity>
-                  {fieldErrors.state ? (
-                    <Text style={styles.errorText}>{fieldErrors.state}</Text>
-                  ) : null}
-                </View>
-
-                <Input
-                  label="Street / Site Base Address"
-                  required
-                  placeholder="Plot No. 42, MIDC Industrial Area"
-                  value={address}
-                  onChangeText={(val) => {
-                    setAddress(val);
-                    clearFieldError('address');
+              <MobileFormSectionCard
+                stepNumber={3}
+                title="Work Location & Documents"
+                description="Field operations base location and regulatory compliance credentials."
+                isMandatory={true}
+                isCompleted={section3Complete}
+              >
+                <MobileAddressFields
+                  street={street}
+                  city={city}
+                  district={district}
+                  stateName={stateVal}
+                  stateId={stateId}
+                  onStreetChange={(val) => {
+                    setStreet(val);
+                    clearFieldError('street');
                   }}
-                  error={fieldErrors.address}
-                  leftIcon={<MapPin size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                  onCityChange={(val) => {
+                    setCity(val);
+                    clearFieldError('city');
+                  }}
+                  onDistrictChange={(val) => {
+                    setDistrict(val);
+                    clearFieldError('district');
+                  }}
+                  onStateChange={(id, name) => {
+                    setStateId(id);
+                    setStateVal(name);
+                    clearFieldError('state');
+                  }}
+                  errors={{
+                    street: fieldErrors.street,
+                    city: fieldErrors.city,
+                    district: fieldErrors.district,
+                    state: fieldErrors.state,
+                  }}
+                  required={true}
                 />
 
                 <Input
@@ -701,21 +715,16 @@ export default function SignupScreen() {
                   }}
                   errorMessage={licenseDocError}
                 />
-              </View>
+              </MobileFormSectionCard>
 
               {/* Section 4: Security Credentials */}
-              <View style={[styles.sectionCard, { backgroundColor: sectionBg, borderColor: cardBorder }]}>
-                <View style={[styles.sectionHeader, { borderBottomColor: cardBorder }]}>
-                  <View style={styles.sectionHeaderTitleRow}>
-                    <View style={styles.sectionBadge}>
-                      <Text style={styles.sectionBadgeText}>4</Text>
-                    </View>
-                    <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>
-                      Security Credentials
-                    </Text>
-                  </View>
-                </View>
-
+              <MobileFormSectionCard
+                stepNumber={4}
+                title="Security Credentials"
+                description="Secure password credentials for logging into the platform."
+                isMandatory={true}
+                isCompleted={section4Complete}
+              >
                 <Input
                   label="Password"
                   required
@@ -751,7 +760,7 @@ export default function SignupScreen() {
                 <Text style={[styles.helperCaption, { color: theme.colors.mute }]}>
                   Password must be at least 8 characters long. Make sure both passwords match.
                 </Text>
-              </View>
+              </MobileFormSectionCard>
 
               {/* Note Banner */}
               <View style={styles.noteBox}>
@@ -763,7 +772,7 @@ export default function SignupScreen() {
               </View>
 
               {/* Terms and Privacy Agreement Checkbox */}
-              <View style={{ marginTop: 14, marginBottom: 6 }}>
+              <View style={{ marginTop: 14, marginBottom: 12 }}>
                 <TouchableOpacity
                   style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}
                   onPress={() => {
@@ -816,23 +825,16 @@ export default function SignupScreen() {
                 )}
               </View>
 
-              {/* Submit CTA Button */}
-              <TouchableOpacity
-                style={[
-                  styles.submitButton,
-                  { backgroundColor: primarySkyBlue },
-                  (isLoading || !agreedToTerms) && styles.buttonDisabled,
-                ]}
+              {/* Gated Submit Button with multi-submit prevention */}
+              <MobileSubmitButton
+                isReady={isAllMandatoryFilled}
+                isLoading={isLoading}
                 onPress={handleSignup}
-                disabled={isLoading || !agreedToTerms}
-                activeOpacity={0.8}
-              >
-                {isLoading ? (
-                  <ActivityIndicator size="small" color="#ffffff" />
-                ) : (
-                  <Text style={styles.submitButtonText}>Request Platform Access</Text>
-                )}
-              </TouchableOpacity>
+                label="Request Platform Access"
+                loadingLabel="Submitting Registration..."
+                missingCount={missingMandatoryCount}
+                helperText="All required information provided. Tap to submit your account request."
+              />
 
               {/* Card Footer */}
               <View style={[styles.cardFooter, { borderTopColor: cardBorder }]}>
@@ -924,55 +926,6 @@ export default function SignupScreen() {
                       </Text>
                       <Text style={[styles.modalItemDesc, { color: theme.colors.mute }]}>{r.desc}</Text>
                     </View>
-                    {isSelected && <Check size={18} color={primarySkyBlue} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* State Selection Modal */}
-      <Modal visible={stateModalVisible} animationType="slide" transparent onRequestClose={() => setStateModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalSheet, { backgroundColor: cardBackground, borderColor: cardBorder }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: cardBorder }]}>
-              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select State</Text>
-              <TouchableOpacity onPress={() => setStateModalVisible(false)} style={styles.modalCloseBtn}>
-                <X size={18} color={theme.colors.ink} />
-              </TouchableOpacity>
-            </View>
-            <View style={{ paddingHorizontal: 16, paddingVertical: 8 }}>
-              <Input
-                placeholder="Search state..."
-                value={stateSearch}
-                onChangeText={setStateSearch}
-                leftIcon={<Search size={15} color={isDark ? '#737373' : '#9ca3af'} />}
-              />
-            </View>
-            <ScrollView style={styles.modalListScroll} showsVerticalScrollIndicator={false}>
-              {INDIAN_STATES.filter((s) => s.name.toLowerCase().includes(stateSearch.toLowerCase().trim())).map((s) => {
-                const isSelected = stateId === s.id;
-                return (
-                  <TouchableOpacity
-                    key={s.id}
-                    onPress={() => {
-                      setStateId(s.id);
-                      setStateVal(s.name);
-                      setStateModalVisible(false);
-                      setStateSearch('');
-                      clearFieldError('state');
-                    }}
-                    style={[
-                      styles.modalItemRow,
-                      { borderBottomColor: cardBorder },
-                      isSelected && { backgroundColor: 'rgba(14, 165, 233, 0.1)' },
-                    ]}
-                  >
-                    <Text style={[styles.modalItemTitle, { color: isSelected ? primarySkyBlue : theme.colors.ink }]}>
-                      {s.name}
-                    </Text>
                     {isSelected && <Check size={18} color={primarySkyBlue} />}
                   </TouchableOpacity>
                 );

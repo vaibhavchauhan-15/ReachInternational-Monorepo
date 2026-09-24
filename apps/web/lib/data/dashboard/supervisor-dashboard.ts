@@ -39,7 +39,7 @@ export const getSupervisorDashboard = cache(
           return DEFAULT_SUPERVISOR_DASHBOARD;
         }
       },
-      [`dashboard-supervisor-${supervisorId}`],
+      [`dashboard-supervisor-v2-${supervisorId}`],
       {
         revalidate: 15,
         tags: [TAGS.dashboard, TAGS.dashboardSupervisor(supervisorId)],

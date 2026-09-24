@@ -5,13 +5,12 @@ import {
   AnimatedX,
   AnimatedBuilding2,
   AnimatedMapPin,
-  AnimatedFileText,
+  AnimatedReceipt,
 } from "@/components/ui/animated-icons";
-import { AlertCircle, Save, Receipt } from "lucide-react";
+import { AlertCircle, Save } from "lucide-react";
 import type { CRMClient } from "@/lib/types/database";
 import { createClientAction, updateClientAction, type ClientFormState } from "@/app/actions/clients";
 import { Button, Input, Switch } from "@/components/ui";
-import { LocationHierarchySelector } from "./LocationHierarchySelector";
 
 interface ClientModalProps {
   isOpen: boolean;
@@ -171,7 +170,7 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
             onClick={onClose}
             className="rounded-lg p-1.5 text-[var(--color-mute)] hover:bg-[var(--color-hairline-soft-surface)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
           >
-            <AnimatedX className="h-5 w-5" />
+            <AnimatedX size={18} className="w-4.5 h-4.5" />
           </button>
         </div>
 
@@ -192,9 +191,12 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
           className="mt-4 space-y-4 overflow-y-auto pr-1 flex-1 custom-scrollbar"
         >
           {/* Section 1: Company & Tax Details */}
-          <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-mute)] pb-1 border-b border-[var(--color-hairline)]">
-              <AnimatedBuilding2 className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+          <div
+            data-hover-parent
+            className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3 transition-colors"
+          >
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-mute)] pb-2 border-b border-[var(--color-hairline)]">
+              <AnimatedBuilding2 size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
               Company & Tax Details
             </div>
 
@@ -250,48 +252,63 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
           </div>
 
           {/* Section 2: Site Location */}
-          <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3">
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-mute)] pb-1 border-b border-[var(--color-hairline)]">
-              <AnimatedMapPin className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          <div
+            data-hover-parent
+            className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3 transition-colors"
+          >
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-mute)] pb-2 border-b border-[var(--color-hairline)]">
+              <AnimatedMapPin size={16} className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
               Site Location
             </div>
 
-            {/* Progressive Location Cascade: State -> District -> City/Town */}
-            <LocationHierarchySelector
-              selectedState={stateName}
-              selectedDistrict={district}
-              selectedCity={city}
-              onStateChange={(s) => setStateName(s)}
-              onDistrictChange={(d) => setDistrict(d)}
-              onCityChange={(c) => setCity(c)}
-              errorState={formState.fieldErrors?.state}
-              errorDistrict={formState.fieldErrors?.district}
-              errorCity={formState.fieldErrors?.city}
-              required
-            />
+            <div className="space-y-3">
+              {/* 1. Street / Area */}
+              <Input
+                label="Street / Area"
+                required
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="e.g. Plot 42, Sector 18, Industrial Area"
+                error={formState.fieldErrors?.street || formState.fieldErrors?.address}
+              />
 
-            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1">
-              <div className="sm:col-span-3">
-                <label className="block text-[12px] font-medium text-[var(--color-ink)] mb-1 select-none flex items-center gap-1">
-                  <span>Street / Site Address Details</span>
-                  <span className="text-rose-500 font-semibold">*</span>
-                </label>
-                <input
-                  type="text"
+              {/* 2. City / Town / Village & 3. District */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  label="City / Town / Village"
                   required
-                  value={address}
-                  onChange={(e) => setAddress(e.target.value)}
-                  placeholder="e.g. Plot 42, Sector 18, Industrial Area"
-                  className="w-full h-9 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] px-3 text-xs text-[var(--color-ink)] placeholder-[#969CA3]/60 focus:outline-hidden focus:ring-2 focus:ring-sky-500"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  placeholder="e.g. Pune"
+                  error={formState.fieldErrors?.city}
+                />
+
+                <Input
+                  label="District"
+                  value={district}
+                  onChange={(e) => setDistrict(e.target.value)}
+                  placeholder="e.g. Pune"
+                  error={formState.fieldErrors?.district}
                 />
               </div>
 
-              <div>
+              {/* 4. State & 5. Pincode */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  label="State"
+                  required
+                  value={stateName}
+                  onChange={(e) => setStateName(e.target.value)}
+                  placeholder="e.g. Maharashtra"
+                  error={formState.fieldErrors?.state}
+                />
+
                 <Input
                   label="Pincode"
                   value={pincode}
                   onChange={(e) => setPincode(e.target.value)}
                   placeholder="411001"
+                  maxLength={6}
                   error={formState.fieldErrors?.pincode}
                 />
               </div>
@@ -300,12 +317,13 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
 
           {/* Section 3: Billing Address (Conditional) */}
           <div
+            data-hover-parent
             ref={billingSectionRef}
-            className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3"
+            className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3 transition-colors"
           >
-            <div className="flex items-center justify-between pb-1 border-b border-[var(--color-hairline)]">
+            <div className="flex items-center justify-between pb-2 border-b border-[var(--color-hairline)]">
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-mute)]">
-                <Receipt className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                <AnimatedReceipt size={16} className="w-4 h-4 text-purple-600 dark:text-purple-400 shrink-0" />
                 Billing Address
               </div>
               <Switch
@@ -318,42 +336,52 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
 
             {isBillingAddressDifferent ? (
               <div className="space-y-3 pt-1 animate-in fade-in slide-in-from-top-1 duration-200">
-                {/* Progressive Hierarchy for Billing */}
-                <LocationHierarchySelector
-                  selectedState={billingState}
-                  selectedDistrict={billingDistrict}
-                  selectedCity={billingCity}
-                  onStateChange={(s) => setBillingState(s)}
-                  onDistrictChange={(d) => setBillingDistrict(d)}
-                  onCityChange={(c) => setBillingCity(c)}
-                  errorState={formState.fieldErrors?.billingState}
-                  errorDistrict={formState.fieldErrors?.billingDistrict}
-                  errorCity={formState.fieldErrors?.billingCity}
+                {/* 1. Billing Street / Area */}
+                <Input
+                  label="Billing Street / Area"
+                  value={billingAddress}
+                  onChange={(e) => setBillingAddress(e.target.value)}
+                  placeholder="e.g. Corporate HQ, 5th Floor, Tower B, Cyber City"
+                  error={formState.fieldErrors?.billingAddress}
                 />
 
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                  <div className="sm:col-span-3">
-                    <label className="block text-[12px] font-medium text-[var(--color-ink)] mb-1 select-none">
-                      Billing Street Address
-                    </label>
-                    <input
-                      type="text"
-                      value={billingAddress}
-                      onChange={(e) => setBillingAddress(e.target.value)}
-                      placeholder="e.g. Corporate HQ, 5th Floor, Tower B, Cyber City"
-                      className="w-full h-9 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] px-3 text-xs text-[var(--color-ink)] placeholder-[#969CA3]/60 focus:outline-hidden focus:ring-2 focus:ring-sky-500"
-                    />
-                  </div>
+                {/* 2. Billing City / Town / Village & 3. Billing District */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    label="Billing City / Town / Village"
+                    value={billingCity}
+                    onChange={(e) => setBillingCity(e.target.value)}
+                    placeholder="e.g. Gurugram"
+                    error={formState.fieldErrors?.billingCity}
+                  />
 
-                  <div>
-                    <Input
-                      label="Pincode"
-                      value={billingPincode}
-                      onChange={(e) => setBillingPincode(e.target.value)}
-                      placeholder="122002"
-                      error={formState.fieldErrors?.billingPincode}
-                    />
-                  </div>
+                  <Input
+                    label="Billing District"
+                    value={billingDistrict}
+                    onChange={(e) => setBillingDistrict(e.target.value)}
+                    placeholder="e.g. Gurugram"
+                    error={formState.fieldErrors?.billingDistrict}
+                  />
+                </div>
+
+                {/* 4. Billing State & 5. Billing Pincode */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Input
+                    label="Billing State"
+                    value={billingState}
+                    onChange={(e) => setBillingState(e.target.value)}
+                    placeholder="e.g. Haryana"
+                    error={formState.fieldErrors?.billingState}
+                  />
+
+                  <Input
+                    label="Billing Pincode"
+                    value={billingPincode}
+                    onChange={(e) => setBillingPincode(e.target.value)}
+                    placeholder="122002"
+                    maxLength={6}
+                    error={formState.fieldErrors?.billingPincode}
+                  />
                 </div>
               </div>
             ) : (

@@ -17,6 +17,11 @@ import {
 import {
   AnimatedTrash,
   AnimatedArrowLeft,
+  AnimatedInfo,
+  AnimatedShield,
+  AnimatedWrench,
+  AnimatedBuilding,
+  AnimatedAlertCircle,
 } from "@/components/ui/animated-icons";
 import {
   updateMachineInfoAction,
@@ -29,7 +34,6 @@ import {
 } from "@/app/actions/machines";
 import type { Machine, User, UserRole } from "@/lib/types/database";
 import { isManagerOrAbove } from "@reachinternational/permissions";
-import { AlertCircle } from "lucide-react";
 
 export interface MachineEditClientProps {
   machine: Machine;
@@ -82,7 +86,7 @@ export function MachineEditClient({
   // -------------------------------------------------------------
   // CARD 2: Supervisor Assignment
   // -------------------------------------------------------------
-  const initialSupervisorIds = Array.isArray(machine.supervisor_ids) && machine.supervisor_ids.length > 0
+  const initialSupervisorIds = Array.isArray(machine.supervisor_ids)
     ? machine.supervisor_ids
     : machine.current_supervisor_id ? [machine.current_supervisor_id] : [];
 
@@ -92,7 +96,7 @@ export function MachineEditClient({
   // -------------------------------------------------------------
   // CARD 3: Operator Assignment
   // -------------------------------------------------------------
-  const initialOperatorIds = Array.isArray(machine.operator_ids) && machine.operator_ids.length > 0
+  const initialOperatorIds = Array.isArray(machine.operator_ids)
     ? machine.operator_ids
     : machine.current_operator_id ? [machine.current_operator_id] : [];
 
@@ -195,13 +199,13 @@ export function MachineEditClient({
     (parseFloat(hourMeter) || 0) !== (savedMachine.hour_meter ?? 0) ||
     healthStatus !== (savedMachine.health_status || "active");
 
-  const savedSupIds = Array.isArray(savedMachine.supervisor_ids) && savedMachine.supervisor_ids.length > 0
+  const savedSupIds = Array.isArray(savedMachine.supervisor_ids)
     ? savedMachine.supervisor_ids
     : savedMachine.current_supervisor_id ? [savedMachine.current_supervisor_id] : [];
   const isSupervisorsDirty =
     JSON.stringify([...supervisorIds].sort()) !== JSON.stringify([...savedSupIds].sort());
 
-  const savedOpIds = Array.isArray(savedMachine.operator_ids) && savedMachine.operator_ids.length > 0
+  const savedOpIds = Array.isArray(savedMachine.operator_ids)
     ? savedMachine.operator_ids
     : savedMachine.current_operator_id ? [savedMachine.current_operator_id] : [];
   const isOperatorsDirty =
@@ -321,6 +325,8 @@ export function MachineEditClient({
           ...prev,
           supervisor_ids: res.supervisor_ids,
           current_supervisor_id: res.current_supervisor_id || null,
+          supervisors: (res.supervisors || prev.supervisors) as any,
+          current_supervisor: ((res.supervisors && res.supervisors[0]) || prev.current_supervisor) as any,
         }));
         toast(
           "success",
@@ -348,6 +354,8 @@ export function MachineEditClient({
           ...prev,
           operator_ids: res.operator_ids,
           current_operator_id: res.current_operator_id || null,
+          operators: (res.operators || prev.operators) as any,
+          current_operator: ((res.operators && res.operators[0]) || prev.current_operator) as any,
         }));
         toast(
           "success",
@@ -507,11 +515,17 @@ export function MachineEditClient({
         {/* CARD 1: Machine Information & Specifications */}
         {/* ============================================================= */}
         <div className="space-y-4 sm:space-y-5">
-          <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-5 md:p-6 shadow-xs space-y-4">
+          <div
+            data-hover-parent
+            className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-5 md:p-6 shadow-xs space-y-4 transition-colors"
+          >
             <div className="pb-3 border-b border-[var(--color-hairline)] flex items-center justify-between flex-wrap gap-2">
-              <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
-                1. Machine Information & Specifications
-              </h2>
+              <div className="flex items-center gap-2">
+                <AnimatedInfo size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
+                  1. Machine Information & Specifications
+                </h2>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -705,8 +719,12 @@ export function MachineEditClient({
             <div className="pt-3 border-t border-[var(--color-hairline)] flex items-center justify-between flex-wrap gap-2">
               <div className="text-xs text-[var(--color-mute)]">
                 {isInfoDirty && (
-                  <span className="text-amber-500 dark:text-amber-400 font-medium flex items-center gap-1.5">
-                    <AlertCircle size={14} /> Unsaved changes in specifications
+                  <span
+                    data-hover-parent
+                    className="text-amber-500 dark:text-amber-400 font-medium inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-xs transition-colors cursor-default"
+                  >
+                    <AnimatedAlertCircle size={14} className="w-3.5 h-3.5 shrink-0" />
+                    <span>Unsaved changes in specifications</span>
                   </span>
                 )}
               </div>
@@ -732,11 +750,17 @@ export function MachineEditClient({
           {/* ============================================================= */}
           {/* CARD 2: Supervisor Assignment */}
           {/* ============================================================= */}
-          <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-5 md:p-6 shadow-xs space-y-4">
+          <div
+            data-hover-parent
+            className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-5 md:p-6 shadow-xs space-y-4 transition-colors"
+          >
             <div className="pb-3 border-b border-[var(--color-hairline)] flex items-center justify-between flex-wrap gap-2">
-              <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
-                2. Supervisor Assignment (Multi-Shift Oversight)
-              </h2>
+              <div className="flex items-center gap-2">
+                <AnimatedShield size={16} className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
+                <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
+                  2. Supervisor Assignment (Multi-Shift Oversight)
+                </h2>
+              </div>
             </div>
 
             <div>
@@ -754,8 +778,12 @@ export function MachineEditClient({
             <div className="pt-3 border-t border-[var(--color-hairline)] flex items-center justify-between flex-wrap gap-2">
               <div className="text-xs text-[var(--color-mute)]">
                 {isSupervisorsDirty && (
-                  <span className="text-amber-500 dark:text-amber-400 font-medium flex items-center gap-1.5">
-                    <AlertCircle size={14} /> Unsaved supervisor roster changes ({supervisorIds.length} selected)
+                  <span
+                    data-hover-parent
+                    className="text-amber-500 dark:text-amber-400 font-medium inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-xs transition-colors cursor-default"
+                  >
+                    <AnimatedAlertCircle size={14} className="w-3.5 h-3.5 shrink-0" />
+                    <span>Unsaved supervisor roster changes ({supervisorIds.length} selected)</span>
                   </span>
                 )}
               </div>
@@ -776,11 +804,17 @@ export function MachineEditClient({
           {/* ============================================================= */}
           {/* CARD 3: Operator Assignment */}
           {/* ============================================================= */}
-          <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-5 md:p-6 shadow-xs space-y-4">
+          <div
+            data-hover-parent
+            className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-5 md:p-6 shadow-xs space-y-4 transition-colors"
+          >
             <div className="pb-3 border-b border-[var(--color-hairline)] flex items-center justify-between flex-wrap gap-2">
-              <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
-                3. Operator Assignment (24h Shift Execution)
-              </h2>
+              <div className="flex items-center gap-2">
+                <AnimatedWrench size={16} className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
+                  3. Operator Assignment (24h Shift Execution)
+                </h2>
+              </div>
             </div>
 
             <div>
@@ -798,8 +832,12 @@ export function MachineEditClient({
             <div className="pt-3 border-t border-[var(--color-hairline)] flex items-center justify-between flex-wrap gap-2">
               <div className="text-xs text-[var(--color-mute)]">
                 {isOperatorsDirty && (
-                  <span className="text-amber-500 dark:text-amber-400 font-medium flex items-center gap-1.5">
-                    <AlertCircle size={14} /> Unsaved operator roster changes ({operatorIds.length} selected)
+                  <span
+                    data-hover-parent
+                    className="text-amber-500 dark:text-amber-400 font-medium inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-xs transition-colors cursor-default"
+                  >
+                    <AnimatedAlertCircle size={14} className="w-3.5 h-3.5 shrink-0" />
+                    <span>Unsaved operator roster changes ({operatorIds.length} selected)</span>
                   </span>
                 )}
               </div>
@@ -820,11 +858,17 @@ export function MachineEditClient({
           {/* ============================================================= */}
           {/* CARD 4: Client Assignment & Rental Deployment */}
           {/* ============================================================= */}
-          <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-5 md:p-6 shadow-xs space-y-4">
+          <div
+            data-hover-parent
+            className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-5 md:p-6 shadow-xs space-y-4 transition-colors"
+          >
             <div className="pb-3 border-b border-[var(--color-hairline)] flex items-center justify-between flex-wrap gap-2">
-              <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
-                4. Client Assignment & Rental Deployment
-              </h2>
+              <div className="flex items-center gap-2">
+                <AnimatedBuilding size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
+                  4. Client Assignment & Rental Deployment
+                </h2>
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -859,8 +903,12 @@ export function MachineEditClient({
             <div className="pt-3 border-t border-[var(--color-hairline)] flex items-center justify-between flex-wrap gap-2">
               <div className="text-xs text-[var(--color-mute)]">
                 {isClientDirty && (
-                  <span className="text-amber-500 dark:text-amber-400 font-medium flex items-center gap-1.5">
-                    <AlertCircle size={14} /> Unsaved client assignment ({clientId ? "Will set to Rented" : "Will set to Available"})
+                  <span
+                    data-hover-parent
+                    className="text-amber-500 dark:text-amber-400 font-medium inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-xs transition-colors cursor-default"
+                  >
+                    <AnimatedAlertCircle size={14} className="w-3.5 h-3.5 shrink-0" />
+                    <span>Unsaved client assignment ({clientId ? "Will set to Rented" : "Will set to Available"})</span>
                   </span>
                 )}
               </div>

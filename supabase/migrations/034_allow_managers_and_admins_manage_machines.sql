@@ -1,4 +1,4 @@
-﻿-- ============================================
+-- ============================================
 -- Migration 034: Allow Managers, Service Managers, and Admins to Add, Edit, and Delete Machines
 -- ============================================
 

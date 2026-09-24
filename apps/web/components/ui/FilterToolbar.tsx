@@ -6,8 +6,8 @@ import {
   AnimatedSlidersHorizontal,
   AnimatedX,
   AnimatedRotateCcw,
-  AnimatedChevronDown,
 } from "./animated-icons";
+import { ChevronDown } from "lucide-react";
 
 export interface FilterToolbarProps {
   /** Search query value */
@@ -58,6 +58,8 @@ export function FilterToolbar({
   }
   const [isTransitioning, setIsTransitioning] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const filterIconRef = useRef<any>(null);
+  const resetIconRef = useRef<any>(null);
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,6 +136,8 @@ export function FilterToolbar({
           <button
             type="button"
             onClick={toggleOpen}
+            onMouseEnter={() => filterIconRef.current?.startAnimation?.()}
+            onMouseLeave={() => filterIconRef.current?.stopAnimation?.()}
             aria-expanded={isOpen}
             aria-controls="filter-panel-content"
             className={`flex items-center gap-1.5 px-3 h-11 sm:h-9 rounded-lg border text-xs font-semibold active:scale-95 transition-all duration-200 shrink-0 select-none cursor-pointer ${
@@ -142,7 +146,7 @@ export function FilterToolbar({
                 : "bg-[var(--color-canvas)] text-[var(--color-ink)] border-[var(--color-hairline)] hover:border-[var(--color-ink)]/40 hover:bg-[var(--color-hairline-soft-surface)]"
             }`}
           >
-            <AnimatedSlidersHorizontal size={14} />
+            <AnimatedSlidersHorizontal ref={filterIconRef as any} size={14} className="shrink-0" />
             <span>Filter</span>
             {activeFilterCount > 0 && (
               <span
@@ -155,7 +159,7 @@ export function FilterToolbar({
                 {activeFilterCount}
               </span>
             )}
-            <AnimatedChevronDown
+            <ChevronDown
               size={12}
               className={`transition-transform duration-300 ease-out ${isOpen ? "rotate-180" : ""}`}
             />
@@ -170,10 +174,12 @@ export function FilterToolbar({
           <button
             type="button"
             onClick={onResetFilters}
+            onMouseEnter={() => resetIconRef.current?.startAnimation?.()}
+            onMouseLeave={() => resetIconRef.current?.stopAnimation?.()}
             className="flex items-center gap-1 px-2.5 h-11 sm:h-9 rounded-lg text-xs font-medium text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-all shrink-0 cursor-pointer active:scale-95"
             title="Reset all filters"
           >
-            <AnimatedRotateCcw size={14} />
+            <AnimatedRotateCcw ref={resetIconRef as any} size={14} className="shrink-0" />
             <span className="hidden sm:inline">Reset</span>
           </button>
         )}

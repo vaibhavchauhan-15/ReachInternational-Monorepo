@@ -5,19 +5,10 @@ import { getUserDetailAction } from "@/app/actions/users";
 import {
   AnimatedUser,
   AnimatedPhone,
-  AnimatedBuilding2,
   AnimatedShieldCheck,
-  AnimatedShieldAlert,
-  AnimatedWrench,
-  AnimatedPackage,
-  AnimatedActivity,
-  AnimatedUsers,
   AnimatedCreditCard,
-  AnimatedTrendingUp,
-  AnimatedTruck,
-  AnimatedMapPin,
 } from "@/components/ui/animated-icons";
-import { ShieldAlert, ShieldCheck, Building2, Wrench, Package, Activity, Users, CreditCard, TrendingUp, Truck } from "lucide-react";
+import { ShieldAlert, ShieldCheck, Activity, Users } from "lucide-react";
 import { Modal, Input, SearchableSelect, Button } from "@/components/ui";
 import type { SelectOption } from "@/components/ui/SearchableSelect";
 import type { User, UserRole } from "@/lib/types/database";
@@ -26,16 +17,16 @@ import {
   validateAadhaarNumber,
   validateLicenseNumber,
   formatAadhaar,
-  INDIAN_STATES,
   getStateById,
   getStateByName,
 } from "@reachinternational/utils";
 import { isSupervisedRole } from "@reachinternational/permissions";
-
-const stateSelectOptions: SelectOption[] = INDIAN_STATES.map((s) => ({
-  value: String(s.id),
-  label: s.name,
-}));
+import {
+  FormSectionCard,
+  UserAddressSection,
+  UserSalaryField,
+  FormSubmitButton,
+} from "@/components/forms";
 
 const allRoleSelectOptions: SelectOption[] = [
   {
@@ -236,6 +227,41 @@ export function UserEditModal({
     ? allRoleSelectOptions
     : allRoleSelectOptions.filter((r) => r.value !== "super_admin");
 
+  // Real-time completeness check
+  const section1Complete = Boolean(
+    editForm.full_name.trim().length > 0 &&
+    editForm.phone.trim().length >= 10
+  );
+
+  const section2Complete = Boolean(
+    editForm.city.trim().length > 0 &&
+    editForm.district.trim().length > 0 &&
+    (editForm.state.trim().length > 0 || editForm.state_id.trim().length > 0)
+  );
+
+  const section3Complete = Boolean(
+    editForm.aadhaar_number.trim().length > 0 ||
+    editForm.license_number.trim().length > 0
+  );
+
+  const section4Complete = Boolean(
+    editForm.role &&
+    (editForm.role !== "operator" || (editForm.monthly_salary && Number(editForm.monthly_salary) > 0))
+  );
+
+  const isAllMandatoryFilled = Boolean(section1Complete && section2Complete && section4Complete);
+
+  const missingFields: string[] = [];
+  if (!editForm.full_name.trim()) missingFields.push("Full Name");
+  if (!editForm.phone.trim() || editForm.phone.trim().length < 10) missingFields.push("Valid Phone");
+  if (!editForm.city.trim()) missingFields.push("City/Town/Village");
+  if (!editForm.district.trim()) missingFields.push("District");
+  if (!editForm.state.trim() && !editForm.state_id.trim()) missingFields.push("State");
+  if (editForm.role === "operator" && (!editForm.monthly_salary || Number(editForm.monthly_salary) <= 0)) {
+    missingFields.push("Monthly Salary");
+  }
+  const missingMandatoryCount = missingFields.length;
+
   return (
     <Modal
       open={true}
@@ -254,13 +280,13 @@ export function UserEditModal({
         <input type="hidden" name="state_id" value={editForm.state_id} />
 
         {/* Section 1: User Identity */}
-        <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3.5">
-          <div className="pb-2 border-b border-[var(--color-hairline)]">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-              Contact & Identity Info
-            </h3>
-          </div>
-
+        <FormSectionCard
+          stepNumber={1}
+          title="Contact & Identity Info"
+          description="Employee full legal name and active communication phone number."
+          isMandatory={true}
+          isCompleted={section1Complete}
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               label="Full Name *"
@@ -282,24 +308,18 @@ export function UserEditModal({
               required
             />
           </div>
-        </div>
+        </FormSectionCard>
 
         {/* Section 2: User Address & Work Location */}
-        <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3.5">
-          <div className="pb-2 border-b border-[var(--color-hairline)]">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-              User Address & Operations
-            </h3>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Input
-              label="Street Address"
-              name="street"
-              value={editForm.street}
-              onChange={(e) => setEditForm((prev) => ({ ...prev, street: e.target.value }))}
-              placeholder="e.g. Plot 42, MIDC Ind Area"
-            />
+        <FormSectionCard
+          stepNumber={2}
+          title="Address & Shift Schedule"
+          description="Operational deployment address and daily work shift timing."
+          isMandatory={true}
+          isCompleted={section2Complete}
+        >
+          {/* Shift Schedule */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-2 border-b border-[var(--color-hairline)]">
             <Input
               label="Shift Start Time"
               name="shift_start_time"
@@ -314,67 +334,35 @@ export function UserEditModal({
               value={editForm.shift_end_time}
               onChange={(e) => setEditForm((prev) => ({ ...prev, shift_end_time: e.target.value }))}
             />
-            <input type="hidden" name="address" value={editForm.street} />
             <input type="hidden" name="shift_time" value={`${editForm.shift_start_time} - ${editForm.shift_end_time}`} />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Input
-              label="City/Town/Village *"
-              name="city"
-              icon={<AnimatedMapPin size={16} className="text-emerald-500" />}
-              value={editForm.city}
-              onChange={(e) => setEditForm((prev) => ({ ...prev, city: e.target.value }))}
-              placeholder="e.g. Pune"
-              required
-            />
-            <Input
-              label="District *"
-              name="district"
-              icon={<AnimatedMapPin size={16} className="text-emerald-500" />}
-              value={editForm.district}
-              onChange={(e) => setEditForm((prev) => ({ ...prev, district: e.target.value }))}
-              placeholder="e.g. Pune"
-              required
-            />
-            <div className="flex flex-col gap-1 w-full">
-              <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none">
-                State <span className="text-rose-500 font-semibold">*</span>
-              </label>
-              <SearchableSelect
-                options={stateSelectOptions}
-                value={editForm.state_id}
-                onChange={(val, opt) => {
-                  setEditForm((prev) => ({
-                    ...prev,
-                    state_id: val,
-                    state: opt?.label || prev.state,
-                  }));
-                  if (errors.state) {
-                    setErrors((prev) => {
-                      const copy = { ...prev };
-                      delete copy.state;
-                      return copy;
-                    });
-                  }
-                }}
-                placeholder="Select state..."
-                clearable={false}
-                error={errors.state}
-                className="w-full text-xs sm:text-[13px]"
-              />
-            </div>
-          </div>
-        </div>
+          {/* Canonical User Address Component */}
+          <UserAddressSection
+            street={editForm.street}
+            city={editForm.city}
+            district={editForm.district}
+            state={editForm.state}
+            stateId={editForm.state_id}
+            onChange={(field, val) => handleFieldChange(field, val)}
+            required={true}
+            idPrefix="edit-user"
+            errors={{
+              state: errors.state,
+              city: errors.city,
+              district: errors.district,
+            }}
+          />
+        </FormSectionCard>
 
         {/* Section 3: Identity & Regulatory Documents */}
-        <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3.5">
-          <div className="pb-2 border-b border-[var(--color-hairline)]">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-              Identity & Regulatory Documents
-            </h3>
-          </div>
-
+        <FormSectionCard
+          stepNumber={3}
+          title="Identity & Regulatory Documents"
+          description="Government-issued compliance identifiers for payroll and field operations."
+          isMandatory={false}
+          isCompleted={section3Complete}
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
               label="Aadhaar Card Number"
@@ -399,16 +387,16 @@ export function UserEditModal({
               placeholder="e.g. MH12 20110012345"
             />
           </div>
-        </div>
+        </FormSectionCard>
 
         {/* Section 4: Role & Access Control */}
-        <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3.5">
-          <div className="pb-2 border-b border-[var(--color-hairline)]">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-              System Access Role
-            </h3>
-          </div>
-
+        <FormSectionCard
+          stepNumber={4}
+          title="System Access & Compensation"
+          description="Role-based permissions, supervisory hierarchy, and salary configuration."
+          isMandatory={true}
+          isCompleted={section4Complete}
+        >
           <SearchableSelect
             label="User Access Role *"
             options={roleOptions}
@@ -438,16 +426,10 @@ export function UserEditModal({
           {/* Conditional Monthly Salary for Operators */}
           {editForm.role === "operator" && (
             <div className="pt-2">
-              <Input
-                label="Monthly Salary (₹) *"
-                name="monthly_salary"
-                type="number"
-                min="1"
-                step="100"
-                placeholder="e.g. 25000"
+              <UserSalaryField
                 value={editForm.monthly_salary}
-                onChange={(e) => {
-                  setEditForm((prev) => ({ ...prev, monthly_salary: e.target.value }));
+                onChange={(val) => {
+                  setEditForm((prev) => ({ ...prev, monthly_salary: val }));
                   if (errors.monthly_salary) {
                     setErrors((prev) => {
                       const copy = { ...prev };
@@ -456,18 +438,16 @@ export function UserEditModal({
                     });
                   }
                 }}
+                role={editForm.role}
                 error={errors.monthly_salary}
-                required
+                id="edit-user-salary"
               />
-              <p className="mt-1.5 text-[11px] text-[var(--color-mute)]">
-                Mandatory monthly salary for machine operator personnel.
-              </p>
             </div>
           )}
+        </FormSectionCard>
 
-        </div>
-
-        <div className="flex items-center justify-end gap-2.5 pt-2">
+        {/* Form Action Controls */}
+        <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[var(--color-hairline)]">
           <Button
             type="button"
             variant="ghost-sm"
@@ -476,14 +456,17 @@ export function UserEditModal({
           >
             Cancel
           </Button>
-          <Button
-            type="submit"
-            variant="primary-sm"
-            loading={loading}
-            className="h-9 px-4 text-xs font-semibold whitespace-nowrap"
-          >
-            Save Account Changes
-          </Button>
+          <div className="min-w-[180px]">
+            <FormSubmitButton
+              isReady={isAllMandatoryFilled}
+              loading={loading}
+              label="Save Account Changes"
+              loadingLabel="Saving Changes..."
+              missingCount={missingMandatoryCount}
+              fullWidth={false}
+              size="sm"
+            />
+          </div>
         </div>
       </form>
     </Modal>

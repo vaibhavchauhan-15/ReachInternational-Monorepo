@@ -80,19 +80,21 @@ export const OperationsMachineView = React.memo(function OperationsMachineView({
           {onOpenHistoryModal && (
             <button
               type="button"
+              data-hover-parent
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenHistoryModal();
               }}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] font-bold text-xs transition-colors shadow-2xs"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] font-bold text-xs transition-colors shadow-2xs cursor-pointer"
               title="View machine running history and meter timeline on-demand"
             >
-              <History className="w-3.5 h-3.5 text-sky-500" />
+              <History size={14} className="w-3.5 h-3.5 text-sky-500 shrink-0" />
               <span>History</span>
             </button>
           )}
-          <div className="p-1 rounded-lg hover:bg-[var(--color-canvas)] text-[var(--color-mute)] transition-colors">
+          <div className="p-1 rounded-lg hover:bg-[var(--color-canvas)] text-[var(--color-mute)] transition-colors inline-flex items-center justify-center">
             <ChevronDown
+              size={16}
               className={`w-4 h-4 transition-transform duration-300 ${
                 isExpanded ? "rotate-180" : ""
               }`}

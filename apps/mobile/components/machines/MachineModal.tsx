@@ -110,7 +110,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
         setRentalStatus(machineToEdit.status || 'available');
 
         // Extract supervisor IDs
-        const sups = Array.isArray(machineToEdit.supervisor_ids) && machineToEdit.supervisor_ids.length > 0
+        const sups = Array.isArray(machineToEdit.supervisor_ids)
           ? machineToEdit.supervisor_ids
           : machineToEdit.current_supervisor_id || machineToEdit.supervisor_id
           ? [machineToEdit.current_supervisor_id || machineToEdit.supervisor_id]
@@ -118,7 +118,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
         setSupervisorIds(sups);
 
         // Extract operator IDs
-        const ops = Array.isArray(machineToEdit.operator_ids) && machineToEdit.operator_ids.length > 0
+        const ops = Array.isArray(machineToEdit.operator_ids)
           ? machineToEdit.operator_ids
           : machineToEdit.current_operator_id || machineToEdit.operator_id
           ? [machineToEdit.current_operator_id || machineToEdit.operator_id]
@@ -387,7 +387,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
   };
 
   const modalTitle = isSupervisor
-    ? `Update Status (${machineToEdit?.machine_id || ''})`
+    ? `Assign Operator (${machineToEdit?.machine_id || ''})`
     : initialSection === 'info'
     ? `Edit Machine Info (${machineToEdit?.machine_id || ''})`
     : initialSection === 'personnel'
@@ -552,79 +552,127 @@ export const MachineModal: React.FC<MachineModalProps> = ({
               <View style={[styles.sectionBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                 <View style={[styles.sectionTitleRow, { borderBottomColor: theme.colors.hairline }]}>
                   <Text style={[styles.sectionHeaderTitle, { color: theme.colors.ink }]}>
-                    PERSONNEL ASSIGNMENT (SUPERVISORS & OPERATORS)
+                    {isSupervisor ? 'OPERATOR ASSIGNMENT' : 'PERSONNEL ASSIGNMENT (SUPERVISORS & OPERATORS)'}
                   </Text>
                 </View>
 
                 <View style={styles.sectionFields}>
                   {/* Assigned Supervisors */}
-                  <View style={styles.fieldGroup}>
-                    <View style={styles.labelRow}>
-                      <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
-                        Assigned Supervisors (Multi-Shift Oversight)
-                      </Text>
-                      <Text style={[styles.assignedCountText, { color: theme.colors.mute }]}>
-                        {supervisorIds.length} assigned
-                      </Text>
-                    </View>
-
-                    <TouchableOpacity
-                      onPress={() => setSupervisorModalOpen(true)}
-                      activeOpacity={0.7}
-                      style={[
-                        styles.multiSelectTrigger,
-                        {
-                          backgroundColor: theme.colors.canvasElevated,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ]}
-                    >
-                      <View style={styles.selectedPillsWrap}>
-                        {selectedSupervisors.length === 0 ? (
-                          <Text style={[styles.placeholderText, { color: theme.colors.mute }]}>
-                            Search & assign supervisors...
-                          </Text>
-                        ) : (
-                          selectedSupervisors.map((s) => (
-                            <View
-                              key={s.id}
-                              style={[
-                                styles.userChip,
-                                {
-                                  backgroundColor: theme.colors.canvas,
-                                  borderColor: theme.colors.hairline,
-                                },
-                              ]}
-                            >
-                              <Text style={[styles.userChipText, { color: theme.colors.ink }]}>
-                                {s.full_name}
-                              </Text>
-                              <TouchableOpacity
-                                onPress={() => handleRemoveSupervisor(s.id)}
-                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                              >
-                                <X size={11} color={theme.colors.mute} />
-                              </TouchableOpacity>
-                            </View>
-                          ))
-                        )}
+                  {!isSupervisor ? (
+                    <View style={styles.fieldGroup}>
+                      <View style={styles.labelRow}>
+                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
+                          Assigned Supervisors (Multi-Shift Oversight)
+                        </Text>
+                        <Text style={[styles.assignedCountText, { color: theme.colors.mute }]}>
+                          {supervisorIds.length} assigned
+                        </Text>
                       </View>
 
-                      <View style={styles.triggerRightActions}>
-                        {supervisorIds.length > 0 && (
-                          <TouchableOpacity
-                            onPress={() => setSupervisorIds([])}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          >
-                            <Text style={[styles.clearBtnText, { color: theme.colors.mute }]}>
-                              Clear
+                      <TouchableOpacity
+                        onPress={() => setSupervisorModalOpen(true)}
+                        activeOpacity={0.7}
+                        style={[
+                          styles.multiSelectTrigger,
+                          {
+                            backgroundColor: theme.colors.canvasElevated,
+                            borderColor: theme.colors.hairline,
+                          },
+                        ]}
+                      >
+                        <View style={styles.selectedPillsWrap}>
+                          {selectedSupervisors.length === 0 ? (
+                            <Text style={[styles.placeholderText, { color: theme.colors.mute }]}>
+                              Search & assign supervisors...
                             </Text>
-                          </TouchableOpacity>
-                        )}
-                        <ChevronDown size={14} color={theme.colors.mute} />
+                          ) : (
+                            selectedSupervisors.map((s) => (
+                              <View
+                                key={s.id}
+                                style={[
+                                  styles.userChip,
+                                  {
+                                    backgroundColor: theme.colors.canvas,
+                                    borderColor: theme.colors.hairline,
+                                  },
+                                ]}
+                              >
+                                <Text style={[styles.userChipText, { color: theme.colors.ink }]}>
+                                  {s.full_name}
+                                </Text>
+                                <TouchableOpacity
+                                  onPress={() => handleRemoveSupervisor(s.id)}
+                                  hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                >
+                                  <X size={11} color={theme.colors.mute} />
+                                </TouchableOpacity>
+                              </View>
+                            ))
+                          )}
+                        </View>
+
+                        <View style={styles.triggerRightActions}>
+                          {supervisorIds.length > 0 && (
+                            <TouchableOpacity
+                              onPress={() => setSupervisorIds([])}
+                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            >
+                              <Text style={[styles.clearBtnText, { color: theme.colors.mute }]}>
+                                Clear
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                          <ChevronDown size={14} color={theme.colors.mute} />
+                        </View>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.fieldGroup}>
+                      <View style={styles.labelRow}>
+                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
+                          Designated Supervisors
+                        </Text>
+                        <Text style={[styles.assignedCountText, { color: theme.colors.mute }]}>
+                          Managed by Admin
+                        </Text>
                       </View>
-                    </TouchableOpacity>
-                  </View>
+                      <View
+                        style={[
+                          styles.multiSelectTrigger,
+                          {
+                            backgroundColor: theme.colors.canvasElevated,
+                            borderColor: theme.colors.hairline,
+                            opacity: 0.85,
+                          },
+                        ]}
+                      >
+                        <View style={styles.selectedPillsWrap}>
+                          {selectedSupervisors.length === 0 ? (
+                            <Text style={[styles.placeholderText, { color: theme.colors.mute }]}>
+                              No supervisors designated
+                            </Text>
+                          ) : (
+                            selectedSupervisors.map((s) => (
+                              <View
+                                key={s.id}
+                                style={[
+                                  styles.userChip,
+                                  {
+                                    backgroundColor: theme.colors.canvas,
+                                    borderColor: theme.colors.hairline,
+                                  },
+                                ]}
+                              >
+                                <Text style={[styles.userChipText, { color: theme.colors.ink }]}>
+                                  {s.full_name}
+                                </Text>
+                              </View>
+                            ))
+                          )}
+                        </View>
+                      </View>
+                    </View>
+                  )}
 
                   {/* Assigned Operators */}
                   <View style={styles.fieldGroup}>
@@ -815,7 +863,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                   <ActivityIndicator size="small" color={theme.colors.onPrimary} />
                 ) : (
                   <Text style={[styles.primaryActionBtnText, { color: theme.colors.onPrimary }]}>
-                    {isSupervisor ? 'Save Updates' : isEdit ? 'Update Machine' : 'Register Machine'}
+                    {isSupervisor ? 'Save Operator Assignment' : isEdit ? 'Update Machine' : 'Register Machine'}
                   </Text>
                 )}
               </TouchableOpacity>

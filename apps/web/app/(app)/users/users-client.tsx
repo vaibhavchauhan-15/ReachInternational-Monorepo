@@ -136,11 +136,18 @@ export function UsersPageClient({
   // ── Pure High-Scale Server-Side Search Engine (Engineered for 100,000+ Users)
   // Queries PostgreSQL via GIN Trigram indexes on (name, phone, email, etc.)
   // Never downloads 100,000 rows to client RAM. Ultra-lean ~15KB network responses.
-  const [localSearchTerm, setLocalSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState<User[] | null>(null);
-  const [searchTotalCount, setSearchTotalCount] = useState<number>(0);
-  const [searchTotalPages, setSearchTotalPages] = useState<number>(0);
-  const [searchPage, setSearchPage] = useState<number>(1);
+  const initialUrlSearch = searchParams?.get("search") || "";
+  const [localSearchTerm, setLocalSearchTerm] = useState(initialUrlSearch);
+  const [searchResults, setSearchResults] = useState<User[] | null>(() => {
+    return initialUrlSearch ? users : null;
+  });
+  const [searchTotalCount, setSearchTotalCount] = useState<number>(() => {
+    return initialUrlSearch ? totalCount : 0;
+  });
+  const [searchTotalPages, setSearchTotalPages] = useState<number>(() => {
+    return initialUrlSearch ? totalPages : 0;
+  });
+  const [searchPage, setSearchPage] = useState<number>(currentPage);
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const searchAbortRef = useRef<AbortController | null>(null);
   const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -237,22 +244,35 @@ export function UsersPageClient({
   const dateRangeFilter = searchParams?.get("dateRange") || "all";
   const sortBy = searchParams?.get("sort") || "newest";
 
-  // Search is now purely client-side — no debouncing, no URL update needed
   const isQueryLoading = isPending || isSearchLoading;
 
   // Derive a key from current server-side filters to detect changes
   const currentFilterKey = `${roleFilter}:${statusFilter}:${stateFilter}:${kycFilter}:${dateRangeFilter}:${sortBy}`;
 
-
-
-  // Sync localSearchTerm from URL search param on initial load / deep link
+  // Synchronize local search state when URL search param changes via browser back/forward navigation
   useEffect(() => {
     const urlSearch = searchParams?.get("search") || "";
-    if (urlSearch && urlSearch !== localSearchTerm) {
+    if (urlSearch !== localSearchTerm) {
       setLocalSearchTerm(urlSearch);
+      if (!urlSearch) {
+        setSearchResults(null);
+        setSearchTotalCount(0);
+        setSearchTotalPages(0);
+        setSearchPage(1);
+      }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [searchParams]);
+
+  // Synchronize search results with fresh server props when search term is active in URL
+  useEffect(() => {
+    const activeSearch = searchParams?.get("search") || "";
+    if (activeSearch) {
+      setSearchResults(users);
+      setSearchTotalCount(totalCount);
+      setSearchTotalPages(totalPages);
+      setSearchPage(currentPage);
+    }
+  }, [users, searchParams, totalCount, totalPages, currentPage]);
 
   // Mobile Infinite Scroll State for Cards View
   const [mobileUsersList, setMobileUsersList] = useState<User[]>(users);
@@ -382,22 +402,47 @@ export function UsersPageClient({
   }, [handleLoadMoreMobile]);
 
   const updateFilter = useCallback((key: string, value: string) => {
-    const params = new URLSearchParams(searchParams?.toString() || "");
+    const params = typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search)
+      : new URLSearchParams(searchParams?.toString() || "");
     if (value && value !== "all" && value !== "") params.set(key, value);
     else params.delete(key);
-    params.set("page", "1");
+    params.delete("page"); // Reset to page 1 whenever any filter changes
+    if (localSearchTerm.trim()) {
+      params.set("search", localSearchTerm.trim());
+    } else {
+      params.delete("search");
+    }
+    const newQuery = params.toString();
     startTransition(() => {
-      router.push(`?${params.toString()}`, { scroll: false });
+      router.push(newQuery ? `/users?${newQuery}` : "/users", { scroll: false });
     });
-  }, [searchParams, router]);
+  }, [localSearchTerm, searchParams, router]);
 
   // ── Pure High-Scale Server-Side Search Engine (Engineered for 100,000+ Users)
   // • Queries PostgreSQL via GIN Trigram indexes on (name, phone, email, etc.)
   // • Debounced 180ms with AbortController to cancel stale in-flight requests.
-  // • Never downloads 100,000 rows to client RAM. Ultra-lean ~15KB network responses.
+  // • Synchronizes ?search= query parameter into the active URL via window.history.replaceState.
   const executeServerSearch = useCallback(
     (query: string, page: number = 1) => {
       const trimmed = query.trim();
+
+      // Persist active search query & page to browser address bar without page jump
+      if (typeof window !== "undefined") {
+        const currentParams = new URLSearchParams(window.location.search);
+        if (trimmed) {
+          currentParams.set("search", trimmed);
+        } else {
+          currentParams.delete("search");
+        }
+        if (page > 1) {
+          currentParams.set("page", String(page));
+        } else {
+          currentParams.delete("page");
+        }
+        const newQuery = currentParams.toString();
+        window.history.replaceState(null, "", newQuery ? `/users?${newQuery}` : "/users");
+      }
 
       if (!trimmed) {
         if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -464,10 +509,20 @@ export function UsersPageClient({
         executeServerSearch(localSearchTerm, newPage);
         return;
       }
-      const params = new URLSearchParams(searchParams?.toString() || "");
-      params.set("page", String(newPage));
+      const params = typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search)
+        : new URLSearchParams(searchParams?.toString() || "");
+      if (newPage > 1) {
+        params.set("page", String(newPage));
+      } else {
+        params.delete("page");
+      }
+      if (localSearchTerm.trim()) {
+        params.set("search", localSearchTerm.trim());
+      }
+      const newQuery = params.toString();
       startTransition(() => {
-        router.push(`?${params.toString()}`, { scroll: false });
+        router.push(newQuery ? `/users?${newQuery}` : "/users", { scroll: false });
       });
     },
     [isSearchActive, localSearchTerm, executeServerSearch, searchParams, router]
@@ -1231,8 +1286,11 @@ export function UsersPageClient({
     setSearchTotalPages(0);
     setSearchPage(1);
     setIsSearchLoading(false);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", "/users");
+    }
     startTransition(() => {
-      router.push("?", { scroll: false });
+      router.push("/users", { scroll: false });
     });
   }, [router]);
 

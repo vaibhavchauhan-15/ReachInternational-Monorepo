@@ -5,7 +5,12 @@ import { Modal, Input, Select, Button, useToast, SearchableSelect, UserSelect, M
 import { createMachine, updateMachine, checkMachineSerialNumberAvailable, getMachineModalOptionsAction } from "@/app/actions/machines";
 import type { Machine, User } from "@/lib/types/database";
 import { isManagerOrAbove } from "@reachinternational/permissions";
-import { AlertCircle } from "lucide-react";
+import {
+  AnimatedInfo,
+  AnimatedUsers,
+  AnimatedActivity,
+  AnimatedAlertCircle,
+} from "@/components/ui/animated-icons";
 
 interface MachineModalProps {
   open: boolean;
@@ -46,14 +51,14 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
 
   const getInitialSupervisors = (m?: Machine | null) => {
     if (!m) return [];
-    if (Array.isArray(m.supervisor_ids) && m.supervisor_ids.length > 0) return m.supervisor_ids;
+    if (Array.isArray(m.supervisor_ids)) return m.supervisor_ids;
     if (m.current_supervisor_id) return [m.current_supervisor_id];
     return [];
   };
 
   const getInitialOperators = (m?: Machine | null) => {
     if (!m) return [];
-    if (Array.isArray(m.operator_ids) && m.operator_ids.length > 0) return m.operator_ids;
+    if (Array.isArray(m.operator_ids)) return m.operator_ids;
     if (m.current_operator_id) return [m.current_operator_id];
     return [];
   };
@@ -314,14 +319,15 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
       <form id="machine-form" onSubmit={handleSubmit} className="flex flex-col gap-4">
         {formError && (
           <div className="p-3.5 text-xs rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 flex items-start gap-2.5 shadow-xs">
-            <AlertCircle size={16} className="shrink-0 mt-0.5" />
+            <AnimatedAlertCircle size={16} className="shrink-0 mt-0.5" />
             <div className="flex-1 leading-relaxed font-medium">{formError}</div>
           </div>
         )}
 
         {/* SECTION 1: Machine Identity & Specifications */}
-        <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 flex flex-col gap-3.5">
-          <div className="pb-2 border-b border-[var(--color-hairline)] flex items-center justify-between gap-2">
+        <div data-hover-parent className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 flex flex-col gap-3.5 transition-colors">
+          <div className="pb-2 border-b border-[var(--color-hairline)] flex items-center gap-2">
+            <AnimatedInfo size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
             <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink)]">
               MACHINE INFO
             </h4>
@@ -372,8 +378,9 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
         </div>
 
         {/* SECTION 2: Metering & Fleet Assignment */}
-        <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 flex flex-col gap-3.5">
-          <div className="pb-2 border-b border-[var(--color-hairline)]">
+        <div data-hover-parent className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 flex flex-col gap-3.5 transition-colors">
+          <div className="pb-2 border-b border-[var(--color-hairline)] flex items-center gap-2">
+            <AnimatedUsers size={16} className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
             <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink)]">
               Meter Readings & Personnel Assignment
             </h4>
@@ -421,8 +428,9 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
         </div>
 
         {/* SECTION 3: Status & Health */}
-        <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 flex flex-col gap-3.5">
-          <div className="pb-2 border-b border-[var(--color-hairline)]">
+        <div data-hover-parent className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 flex flex-col gap-3.5 transition-colors">
+          <div className="pb-2 border-b border-[var(--color-hairline)] flex items-center gap-2">
+            <AnimatedActivity size={16} className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
             <h4 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink)]">
               Status & Health Tracking
             </h4>

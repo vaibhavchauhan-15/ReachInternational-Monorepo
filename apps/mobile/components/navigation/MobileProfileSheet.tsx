@@ -24,7 +24,7 @@ import { useAuth } from '../../lib/auth/useAuth';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
-import { EditProfileModal } from '../profile/EditProfileModal';
+
 import { ReachInternationalLogo } from '../branding';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 import { supabase } from '../../lib/supabase';
@@ -38,7 +38,7 @@ import {
   MapPin,
   ShieldCheck,
   FileText,
-  Edit,
+  User,
   LogOut,
   Building,
   KeyRound,
@@ -67,7 +67,6 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
   const { user, userProfile, role, signOut, refreshSession } = useAuth();
   const router = useRouter();
 
-  const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
   // Password Change Form State
@@ -529,13 +528,16 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
 
               {/* ACTION BUTTONS GROUP */}
               <View style={styles.actionsContainer}>
-                {/* Primary: Edit Profile */}
+                {/* Primary: View Full Profile */}
                 <Button
-                  label="Edit Profile & Shift Details"
-                  onPress={() => setEditProfileOpen(true)}
+                  label="View & Edit Full Profile"
+                  onPress={() => {
+                    onClose();
+                    router.push('/(app)/profile' as any);
+                  }}
                   variant="primary"
                   size="md"
-                  icon={<Edit size={15} color="#ffffff" />}
+                  icon={<User size={15} color="#ffffff" />}
                   fullWidth
                 />
 
@@ -574,16 +576,7 @@ export const MobileProfileSheet: React.FC<MobileProfileSheetProps> = ({
         </View>
       </Modal>
 
-      {/* Edit Profile Modal Dialog */}
-      <EditProfileModal
-        visible={editProfileOpen}
-        onClose={() => setEditProfileOpen(false)}
-        currentUser={userProfile}
-        onSuccess={() => {
-          setEditProfileOpen(false);
-          if (refreshSession) refreshSession();
-        }}
-      />
+
 
       {/* Change Password Modal Dialog */}
       <Modal

@@ -81,13 +81,13 @@ async function hydrateExportPersonnel(machines: any[], supabase: any): Promise<a
 
   return machines.map((m) => {
     const supIds =
-      Array.isArray(m.supervisor_ids) && m.supervisor_ids.length > 0
+      Array.isArray(m.supervisor_ids)
         ? m.supervisor_ids
         : m.current_supervisor_id
         ? [m.current_supervisor_id]
         : [];
     const opIds =
-      Array.isArray(m.operator_ids) && m.operator_ids.length > 0
+      Array.isArray(m.operator_ids)
         ? m.operator_ids
         : m.current_operator_id
         ? [m.current_operator_id]
@@ -109,8 +109,8 @@ async function hydrateExportPersonnel(machines: any[], supabase: any): Promise<a
       machine_name: m.model ? `${code} (${m.model})` : code,
       supervisors: supervisorsList,
       operators: operatorsList,
-      current_supervisor: supervisorsList[0] || m.current_supervisor || null,
-      current_operator: operatorsList[0] || m.current_operator || null,
+      current_supervisor: supervisorsList[0] || null,
+      current_operator: operatorsList[0] || null,
     };
   });
 }

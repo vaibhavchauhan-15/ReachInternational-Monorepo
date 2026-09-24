@@ -12,7 +12,6 @@ import {
   AnimatedSearch,
   AnimatedX,
   AnimatedCheck,
-  AnimatedChevronDown,
 } from "@/components/ui/animated-icons";
 import {
   Send,

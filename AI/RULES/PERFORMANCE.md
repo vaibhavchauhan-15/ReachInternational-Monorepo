@@ -430,8 +430,10 @@ AI agents MUST NEVER introduce any of the following performance anti-patterns:
 * ❌ **Missing Image Dimensions**: Rendering images without explicit dimensions causing CLS layout shifts.
 * ❌ **Un-Memoized Table Column Definitions**: Re-creating column arrays on every render tick.
 * ❌ **Global State Overuse**: Introducing global stores for data that belongs in RSC or local state.
+* ❌ **Caching Navigation Redirects in Service Workers / PWA**: Caching HTTP 301/302/307/308 redirect headers or dynamic App Router HTML payloads (`/(app)/*`) in Service Workers, causing users to get trapped in permanent redirect loops across auth/session state transitions.
 
 ---
+
 
 ## 41. Performance Change Policy
 

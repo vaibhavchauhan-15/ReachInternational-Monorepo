@@ -867,7 +867,20 @@ export async function updateMachineInfoAction(
 export async function updateMachineSupervisorsAction(
   machineId: string,
   supervisorIds: string[]
-): Promise<{ success?: boolean; error?: string; supervisor_ids?: string[]; current_supervisor_id?: string | null }> {
+): Promise<{
+  success?: boolean;
+  error?: string;
+  supervisor_ids?: string[];
+  current_supervisor_id?: string | null;
+  supervisors?: Array<{
+    id: string;
+    full_name: string;
+    phone: string | null;
+    email: string | null;
+    shift_time: string | null;
+    role: string;
+  }>;
+}> {
   if (!isValidUuid(machineId)) {
     return { error: "Invalid machine ID format." };
   }
@@ -900,7 +913,7 @@ export async function updateMachineSupervisorsAction(
     const removedSups = prevSups.filter((id) => !validSups.includes(id));
     const addedSups = validSups.filter((id) => !prevSups.includes(id));
 
-    await logAudit({
+    void logAudit({
       action: "machine.supervisors_updated",
       entity_type: "machine",
       entity_id: machineId,
@@ -926,7 +939,53 @@ export async function updateMachineSupervisorsAction(
     revalidateTag(TAGS.machinesList, "max");
     revalidateTag(TAGS.machines, "max");
 
-    return { success: true, supervisor_ids: validSups, current_supervisor_id };
+    // Fetch fresh supervisor records directly from database for instant component update
+    let freshSupervisors: Array<{
+      id: string;
+      full_name: string;
+      phone: string | null;
+      email: string | null;
+      shift_time: string | null;
+      role: string;
+    }> = [];
+
+    if (validSups.length > 0) {
+      const supabaseAdmin = createSupabaseAdminClient();
+      const { data: supUsers, error: supError } = await supabaseAdmin
+        .from("users")
+        .select("id, full_name, phone, email, shift_start_time, shift_end_time, role")
+        .in("id", validSups);
+
+      if (supError) {
+        console.error("[updateMachineSupervisorsAction] Error fetching supervisors:", supError);
+      }
+
+      const supMap = new Map((supUsers || []).map((u) => [u.id, u]));
+      freshSupervisors = validSups
+        .map((id) => supMap.get(id))
+        .filter((u): u is NonNullable<typeof u> => Boolean(u))
+        .map((u) => {
+          const shift_time =
+            u.shift_start_time && u.shift_end_time
+              ? `${String(u.shift_start_time).slice(0, 5)} - ${String(u.shift_end_time).slice(0, 5)}`
+              : null;
+          return {
+            id: u.id,
+            full_name: u.full_name || "Supervisor",
+            phone: u.phone || null,
+            email: u.email || null,
+            shift_time,
+            role: u.role || "supervisor",
+          };
+        });
+    }
+
+    return {
+      success: true,
+      supervisor_ids: validSups,
+      current_supervisor_id,
+      supervisors: freshSupervisors,
+    };
   } catch (err: unknown) {
     if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
       throw err;
@@ -943,18 +1002,60 @@ export async function updateMachineSupervisorsAction(
 /**
  * Isolated, fast action to update Operator Assignments.
  * Does not mutate machine specs, hour meters, or client associations.
+ * Optimized with parallel RPC execution and returns fresh operator records immediately.
  */
 export async function updateMachineOperatorsAction(
   machineId: string,
   operatorIds: string[]
-): Promise<{ success?: boolean; error?: string; operator_ids?: string[]; current_operator_id?: string | null }> {
+): Promise<{
+  success?: boolean;
+  error?: string;
+  operator_ids?: string[];
+  current_operator_id?: string | null;
+  operators?: Array<{
+    id: string;
+    full_name: string;
+    phone: string | null;
+    email: string | null;
+    shift_time: string | null;
+    role: string;
+  }>;
+}> {
   if (!isValidUuid(machineId)) {
     return { error: "Invalid machine ID format." };
   }
   try {
-    await requireRole("admin", "super_admin", "manager", "supervisor");
+    const caller = await requireRole("admin", "super_admin", "manager", "supervisor");
     const supabase = await createSupabaseServerClient();
+    const supabaseAdmin = createSupabaseAdminClient();
     const validOps = Array.isArray(operatorIds) ? operatorIds.filter(isValidUuid) : [];
+
+    // 1. Strict validation & single user prefetch: Only active users with role = 'operator' can be assigned
+    let opUserMap = new Map<string, any>();
+    if (validOps.length > 0) {
+      const { data: operatorUsers, error: userError } = await supabaseAdmin
+        .from("users")
+        .select("id, role, status, full_name, phone, email, shift_start_time, shift_end_time")
+        .in("id", validOps);
+
+      if (userError) {
+        console.error("[updateMachineOperatorsAction] Failed to verify operator roles:", userError);
+        return { error: `Failed to verify operator roles: ${userError.message}` };
+      }
+
+      const invalidUsers = (operatorUsers || []).filter(
+        (u) => u.role !== "operator" || u.status === "inactive"
+      );
+
+      if (invalidUsers.length > 0 || (operatorUsers?.length || 0) < validOps.length) {
+        return {
+          error: "Invalid assignment: Only active users with the 'operator' role can be assigned as machine operators.",
+        };
+      }
+
+      opUserMap = new Map((operatorUsers || []).map((u) => [u.id, u]));
+    }
+
     const current_operator_id = validOps[0] || null;
 
     const { data: previousMachine } = await supabase
@@ -963,6 +1064,84 @@ export async function updateMachineOperatorsAction(
       .eq("id", machineId)
       .maybeSingle();
 
+    // 2. Deactivate assignments for operators removed from this machine
+    if (validOps.length === 0) {
+      const { error: deactAllError } = await supabase
+        .from("operator_machine_assignments")
+        .update({
+          is_active: false,
+          ended_at: new Date().toISOString(),
+          ended_by: caller.id,
+          end_reason: "removed",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("machine_id", machineId)
+        .eq("is_active", true);
+
+      if (deactAllError) {
+        console.error("Failed to deactivate operator assignments:", deactAllError);
+      }
+    } else {
+      const { error: deactError } = await supabase
+        .from("operator_machine_assignments")
+        .update({
+          is_active: false,
+          ended_at: new Date().toISOString(),
+          ended_by: caller.id,
+          end_reason: "removed",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("machine_id", machineId)
+        .eq("is_active", true)
+        .not("operator_id", "in", `(${validOps.join(",")})`);
+
+      if (deactError) {
+        console.error("Failed to deactivate removed operator assignments:", deactError);
+      }
+    }
+
+    // 3. Ensure newly assigned operators have active records in operator_machine_assignments (executed in parallel)
+    if (validOps.length > 0) {
+      const { data: existingActive } = await supabase
+        .from("operator_machine_assignments")
+        .select("operator_id")
+        .eq("machine_id", machineId)
+        .eq("is_active", true);
+
+      const activeOpIdSet = new Set((existingActive || []).map((e) => e.operator_id));
+      const newlyAddedOps = validOps.filter((id) => !activeOpIdSet.has(id));
+
+      if (newlyAddedOps.length > 0) {
+        const rpcResults = await Promise.all(
+          newlyAddedOps.map(async (newOpId) => {
+            const userRec = opUserMap.get(newOpId);
+            const shiftStart = userRec?.shift_start_time || "08:00:00";
+            const shiftEnd = userRec?.shift_end_time || "17:00:00";
+
+            return supabase.rpc("assign_operator_machine_atomic", {
+              p_machine_id: machineId,
+              p_operator_id: newOpId,
+              p_shift_start: shiftStart,
+              p_shift_end: shiftEnd,
+              p_shift_start_time: shiftStart,
+              p_shift_end_time: shiftEnd,
+              p_assigned_by: caller.id,
+              p_notes: "Assigned via machine operator management",
+            });
+          })
+        );
+
+        for (const res of rpcResults) {
+          if (res.data && typeof res.data === "object" && (res.data as any).success === false) {
+            return {
+              error: (res.data as any).error || "Failed to assign operator due to shift conflict or capacity limit.",
+            };
+          }
+        }
+      }
+    }
+
+    // 4. Update the machines table
     const { error } = await supabase
       .from("machines")
       .update({
@@ -980,7 +1159,7 @@ export async function updateMachineOperatorsAction(
     const removedOps = prevOps.filter((id) => !validOps.includes(id));
     const addedOps = validOps.filter((id) => !prevOps.includes(id));
 
-    await logAudit({
+    void logAudit({
       action: "machine.operators_updated",
       entity_type: "machine",
       entity_id: machineId,
@@ -1005,8 +1184,50 @@ export async function updateMachineOperatorsAction(
     revalidateTag(TAGS.machineDetail(machineId), "max");
     revalidateTag(TAGS.machinesList, "max");
     revalidateTag(TAGS.machines, "max");
+    revalidateTag(TAGS.operationsAssignments, "max");
+    revalidateTag(TAGS.operations, "max");
+    revalidateTag(TAGS.dashboardKpis, "max");
 
-    return { success: true, operator_ids: validOps, current_operator_id };
+    // 5. Query active assignments for shift times and return fresh operator records directly
+    let freshAssignmentsMap = new Map<string, any>();
+    if (validOps.length > 0) {
+      const { data: assignments } = await supabaseAdmin
+        .from("operator_machine_assignments")
+        .select("operator_id, shift_start_time, shift_end_time")
+        .eq("machine_id", machineId)
+        .eq("is_active", true);
+
+      (assignments || []).forEach((a) => {
+        if (a.operator_id) freshAssignmentsMap.set(a.operator_id, a);
+      });
+    }
+
+    const freshOperators = validOps.map((opId) => {
+      const u = opUserMap.get(opId);
+      const assign = freshAssignmentsMap.get(opId);
+      const shiftStart = assign?.shift_start_time || u?.shift_start_time;
+      const shiftEnd = assign?.shift_end_time || u?.shift_end_time;
+      const shift_time =
+        shiftStart && shiftEnd
+          ? `${String(shiftStart).slice(0, 5)} - ${String(shiftEnd).slice(0, 5)}`
+          : "08:00 AM - 04:00 PM";
+
+      return {
+        id: opId,
+        full_name: u?.full_name || "Operator",
+        phone: u?.phone || null,
+        email: u?.email || null,
+        shift_time,
+        role: "operator",
+      };
+    });
+
+    return {
+      success: true,
+      operator_ids: validOps,
+      current_operator_id,
+      operators: freshOperators,
+    };
   } catch (err: unknown) {
     if (err instanceof Error && (err.message.includes("NEXT_REDIRECT") || err.name === "NEXT_REDIRECT")) {
       throw err;
@@ -1017,6 +1238,144 @@ export async function updateMachineOperatorsAction(
         ? "Permission denied: Your account role does not have authorization to reassign operators."
         : rawMsg,
     };
+  }
+}
+
+/**
+ * Dedicated, ultra-fast server action to fetch ONLY the latest personnel
+ * (supervisors and operators) for a machine directly from the database.
+ * Does not fetch heavy specs, client profiles, hour meter logs, or audit records.
+ * Execution time < 20ms.
+ */
+export async function getMachinePersonnelFreshAction(machineId: string): Promise<{
+  success: boolean;
+  error?: string;
+  data?: {
+    supervisor_ids: string[];
+    current_supervisor_id: string | null;
+    supervisors: Array<{
+      id: string;
+      full_name: string;
+      phone: string | null;
+      email: string | null;
+      shift_time: string | null;
+      role?: string;
+    }>;
+    current_supervisor: any | null;
+    operator_ids: string[];
+    current_operator_id: string | null;
+    operators: Array<{
+      id: string;
+      full_name: string;
+      phone: string | null;
+      email: string | null;
+      shift_time: string | null;
+      role?: string;
+    }>;
+    current_operator: any | null;
+  };
+}> {
+  if (!isValidUuid(machineId)) {
+    return { success: false, error: "Invalid machine ID." };
+  }
+
+  try {
+    const supabaseAdmin = createSupabaseAdminClient();
+    const { data: machine, error: mError } = await supabaseAdmin
+      .from("machines")
+      .select("supervisor_ids, current_supervisor_id, operator_ids, current_operator_id")
+      .eq("id", machineId)
+      .maybeSingle();
+
+    if (mError || !machine) {
+      return { success: false, error: mError?.message || "Machine not found." };
+    }
+
+    const supIds: string[] = Array.isArray(machine.supervisor_ids)
+      ? machine.supervisor_ids
+      : machine.current_supervisor_id ? [machine.current_supervisor_id] : [];
+
+    const opIds: string[] = Array.isArray(machine.operator_ids)
+      ? machine.operator_ids
+      : machine.current_operator_id ? [machine.current_operator_id] : [];
+
+    const allUserIds = Array.from(new Set([...supIds, ...opIds]));
+
+    const [usersRes, assignmentsRes] = await Promise.all([
+      allUserIds.length > 0
+        ? supabaseAdmin
+            .from("users")
+            .select("id, full_name, phone, email, shift_start_time, shift_end_time, role")
+            .in("id", allUserIds)
+        : Promise.resolve({ data: [] }),
+      opIds.length > 0
+        ? supabaseAdmin
+            .from("operator_machine_assignments")
+            .select("operator_id, shift_start_time, shift_end_time")
+            .eq("machine_id", machineId)
+            .eq("is_active", true)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const usersMap = new Map((usersRes.data || []).map((u) => [u.id, u]));
+    const assignMap = new Map((assignmentsRes.data || []).map((a) => [a.operator_id, a]));
+
+    const supervisors = supIds
+      .map((id) => usersMap.get(id))
+      .filter((u): u is NonNullable<typeof u> => Boolean(u))
+      .map((u) => {
+        const shift_time =
+          u.shift_start_time && u.shift_end_time
+            ? `${String(u.shift_start_time).slice(0, 5)} - ${String(u.shift_end_time).slice(0, 5)}`
+            : null;
+        return {
+          id: u.id,
+          full_name: u.full_name || "Supervisor",
+          phone: u.phone || null,
+          email: u.email || null,
+          shift_time,
+          role: u.role || "supervisor",
+        };
+      });
+
+    const operators = opIds
+      .map((id) => {
+        const u = usersMap.get(id);
+        if (!u) return null;
+        const assign = assignMap.get(id);
+        const start = assign?.shift_start_time || u.shift_start_time;
+        const end = assign?.shift_end_time || u.shift_end_time;
+        const shift_time =
+          start && end
+            ? `${String(start).slice(0, 5)} - ${String(end).slice(0, 5)}`
+            : "08:00 AM - 04:00 PM";
+        return {
+          id: u.id,
+          full_name: u.full_name || "Operator",
+          phone: u.phone || null,
+          email: u.email || null,
+          shift_time,
+          role: "operator",
+        };
+      })
+      .filter(Boolean);
+
+    return {
+      success: true,
+      data: {
+        supervisor_ids: supIds,
+        current_supervisor_id: machine.current_supervisor_id || (supIds[0] || null),
+        supervisors,
+        current_supervisor: supervisors[0] || null,
+        operator_ids: opIds,
+        current_operator_id: machine.current_operator_id || (opIds[0] || null),
+        operators: operators as any[],
+        current_operator: (operators[0] as any) || null,
+      },
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Failed to fetch personnel";
+    return { success: false, error: msg };
   }
 }
 

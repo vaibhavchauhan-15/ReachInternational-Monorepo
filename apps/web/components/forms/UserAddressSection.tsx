@@ -64,12 +64,7 @@ export function UserAddressSection({
         <Input
           id={`${idPrefix}-street`}
           name="street"
-          label={
-            <span>
-              Street / Building / Locality Address{" "}
-              {required ? <span className="text-rose-500 font-semibold">*</span> : <span className="text-[11px] font-normal text-[var(--color-mute)]">(Optional)</span>}
-            </span>
-          }
+          label="Street / Building / Locality Address"
           type="text"
           value={street}
           onChange={(e) => onChange("street", e.target.value)}
@@ -89,12 +84,7 @@ export function UserAddressSection({
         <Input
           id={`${idPrefix}-city`}
           name="city"
-          label={
-            <span>
-              City / Town / Village{" "}
-              {required ? <span className="text-rose-500 font-semibold">*</span> : <span className="text-[11px] font-normal text-[var(--color-mute)]">(Optional)</span>}
-            </span>
-          }
+          label="City / Town / Village"
           type="text"
           value={city}
           onChange={(e) => onChange("city", e.target.value)}
@@ -110,12 +100,7 @@ export function UserAddressSection({
         <Input
           id={`${idPrefix}-district`}
           name="district"
-          label={
-            <span>
-              District{" "}
-              {required ? <span className="text-rose-500 font-semibold">*</span> : <span className="text-[11px] font-normal text-[var(--color-mute)]">(Optional)</span>}
-            </span>
-          }
+          label="District"
           type="text"
           value={district}
           onChange={(e) => onChange("district", e.target.value)}
@@ -129,8 +114,9 @@ export function UserAddressSection({
 
         {/* State Selector */}
         <div className="flex flex-col gap-1 w-full" id={`${idPrefix}-state-container`}>
-          <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none">
-            State {required ? <span className="text-rose-500 font-semibold">*</span> : <span className="text-[11px] font-normal text-[var(--color-mute)]">(Optional)</span>}
+          <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none flex items-center gap-1">
+            <span>State</span>
+            {required && <span className="text-rose-500 font-semibold">*</span>}
           </label>
           <input type="hidden" name="state" value={state} />
           <input type="hidden" name="state_id" value={activeStateId} />

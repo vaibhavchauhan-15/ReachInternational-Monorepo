@@ -66,7 +66,7 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
         setStatus(machineToEdit.status || 'available');
         setHealthStatus(machineToEdit.health_status || 'active');
         setSupervisorId(machineToEdit.current_supervisor_id || machineToEdit.supervisor_id || null);
-        const ops = Array.isArray(machineToEdit.operator_ids) && machineToEdit.operator_ids.length > 0
+        const ops = Array.isArray(machineToEdit.operator_ids)
           ? machineToEdit.operator_ids
           : machineToEdit.current_operator_id || machineToEdit.operator_id
           ? [machineToEdit.current_operator_id || machineToEdit.operator_id]

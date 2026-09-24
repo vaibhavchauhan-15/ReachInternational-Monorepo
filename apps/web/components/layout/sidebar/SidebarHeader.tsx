@@ -5,6 +5,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { PanelLeftOpen, PanelLeftClose } from "lucide-react";
 import { ReachInternationalLogo, SidebarTooltip, TooltipWrapper } from "@/components/ui";
+import { cn } from "@/lib/utils";
 
 interface SidebarHeaderProps {
   collapsed: boolean;
@@ -16,9 +17,10 @@ export function SidebarHeader({ collapsed, onToggleCollapse }: SidebarHeaderProp
 
   return (
     <div
-      className={`shrink-0 flex items-center border-b border-[var(--color-hairline)] h-16 transition-colors duration-200 ${
+      className={cn(
+        "shrink-0 flex items-center border-b border-[var(--color-hairline)] h-16 transition-all duration-200 overflow-hidden select-none",
         collapsed ? "justify-center px-2" : "justify-between px-4"
-      }`}
+      )}
     >
       {collapsed ? (
         /* Collapsed Header: Brand logo with hover morph to expand button */

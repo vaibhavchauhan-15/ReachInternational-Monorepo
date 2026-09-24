@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -9,8 +9,6 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  FlatList,
-  TextInput,
 } from 'react-native';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
@@ -20,7 +18,6 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
-  INDIAN_STATES,
   getStateByName,
   getStateById,
   validateAadhaarNumber,
@@ -38,14 +35,15 @@ import {
 } from '../../lib/documents';
 import { MobileDocumentUploadCard } from '../documents/MobileDocumentUploadCard';
 import {
+  MobileFormSectionCard,
+  MobileAddressFields,
+  MobileSalaryField,
+  MobileSubmitButton,
+} from '../forms';
+import {
   X,
-  Clock,
-  MapPin,
   CheckCircle,
   AlertCircle,
-  ChevronDown,
-  Search,
-  Check,
 } from 'lucide-react-native';
 
 interface EditProfileModalProps {
@@ -85,7 +83,8 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
   const [phone, setPhone] = useState('');
   const [startTime, setStartTime] = useState('08:00 AM');
   const [endTime, setEndTime] = useState('08:00 PM');
-  const [address, setAddress] = useState('');
+  const [street, setStreet] = useState('');
+  const [monthlySalary, setMonthlySalary] = useState('');
   const [city, setCity] = useState('Mumbai');
   const [district, setDistrict] = useState('Mumbai');
   const [stateName, setStateName] = useState('Maharashtra');
@@ -105,8 +104,6 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
   const [licenseError, setLicenseError] = useState<string | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [statePickerVisible, setStatePickerVisible] = useState(false);
-  const [stateSearchQuery, setStateSearchQuery] = useState('');
 
   useEffect(() => {
     if (visible) {
@@ -120,7 +117,11 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
       setStartTime(times.start);
       setEndTime(times.end);
       
-      setAddress(src.address || meta.address || '');
+      const streetVal = src.street || meta.street || src.address || meta.address || '';
+      setStreet(streetVal);
+      const salVal = src.monthly_salary ? String(src.monthly_salary) : meta.monthly_salary ? String(meta.monthly_salary) : '';
+      setMonthlySalary(salVal);
+
       setCity(src.city || meta.city || 'Mumbai');
       setDistrict(src.district || meta.district || 'Mumbai');
 
@@ -239,11 +240,21 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
       ? 'Administrator'
       : 'Manager / Administrator';
 
-  const filteredStates = useMemo(() => {
-    if (!stateSearchQuery.trim()) return INDIAN_STATES;
-    const q = stateSearchQuery.trim().toLowerCase();
-    return INDIAN_STATES.filter((s) => s.name.toLowerCase().includes(q));
-  }, [stateSearchQuery]);
+  const isOperator = (currentUser?.role || role) === 'operator';
+  const isSalaryRequired = isSuperAdmin && isOperator;
+
+  const section1Complete = Boolean(fullName.trim() && phone.replace(/\D/g, '').length >= 10);
+  const section2Complete = Boolean(startTime.trim() && endTime.trim());
+  const section3Complete = Boolean(street.trim() && city.trim() && district.trim() && stateName.trim());
+  const section4Complete = isSalaryRequired ? Boolean(monthlySalary && Number(monthlySalary) > 0) : true;
+
+  const isAllMandatoryFilled = section1Complete && section2Complete && section3Complete && section4Complete;
+  const missingMandatoryCount = [
+    !section1Complete,
+    !section2Complete,
+    !section3Complete,
+    isSalaryRequired && !section4Complete,
+  ].filter(Boolean).length;
 
   const handleSubmit = async () => {
     if (!fullName.trim()) {
@@ -291,11 +302,13 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
       full_name: fullName.trim(),
       phone: phone.trim(),
       shift_time: finalShift || null,
-      address: address.trim() || null,
+      street: street.trim() || null,
+      address: street.trim() || null,
       city: city.trim() || 'Mumbai',
       district: district.trim() || 'Mumbai',
       state: resolvedStateName,
       state_id: resolvedStateId,
+      monthly_salary: monthlySalary ? Number(monthlySalary) : null,
       aadhaar_number: cleanAadhaar,
       license_number: formattedLicense,
     };
@@ -369,11 +382,13 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
         full_name: parsed.data.full_name,
         phone: parsed.data.phone,
         shift_time: parsed.data.shift_time || null,
-        address: parsed.data.address || null,
+        street: street.trim() || null,
+        address: street.trim() || null,
         city: parsed.data.city,
         district: parsed.data.district,
         state: parsed.data.state,
         state_id: parsed.data.state_id,
+        monthly_salary: monthlySalary ? Number(monthlySalary) : null,
         aadhaar_number: cleanAadhaar,
         license_number: formattedLicense,
       };
@@ -384,11 +399,13 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
         const userTablePayload: Record<string, unknown> = {
           full_name: parsed.data.full_name,
           phone: parsed.data.phone,
-          street: parsed.data.address || null,
+          street: street.trim() || null,
+          address: street.trim() || null,
           city: parsed.data.city,
           district: parsed.data.district,
           state: parsed.data.state,
           state_id: parsed.data.state_id,
+          monthly_salary: monthlySalary ? Number(monthlySalary) : null,
           aadhaar_number: cleanAadhaar,
           license_number: formattedLicense,
           updated_at: new Date().toISOString(),
@@ -436,11 +453,13 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
           full_name: activeSource.full_name || meta.full_name || '',
           phone: activeSource.phone || meta.phone || '',
           shift_time: activeSource.shift_time || meta.shift_time || null,
+          street: activeSource.street || meta.street || activeSource.address || meta.address || null,
           address: activeSource.address || meta.address || null,
           city: activeSource.city || meta.city || 'Mumbai',
           district: activeSource.district || meta.district || 'Mumbai',
           state: activeSource.state || meta.state || 'Maharashtra',
           state_id: activeSource.state_id || 27,
+          monthly_salary: activeSource.monthly_salary ?? meta.monthly_salary ?? null,
           aadhaar_number: activeSource.aadhaar_number || meta.aadhaar_number || null,
           license_number: activeSource.license_number || meta.license_number || null,
         };
@@ -541,163 +560,165 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
               </View>
             </View>
 
-            {/* Section 1: Personal Details */}
-            <Text style={[styles.sectionTitle, { color: theme.colors.mute }]}>1. Personal Details</Text>
-            <Input
-              label="Full Name *"
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder="e.g. Rahul Sharma"
-              containerStyle={styles.inputSpacing}
-            />
-            <Input
-              label="Mobile Phone *"
-              value={phone}
-              onChangeText={setPhone}
-              placeholder="e.g. 9876543210"
-              keyboardType="phone-pad"
-              containerStyle={styles.inputSpacing}
-            />
-            <Input
-              label="Aadhaar Card Number"
-              value={aadhaarNumber}
-              onChangeText={setAadhaarNumber}
-              placeholder="12-digit Aadhaar"
-              keyboardType="numeric"
-              maxLength={14}
-              containerStyle={styles.inputSpacing}
-            />
+            {/* Section 1: Personal Details & Identity */}
+            <MobileFormSectionCard
+              stepNumber={1}
+              title="Personal Details & KYC"
+              description="Name, contact, and identity credentials"
+              isMandatory={true}
+              isCompleted={section1Complete}
+            >
+              <Input
+                label="Full Name *"
+                value={fullName}
+                onChangeText={setFullName}
+                placeholder="e.g. Rahul Sharma"
+                containerStyle={styles.inputSpacing}
+              />
+              <Input
+                label="Mobile Phone *"
+                value={phone}
+                onChangeText={setPhone}
+                placeholder="e.g. 9876543210"
+                keyboardType="phone-pad"
+                containerStyle={styles.inputSpacing}
+              />
+              <Input
+                label="Aadhaar Card Number"
+                value={aadhaarNumber}
+                onChangeText={setAadhaarNumber}
+                placeholder="12-digit Aadhaar"
+                keyboardType="numeric"
+                maxLength={14}
+                containerStyle={styles.inputSpacing}
+              />
 
-            <MobileDocumentUploadCard
-              title="Aadhaar Card Document"
-              subtitle="Front page image or PDF (max 2 MB)"
-              docTypeCode="aadhaar"
-              selectedDoc={aadhaarDoc}
-              existingDoc={existingDocs['aadhaar']}
-              onDocSelected={(doc) => {
-                setAadhaarDoc(doc);
-                handleUploadDoc('aadhaar', doc);
-              }}
-              onDocRemoved={() => {
-                if (existingDocs['aadhaar']) {
-                  handleDeleteDoc('aadhaar');
-                } else {
-                  setAadhaarDoc(null);
-                }
-              }}
-              uploading={aadhaarUploading}
-              uploadProgress={aadhaarProgress}
-              errorMessage={aadhaarError}
-            />
+              <MobileDocumentUploadCard
+                title="Aadhaar Card Document"
+                subtitle="Front page image or PDF (max 2 MB)"
+                docTypeCode="aadhaar"
+                selectedDoc={aadhaarDoc}
+                existingDoc={existingDocs['aadhaar']}
+                onDocSelected={(doc) => {
+                  setAadhaarDoc(doc);
+                  handleUploadDoc('aadhaar', doc);
+                }}
+                onDocRemoved={() => {
+                  if (existingDocs['aadhaar']) {
+                    handleDeleteDoc('aadhaar');
+                  } else {
+                    setAadhaarDoc(null);
+                  }
+                }}
+                uploading={aadhaarUploading}
+                uploadProgress={aadhaarProgress}
+                errorMessage={aadhaarError}
+              />
 
-            <Input
-              label="Driving Licence"
-              value={licenseNumber}
-              onChangeText={(t) => setLicenseNumber(t.toUpperCase())}
-              placeholder="e.g. MH12 20110012345"
-              autoCapitalize="characters"
-              containerStyle={styles.inputSpacing}
-            />
+              <Input
+                label="Driving Licence"
+                value={licenseNumber}
+                onChangeText={(t) => setLicenseNumber(t.toUpperCase())}
+                placeholder="e.g. MH12 20110012345"
+                autoCapitalize="characters"
+                containerStyle={styles.inputSpacing}
+              />
 
-            <MobileDocumentUploadCard
-              title="Driving Licence Document"
-              subtitle="Smart card scan or PDF (max 2 MB)"
-              docTypeCode="driving_license"
-              selectedDoc={licenseDoc}
-              existingDoc={existingDocs['driving_license']}
-              onDocSelected={(doc) => {
-                setLicenseDoc(doc);
-                handleUploadDoc('driving_license', doc);
-              }}
-              onDocRemoved={() => {
-                if (existingDocs['driving_license']) {
-                  handleDeleteDoc('driving_license');
-                } else {
-                  setLicenseDoc(null);
-                }
-              }}
-              uploading={licenseUploading}
-              uploadProgress={licenseProgress}
-              errorMessage={licenseError}
-            />
+              <MobileDocumentUploadCard
+                title="Driving Licence Document"
+                subtitle="Smart card scan or PDF (max 2 MB)"
+                docTypeCode="driving_license"
+                selectedDoc={licenseDoc}
+                existingDoc={existingDocs['driving_license']}
+                onDocSelected={(doc) => {
+                  setLicenseDoc(doc);
+                  handleUploadDoc('driving_license', doc);
+                }}
+                onDocRemoved={() => {
+                  if (existingDocs['driving_license']) {
+                    handleDeleteDoc('driving_license');
+                  } else {
+                    setLicenseDoc(null);
+                  }
+                }}
+                uploading={licenseUploading}
+                uploadProgress={licenseProgress}
+                errorMessage={licenseError}
+              />
+            </MobileFormSectionCard>
 
             {/* Section 2: Shift Timing */}
-            <Text style={[styles.sectionTitle, { color: theme.colors.mute, marginTop: 14 }]}>
-              2. Shift Timing
-            </Text>
-            <View style={styles.row}>
-              <View style={{ flex: 1, marginRight: 8 }}>
-                <TimeInput
-                  label="Shift Start Time"
-                  value={startTime}
-                  onChangeText={setStartTime}
-                  containerStyle={styles.inputSpacing}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <TimeInput
-                  label="Shift End Time"
-                  value={endTime}
-                  onChangeText={setEndTime}
-                  containerStyle={styles.inputSpacing}
-                />
-              </View>
-            </View>
-
-            {/* Section 3: Address */}
-            <Text style={[styles.sectionTitle, { color: theme.colors.mute, marginTop: 14 }]}>
-              3. Address
-            </Text>
-            
-            {/* State Picker Button */}
-            <Text style={[styles.fieldLabel, { color: theme.colors.mute }]}>State *</Text>
-            <TouchableOpacity
-              style={[
-                styles.stateSelectorBtn,
-                {
-                  borderColor: theme.colors.hairline,
-                  backgroundColor: theme.colors.canvas,
-                },
-              ]}
-              onPress={() => {
-                setStateSearchQuery('');
-                setStatePickerVisible(true);
-              }}
+            <MobileFormSectionCard
+              stepNumber={2}
+              title="Shift Timing"
+              description="Operating work schedule window"
+              isMandatory={true}
+              isCompleted={section2Complete}
             >
-              <Text style={[styles.stateSelectorText, { color: theme.colors.ink }]}>
-                {stateName || 'Select Indian State'}
-              </Text>
-              <ChevronDown size={18} color={theme.colors.mute} />
-            </TouchableOpacity>
-
-            <View style={styles.row}>
-              <View style={{ flex: 1, marginRight: 8 }}>
-                <Input
-                  label="District *"
-                  value={district}
-                  onChangeText={setDistrict}
-                  placeholder="e.g. Thane"
-                  containerStyle={styles.inputSpacing}
-                />
+              <View style={styles.row}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <TimeInput
+                    label="Shift Start Time"
+                    value={startTime}
+                    onChangeText={setStartTime}
+                    containerStyle={styles.inputSpacing}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <TimeInput
+                    label="Shift End Time"
+                    value={endTime}
+                    onChangeText={setEndTime}
+                    containerStyle={styles.inputSpacing}
+                  />
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Input
-                  label="City *"
-                  value={city}
-                  onChangeText={setCity}
-                  placeholder="e.g. Pune"
-                  containerStyle={styles.inputSpacing}
-                />
-              </View>
-            </View>
+            </MobileFormSectionCard>
 
-            <Input
-              label="Street / Landmark Address"
-              value={address}
-              onChangeText={setAddress}
-              placeholder="e.g. Plot No. 42, MIDC Industrial Area"
-              containerStyle={styles.inputSpacing}
-            />
+            {/* Section 3: Work Location & Address */}
+            <MobileFormSectionCard
+              stepNumber={3}
+              title="Work Location & Address"
+              description="Street + City/Town/Village + District + State"
+              isMandatory={true}
+              isCompleted={section3Complete}
+            >
+              <MobileAddressFields
+                street={street}
+                city={city}
+                district={district}
+                stateName={stateName}
+                stateId={stateId}
+                onStreetChange={setStreet}
+                onCityChange={setCity}
+                onDistrictChange={setDistrict}
+                onStateChange={(id, name) => {
+                  setStateId(id);
+                  setStateName(name);
+                }}
+                required={true}
+              />
+            </MobileFormSectionCard>
+
+            {/* Section 4: Compensation */}
+            <MobileFormSectionCard
+              stepNumber={4}
+              title="Compensation"
+              description={
+                isSuperAdmin
+                  ? 'Monthly base remuneration (Super Admin editable)'
+                  : 'Verified base monthly compensation'
+              }
+              isMandatory={isSalaryRequired}
+              isCompleted={section4Complete}
+            >
+              <MobileSalaryField
+                value={monthlySalary}
+                onChangeText={setMonthlySalary}
+                role={currentUser?.role || role || 'operator'}
+                readOnly={!isSuperAdmin}
+              />
+            </MobileFormSectionCard>
 
             <View style={{ height: 20 }} />
           </ScrollView>
@@ -711,86 +732,19 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
               size="md"
               style={{ flex: 1, marginRight: 8 }}
             />
-            <Button
-              label={isSubmitting ? 'Submitting...' : isSuperAdmin ? 'Save Directly' : 'Submit for Approval'}
-              onPress={handleSubmit}
-              variant="primary"
-              size="md"
-              disabled={isSubmitting}
-              style={{ flex: 1 }}
-            />
+            <View style={{ flex: 1.5 }}>
+              <MobileSubmitButton
+                isReady={isAllMandatoryFilled}
+                isLoading={isSubmitting}
+                label={isSuperAdmin ? 'Save Directly' : 'Submit Request'}
+                loadingLabel="Submitting..."
+                missingCount={missingMandatoryCount}
+                onPress={handleSubmit}
+              />
+            </View>
           </View>
         </View>
       </KeyboardAvoidingView>
-
-      {/* Indian States Selector Modal */}
-      <Modal visible={statePickerVisible} animationType="slide" transparent onRequestClose={() => setStatePickerVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.statePickerSheet, { backgroundColor: theme.colors.canvas }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
-              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select State / UT</Text>
-              <TouchableOpacity onPress={() => setStatePickerVisible(false)} style={styles.closeBtn}>
-                <X size={20} color={theme.colors.mute} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={[styles.searchBox, { borderColor: theme.colors.hairline }]}>
-              <Search size={16} color={theme.colors.mute} />
-              <TextInput
-                style={[styles.searchInput, { color: theme.colors.ink }]}
-                placeholder="Search state or union territory..."
-                placeholderTextColor={theme.colors.mute}
-                value={stateSearchQuery}
-                onChangeText={setStateSearchQuery}
-                autoFocus
-              />
-              {stateSearchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setStateSearchQuery('')}>
-                  <X size={16} color={theme.colors.mute} />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            <FlatList
-              data={filteredStates}
-              keyExtractor={(item) => String(item.id)}
-              keyboardShouldPersistTaps="handled"
-              renderItem={({ item }) => {
-                const isSelected = item.name.toLowerCase() === stateName.toLowerCase();
-                return (
-                  <TouchableOpacity
-                    style={[
-                      styles.stateItem,
-                      {
-                        borderBottomColor: theme.colors.hairline,
-                        backgroundColor: isSelected ? 'rgba(0, 112, 243, 0.08)' : 'transparent',
-                      },
-                    ]}
-                    onPress={() => {
-                      setStateName(item.name);
-                      setStateId(item.id);
-                      setStatePickerVisible(false);
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.stateItemText,
-                        {
-                          color: isSelected ? theme.colors.link : theme.colors.ink,
-                          fontWeight: isSelected ? '700' : '500',
-                        },
-                      ]}
-                    >
-                      {item.name}
-                    </Text>
-                    {isSelected && <Check size={18} color={theme.colors.link} />}
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          </View>
-        </View>
-      </Modal>
     </Modal>
   );
 }
@@ -805,12 +759,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: radiusNumeric.lg,
     borderTopRightRadius: radiusNumeric.lg,
     maxHeight: '90%',
-    paddingBottom: 24,
-  },
-  statePickerSheet: {
-    borderTopLeftRadius: radiusNumeric.lg,
-    borderTopRightRadius: radiusNumeric.lg,
-    height: '75%',
     paddingBottom: 24,
   },
   modalHeader: {
@@ -852,60 +800,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     lineHeight: 15,
   },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-    marginBottom: 8,
-  },
-  fieldLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-    marginBottom: 4,
-  },
-  stateSelectorBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    height: 44,
-    borderWidth: 1,
-    borderRadius: radiusNumeric.md,
-    paddingHorizontal: 12,
-    marginBottom: 10,
-  },
-  stateSelectorText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    margin: spacingNumeric.md,
-    marginBottom: spacingNumeric.xs,
-    paddingHorizontal: 12,
-    height: 42,
-    borderWidth: 1,
-    borderRadius: radiusNumeric.md,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-  },
-  stateItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: spacingNumeric.md,
-    borderBottomWidth: 1,
-  },
-  stateItemText: {
-    fontSize: 14,
-  },
   inputSpacing: {
     marginBottom: 10,
   },
@@ -914,6 +808,7 @@ const styles = StyleSheet.create({
   },
   modalFooter: {
     flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: spacingNumeric.md,
     paddingTop: spacingNumeric.sm,
     borderTopWidth: 1,

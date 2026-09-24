@@ -274,8 +274,22 @@ export async function updateMachine(id: string, input: UpdateMachineInput): Prom
         updateData.status = status;
         updateData.client_id = status === "rented" && isValidUuid(input.client_id) ? input.client_id : null;
       }
-      if (input.operator_ids) {
+      if (input.operator_ids !== undefined) {
         const validOps = input.operator_ids.filter(isValidUuid);
+        if (validOps.length > 0) {
+          const { data: operatorUsers } = await supabase
+            .from("users")
+            .select("id, role, status")
+            .in("id", validOps);
+          const invalidUsers = (operatorUsers || []).filter(
+            (u) => u.role !== "operator" || u.status === "inactive"
+          );
+          if (invalidUsers.length > 0 || (operatorUsers?.length || 0) < validOps.length) {
+            return {
+              error: "Invalid assignment: Only active users with the 'operator' role can be assigned as machine operators.",
+            };
+          }
+        }
         updateData.operator_ids = validOps;
         updateData.current_operator_id = validOps[0] || null;
       }
@@ -350,12 +364,12 @@ export async function updateMachine(id: string, input: UpdateMachineInput): Prom
     if (input.supervisor_ids !== undefined) {
       const validSups = input.supervisor_ids.filter(isValidUuid);
       updatePayload.supervisor_ids = validSups;
-      updatePayload.current_supervisor_id = input.current_supervisor_id || validSups[0] || null;
+      updatePayload.current_supervisor_id = validSups[0] || null;
     }
     if (input.operator_ids !== undefined) {
       const validOps = input.operator_ids.filter(isValidUuid);
       updatePayload.operator_ids = validOps;
-      updatePayload.current_operator_id = input.current_operator_id || validOps[0] || null;
+      updatePayload.current_operator_id = validOps[0] || null;
     }
 
     const { error } = await supabase.from("machines").update(updatePayload).eq("id", id);

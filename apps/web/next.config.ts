@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -53,6 +54,18 @@ const nextConfig: NextConfig = {
   compiler: {
     removeConsole: process.env.NODE_ENV === "production" ? { exclude: ["error", "warn"] } : false,
   },
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "lucide-react": path.resolve(__dirname, "components/ui/empty-icons.tsx"),
+    };
+    return config;
+  },
+  turbopack: {
+    resolveAlias: {
+      "lucide-react": "./components/ui/empty-icons.tsx",
+    },
+  },
   async redirects() {
     return [
       {
@@ -106,6 +119,33 @@ const nextConfig: NextConfig = {
           {
             key: "Cache-Control",
             value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+      {
+        // Enforce zero caching for all dynamic authenticated application pages & routes
+        // to prevent Service Workers, PWA offline strategies, or proxies from caching redirect headers
+        source: "/:path((?:dashboard|users|machines|operations|clients|payroll|profile|settings|attendance|notifications|audit|onboarding).*)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+          },
+          {
+            key: "Pragma",
+            value: "no-cache",
+          },
+          {
+            key: "Expires",
+            value: "0",
+          },
+          {
+            key: "CDN-Cache-Control",
+            value: "no-store",
+          },
+          {
+            key: "Vercel-CDN-Cache-Control",
+            value: "no-store",
           },
         ],
       },

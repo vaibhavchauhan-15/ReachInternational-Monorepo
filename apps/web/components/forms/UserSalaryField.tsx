@@ -63,16 +63,7 @@ export function UserSalaryField({
         type="number"
         min="0"
         step="100"
-        label={
-          <span>
-            Monthly Base Salary (₹){" "}
-            {isMandatory ? (
-              <span className="text-rose-500 font-semibold">*</span>
-            ) : (
-              <span className="text-[11px] font-normal text-[var(--color-mute)]">(Optional)</span>
-            )}
-          </span>
-        }
+        label="Monthly Base Salary (₹)"
         value={displayValue}
         onChange={(e) => onChange?.(e.target.value)}
         placeholder="e.g. 25000"

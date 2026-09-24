@@ -79,6 +79,14 @@ STEP 5 — IMPLEMENT
 - **STRICT UI/UX & RESPONSIVE RULE**: Every page, component, and module MUST strictly adhere to `DESIGN.md` (Vercel Geist System tokens: `#171717` ink, `#fafafa` canvas, `#ffffff` elevated, `#ebebeb` 1px hairline border, `#0070f3` link blue, Geist Sans/Mono fonts) and `AI/RULES/UI-UX.md` / `.agents/rules/responsive_cross_platform_design.md` / `.agents/rules/web_mobile_ui_consistency.md`.
 - **MANDATORY WEB-TO-MOBILE CHANGE SYNCHRONIZATION**: Whenever ANY change, feature, component, style, theme, color, modal, drawer, page, module, status badge, form field, or workflow is added or modified in the Web App (`apps/web`), every AI agent **MUST MANDATORILY apply and synchronize the exact same change in the Mobile App (`apps/mobile`)** with mobile-compatible adaptations (touch cards, bottom sheets, scrollable filter strips, min 44px touch targets) in the same task. Web and Mobile MUST NEVER drift out of sync.
 - **3-TIER VIEWPORT RESPONSIVENESS**: Every feature MUST be highly optimized for Mobile (≤640px touch card views `block sm:hidden`, scrollable filter strips `overflow-x-auto`, min 44px touch targets), Tablet (641px–1023px 2-col grids `grid-cols-1 sm:grid-cols-2`, adaptive modals), and Desktop (≥1024px high-density tables `hidden sm:block`, full multi-col grid, hover tooltips `<TooltipWrapper>`), maintaining identical visual identity, colors, and theme.
+- **STRICT SUPABASE ENVIRONMENT ISOLATION RULE (DEVELOPMENT VS. PRODUCTION)**:
+  - **Organization**: `ljzofzlvjtfiqoffaaua`
+  - **Development Project (Target)**: `vlmxciuogczumumrwyot` (`Reach International Dev`)
+  - **Production Project (Protected)**: `dhbbgfzbyatzvqafnsqp` (`Reach International Production`) — **STRICTLY UNTOUCHED DURING DEVELOPMENT**.
+  - During development, testing, schema evolution, migrations, script execution, SQL queries, seeding, or RPC testing:
+    1. Every AI agent MUST **STRICTLY NEVER TOUCH, EXECUTE SQL ON, APPLY MIGRATIONS TO, OR MODIFY** the Production Supabase project (`dhbbgfzbyatzvqafnsqp`).
+    2. Every AI agent MUST **ONLY USE the Development project (`vlmxciuogczumumrwyot`)** database to push migrations, run SQL, seed dummy/test data, or test procedures.
+    3. Whenever using Supabase MCP tools (`execute_sql`, `apply_migration`, etc.), AI agents MUST explicitly set and verify `project_id: "vlmxciuogczumumrwyot"`. Production is strictly protected and must never be altered during development tasks.
 - Respect existing architecture.
 
 ====================================

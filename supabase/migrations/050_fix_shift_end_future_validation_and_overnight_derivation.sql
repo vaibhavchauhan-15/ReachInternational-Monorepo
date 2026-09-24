@@ -143,6 +143,7 @@ DECLARE
   v_audit_meta JSONB;
   v_inserted_log RECORD;
   v_resolved_client_id UUID;
+  v_machine_client_id UUID;
   v_resolved_location TEXT;
   v_conflict_flag BOOLEAN := false;
   v_conflict_reason TEXT := NULL;

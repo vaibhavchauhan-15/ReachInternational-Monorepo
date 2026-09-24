@@ -30,7 +30,6 @@ import {
   MobileHeader,
   ReachInternationalLogo,
 } from '../../components/ui';
-import { EditProfileModal } from '../../components/profile/EditProfileModal';
 import { NotificationPermissionModal } from '../../components/permissions';
 import { getNotificationPermissionStatus, type PermissionStatus } from '../../lib/permissions';
 import { supabase } from '../../lib/supabase';
@@ -61,7 +60,6 @@ import {
   Lock,
   X,
   ExternalLink,
-  Edit,
   Phone,
   Mail,
   FileText,
@@ -98,7 +96,6 @@ export default function SettingsScreen() {
   // Modals
   const [accountModalVisible, setAccountModalVisible] = useState(false);
   const [notifModalVisible, setNotifModalVisible] = useState(false);
-  const [editProfileVisible, setEditProfileVisible] = useState(false);
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
   const [permissionModalVisible, setPermissionModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
@@ -361,8 +358,7 @@ export default function SettingsScreen() {
                 </View>
               </View>
             </View>
-            <TouchableOpacity
-              onPress={() => setEditProfileVisible(true)}
+            <View
               style={[
                 styles.editBtn,
                 {
@@ -370,10 +366,9 @@ export default function SettingsScreen() {
                   backgroundColor: theme.colors.canvas,
                 },
               ]}
-              accessibilityLabel="Edit Profile"
             >
-              <Edit size={15} color={theme.colors.mute} />
-            </TouchableOpacity>
+              <ChevronRight size={15} color={theme.colors.mute} />
+            </View>
           </View>
         </TouchableOpacity>
 
@@ -767,14 +762,14 @@ export default function SettingsScreen() {
               {/* Action Buttons */}
               <View style={{ gap: 8, marginTop: spacingNumeric.md }}>
                 <Button
-                  label="Edit Profile & Shift Details"
+                  label="View & Edit Full Profile"
                   onPress={() => {
                     setAccountModalVisible(false);
-                    setEditProfileVisible(true);
+                    router.push('/(app)/profile');
                   }}
                   variant="primary"
                   size="sm"
-                  icon={<Edit size={14} color="#ffffff" />}
+                  icon={<ExternalLink size={14} color="#ffffff" />}
                   fullWidth
                 />
 
@@ -787,18 +782,6 @@ export default function SettingsScreen() {
                   variant="outline"
                   size="sm"
                   icon={<KeyRound size={14} color={theme.colors.ink} />}
-                  fullWidth
-                />
-
-                <Button
-                  label="View Full Profile Screen"
-                  onPress={() => {
-                    setAccountModalVisible(false);
-                    router.push('/(app)/profile');
-                  }}
-                  variant="ghost"
-                  size="sm"
-                  icon={<ExternalLink size={14} color={theme.colors.link} />}
                   fullWidth
                 />
 
@@ -948,18 +931,7 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
-      {/* ========================================================================= */}
-      {/* MODAL 3: EDIT PROFILE MODAL */}
-      {/* ========================================================================= */}
-      <EditProfileModal
-        visible={editProfileVisible}
-        currentUser={userProfile}
-        onClose={() => setEditProfileVisible(false)}
-        onSuccess={() => {
-          setEditProfileVisible(false);
-          if (refreshSession) refreshSession();
-        }}
-      />
+
 
       {/* ========================================================================= */}
       {/* MODAL 4: CHANGE PASSWORD MODAL */}

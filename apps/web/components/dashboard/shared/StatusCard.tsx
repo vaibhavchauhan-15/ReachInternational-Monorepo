@@ -1,4 +1,6 @@
-import React from "react";
+"use client";
+
+import React, { useRef } from "react";
 import { Card } from "@/components/ui/Card";
 import { CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 
@@ -18,7 +20,7 @@ const statusConfig = {
     accent: "from-emerald-500 via-emerald-400/60 to-transparent",
     text: "text-emerald-700 dark:text-emerald-300",
     icon: CheckCircle2,
-    iconBg: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20",
+    iconBg: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25",
     iconColor: "text-emerald-600 dark:text-emerald-400",
   },
   pending: {
@@ -27,7 +29,7 @@ const statusConfig = {
     accent: "from-amber-500 via-amber-400/60 to-transparent",
     text: "text-amber-700 dark:text-amber-300",
     icon: Clock,
-    iconBg: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/20",
+    iconBg: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/25",
     iconColor: "text-amber-600 dark:text-amber-400",
   },
   warning: {
@@ -36,7 +38,7 @@ const statusConfig = {
     accent: "from-rose-500 via-rose-400/60 to-transparent",
     text: "text-rose-700 dark:text-rose-300",
     icon: AlertTriangle,
-    iconBg: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/20",
+    iconBg: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/25",
     iconColor: "text-rose-600 dark:text-rose-400",
   },
 };
@@ -49,12 +51,23 @@ export function StatusCard({
   extra,
   className = "",
 }: StatusCardProps) {
+  const iconRef = useRef<{ startAnimation: () => void; stopAnimation: () => void } | null>(null);
   const config = statusConfig[status];
   const Icon = config.icon;
+
+  const handleMouseEnter = () => {
+    iconRef.current?.startAnimation?.();
+  };
+
+  const handleMouseLeave = () => {
+    iconRef.current?.stopAnimation?.();
+  };
 
   return (
     <Card
       padding="none"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       className={`relative overflow-hidden p-3.5 sm:p-4 md:p-5 flex flex-col justify-between h-full rounded-[var(--radius-md)] border transition-all duration-200 ${config.bg} ${config.border} ${className}`}
     >
       {/* Top Hairline Gradient Accent Bar */}
@@ -69,8 +82,19 @@ export function StatusCard({
             {title}
           </p>
           <div className="flex items-center gap-2">
-            <div className={`w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-md sm:rounded-lg shrink-0 ${config.iconBg}`}>
-              <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${config.iconColor}`} />
+            <div className={`w-8 h-8 flex items-center justify-center rounded-full shrink-0 ${config.iconBg}`}>
+              {React.isValidElement(Icon) ? (
+                React.cloneElement(Icon as React.ReactElement<any>, {
+                  ref: iconRef,
+                  size: 16,
+                  className: `w-4 h-4 shrink-0 ${config.iconColor}`,
+                })
+              ) : typeof Icon === "function" || (typeof Icon === "object" && Icon !== null) ? (
+                (() => {
+                  const IconComp = Icon as React.ComponentType<any>;
+                  return <IconComp ref={iconRef} size={16} className={`w-4 h-4 shrink-0 ${config.iconColor}`} />;
+                })()
+              ) : null}
             </div>
             <span className={`text-sm sm:text-base md:text-lg font-bold ${config.text} leading-tight line-clamp-2 break-words`}>
               {label}

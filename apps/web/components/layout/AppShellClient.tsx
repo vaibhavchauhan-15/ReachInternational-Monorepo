@@ -103,9 +103,10 @@ export function AppShellClient({
         {/* Main Workspace Column */}
         <div
           className={cn(
-            "flex-1 flex flex-col min-w-0 md:pl-[var(--sidebar-width)]",
+            "flex-1 flex flex-col min-w-0 max-w-full",
+            collapsed ? "md:pl-[72px]" : "md:pl-[280px]",
             isInteractive
-              ? "transition-[padding] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
+              ? "transition-[padding-left] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
               : "transition-none"
           )}
         >

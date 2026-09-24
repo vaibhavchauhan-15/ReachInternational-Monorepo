@@ -224,6 +224,15 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     }
   }, [searchParams]);
 
+  // Support browser Back/Forward navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      router.refresh();
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [router]);
+
   const handleOpenHistoryModal = useCallback(() => {
     setShowMachineHistoryModal(true);
   }, []);

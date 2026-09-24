@@ -65,9 +65,18 @@ ReachInternational partitions deployment environments into three strict tiers:
 ENVIRONMENT     PURPOSE & DB BOUNDARY                      CONFIG & SECRET SOURCE
 ──────────────────────────────────────────────────────────────────────────────────────────
 • Local Dev     Local Supabase container / seed data       .env.local (never committed)
-• Preview       Vercel PR previews / staging Supabase DB   Environment dashboard secrets
-• Production    https://www.reachinternational.co.in / Prod DB     Production secret store
+• Development   Reach International Dev (vlmxciuogczumumrwyot)     Dev Supabase DB (Target)
+• Production    Reach International Production (dhbbgfzbyatzvqafnsqp) Prod DB (Protected)
 ```
+
+### Authoritative Supabase Project Isolation Rule:
+- **Organization**: `ljzofzlvjtfiqoffaaua`
+- **Development Project (Target)**: `vlmxciuogczumumrwyot` (`Reach International Dev`)
+- **Production Project (Protected)**: `dhbbgfzbyatzvqafnsqp` (`Reach International Production`) — **STRICTLY UNTOUCHED DURING DEVELOPMENT**.
+
+1. **Development Boundary**: ALL migrations, schema edits, SQL executions, table creation, seed data scripts, RPC updates, and testing MUST ONLY target the **Development Project (`vlmxciuogczumumrwyot`)**.
+2. **Production Protection**: The Production project (`dhbbgfzbyatzvqafnsqp`) is **STRICTLY PROTECTED**. AI agents are **FORBIDDEN** from modifying, running migrations, executing SQL mutations, or altering data on the Production project during development tasks.
+3. **MCP Tool Enforcement**: Any invocation of Supabase MCP tools (`execute_sql`, `apply_migration`, etc.) MUST explicitly verify that `project_id: "vlmxciuogczumumrwyot"`.
 
 ---
 

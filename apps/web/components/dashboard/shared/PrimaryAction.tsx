@@ -1,4 +1,6 @@
-import React from "react";
+"use client";
+
+import React, { useRef } from "react";
 import Link from "next/link";
 import { ArrowRight, LucideIcon } from "lucide-react";
 
@@ -21,20 +23,30 @@ export function PrimaryAction({
   badgeText,
   className = "",
 }: PrimaryActionProps) {
+  const iconRef = useRef<{ startAnimation: () => void; stopAnimation: () => void } | null>(null);
+
+  const handleMouseEnter = () => {
+    iconRef.current?.startAnimation?.();
+  };
+
+  const handleMouseLeave = () => {
+    iconRef.current?.stopAnimation?.();
+  };
+
   const variantStyles = {
     primary: {
       card: "bg-gradient-to-r from-[var(--color-ink)] via-[var(--color-ink)] to-[#262626] text-[var(--color-canvas)] hover:opacity-95 border-transparent shadow-sm",
-      iconBox: "bg-white/10 text-[var(--color-canvas)]",
+      iconBox: "bg-white/10 text-[var(--color-canvas)] border border-white/10",
       badge: "bg-white/20 text-[var(--color-canvas)]",
     },
     secondary: {
       card: "bg-gradient-to-br from-[var(--color-surface)] via-[var(--color-surface)] to-[var(--color-canvas)] text-[var(--color-ink)] hover:border-[var(--color-ink)]/30 border-[var(--color-hairline)]",
-      iconBox: "bg-[var(--color-canvas)] text-[var(--color-mute)] border border-[var(--color-hairline)]",
+      iconBox: "bg-[var(--color-canvas)] text-[var(--color-ink)] border border-[var(--color-hairline)] shadow-2xs",
       badge: "bg-[var(--color-hairline-soft)] text-[var(--color-ink)]",
     },
     warning: {
       card: "bg-gradient-to-r from-amber-600 to-amber-500 text-white hover:opacity-95 border-transparent shadow-sm",
-      iconBox: "bg-white/20 text-white",
+      iconBox: "bg-white/20 text-white border border-white/20",
       badge: "bg-white/25 text-white",
     },
   }[variant];
@@ -42,11 +54,24 @@ export function PrimaryAction({
   return (
     <Link
       href={href}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       className={`group relative flex items-center justify-between p-3.5 sm:p-4 md:p-5 rounded-[var(--radius-md)] border transition-all duration-200 active:scale-[0.99] ${variantStyles.card} ${className}`}
     >
       <div className="flex items-start sm:items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
         <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg shrink-0 flex items-center justify-center ${variantStyles.iconBox}`}>
-          <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
+          {React.isValidElement(Icon) ? (
+            React.cloneElement(Icon as React.ReactElement<any>, {
+              ref: iconRef,
+              size: 20,
+              className: "w-5 h-5 shrink-0",
+            })
+          ) : typeof Icon === "function" || (typeof Icon === "object" && Icon !== null) ? (
+            (() => {
+              const IconComp = Icon as React.ComponentType<any>;
+              return <IconComp ref={iconRef} size={20} className="w-5 h-5 shrink-0" />;
+            })()
+          ) : null}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
@@ -66,7 +91,7 @@ export function PrimaryAction({
       </div>
 
       <div className="pl-2 sm:pl-3 shrink-0">
-        <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 transition-transform duration-200 group-hover:translate-x-1" />
+        <ArrowRight size={18} className="w-4 h-4 sm:w-5 sm:h-5 transition-transform duration-200 group-hover:translate-x-1" />
       </div>
     </Link>
   );

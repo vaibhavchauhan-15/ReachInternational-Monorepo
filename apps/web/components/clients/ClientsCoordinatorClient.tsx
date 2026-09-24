@@ -69,6 +69,7 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
   ariaLabel,
   align = "left",
   className = "",
+  icon,
 }: {
   label: string;
   value: string;
@@ -77,9 +78,11 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
   ariaLabel?: string;
   align?: "left" | "right";
   className?: string;
+  icon?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const iconRef = useRef<{ startAnimation?: () => void; stopAnimation?: () => void }>(null);
 
   const selectedOption = options.find((opt) => opt.id === value) || options[0];
 
@@ -106,11 +109,13 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
   return (
     <div
       ref={containerRef}
-      className={`relative w-full ${open ? "z-40" : "z-10"} ${className}`}
+      className={`relative w-full group ${open ? "z-40" : "z-10"} ${className}`}
     >
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
+        onMouseEnter={() => iconRef.current?.startAnimation?.()}
+        onMouseLeave={() => iconRef.current?.stopAnimation?.()}
         aria-expanded={open}
         aria-label={ariaLabel || label}
         className="w-full h-11 sm:h-9 px-3.5 sm:px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-xs text-[var(--color-ink)] flex items-center justify-between gap-2 transition-all cursor-pointer select-none active:scale-[0.98] shadow-2xs"
@@ -130,11 +135,32 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
             {selectedOption?.label}
           </span>
         </div>
-        <ChevronDown
-          className={`h-3.5 w-3.5 text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
-            open ? "rotate-180 text-[var(--color-ink)]" : ""
-          }`}
-        />
+        {icon ? (
+          React.isValidElement(icon) ? (
+            React.cloneElement(icon as React.ReactElement<any>, {
+              ref: (node: any) => {
+                iconRef.current = node;
+                const orig = (icon as any).ref;
+                if (typeof orig === "function") orig(node);
+                else if (orig && typeof orig === "object") orig.current = node;
+              },
+              size: (icon as any).props?.size ?? 14,
+              className: `shrink-0 transition-transform duration-200 ${
+                open ? "rotate-180" : ""
+              } ${(icon as any).props?.className || ""}`,
+            })
+          ) : (
+            icon
+          )
+        ) : (
+          <ChevronDown
+            ref={iconRef as any}
+            size={14}
+            className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 group-hover:text-[var(--color-ink)] ${
+              open ? "rotate-180 text-[var(--color-ink)]" : ""
+            }`}
+          />
+        )}
       </button>
 
       <AnimatePresence>
@@ -609,6 +635,33 @@ export function ClientsCoordinatorClient({
     },
     [syncUrl]
   );
+
+  // Listen to popstate (browser back/forward button navigation)
+  useEffect(() => {
+    const handlePopState = () => {
+      if (typeof window === "undefined") return;
+      const params = new URLSearchParams(window.location.search);
+      const urlStatus = (params.get("status") as "all" | "active" | "inactive") || "all";
+      const urlSearch = params.get("search") || "";
+      const urlCity = params.get("city") || "all";
+      const urlSort = params.get("sort") || "company_name";
+      const urlOrder = (params.get("order") as "asc" | "desc") || "asc";
+      const urlPage = parseInt(params.get("page") || "1", 10) || 1;
+
+      executeFilterQuery({
+        status: urlStatus,
+        search: urlSearch,
+        city: urlCity,
+        sortField: urlSort,
+        sortOrder: urlOrder,
+        page: urlPage,
+        pageSize: 10,
+      });
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [executeFilterQuery]);
 
   // ─── C9: All / Active / Inactive Tab Handler ───────────────────────────────────
 

@@ -61,6 +61,11 @@ Manages user accounts, profile details, company branch assignments, and Role-Bas
   - **Export Query Optimization**: Omits `{ count: "exact" }` when `pageSize > 100`, eliminating the secondary full-table count query on export requests.
   - **Relational Batch Protection**: For bulk exports, queries supervisors and working locations via indexed role/catalog lookups when ID count exceeds 50, preventing HTTP 414 URL overflow errors.
   - **Deterministic Secondary Sort**: Appends `.order("id", { ascending: true })` across all sort branches to prevent pagination drift.
+- **Search & Filter Query Parameters URL Persistence (`apps/web/app/(app)/users/users-client.tsx`)**:
+  - Automatically synchronizes search queries (`?search=...`) and active pagination (`?page=...`) directly to the browser URL via `window.history.replaceState` during debounced execution. This preserves instant search responsiveness without triggering full React Server Component tree re-fetches.
+  - Hydrates search input and search results directly from `searchParams.get("search")` on page mount, ensuring all active search terms, pagination, and filter parameters (`?role=...`, `?status=...`, `?state=...`, `?kyc=...`) remain intact across browser page reloads.
+  - Synchronizes on browser back and forward navigation (`popstate` event listener).
+  - Clicking "Reset" resets filters and reverts URL to clean `/users`.
 - **Auto-Run Query & 300ms Snappy Debounce (`apps/web/app/(app)/users/users-client.tsx`, `apps/mobile/app/(app)/users.tsx`)**:
   - Automatically dispatches search query after a 300ms typing pause without requiring users to click any button or press enter.
   - Enter key triggers immediate execution; clearing input immediately resets the query.

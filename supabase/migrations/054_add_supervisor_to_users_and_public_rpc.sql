@@ -1,4 +1,4 @@
-﻿-- Migration 054: Add supervisor_id to public.users, update handle_new_user trigger, and add public get_active_supervisors RPC
+-- Migration 054: Add supervisor_id to public.users, update handle_new_user trigger, and add public get_active_supervisors RPC
 
 -- 1. Add supervisor_id column to public.users
 ALTER TABLE public.users

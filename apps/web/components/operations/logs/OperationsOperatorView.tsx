@@ -95,16 +95,22 @@ export const OperationsOperatorView = React.memo(function OperationsOperatorView
           >
             <div className="mt-3 pt-3 border-t border-[var(--color-hairline)] space-y-3">
               {(activeOperatorObj?.phone || activeOperatorObj?.email) && (
-                <div className="flex items-center gap-x-4 gap-y-1 text-xs text-[var(--color-mute)] flex-wrap">
+                <div className="flex items-center gap-x-2 gap-y-1 text-xs text-[var(--color-mute)] flex-wrap">
                   {activeOperatorObj?.phone && (
-                    <div className="flex items-center gap-1.5 font-mono">
-                      <Phone className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                    <div
+                      data-hover-parent
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-[var(--color-canvas)] border border-transparent hover:border-[var(--color-hairline)] transition-colors font-mono cursor-default"
+                    >
+                      <Phone size={14} className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                       <span className="text-[var(--color-ink)]">{activeOperatorObj.phone}</span>
                     </div>
                   )}
                   {activeOperatorObj?.email && (
-                    <div className="flex items-center gap-1.5">
-                      <Mail className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                    <div
+                      data-hover-parent
+                      className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-[var(--color-canvas)] border border-transparent hover:border-[var(--color-hairline)] transition-colors cursor-default"
+                    >
+                      <Mail size={14} className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                       <span className="text-[var(--color-ink)]">{activeOperatorObj.email}</span>
                     </div>
                   )}
@@ -113,9 +119,12 @@ export const OperationsOperatorView = React.memo(function OperationsOperatorView
 
               {/* 4 Summary Metrics Cards Grid in Operator Detail Box */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 pt-0.5">
-                <div className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-1">
+                <div
+                  data-hover-parent
+                  className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] space-y-1 transition-colors cursor-default select-none"
+                >
                   <div className="flex items-center gap-1.5 text-[var(--color-mute)]">
-                    <Clock className="h-3.5 w-3.5 text-sky-500 shrink-0" />
+                    <Clock size={16} className="w-4 h-4 text-sky-500 shrink-0" />
                     <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
                       <span className="sm:hidden">Run</span>
                       <span className="hidden sm:inline">Run Hours</span>
@@ -129,9 +138,12 @@ export const OperationsOperatorView = React.memo(function OperationsOperatorView
                   </div>
                 </div>
 
-                <div className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-1">
+                <div
+                  data-hover-parent
+                  className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] space-y-1 transition-colors cursor-default select-none"
+                >
                   <div className="flex items-center gap-1.5 text-[var(--color-mute)]">
-                    <Zap className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                    <Zap size={16} className="w-4 h-4 text-amber-500 shrink-0" />
                     <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
                       <span className="sm:hidden">OT</span>
                       <span className="hidden sm:inline">Overtime</span>
@@ -145,9 +157,12 @@ export const OperationsOperatorView = React.memo(function OperationsOperatorView
                   </div>
                 </div>
 
-                <div className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-1">
+                <div
+                  data-hover-parent
+                  className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] space-y-1 transition-colors cursor-default select-none"
+                >
                   <div className="flex items-center gap-1.5 text-[var(--color-mute)]">
-                    <AlertTriangle className="h-3.5 w-3.5 text-rose-500 shrink-0" />
+                    <AlertTriangle size={16} className="w-4 h-4 text-rose-500 shrink-0" />
                     <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
                       <span className="sm:hidden">Breakdown</span>
                       <span className="hidden sm:inline">Breakdowns</span>
@@ -161,9 +176,12 @@ export const OperationsOperatorView = React.memo(function OperationsOperatorView
                   </div>
                 </div>
 
-                <div className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)] space-y-1">
+                <div
+                  data-hover-parent
+                  className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] space-y-1 transition-colors cursor-default select-none"
+                >
                   <div className="flex items-center gap-1.5 text-[var(--color-mute)]">
-                    <FileText className="h-3.5 w-3.5 text-[var(--color-mute)] shrink-0" />
+                    <FileText size={16} className="w-4 h-4 text-[var(--color-mute)] shrink-0" />
                     <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
                       Logs
                     </span>

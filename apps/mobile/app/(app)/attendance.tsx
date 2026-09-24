@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../components/ui/ThemeProvider';
 import { useAuth } from '../../lib/auth/useAuth';
 import { MobileHeader, Card, Badge, EmptyState } from '../../components/ui';
+import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { supabase } from '../../lib/supabase';
 import {
   CalendarCheck,
@@ -134,8 +135,30 @@ export default function AttendanceScreen() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'present' | 'absent' | 'half_day'>('all');
+  // Persistent search and filter state
+  const {
+    search: debouncedSearchQuery,
+    inputValue: searchQuery,
+    setSearch: setSearchQuery,
+    filters,
+    setFilter,
+    resetFilters: resetListFilters,
+  } = usePersistentListState<{
+    statusFilter: 'all' | 'present' | 'absent' | 'half_day';
+  }>({
+    storageKey: 'reach_filters_attendance',
+    defaultSearch: '',
+    defaultFilters: {
+      statusFilter: 'all',
+    },
+    debounceMs: 250,
+  });
+
+  const statusFilter = filters.statusFilter;
+  const setStatusFilter = useCallback(
+    (val: 'all' | 'present' | 'absent' | 'half_day') => setFilter('statusFilter', val),
+    [setFilter]
+  );
 
   // Month state (YYYY-MM)
   const now = new Date();
@@ -399,11 +422,11 @@ export default function AttendanceScreen() {
             placeholder="Search operator by name, phone, city..."
             placeholderTextColor={theme.colors.mute}
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={(text) => setSearchQuery(text)}
             autoCapitalize="none"
           />
           {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <TouchableOpacity onPress={() => setSearchQuery('', true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <X size={16} color={theme.colors.mute} />
             </TouchableOpacity>
           ) : null}

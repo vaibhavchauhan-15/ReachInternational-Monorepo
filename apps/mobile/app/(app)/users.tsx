@@ -34,6 +34,7 @@ import { UserExportModal } from '../../components/users/UserExportModal';
 import { UserListSkeleton } from '../../components/users/UserCardSkeleton';
 import { supabase } from '../../lib/supabase';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { useAuth } from '../../lib/auth/useAuth';
 import { notifyUserPasswordReset } from '../../lib/notifications';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
@@ -412,9 +413,50 @@ export default function UsersScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
+  // Filter & Search states backed by persistent AsyncStorage (auto-resets pagination to page 1)
+  const {
+    search: debouncedSearch,
+    inputValue: search,
+    setSearch,
+    filters,
+    setFilter,
+    resetFilters: resetListFilters,
+    isDebouncing: isSearching,
+  } = usePersistentListState<{
+    roleFilter: string;
+    statusFilter: string;
+    stateFilter: string;
+    kycFilter: string;
+    dateRangeFilter: string;
+    sortBy: string;
+  }>({
+    storageKey: 'reach_filters_users',
+    defaultSearch: typeof localParams.search === 'string' ? localParams.search.trim() : '',
+    defaultFilters: {
+      roleFilter: 'all',
+      statusFilter: 'all',
+      stateFilter: 'all',
+      kycFilter: 'all',
+      dateRangeFilter: 'all',
+      sortBy: 'newest',
+    },
+    debounceMs: 280,
+  });
+
+  const roleFilter = filters.roleFilter;
+  const statusFilter = filters.statusFilter;
+  const stateFilter = filters.stateFilter;
+  const kycFilter = filters.kycFilter;
+  const dateRangeFilter = filters.dateRangeFilter;
+  const sortBy = filters.sortBy;
+
+  const setRoleFilter = useCallback((val: string | ((prev: string) => string)) => setFilter('roleFilter', val), [setFilter]);
+  const setStatusFilter = useCallback((val: string | ((prev: string) => string)) => setFilter('statusFilter', val), [setFilter]);
+  const setStateFilter = useCallback((val: string | ((prev: string) => string)) => setFilter('stateFilter', val), [setFilter]);
+  const setKycFilter = useCallback((val: string | ((prev: string) => string)) => setFilter('kycFilter', val), [setFilter]);
+  const setDateRangeFilter = useCallback((val: string | ((prev: string) => string)) => setFilter('dateRangeFilter', val), [setFilter]);
+  const setSortBy = useCallback((val: string | ((prev: string) => string)) => setFilter('sortBy', val), [setFilter]);
+
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchInputRef = useRef<TextInput>(null);
 
@@ -422,57 +464,21 @@ export default function UsersScreen() {
   useEffect(() => {
     if (localParams.search && typeof localParams.search === 'string') {
       const paramSearch = localParams.search.trim();
-      setSearch(paramSearch);
-      setDebouncedSearch(paramSearch);
+      setSearch(paramSearch, true);
     }
-  }, [localParams.search]);
-
-  // 6 Primary Filter Dimensions
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [stateFilter, setStateFilter] = useState('all');
-  const [kycFilter, setKycFilter] = useState('all');
-  const [dateRangeFilter, setDateRangeFilter] = useState('all');
-  const [sortBy, setSortBy] = useState('newest');
+  }, [localParams.search, setSearch]);
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const filterAnim = useRef(new Animated.Value(0)).current;
   const [panelContentHeight, setPanelContentHeight] = useState(0);
   const isWeb = Platform.OS === 'web';
 
-  // Snappy 280ms search debounce for fluid typing and instant skeleton loading
-  useEffect(() => {
-    const trimmed = search.trim();
-    if (trimmed === debouncedSearch.trim()) {
-      setIsSearching(false);
-      return;
-    }
-
-    if (trimmed === '') {
-      setDebouncedSearch('');
-      setIsSearching(false);
-      return;
-    }
-
-    setIsSearching(true);
-    const timer = setTimeout(() => {
-      setDebouncedSearch(trimmed);
-      setIsSearching(false);
-    }, 280);
-
-    return () => clearTimeout(timer);
-  }, [search, debouncedSearch]);
-
   const handleSearchSubmit = () => {
-    const trimmed = search.trim();
-    setDebouncedSearch(trimmed);
-    setIsSearching(false);
+    setSearch(search, true);
   };
 
   const handleClearSearch = () => {
-    setSearch('');
-    setDebouncedSearch('');
-    setIsSearching(false);
+    setSearch('', true);
     searchInputRef.current?.focus();
   };
 
@@ -558,16 +564,8 @@ export default function UsersScreen() {
   }, [roleFilter, statusFilter, stateFilter, kycFilter, dateRangeFilter, sortBy]);
 
   const handleResetAllFilters = useCallback(() => {
-    setRoleFilter('all');
-    setStatusFilter('all');
-    setStateFilter('all');
-    setKycFilter('all');
-    setDateRangeFilter('all');
-    setSortBy('newest');
-    setSearch('');
-    setDebouncedSearch('');
-    setIsSearching(false);
-  }, []);
+    resetListFilters();
+  }, [resetListFilters]);
 
   const renderFilterPanelContent = () => (
     <View

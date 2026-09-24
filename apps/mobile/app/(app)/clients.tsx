@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
 import { ClientListSkeleton, MobileClientCard } from '../../components/clients';
 import { DropdownFilterSelector, type FilterOption } from '../../components/machines';
+import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 
 export type StatusFilter = 'all' | 'active' | 'inactive';
 
@@ -128,12 +129,50 @@ export default function ClientsScreen() {
   const [clients, setClients] = useState<ClientItem[]>(INITIAL_CLIENTS);
   const [totalCount, setTotalCount] = useState<number>(INITIAL_CLIENTS.length);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [activeFilter, setActiveFilter] = useState<StatusFilter>('all');
-  const [sortBy, setSortBy] = useState<ClientSortOptionType>('company_name_asc');
+  // Persistent search, filters, and sorting (auto-resets page to 1 on initial mount)
+  const {
+    search: debouncedSearch,
+    inputValue: search,
+    setSearch,
+    page,
+    setPage,
+    filters,
+    setFilter,
+    resetFilters: resetListFilters,
+    isDebouncing: isSearching,
+  } = usePersistentListState<{
+    activeFilter: StatusFilter;
+    sortBy: ClientSortOptionType;
+  }>({
+    storageKey: 'reach_filters_clients',
+    defaultSearch: '',
+    defaultFilters: {
+      activeFilter: 'all',
+      sortBy: 'company_name_asc',
+    },
+    debounceMs: 300,
+  });
+
+  const activeFilter = filters.activeFilter;
+  const sortBy = filters.sortBy;
+
+  const setActiveFilter = useCallback(
+    (val: StatusFilter) => {
+      setFilter('activeFilter', val);
+      setPage(1);
+    },
+    [setFilter, setPage]
+  );
+
+  const setSortBy = useCallback(
+    (val: ClientSortOptionType) => {
+      setFilter('sortBy', val);
+      setPage(1);
+    },
+    [setFilter, setPage]
+  );
+
   const [refreshing, setRefreshing] = useState(false);
-  const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<10 | 25 | 50 | 100>(10);
   const querySeqRef = React.useRef(0);
   const mobileQueryCacheRef = React.useRef<Map<string, MobileQueryCacheEntry>>(new Map());
@@ -147,12 +186,8 @@ export default function ClientsScreen() {
   }, [activeFilter, debouncedSearch, sortBy]);
 
   const handleResetAllFilters = useCallback(() => {
-    setSearch('');
-    setDebouncedSearch('');
-    setActiveFilter('all');
-    setSortBy('company_name_asc');
-    setPage(1);
-  }, []);
+    resetListFilters();
+  }, [resetListFilters]);
 
   // Client Modal Form State
   const [modalVisible, setModalVisible] = useState(false);
@@ -192,92 +227,6 @@ export default function ClientsScreen() {
 
   const mobileDetailCacheRef = React.useRef<Map<string, any>>(new Map());
 
-  // C14 Location Hierarchy State & In-Memory Session Cache
-  const mobileLocationHierarchyCacheRef = React.useRef<Map<string, any[]>>(new Map());
-  const [mobileStatesList, setMobileStatesList] = useState<any[]>([]);
-  const [mobileDistrictsList, setMobileDistrictsList] = useState<any[]>([]);
-  const [mobileCitiesList, setMobileCitiesList] = useState<any[]>([]);
-  const [mobileLoadingStates, setMobileLoadingStates] = useState(false);
-  const [mobileLoadingDistricts, setMobileLoadingDistricts] = useState(false);
-  const [mobileLoadingCities, setMobileLoadingCities] = useState(false);
-
-  // Progressive Location: Load States when modal opens
-  useEffect(() => {
-    if (!modalVisible) return;
-    const cacheKey = "states";
-    if (mobileLocationHierarchyCacheRef.current.has(cacheKey)) {
-      setMobileStatesList(mobileLocationHierarchyCacheRef.current.get(cacheKey) || []);
-      return;
-    }
-    setMobileLoadingStates(true);
-    supabase
-      .from("states")
-      .select("id, name")
-      .order("name", { ascending: true })
-      .then(({ data, error }) => {
-        setMobileLoadingStates(false);
-        if (!error && data) {
-          setMobileStatesList(data);
-          mobileLocationHierarchyCacheRef.current.set(cacheKey, data);
-        }
-      });
-  }, [modalVisible]);
-
-  // Progressive Location: Load Districts when stateName changes
-  useEffect(() => {
-    if (!modalVisible || !stateName.trim()) {
-      setMobileDistrictsList([]);
-      return;
-    }
-    const cleanState = stateName.trim().toLowerCase();
-    const cacheKey = `districts:${cleanState}`;
-    if (mobileLocationHierarchyCacheRef.current.has(cacheKey)) {
-      setMobileDistrictsList(mobileLocationHierarchyCacheRef.current.get(cacheKey) || []);
-      return;
-    }
-    setMobileLoadingDistricts(true);
-    const matchedState = mobileStatesList.find((s) => s.name.toLowerCase() === cleanState);
-    const query = matchedState
-      ? supabase.from("districts").select("id, state_id, name").eq("state_id", matchedState.id)
-      : supabase.from("districts").select("id, state_id, name, states!inner(name)").ilike("states.name", stateName.trim());
-
-    query.order("name", { ascending: true }).then(({ data, error }) => {
-      setMobileLoadingDistricts(false);
-      if (!error && data) {
-        const mapped = data.map((d: any) => ({ id: d.id, name: d.name }));
-        setMobileDistrictsList(mapped);
-        mobileLocationHierarchyCacheRef.current.set(cacheKey, mapped);
-      }
-    });
-  }, [modalVisible, stateName, mobileStatesList]);
-
-  // Progressive Location: Load Cities when district changes
-  useEffect(() => {
-    if (!modalVisible || !district.trim()) {
-      setMobileCitiesList([]);
-      return;
-    }
-    const cleanDist = district.trim().toLowerCase();
-    const cacheKey = `cities:${cleanDist}`;
-    if (mobileLocationHierarchyCacheRef.current.has(cacheKey)) {
-      setMobileCitiesList(mobileLocationHierarchyCacheRef.current.get(cacheKey) || []);
-      return;
-    }
-    setMobileLoadingCities(true);
-    const matchedDist = mobileDistrictsList.find((d) => d.name.toLowerCase() === cleanDist);
-    const query = matchedDist
-      ? supabase.from("cities").select("id, district_id, name").eq("district_id", matchedDist.id)
-      : supabase.from("cities").select("id, district_id, name, districts!inner(name)").ilike("districts.name", district.trim());
-
-    query.order("name", { ascending: true }).then(({ data, error }) => {
-      setMobileLoadingCities(false);
-      if (!error && data) {
-        const mapped = data.map((c: any) => ({ id: c.id, name: c.name }));
-        setMobileCitiesList(mapped);
-        mobileLocationHierarchyCacheRef.current.set(cacheKey, mapped);
-      }
-    });
-  }, [modalVisible, district, mobileDistrictsList]);
 
   const [kpis, setKpis] = useState<{
     total: number;
@@ -293,15 +242,6 @@ export default function ClientsScreen() {
     locationsCovered: 3,
   });
 
-  // 350ms Search debounce
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search);
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [search]);
-
-  const isSearching = search.trim() !== debouncedSearch.trim() && search.trim() !== '';
 
   const getMobileCacheKey = useCallback(
     (status: StatusFilter, query: string, sortOption: ClientSortOptionType, pageNum: number, sizeNum: number = 10) =>
@@ -1189,127 +1129,10 @@ export default function ClientsScreen() {
               </View>
 
               <View style={styles.formSection}>
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                  <Text style={[styles.sectionTitle, { color: theme.colors.mute, marginBottom: 0 }]}>Site Location</Text>
-                  <Text style={{ fontSize: 10, color: theme.colors.mute, fontWeight: "600" }}>
-                    {stateName || "State"} → {district || "District"} → {city || "City"}
-                  </Text>
-                </View>
-
-                {/* Progressive State Quick Selector Strip */}
-                {mobileStatesList.length > 0 && (
-                  <View style={{ marginBottom: 8 }}>
-                    <Text style={{ fontSize: 10, color: theme.colors.mute, marginBottom: 4 }}>Select State:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {mobileStatesList.map((s) => (
-                        <TouchableOpacity
-                          key={s.id}
-                          onPress={() => {
-                            setStateName(s.name);
-                            setDistrict("");
-                            setCity("");
-                          }}
-                          style={{
-                            minHeight: 44,
-                            paddingHorizontal: 12,
-                            borderRadius: radiusNumeric.sm,
-                            borderWidth: 1,
-                            borderColor: stateName.toLowerCase() === s.name.toLowerCase() ? theme.colors.primary : theme.colors.hairline,
-                            backgroundColor: stateName.toLowerCase() === s.name.toLowerCase() ? (isDark ? "#0284c7" : "#0ea5e9") : theme.colors.canvas,
-                            justifyContent: "center",
-                            alignItems: "center",
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              fontWeight: "600",
-                              color: stateName.toLowerCase() === s.name.toLowerCase() ? "#ffffff" : theme.colors.ink,
-                            }}
-                          >
-                            {s.name}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-
-                {/* Progressive District Quick Selector Strip */}
-                {mobileDistrictsList.length > 0 && (
-                  <View style={{ marginBottom: 8 }}>
-                    <Text style={{ fontSize: 10, color: theme.colors.mute, marginBottom: 4 }}>Select District ({stateName}):</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {mobileDistrictsList.map((d) => (
-                        <TouchableOpacity
-                          key={d.id}
-                          onPress={() => {
-                            setDistrict(d.name);
-                            setCity("");
-                          }}
-                          style={{
-                            minHeight: 44,
-                            paddingHorizontal: 12,
-                            borderRadius: radiusNumeric.sm,
-                            borderWidth: 1,
-                            borderColor: district.toLowerCase() === d.name.toLowerCase() ? theme.colors.primary : theme.colors.hairline,
-                            backgroundColor: district.toLowerCase() === d.name.toLowerCase() ? (isDark ? "#0284c7" : "#0ea5e9") : theme.colors.canvas,
-                            justifyContent: "center",
-                            alignItems: "center",
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              fontWeight: "600",
-                              color: district.toLowerCase() === d.name.toLowerCase() ? "#ffffff" : theme.colors.ink,
-                            }}
-                          >
-                            {d.name}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
-
-                {/* Progressive City Quick Selector Strip */}
-                {mobileCitiesList.length > 0 && (
-                  <View style={{ marginBottom: 8 }}>
-                    <Text style={{ fontSize: 10, color: theme.colors.mute, marginBottom: 4 }}>Select City / Town ({district}):</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {mobileCitiesList.map((c) => (
-                        <TouchableOpacity
-                          key={c.id}
-                          onPress={() => setCity(c.name)}
-                          style={{
-                            minHeight: 44,
-                            paddingHorizontal: 12,
-                            borderRadius: radiusNumeric.sm,
-                            borderWidth: 1,
-                            borderColor: city.toLowerCase() === c.name.toLowerCase() ? theme.colors.primary : theme.colors.hairline,
-                            backgroundColor: city.toLowerCase() === c.name.toLowerCase() ? (isDark ? "#0284c7" : "#0ea5e9") : theme.colors.canvas,
-                            justifyContent: "center",
-                            alignItems: "center",
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              fontWeight: "600",
-                              color: city.toLowerCase() === c.name.toLowerCase() ? "#ffffff" : theme.colors.ink,
-                            }}
-                          >
-                            {c.name}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-                )}
+                <Text style={[styles.sectionTitle, { color: theme.colors.mute, marginBottom: 8 }]}>Site Location</Text>
 
                 <View style={styles.formGroup}>
-                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Street / Site Address *</Text>
+                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Street / Area *</Text>
                   <TextInput
                     value={address}
                     onChangeText={setAddress}
@@ -1321,7 +1144,7 @@ export default function ClientsScreen() {
 
                 <View style={styles.rowInputs}>
                   <View style={[styles.formGroup, { flex: 1 }]}>
-                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>City *</Text>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>City / Town / Village *</Text>
                     <TextInput
                       value={city}
                       onChangeText={setCity}
@@ -1363,6 +1186,7 @@ export default function ClientsScreen() {
                       placeholder="411001"
                       placeholderTextColor={theme.colors.mute}
                       keyboardType="numeric"
+                      maxLength={6}
                       style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
                     />
                   </View>
@@ -1385,61 +1209,62 @@ export default function ClientsScreen() {
                 {isBillingAddressDifferent && (
                   <View style={{ marginTop: 8 }}>
                     <View style={styles.formGroup}>
-                      <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Billing Address</Text>
+                      <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Billing Street / Area</Text>
                       <TextInput
                         value={billingAddress}
                         onChangeText={setBillingAddress}
-                        placeholder="e.g. Corporate HQ, Tower B, Cyber City"
+                        placeholder="e.g. Corporate HQ, 5th Floor, Tower B, Cyber City"
                         placeholderTextColor={theme.colors.mute}
-                        style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                        style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
                       />
                     </View>
 
                     <View style={styles.rowInputs}>
                       <View style={[styles.formGroup, { flex: 1 }]}>
-                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>City</Text>
+                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Billing City / Town / Village</Text>
                         <TextInput
                           value={billingCity}
                           onChangeText={setBillingCity}
                           placeholder="e.g. Gurugram"
                           placeholderTextColor={theme.colors.mute}
-                          style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                          style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
                         />
                       </View>
 
                       <View style={[styles.formGroup, { flex: 1 }]}>
-                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>District</Text>
+                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Billing District</Text>
                         <TextInput
                           value={billingDistrict}
                           onChangeText={setBillingDistrict}
                           placeholder="e.g. Gurugram"
                           placeholderTextColor={theme.colors.mute}
-                          style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                          style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
                         />
                       </View>
                     </View>
 
                     <View style={styles.rowInputs}>
                       <View style={[styles.formGroup, { flex: 1 }]}>
-                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>State</Text>
+                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Billing State</Text>
                         <TextInput
                           value={billingState}
                           onChangeText={setBillingState}
                           placeholder="e.g. Haryana"
                           placeholderTextColor={theme.colors.mute}
-                          style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                          style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
                         />
                       </View>
 
                       <View style={[styles.formGroup, { flex: 1 }]}>
-                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Pincode</Text>
+                        <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Billing Pincode</Text>
                         <TextInput
                           value={billingPincode}
                           onChangeText={setBillingPincode}
                           placeholder="122002"
                           placeholderTextColor={theme.colors.mute}
                           keyboardType="numeric"
-                          style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink }]}
+                          maxLength={6}
+                          style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
                         />
                       </View>
                     </View>

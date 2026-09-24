@@ -8,7 +8,6 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
-  TextInput,
 } from 'react-native';
 import { Button, Input, useTheme } from '../ui';
 import { supabase } from '../../lib/supabase';
@@ -18,10 +17,15 @@ import {
   validateLicenseNumber,
   formatAadhaar,
   parseProfileShiftTime,
-  INDIAN_STATES,
 } from '@reachinternational/utils';
 import { isSupervisedRole } from '@reachinternational/permissions';
 import { notifyUserCreated } from '../../lib/notifications';
+import {
+  MobileFormSectionCard,
+  MobileAddressFields,
+  MobileSalaryField,
+  MobileSubmitButton,
+} from '../forms';
 import {
   X,
   UserPlus,
@@ -29,13 +33,11 @@ import {
   Mail,
   Phone,
   Lock,
-  MapPin,
   ChevronDown,
   Check,
   ShieldCheck,
   CreditCard,
   Clock,
-  Search,
   CheckCircle2,
 } from 'lucide-react-native';
 
@@ -69,13 +71,11 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   const [role, setRole] = useState('operator');
   const [rolePickerVisible, setRolePickerVisible] = useState(false);
   const [shiftTime, setShiftTime] = useState('Day Shift (08:00 AM - 08:00 PM)');
-  const [address, setAddress] = useState('');
+  const [street, setStreet] = useState('');
   const [city, setCity] = useState('');
   const [district, setDistrict] = useState('');
   const [stateVal, setStateVal] = useState('Maharashtra');
-  const [stateIdVal, setStateIdVal] = useState('27');
-  const [statePickerVisible, setStatePickerVisible] = useState(false);
-  const [stateSearch, setStateSearch] = useState('');
+  const [stateIdVal, setStateIdVal] = useState<number>(27);
   const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
   const [password, setPassword] = useState('Welcome@123');
@@ -112,14 +112,26 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
   const selectedRoleObj = availableRoles.find((r) => r.value === role) || availableRoles[0];
   const selectedSupervisor = supervisors.find((s) => s.id === supervisorId);
 
-  const filteredStates = INDIAN_STATES.filter((s) =>
-    s.name.toLowerCase().includes(stateSearch.toLowerCase())
-  );
+  const isOperator = role === 'operator';
+  const cleanPhone = phone.replace(/[^0-9+]/g, '');
 
-  const filteredSupervisors = supervisors.filter((s) =>
-    s.full_name.toLowerCase().includes(supervisorSearch.toLowerCase()) ||
-    (s.email && s.email.toLowerCase().includes(supervisorSearch.toLowerCase()))
+  const section1Complete = Boolean(
+    fullName.trim().length >= 2 &&
+    email.trim().includes('@') &&
+    cleanPhone.length >= 10 &&
+    password.trim().length >= 6
   );
+  const section2Complete = Boolean(shiftTime.trim().length > 0);
+  const section3Complete = Boolean(street.trim() && city.trim() && district.trim() && stateVal.trim());
+  const section4Complete = isOperator ? Boolean(monthlySalary && Number(monthlySalary) > 0) : true;
+
+  const isAllMandatoryFilled = section1Complete && section2Complete && section3Complete && section4Complete;
+  const missingMandatoryCount = [
+    !section1Complete,
+    !section2Complete,
+    !section3Complete,
+    isOperator && !section4Complete,
+  ].filter(Boolean).length;
 
   const handleCreate = async () => {
     setError('');
@@ -127,7 +139,6 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
       setError('Full Name is required (minimum 2 characters).');
       return;
     }
-    const cleanPhone = phone.replace(/[^0-9+]/g, '');
     if (cleanPhone.length < 10) {
       setError('Valid 10-digit mobile phone number is required.');
       return;
@@ -140,8 +151,8 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
       setError('Password must be at least 6 characters.');
       return;
     }
-    if (!city.trim() || !district.trim() || !stateVal.trim()) {
-      setError('City, District, and State are required.');
+    if (!street.trim() || !city.trim() || !district.trim() || !stateVal.trim()) {
+      setError('Street address, City, District, and State are required.');
       return;
     }
 
@@ -187,15 +198,15 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
             role,
             supervisor_id: isSupervisedRole(role) ? supervisorId || null : null,
             shift_time: shiftTime.trim() || null,
-            street: address.trim() || null,
-            address: address.trim() || null,
+            street: street.trim() || null,
+            address: street.trim() || null,
             monthly_salary: sal,
             complete_profile: true,
             city: city.trim(),
             district: district.trim(),
             state: stateVal.trim(),
             state_id: stateIdVal ? Number(stateIdVal) : null,
-            location: `${city.trim()}, ${district.trim()}, ${stateVal.trim()}`,
+            location: `${street.trim()}, ${city.trim()}, ${district.trim()}, ${stateVal.trim()}`,
             aadhaar_number: cleanAadhaar,
             license_number: formattedLic,
             status: 'active',
@@ -217,7 +228,8 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
               supervisor_id: isSupervisedRole(role) ? supervisorId || null : null,
               shift_start_time: parsedShift?.startTime || null,
               shift_end_time: parsedShift?.endTime || null,
-              street: address.trim() || null,
+              street: street.trim() || null,
+              address: street.trim() || null,
               monthly_salary: sal,
               complete_profile: true,
               city: city.trim(),
@@ -295,175 +307,181 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
           ) : null}
 
           <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
-            <Input
-              label="Full Name *"
-              placeholder="e.g. Ramesh Verma"
-              value={fullName}
-              onChangeText={setFullName}
-              leftIcon={<User size={16} color={theme.colors.mute} />}
-            />
+            {/* Section 1: Account Credentials */}
+            <MobileFormSectionCard
+              stepNumber={1}
+              title="Account Credentials"
+              description="Login email, initial password & designated role"
+              isMandatory={true}
+              isCompleted={section1Complete}
+            >
+              <Input
+                label="Full Name *"
+                placeholder="e.g. Ramesh Verma"
+                value={fullName}
+                onChangeText={setFullName}
+                leftIcon={<User size={16} color={theme.colors.mute} />}
+              />
 
-            <Input
-              label="Email Address *"
-              placeholder="e.g. ramesh@reachinternational.co.in"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              leftIcon={<Mail size={16} color={theme.colors.mute} />}
-            />
+              <Input
+                label="Email Address *"
+                placeholder="e.g. ramesh@reachinternational.co.in"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                leftIcon={<Mail size={16} color={theme.colors.mute} />}
+              />
 
-            <Input
-              label="Mobile Number *"
-              placeholder="+91 98765 43210"
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              leftIcon={<Phone size={16} color={theme.colors.mute} />}
-            />
+              <Input
+                label="Mobile Number *"
+                placeholder="+91 98765 43210"
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+                leftIcon={<Phone size={16} color={theme.colors.mute} />}
+              />
 
-            {/* Role Trigger */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Designated Role *</Text>
-              <TouchableOpacity
-                onPress={() => setRolePickerVisible(true)}
-                activeOpacity={0.8}
-                style={[
-                  styles.roleTrigger,
-                  { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
-                ]}
-              >
-                <Text style={[styles.roleTriggerText, { color: theme.colors.ink }]}>{selectedRoleObj.label}</Text>
-                <ChevronDown size={16} color={theme.colors.mute} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Conditional Supervisor Trigger */}
-            {isSupervisedRole(role) && (
+              {/* Role Trigger */}
               <View style={styles.inputGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Assign Supervisor</Text>
+                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Designated Role *</Text>
                 <TouchableOpacity
-                  onPress={() => setSupervisorModalVisible(true)}
+                  onPress={() => setRolePickerVisible(true)}
                   activeOpacity={0.8}
                   style={[
                     styles.roleTrigger,
                     { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
                   ]}
                 >
-                  <Text style={[styles.roleTriggerText, { color: selectedSupervisor ? theme.colors.ink : theme.colors.mute }]}>
-                    {selectedSupervisor ? selectedSupervisor.full_name : 'Select supervisor...'}
-                  </Text>
+                  <Text style={[styles.roleTriggerText, { color: theme.colors.ink }]}>{selectedRoleObj.label}</Text>
                   <ChevronDown size={16} color={theme.colors.mute} />
                 </TouchableOpacity>
               </View>
-            )}
 
-            {/* Operator Monthly Salary Input */}
-            {role === 'operator' && (
+              {/* Conditional Supervisor Trigger */}
+              {isSupervisedRole(role) && (
+                <View style={styles.inputGroup}>
+                  <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Assign Supervisor</Text>
+                  <TouchableOpacity
+                    onPress={() => setSupervisorModalVisible(true)}
+                    activeOpacity={0.8}
+                    style={[
+                      styles.roleTrigger,
+                      { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
+                    ]}
+                  >
+                    <Text style={[styles.roleTriggerText, { color: selectedSupervisor ? theme.colors.ink : theme.colors.mute }]}>
+                      {selectedSupervisor ? selectedSupervisor.full_name : 'Select supervisor...'}
+                    </Text>
+                    <ChevronDown size={16} color={theme.colors.mute} />
+                  </TouchableOpacity>
+                </View>
+              )}
+
               <Input
-                label="Monthly Salary (₹) *"
-                placeholder="e.g. 25000"
+                label="Initial Password *"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                leftIcon={<Lock size={16} color={theme.colors.mute} />}
+              />
+            </MobileFormSectionCard>
+
+            {/* Section 2: Shift Schedule */}
+            <MobileFormSectionCard
+              stepNumber={2}
+              title="Shift Schedule"
+              description="Operating work schedule window"
+              isMandatory={true}
+              isCompleted={section2Complete}
+            >
+              <Input
+                label="Shift Schedule *"
+                placeholder="e.g. Day Shift (08:00 AM - 08:00 PM)"
+                value={shiftTime}
+                onChangeText={setShiftTime}
+                leftIcon={<Clock size={16} color={theme.colors.mute} />}
+              />
+            </MobileFormSectionCard>
+
+            {/* Section 3: Work Location & Address */}
+            <MobileFormSectionCard
+              stepNumber={3}
+              title="Work Location & Address"
+              description="Street + City/Town/Village + District + State"
+              isMandatory={true}
+              isCompleted={section3Complete}
+            >
+              <MobileAddressFields
+                street={street}
+                city={city}
+                district={district}
+                stateName={stateVal}
+                stateId={stateIdVal}
+                onStreetChange={setStreet}
+                onCityChange={setCity}
+                onDistrictChange={setDistrict}
+                onStateChange={(id, name) => {
+                  setStateIdVal(id);
+                  setStateVal(name);
+                }}
+                required={true}
+              />
+            </MobileFormSectionCard>
+
+            {/* Section 4: Compensation & Identity */}
+            <MobileFormSectionCard
+              stepNumber={4}
+              title="Compensation & KYC"
+              description={
+                isOperator
+                  ? 'Mandatory operator base compensation & official KYC'
+                  : 'Base compensation & official KYC (Optional)'
+              }
+              isMandatory={isOperator}
+              isCompleted={section4Complete}
+            >
+              <MobileSalaryField
                 value={monthlySalary}
                 onChangeText={setMonthlySalary}
+                role={role}
+              />
+
+              <Input
+                label="Aadhaar Card Number"
+                placeholder="12-digit Aadhaar Number"
+                value={aadhaarNumber}
+                onChangeText={(val) => setAadhaarNumber(formatAadhaar(val))}
                 keyboardType="number-pad"
+                maxLength={14}
+                leftIcon={<ShieldCheck size={16} color={theme.colors.mute} />}
+              />
+
+              <Input
+                label="Driving Licence Number"
+                placeholder="e.g. MH12 20110012345"
+                value={licenseNumber}
+                onChangeText={(val) => setLicenseNumber(val.toUpperCase())}
+                autoCapitalize="characters"
+                maxLength={25}
                 leftIcon={<CreditCard size={16} color={theme.colors.mute} />}
               />
-            )}
-
-            <Input
-              label="Shift Schedule"
-              placeholder="e.g. Day Shift (08:00 AM - 08:00 PM)"
-              value={shiftTime}
-              onChangeText={setShiftTime}
-              leftIcon={<Clock size={16} color={theme.colors.mute} />}
-            />
-
-            <Input
-              label="Street Address"
-              placeholder="e.g. Plot 42, MIDC Area"
-              value={address}
-              onChangeText={setAddress}
-              leftIcon={<MapPin size={16} color={theme.colors.mute} />}
-            />
-
-            <View style={styles.rowInputs}>
-              <View style={{ flex: 1 }}>
-                <Input
-                  label="City *"
-                  placeholder="Pune"
-                  value={city}
-                  onChangeText={setCity}
-                  leftIcon={<MapPin size={16} color={theme.colors.mute} />}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Input
-                  label="District *"
-                  placeholder="Pune"
-                  value={district}
-                  onChangeText={setDistrict}
-                  leftIcon={<MapPin size={16} color={theme.colors.mute} />}
-                />
-              </View>
-            </View>
-
-            {/* State Picker Trigger */}
-            <View style={styles.inputGroup}>
-              <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>State *</Text>
-              <TouchableOpacity
-                onPress={() => setStatePickerVisible(true)}
-                activeOpacity={0.8}
-                style={[
-                  styles.roleTrigger,
-                  { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline },
-                ]}
-              >
-                <Text style={[styles.roleTriggerText, { color: stateVal ? theme.colors.ink : theme.colors.mute }]}>
-                  {stateVal || 'Select state...'}
-                </Text>
-                <ChevronDown size={16} color={theme.colors.mute} />
-              </TouchableOpacity>
-            </View>
-
-            <Input
-              label="Aadhaar Card Number"
-              placeholder="12-digit Aadhaar Number"
-              value={aadhaarNumber}
-              onChangeText={(val) => setAadhaarNumber(formatAadhaar(val))}
-              keyboardType="number-pad"
-              maxLength={14}
-              leftIcon={<ShieldCheck size={16} color={theme.colors.mute} />}
-            />
-
-            <Input
-              label="Driving Licence Number"
-              placeholder="e.g. MH12 20110012345"
-              value={licenseNumber}
-              onChangeText={(val) => setLicenseNumber(val.toUpperCase())}
-              autoCapitalize="characters"
-              maxLength={25}
-              leftIcon={<CreditCard size={16} color={theme.colors.mute} />}
-            />
-
-            <Input
-              label="Initial Password *"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              leftIcon={<Lock size={16} color={theme.colors.mute} />}
-            />
+            </MobileFormSectionCard>
           </ScrollView>
 
           {/* Footer Actions */}
           <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
-            <Button label="Cancel" onPress={onClose} variant="outline" size="md" />
-            <Button
-              label="Create User"
-              onPress={handleCreate}
-              isLoading={isLoading}
-              variant="primary"
-              size="md"
-            />
+            <Button label="Cancel" onPress={onClose} variant="outline" size="md" style={{ flex: 1, marginRight: 8 }} />
+            <View style={{ flex: 1.5 }}>
+              <MobileSubmitButton
+                isReady={isAllMandatoryFilled}
+                isLoading={isLoading}
+                label="Create User"
+                loadingLabel="Creating Account..."
+                missingCount={missingMandatoryCount}
+                onPress={handleCreate}
+              />
+            </View>
           </View>
         </View>
 
@@ -498,58 +516,6 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
                         {r.label}
                       </Text>
                       {isSelected && <Check size={18} color={theme.colors.link} />}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
-        {/* State Picker Modal */}
-        <Modal visible={statePickerVisible} animationType="slide" transparent onRequestClose={() => setStatePickerVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select Indian State</Text>
-                <TouchableOpacity onPress={() => setStatePickerVisible(false)} style={styles.closeBtn}>
-                  <X size={18} color={theme.colors.ink} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={[styles.searchWrap, { borderBottomColor: theme.colors.hairline }]}>
-                <Search size={15} color={theme.colors.mute} />
-                <TextInput
-                  style={[styles.searchInput, { color: theme.colors.ink }]}
-                  placeholder="Search state..."
-                  placeholderTextColor={theme.colors.mute}
-                  value={stateSearch}
-                  onChangeText={setStateSearch}
-                />
-              </View>
-
-              <ScrollView style={styles.roleListScroll} showsVerticalScrollIndicator={false}>
-                {filteredStates.map((st) => {
-                  const isSelected = stateIdVal === String(st.id) || stateVal === st.name;
-                  return (
-                    <TouchableOpacity
-                      key={st.id}
-                      onPress={() => {
-                        setStateVal(st.name);
-                        setStateIdVal(String(st.id));
-                        setStatePickerVisible(false);
-                        setStateSearch('');
-                      }}
-                      style={[
-                        styles.roleItemRow,
-                        { borderBottomColor: theme.colors.hairline },
-                        isSelected && { backgroundColor: theme.colors.link + '12' },
-                      ]}
-                    >
-                      <Text style={[styles.roleItemText, { color: isSelected ? theme.colors.link : theme.colors.ink, fontWeight: isSelected ? '700' : '500' }]}>
-                        {st.name}
-                      </Text>
-                      {isSelected && <Check size={16} color={theme.colors.link} />}
                     </TouchableOpacity>
                   );
                 })}
@@ -706,10 +672,6 @@ const styles = StyleSheet.create({
     padding: spacingNumeric.lg,
     gap: spacingNumeric.md,
   },
-  rowInputs: {
-    flexDirection: 'row',
-    gap: spacingNumeric.sm,
-  },
   inputGroup: {
     gap: 6,
   },
@@ -760,19 +722,6 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 14,
     fontWeight: '700',
-  },
-  searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacingNumeric.md,
-    paddingVertical: spacingNumeric.xs,
-    borderBottomWidth: 1,
-    gap: spacingNumeric.xs,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    paddingVertical: 4,
   },
   roleListScroll: {
     maxHeight: 300,

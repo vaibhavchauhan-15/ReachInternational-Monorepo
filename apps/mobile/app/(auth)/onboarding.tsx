@@ -18,7 +18,6 @@ import {
   validateAadhaarNumber,
   validateLicenseNumber,
   formatAadhaar,
-  INDIAN_STATES,
   computeShiftTiming,
   parseProfileShiftTime,
 } from '@reachinternational/utils';
@@ -31,9 +30,14 @@ import {
 } from '../../lib/documents';
 import { MobileDocumentUploadCard } from '../../components/documents/MobileDocumentUploadCard';
 import {
+  MobileFormSectionCard,
+  MobileAddressFields,
+  MobileSalaryField,
+  MobileSubmitButton,
+} from '../../components/forms';
+import {
   User as UserIcon,
   Phone,
-  MapPin,
   ShieldCheck,
   CreditCard,
   ChevronDown,
@@ -58,15 +62,14 @@ export default function OnboardingScreen() {
   const [phone, setPhone] = useState('');
   const [selectedRole, setSelectedRole] = useState('operator');
   const [roleModalVisible, setRoleModalVisible] = useState(false);
+  const [monthlySalary, setMonthlySalary] = useState('');
   const [shiftStartTime, setShiftStartTime] = useState('08:00 AM');
   const [shiftEndTime, setShiftEndTime] = useState('08:00 PM');
+  const [street, setStreet] = useState('');
   const [city, setCity] = useState('');
   const [district, setDistrict] = useState('');
-  const [address, setAddress] = useState('');
   const [stateVal, setStateVal] = useState('');
   const [stateId, setStateId] = useState<number | null>(null);
-  const [stateModalVisible, setStateModalVisible] = useState(false);
-  const [stateSearch, setStateSearch] = useState('');
   const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
 
@@ -93,6 +96,9 @@ export default function OnboardingScreen() {
       }
       if (userProfile.phone) setPhone(userProfile.phone);
       if (userProfile.role) setSelectedRole(userProfile.role);
+      if ((userProfile as any).monthly_salary) {
+        setMonthlySalary(String((userProfile as any).monthly_salary));
+      }
       if (userProfile.shift_time) {
         const parsed = parseProfileShiftTime(userProfile.shift_time);
         if (parsed && parsed.startTime && parsed.endTime) {
@@ -102,7 +108,11 @@ export default function OnboardingScreen() {
       }
       if (userProfile.city) setCity(userProfile.city);
       if (userProfile.district) setDistrict(userProfile.district);
-      if (userProfile.address) setAddress(userProfile.address);
+      if ((userProfile as any).street) {
+        setStreet((userProfile as any).street);
+      } else if (userProfile.address) {
+        setStreet(userProfile.address);
+      }
       if (userProfile.state) setStateVal(userProfile.state);
       if (userProfile.state_id) setStateId(userProfile.state_id);
       if (userProfile.aadhaar_number) setAadhaarNumber(formatAadhaar(userProfile.aadhaar_number));
@@ -237,10 +247,16 @@ export default function OnboardingScreen() {
       setErrorMessage('State is required.');
       return;
     }
-    if (!address.trim()) {
-      setErrorMessage('Street / Site address is required.');
-      return;
+
+    const effectiveRole = userProfile?.role || selectedRole;
+    if (effectiveRole === 'operator') {
+      const sal = Number(monthlySalary);
+      if (!monthlySalary || isNaN(sal) || sal <= 0) {
+        setErrorMessage('Monthly salary is mandatory for operator accounts and must be greater than 0.');
+        return;
+      }
     }
+
     if (!aadhaarNumber.trim()) {
       setErrorMessage('Aadhaar card number is required.');
       return;
@@ -281,9 +297,9 @@ export default function OnboardingScreen() {
         p_user_id: user.id,
         p_full_name: fullName.trim(),
         p_phone: cleanPhone,
-        p_role: userProfile?.role || selectedRole,
+        p_role: effectiveRole,
         p_shift_time: finalShift,
-        p_address: address.trim(),
+        p_address: street.trim(),
         p_city: city.trim(),
         p_district: district.trim(),
         p_state: stateVal.trim(),
@@ -291,6 +307,17 @@ export default function OnboardingScreen() {
         p_aadhaar_number: cleanAadhaar,
         p_license_number: formattedLic,
       });
+
+      if (!rpcError && (monthlySalary || street.trim())) {
+        await supabase
+          .from('users')
+          .update({
+            street: street.trim(),
+            address: street.trim(),
+            monthly_salary: monthlySalary ? Number(monthlySalary) : null,
+          })
+          .eq('id', user.id);
+      }
 
       if (rpcError) {
         // Fallback: direct table update
@@ -302,7 +329,9 @@ export default function OnboardingScreen() {
             phone: cleanPhone,
             shift_start_time: shiftStartTime.trim() || null,
             shift_end_time: shiftEndTime.trim() || null,
-            street: address.trim(),
+            street: street.trim(),
+            address: street.trim(),
+            monthly_salary: monthlySalary ? Number(monthlySalary) : null,
             city: city.trim(),
             district: district.trim(),
             state: stateVal.trim(),
@@ -332,9 +361,45 @@ export default function OnboardingScreen() {
     }
   };
 
-  const filteredStates = INDIAN_STATES.filter((s) =>
-    s.name.toLowerCase().includes(stateSearch.toLowerCase())
+  const cleanPhone = phone.replace(/[^0-9+]/g, '');
+  const effectiveRole = userProfile?.role || selectedRole;
+
+  const section1Complete = Boolean(
+    fullName.trim().length >= 2 &&
+    cleanPhone.length >= 10 &&
+    (effectiveRole !== 'operator' || (monthlySalary && Number(monthlySalary) > 0))
   );
+
+  const section2Complete = Boolean(
+    shiftStartTime.trim().length > 0 &&
+    shiftEndTime.trim().length > 0
+  );
+
+  const section3Complete = Boolean(
+    city.trim().length >= 2 &&
+    district.trim().length >= 2 &&
+    (stateVal.trim().length > 0 || stateId !== null)
+  );
+
+  const section4Complete = Boolean(
+    aadhaarNumber.replace(/\D/g, '').length === 12
+  );
+
+  const isAllMandatoryFilled = Boolean(
+    section1Complete && section2Complete && section3Complete && section4Complete
+  );
+
+  const missingFields: string[] = [];
+  if (!fullName.trim() || fullName.trim().length < 2) missingFields.push('Full Name');
+  if (cleanPhone.length < 10) missingFields.push('10-digit Phone');
+  if (effectiveRole === 'operator' && (!monthlySalary || Number(monthlySalary) <= 0)) missingFields.push('Monthly Salary');
+  if (!shiftStartTime.trim() || !shiftEndTime.trim()) missingFields.push('Shift Hours');
+  if (!city.trim() || city.trim().length < 2) missingFields.push('City/Town');
+  if (!district.trim() || district.trim().length < 2) missingFields.push('District');
+  if (!stateVal.trim() && !stateId) missingFields.push('State');
+  if (aadhaarNumber.replace(/\D/g, '').length !== 12) missingFields.push('12-digit Aadhaar');
+
+  const missingMandatoryCount = missingFields.length;
 
   return (
     <KeyboardAvoidingView
@@ -366,14 +431,13 @@ export default function OnboardingScreen() {
 
         <Card variant="elevated" style={styles.formCard}>
           {/* Section 1: Account Information & Role */}
-          <View style={[styles.sectionContainer, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-            <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
-              <View style={[styles.stepPill, { backgroundColor: theme.colors.link + '18' }]}>
-                <Text style={[styles.stepNumber, { color: theme.colors.link }]}>1</Text>
-              </View>
-              <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>Account & Role</Text>
-            </View>
-
+          <MobileFormSectionCard
+            stepNumber={1}
+            title="Account & Role"
+            description="Your full name, phone number, and organization role."
+            isMandatory={true}
+            isCompleted={section1Complete}
+          >
             <Input
               label="Full Name *"
               value={fullName}
@@ -414,24 +478,27 @@ export default function OnboardingScreen() {
                 <ChevronDown size={16} color={theme.colors.mute} />
               </TouchableOpacity>
             </View>
-          </View>
+
+            {/* Monthly Salary Input for Operators */}
+            {effectiveRole === 'operator' && (
+              <View style={{ paddingTop: 6, borderTopWidth: 1, borderTopColor: theme.colors.hairline }}>
+                <MobileSalaryField
+                  value={monthlySalary}
+                  onChangeText={setMonthlySalary}
+                  role={effectiveRole}
+                />
+              </View>
+            )}
+          </MobileFormSectionCard>
 
           {/* Section 2: Work Shift Schedule */}
-          <View style={[styles.sectionContainer, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-            <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
-              <View style={[styles.stepPill, { backgroundColor: theme.colors.link + '18' }]}>
-                <Text style={[styles.stepNumber, { color: theme.colors.link }]}>2</Text>
-              </View>
-              <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>Work Shift Schedule</Text>
-              {shiftSummary?.isValid && (
-                <View style={[styles.shiftBadge, { backgroundColor: theme.colors.link + '15', borderColor: theme.colors.link + '30' }]}>
-                  <Text style={[styles.shiftBadgeText, { color: theme.colors.link }]}>
-                    {shiftSummary.isOvernight ? '🌙' : '☀️'} {shiftSummary.durationFormatted}
-                  </Text>
-                </View>
-              )}
-            </View>
-
+          <MobileFormSectionCard
+            stepNumber={2}
+            title="Work Shift Schedule"
+            description="Assigned shift schedule for operations."
+            isMandatory={true}
+            isCompleted={section2Complete}
+          >
             <View style={styles.timeInputsRow}>
               <View style={styles.timeInputCol}>
                 <TimeInput
@@ -450,79 +517,49 @@ export default function OnboardingScreen() {
                 />
               </View>
             </View>
-          </View>
+
+            {shiftSummary?.isValid && (
+              <View style={[styles.shiftBadge, { backgroundColor: theme.colors.link + '15', borderColor: theme.colors.link + '30' }]}>
+                <Text style={[styles.shiftBadgeText, { color: theme.colors.link }]}>
+                  {shiftSummary.isOvernight ? '🌙' : '☀️'} {shiftSummary.durationFormatted}
+                </Text>
+              </View>
+            )}
+          </MobileFormSectionCard>
 
           {/* Section 3: Work Location & Address */}
-          <View style={[styles.sectionContainer, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-            <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
-              <View style={[styles.stepPill, { backgroundColor: theme.colors.link + '18' }]}>
-                <Text style={[styles.stepNumber, { color: theme.colors.link }]}>3</Text>
-              </View>
-              <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>Work Location & Address</Text>
-            </View>
-
-            <View style={styles.row}>
-              <View style={styles.col}>
-                <Input
-                  label="City / Town *"
-                  value={city}
-                  onChangeText={setCity}
-                  placeholder="e.g. Pune"
-                  leftIcon={<MapPin size={16} color={theme.colors.mute} />}
-                />
-              </View>
-              <View style={styles.col}>
-                <Input
-                  label="District *"
-                  value={district}
-                  onChangeText={setDistrict}
-                  placeholder="e.g. Pune"
-                  leftIcon={<MapPin size={16} color={theme.colors.mute} />}
-                />
-              </View>
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={[styles.label, { color: theme.colors.ink }]}>
-                State <Text style={styles.requiredStar}>*</Text>
-              </Text>
-              <TouchableOpacity
-                style={[
-                  styles.selectTrigger,
-                  { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated },
-                ]}
-                onPress={() => setStateModalVisible(true)}
-              >
-                <Text
-                  style={[
-                    styles.selectTriggerText,
-                    { color: stateVal ? theme.colors.ink : theme.colors.mute },
-                  ]}
-                >
-                  {stateVal || 'Select State...'}
-                </Text>
-                <ChevronDown size={16} color={theme.colors.mute} />
-              </TouchableOpacity>
-            </View>
-
-            <Input
-              label="Street / Site Base Address *"
-              value={address}
-              onChangeText={setAddress}
-              placeholder="e.g. Plot No. 42, MIDC Chakan"
-              leftIcon={<MapPin size={16} color={theme.colors.mute} />}
+          <MobileFormSectionCard
+            stepNumber={3}
+            title="Work Location & Address"
+            description="Operating site address and geographic base."
+            isMandatory={true}
+            isCompleted={section3Complete}
+          >
+            <MobileAddressFields
+              street={street}
+              city={city}
+              district={district}
+              stateName={stateVal}
+              stateId={stateId}
+              onStreetChange={setStreet}
+              onCityChange={setCity}
+              onDistrictChange={setDistrict}
+              onStateChange={(id, name) => {
+                setStateId(id);
+                setStateVal(name);
+              }}
+              required={true}
             />
-          </View>
+          </MobileFormSectionCard>
 
           {/* Section 4: Identity Verification */}
-          <View style={[styles.sectionContainer, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
-            <View style={[styles.sectionHeaderRow, { borderBottomColor: theme.colors.hairline }]}>
-              <View style={[styles.stepPill, { backgroundColor: theme.colors.link + '18' }]}>
-                <Text style={[styles.stepNumber, { color: theme.colors.link }]}>4</Text>
-              </View>
-              <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>Identity Verification</Text>
-            </View>
-
+          <MobileFormSectionCard
+            stepNumber={4}
+            title="Identity Verification"
+            description="Regulatory identity compliance documents."
+            isMandatory={true}
+            isCompleted={section4Complete}
+          >
             <Input
               label="Aadhaar Card Number *"
               value={aadhaarNumber}
@@ -586,7 +623,7 @@ export default function OnboardingScreen() {
               uploadProgress={licenseProgress}
               errorMessage={licenseError}
             />
-          </View>
+          </MobileFormSectionCard>
 
           {/* One-Time Reassurance Banner */}
           <View style={[styles.noticeBox, { backgroundColor: theme.colors.link + '12', borderColor: theme.colors.link + '30' }]}>
@@ -599,12 +636,14 @@ export default function OnboardingScreen() {
 
           {/* Submit Button */}
           <View style={styles.submitContainer}>
-            <Button
-              label={isLoading ? 'Saving Profile...' : 'Complete Profile & Enter'}
-              onPress={handleComplete}
+            <MobileSubmitButton
+              isReady={isAllMandatoryFilled}
               isLoading={isLoading}
-              shape="square"
-              fullWidth
+              onPress={handleComplete}
+              label="Complete Profile & Enter"
+              loadingLabel="Saving Profile..."
+              missingCount={missingMandatoryCount}
+              helperText="All required details completed. Ready to activate profile."
             />
           </View>
         </Card>
@@ -644,53 +683,6 @@ export default function OnboardingScreen() {
                         {r.desc}
                       </Text>
                     </View>
-                    {isSelected && <Check size={18} color={theme.colors.link} />}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* State Picker Modal */}
-      <Modal visible={stateModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated }]}>
-            <View style={[styles.modalHeader, { borderColor: theme.colors.hairline }]}>
-              <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select State</Text>
-              <TouchableOpacity onPress={() => setStateModalVisible(false)} hitSlop={8}>
-                <X size={20} color={theme.colors.mute} />
-              </TouchableOpacity>
-            </View>
-            <View style={{ paddingHorizontal: 16, paddingTop: 10 }}>
-              <Input
-                value={stateSearch}
-                onChangeText={setStateSearch}
-                placeholder="Search state..."
-              />
-            </View>
-            <ScrollView style={styles.modalList}>
-              {filteredStates.map((s) => {
-                const isSelected = stateId === s.id || stateVal === s.name;
-                return (
-                  <TouchableOpacity
-                    key={s.id}
-                    style={[
-                      styles.modalOption,
-                      { borderColor: theme.colors.hairline },
-                      isSelected && { backgroundColor: theme.colors.link + '15' },
-                    ]}
-                    onPress={() => {
-                      setStateVal(s.name);
-                      setStateId(s.id);
-                      setStateModalVisible(false);
-                      setStateSearch('');
-                    }}
-                  >
-                    <Text style={[styles.optionLabel, { color: isSelected ? theme.colors.link : theme.colors.ink }]}>
-                      {s.name}
-                    </Text>
                     {isSelected && <Check size={18} color={theme.colors.link} />}
                   </TouchableOpacity>
                 );

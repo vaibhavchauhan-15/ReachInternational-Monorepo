@@ -3,11 +3,10 @@
 import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
-  AnimatedChevronDown,
   AnimatedCheck,
   AnimatedX,
 } from "./animated-icons";
-import { Search, Clock, Users, UserCheck } from "lucide-react";
+import { Search, Clock, Users, UserCheck, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDynamicDropdownPosition } from "@/lib/hooks/useDynamicDropdownPosition";
 
@@ -277,7 +276,7 @@ export function MultiUserSelect({
               Clear
             </button>
           )}
-          <AnimatedChevronDown
+          <ChevronDown
             size={16}
             className={`text-[var(--color-mute)] transition-transform duration-200 ${
               isOpen ? "rotate-180 text-sky-500" : ""

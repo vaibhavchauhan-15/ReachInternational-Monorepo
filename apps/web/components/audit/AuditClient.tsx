@@ -305,9 +305,20 @@ export function AuditClient({
     }
 
     startTransition(() => {
-      router.push(`/audit?${current.toString()}`);
+      router.replace(`/audit?${current.toString()}`, { scroll: false });
     });
   };
+
+  // Sync on browser Back / Forward
+  useEffect(() => {
+    const handlePopState = () => {
+      startTransition(() => {
+        router.refresh();
+      });
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [router]);
 
   const handleTabChange = (newTab: AuditTab) => {
     handleFilterChange({ tab: newTab, category: undefined, page: 1 });

@@ -88,7 +88,7 @@ export function Tabs({
                   : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
               } ${tab.disabled ? "opacity-40 cursor-not-allowed" : ""}`}
             >
-              {tab.icon && <span className="interactive-icon icon-bounce">{tab.icon}</span>}
+              {tab.icon && <span className="shrink-0 flex items-center justify-center">{tab.icon}</span>}
               <span>{tab.label}</span>
               {tab.count !== undefined && (
                 <span
@@ -136,7 +136,7 @@ export function Tabs({
                 : "text-[var(--color-mute)] hover:text-[var(--color-ink)] hover:bg-[var(--color-canvas)]/50"
             } ${tab.disabled ? "opacity-40 cursor-not-allowed" : ""}`}
           >
-            {tab.icon && <span className="interactive-icon icon-bounce">{tab.icon}</span>}
+            {tab.icon && <span className="shrink-0 flex items-center justify-center">{tab.icon}</span>}
             <span>{tab.label}</span>
             {tab.count !== undefined && (
               <span

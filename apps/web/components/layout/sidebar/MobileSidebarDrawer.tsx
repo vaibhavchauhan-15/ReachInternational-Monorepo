@@ -111,7 +111,7 @@ export function MobileSidebarDrawer({ user, items, isOpen, onClose }: MobileSide
                           : "text-[var(--color-body)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]"
                       }`}
                     >
-                      <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-sky-600 dark:text-sky-400" : ""}`} />
+                      <Icon size={16} className={`h-4 w-4 shrink-0 ${isActive ? "text-sky-600 dark:text-sky-400" : ""}`} />
                       <span className="truncate">{item.label}</span>
                     </Link>
 

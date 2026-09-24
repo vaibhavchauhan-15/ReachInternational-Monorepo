@@ -504,3 +504,14 @@ After completing code modifications, every AI agent MUST perform the following v
    - React components automatically escape expressions rendered in JSX `{}`. Using `dangerouslySetInnerHTML` is FORBIDDEN unless sanitizing rich text backed by DOMPurify with an explicit security review comment.
 
 ---
+
+## 48. Database Environment Isolation & Production Protection Rule
+
+- **Organization**: `ljzofzlvjtfiqoffaaua`
+- **Development Project (Target)**: `vlmxciuogczumumrwyot` (`Reach International Dev`)
+- **Production Project (Protected)**: `dhbbgfzbyatzvqafnsqp` (`Reach International Production`) — **STRICTLY UNTOUCHED DURING DEVELOPMENT**.
+
+1. **Zero Production Mutation in Development**: During all development, debugging, testing, prototyping, seeding, and migration testing, AI agents MUST **NEVER execute SQL queries, DDL, mutations, or migrations on the Production database (`dhbbgfzbyatzvqafnsqp`)**.
+2. **Dedicated Development Database**: AI agents MUST exclusively push migrations, execute SQL scripts, test RPCs, and seed test data in the Development database (`vlmxciuogczumumrwyot`).
+3. **MCP Tool Argument Verification**: Any invocation of Supabase MCP tools (`execute_sql`, `apply_migration`, `deploy_edge_function`) MUST explicitly verify that `project_id == "vlmxciuogczumumrwyot"`.
+

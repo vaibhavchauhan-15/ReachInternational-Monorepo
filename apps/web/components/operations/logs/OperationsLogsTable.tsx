@@ -361,17 +361,17 @@ export const OperationsLogRow = React.memo(function OperationsLogRow({
         </>
       )}
       <td className="px-3 py-3 text-center">
-        <div className="inline-flex items-center justify-center gap-1">
+        <div className="inline-flex items-center justify-center gap-1.5">
           {canEdit && (
             <TooltipWrapper content="Edit log entry">
               <button
                 type="button"
                 onClick={() => onEditLog?.(log)}
-                className="p-1 rounded-md text-[var(--color-mute)] hover:text-sky-600 hover:bg-sky-50 dark:hover:bg-sky-500/10 transition-colors inline-flex items-center justify-center cursor-pointer"
+                className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] hover:text-sky-600 dark:hover:text-sky-400 text-[var(--color-mute)] transition-all shadow-2xs inline-flex items-center justify-center cursor-pointer active:scale-95"
                 title="Edit log entry"
                 aria-label="Edit log entry"
               >
-                <Pencil className="w-3.5 h-3.5" />
+                <Pencil size={14} className="w-3.5 h-3.5 shrink-0" />
               </button>
             </TooltipWrapper>
           )}
@@ -380,11 +380,11 @@ export const OperationsLogRow = React.memo(function OperationsLogRow({
               <button
                 type="button"
                 onClick={() => onDeleteLog?.(log)}
-                className="p-1 rounded-md text-[var(--color-mute)] hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors inline-flex items-center justify-center cursor-pointer"
+                className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-rose-600 dark:hover:text-rose-400 text-[var(--color-mute)] transition-all shadow-2xs inline-flex items-center justify-center cursor-pointer active:scale-95"
                 title="Delete log entry"
                 aria-label="Delete log entry"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <Trash2 size={14} className="w-3.5 h-3.5 shrink-0" />
               </button>
             </TooltipWrapper>
           )}
@@ -442,9 +442,9 @@ export const OperationsLogsTable = React.memo(function OperationsLogsTable({
                   <span className="inline-flex items-center gap-1">
                     <span>Date</span>
                     {currentSort === "date-asc" ? (
-                      <ChevronUp className="w-3 h-3 text-sky-500" />
+                      <ChevronUp size={12} className="w-3 h-3 text-sky-500 shrink-0" />
                     ) : currentSort === "date-desc" ? (
-                      <ChevronDown className="w-3 h-3 text-sky-500" />
+                      <ChevronDown size={12} className="w-3 h-3 text-sky-500 shrink-0" />
                     ) : null}
                   </span>
                 </TooltipWrapper>
@@ -556,9 +556,9 @@ export const OperationsLogsTable = React.memo(function OperationsLogsTable({
                       <span className="inline-flex items-center justify-center gap-1">
                         <span>HMR</span>
                         {currentSort === "meter-asc" ? (
-                          <ChevronUp className="w-3 h-3 text-sky-500" />
+                          <ChevronUp size={12} className="w-3 h-3 text-sky-500 shrink-0" />
                         ) : currentSort === "meter-desc" ? (
-                          <ChevronDown className="w-3 h-3 text-sky-500" />
+                          <ChevronDown size={12} className="w-3 h-3 text-sky-500 shrink-0" />
                         ) : null}
                       </span>
                     </TooltipWrapper>
@@ -577,9 +577,9 @@ export const OperationsLogsTable = React.memo(function OperationsLogsTable({
                       <span className="inline-flex items-center justify-center gap-1">
                         <span>RT(h)</span>
                         {currentSort === "hours-asc" ? (
-                          <ChevronUp className="w-3 h-3 text-sky-500" />
+                          <ChevronUp size={12} className="w-3 h-3 text-sky-500 shrink-0" />
                         ) : currentSort === "hours-desc" ? (
-                          <ChevronDown className="w-3 h-3 text-sky-500" />
+                          <ChevronDown size={12} className="w-3 h-3 text-sky-500 shrink-0" />
                         ) : null}
                       </span>
                     </TooltipWrapper>

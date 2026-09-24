@@ -7,6 +7,7 @@ import {
   FileText,
   Check,
   Trash2,
+  ChevronDown,
 } from "lucide-react";
 import {
   AnimatedShieldAlert,
@@ -14,7 +15,6 @@ import {
   AnimatedUsers,
   AnimatedShieldCheck,
   AnimatedUserCheck,
-  AnimatedChevronDown,
 } from "@/components/ui/animated-icons";
 import { AnimatedCounter } from "@/components/ui/Motion";
 import { Button, PageHeader } from "@/components/ui";
@@ -122,7 +122,7 @@ export function UsersHeader({
                   <FileText className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0" />
                 )}
                 <span className="hidden sm:inline text-xs font-semibold">Export</span>
-                <AnimatedChevronDown
+                <ChevronDown
                   size={13}
                   className={`text-[var(--color-mute)] transition-transform duration-200 ${
                     isExportMenuOpen ? "rotate-180 text-[var(--color-ink)]" : ""

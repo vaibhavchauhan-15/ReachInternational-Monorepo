@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, memo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, ChevronUp } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 export interface PageSizeSelectProps {
   value: number;
@@ -61,7 +61,8 @@ export const PageSizeSelect = memo(function PageSizeSelect({
         className="h-8 sm:h-7 px-2 sm:px-2.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-xs text-[var(--color-ink)] font-mono font-medium flex items-center justify-between gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] shadow-2xs focus:outline-none focus:border-[var(--color-ink)]"
       >
         <span>{value}</span>
-        <ChevronUp
+        <ChevronDown
+          size={12}
           className={`h-3 w-3 text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
             open ? "rotate-180 text-[var(--color-ink)]" : ""
           }`}
@@ -102,7 +103,6 @@ export const PageSizeSelect = memo(function PageSizeSelect({
                     }`}
                   >
                     <span>{opt} rows</span>
-                    {isSelected && <Check className="h-3 w-3 shrink-0 ml-1.5" />}
                   </button>
                 );
               })}

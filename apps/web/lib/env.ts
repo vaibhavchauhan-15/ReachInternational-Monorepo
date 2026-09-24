@@ -107,6 +107,23 @@ export function getGaMeasurementId(): string | undefined {
 }
 
 /**
+ * Returns Upstash Redis configuration if configured in .env.
+ */
+export function getUpstashRedisConfig() {
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!url || !token) {
+    return null;
+  }
+
+  return {
+    url: url.trim(),
+    token: token.trim(),
+  };
+}
+
+/**
  * Typed environment object for direct property access.
  */
 export const env = {
@@ -128,4 +145,10 @@ export const env = {
   get gaMeasurementId(): string | undefined {
     return getGaMeasurementId();
   },
+  get upstash() {
+    return getUpstashRedisConfig();
+  },
 } as const;
+
+
+

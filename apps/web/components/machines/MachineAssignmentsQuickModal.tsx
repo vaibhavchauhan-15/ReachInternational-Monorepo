@@ -117,9 +117,7 @@ export function MachineAssignmentsQuickModal({
                 <Users className="h-8 w-8 mx-auto text-[var(--color-mute)]/50 mb-2" />
                 <p className="font-semibold text-[var(--color-ink)]">No Active Shift Assignments Found</p>
                 <p className="text-[11px]">
-                  {machine.current_operator
-                    ? `Default primary operator: ${machine.current_operator.full_name}`
-                    : "Assign operators through the machine edit screen."}
+                  Assign operators through the machine edit screen.
                 </p>
               </div>
             ) : (

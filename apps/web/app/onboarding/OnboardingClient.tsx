@@ -8,15 +8,12 @@ import { motion } from "framer-motion";
 import { Upload, FileText, X } from "lucide-react";
 import { validateDocumentFile, DEFAULT_ALLOWED_DOCUMENT_MIME_TYPES } from "@/lib/upload";
 import {
-  AnimatedMail,
   AnimatedUser,
   AnimatedPhone,
-  AnimatedMapPin,
   AnimatedShieldCheck,
   AnimatedCreditCard,
 } from "@/components/ui/animated-icons";
 import {
-  Button,
   Input,
   Alert,
   SearchableSelect,
@@ -28,8 +25,6 @@ import {
   validateAadhaarNumber,
   validateLicenseNumber,
   formatAadhaar,
-  INDIAN_STATES,
-  getStateById,
   computeShiftTiming,
   parseProfileShiftTime,
 } from "@reachinternational/utils";
@@ -48,11 +43,6 @@ const onboardingRoleOptions: SelectOption[] = [
   { value: "hr", label: "HR" },
   { value: "operator", label: "Operator" },
 ];
-
-const stateSelectOptions: SelectOption[] = INDIAN_STATES.map((s) => ({
-  value: String(s.id),
-  label: s.name,
-}));
 
 interface OnboardingClientProps {
   user: User;
@@ -79,11 +69,13 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
     role: user.role || "operator",
     shift_start_time: initialShifts.start,
     shift_end_time: initialShifts.end,
+    street: user.street || user.address || "",
     city: user.city || "",
     district: user.district || "",
     state: user.state || "",
     state_id: user.state_id ? String(user.state_id) : "",
-    address: user.address || "",
+    address: user.address || user.street || "",
+    monthly_salary: user.monthly_salary !== null && user.monthly_salary !== undefined ? String(user.monthly_salary) : "",
     aadhaar_number: user.aadhaar_number ? formatAadhaar(user.aadhaar_number) : "",
     license_number: user.license_number || "",
   });
@@ -158,20 +150,81 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
     });
   }, [formValues.shift_start_time, formValues.shift_end_time]);
 
+  const isOperator = formValues.role === "operator";
+
+  // Section 1: Account Information & Role (Mandatory)
+  const section1Complete = useMemo(() => {
+    return Boolean(
+      formValues.full_name.trim().length >= 2 &&
+      formValues.phone.replace(/\D/g, "").length >= 10 &&
+      formValues.role
+    );
+  }, [formValues.full_name, formValues.phone, formValues.role]);
+
+  // Section 2: Work Shift Schedule (Mandatory)
+  const section2Complete = useMemo(() => {
+    return Boolean(formValues.shift_start_time.trim() && formValues.shift_end_time.trim());
+  }, [formValues.shift_start_time, formValues.shift_end_time]);
+
+  // Section 3: Work Location & Address (Mandatory)
+  const section3Complete = useMemo(() => {
+    return Boolean(
+      (formValues.street.trim() || formValues.address.trim()) &&
+      formValues.city.trim() &&
+      formValues.district.trim() &&
+      (formValues.state.trim() || formValues.state_id)
+    );
+  }, [formValues.street, formValues.address, formValues.city, formValues.district, formValues.state, formValues.state_id]);
+
+  // Section 4: Compensation (Mandatory for operators, optional for others)
+  const section4Complete = useMemo(() => {
+    if (!isOperator) return true;
+    return Boolean(formValues.monthly_salary && Number(formValues.monthly_salary) > 0);
+  }, [isOperator, formValues.monthly_salary]);
+
+  // Section 5: Identity & Verification (Mandatory)
+  const section5Complete = useMemo(() => {
+    const clean = formValues.aadhaar_number.replace(/\D/g, "");
+    return Boolean(clean.length === 12 && validateAadhaarNumber(clean).isValid);
+  }, [formValues.aadhaar_number]);
+
+  // Combined completeness guard for submission gating
+  const isAllMandatoryFilled = useMemo(() => {
+    return (
+      section1Complete &&
+      section2Complete &&
+      section3Complete &&
+      section4Complete &&
+      section5Complete
+    );
+  }, [section1Complete, section2Complete, section3Complete, section4Complete, section5Complete]);
+
+  const missingMandatoryCount = useMemo(() => {
+    let count = 0;
+    if (!section1Complete) count++;
+    if (!section2Complete) count++;
+    if (!section3Complete) count++;
+    if (!section4Complete) count++;
+    if (!section5Complete) count++;
+    return count;
+  }, [section1Complete, section2Complete, section3Complete, section4Complete, section5Complete]);
+
   // Compute profile completeness percentage for visual progress indicator
   const progressPercent = useMemo(() => {
     let completed = 0;
-    const total = 8;
+    const total = isOperator ? 9 : 8;
     if (formValues.full_name.trim().length >= 2) completed++;
     if (formValues.phone.trim().replace(/\D/g, "").length >= 10) completed++;
     if (formValues.role) completed++;
     if (formValues.shift_start_time && formValues.shift_end_time) completed++;
+    if (formValues.street.trim().length >= 2 || formValues.address.trim().length >= 2) completed++;
     if (formValues.city.trim().length >= 2) completed++;
     if (formValues.district.trim().length >= 2) completed++;
-    if (formValues.state.trim().length >= 2) completed++;
+    if (formValues.state.trim().length >= 2 || formValues.state_id) completed++;
+    if (isOperator && formValues.monthly_salary && Number(formValues.monthly_salary) > 0) completed++;
     if (formValues.aadhaar_number.trim().replace(/\D/g, "").length === 12) completed++;
-    return Math.round((completed / total) * 100);
-  }, [formValues]);
+    return Math.min(100, Math.round((completed / total) * 100));
+  }, [formValues, isOperator]);
 
   const handleChange = (field: string, value: string) => {
     let formattedVal = value;
@@ -179,18 +232,20 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
       formattedVal = formatAadhaar(value);
     } else if (field === "license_number") {
       formattedVal = value.toUpperCase();
+    } else if (field === "street") {
+      setFormValues((prev) => ({ ...prev, street: value, address: value }));
+      if (fieldErrors.street || fieldErrors.address) {
+        setFieldErrors((prev) => {
+          const copy = { ...prev };
+          delete copy.street;
+          delete copy.address;
+          return copy;
+        });
+      }
+      return;
     }
 
-    if (field === "state_id") {
-      const matchedState = getStateById(value);
-      setFormValues((prev) => ({
-        ...prev,
-        state_id: value,
-        state: matchedState ? matchedState.name : prev.state,
-      }));
-    } else {
-      setFormValues((prev) => ({ ...prev, [field]: formattedVal }));
-    }
+    setFormValues((prev) => ({ ...prev, [field]: formattedVal }));
 
     // Instant Aadhaar validation feedback
     if (field === "aadhaar_number") {
@@ -247,6 +302,9 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
     if (!formValues.shift_end_time.trim()) {
       errors.shift_end_time = "Shift end time is required.";
     }
+    if (!formValues.street.trim() && !formValues.address.trim()) {
+      errors.street = "Street / building address is required.";
+    }
     if (!formValues.city.trim()) {
       errors.city = "City/Town is required.";
     }
@@ -256,8 +314,8 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
     if (!formValues.state.trim() && !formValues.state_id) {
       errors.state = "State is required.";
     }
-    if (!formValues.address.trim()) {
-      errors.address = "Address (street / locality) is required.";
+    if (isOperator && (!formValues.monthly_salary || Number(formValues.monthly_salary) <= 0)) {
+      errors.monthly_salary = "Monthly salary is required for operator accounts.";
     }
     if (!formValues.aadhaar_number.trim()) {
       errors.aadhaar_number = "Aadhaar card number is required.";
@@ -443,16 +501,13 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
               />
 
               {/* Section 1: Account Information & Role */}
-              <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 p-3 sm:p-3.5 space-y-2 sm:space-y-2.5">
-                <div className="flex items-center justify-between pb-1.5 border-b border-[var(--color-hairline)]">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="flex items-center justify-center w-5 h-5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold">1</span>
-                    <h3 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-                      Account & Role
-                    </h3>
-                  </div>
-                </div>
-
+              <FormSectionCard
+                stepNumber={1}
+                title="Account & Role"
+                description="Verified credentials and platform operational role"
+                isMandatory={true}
+                isCompleted={section1Complete}
+              >
                 {/* Row 1: Full Name | Verified Email */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
                   <Input
@@ -523,24 +578,23 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
                     />
                   </div>
                 </div>
-              </div>
+              </FormSectionCard>
 
               {/* Section 2: Work Shift Schedule */}
-              <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 p-3 sm:p-3.5 space-y-2 sm:space-y-2.5">
-                <div className="flex items-center justify-between pb-1.5 border-b border-[var(--color-hairline)]">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="flex items-center justify-center w-5 h-5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold">2</span>
-                    <h3 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-                      Work Shift Schedule
-                    </h3>
-                  </div>
-                  {shiftTimingSummary?.isValid && (
+              <FormSectionCard
+                stepNumber={2}
+                title="Work Shift Schedule"
+                description="Operating shift hours and timing window"
+                isMandatory={true}
+                isCompleted={section2Complete}
+                headerAction={
+                  shiftTimingSummary?.isValid ? (
                     <span className="inline-flex items-center gap-1 text-[10px] font-semibold font-mono text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
                       {shiftTimingSummary.isOvernight ? "🌙 Overnight" : "☀️ Standard"} · {shiftTimingSummary.durationFormatted}
                     </span>
-                  )}
-                </div>
-
+                  ) : undefined
+                }
+              >
                 {/* Shift Start Time | Shift End Time */}
                 <div className="grid grid-cols-2 gap-2 sm:gap-2.5">
                   <CustomTimePicker
@@ -562,108 +616,59 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
                     error={fieldErrors.shift_end_time}
                   />
                 </div>
-              </div>
+              </FormSectionCard>
 
               {/* Section 3: Work Location & Address */}
-              <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 p-3 sm:p-3.5 space-y-2 sm:space-y-2.5">
-                <div className="flex items-center justify-between pb-1.5 border-b border-[var(--color-hairline)]">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="flex items-center justify-center w-5 h-5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold">3</span>
-                    <h3 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-                      Work Location & Address
-                    </h3>
-                  </div>
-                </div>
-
-                {/* City/Town/Village | District | State (3-Column layout) */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
-                  <Input
-                    id="onboarding-city"
-                    name="city"
-                    label="City/Town/Village"
-                    type="text"
-                    value={formValues.city}
-                    onChange={(e) => handleChange("city", e.target.value)}
-                    placeholder="Pune"
-                    required
-                    autoComplete="address-level2"
-                    error={fieldErrors.city}
-                    icon={<AnimatedMapPin size={15} />}
-                  />
-
-                  <Input
-                    id="onboarding-district"
-                    name="district"
-                    label="District"
-                    type="text"
-                    value={formValues.district}
-                    onChange={(e) => handleChange("district", e.target.value)}
-                    placeholder="Pune"
-                    required
-                    autoComplete="address-level2"
-                    error={fieldErrors.district}
-                    icon={<AnimatedMapPin size={15} />}
-                  />
-
-                  {/* State Dropdown Selector */}
-                  <div className="flex flex-col gap-1 w-full" id="onboarding-state-container">
-                    <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none">
-                      State <span className="text-rose-500 font-semibold">*</span>
-                    </label>
-                    <input type="hidden" name="state" value={formValues.state} />
-                    <input type="hidden" name="state_id" value={formValues.state_id} />
-                    <SearchableSelect
-                      options={stateSelectOptions}
-                      value={formValues.state_id}
-                      onChange={(val, opt) => {
-                        setFormValues((prev) => ({
-                          ...prev,
-                          state_id: val,
-                          state: opt?.label || prev.state,
-                        }));
-                        if (fieldErrors.state) {
-                          setFieldErrors((prev) => {
-                            const copy = { ...prev };
-                            delete copy.state;
-                            return copy;
-                          });
-                        }
-                      }}
-                      placeholder="Select state..."
-                      clearable={false}
-                      error={fieldErrors.state}
-                      className="w-full text-xs sm:text-[13px]"
-                    />
-                  </div>
-                </div>
-
-                {/* Street / Building Address */}
-                <Input
-                  id="onboarding-address"
-                  name="address"
-                  label="Street / Site Base Address"
-                  type="text"
-                  value={formValues.address}
-                  onChange={(e) => handleChange("address", e.target.value)}
-                  placeholder="Plot No. 42, MIDC Industrial Area, Chakan"
-                  required
-                  error={fieldErrors.address}
-                  icon={<AnimatedMapPin size={15} />}
+              <FormSectionCard
+                stepNumber={3}
+                title="Work Location & Address"
+                description="Street + City/Town/Village + District + State"
+                isMandatory={true}
+                isCompleted={section3Complete}
+              >
+                <UserAddressSection
+                  street={formValues.street || formValues.address}
+                  city={formValues.city}
+                  district={formValues.district}
+                  state={formValues.state}
+                  stateId={formValues.state_id}
+                  onChange={(field, val) => handleChange(field, val)}
+                  errors={{
+                    street: fieldErrors.street || fieldErrors.address,
+                    city: fieldErrors.city,
+                    district: fieldErrors.district,
+                    state: fieldErrors.state,
+                  }}
+                  required={true}
+                  idPrefix="onboarding"
                 />
-                <input type="hidden" name="street" value={formValues.address} />
-              </div>
+              </FormSectionCard>
 
-              {/* Section 4: Identity Verification */}
-              <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 p-3 sm:p-3.5 space-y-2 sm:space-y-2.5">
-                <div className="flex items-center justify-between pb-1.5 border-b border-[var(--color-hairline)]">
-                  <div className="flex items-center gap-1.5 sm:gap-2">
-                    <span className="flex items-center justify-center w-5 h-5 rounded-md bg-sky-500/10 text-sky-600 dark:text-sky-400 text-[10px] font-bold">4</span>
-                    <h3 className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-                      Identity & Verification
-                    </h3>
-                  </div>
-                </div>
+              {/* Section 4: Compensation */}
+              <FormSectionCard
+                stepNumber={4}
+                title="Compensation"
+                description="Monthly base remuneration details"
+                isMandatory={isOperator}
+                isCompleted={section4Complete}
+              >
+                <UserSalaryField
+                  value={formValues.monthly_salary}
+                  onChange={(val) => handleChange("monthly_salary", val)}
+                  role={formValues.role}
+                  error={fieldErrors.monthly_salary}
+                  id="onboarding-salary"
+                />
+              </FormSectionCard>
 
+              {/* Section 5: Identity Verification */}
+              <FormSectionCard
+                stepNumber={5}
+                title="Identity & Verification"
+                description="Government identification and document attachments"
+                isMandatory={true}
+                isCompleted={section5Complete}
+              >
                 {/* Aadhaar Card Number | Driving Licence Number */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
                   <Input
@@ -830,20 +835,17 @@ export function OnboardingClient({ user }: OnboardingClientProps) {
                     )}
                   </div>
                 </div>
-              </div>
+              </FormSectionCard>
 
-              {/* Submit CTA Button */}
+              {/* Submit CTA Button with mandatory gating & double-click protection */}
               <div className="pt-2">
-                <Button
-                  type="submit"
-                  variant="primary"
-                  size="lg"
+                <FormSubmitButton
+                  isReady={isAllMandatoryFilled}
                   loading={pending}
-                  disabled={pending}
-                  className="w-full h-10 sm:h-11 text-xs sm:text-sm font-semibold shadow-md"
-                >
-                  {pending ? "Saving Profile & Directing to Dashboard..." : "Complete Profile & Enter Dashboard"}
-                </Button>
+                  label="Complete Profile & Enter Dashboard"
+                  loadingLabel="Saving Profile & Directing to Dashboard..."
+                  missingCount={missingMandatoryCount}
+                />
               </div>
             </form>
           </motion.div>

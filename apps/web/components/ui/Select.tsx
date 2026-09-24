@@ -2,7 +2,8 @@
 
 import React, { forwardRef, useState, useRef, useEffect, useMemo, ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AnimatedChevronDown, AnimatedCheck, AnimatedSearch, AnimatedX } from "./animated-icons";
+import { ChevronDown } from "lucide-react";
+import { AnimatedCheck, AnimatedSearch, AnimatedX } from "./animated-icons";
 
 export interface SelectOption {
   value: string;
@@ -247,7 +248,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
               )}
             </span>
 
-            <AnimatedChevronDown
+            <ChevronDown
               size={16}
               className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
                 isOpen ? "rotate-180 text-sky-500" : ""

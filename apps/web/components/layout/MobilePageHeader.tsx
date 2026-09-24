@@ -286,17 +286,19 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
           {/* Machine Detail Dedicated Separate Edit Actions for Mobile Users */}
           {canEditMachine && (
             <div className="py-0.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setMoreOpen(false);
-                  window.dispatchEvent(new CustomEvent("reach:edit-machine-info"));
-                }}
-                className="w-full flex items-center gap-2.5 px-3.5 h-10 text-[13px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
-              >
-                <AnimatedEdit size={15} className="text-amber-500 shrink-0" />
-                <span>Edit Machine Info</span>
-              </button>
+              {userRole !== "supervisor" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    window.dispatchEvent(new CustomEvent("reach:edit-machine-info"));
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-[13px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                >
+                  <AnimatedEdit size={15} className="text-amber-500 shrink-0" />
+                  <span>Edit Machine Info</span>
+                </button>
+              )}
 
               <button
                 type="button"
@@ -307,20 +309,22 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
                 className="w-full flex items-center gap-2.5 px-3.5 h-10 text-[13px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
               >
                 <AnimatedUserCheck size={15} className="text-teal-600 dark:text-teal-400 shrink-0" />
-                <span>Edit Shift Personnel</span>
+                <span>{userRole === "supervisor" ? "Assign Operator" : "Edit Shift Personnel"}</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setMoreOpen(false);
-                  window.dispatchEvent(new CustomEvent("reach:edit-machine-client"));
-                }}
-                className="w-full flex items-center gap-2.5 px-3.5 h-10 text-[13px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
-              >
-                <AnimatedCheck size={15} className="text-sky-500 shrink-0" />
-                <span>Edit Client Assignment</span>
-              </button>
+              {userRole !== "supervisor" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreOpen(false);
+                    window.dispatchEvent(new CustomEvent("reach:edit-machine-client"));
+                  }}
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-[13px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                >
+                  <AnimatedCheck size={15} className="text-sky-500 shrink-0" />
+                  <span>Edit Client Assignment</span>
+                </button>
+              )}
             </div>
           )}
 

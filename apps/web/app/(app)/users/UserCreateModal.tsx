@@ -25,6 +25,12 @@ import type { UserRole } from "@/lib/types/database";
 import type { Branch } from "@/lib/queries/branches";
 import { validateAadhaarNumber, validateLicenseNumber, formatAadhaar } from "@reachinternational/utils";
 import { isSupervisedRole } from "@reachinternational/permissions";
+import {
+  FormSectionCard,
+  UserAddressSection,
+  UserSalaryField,
+  FormSubmitButton,
+} from "@/components/forms";
 
 const allRoleSelectOptions: SelectOption[] = [
   {
@@ -102,6 +108,7 @@ export function UserCreateModal({
     city: "",
     district: "",
     state: "",
+    state_id: "",
     aadhaar_number: "",
     license_number: "",
   });
@@ -151,6 +158,50 @@ export function UserCreateModal({
       }
     }
   };
+
+  const isOperator = createForm.role === "operator";
+
+  // Section 1: Employee Identity & Login Credentials (Mandatory)
+  const section1Complete = Boolean(
+    createForm.full_name.trim().length >= 2 &&
+    createForm.email.trim().includes("@") &&
+    createForm.phone.replace(/\D/g, "").length >= 10 &&
+    createForm.password.length >= 6
+  );
+
+  // Section 2: User Address & Operations (Mandatory)
+  const section2Complete = Boolean(
+    createForm.street.trim() &&
+    createForm.city.trim() &&
+    createForm.district.trim() &&
+    (createForm.state.trim() || createForm.state_id) &&
+    createForm.shift_start_time.trim() &&
+    createForm.shift_end_time.trim()
+  );
+
+  // Section 3: Identity & Regulatory Documents (Optional)
+  const section3Complete = Boolean(
+    (!createForm.aadhaar_number.trim() || (createForm.aadhaar_number.replace(/\D/g, "").length === 12 && !errors.aadhaar_number)) &&
+    (!createForm.license_number.trim() || !errors.license_number)
+  );
+
+  // Section 4: User Access Role & System Permissions (Mandatory)
+  const section4Complete = Boolean(
+    createForm.role &&
+    (!isOperator || (createForm.monthly_salary && Number(createForm.monthly_salary) > 0 && !errors.monthly_salary))
+  );
+
+  const isAllMandatoryFilled =
+    section1Complete &&
+    section2Complete &&
+    section3Complete &&
+    section4Complete;
+
+  const missingMandatoryCount =
+    (section1Complete ? 0 : 1) +
+    (section2Complete ? 0 : 1) +
+    (section3Complete ? 0 : 1) +
+    (section4Complete ? 0 : 1);
 
   const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -215,7 +266,7 @@ export function UserCreateModal({
     >
       <form
         onSubmit={handleFormSubmit}
-        className="flex flex-col gap-5"
+        className="flex flex-col gap-4"
       >
         {/* Hidden inputs for custom select values */}
         <input type="hidden" name="branch_id" value={createForm.branch_id} />
@@ -229,14 +280,14 @@ export function UserCreateModal({
         </div>
 
         {/* Section 1: User Identity & Login Credentials */}
-        <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3.5">
-          <div className="pb-2 border-b border-[var(--color-hairline)]">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-              1. Employee Identity & Login Credentials
-            </h3>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FormSectionCard
+          stepNumber={1}
+          title="Employee Identity & Login Credentials"
+          description="Basic personal details and login access"
+          isMandatory={true}
+          isCompleted={section1Complete}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Input
               label="Full Name *"
               name="full_name"
@@ -258,7 +309,7 @@ export function UserCreateModal({
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Input
               label="Mobile Phone Number *"
               name="phone"
@@ -280,82 +331,57 @@ export function UserCreateModal({
               required
             />
           </div>
-        </div>
+        </FormSectionCard>
 
         {/* Section 2: User Address & Work Location */}
-        <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3.5">
-          <div className="pb-2 border-b border-[var(--color-hairline)]">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-              2. User Address & Operations
-            </h3>
-          </div>
+        <FormSectionCard
+          stepNumber={2}
+          title="User Address & Operations"
+          description="Street + City/Town/Village + District + State and Shift schedule"
+          isMandatory={true}
+          isCompleted={section2Complete}
+        >
+          <UserAddressSection
+            street={createForm.street}
+            city={createForm.city}
+            district={createForm.district}
+            state={createForm.state}
+            stateId={createForm.state_id}
+            onChange={(field, val) => handleFieldChange(field, val)}
+            required={true}
+            idPrefix="create-user"
+          />
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-[var(--color-hairline)]">
             <Input
-              label="Street Address"
-              name="street"
-              value={createForm.street}
-              onChange={(e) => setCreateForm((prev) => ({ ...prev, street: e.target.value }))}
-              placeholder="e.g. Plot 42, MIDC Ind Area"
-            />
-            <Input
-              label="Shift Start Time"
+              label="Shift Start Time *"
               name="shift_start_time"
               type="time"
               value={createForm.shift_start_time}
-              onChange={(e) => setCreateForm((prev) => ({ ...prev, shift_start_time: e.target.value }))}
+              onChange={(e) => handleFieldChange("shift_start_time", e.target.value)}
+              required
             />
             <Input
-              label="Shift End Time"
+              label="Shift End Time *"
               name="shift_end_time"
               type="time"
               value={createForm.shift_end_time}
-              onChange={(e) => setCreateForm((prev) => ({ ...prev, shift_end_time: e.target.value }))}
+              onChange={(e) => handleFieldChange("shift_end_time", e.target.value)}
+              required
             />
-            <input type="hidden" name="address" value={createForm.street} />
             <input type="hidden" name="shift_time" value={`${createForm.shift_start_time} - ${createForm.shift_end_time}`} />
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <Input
-              label="City *"
-              name="city"
-              icon={<AnimatedMapPin size={16} className="text-emerald-500" />}
-              value={createForm.city}
-              onChange={(e) => setCreateForm((prev) => ({ ...prev, city: e.target.value }))}
-              placeholder="e.g. Pune"
-              required
-            />
-            <Input
-              label="District *"
-              name="district"
-              icon={<AnimatedMapPin size={16} className="text-emerald-500" />}
-              value={createForm.district}
-              onChange={(e) => setCreateForm((prev) => ({ ...prev, district: e.target.value }))}
-              placeholder="e.g. Pune"
-              required
-            />
-            <Input
-              label="State *"
-              name="state"
-              icon={<AnimatedMapPin size={16} className="text-emerald-500" />}
-              value={createForm.state}
-              onChange={(e) => setCreateForm((prev) => ({ ...prev, state: e.target.value }))}
-              placeholder="e.g. Maharashtra"
-              required
-            />
-          </div>
-        </div>
+        </FormSectionCard>
 
         {/* Section 3: Identity & Regulatory Documents */}
-        <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3.5">
-          <div className="pb-2 border-b border-[var(--color-hairline)]">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-              3. Identity & Regulatory Documents
-            </h3>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FormSectionCard
+          stepNumber={3}
+          title="Identity & Regulatory Documents"
+          description="Government identification records (Optional)"
+          isMandatory={false}
+          isCompleted={section3Complete}
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Input
               label="Aadhaar Card Number"
               name="aadhaar_number"
@@ -379,16 +405,16 @@ export function UserCreateModal({
               placeholder="e.g. MH12 20110012345"
             />
           </div>
-        </div>
+        </FormSectionCard>
 
         {/* Section 4: User Access Role & System Permissions */}
-        <div className="p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3.5">
-          <div className="pb-2 border-b border-[var(--color-hairline)]">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-              4. User Access Role & System Permissions
-            </h3>
-          </div>
-
+        <FormSectionCard
+          stepNumber={4}
+          title="User Access Role & System Permissions"
+          description="Platform role, supervisor oversight, and compensation"
+          isMandatory={true}
+          isCompleted={section4Complete}
+        >
           {/* Custom Role Selector */}
           <SearchableSelect
             label="User Access Role *"
@@ -419,16 +445,10 @@ export function UserCreateModal({
           {/* Conditional Monthly Salary for Operators */}
           {createForm.role === "operator" && (
             <div className="pt-2">
-              <Input
-                label="Monthly Salary (₹) *"
-                name="monthly_salary"
-                type="number"
-                min="1"
-                step="100"
-                placeholder="e.g. 25000"
+              <UserSalaryField
                 value={createForm.monthly_salary}
-                onChange={(e) => {
-                  setCreateForm((prev) => ({ ...prev, monthly_salary: e.target.value }));
+                onChange={(val) => {
+                  setCreateForm((prev) => ({ ...prev, monthly_salary: val }));
                   if (errors.monthly_salary) {
                     setErrors((prev) => {
                       const copy = { ...prev };
@@ -437,19 +457,16 @@ export function UserCreateModal({
                     });
                   }
                 }}
+                role={createForm.role}
                 error={errors.monthly_salary}
-                required
+                id="create-user-salary"
               />
-              <p className="mt-1.5 text-[11px] text-[var(--color-mute)]">
-                Mandatory monthly salary for machine operator personnel.
-              </p>
             </div>
           )}
-
-        </div>
+        </FormSectionCard>
 
         {/* Form Action Controls */}
-        <div className="flex items-center justify-end gap-2.5 pt-2">
+        <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-[var(--color-hairline)]">
           <Button
             type="button"
             variant="ghost-sm"
@@ -458,14 +475,17 @@ export function UserCreateModal({
           >
             Cancel
           </Button>
-          <Button
-            type="submit"
-            variant="primary-sm"
-            loading={loading}
-            className="h-9 px-4 text-xs font-semibold whitespace-nowrap"
-          >
-            Create User Account
-          </Button>
+          <div className="min-w-[180px]">
+            <FormSubmitButton
+              isReady={isAllMandatoryFilled}
+              loading={loading}
+              label="Create User Account"
+              loadingLabel="Creating User Account..."
+              missingCount={missingMandatoryCount}
+              fullWidth={false}
+              size="sm"
+            />
+          </div>
         </div>
       </form>
     </Modal>

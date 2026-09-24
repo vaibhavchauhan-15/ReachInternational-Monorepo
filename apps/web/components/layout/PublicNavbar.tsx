@@ -8,7 +8,6 @@ import {
   AnimatedArrowRight,
   AnimatedX,
   AnimatedChevronRight,
-  AnimatedChevronDown,
   AnimatedSearch,
   AnimatedDashboard,
   AnimatedHome,
@@ -24,6 +23,7 @@ import {
   AnimatedMenu,
   AnimatedLogOut,
 } from "@/components/ui/animated-icons";
+import { ChevronDown } from "lucide-react";
 
 import { motion, AnimatePresence } from "framer-motion";
 import type { User, UserRole } from "@/lib/types/database";
@@ -95,7 +95,7 @@ const UserMenu = memo(function UserMenu({ user }: { user: User }) {
           {user.full_name.charAt(0).toUpperCase()}
         </div>
         <span className="text-xs font-semibold text-[var(--color-ink)] hidden sm:inline">{user.full_name}</span>
-        <AnimatedChevronDown size={14} className={`text-[var(--color-mute)] transition-transform duration-200 ${userMenuOpen ? "rotate-180" : ""}`} />
+        <ChevronDown size={14} className={`text-[var(--color-mute)] transition-transform duration-200 ${userMenuOpen ? "rotate-180" : ""}`} />
       </motion.button>
 
       <AnimatePresence>

@@ -119,17 +119,15 @@ export function BottomNav({ role }: { role: UserRole }) {
                     : "text-[var(--color-mute)] font-medium"
                 }`}
               >
-                <span className="interactive-icon icon-bounce flex items-center justify-center">
-                  <Icon
-                    size={20}
-                    className={`shrink-0 transition-colors duration-150 ${
-                      active
-                        ? "text-[var(--color-ink)]"
-                        : "text-[var(--color-mute)]"
-                    }`}
-                    aria-hidden
-                  />
-                </span>
+                <Icon
+                  size={20}
+                  className={`shrink-0 transition-colors duration-150 ${
+                    active
+                      ? "text-[var(--color-ink)]"
+                      : "text-[var(--color-mute)]"
+                  }`}
+                  aria-hidden
+                />
                 <span className="truncate max-w-full leading-none">
                   {t.label}
                 </span>

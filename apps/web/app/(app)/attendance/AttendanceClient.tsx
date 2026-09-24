@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useTransition, useCallback } from "react";
+import React, { useState, useMemo, useTransition, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -70,7 +70,6 @@ export function AttendanceClient({
     setStatusFilter(searchParams.get("status") || "all");
   }
 
-  // Navigate with updated query parameters
   const updateParams = useCallback(
     (overrides: { month?: string; page?: number; status?: string; search?: string }) => {
       startTransition(() => {
@@ -80,15 +79,29 @@ export function AttendanceClient({
         const nextStatus = overrides.status !== undefined ? overrides.status : statusFilter;
         const nextSearch = overrides.search !== undefined ? overrides.search : searchQuery;
 
-        params.set("month", nextMonth);
+        if (nextMonth) params.set("month", nextMonth);
         if (nextPage > 1) params.set("page", String(nextPage));
         if (nextStatus && nextStatus !== "all") params.set("status", nextStatus);
         if (nextSearch.trim()) params.set("search", nextSearch.trim());
 
-        router.push(`${pathname}?${params.toString()}`);
+        const qs = params.toString();
+        router.replace(`${pathname}${qs ? `?${qs}` : ""}`, { scroll: false });
       });
     },
     [currentMonth, statusFilter, searchQuery, pathname, router]
+  );
+
+  // Debounced search sync to URL
+  const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const handleSearchChange = useCallback(
+    (newQuery: string) => {
+      setSearchQuery(newQuery);
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+      searchTimerRef.current = setTimeout(() => {
+        updateParams({ search: newQuery, page: 1 });
+      }, 300);
+    },
+    [updateParams]
   );
 
   // Month navigation
@@ -110,11 +123,13 @@ export function AttendanceClient({
   // Search input change with submit on enter
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     updateParams({ search: searchQuery, page: 1 });
   };
 
   // Reset all filters
   const resetFilters = () => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     setSearchQuery("");
     setStatusFilter("all");
     updateParams({ search: "", status: "all", page: 1 });
@@ -368,10 +383,7 @@ export function AttendanceClient({
       <div className="space-y-2">
         <FilterToolbar
           searchQuery={searchQuery}
-          onSearchChange={(val) => {
-            setSearchQuery(val);
-            if (!val) updateParams({ search: "", page: 1 });
-          }}
+          onSearchChange={handleSearchChange}
           onSubmitSearch={handleSearchSubmit}
           placeholder="Search by employee name or phone..."
           activeFilterCount={activeFilterCount}

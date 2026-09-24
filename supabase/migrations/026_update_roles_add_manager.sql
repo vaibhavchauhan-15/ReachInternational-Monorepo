@@ -1,4 +1,4 @@
-﻿-- ============================================
+-- ============================================
 -- Migration 026: Consolidate User Roles (Remove rental_manager, sales_executive, finance_manager; Add manager)
 -- ============================================
 

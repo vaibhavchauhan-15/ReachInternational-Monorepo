@@ -1,4 +1,6 @@
-import React from "react";
+"use client";
+
+import React, { useRef } from "react";
 import type { DashboardRole } from "@reachinternational/types";
 import { Calendar } from "lucide-react";
 
@@ -30,6 +32,7 @@ export function DashboardHeader({
   subtitle,
   actions,
 }: DashboardHeaderProps) {
+  const calendarRef = useRef<{ startAnimation: () => void; stopAnimation: () => void } | null>(null);
   const greeting = getGreeting();
   const dateStr = formatDate();
 
@@ -47,8 +50,12 @@ export function DashboardHeader({
       </div>
 
       <div className="flex items-center gap-2.5 shrink-0">
-        <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--color-surface)] border border-[var(--color-hairline)] text-xs text-[var(--color-mute)]">
-          <Calendar className="w-3.5 h-3.5 text-[var(--color-mute)]" />
+        <div
+          onMouseEnter={() => calendarRef.current?.startAnimation?.()}
+          onMouseLeave={() => calendarRef.current?.stopAnimation?.()}
+          className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[var(--color-surface)] border border-[var(--color-hairline)] text-xs text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors cursor-default"
+        >
+          <Calendar ref={calendarRef} size={14} className="w-3.5 h-3.5 text-[var(--color-mute)] shrink-0" />
           <span>{dateStr}</span>
         </div>
         {actions}

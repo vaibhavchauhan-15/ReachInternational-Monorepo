@@ -1,4 +1,4 @@
-﻿-- ==============================================================================
+-- ==============================================================================
 -- Migration 089: Machine Directory KPI Summary Scoping for Operators
 -- Milestone: Support active operator_machine_assignments in get_machines_directory_summary
 -- ==============================================================================

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   AnimatedSearch,
   AnimatedSlidersHorizontal,
@@ -58,6 +58,19 @@ export function AuditFilters({
   logs,
 }: AuditFiltersProps) {
   const [search, setSearch] = useState(currentParams.search || "");
+  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sync if URL search changes from outside (e.g. popstate or reset)
+  useEffect(() => {
+    setSearch(currentParams.search || "");
+  }, [currentParams.search]);
+
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, []);
+
   const [showAdvanced, setShowAdvanced] = useState(
     Boolean(
       currentParams.role ||
@@ -76,18 +89,29 @@ export function AuditFilters({
       currentParams.endDate
   );
 
+  const handleSearchChange = (val: string) => {
+    setSearch(val);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      onFilterChange({ search: val.trim() || undefined });
+    }, 350);
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     onFilterChange({ search: search.trim() || undefined });
   };
 
   const handleSearchClear = () => {
     setSearch("");
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     onFilterChange({ search: undefined });
   };
 
   const handleResetAll = () => {
     setSearch("");
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     onFilterChange({
       search: undefined,
       severity: undefined,
@@ -155,7 +179,7 @@ export function AuditFilters({
               type="text"
               placeholder="Search action, actor, machine, employee, IP..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="pl-9 pr-8 h-9 text-xs"
             />
             <AnimatedSearch className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-mute)] pointer-events-none" />

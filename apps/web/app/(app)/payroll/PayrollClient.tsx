@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useMemo, useTransition, useCallback } from "react";
+import React, { useState, useMemo, useTransition, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Download,
@@ -45,6 +45,7 @@ export function PayrollClient({
   currentMonth,
 }: PayrollClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
 
@@ -59,7 +60,42 @@ export function PayrollClient({
     setOperators(initialData.operators || []);
   }
 
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(() => searchParams?.get("search") || "");
+  const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Debounced search sync to URL using replaceState
+  const handleSearchChange = (newVal: string) => {
+    setSearchQuery(newVal);
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+    }
+    searchDebounceRef.current = setTimeout(() => {
+      if (typeof window !== "undefined") {
+        const url = new URL(window.location.href);
+        const trimmed = newVal.trim();
+        if (trimmed) {
+          url.searchParams.set("search", trimmed);
+        } else {
+          url.searchParams.delete("search");
+        }
+        window.history.replaceState(null, "", `${url.pathname}${url.search}`);
+      }
+    }, 300);
+  };
+
+  // Sync state on browser Back / Forward (popstate)
+  useEffect(() => {
+    const onPopState = () => {
+      const sp = new URLSearchParams(window.location.search);
+      setSearchQuery(sp.get("search") || "");
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, []);
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Editing state for single operator inline editing
@@ -74,10 +110,12 @@ export function PayrollClient({
   const [bulkOtRate, setBulkOtRate] = useState<string>("");
   const [isSavingBulk, setIsSavingBulk] = useState(false);
 
-  // Month change navigation
+  // Month change navigation: preserve search and other query params, replace history
   const handleMonthChange = (newMonth: string) => {
     startTransition(() => {
-      router.push(`/payroll?month=${newMonth}`);
+      const sp = new URLSearchParams(typeof window !== "undefined" ? window.location.search : "");
+      sp.set("month", newMonth);
+      router.replace(`/payroll?${sp.toString()}`, { scroll: false });
     });
   };
 
@@ -464,7 +502,7 @@ export function PayrollClient({
       {/* 4. Search, Selection & Action Toolbar */}
       <FilterToolbar
         searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
+        onSearchChange={handleSearchChange}
         placeholder="Search by operator name, phone, city, state..."
         actions={
           <div className="flex items-center gap-2">

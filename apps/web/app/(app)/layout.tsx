@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { getCurrentUser, isProfileIncomplete } from "@/lib/dal";
 import { AppShellClient } from "@/components/layout/AppShellClient";
-import { BrowserLifecycleManager } from "@/components/layout/BrowserLifecycleManager";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -40,7 +39,6 @@ export default async function AppLayout({
 
   return (
     <AppShellClient user={user} defaultCollapsed={defaultCollapsed}>
-      <BrowserLifecycleManager userRole={user.role} />
       {children}
     </AppShellClient>
   );

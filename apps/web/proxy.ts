@@ -145,6 +145,12 @@ export async function proxy(request: NextRequest) {
     response.cookies.getAll().forEach((c) => {
       redirectRes.cookies.set(c.name, c.value, c);
     });
+    // Critical: Never allow Service Workers, PWA offline caches, CDNs, or browser HTTP caches to cache navigation redirects
+    redirectRes.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0");
+    redirectRes.headers.set("Pragma", "no-cache");
+    redirectRes.headers.set("Expires", "0");
+    redirectRes.headers.set("CDN-Cache-Control", "no-store");
+    redirectRes.headers.set("Vercel-CDN-Cache-Control", "no-store");
     return redirectRes;
   };
 

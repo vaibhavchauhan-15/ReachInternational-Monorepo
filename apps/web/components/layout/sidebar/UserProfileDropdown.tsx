@@ -3,9 +3,10 @@
 import { useState, useEffect, useRef, memo } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { AnimatedChevronDown } from "@/components/ui/animated-icons";
+import { ChevronDown } from "lucide-react";
 import type { User } from "@/lib/types/database";
 import { SidebarTooltip } from "@/components/ui";
+import { cn } from "@/lib/utils";
 import { UserProfileCard, ROLE_CONFIG } from "@/components/profile/UserProfileCard";
 
 interface UserProfileDropdownProps {
@@ -150,33 +151,37 @@ export const UserProfileDropdown = memo(function UserProfileDropdown({
           onClick={() => setOpen(!open)}
           aria-expanded={open}
           aria-label="User profile menu"
-          className={`w-full flex items-center gap-3 rounded-xl hover:bg-[var(--color-hairline-soft-surface)] transition-all duration-150 border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-sky-500/30 ${
-            collapsed ? "justify-center p-2.5 h-11 w-11 mx-auto" : "px-3 py-2.5"
-          }`}
+          className={cn(
+            "w-full flex items-center rounded-xl hover:bg-[var(--color-hairline-soft-surface)] transition-all duration-200 border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] cursor-pointer text-left focus:outline-none focus:ring-2 focus:ring-sky-500/30 overflow-hidden",
+            collapsed ? "justify-center h-10 w-10 mx-auto p-0" : "h-11 px-3 py-2 gap-3"
+          )}
         >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-ink)] text-[var(--color-canvas)] text-xs font-extrabold shadow-2xs">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-ink)] text-[var(--color-canvas)] text-xs font-extrabold shadow-2xs">
             {user.full_name.charAt(0).toUpperCase()}
           </div>
 
-          {!collapsed && (
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-bold text-[var(--color-ink)] truncate leading-tight">
-                {user.full_name}
-              </p>
-              <p className="text-[11px] text-[var(--color-mute)] truncate font-medium capitalize mt-0.5">
-                {roleMeta.label}
-              </p>
-            </div>
-          )}
+          <div
+            className={cn(
+              "min-w-0 flex-1 transition-all duration-200 overflow-hidden whitespace-nowrap text-left",
+              collapsed ? "opacity-0 w-0 max-w-0 pointer-events-none" : "opacity-100"
+            )}
+          >
+            <p className="text-xs font-bold text-[var(--color-ink)] truncate leading-tight">
+              {user.full_name}
+            </p>
+            <p className="text-[11px] text-[var(--color-mute)] truncate font-medium capitalize mt-0.5">
+              {roleMeta.label}
+            </p>
+          </div>
 
-          {!collapsed && (
-            <AnimatedChevronDown
-              size={16}
-              className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
-                open ? "rotate-180" : ""
-              }`}
-            />
-          )}
+          <ChevronDown
+            size={15}
+            className={cn(
+              "text-[var(--color-mute)] shrink-0 transition-all duration-200",
+              open ? "rotate-180" : "",
+              collapsed ? "opacity-0 w-0 pointer-events-none" : "opacity-100"
+            )}
+          />
         </button>
       </SidebarTooltip>
 

@@ -1,140 +1,137 @@
 "use client";
+import React from "react";
 
-import {
-  AnimatedIcon,
-  AnimatedIconProps,
-  IconAnimationPreset,
-  createAnimatedIcon,
-  InteractiveIcon,
-  type InteractiveIconProps,
-  type IconInteractionVariant,
-  getIconInteractionClass,
-} from "../animated-icon";
-import * as L from "lucide-react";
+// Re-export real bridged animated icons from ../../icons at default settings
 
-// Navigation & Directional Icons
-export const AnimatedChevronRight = createAnimatedIcon(L.ChevronRight, "arrow-right");
-export const AnimatedChevronLeft = createAnimatedIcon(L.ChevronLeft, "arrow-left");
-export const AnimatedChevronDown = createAnimatedIcon(L.ChevronDown, "arrow-down");
-export const AnimatedChevronUp = createAnimatedIcon(L.ChevronUp, "arrow-up");
-export const AnimatedChevronsUpDown = createAnimatedIcon(L.ChevronsUpDown, "bounce");
-export const AnimatedArrowRight = createAnimatedIcon(L.ArrowRight, "arrow-right");
-export const AnimatedArrowLeft = createAnimatedIcon(L.ArrowLeft, "arrow-left");
-export const AnimatedArrowUp = createAnimatedIcon(L.ArrowUp, "arrow-up");
-export const AnimatedArrowDown = createAnimatedIcon(L.ArrowDown, "arrow-down");
-export const AnimatedArrowUpDown = createAnimatedIcon(L.ArrowUpDown, "bounce");
-export const AnimatedArrowUpRight = createAnimatedIcon(L.ArrowUpRight, "arrow-right");
-export const AnimatedArrowDownLeft = createAnimatedIcon(L.ArrowDownLeft, "arrow-left");
+// Navigation & Directional
+export { ChevronRightIcon as AnimatedChevronRight } from "../../icons";
+export { ChevronLeftIcon as AnimatedChevronLeft } from "../../icons";
+export { ChevronDownIcon as AnimatedChevronDown } from "../../icons";
+export { ChevronUpIcon as AnimatedChevronUp } from "../../icons";
+export { ChevronsUpDownIcon as AnimatedChevronsUpDown } from "../../icons";
+export { ArrowRightIcon as AnimatedArrowRight } from "../../icons";
+export { ArrowLeftIcon as AnimatedArrowLeft } from "../../icons";
+export { ArrowUpIcon as AnimatedArrowUp } from "../../icons";
+export { ArrowDownIcon as AnimatedArrowDown } from "../../icons";
+export { ArrowUpDownIcon as AnimatedArrowUpDown } from "../../icons";
+export { ArrowUpRightIcon as AnimatedArrowUpRight } from "../../icons";
+export { ArrowLeftIcon as AnimatedArrowDownLeft } from "../../icons";
 
-// Actions & Tools Icons
-export const AnimatedPlus = createAnimatedIcon(L.Plus, "bounce");
-export const AnimatedMinus = createAnimatedIcon(L.Minus, "bounce");
-export const AnimatedCopy = createAnimatedIcon(L.Copy, "bounce");
-export const AnimatedTrash = createAnimatedIcon(L.Trash2, "tilt");
-export const AnimatedEdit = createAnimatedIcon(L.Edit, "draw");
-export const AnimatedEdit2 = createAnimatedIcon(L.Edit2, "draw");
-export const AnimatedSearch = createAnimatedIcon(L.Search, "lens");
-export const AnimatedFilter = createAnimatedIcon(L.Filter, "rotate");
-export const AnimatedSlidersHorizontal = createAnimatedIcon(L.SlidersHorizontal, "rotate");
-export const AnimatedRefresh = createAnimatedIcon(L.RefreshCw, "spin");
-export const AnimatedRotateCcw = createAnimatedIcon(L.RotateCcw, "spin");
-export const AnimatedRotateCw = createAnimatedIcon(L.RotateCw, "spin");
-export const AnimatedDownload = createAnimatedIcon(L.Download, "arrow-down");
-export const AnimatedUpload = createAnimatedIcon(L.Upload, "arrow-up");
-export const AnimatedSettings = createAnimatedIcon(L.Settings, "gear");
-export const AnimatedSave = createAnimatedIcon(L.Save, "bounce");
+// Actions & Tools
+export { PlusIcon as AnimatedPlus } from "../../icons";
+export { MinusIcon as AnimatedMinus } from "../../icons";
+export { CopyIcon as AnimatedCopy } from "../../icons";
+export { TrashIcon as AnimatedTrash } from "../../icons";
+export { Trash2Icon as AnimatedTrash2 } from "../../icons";
+export { PencilIcon as AnimatedEdit } from "../../icons";
+export { PencilIcon as AnimatedEdit2 } from "../../icons";
+export { SearchIcon as AnimatedSearch } from "../../icons";
+export { SearchIcon as AnimatedSearchX } from "../../icons";
+export { SlidersHorizontalIcon as AnimatedFilter } from "../../icons";
+export { SlidersHorizontalIcon as AnimatedSlidersHorizontal } from "../../icons";
+export { RefreshCwIcon as AnimatedRefresh } from "../../icons";
+export { RotateCcwIcon as AnimatedRotateCcw } from "../../icons";
+export { RotateCwIcon as AnimatedRotateCw } from "../../icons";
+export { DownloadIcon as AnimatedDownload } from "../../icons";
+export { UploadIcon as AnimatedUpload } from "../../icons";
+export { SettingsIcon as AnimatedSettings } from "../../icons";
+export { SaveIcon as AnimatedSave } from "../../icons";
 
-// Status & Alerts Icons
-export const AnimatedCheck = createAnimatedIcon(L.Check, "draw");
-export const AnimatedCheckCircle = createAnimatedIcon(L.CheckCircle, "bounce");
-export const AnimatedCheckCircle2 = createAnimatedIcon(L.CheckCircle2, "bounce");
-export const AnimatedCheckCheck = createAnimatedIcon(L.CheckCheck, "draw");
-export const AnimatedX = createAnimatedIcon(L.X, "bounce");
-export const AnimatedXCircle = createAnimatedIcon(L.XCircle, "shake");
-export const AnimatedAlertTriangle = createAnimatedIcon(L.AlertTriangle, "shake");
-export const AnimatedAlertCircle = createAnimatedIcon(L.AlertCircle, "shake");
-export const AnimatedInfo = createAnimatedIcon(L.Info, "bounce");
-export const AnimatedSparkles = createAnimatedIcon(L.Sparkles, "sparkle");
+// Status & Alerts
+export { CheckIcon as AnimatedCheck } from "../../icons";
+export { CircleCheckIcon as AnimatedCheckCircle } from "../../icons";
+export { CircleCheckIcon as AnimatedCheckCircle2 } from "../../icons";
+export { CheckCheckIcon as AnimatedCheckCheck } from "../../icons";
+export { XIcon as AnimatedX } from "../../icons";
+export { XIcon as AnimatedXCircle } from "../../icons";
+export { TriangleAlertIcon as AnimatedAlertTriangle } from "../../icons";
+export { TriangleAlertIcon as AnimatedAlertCircle } from "../../icons";
+export { InfoIcon as AnimatedInfo } from "../../icons";
+export { SparklesIcon as AnimatedSparkles } from "../../icons";
 
 // App Modules & Objects
-export const AnimatedDashboard = createAnimatedIcon(L.LayoutDashboard, "bounce");
-export const AnimatedHome = createAnimatedIcon(L.Home, "bounce");
-export const AnimatedWrench = createAnimatedIcon(L.Wrench, "gear");
-export const AnimatedBuilding = createAnimatedIcon(L.Building, "bounce");
-export const AnimatedBuilding2 = createAnimatedIcon(L.Building2, "bounce");
-export const AnimatedCpu = createAnimatedIcon(L.Cpu, "pulse");
-export const AnimatedPackage = createAnimatedIcon(L.Package, "bounce");
-export const AnimatedStore = createAnimatedIcon(L.Store, "bounce");
-export const AnimatedShoppingBag = createAnimatedIcon(L.ShoppingBag, "bounce");
-export const AnimatedFileText = createAnimatedIcon(L.FileText, "draw");
-export const AnimatedScrollText = createAnimatedIcon(L.ScrollText, "draw");
-
-export const AnimatedFolderOpen = createAnimatedIcon(L.FolderOpen, "bounce");
-export const AnimatedUsers = createAnimatedIcon(L.Users, "bounce");
-export const AnimatedUserCheck = createAnimatedIcon(L.UserCheck, "bounce");
-export const AnimatedUserPlus = createAnimatedIcon(L.UserPlus, "bounce");
-export const AnimatedUser = createAnimatedIcon(L.User, "bounce");
-export const AnimatedBriefcase = createAnimatedIcon(L.Briefcase, "bounce");
-export const AnimatedBarChart3 = createAnimatedIcon(L.BarChart3, "bounce");
-export const AnimatedShield = createAnimatedIcon(L.Shield, "bounce");
-export const AnimatedShieldCheck = createAnimatedIcon(L.ShieldCheck, "bounce");
-export const AnimatedShieldAlert = createAnimatedIcon(L.ShieldAlert, "shake");
+export { LayersIcon as AnimatedDashboard } from "../../icons";
+export { HomeIcon as AnimatedHome } from "../../icons";
+export { WrenchIcon as AnimatedWrench } from "../../icons";
+export { StoreIcon as AnimatedBuilding } from "../../icons";
+export { StoreIcon as AnimatedBuilding2 } from "../../icons";
+export { CpuIcon as AnimatedCpu } from "../../icons";
+export { PackageIcon as AnimatedPackage } from "../../icons";
+export { StoreIcon as AnimatedStore } from "../../icons";
+export { PackageIcon as AnimatedShoppingBag } from "../../icons";
+export { FileTextIcon as AnimatedFileText } from "../../icons";
+export { FileTextIcon as AnimatedScrollText } from "../../icons";
+export { FolderOpenIcon as AnimatedFolderOpen } from "../../icons";
+export { UsersIcon as AnimatedUsers } from "../../icons";
+export { UserCheckIcon as AnimatedUserCheck } from "../../icons";
+export { UserPlusIcon as AnimatedUserPlus } from "../../icons";
+export { UserIcon as AnimatedUser } from "../../icons";
+export { UserXIcon as AnimatedUserX } from "../../icons";
+export { BriefcaseBusinessIcon as AnimatedBriefcase } from "../../icons";
+export { TrendingUpIcon as AnimatedBarChart3 } from "../../icons";
+export { ShieldCheckIcon as AnimatedShield } from "../../icons";
+export { ShieldCheckIcon as AnimatedShieldCheck } from "../../icons";
+export { ShieldXIcon as AnimatedShieldAlert } from "../../icons";
 
 // Communication & Alerts
-export const AnimatedBell = createAnimatedIcon(L.Bell, "bell");
-export const AnimatedBellRing = createAnimatedIcon(L.BellRing, "bell");
+export { BellIcon as AnimatedBell } from "../../icons";
+export { BellIcon as AnimatedBellRing } from "../../icons";
+export { MailIcon as AnimatedMail } from "../../icons";
+export { MessageSquareIcon as AnimatedMessageSquare } from "../../icons";
+export { PhoneIcon as AnimatedPhone } from "../../icons";
+export { SmartphoneIcon as AnimatedSmartphone } from "../../icons";
+export { SendIcon as AnimatedSend } from "../../icons";
 
-export const AnimatedMail = createAnimatedIcon(L.Mail, "bounce");
-export const AnimatedMessageSquare = createAnimatedIcon(L.MessageSquare, "bounce");
-export const AnimatedPhone = createAnimatedIcon(L.Phone, "shake");
-export const AnimatedSmartphone = createAnimatedIcon(L.Smartphone, "bounce");
-export const AnimatedSend = createAnimatedIcon(L.Send, "arrow-right");
+// Miscellaneous UI
+export { EyeIcon as AnimatedEye } from "../../icons";
+export { EyeOffIcon as AnimatedEyeOff } from "../../icons";
+export { MapPinIcon as AnimatedMapPin } from "../../icons";
+export { CalendarIcon as AnimatedCalendar } from "../../icons";
+export { ClockIcon as AnimatedClock } from "../../icons";
+export { CalendarClockIcon as AnimatedCalendarClock } from "../../icons";
+export { CalendarCheckIcon as AnimatedCalendarCheck } from "../../icons";
+export { SparklesIcon as AnimatedStar } from "../../icons";
+export { ActivityIcon as AnimatedActivity } from "../../icons";
+export { GaugeIcon as AnimatedGauge } from "../../icons";
+export { LockIcon as AnimatedLock } from "../../icons";
+export { KeyIcon as AnimatedKey } from "../../icons";
+export { KeyRoundIcon as AnimatedKeyRound } from "../../icons";
+export { CreditCardIcon as AnimatedCreditCard } from "../../icons";
+export { ReceiptIcon as AnimatedReceipt } from "../../icons";
+export { ZapIcon as AnimatedPower } from "../../icons";
+export { ServerIcon as AnimatedDatabase } from "../../icons";
+export { ClipboardCheckIcon as AnimatedClipboardList } from "../../icons";
+export { FileCheckIcon as AnimatedFileCheck } from "../../icons";
+export { FileSpreadsheetIcon as AnimatedFileSpreadsheet } from "../../icons";
+export { TagIcon as AnimatedTag } from "../../icons";
+export { SunIcon as AnimatedSun } from "../../icons";
+export { MoonIcon as AnimatedMoon } from "../../icons";
+export { MonitorIcon as AnimatedMonitor } from "../../icons";
+export { PackageIcon as AnimatedCookie } from "../../icons";
+export { SendIcon as AnimatedInbox } from "../../icons";
+export { CirclePlayIcon as AnimatedPlayCircle } from "../../icons";
+export { TruckIcon as AnimatedTruck } from "../../icons";
+export { PrinterIcon as AnimatedPrinter } from "../../icons";
+export { CameraIcon as AnimatedCamera } from "../../icons";
+export { HistoryIcon as AnimatedHistory } from "../../icons";
+export { LoaderIcon as AnimatedLoader } from "../../icons";
+export { EllipsisVerticalIcon as AnimatedMoreVertical } from "../../icons";
+export { EllipsisIcon as AnimatedMoreHorizontal } from "../../icons";
+export { MenuIcon as AnimatedMenu } from "../../icons";
+export { ArrowRightIcon as AnimatedLogOut } from "../../icons";
+export { PanelLeftCloseIcon as AnimatedPanelLeftClose } from "../../icons";
+export { PanelLeftOpenIcon as AnimatedPanelLeftOpen } from "../../icons";
+export { TrendingUpIcon as AnimatedTrendingUp } from "../../icons";
+export { TrendingDownIcon as AnimatedTrendingDown } from "../../icons";
 
-// Miscellaneous UI Icons
-export const AnimatedEye = createAnimatedIcon(L.Eye, "lens");
-export const AnimatedEyeOff = createAnimatedIcon(L.EyeOff, "lens");
-export const AnimatedMapPin = createAnimatedIcon(L.MapPin, "bounce");
-export const AnimatedCalendar = createAnimatedIcon(L.Calendar, "bounce");
-export const AnimatedClock = createAnimatedIcon(L.Clock, "spin");
-export const AnimatedCalendarClock = createAnimatedIcon(L.CalendarClock, "bounce");
-export const AnimatedCalendarCheck = createAnimatedIcon(L.CalendarCheck, "bounce");
-export const AnimatedStar = createAnimatedIcon(L.Star, "sparkle");
-export const AnimatedActivity = createAnimatedIcon(L.Activity, "pulse");
-export const AnimatedGauge = createAnimatedIcon(L.Gauge, "rotate");
-export const AnimatedLock = createAnimatedIcon(L.Lock, "bounce");
-export const AnimatedKeyRound = createAnimatedIcon(L.KeyRound, "rotate");
-export const AnimatedKey = createAnimatedIcon(L.Key, "rotate");
-export const AnimatedCreditCard = createAnimatedIcon(L.CreditCard, "bounce");
-export const AnimatedTrash2 = createAnimatedIcon(L.Trash2, "tilt");
-export const AnimatedUserX = createAnimatedIcon(L.UserX, "bounce");
-export const AnimatedPower = createAnimatedIcon(L.Power, "bounce");
-export const AnimatedDatabase = createAnimatedIcon(L.Database, "bounce");
-export const AnimatedClipboardList = createAnimatedIcon(L.ClipboardList, "draw");
-export const AnimatedFileCheck = createAnimatedIcon(L.FileCheck, "bounce");
-export const AnimatedFileSpreadsheet = createAnimatedIcon(L.FileSpreadsheet, "bounce");
-export const AnimatedTag = createAnimatedIcon(L.Tag, "bounce");
-export const AnimatedSun = createAnimatedIcon(L.Sun, "spin");
-export const AnimatedMoon = createAnimatedIcon(L.Moon, "tilt");
-export const AnimatedMonitor = createAnimatedIcon(L.Monitor, "bounce");
-export const AnimatedCookie = createAnimatedIcon(L.Cookie, "bounce");
-export const AnimatedInbox = createAnimatedIcon(L.Inbox, "bounce");
-export const AnimatedPlayCircle = createAnimatedIcon(L.PlayCircle, "sparkle");
-export const AnimatedTruck = createAnimatedIcon(L.Truck, "arrow-right");
-export const AnimatedPrinter = createAnimatedIcon(L.Printer, "bounce");
-export const AnimatedCamera = createAnimatedIcon(L.Camera, "bounce");
-export const AnimatedHistory = createAnimatedIcon(L.History, "spin");
-export const AnimatedLoader = createAnimatedIcon(L.Loader2, "spin");
-export const AnimatedMoreVertical = createAnimatedIcon(L.MoreVertical, "bounce");
-export const AnimatedMoreHorizontal = createAnimatedIcon(L.MoreHorizontal, "bounce");
-export const AnimatedMenu = createAnimatedIcon(L.Menu, "bounce");
-export const AnimatedLogOut = createAnimatedIcon(L.LogOut, "arrow-right");
-export const AnimatedPanelLeftClose = createAnimatedIcon(L.PanelLeftClose, "arrow-left");
-export const AnimatedPanelLeftOpen = createAnimatedIcon(L.PanelLeftOpen, "arrow-right");
-export const AnimatedTrendingUp = createAnimatedIcon(L.TrendingUp, "bounce");
-export const AnimatedTrendingDown = createAnimatedIcon(L.TrendingDown, "bounce");
-export const AnimatedSearchX = createAnimatedIcon(L.SearchX, "shake");
+// Compatibility shims for legacy imports with zero custom transforms
+export const AnimatedIcon: any = ({ icon: Icon, ...props }: any) => Icon ? React.createElement(Icon, props) : null;
+export const InteractiveIcon: any = ({ icon: Icon, ...props }: any) => Icon ? React.createElement(Icon, props) : null;
+export type AnimatedIconProps = any;
+export type InteractiveIconProps = any;
+export type IconAnimationPreset = any;
+export type IconInteractionVariant = any;
 
-// Re-export generic AnimatedIcon, InteractiveIcon & Types
-export { AnimatedIcon, createAnimatedIcon, InteractiveIcon, getIconInteractionClass };
-export type { AnimatedIconProps, IconAnimationPreset, InteractiveIconProps, IconInteractionVariant };
-
+export function getIconInteractionClass(): string {
+  return "";
+}

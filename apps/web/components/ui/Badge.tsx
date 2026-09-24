@@ -15,7 +15,7 @@ type BadgeVariant =
   | "upcoming"
   | "spare";
 
-interface BadgeProps {
+export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
   variant?: BadgeVariant;
   children: ReactNode;
   className?: string;
@@ -54,9 +54,15 @@ const dotColors: Record<BadgeVariant, string> = {
   spare: "bg-cyan-500",
 };
 
-export function Badge({ variant = "default", children, className = "", dot = false }: BadgeProps) {
+export function Badge({
+  variant = "default",
+  children,
+  className = "",
+  dot = false,
+  ...props
+}: BadgeProps) {
   return (
-    <span className={`badge-base ${variantClasses[variant]} ${className}`}>
+    <span className={`badge-base ${variantClasses[variant]} ${className}`} {...props}>
       {dot && <span className={`h-1.5 w-1.5 rounded-full ${dotColors[variant]}`} />}
       {children}
     </span>

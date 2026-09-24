@@ -231,7 +231,7 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
           }
           aria-label="More actions"
         >
-          <MoreVertical className="h-4 w-4" />
+          <MoreVertical size={16} className="shrink-0" />
         </button>
       </TooltipWrapper>
 
@@ -273,9 +273,7 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
                     onClick={handleEditPersonnelAction}
                     className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
                   >
-                    <span className="interactive-icon icon-bounce flex items-center justify-center">
-                      <Users size={14} className="text-teal-600 dark:text-teal-400 shrink-0" />
-                    </span>
+                    <Users size={14} className="text-teal-600 dark:text-teal-400 shrink-0" />
                     <span>Edit Supervisor & Operator</span>
                   </button>
                 )}
@@ -287,9 +285,7 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
                     onClick={handleEditClientAction}
                     className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
                   >
-                    <span className="interactive-icon icon-bounce flex items-center justify-center">
-                      <Building2 size={14} className="text-sky-500 shrink-0" />
-                    </span>
+                    <Building2 size={14} className="text-sky-500 shrink-0" />
                     <span>Edit Client</span>
                   </button>
                 )}
@@ -302,9 +298,7 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
                   onClick={handleViewAuditAction}
                   className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
                 >
-                  <span className="interactive-icon icon-bounce flex items-center justify-center">
-                    <Shield size={14} className="text-purple-600 dark:text-purple-400 shrink-0" />
-                  </span>
+                  <Shield size={14} className="text-purple-600 dark:text-purple-400 shrink-0" />
                   <span>Audit</span>
                 </button>
 
@@ -314,9 +308,7 @@ export const MachineRowActionsMenu = memo(function MachineRowActionsMenu({
                   onClick={handleViewLogsAction}
                   className="group group/menu-item interactive-parent w-full flex items-center gap-2.5 px-3 py-2 rounded text-left font-medium text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] active:scale-[0.99] transition-all cursor-pointer min-h-[40px]"
                 >
-                  <span className="interactive-icon icon-rotate flex items-center justify-center">
-                    <History size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
-                  </span>
+                  <History size={14} className="text-sky-600 dark:text-sky-400 shrink-0" />
                   <span>Running Logs</span>
                 </button>
 

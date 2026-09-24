@@ -1,7 +1,12 @@
 "use client";
 
 import React, { forwardRef } from "react";
-import { FileSpreadsheet, FileText, Printer, Download } from "lucide-react";
+import {
+  AnimatedFileSpreadsheet,
+  AnimatedFileText,
+  AnimatedPrinter,
+  AnimatedDownload,
+} from "./animated-icons";
 import { Button, ButtonProps } from "./Button";
 import { TooltipWrapper } from "./tooltip";
 
@@ -40,27 +45,27 @@ export const ExportButton = forwardRef<HTMLButtonElement, ExportButtonProps>(
   ) => {
     const configMap: Record<ExportFormat, { icon: React.ReactNode; defaultLabel: string; defaultTooltip: string }> = {
       xlsx: {
-        icon: <FileSpreadsheet className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 interactive-icon icon-lift" />,
+        icon: <AnimatedFileSpreadsheet size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />,
         defaultLabel: "Export Excel",
         defaultTooltip: "Export to Excel (.xlsx)",
       },
       csv: {
-        icon: <FileText className="h-4 w-4 text-sky-600 dark:text-sky-400 shrink-0 interactive-icon icon-lift" />,
+        icon: <AnimatedFileText size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />,
         defaultLabel: "Export CSV",
         defaultTooltip: "Export to CSV (.csv)",
       },
       pdf: {
-        icon: <FileText className="h-4 w-4 text-rose-600 dark:text-rose-400 shrink-0 interactive-icon icon-lift" />,
+        icon: <AnimatedFileText size={16} className="text-rose-600 dark:text-rose-400 shrink-0" />,
         defaultLabel: "Export PDF",
         defaultTooltip: "Export to PDF (.pdf)",
       },
       print: {
-        icon: <Printer className="h-4 w-4 text-[var(--color-ink)] shrink-0 interactive-icon icon-lift" />,
+        icon: <AnimatedPrinter size={16} className="text-[var(--color-ink)] shrink-0" />,
         defaultLabel: "Print",
         defaultTooltip: "Print document",
       },
       generic: {
-        icon: <Download className="h-4 w-4 text-[var(--color-ink)] shrink-0 interactive-icon icon-arrow-down" />,
+        icon: <AnimatedDownload size={16} className="text-[var(--color-ink)] shrink-0" />,
         defaultLabel: "Export",
         defaultTooltip: "Export data",
       },

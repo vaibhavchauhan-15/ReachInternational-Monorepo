@@ -14,6 +14,7 @@ import {
   AnimatedMapPin,
   AnimatedShieldCheck,
   AnimatedCreditCard,
+  AnimatedClock,
 } from "@/components/ui/animated-icons";
 import { signup, getSupervisorsAction, type AuthFormState } from "@/app/actions/auth";
 import { isSupervisedRole } from "@reachinternational/permissions";
@@ -195,10 +196,10 @@ export default function SignupPage() {
     const hasCity = formValues.city.trim().length >= 2;
     const hasDistrict = formValues.district.trim().length >= 2;
     const hasState = formValues.state.trim().length >= 2 || Boolean(formValues.state_id);
+    const hasSalary = formValues.monthly_salary.trim().length > 0 && Number(formValues.monthly_salary) > 0;
     const hasAadhaar = formValues.aadhaar_number.trim().replace(/\D/g, "").length === 12;
-    const hasSalary = formValues.role !== "operator" || (formValues.monthly_salary.trim().length > 0 && Number(formValues.monthly_salary) > 0);
-    return hasStreet && hasCity && hasDistrict && hasState && hasAadhaar && hasSalary;
-  }, [formValues.street, formValues.address, formValues.city, formValues.district, formValues.state, formValues.state_id, formValues.aadhaar_number, formValues.role, formValues.monthly_salary]);
+    return hasStreet && hasCity && hasDistrict && hasState && hasSalary && hasAadhaar;
+  }, [formValues.street, formValues.address, formValues.city, formValues.district, formValues.state, formValues.state_id, formValues.monthly_salary, formValues.aadhaar_number]);
 
   const section4Complete = useMemo(() => {
     return (
@@ -213,14 +214,71 @@ export default function SignupPage() {
     return section1Complete && section2Complete && section3Complete && section4Complete;
   }, [section1Complete, section2Complete, section3Complete, section4Complete]);
 
-  const missingMandatoryCount = useMemo(() => {
-    let count = 0;
-    if (!section1Complete) count++;
-    if (!section2Complete) count++;
-    if (!section3Complete) count++;
-    if (!section4Complete) count++;
-    return count;
-  }, [section1Complete, section2Complete, section3Complete, section4Complete]);
+  const missingMandatoryList = useMemo(() => {
+    const list: string[] = [];
+    if (!formValues.full_name.trim() || formValues.full_name.trim().length < 2) {
+      list.push("Full Name");
+    }
+    if (!formValues.email.trim() || !formValues.email.includes("@")) {
+      list.push("Email Address");
+    }
+    if (formValues.phone.trim().replace(/\D/g, "").length < 10) {
+      list.push("Mobile Number");
+    }
+    if (isSupervisedRole(formValues.role) && !formValues.supervisor_id.trim()) {
+      list.push("Supervisor");
+    }
+    if (!formValues.shift_start_time.trim() || !formValues.shift_end_time.trim()) {
+      list.push("Shift Timing");
+    }
+    if (!(formValues.street || formValues.address).trim()) {
+      list.push("Street Address");
+    }
+    if (!formValues.city.trim()) {
+      list.push("City");
+    }
+    if (!formValues.district.trim()) {
+      list.push("District");
+    }
+    if (!formValues.state.trim() && !formValues.state_id) {
+      list.push("State");
+    }
+    if (!formValues.monthly_salary.trim() || Number(formValues.monthly_salary) <= 0) {
+      list.push("Monthly Base Salary");
+    }
+    if (formValues.aadhaar_number.trim().replace(/\D/g, "").length !== 12) {
+      list.push("Aadhaar Number");
+    }
+    if (formValues.password.length < 8) {
+      list.push("Password");
+    }
+    if (formValues.confirm_password.length < 8 || formValues.password !== formValues.confirm_password) {
+      list.push("Confirm Password");
+    }
+    if (!agreedToTerms) {
+      list.push("Terms & Privacy Policy");
+    }
+    return list;
+  }, [
+    formValues.full_name,
+    formValues.email,
+    formValues.phone,
+    formValues.role,
+    formValues.supervisor_id,
+    formValues.shift_start_time,
+    formValues.shift_end_time,
+    formValues.street,
+    formValues.address,
+    formValues.city,
+    formValues.district,
+    formValues.state,
+    formValues.state_id,
+    formValues.monthly_salary,
+    formValues.aadhaar_number,
+    formValues.password,
+    formValues.confirm_password,
+    agreedToTerms,
+  ]);
 
   const handleAddressChange = (field: "street" | "city" | "district" | "state" | "state_id", value: string) => {
     if (field === "street") {
@@ -337,6 +395,9 @@ export default function SignupPage() {
     }
     if (!formValues.address.trim()) {
       errors.address = "Address (street / site base) is required.";
+    }
+    if (!formValues.monthly_salary.trim() || Number(formValues.monthly_salary) <= 0) {
+      errors.monthly_salary = "Monthly base salary is required and must be greater than 0.";
     }
     if (!formValues.aadhaar_number.trim()) {
       errors.aadhaar_number = "Aadhaar card number is required.";
@@ -532,6 +593,7 @@ export default function SignupPage() {
               <FormSectionCard
                 stepNumber={1}
                 title="Account & Role"
+                icon={<AnimatedUser size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />}
                 isMandatory={true}
                 isCompleted={section1Complete}
               >
@@ -640,6 +702,7 @@ export default function SignupPage() {
               <FormSectionCard
                 stepNumber={2}
                 title="Work Shift Schedule"
+                icon={<AnimatedClock size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />}
                 isMandatory={true}
                 isCompleted={section2Complete}
                 headerAction={
@@ -676,10 +739,11 @@ export default function SignupPage() {
                 </p>
               </FormSectionCard>
 
-              {/* Section 3: Work Location, Salary & Identity */}
+              {/* Section 3: Address, Salary & Identity */}
               <FormSectionCard
                 stepNumber={3}
-                title="Work Location, Salary & Identity"
+                title="Address, Salary & Identity"
+                icon={<AnimatedMapPin size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />}
                 isMandatory={true}
                 isCompleted={section3Complete}
               >
@@ -703,6 +767,7 @@ export default function SignupPage() {
                     onChange={(val) => handleChange("monthly_salary", val)}
                     role={formValues.role}
                     error={fieldErrors.monthly_salary}
+                    required={true}
                     id="signup-salary"
                   />
 
@@ -745,10 +810,13 @@ export default function SignupPage() {
                   {/* Document Uploads: Aadhaar Card & Driving Licence */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 pt-1">
                     {/* Aadhaar Upload Card */}
-                    <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2">
+                    <div
+                      data-hover-parent
+                      className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2 transition-colors hover:border-sky-500/30"
+                    >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
-                          <AnimatedShieldCheck size={14} className="text-sky-600 dark:text-sky-400" />
+                          <AnimatedShieldCheck size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
                           Aadhaar Document <span className="text-[10px] font-normal text-[var(--color-mute)]">(Front Photo / PDF)</span>
                         </span>
                         <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
@@ -809,10 +877,13 @@ export default function SignupPage() {
                     </div>
 
                     {/* Licence Upload Card */}
-                    <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2">
+                    <div
+                      data-hover-parent
+                      className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2 transition-colors hover:border-sky-500/30"
+                    >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
-                          <AnimatedCreditCard size={14} className="text-sky-600 dark:text-sky-400" />
+                          <AnimatedCreditCard size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
                           Licence Document <span className="text-[10px] font-normal text-[var(--color-mute)]">(Front Photo / PDF)</span>
                         </span>
                         <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
@@ -879,6 +950,7 @@ export default function SignupPage() {
               <FormSectionCard
                 stepNumber={4}
                 title="Security Credentials"
+                icon={<AnimatedLock size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />}
                 isMandatory={true}
                 isCompleted={section4Complete}
               >
@@ -988,7 +1060,8 @@ export default function SignupPage() {
                   loading={pending}
                   label="Request Platform Access"
                   loadingLabel="Submitting Registration Request..."
-                  missingCount={missingMandatoryCount}
+                  missingCount={missingMandatoryList.length}
+                  missingFields={missingMandatoryList}
                 />
               </div>
             </form>

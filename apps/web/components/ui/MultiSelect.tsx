@@ -3,11 +3,11 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  AnimatedChevronDown,
   AnimatedCheck,
   AnimatedSearch,
   AnimatedX,
 } from "./animated-icons";
+import { ChevronDown } from "lucide-react";
 
 export interface MultiSelectOption {
   value: string;
@@ -193,7 +193,7 @@ export function MultiSelect({
               <AnimatedX size={13} />
             </span>
           )}
-          <AnimatedChevronDown
+          <ChevronDown
             size={16}
             className={`text-[var(--color-mute)] transition-transform duration-200 ${
               isOpen ? "rotate-180 text-sky-500" : ""

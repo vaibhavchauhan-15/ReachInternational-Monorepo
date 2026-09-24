@@ -371,7 +371,7 @@ export function CommandPalette({
                               : "bg-muted text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground"
                           }`}
                         >
-                          <span className="interactive-icon icon-bounce flex items-center justify-center">
+                          <span className="flex items-center justify-center">
                             <Icon size={16} />
                           </span>
                         </div>

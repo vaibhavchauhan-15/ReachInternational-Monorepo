@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../components/ui/ThemeProvider';
 import { useAuth } from '../../lib/auth/useAuth';
 import { MobileHeader, Card, Badge, EmptyState } from '../../components/ui';
+import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { supabase } from '../../lib/supabase';
 import {
   Banknote,
@@ -53,12 +54,30 @@ export default function PayrollScreen() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-
   // Target payroll month YYYY-MM
   const now = new Date();
   const defaultMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  const [selectedMonth, setSelectedMonth] = useState(defaultMonth);
+
+  // Persistent search and month filter state
+  const {
+    search: debouncedSearchQuery,
+    inputValue: searchQuery,
+    setSearch: setSearchQuery,
+    filters,
+    setFilter,
+  } = usePersistentListState<{
+    selectedMonth: string;
+  }>({
+    storageKey: 'reach_filters_payroll',
+    defaultSearch: '',
+    defaultFilters: {
+      selectedMonth: defaultMonth,
+    },
+    debounceMs: 250,
+  });
+
+  const selectedMonth = filters.selectedMonth;
+  const setSelectedMonth = useCallback((m: string) => setFilter('selectedMonth', m), [setFilter]);
 
   const [payrollData, setPayrollData] = useState<HRPayrollSummary | null>(null);
 
@@ -379,11 +398,11 @@ export default function PayrollScreen() {
             placeholder="Search operator by name, city..."
             placeholderTextColor={theme.colors.mute}
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={(t) => setSearchQuery(t)}
             style={[styles.searchInput, { color: theme.colors.ink }]}
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <TouchableOpacity onPress={() => setSearchQuery('', true)}>
               <X size={16} color={theme.colors.mute} />
             </TouchableOpacity>
           )}

@@ -12,7 +12,6 @@ import {
   AnimatedClock,
   AnimatedCheck,
   AnimatedX,
-  AnimatedChevronDown,
 } from "@/components/ui/animated-icons";
 import { Clock, UserCog, Check, X, Phone, MapPin, Shield, FileText, ArrowRight, AlertTriangle } from "lucide-react";
 import { formatDateTime, formatTimeAgo, formatTinyRelativeTime } from "@reachinternational/utils";

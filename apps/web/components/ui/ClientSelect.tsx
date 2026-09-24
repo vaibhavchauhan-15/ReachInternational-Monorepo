@@ -4,11 +4,10 @@ import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  AnimatedChevronDown,
   AnimatedCheck,
   AnimatedX,
 } from "./animated-icons";
-import { Search } from "lucide-react";
+import { Search, ChevronDown } from "lucide-react";
 import { useDynamicDropdownPosition } from "@/lib/hooks/useDynamicDropdownPosition";
 
 export interface ClientSelectItem {
@@ -243,7 +242,7 @@ export function ClientSelect({
               <AnimatedX size={12} />
             </span>
           )}
-          <AnimatedChevronDown
+          <ChevronDown
             size={16}
             className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
               isOpen ? "rotate-180 text-sky-500" : ""

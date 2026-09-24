@@ -9,8 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  TextInput,
-  ActivityIndicator,
 } from 'react-native';
 import { Button, Input, useTheme } from '../ui';
 import { supabase } from '../../lib/supabase';
@@ -20,25 +18,26 @@ import {
   validateLicenseNumber,
   formatAadhaar,
   parseProfileShiftTime,
-  INDIAN_STATES,
   getStateById,
   getStateByName,
 } from '@reachinternational/utils';
 import { isSupervisedRole } from '@reachinternational/permissions';
 import { notifyUserUpdated } from '../../lib/notifications';
 import {
+  MobileFormSectionCard,
+  MobileAddressFields,
+  MobileSalaryField,
+  MobileSubmitButton,
+} from '../forms';
+import {
   X,
   User,
   Phone,
-  MapPin,
-  Shield,
   ShieldCheck,
   CreditCard,
   Clock,
-  Building2,
   ChevronDown,
   Check,
-  Search,
 } from 'lucide-react-native';
 import type { UserRecord } from './UserDetailModal';
 
@@ -72,18 +71,16 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('operator');
   const [shiftTime, setShiftTime] = useState('');
-  const [address, setAddress] = useState('');
+  const [street, setStreet] = useState('');
   const [city, setCity] = useState('');
   const [district, setDistrict] = useState('');
-  const [stateName, setStateName] = useState('');
-  const [stateId, setStateId] = useState<string>('');
+  const [stateName, setStateName] = useState('Maharashtra');
+  const [stateId, setStateId] = useState<number>(27);
   const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
 
   // Dropdown Picker States
   const [rolePickerVisible, setRolePickerVisible] = useState(false);
-  const [statePickerVisible, setStatePickerVisible] = useState(false);
-  const [stateSearch, setStateSearch] = useState('');
 
   // Supervisor State
   const [supervisors, setSupervisors] = useState<Array<{ id: string; full_name: string; email?: string }>>([]);
@@ -102,7 +99,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
       setPhone(user.phone || '');
       setRole(user.role || 'operator');
       setShiftTime(user.shift_time || '');
-      setAddress(user.address || '');
+      setStreet(user.street || user.address || '');
       setCity(user.city || '');
       setDistrict(user.district || '');
       setMonthlySalary(user.monthly_salary ? String(user.monthly_salary) : '');
@@ -113,8 +110,8 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
         ? getStateByName(user.state)
         : undefined;
 
-      setStateName(matchedState ? matchedState.name : user.state || '');
-      setStateId(matchedState ? String(matchedState.id) : user.state_id ? String(user.state_id) : '');
+      setStateName(matchedState ? matchedState.name : user.state || 'Maharashtra');
+      setStateId(matchedState ? matchedState.id : user.state_id || 27);
       setAadhaarNumber(user.aadhaar_number ? formatAadhaar(user.aadhaar_number) : '');
       setLicenseNumber(user.license_number || '');
       setSupervisorId(user.supervisor_id || (user.supervisor_ids && user.supervisor_ids[0]) || '');
@@ -145,14 +142,27 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
   const selectedRoleObj = ALL_ROLES.find((r) => r.value === role) || ALL_ROLES[0];
   const selectedSupervisor = supervisors.find((s) => s.id === supervisorId);
 
-  const filteredStates = INDIAN_STATES.filter((s) =>
-    s.name.toLowerCase().includes(stateSearch.toLowerCase())
-  );
-
   const filteredSupervisors = supervisors.filter((s) =>
     s.full_name.toLowerCase().includes(supervisorSearch.toLowerCase()) ||
     (s.email && s.email.toLowerCase().includes(supervisorSearch.toLowerCase()))
   );
+
+  const isOperator = role === 'operator';
+  const isSalaryRequired = isOperator;
+
+  const cleanPhone = phone.replace(/[^0-9+]/g, '');
+  const section1Complete = Boolean(fullName.trim().length >= 2 && cleanPhone.length >= 10);
+  const section2Complete = Boolean(shiftTime.trim().length > 0);
+  const section3Complete = Boolean(street.trim() && city.trim() && district.trim() && stateName.trim());
+  const section4Complete = isSalaryRequired ? Boolean(monthlySalary && Number(monthlySalary) > 0) : true;
+
+  const isAllMandatoryFilled = section1Complete && section2Complete && section3Complete && section4Complete;
+  const missingMandatoryCount = [
+    !section1Complete,
+    !section2Complete,
+    !section3Complete,
+    isSalaryRequired && !section4Complete,
+  ].filter(Boolean).length;
 
   const handleSave = async () => {
     setError('');
@@ -160,13 +170,12 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
       setError('Full Name is required.');
       return;
     }
-    const cleanPhone = phone.replace(/[^0-9+]/g, '');
     if (cleanPhone.length < 10) {
       setError('Valid 10-digit mobile phone number is required.');
       return;
     }
-    if (!city.trim() || !district.trim() || !stateName.trim()) {
-      setError('City, District, and State are required.');
+    if (!street.trim() || !city.trim() || !district.trim() || !stateName.trim()) {
+      setError('Street address, City, District, and State are required.');
       return;
     }
 
@@ -212,12 +221,13 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
           role,
           shift_start_time: parsedShift?.startTime || null,
           shift_end_time: parsedShift?.endTime || null,
-          street: address.trim() || null,
+          street: street.trim() || null,
+          address: street.trim() || null,
           monthly_salary: sal,
           city: city.trim(),
           district: district.trim(),
           state: stateName.trim(),
-          state_id: stateId ? Number(stateId) : null,
+          state_id: stateId || null,
           aadhaar_number: cleanAadhaar,
           license_number: formattedLic,
           supervisor_id: primarySupervisorId,
@@ -297,9 +307,13 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
 
           <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent} showsVerticalScrollIndicator={false}>
             {/* Section 1: Contact & Identity Info */}
-            <View style={[styles.sectionCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>CONTACT & IDENTITY</Text>
-
+            <MobileFormSectionCard
+              stepNumber={1}
+              title="Contact Details"
+              description="Full name and verified mobile phone"
+              isMandatory={true}
+              isCompleted={section1Complete}
+            >
               <Input
                 label="Full Name *"
                 placeholder="e.g. Ramesh Verma"
@@ -316,97 +330,62 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
                 keyboardType="phone-pad"
                 leftIcon={<Phone size={16} color={theme.colors.mute} />}
               />
-            </View>
+            </MobileFormSectionCard>
 
-            {/* Section 2: Operations & Address */}
-            <View style={[styles.sectionCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>OPERATIONS & ADDRESS</Text>
-
+            {/* Section 2: Shift Schedule */}
+            <MobileFormSectionCard
+              stepNumber={2}
+              title="Shift Schedule"
+              description="Operating work schedule window"
+              isMandatory={true}
+              isCompleted={section2Complete}
+            >
               <Input
-                label="Shift Schedule"
+                label="Shift Schedule *"
                 placeholder="e.g. Day Shift (08:00 AM - 08:00 PM)"
                 value={shiftTime}
                 onChangeText={setShiftTime}
                 leftIcon={<Clock size={16} color={theme.colors.mute} />}
               />
+            </MobileFormSectionCard>
 
-              <Input
-                label="Street Address"
-                placeholder="e.g. Plot 42, MIDC Area"
-                value={address}
-                onChangeText={setAddress}
-                leftIcon={<MapPin size={16} color={theme.colors.mute} />}
+            {/* Section 3: Work Location & Address */}
+            <MobileFormSectionCard
+              stepNumber={3}
+              title="Work Location & Address"
+              description="Street + City/Town/Village + District + State"
+              isMandatory={true}
+              isCompleted={section3Complete}
+            >
+              <MobileAddressFields
+                street={street}
+                city={city}
+                district={district}
+                stateName={stateName}
+                stateId={stateId}
+                onStreetChange={setStreet}
+                onCityChange={setCity}
+                onDistrictChange={setDistrict}
+                onStateChange={(id, name) => {
+                  setStateId(id);
+                  setStateName(name);
+                }}
+                required={true}
               />
+            </MobileFormSectionCard>
 
-              <View style={styles.rowInputs}>
-                <View style={{ flex: 1 }}>
-                  <Input
-                    label="City *"
-                    placeholder="Pune"
-                    value={city}
-                    onChangeText={setCity}
-                    leftIcon={<MapPin size={16} color={theme.colors.mute} />}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Input
-                    label="District *"
-                    placeholder="Pune"
-                    value={district}
-                    onChangeText={setDistrict}
-                    leftIcon={<MapPin size={16} color={theme.colors.mute} />}
-                  />
-                </View>
-              </View>
-
-              {/* State Picker Trigger */}
-              <View style={styles.inputGroup}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>State *</Text>
-                <TouchableOpacity
-                  onPress={() => setStatePickerVisible(true)}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.pickerTrigger,
-                    { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
-                  ]}
-                >
-                  <Text style={[styles.pickerTriggerText, { color: stateName ? theme.colors.ink : theme.colors.mute }]}>
-                    {stateName || 'Select Indian state...'}
-                  </Text>
-                  <ChevronDown size={16} color={theme.colors.mute} />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Section 3: Identity & Regulatory Documents */}
-            <View style={[styles.sectionCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>REGULATORY DOCUMENTS</Text>
-
-              <Input
-                label="Aadhaar Card Number"
-                placeholder="12-digit Aadhaar Number"
-                value={aadhaarNumber}
-                onChangeText={(val) => setAadhaarNumber(formatAadhaar(val))}
-                keyboardType="number-pad"
-                maxLength={14}
-                leftIcon={<ShieldCheck size={16} color={theme.colors.mute} />}
-              />
-
-              <Input
-                label="Driving Licence Number"
-                placeholder="e.g. MH12 20110012345"
-                value={licenseNumber}
-                onChangeText={(val) => setLicenseNumber(val.toUpperCase())}
-                autoCapitalize="characters"
-                maxLength={25}
-                leftIcon={<CreditCard size={16} color={theme.colors.mute} />}
-              />
-            </View>
-
-            {/* Section 4: Role & Permissions */}
-            <View style={[styles.sectionCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-              <Text style={[styles.sectionTitle, { color: theme.colors.ink }]}>ACCESS ROLE & ASSIGNMENTS</Text>
-
+            {/* Section 4: Role, Compensation & Regulatory Documents */}
+            <MobileFormSectionCard
+              stepNumber={4}
+              title="Role, Compensation & KYC"
+              description={
+                isOperator
+                  ? 'Designated role, mandatory operator base salary & official KYC'
+                  : 'Designated role, base salary & official KYC (Optional)'
+              }
+              isMandatory={isOperator}
+              isCompleted={section4Complete}
+            >
               {/* Designated Role Trigger */}
               <View style={styles.inputGroup}>
                 <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Designated Role *</Text>
@@ -444,31 +423,47 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
               )}
 
               {/* Operator Monthly Salary */}
-              {role === 'operator' && (
-                <View style={{ marginTop: spacingNumeric.sm }}>
-                  <Input
-                    label="Monthly Salary (₹) *"
-                    placeholder="e.g. 25000"
-                    value={monthlySalary}
-                    onChangeText={setMonthlySalary}
-                    keyboardType="number-pad"
-                    leftIcon={<CreditCard size={16} color={theme.colors.mute} />}
-                  />
-                </View>
-              )}
-            </View>
+              <MobileSalaryField
+                value={monthlySalary}
+                onChangeText={setMonthlySalary}
+                role={role}
+              />
+
+              <Input
+                label="Aadhaar Card Number"
+                placeholder="12-digit Aadhaar Number"
+                value={aadhaarNumber}
+                onChangeText={(val) => setAadhaarNumber(formatAadhaar(val))}
+                keyboardType="number-pad"
+                maxLength={14}
+                leftIcon={<ShieldCheck size={16} color={theme.colors.mute} />}
+              />
+
+              <Input
+                label="Driving Licence Number"
+                placeholder="e.g. MH12 20110012345"
+                value={licenseNumber}
+                onChangeText={(val) => setLicenseNumber(val.toUpperCase())}
+                autoCapitalize="characters"
+                maxLength={25}
+                leftIcon={<CreditCard size={16} color={theme.colors.mute} />}
+              />
+            </MobileFormSectionCard>
           </ScrollView>
 
           {/* Footer Actions */}
           <View style={[styles.footer, { borderTopColor: theme.colors.hairline }]}>
-            <Button label="Cancel" onPress={onClose} variant="outline" size="md" />
-            <Button
-              label="Save Changes"
-              onPress={handleSave}
-              isLoading={isLoading}
-              variant="primary"
-              size="md"
-            />
+            <Button label="Cancel" onPress={onClose} variant="outline" size="md" style={{ flex: 1, marginRight: 8 }} />
+            <View style={{ flex: 1.5 }}>
+              <MobileSubmitButton
+                isReady={isAllMandatoryFilled}
+                isLoading={isLoading}
+                label="Save Changes"
+                loadingLabel="Saving Changes..."
+                missingCount={missingMandatoryCount}
+                onPress={handleSave}
+              />
+            </View>
           </View>
         </View>
 
@@ -511,58 +506,6 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
           </View>
         </Modal>
 
-        {/* State Picker Modal */}
-        <Modal visible={statePickerVisible} animationType="slide" transparent onRequestClose={() => setStatePickerVisible(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalSheet, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-              <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
-                <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>Select State</Text>
-                <TouchableOpacity onPress={() => setStatePickerVisible(false)} style={styles.closeBtn}>
-                  <X size={18} color={theme.colors.ink} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={[styles.searchBox, { borderBottomColor: theme.colors.hairline }]}>
-                <Search size={16} color={theme.colors.mute} />
-                <TextInput
-                  style={[styles.searchInput, { color: theme.colors.ink }]}
-                  placeholder="Search state..."
-                  placeholderTextColor={theme.colors.mute}
-                  value={stateSearch}
-                  onChangeText={setStateSearch}
-                />
-              </View>
-
-              <ScrollView style={styles.modalListScroll} showsVerticalScrollIndicator={false}>
-                {filteredStates.map((st) => {
-                  const isSelected = stateId === String(st.id) || stateName === st.name;
-                  return (
-                    <TouchableOpacity
-                      key={st.id}
-                      onPress={() => {
-                        setStateName(st.name);
-                        setStateId(String(st.id));
-                        setStatePickerVisible(false);
-                        setStateSearch('');
-                      }}
-                      style={[
-                        styles.modalItemRow,
-                        { borderBottomColor: theme.colors.hairline },
-                        isSelected && { backgroundColor: theme.colors.link + '12' },
-                      ]}
-                    >
-                      <Text style={[styles.modalItemText, { color: isSelected ? theme.colors.link : theme.colors.ink, fontWeight: isSelected ? '700' : '500' }]}>
-                        {st.name}
-                      </Text>
-                      {isSelected && <Check size={16} color={theme.colors.link} />}
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
         {/* Supervisor Picker Modal */}
         <Modal visible={supervisorPickerVisible} animationType="slide" transparent onRequestClose={() => setSupervisorPickerVisible(false)}>
           <View style={styles.modalOverlay}>
@@ -574,14 +517,12 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
                 </TouchableOpacity>
               </View>
 
-              <View style={[styles.searchBox, { borderBottomColor: theme.colors.hairline }]}>
-                <Search size={16} color={theme.colors.mute} />
-                <TextInput
-                  style={[styles.searchInput, { color: theme.colors.ink }]}
+              <View style={{ paddingHorizontal: spacingNumeric.md, paddingVertical: spacingNumeric.xs }}>
+                <Input
                   placeholder="Search supervisor..."
-                  placeholderTextColor={theme.colors.mute}
                   value={supervisorSearch}
                   onChangeText={setSupervisorSearch}
+                  leftIcon={<User size={15} color={theme.colors.mute} />}
                 />
               </View>
 
@@ -616,7 +557,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
                         <Text style={[styles.modalItemText, { color: isSelected ? theme.colors.link : theme.colors.ink, fontWeight: isSelected ? '700' : '500' }]}>
                           {s.full_name}
                         </Text>
-                        {s.email ? <Text style={{ fontSize: 11, color: theme.colors.mute }}>{s.email}</Text> : null}
+                        {s.email ? <Text style={{ fontSize: 11, color: theme.colors.mute, marginTop: 2 }}>{s.email}</Text> : null}
                       </View>
                       {isSelected && <Check size={16} color={theme.colors.link} />}
                     </TouchableOpacity>
@@ -689,22 +630,6 @@ const styles = StyleSheet.create({
     padding: spacingNumeric.lg,
     gap: spacingNumeric.md,
   },
-  sectionCard: {
-    padding: spacingNumeric.md,
-    borderRadius: radiusNumeric.md,
-    borderWidth: 1,
-    gap: spacingNumeric.sm,
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  rowInputs: {
-    flexDirection: 'row',
-    gap: spacingNumeric.sm,
-  },
   inputGroup: {
     gap: 4,
   },
@@ -755,19 +680,6 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 14,
     fontWeight: '700',
-  },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacingNumeric.md,
-    paddingVertical: spacingNumeric.sm,
-    borderBottomWidth: 1,
-    gap: spacingNumeric.xs,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    paddingVertical: 2,
   },
   modalListScroll: {
     maxHeight: 320,

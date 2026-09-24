@@ -20,11 +20,19 @@ import {
   checkMachineSerialNumberAvailable,
   getMachineModalOptionsAction,
   getClientSelectOptionsAction,
+  getMachinePersonnelFreshAction,
 } from "@/app/actions/machines";
 import type { MachineWithEngineer } from "@/lib/types/database";
 import type { User, UserRole } from "@reachinternational/types";
 import { isManagerOrAbove } from "@reachinternational/permissions";
-import { AlertCircle, Shield, Wrench, Building2 } from "lucide-react";
+import {
+  AnimatedShield,
+  AnimatedWrench,
+  AnimatedAlertCircle,
+  AnimatedBuilding,
+  AnimatedInfo,
+} from "@/components/ui/animated-icons";
+import { Shield, Wrench, AlertCircle } from "lucide-react";
 
 const HEALTH_STATUS_OPTIONS = [
   { value: "active", label: "Active" },
@@ -192,7 +200,16 @@ export function MachineInfoModal({
       size="lg"
     >
       <div className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+        <div
+          data-hover-parent
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3 transition-colors"
+        >
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-mute)] pb-2 border-b border-[var(--color-hairline)]">
+            <AnimatedInfo size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+            <span>Specifications & Meter Readings</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 pt-1">
           {/* Machine Code / ID (Immutable) */}
           <div
             className="w-full cursor-not-allowed group/locked-machine"
@@ -354,12 +371,17 @@ export function MachineInfoModal({
             disabled={isSaving}
           />
         </div>
+      </div>
 
         <div className="pt-3 border-t border-[var(--color-hairline)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="text-xs text-[var(--color-mute)] empty:hidden">
             {isDirty && (
-              <span className="text-amber-500 dark:text-amber-400 font-medium flex items-center gap-1.5">
-                <AlertCircle size={14} /> Unsaved changes
+              <span
+                data-hover-parent
+                className="text-amber-500 dark:text-amber-400 font-medium inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-xs transition-colors cursor-default"
+              >
+                <AnimatedAlertCircle size={14} className="w-3.5 h-3.5 shrink-0" />
+                <span>Unsaved changes</span>
               </span>
             )}
           </div>
@@ -417,11 +439,11 @@ export function MachinePersonnelModal({
 
   const canEditSupervisor = isManagerOrAbove(userRole as any);
 
-  const initialSupervisorIds = Array.isArray(machine.supervisor_ids) && machine.supervisor_ids.length > 0
+  const initialSupervisorIds = Array.isArray(machine.supervisor_ids)
     ? machine.supervisor_ids
     : machine.current_supervisor_id ? [machine.current_supervisor_id] : [];
 
-  const initialOperatorIds = Array.isArray(machine.operator_ids) && machine.operator_ids.length > 0
+  const initialOperatorIds = Array.isArray(machine.operator_ids)
     ? machine.operator_ids
     : machine.current_operator_id ? [machine.current_operator_id] : [];
 
@@ -477,12 +499,12 @@ export function MachinePersonnelModal({
 
   useEffect(() => {
     if (isOpen) {
-      const supIds = Array.isArray(machine.supervisor_ids) && machine.supervisor_ids.length > 0
+      const supIds = Array.isArray(machine.supervisor_ids)
         ? machine.supervisor_ids
         : machine.current_supervisor_id ? [machine.current_supervisor_id] : [];
       setSupervisorIds(supIds);
 
-      const opIds = Array.isArray(machine.operator_ids) && machine.operator_ids.length > 0
+      const opIds = Array.isArray(machine.operator_ids)
         ? machine.operator_ids
         : machine.current_operator_id ? [machine.current_operator_id] : [];
       setOperatorIds(opIds);
@@ -542,16 +564,18 @@ export function MachinePersonnelModal({
     shift_time?: string | null;
     role?: string | null;
     status?: string | null;
-  }> = (lazyOperators || []).map((o) => ({
-    ...o,
-    full_name: o.full_name || (o as any).name || "Operator",
-    role: o.role || "operator",
-    status: o.status || "active",
-  }));
+  }> = (lazyOperators || [])
+    .filter((o) => (!o.role || o.role === "operator") && o.status !== "inactive")
+    .map((o) => ({
+      ...o,
+      full_name: o.full_name || (o as any).name || "Operator",
+      role: "operator",
+      status: o.status || "active",
+    }));
 
   if (Array.isArray(machine.operators)) {
     machine.operators.forEach((o) => {
-      if (o && !allOperators.some((item) => item.id === o.id)) {
+      if (o && (!(o as any).role || (o as any).role === "operator") && !allOperators.some((item) => item.id === o.id)) {
         allOperators.push({
           id: o.id,
           full_name: o.full_name || (o as any).name || "Operator",
@@ -565,32 +589,34 @@ export function MachinePersonnelModal({
     });
   }
   if (machine.current_operator && machine.current_operator_id) {
-    if (!allOperators.some((o) => o.id === machine.current_operator_id)) {
+    const currOp = machine.current_operator;
+    if ((!(currOp as any).role || (currOp as any).role === "operator") && !allOperators.some((o) => o.id === machine.current_operator_id)) {
       allOperators.push({
         id: machine.current_operator_id,
-        full_name: machine.current_operator.full_name || (machine.current_operator as any).name || "Operator",
-        phone: machine.current_operator.phone,
-        email: machine.current_operator.email,
-        shift_time: machine.current_operator.shift_time,
+        full_name: currOp.full_name || (currOp as any).name || "Operator",
+        phone: currOp.phone,
+        email: currOp.email,
+        shift_time: currOp.shift_time,
         role: "operator",
         status: "active",
       });
     }
   }
 
-  const savedSupIds = Array.isArray(machine.supervisor_ids) && machine.supervisor_ids.length > 0
+  const savedSupIds = Array.isArray(machine.supervisor_ids)
     ? machine.supervisor_ids
     : machine.current_supervisor_id ? [machine.current_supervisor_id] : [];
   const isSupervisorsDirty =
     JSON.stringify([...supervisorIds].sort()) !== JSON.stringify([...savedSupIds].sort());
 
-  const savedOpIds = Array.isArray(machine.operator_ids) && machine.operator_ids.length > 0
+  const savedOpIds = Array.isArray(machine.operator_ids)
     ? machine.operator_ids
     : machine.current_operator_id ? [machine.current_operator_id] : [];
   const isOperatorsDirty =
     JSON.stringify([...operatorIds].sort()) !== JSON.stringify([...savedOpIds].sort());
 
-  const isDirty = isSupervisorsDirty || isOperatorsDirty;
+  const isSupervisor = userRole === "supervisor";
+  const isDirty = canEditSupervisor ? (isSupervisorsDirty || isOperatorsDirty) : isOperatorsDirty;
 
   const handleSavePersonnel = async () => {
     setIsSaving(true);
@@ -602,11 +628,13 @@ export function MachinePersonnelModal({
         promises.push(
           updateMachineSupervisorsAction(machine.id, supervisorIds).then((res) => {
             if (res.error) throw new Error(res.error);
-            const updatedSupervisorsList = allSupervisors.filter((s) => supervisorIds.includes(s.id));
-            updatedFields.supervisor_ids = res.supervisor_ids;
-            updatedFields.current_supervisor_id = res.current_supervisor_id || null;
-            updatedFields.supervisors = updatedSupervisorsList as any;
-            updatedFields.current_supervisor = (updatedSupervisorsList[0] as any) || null;
+            const freshSups = res.supervisors && res.supervisors.length > 0
+              ? res.supervisors
+              : (supervisorIds.length === 0 ? [] : allSupervisors.filter((s) => supervisorIds.includes(s.id)));
+            updatedFields.supervisor_ids = res.supervisor_ids !== undefined ? res.supervisor_ids : supervisorIds;
+            updatedFields.current_supervisor_id = res.current_supervisor_id !== undefined ? res.current_supervisor_id : null;
+            updatedFields.supervisors = freshSups as any;
+            updatedFields.current_supervisor = (freshSups[0] as any) || null;
           })
         );
       }
@@ -615,20 +643,36 @@ export function MachinePersonnelModal({
         promises.push(
           updateMachineOperatorsAction(machine.id, operatorIds).then((res) => {
             if (res.error) throw new Error(res.error);
-            const updatedOperatorsList = allOperators.filter((o) => operatorIds.includes(o.id));
-            updatedFields.operator_ids = res.operator_ids;
-            updatedFields.current_operator_id = res.current_operator_id || null;
-            updatedFields.operators = updatedOperatorsList as any;
-            updatedFields.current_operator = (updatedOperatorsList[0] as any) || null;
+            const freshOps = res.operators && res.operators.length > 0
+              ? res.operators
+              : (operatorIds.length === 0 ? [] : allOperators.filter((o) => operatorIds.includes(o.id)));
+            updatedFields.operator_ids = res.operator_ids !== undefined ? res.operator_ids : operatorIds;
+            updatedFields.current_operator_id = res.current_operator_id !== undefined ? res.current_operator_id : null;
+            updatedFields.operators = freshOps as any;
+            updatedFields.current_operator = (freshOps[0] as any) || null;
           })
         );
       }
 
       await Promise.all(promises);
 
+      // Immediately invalidate and update assignment component with fresh database response
       onMachineUpdated?.(updatedFields);
-      router.refresh();
-      toast("success", "Personnel assignments updated", "Supervisors and operators updated successfully.");
+
+      // Dedicated background verification query directly to DB without blocking UI or reloading
+      void getMachinePersonnelFreshAction(machine.id).then((freshRes) => {
+        if (freshRes.success && freshRes.data) {
+          onMachineUpdated?.(freshRes.data as any);
+        }
+      });
+
+      toast(
+        "success",
+        isSupervisor ? "Operator assignment updated" : "Personnel assignments updated",
+        isSupervisor
+          ? "Machine operator assignments saved successfully."
+          : "Supervisors and operators updated successfully."
+      );
       onClose();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to update personnel";
@@ -645,7 +689,7 @@ export function MachinePersonnelModal({
       title={
         <div className="flex items-center gap-2 flex-wrap min-w-0">
           <span className="font-bold text-sm sm:text-base text-[var(--color-ink)]">
-            Assign Shift Personnel
+            {isSupervisor ? "Assign Machine Operator" : "Assign Shift Personnel"}
           </span>
           <span className="font-mono text-xs px-2 py-0.5 rounded bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] border border-[var(--color-hairline)] font-normal">
             {machine.machine_id}
@@ -662,31 +706,71 @@ export function MachinePersonnelModal({
       }
       size="lg"
     >
-      <div className="space-y-5">
+      <div className="space-y-4">
         {/* Supervisors Section */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-1.5 pb-1">
-            <Shield className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-            <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-              Assigned Supervisors (Multi-Shift Oversight)
-            </span>
+        <div
+          data-hover-parent
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3 transition-colors"
+        >
+          <div className="flex items-center justify-between pb-2 border-b border-[var(--color-hairline)]">
+            <div className="flex items-center gap-2">
+              <AnimatedShield size={16} className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink)]">
+                Assigned Supervisors (Multi-Shift Oversight)
+              </span>
+            </div>
+            {!canEditSupervisor && (
+              <span className="text-[10px] text-[var(--color-mute)] font-medium">
+                Managed by Administrators
+              </span>
+            )}
           </div>
-          <MultiUserSelect
-            label=""
-            users={allSupervisors}
-            values={supervisorIds}
-            onChange={setSupervisorIds}
-            placeholder={isLoadingOptions && allSupervisors.length === 0 ? "Loading supervisors from database..." : "Search & assign supervisors..."}
-            disabled={!canEditSupervisor || isSaving}
-          />
+          {canEditSupervisor ? (
+            <MultiUserSelect
+              label=""
+              users={allSupervisors}
+              values={supervisorIds}
+              onChange={setSupervisorIds}
+              placeholder={isLoadingOptions && allSupervisors.length === 0 ? "Loading supervisors from database..." : "Search & assign supervisors..."}
+              disabled={isSaving}
+            />
+          ) : (
+            <div className="space-y-2 text-xs">
+              {allSupervisors.filter((s) => supervisorIds.includes(s.id)).length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {allSupervisors
+                    .filter((s) => supervisorIds.includes(s.id))
+                    .map((s) => (
+                      <span
+                        key={s.id}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] text-[var(--color-ink)] shadow-2xs"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
+                        <span>{s.full_name}</span>
+                      </span>
+                    ))}
+                </div>
+              ) : (
+                <p className="text-[11px] text-[var(--color-mute)] italic">No supervisors designated</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Operators Section */}
-        <div className="space-y-2 pt-3 border-t border-[var(--color-hairline)]">
-          <div className="flex items-center gap-1.5 pb-1">
-            <Wrench className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-ink)]">
-              Assigned Operators (24h Shift Execution)
+        <div
+          data-hover-parent
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3 transition-colors"
+        >
+          <div className="flex items-center justify-between pb-2 border-b border-[var(--color-hairline)]">
+            <div className="flex items-center gap-2">
+              <AnimatedWrench size={16} className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink)]">
+                Assigned Operators (24h Shift Execution)
+              </span>
+            </div>
+            <span className="text-[10px] text-[var(--color-mute)] font-medium">
+              Only active operators eligible
             </span>
           </div>
           <MultiUserSelect
@@ -703,8 +787,12 @@ export function MachinePersonnelModal({
         <div className="pt-3 border-t border-[var(--color-hairline)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="text-xs text-[var(--color-mute)] empty:hidden">
             {isDirty && (
-              <span className="text-amber-500 dark:text-amber-400 font-medium flex items-center gap-1.5">
-                <AlertCircle size={14} /> Unsaved roster changes
+              <span
+                data-hover-parent
+                className="text-amber-500 dark:text-amber-400 font-medium inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-xs transition-colors cursor-default"
+              >
+                <AnimatedAlertCircle size={14} className="w-3.5 h-3.5 shrink-0" />
+                <span>Unsaved roster changes</span>
               </span>
             )}
           </div>
@@ -726,7 +814,7 @@ export function MachinePersonnelModal({
               onClick={handleSavePersonnel}
               className="w-full sm:w-auto h-11 min-h-[44px] px-5 text-sm font-semibold justify-center"
             >
-              Update Personnel
+              {isSupervisor ? "Save Operator Assignment" : "Update Personnel"}
             </Button>
           </div>
         </div>
@@ -867,39 +955,53 @@ export function MachineClientModal({
       size="md"
     >
       <div className="space-y-4">
-        <div className="space-y-3">
-          <ClientSelect
-            label="Assigned Client"
-            clients={allClients}
-            value={clientId}
-            onChange={(selectedId) => setClientId(selectedId || "")}
-            placeholder={isLoadingClients && allClients.length === 0 ? "Loading clients from database..." : "Search and select client renting this machine..."}
-            clearable
-            disabled={isSaving}
-          />
+        <div
+          data-hover-parent
+          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3 transition-colors"
+        >
+          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-mute)] pb-2 border-b border-[var(--color-hairline)]">
+            <AnimatedBuilding size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+            <span>Client Assignment & Rental Status</span>
+          </div>
 
-          <div className="p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] flex items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2">
-              <span
-                className={`w-2.5 h-2.5 rounded-full ${
-                  clientId ? "bg-sky-500 animate-pulse" : "bg-emerald-500"
-                }`}
-              />
-              <span className="font-semibold text-[var(--color-ink)]">
-                {clientId ? "Status upon update: RENTED" : "Status upon update: AVAILABLE"}
+          <div className="space-y-3">
+            <ClientSelect
+              label=""
+              clients={allClients}
+              value={clientId}
+              onChange={(selectedId) => setClientId(selectedId || "")}
+              placeholder={isLoadingClients && allClients.length === 0 ? "Loading clients from database..." : "Search and select client renting this machine..."}
+              clearable
+              disabled={isSaving}
+            />
+
+            <div className="p-2.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/50 flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`w-2.5 h-2.5 rounded-full ${
+                    clientId ? "bg-sky-500 animate-pulse" : "bg-emerald-500"
+                  }`}
+                />
+                <span className="font-semibold text-[var(--color-ink)]">
+                  {clientId ? "Status upon update: RENTED" : "Status upon update: AVAILABLE"}
+                </span>
+              </div>
+              <span className="text-[var(--color-mute)] hidden sm:inline">
+                {clientId ? `Deploying to ${assignedClientName}` : "Returning to unassigned fleet"}
               </span>
             </div>
-            <span className="text-[var(--color-mute)] hidden sm:inline">
-              {clientId ? `Deploying to ${assignedClientName}` : "Returning to unassigned fleet"}
-            </span>
           </div>
         </div>
 
         <div className="pt-3 border-t border-[var(--color-hairline)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="text-xs text-[var(--color-mute)] empty:hidden">
             {isDirty && (
-              <span className="text-amber-500 dark:text-amber-400 font-medium flex items-center gap-1.5">
-                <AlertCircle size={14} /> Unsaved client assignment
+              <span
+                data-hover-parent
+                className="text-amber-500 dark:text-amber-400 font-medium inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-xs transition-colors cursor-default"
+              >
+                <AnimatedAlertCircle size={14} className="w-3.5 h-3.5 shrink-0" />
+                <span>Unsaved client assignment</span>
               </span>
             )}
           </div>

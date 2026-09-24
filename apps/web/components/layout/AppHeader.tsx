@@ -10,7 +10,7 @@ import {
   AnimatedShieldCheck,
   AnimatedShieldAlert,
 } from "@/components/ui/animated-icons";
-import type { User } from "@/lib/types/database";
+import type { User, UserRole } from "@/lib/types/database";
 import dynamic from "next/dynamic";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 
@@ -19,7 +19,7 @@ const CommandPalette = dynamic(
   { ssr: false }
 );
 
-const GlobalCreateModal = dynamic(
+const GlobalCreateModal = dynamic<{ userRole: UserRole }>(
   () => import("@/components/layout/GlobalCreateModal").then((mod) => mod.GlobalCreateModal),
   { ssr: false }
 );

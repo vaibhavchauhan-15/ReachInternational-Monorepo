@@ -169,7 +169,7 @@ export function SidebarContent({ className, children, ...props }: React.HTMLAttr
   return (
     <div
       className={cn(
-        "flex-1 overflow-y-auto p-3 space-y-6 no-scrollbar",
+        "flex-1 overflow-y-auto overflow-x-hidden p-3 space-y-6 no-scrollbar min-w-0",
         className
       )}
       {...props}
@@ -183,7 +183,7 @@ export function SidebarFooter({ className, children, ...props }: React.HTMLAttri
   return (
     <div
       className={cn(
-        "p-3 border-t border-[var(--color-hairline)] shrink-0",
+        "p-3 border-t border-[var(--color-hairline)] shrink-0 overflow-hidden",
         className
       )}
       {...props}
@@ -195,7 +195,7 @@ export function SidebarFooter({ className, children, ...props }: React.HTMLAttri
 
 export function SidebarGroup({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("space-y-1", className)} {...props}>
+    <div className={cn("space-y-1 overflow-hidden", className)} {...props}>
       {children}
     </div>
   );
@@ -203,12 +203,12 @@ export function SidebarGroup({ className, children, ...props }: React.HTMLAttrib
 
 export function SidebarGroupLabel({ className, children, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
   const { collapsed } = useSidebar();
-  if (collapsed) return null;
 
   return (
     <p
       className={cn(
-        "px-3 text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-mute)] mb-2 select-none",
+        "px-3 text-[10px] font-extrabold uppercase tracking-wider text-[var(--color-mute)] mb-2 select-none truncate transition-all duration-200 whitespace-nowrap overflow-hidden",
+        collapsed ? "opacity-0 max-h-0 mb-0 py-0 pointer-events-none" : "opacity-100 max-h-6",
         className
       )}
       {...props}
@@ -228,7 +228,7 @@ export function SidebarGroupContent({ className, children, ...props }: React.HTM
 
 export function SidebarMenu({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <nav className={cn("space-y-1", className)} {...props}>
+    <nav className={cn("space-y-1 overflow-hidden", className)} {...props}>
       {children}
     </nav>
   );
@@ -236,7 +236,7 @@ export function SidebarMenu({ className, children, ...props }: React.HTMLAttribu
 
 export function SidebarMenuItem({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn("relative space-y-1", className)} {...props}>
+    <div className={cn("relative space-y-1 overflow-hidden", className)} {...props}>
       {children}
     </div>
   );
@@ -260,8 +260,8 @@ export const SidebarMenuButton = React.forwardRef<HTMLElement, SidebarMenuButton
         ref={ref}
         type={Component === "button" ? (type || "button") : undefined}
         className={cn(
-          "group group/nav interactive-parent relative flex items-center gap-3 rounded-xl transition-colors duration-150 cursor-pointer select-none font-semibold text-xs",
-          collapsed ? "justify-center h-11 w-11 mx-auto p-0" : "w-full px-3.5 py-2.5",
+          "group group/nav interactive-parent relative flex items-center rounded-xl transition-all duration-200 cursor-pointer select-none font-semibold text-xs overflow-hidden",
+          collapsed ? "justify-center h-10 w-10 mx-auto p-0" : "w-full h-10 px-3",
           active
             ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold border border-sky-500/20 shadow-2xs"
             : "text-[var(--color-body)] hover:text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)]",

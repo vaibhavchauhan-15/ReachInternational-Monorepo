@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo, useCallback, useEffect, useRef, memo } from "react";
+import React, { useState, useTransition, useMemo, useCallback, useEffect, useRef, memo } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -15,8 +15,11 @@ import {
   AnimatedAlertTriangle,
   AnimatedSlidersHorizontal,
   AnimatedFileText,
+  AnimatedChevronDown,
+  AnimatedArrowUpDown,
+  AnimatedMoreVertical,
 } from "@/components/ui/animated-icons";
-import { MoreVertical, Download, FileSpreadsheet, FileText, Printer, Check, X, ChevronDown, History, Users, Search, RotateCcw } from "lucide-react";
+import { MoreVertical, Download, FileSpreadsheet, FileText, Printer, Check, X, History, Users, Search, RotateCcw } from "lucide-react";
 import {
   Button,
   Pagination,
@@ -198,6 +201,7 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
   ariaLabel,
   align = "left",
   className = "",
+  icon,
 }: {
   label: string;
   value: string;
@@ -206,9 +210,11 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
   ariaLabel?: string;
   align?: "left" | "right";
   className?: string;
+  icon?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const iconRef = useRef<any>(null);
 
   const selectedOption = options.find((opt) => opt.id === value) || options[0];
 
@@ -235,11 +241,13 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
   return (
     <div
       ref={containerRef}
-      className={`relative w-full ${open ? "z-40" : "z-10"} ${className}`}
+      className={`relative w-full group ${open ? "z-40" : "z-10"} ${className}`}
     >
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
+        onMouseEnter={() => iconRef.current?.startAnimation?.()}
+        onMouseLeave={() => iconRef.current?.stopAnimation?.()}
         aria-expanded={open}
         aria-label={ariaLabel || label}
         className="w-full h-11 sm:h-9 px-3.5 sm:px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-xs text-[var(--color-ink)] flex items-center justify-between gap-2 transition-all cursor-pointer select-none active:scale-[0.98] shadow-2xs"
@@ -259,11 +267,32 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
             {selectedOption?.label}
           </span>
         </div>
-        <ChevronDown
-          className={`h-3.5 w-3.5 text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
-            open ? "rotate-180 text-[var(--color-ink)]" : ""
-          }`}
-        />
+        {icon ? (
+          React.isValidElement(icon) ? (
+            React.cloneElement(icon as React.ReactElement<any>, {
+              ref: (node: any) => {
+                iconRef.current = node;
+                const orig = (icon as any).ref;
+                if (typeof orig === "function") orig(node);
+                else if (orig && typeof orig === "object") orig.current = node;
+              },
+              size: (icon as any).props?.size ?? 14,
+              className: `shrink-0 transition-transform duration-200 ${
+                open ? "rotate-180" : ""
+              } ${(icon as any).props?.className || ""}`,
+            })
+          ) : (
+            icon
+          )
+        ) : (
+          <AnimatedChevronDown
+            ref={iconRef as any}
+            size={14}
+            className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 group-hover:text-[var(--color-ink)] ${
+              open ? "rotate-180 text-[var(--color-ink)]" : ""
+            }`}
+          />
+        )}
       </button>
 
       <AnimatePresence>
@@ -348,6 +377,7 @@ const HeaderMoreMenu = memo(function HeaderMoreMenu({
   });
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const moreIconRef = useRef<any>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -432,11 +462,13 @@ const HeaderMoreMenu = memo(function HeaderMoreMenu({
         ref={buttonRef}
         type="button"
         onClick={toggleOpen}
+        onMouseEnter={() => moreIconRef.current?.startAnimation?.()}
+        onMouseLeave={() => moreIconRef.current?.stopAnimation?.()}
         aria-expanded={open}
-        className="h-9 w-9 sm:w-auto p-0 sm:px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs font-semibold text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-all shadow-xs flex items-center justify-center gap-1 cursor-pointer active:scale-95 shrink-0"
+        className="h-9 w-9 sm:w-auto p-0 sm:px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] text-xs font-semibold text-[var(--color-ink)] hover:bg-[var(--color-hairline-soft-surface)] transition-all shadow-xs inline-flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 shrink-0"
         title="More options"
       >
-        <span className="font-bold text-sm leading-none">⋮</span>
+        <AnimatedMoreVertical ref={moreIconRef as any} size={15} className="shrink-0" />
         <span className="hidden sm:inline">More</span>
       </button>
 
@@ -653,7 +685,8 @@ export function MachineListClient({
   // ── Pure High-Scale Server-Side Search Engine (Engineered for 100,000+ Machines)
   // Queries PostgreSQL via GIN Trigram indexes on (machine_id, model, serial_number only)
   // Never downloads 100,000 rows to client RAM. Ultra-lean ~15KB network responses.
-  const [localSearchTerm, setLocalSearchTerm] = useState(currentSearch);
+  const initialSearchParam = searchParams?.get("search") || currentSearch || "";
+  const [localSearchTerm, setLocalSearchTerm] = useState(initialSearchParam);
   const [searchResults, setSearchResults] = useState<Machine[] | null>(null);
   const [searchTotalCount, setSearchTotalCount] = useState<number>(0);
   const [searchTotalPages, setSearchTotalPages] = useState<number>(0);
@@ -661,6 +694,8 @@ export function MachineListClient({
   const [isSearchLoading, setIsSearchLoading] = useState(false);
   const searchAbortRef = useRef<AbortController | null>(null);
   const searchTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const cardsIconRef = useRef<any>(null);
+  const tableIconRef = useRef<any>(null);
 
   const isSearchActive = localSearchTerm.trim().length > 0;
   const activeMachines = isSearchActive ? (searchResults ?? []) : machines;
@@ -940,7 +975,7 @@ export function MachineListClient({
 
   const updateFilters = useCallback(
     (updates: Record<string, string | number | undefined>) => {
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(typeof window !== "undefined" ? window.location.search : searchParams.toString());
       Object.entries(updates).forEach(([key, val]) => {
         if (val === undefined || val === "" || val === "all" || (key === "page" && val === 1)) {
           params.delete(key);
@@ -948,15 +983,21 @@ export function MachineListClient({
           params.set(key, String(val));
         }
       });
+      // Retain active search query parameter if non-empty
+      if (localSearchTerm.trim()) {
+        params.set("search", localSearchTerm.trim());
+      } else {
+        params.delete("search");
+      }
       const nextQuery = params.toString();
-      const currentQuery = searchParams.toString();
+      const currentQuery = typeof window !== "undefined" ? window.location.search.replace(/^\?/, "") : searchParams.toString();
       if (nextQuery === currentQuery) return; // Deduplicate identical requests
 
       startTransition(() => {
-        router.push(nextQuery ? `${pathname}?${nextQuery}` : pathname);
+        router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
       });
     },
-    [pathname, router, searchParams]
+    [pathname, router, searchParams, localSearchTerm]
   );
 
   // ── Pure High-Scale Server-Side Search Engine (Engineered for 100,000+ Machines)
@@ -975,6 +1016,15 @@ export function MachineListClient({
         setSearchTotalPages(0);
         setSearchPage(1);
         setIsSearchLoading(false);
+
+        // Update URL to remove search parameter
+        if (typeof window !== "undefined") {
+          const params = new URLSearchParams(window.location.search);
+          params.delete("search");
+          if (params.get("page") === "1") params.delete("page");
+          const qs = params.toString();
+          window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
+        }
         return;
       }
 
@@ -1004,6 +1054,23 @@ export function MachineListClient({
             setSearchTotalPages(res.totalPages);
             setSearchPage(pageNum);
             setIsSearchLoading(false);
+
+            // Synchronize search and page in browser URL without full RSC tree refetch
+            if (typeof window !== "undefined") {
+              const params = new URLSearchParams(window.location.search);
+              if (trimmed) {
+                params.set("search", trimmed);
+              } else {
+                params.delete("search");
+              }
+              if (pageNum > 1) {
+                params.set("page", String(pageNum));
+              } else {
+                params.delete("page");
+              }
+              const qs = params.toString();
+              window.history.replaceState(null, "", qs ? `${pathname}?${qs}` : pathname);
+            }
           }
         } catch (err: any) {
           if (!controller.signal.aborted) {
@@ -1013,8 +1080,36 @@ export function MachineListClient({
         }
       }, 180);
     },
-    [currentStatus, healthStatusFilter, supervisorFilter, currentClientId]
+    [currentStatus, healthStatusFilter, supervisorFilter, currentClientId, pathname]
   );
+
+  // Initial mount: execute server search if search parameter is present in URL
+  useEffect(() => {
+    const searchFromUrl = searchParams?.get("search");
+    if (searchFromUrl && searchFromUrl.trim()) {
+      executeServerSearch(searchFromUrl, page);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Listen to popstate (browser back/forward button navigation)
+  useEffect(() => {
+    const handlePopState = () => {
+      if (typeof window === "undefined") return;
+      const params = new URLSearchParams(window.location.search);
+      const urlSearch = params.get("search") || "";
+      const urlPage = parseInt(params.get("page") || "1", 10) || 1;
+      setLocalSearchTerm(urlSearch);
+      if (urlSearch.trim()) {
+        executeServerSearch(urlSearch, urlPage);
+      } else {
+        setSearchResults(null);
+        setSearchPage(1);
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [executeServerSearch]);
 
   const handleSearchChange = useCallback(
     (newSearch: string) => {
@@ -1054,8 +1149,11 @@ export function MachineListClient({
     setHealthStatusFilter("all");
     setSupervisorFilter("all");
     setSortBy("machine_id_asc");
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", pathname);
+    }
     startTransition(() => {
-      router.push(pathname);
+      router.replace(pathname, { scroll: false });
     });
   };
 
@@ -1705,6 +1803,8 @@ export function MachineListClient({
                   <button
                     type="button"
                     onClick={() => setViewMode("cards")}
+                    onMouseEnter={() => cardsIconRef.current?.startAnimation?.()}
+                    onMouseLeave={() => cardsIconRef.current?.stopAnimation?.()}
                     className={`h-full px-2.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] ${
                       viewMode === "cards"
                         ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs border border-[var(--color-hairline)]"
@@ -1712,12 +1812,14 @@ export function MachineListClient({
                     }`}
                     title="Cards view"
                   >
-                    <AnimatedSlidersHorizontal size={13} />
+                    <AnimatedSlidersHorizontal ref={cardsIconRef as any} size={14} className="shrink-0" />
                     <span>Cards</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setViewMode("table")}
+                    onMouseEnter={() => tableIconRef.current?.startAnimation?.()}
+                    onMouseLeave={() => tableIconRef.current?.stopAnimation?.()}
                     className={`h-full px-2.5 rounded-md text-xs font-medium inline-flex items-center gap-1.5 transition-all cursor-pointer select-none active:scale-[0.98] ${
                       viewMode === "table"
                         ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] font-semibold shadow-xs border border-[var(--color-hairline)]"
@@ -1725,7 +1827,7 @@ export function MachineListClient({
                     }`}
                     title="Table view"
                   >
-                    <AnimatedFileText size={13} />
+                    <AnimatedFileText ref={tableIconRef as any} size={14} className="shrink-0" />
                     <span>Table</span>
                   </button>
                 </div>
@@ -1789,6 +1891,12 @@ export function MachineListClient({
                     options={SORT_OPTIONS}
                     ariaLabel="Sort machines"
                     align="right"
+                    icon={
+                      <AnimatedArrowUpDown
+                        size={14}
+                        className="text-[var(--color-mute)] shrink-0 group-hover:text-[var(--color-ink)]"
+                      />
+                    }
                   />
                 </div>
               </div>

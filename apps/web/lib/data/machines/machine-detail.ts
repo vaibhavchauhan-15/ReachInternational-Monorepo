@@ -99,22 +99,27 @@ async function hydrateMachinePersonnelSingle(machine: any, supabase: any): Promi
   const supIdSet = new Set<string>();
   if (Array.isArray(machine.supervisor_ids)) {
     machine.supervisor_ids.forEach((id: string) => id && supIdSet.add(id));
+  } else if (machine.current_supervisor_id) {
+    supIdSet.add(machine.current_supervisor_id);
   }
-  if (machine.current_supervisor_id) supIdSet.add(machine.current_supervisor_id);
 
   const supervisorsList = Array.from(supIdSet)
     .map((id: string) => usersMap.get(id) || (machine.current_supervisor?.id === id ? machine.current_supervisor : null))
     .filter(Boolean);
 
-  // Build complete operator IDs set and list: Union of activeAssignments and machine.operator_ids
+  // Build complete operator IDs set and list:
+  // If machine.operator_ids is an array, it is authoritative.
+  // Never resurrect removed operators or default operators when operator_ids is defined.
   const opIdSet = new Set<string>();
-  activeAssignmentsRaw.forEach((a: any) => {
-    if (a.operator_id) opIdSet.add(a.operator_id);
-  });
   if (Array.isArray(machine.operator_ids)) {
     machine.operator_ids.forEach((id: string) => id && opIdSet.add(id));
+  } else if (machine.current_operator_id) {
+    opIdSet.add(machine.current_operator_id);
+  } else {
+    activeAssignmentsRaw.forEach((a: any) => {
+      if (a.operator_id) opIdSet.add(a.operator_id);
+    });
   }
-  if (machine.current_operator_id) opIdSet.add(machine.current_operator_id);
 
   const assignmentMapByOpId = new Map<string, any>();
   activeAssignmentsRaw.forEach((a: any) => {
@@ -156,9 +161,9 @@ async function hydrateMachinePersonnelSingle(machine: any, supabase: any): Promi
     operator_ids: cleanOpIds,
     supervisors: supervisorsList,
     operators: operatorsList,
-    active_assignments: activeAssignments,
-    current_supervisor: supervisorsList[0] || machine.current_supervisor || null,
-    current_operator: operatorsList[0] || machine.current_operator || null,
+    active_assignments: activeAssignmentsRaw.filter((a: any) => opIdSet.has(a.operator_id)),
+    current_supervisor: supervisorsList[0] || null,
+    current_operator: operatorsList[0] || null,
     client: machine.client
       ? {
           ...machine.client,

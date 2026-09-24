@@ -1,7 +1,7 @@
 "use client";
 
+import React, { ReactNode, forwardRef, useState, useRef } from "react";
 import Link from "next/link";
-import { ReactNode, forwardRef, useState, useRef } from "react";
 import { useFormStatus } from "react-dom";
 import { AnimatedLoader } from "./animated-icons";
 
@@ -112,6 +112,38 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
     const [internalLoading, setInternalLoading] = useState(false);
     const isExecutingRef = useRef(false);
 
+    // Refs for animated icon triggers on button hover
+    const iconRef = useRef<{ startAnimation?: () => void; stopAnimation?: () => void }>(null);
+    const trailingIconRef = useRef<{ startAnimation?: () => void; stopAnimation?: () => void }>(null);
+
+    const handleMouseEnter = (e: React.MouseEvent<any>) => {
+      iconRef.current?.startAnimation?.();
+      trailingIconRef.current?.startAnimation?.();
+      if ("onMouseEnter" in rest && typeof (rest as any).onMouseEnter === "function") {
+        (rest as any).onMouseEnter(e);
+      }
+    };
+
+    const handleMouseLeave = (e: React.MouseEvent<any>) => {
+      iconRef.current?.stopAnimation?.();
+      trailingIconRef.current?.stopAnimation?.();
+      if ("onMouseLeave" in rest && typeof (rest as any).onMouseLeave === "function") {
+        (rest as any).onMouseLeave(e);
+      }
+    };
+
+    const renderIconWithRef = (iconNode: ReactNode, targetRef: React.MutableRefObject<any>) => {
+      if (!React.isValidElement(iconNode)) return iconNode;
+      return React.cloneElement(iconNode as React.ReactElement<any>, {
+        ref: (node: any) => {
+          targetRef.current = node;
+          const origRef = (iconNode as any).ref;
+          if (typeof origRef === "function") origRef(node);
+          else if (origRef && typeof origRef === "object") origRef.current = node;
+        },
+      });
+    };
+
     const effectiveLoading = Boolean(loading || internalLoading || isFormPending);
 
     // Derive default size from variant if not explicitly provided
@@ -142,6 +174,9 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
 
     const renderLabel = () => {
       if (!children) return null;
+      if (effectiveSize === "icon" && React.isValidElement(children)) {
+        return renderIconWithRef(children, iconRef);
+      }
       if (isResponsive && (icon || effectiveLoading)) {
         return <span className="hidden sm:inline-flex items-center gap-1.5 whitespace-nowrap leading-none">{children}</span>;
       }
@@ -155,11 +190,15 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
             <AnimatedLoader isSpinning size={16} />
           </span>
         ) : iconPosition === "left" && icon ? (
-          <span className="inline-flex items-center justify-center shrink-0 leading-none interactive-icon icon-bounce">{icon}</span>
+          <span className="inline-flex items-center justify-center shrink-0 leading-none">
+            {renderIconWithRef(icon, iconRef)}
+          </span>
         ) : null}
         {renderLabel()}
         {!effectiveLoading && (iconPosition === "right" || trailingIcon) ? (
-          <span className="inline-flex items-center justify-center shrink-0 leading-none interactive-icon icon-arrow">{trailingIcon || icon}</span>
+          <span className="inline-flex items-center justify-center shrink-0 leading-none">
+            {renderIconWithRef(trailingIcon || icon, trailingIconRef)}
+          </span>
         ) : null}
       </>
     );
@@ -196,6 +235,8 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
           rel={rel}
           title={title}
           onClick={handleLinkClick}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
           aria-disabled={disabled || effectiveLoading}
           aria-busy={effectiveLoading}
         >
@@ -235,6 +276,8 @@ export const Button = forwardRef<HTMLButtonElement, Props>(
         className={`${classes} ${disabled || effectiveLoading ? "disabled:opacity-50 disabled:cursor-not-allowed" : ""}`}
         disabled={disabled || effectiveLoading}
         onClick={handleButtonClick}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
         aria-disabled={disabled || effectiveLoading}
         aria-busy={effectiveLoading}
         {...buttonRest}

@@ -170,7 +170,7 @@ export function SegmentedToggle<T extends string = string>({
               )}
             >
               {item.icon && (
-                <span className="shrink-0 flex items-center justify-center interactive-icon icon-scale">
+                <span className="shrink-0 flex items-center justify-center">
                   {item.icon}
                 </span>
               )}

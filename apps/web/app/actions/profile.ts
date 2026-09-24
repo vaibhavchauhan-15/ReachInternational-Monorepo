@@ -98,17 +98,24 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
       return { error: "Authentication required." };
     }
 
+    const monthlySalaryRaw = formData.get("monthly_salary") as string | null;
+    const monthly_salary = monthlySalaryRaw !== null && monthlySalaryRaw !== "" && !isNaN(Number(monthlySalaryRaw))
+      ? Number(monthlySalaryRaw)
+      : null;
+
     const rawData = {
       full_name: (formData.get("full_name") as string)?.trim() || "",
       phone: (formData.get("phone") as string)?.trim() || "",
       shift_time: (formData.get("shift_time") as string)?.trim() || null,
-      address: (formData.get("address") as string)?.trim() || null,
+      street: (formData.get("street") as string)?.trim() || (formData.get("address") as string)?.trim() || "",
+      address: (formData.get("address") as string)?.trim() || (formData.get("street") as string)?.trim() || "",
       city: (formData.get("city") as string)?.trim() || "",
       district: (formData.get("district") as string)?.trim() || "",
       state: (formData.get("state") as string)?.trim() || "",
       state_id: formData.get("state_id") ? Number(formData.get("state_id")) : null,
       aadhaar_number: (formData.get("aadhaar_number") as string)?.trim() || null,
       license_number: (formData.get("license_number") as string)?.trim() || null,
+      monthly_salary,
     };
 
     const parsed = ProfileUpdateSchema.safeParse(rawData);
@@ -193,6 +200,7 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
       full_name: parsed.data.full_name,
       phone: parsed.data.phone,
       street: resolvedStreet,
+      address: resolvedStreet,
       city: parsed.data.city,
       district: parsed.data.district,
       state: stateInfo.state,
@@ -201,6 +209,9 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
       license_number: formattedLicense,
       ...(parsed.data.shift_start_time ? { shift_start_time: parsed.data.shift_start_time } : {}),
       ...(parsed.data.shift_end_time ? { shift_end_time: parsed.data.shift_end_time } : {}),
+      ...(currentUser.role === "super_admin" && parsed.data.monthly_salary !== undefined && parsed.data.monthly_salary !== null
+        ? { monthly_salary: parsed.data.monthly_salary }
+        : {}),
     };
 
     // 1. Super Admin bypasses approval and updates immediately

@@ -1,4 +1,5 @@
 import "server-only";
+import { env } from "@/lib/env";
 
 /**
  * ReachInternational Edge & Server Rate Limiter (LPDoS & Brute-Force Safeguard)
@@ -108,12 +109,11 @@ export async function checkRateLimitAsync(
     };
   }
 
-  const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
-  const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+  const upstash = env.upstash;
 
   // SECURITY (F-05): Warn if distributed rate limiter is not configured in production.
   // In-memory Map resets on serverless cold starts and is not shared across instances.
-  if (!upstashUrl || !upstashToken) {
+  if (!upstash) {
     if (process.env.NODE_ENV === "production") {
       console.warn(
         "[RateLimiter] CRITICAL: UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN are not configured. " +
@@ -130,10 +130,10 @@ export async function checkRateLimitAsync(
     const windowStart = now - profile.windowMs;
 
     // Upstash REST Pipeline: prune expired, add current timestamp, count active, set TTL
-    const response = await fetch(`${upstashUrl}/pipeline`, {
+    const response = await fetch(`${upstash.url}/pipeline`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${upstashToken}`,
+        Authorization: `Bearer ${upstash.token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify([

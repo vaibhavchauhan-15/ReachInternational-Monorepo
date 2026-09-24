@@ -2,11 +2,10 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, X, RotateCcw } from "lucide-react";
+import { Check, X, RotateCcw, ChevronDown } from "lucide-react";
 import {
   AnimatedSlidersHorizontal,
   AnimatedFileText,
-  AnimatedChevronDown,
 } from "@/components/ui/animated-icons";
 import { FilterToolbar } from "@/components/ui";
 import {
@@ -25,6 +24,7 @@ interface CustomFilterSelectorProps {
   ariaLabel: string;
   align?: "left" | "right";
   className?: string;
+  icon?: React.ReactNode;
 }
 
 export function CustomFilterSelector({
@@ -35,9 +35,11 @@ export function CustomFilterSelector({
   ariaLabel,
   align = "left",
   className = "",
+  icon,
 }: CustomFilterSelectorProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const iconRef = useRef<{ startAnimation?: () => void; stopAnimation?: () => void }>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent | TouchEvent) {
@@ -67,10 +69,12 @@ export function CustomFilterSelector({
   const selectedOpt = options.find((o) => o.id === value) || options[0];
 
   return (
-    <div ref={containerRef} className={`relative flex-1 min-w-0 ${open ? "z-40" : "z-10"} ${className}`}>
+    <div ref={containerRef} className={`relative flex-1 min-w-0 group ${open ? "z-40" : "z-10"} ${className}`}>
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
+        onMouseEnter={() => iconRef.current?.startAnimation?.()}
+        onMouseLeave={() => iconRef.current?.stopAnimation?.()}
         aria-label={ariaLabel}
         aria-expanded={open}
         className={`w-full h-11 sm:h-9 px-2.5 sm:px-3 rounded-lg border text-xs font-semibold flex items-center justify-between gap-1.5 transition-all cursor-pointer shadow-xs select-none ${
@@ -90,12 +94,32 @@ export function CustomFilterSelector({
             {selectedOpt?.label}
           </span>
         </div>
-        <AnimatedChevronDown
-          size={13}
-          className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
-            open ? "rotate-180 text-[var(--color-ink)]" : ""
-          }`}
-        />
+        {icon ? (
+          React.isValidElement(icon) ? (
+            React.cloneElement(icon as React.ReactElement<any>, {
+              ref: (node: any) => {
+                iconRef.current = node;
+                const orig = (icon as any).ref;
+                if (typeof orig === "function") orig(node);
+                else if (orig && typeof orig === "object") orig.current = node;
+              },
+              size: (icon as any).props?.size ?? 13,
+              className: `shrink-0 transition-transform duration-200 ${
+                open ? "rotate-180" : ""
+              } ${(icon as any).props?.className || ""}`,
+            })
+          ) : (
+            icon
+          )
+        ) : (
+          <ChevronDown
+            ref={iconRef as any}
+            size={13}
+            className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 group-hover:text-[var(--color-ink)] ${
+              open ? "rotate-180 text-[var(--color-ink)]" : ""
+            }`}
+          />
+        )}
       </button>
 
       <AnimatePresence>

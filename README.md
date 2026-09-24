@@ -8,7 +8,7 @@
 
 - [Project Overview](#-project-overview)
 - [Active Core Modules](#-active-core-modules)
-- [Global Interactive Icon Animation System](#-global-interactive-icon-animation-system)
+- [Official Animated Icons System](#-official-animated-icons-system)
 - [Monorepo Architecture](#-monorepo-architecture)
 - [Tech Stack](#-tech-stack)
 - [Getting Started](#-getting-started)
@@ -82,6 +82,11 @@
   - `operator`: Requests routed to `manager` or `hr`.
 - **Dedicated Profile Change Requests Section on `/users`**: Renders pending profile modification requests in a dedicated review section completely separate from new registration requests (`status = 'pending'`), displaying clear side-by-side diffs (Old Value vs Requested Value), individual Approve/Reject actions, and batch Accept All / Reject All actions.
 - **Self-Service Registration & Admin Access Governance**: Users request platform access via `/signup` choosing their functional role (`operator`, `supervisor`, `manager`, `hr`), their working shift timing via interactive time pickers (`shift_start_time` and `shift_end_time`, defaulting to 12h day shift 08:00 AM - 08:00 PM), their street base address (`street`), and selecting their State/UT from a standardized dropdown linked to `public.states(id)`. The chosen role, shift timing, street address, and `state_id` are preserved in `public.users` in `pending` status, displayed in the Admin Pending User Approvals panel with distinct role badges, and maintained without modification upon administrator approval. All complete registrations are automatically flagged for zero-latency dashboard access upon admin activation.
+- **Unified User Lifecycle Forms & Canonical Address Standard (Signup, Onboarding, Profile Edit & User Modals)**: Standardized all 4 core user lifecycle forms across both Web (`apps/web`) and Mobile (`apps/mobile`) through shared reusable form component architectures (`apps/web/components/forms/` and `apps/mobile/components/forms/`):
+  - **Canonical Address Sequence**: Monorepo standard strictly enforces `street` + `city/town/village` + `district` + `state` (`state_id`), with legacy `address` column automatically mirrored for 100% database compatibility.
+  - **Standardized Monthly Salary Input (`UserSalaryField` / `MobileSalaryField`)**: Formatted ₹ INR currency prefix, role-aware helper badge, and operator-mandatory validation (`monthly_salary > 0`) satisfying the PostgreSQL database check constraint `users_operator_monthly_salary_check`. Read-only display mode for employee profile views.
+  - **Explicit Mandatory vs. Optional Section Badges (`FormSectionCard` / `MobileFormSectionCard`)**: High-contrast section cards showing step number, title, description, `Mandatory` vs `Optional` tags, and real-time green `Completed` checkmarks.
+  - **Submit Button Gating & Rapid Double-Tap Lock (`FormSubmitButton` / `MobileSubmitButton`)**: Submit/save buttons remain non-responsive and disabled while required inputs are missing, display a dynamic helper pill (`"X required field(s) remaining"`), and employ ref-based double-submission locking to prevent redundant API/network calls.
 - **Dynamic Supervisor Selection for Supervised Roles**: When registering or creating/editing a user account with a supervised role (`operator`), the system dynamically renders a searchable and scrollable Supervisor selector. On `/signup` (both Web and Mobile), supervised personnel choose from active supervisors loaded via `get_active_supervisors_public()` RPC. In `/users`, the desktop table features a dedicated `Supervisor` column, and admin modals (`UserCreateModal`, `UserEditModal`) provide direct supervisor assignment and updates with full export support. Supervisor assignments are managed through the normalized relational junction table `public.user_supervisors` (`user_id`, `supervisor_id`), replacing legacy arrays and synchronizing seamlessly across Web and Mobile.
 - **Multi-Selection & Unified Multi-Format Export (Excel, CSV, PDF)**: Select individual or all filtered user accounts with a master checkbox and floating bulk actions bar. Perform instant downloads across formatted Excel (`.xlsx` with metadata, statistics summary row, and auto-adjusted column widths), clean CSV files (`.csv` with UTF-8 BOM), and print-ready landscape A4 PDF reports. Guarantees 100% data consistency across all three export formats with a unified 11-column structure (`S.No`, `Full Name`, `Email Address`, `Mobile Number`, `Role`, `Supervisor`, `Status`, `Address` [smartly merged street + city + district + state with duplicate deduplication], `Aadhaar Number`, `Driving Licence`, `Joined Date`). Features high-concurrency Bulk Deletions with safety self-delete guards, super admin protection, optimistic UI removals, and audit logging.
 - **Full React Native Mobile Parity (`apps/mobile/app/(app)/users.tsx`, `apps/mobile/components/users/*`)**: Complete mobile replication across iOS and Android with 100% feature parity: 4 interactive KPI metric cards (Total, Active, Operators, Pending), 6-dimension custom filter modal selector (Role, Status, State covering all 36 Indian states & UTs, KYC, Joined Date, Sort By), mobile touch card feed with role-accent left borders, User Detail bottom sheet with quick contact CTAs (`Email User` & `Call Phone`), ACCOUNT DETAILS well (ID, Email, Phone, Shift, Address, Location, Aadhaar with eye reveal toggle, Licence, Registered Date with relative time), MANAGEMENT ACTIONS well (Role selector, Supervisor selector, Edit Account, Reset Password, Activate/Deactivate, Delete Account), User Edit sheet, Password Reset modal with temporary credential generator, Reject Reason modal, native multi-format directory export modal (`UserExportModal.tsx`) supporting both CSV download and landscape A4 PDF generation/sharing via `expo-print` and `expo-sharing` with identical structure, Profile Change Requests diff review, and floating bulk actions bar.
@@ -91,6 +96,7 @@
 - **Centralized Data Access Layer & Lean Projection (Phase 1 Performance Program)**: Modularized User DAL (`apps/web/lib/data/users/`) into `user-list.ts`, `user-detail.ts`, `user-shared.ts`, and `index.ts`, mirroring the established `machine-list.ts` pattern. Preserves `apps/web/lib/queries/users.ts` as a 100% backward-compatible facade. Employs optimized column projection (`USER_LIST_COLUMNS`), pulling required profile metadata and regulatory identity data (`aadhaar_number`, `license_number`, `address`, `city`, `district`, `state`) directly from PostgreSQL `users` to support rich list views and unified multi-format exports without secondary roundtrips. Employs sub-millisecond in-memory hydration from Next.js cached master queries (`getActiveSupervisorsCached`). Modals (`UserDetailSheet`, `UserEditModal`) fetch full records on-demand via `getUserDetailAction`.
 - **Sub-Millisecond Directory Summary KPI RPC (Phase 3 Performance Program)**: Scalar KPI calculations powered by PostgreSQL RPC `get_users_directory_summary(p_supervisor_id)` returning single JSON `{ total, active, engineers, new_registrations, states }` backed by composite B-tree index `idx_users_status_created_at`. Completely eliminates client-side JavaScript `.filter()` / `.reduce()` computations on browser slices and provides real database-wide counts across all 4 KPI cards.
 - **Modular Component Decomposition (Phase 4 Performance Program)**: Decomposed monolithic 2,866-line client component into clean, focused single-responsibility files following the proven `OperationsClient.tsx` pattern: `UsersHeader.tsx` (KPI cards, exports, title), `UsersFilters.tsx` (search, 6 filter dropdowns, active chips), `UsersTable.tsx` (desktop data table, mobile infinite feed, pagination), `PendingApprovalsSection.tsx` (registration approvals), `ProfileChangeRequests.tsx` (profile diff reviews), and `users-helpers.tsx` (filter options & badge helpers), leaving a thin coordinator in `users-client.tsx` orchestrating state and actions.
+- **Search & Filter Query Parameters URL Persistence & Reload Resilience**: The `/users` directory synchronizes all active search queries (`?search=...`), pagination (`?page=...`), and filter states (`?role=...`, `?status=...`, `?state=...`, `?kyc=...`) directly to the browser URL via non-blocking `window.history.replaceState`. Hard browser reloads (F5/Ctrl+R/Cmd+R) now preserve the user's active page and all filter parameters seamlessly without resetting search state or redirecting to Home. Service Worker and Edge Proxy anti-caching headers (`no-store, no-cache, max-age=0`) prevent stale redirect loops on authenticated dynamic routes.
 - **Dedicated Password Recovery & Email Pre-Check (`/forgot-password` & `/reset-password`)**: Structured two-step password recovery workflow mirroring Supabase's documented flow. When a user requests a recovery link on `/forgot-password`, the system queries `public.users` via `createSupabaseAdminClient()` to verify account existence. If no account matches the entered email, the request immediately halts with an error banner (`No account found with this email address`), preventing unauthorized email dispatch or confusion. If the user exists, a secure email link is sent with dynamic `redirectTo` resolution (`getResetPasswordRedirectUrl()`, pointing to canonical `${getAppUrl()}/reset-password`). The dedicated `/reset-password` page features a strict 4-state lifecycle guard (`verifying`, `valid`, `missing`, `invalid`) blocking unauthorized form access without a verified Supabase recovery token/code. Upon successful password reset, the recovery session is securely terminated and the user is redirected to `/login` with a confirmation notification. Fully synchronized across Web and Mobile (`apps/mobile/app/(auth)/forgot-password.tsx`).
 - **Aadhaar & Licence Document Capture & Hybrid In-App Viewer System (Signup, Edit Profile, Onboarding & User Detail)**: Config-driven document infrastructure (`public.user_document_types`, `public.user_documents`, private `user_files` storage bucket) supporting Aadhaar, Driving Licence, and operational identity documents with format-specific badges, single-slot upload enforcement, and strict zero-public-URL security:
   - **Security & Short-Lived Access Architecture**: Sensitive identity documents (Aadhaar, Licence) are stored in a private bucket (`public = false`). Supabase public URLs and permanent signed URLs are strictly prohibited. Access is gated by server-side authorization (`getDocumentViewUrlAction` / `/api/documents/[id]/view`), generating short-lived signed URLs (120-second TTL) strictly on-demand for the document owner or privileged staff (`super_admin`, `admin`, `hr`), with every view logged as `document.viewed` in `public.audit_logs`. Database tracks `uploaded_by UUID` (Migration 102).
@@ -307,9 +313,9 @@
     - **Zero Full-Hierarchy Serialization**: The Indian master location dataset comprises 657,154 records (36 states, 784 districts, 466 cities, 15,081 towns, 640,787 villages) totaling ~53.27 MB of JSON payload. Progressive loading ensures clients receive strictly ~1 KB per selected slice, achieving **99.99% wire payload reduction** (2.92 KB transferred vs ~53 MB).
     - **Strict Progressive Loading**: `State` (36 records, ~1.07 KB) $\rightarrow$ `selected state` $\rightarrow$ `District` (~34 records, ~1.43 KB) $\rightarrow$ `selected district` $\rightarrow$ `City / Town` (~9 records, ~0.42 KB).
     - **Multi-Tier Caching Architecture**: 24-hour server-side cache via Next.js `unstable_cache` (`CACHE_TIERS.CLASS_A_STATIC`, tag: `TAGS.clientsLocations`) combined with in-memory client-side session caches (`sessionCacheRef` / `mobileLocationHierarchyCacheRef`) delivering **0ms re-toggles (0.0012ms – 0.0018ms)** with 0 database queries.
-    - **Location Hierarchy Selector (`LocationHierarchySelector.tsx`)**: Reusable progressive component featuring 3-step dropdown cascade, breadcrumb indicator, manual override toggle for custom industrial sites, and min 44px touch targets.
-    - **Site Location Standardized Form Integration**: Standardized label to "Site Location" and integrated cascade into Section 2 (Site Location) and Section 3 (Billing Address) in `ClientModal.tsx`.
-    - **Cross-Platform Mobile Parity**: `apps/mobile/app/(app)/clients.tsx` provides Site Location label, horizontal quick-selector strips for State, District, and City/Town with min 44px touch targets and in-memory cache.
+    - **Canonical Manual Address Flow**: Form fields strictly follow the standardized flow: `street/area -> city/town/village -> district -> state -> pincode` for both Site Location and Billing Address, using standard uniform `<Input>` components.
+    - **Card-Level Hover Micro-Interactions**: Client Modal cards feature `data-hover-parent` micro-interactions, triggering default animated icon behaviors (`AnimatedBuilding2`, `AnimatedMapPin`, `AnimatedReceipt`) with balanced `size={16}` sizing and title padding.
+    - **Cross-Platform Mobile Parity**: `apps/mobile/app/(app)/clients.tsx` provides identical canonical address ordering and min 44px touch targets.
     - **Multi-Dimension Search**: Accelerated full-text search across `city`, `district`, and `state` via PostgreSQL GIN trigram indexes (`idx_clients_city_trgm`, `idx_clients_district_trgm`, `idx_clients_state_trgm`).
   - **All / Active / Inactive Tabs & Session Caching Optimization (Milestone C9)**:
     - **Zero Preloading**: Initial cold page load loads strictly the initial status dataset (default: `status=all`). Non-active datasets are never preloaded upfront.
@@ -407,39 +413,40 @@
   - **Dedicated `/more` Route**: Unified server-driven route on Web (`app/(app)/more/page.tsx`) and Native (`apps/mobile/app/(app)/more.tsx`) displaying profile header, dynamic `EditProfileModal`, 2-column overflow touch cards ($\ge 88$px tall), theme toggle, legal links (`/privacy`, `/terms`), account deletion, and sign-out.
   - **Automated Reachability Test**: Enforced by `packages/permissions/src/navigation.test.ts` via `node:test`, verifying 100% route reachability, home-first ordering, and bar length $\le 5$ across all roles.
 
+### 12. 🔄 Global URL Query State Persistence & Anti-Caching Architecture
+- **Web App URL Query State Persistence (`useListQueryState`)**:
+  - Implements bidirectional synchronization of search terms, dropdown filters, date ranges, and sorting parameters into the browser URL (`?search=...&page=1&role=...`) across all operational tables (`/users`, `/machines`, `/clients`, `/attendance`, `/payroll`, `/audit`, `/operations`).
+  - **Zero History Bloat**: Search updates are debounced (~300ms) and synchronized via `window.history.replaceState` or `router.replace(..., { scroll: false })` instead of `router.push`, ensuring the browser Back button navigates between distinct views rather than cycling through individual keystrokes.
+  - **Reload Preservation**: Full page refreshes and link sharing preserve the exact filter state without reverting to initial defaults or redirecting to `/dashboard`.
+  - **Native History Traversal**: Native `popstate` event listeners update local UI state immediately when users click browser Back or Forward.
+- **Mobile Persistent State Architecture (`usePersistentListState`)**:
+  - Implements persistent local state backed by `@react-native-async-storage/async-storage` across mobile list screens (`machines.tsx`, `users.tsx`, `clients.tsx`, `attendance.tsx`, `payroll.tsx`).
+  - **Smart Pagination Reset**: Preserves user-selected search keywords, status filters, and sorting orders across app restarts, while strictly resetting pagination back to **Page 1** on initial screen mount to prevent stale offset or missing row errors.
+  - **Functional Updater Support**: Setters accept both direct values and functional updater callbacks `(prev) => next` for safe asynchronous updates.
+- **Service Worker & CDN Dynamic Anti-Caching Enforcement**:
+  - Injected strict anti-caching headers (`Cache-Control: no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0`, `Pragma: no-cache`, `Expires: 0`, `CDN-Cache-Control: no-store`, `Vercel-CDN-Cache-Control: no-store`) into `apps/web/proxy.ts` and `apps/web/next.config.ts`.
+  - Prohibits service workers and edge CDNs from caching intermediate navigation redirect headers (`307`/`308`/`302`) or authenticated dynamic App Router HTML pages (`/(app)/*`), eliminating stale redirect loops.
+
 ---
 
-## 🎨 Global Interactive Icon Animation System
+## 🎨 Official Animated Icons System
 
-The ReachInternational platform employs a refined, industry-standard micro-interaction engine across the Web (`apps/web`) and Native Mobile (`apps/mobile`) applications, inspired by the design systems of **Linear, Vercel Geist, Stripe, and Apple iOS 17 SF Symbols**. Rather than animating only when the cursor is directly over an icon, icons dynamically react to the hover, focus, and active/pressed states of their parent container.
+ReachInternational standardizes all platform iconography on official, interactive vector animated icons rendered strictly at their natural default settings:
 
-### Core Architectural Principles
-1. **Parent State Ownership**: The interactive parent (`<Button>`, `<Card>`, `<Tabs>`, `SidebarMenuButton`, `<NavigationItem>`, `<BottomNav>`, table action rows, dropdown menu items) owns the interaction state. Child icons automatically respond to parent `:hover`, `:focus-visible`, `:active`, and touch press events.
-2. **Table Data Anchoring (No Jitter)**: Only functional interactive controls animate. In-cell informational icons (phone numbers, calendar dates, location pins, and status dots) remain anchored and calm on row hover, preventing distraction during data audit workflows.
-3. **Subtlety & Restraint**: Micro-magnitudes (3px translations, 1.09x scale, 30° rotations) ensure zero visual distortion or text displacement while delivering unmistakable tactile feedback.
-4. **Crisp Physics & Tactile Press**: Uses 180ms cubic-bezier spring curves (`cubic-bezier(0.16, 1, 0.3, 1)`) on web and Apple iOS 17 spring physics (`tension: 300, friction: 22`) on mobile. Clicking or tapping produces an instant `scale(0.94)` tactile compression.
-5. **Zero Layout Shifts (CLS = 0)**: Animations exclusively manipulate GPU-accelerated CSS/native transform properties (`transform: translate3d()`, `scale()`, `rotate()`).
-6. **No Pointer Event Conflicts**: Icon wrappers enforce `pointer-events: none` on desktop, eliminating boundary cursor flickering.
-7. **Strict Disabled & Reduced Motion Guards**: Disabled controls enforce `transform: none !important; animation: none !important;`. Automatically respects `prefers-reduced-motion: reduce` on Web and `AccessibilityInfo.isReduceMotionEnabled()` on Mobile.
+### 1. Primary Source — `lucide-animated.com`
+- **Component Registry (`apps/web/components/icons/*.tsx`)**: 66 official animated components downloaded directly from the `lucide-animated.com` registry.
+- **Default Animation Settings**: Icons use their natural internal Framer Motion animations at default settings without custom keyframe overrides or artificial scaling jitter.
+- **Universal Prop Support**: Enhanced with standard props (`size?: number | string`, `strokeWidth?: number | string`, `isSpinning?: boolean`, `className?: string`) for smooth integration across buttons, navigation links, and operational tables.
 
-### Semantic Verb Library
-| Semantic Verb | Web CSS Preset | Mobile Native Range | Primary Use Case |
-|---|---|---|---|
-| `bounce` | `.icon-bounce` (`scale(1.09)`) | `outputRange: [1, 0.94]` | Primary buttons, bookmarks, CTAs, empty states |
-| `scale` | `.icon-scale` (`scale(1.08)`) | `outputRange: [1, 0.94]` | Segmented toggles, view switchers, selection chips |
-| `arrow` | `.icon-arrow` (`translateX(3px)`) | `translateX: [0, 3]` | Trailing disclosure arrows, next links, forward actions |
-| `arrow-left` | `.icon-arrow-left` (`translateX(-3px)`) | `translateX: [0, -3]` | Back buttons, previous pagination controls |
-| `chevron` | `.icon-chevron` (`translateX(2px)`) | `translateX: [0, 2]` | Collapsible headers, accordions, dropdown triggers |
-| `rotate` | `.icon-rotate` (`rotate(30deg)`) | `rotate: ['0deg', '30deg']` | Settings, filter buttons, tool triggers |
-| `gear` | `.icon-gear` (`rotate(45deg)`) | `rotate: ['0deg', '45deg']` | Administration cogs, advanced preferences |
-| `refresh` | `.icon-refresh` (`rotate(180deg)`) | `rotate: ['0deg', '180deg']` | Sync buttons, data table refresh, pull-to-refresh |
-| `tilt` | `.icon-tilt` (`rotate(-10deg) scale(1.04)`) | `rotate: ['0deg', '-10deg']` | Destructive actions, delete confirmations, trash triggers |
-| `lift` | `.icon-lift` (`translateY(-2px) scale(1.04)`) | `translateY: [0, -2]`, `scale: [1, 0.96]` | Metric cards, export actions, KPI indicators |
-| `spin` | `.icon-spin` (360deg infinite) | Continuous rotation | Loading spinners, background sync |
+### 2. Complementary Source — `@animateicons/react`
+- **Fallback Registry (`@animateicons/react/lucide`)**: Official package providing complementary animated icons not found on `lucide-animated.com` (e.g. `TriangleAlertIcon`, `StoreIcon`, `EllipsisVerticalIcon`, `SaveIcon`, `CircleCheckIcon`, `SignalIcon`).
+- **Default Micro-Interactions**: Rendered at their natural default settings with clean vector animations.
 
-### Cross-Platform Native Parity
-- **Web (`apps/web`)**: Integrated into `globals.css`, `InteractiveIcon` (`components/ui/animated-icon.tsx`), `Button`, `IconButton`, `Card`, `MetricCard`, `Tabs`, `SegmentedToggle`, `BottomNav`, `AppSidebar`, `MorePageClient`, `CommandPalette`, and `EmptyState`.
-- **Mobile (`apps/mobile`)**: Implemented via `<InteractiveIcon />` (`components/ui/InteractiveIcon.tsx`), utilizing `Animated.Value` with `useNativeDriver: true`. Synchronized with `Button.tsx` (`onPressIn`/`onPressOut`), `Card.tsx` (`CardPressContext`), and `MobileBottomNav.tsx`.
+### 3. Unified Barrels & Compatibility Bridges
+- **`apps/web/components/icons/index.ts`**: Central registry exporting all primary and complementary animated icons.
+- **`apps/web/components/ui/animated-icons/index.ts`**: Re-export barrel providing convenient access to animated icons (`AnimatedArrowRight`, `AnimatedCheck`, `AnimatedSearch`, etc.) alongside zero-transform compatibility shims.
+- **`apps/web/components/ui/empty-icons.tsx`**: Standard compatibility bridge aliased in `tsconfig.json` and `next.config.ts`, providing seamless zero-breaking-change backwards compatibility across all legacy Lucide import call-sites.
+- **`apps/web/components/ui/animated-icon.tsx`**: Clean pass-through rendering icons at default settings with zero custom CSS keyframes.
 
 ---
 
@@ -484,6 +491,7 @@ ReachInternational-Monorepo/
 | **Auth** | Supabase Auth (SSR) | Server-side cookie sessions & JWT authentication |
 | **Styling** | Tailwind CSS v4 | Utility-first styling with Geist design system tokens |
 | **Animations** | Framer Motion 12 | Fluid UI transitions, modals, and drawers |
+| **Animated Icons** | Lucide Animated & `@animateicons/react` | Official interactive vector animated icons at default settings |
 | **PDF & Export**| HTML5 Print Engine / XLSX | Single-page A4 PDF documents & formatted Excel exports |
 
 ---
@@ -573,13 +581,13 @@ Navigation and session lifecycle are governed by `@reachinternational/permission
    - **Scenario 2 — Normal Internal Navigation**: Authenticated users navigate freely between authorized routes (e.g. `/dashboard` $\rightarrow$ `/operations?tab=logs&page=2` $\rightarrow$ `/users`). Full pathname, search parameters, pagination, and tabs are preserved without proxy interference or unnecessary DB roundtrips.
    - **Scenario 3 — Background $\rightarrow$ Foreground / Tab Switch**: Browser tab switching or native app backgrounding preserves in-memory state; zero redirection is triggered.
    - **Scenario 4 — Browser Reload / Native Restart**:
-     - *Web*: Browser refresh (F5 / Cmd+R) is detected via `PerformanceNavigationTiming.type === 'reload'` in `BrowserLifecycleManager.tsx` and consumed once per document load. Redirects authenticated users to their role Home (`/dashboard`), preventing redirect loops if already on Home and preserving direct deep links (`type === 'navigate'`).
+     - *Web*: Browser refresh (F5 / Cmd+R / reload button) strictly preserves the user on their active route (e.g. `/users`, `/machines`, `/profile`). Hard reloads re-render the current route without unwanted redirection to Home (`/dashboard`). Direct root domain (`/`) visits and post-login transitions route to `getRoleHomeRoute(role)`.
      - *Native*: Cold restart / process relaunch runs `apps/mobile/app/index.tsx`, resolves the active session, and opens at `getMobileRoleHomeRoute(role)`.
 
 3. **Layered Separation of Concerns**:
    - **Edge Proxy (`proxy.ts`)**: Session validation, rate limiting, and unauthenticated redirects to `/login`. Does not perform browser reload detection or interfere with internal route navigation.
    - **Authentication / Session Layer (`actions/auth.ts`, `dal.ts`)**: Credentials verification, session cookie management, and role-based access denial redirects to `getRoleHomeRoute()`.
-   - **Web Application Shell (`BrowserLifecycleManager.tsx`)**: Client-side reload detection and single-shot redirection to role Home.
+   - **Web Application Shell**: Normal browser navigation adherence; hard reloads preserve current page state.
    - **Native Navigation Layer (`apps/mobile/app/index.tsx`, `login.tsx`)**: Cold start routing and deep link fallback handling.
 
 ---
@@ -808,5 +816,22 @@ The platform integrates enterprise **Google Analytics 4 (`gtag.js`)** under Meas
 - **Search Telemetry**: `trackSearch()` hooked into `CommandPalette` and table search inputs.
 - **Reporting & Operations**: `trackExport()`, `trackOperationAction()`, `trackThemeChange()`, and `trackException()`.
 - **Cross-Platform Mobile Parity (`apps/mobile/lib/analytics/`)**: Provides isomorphic analytics helpers for Expo Web and native targets.
+
+---
+
+## Database Architecture & Supabase Environments
+
+Reach International manages isolated Supabase environments under organization `ljzofzlvjtfiqoffaaua`:
+
+| Environment | Project Name | Project Ref | Region | Status | Tables / Schema |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Production** | `Reach International Production` | `dhbbgfzbyatzvqafnsqp` | `ap-south-1` (Mumbai) | Active Healthy | Live fleet, operations & production data |
+| **Development** | `Reach International Dev` | `vlmxciuogczumumrwyot` | `ap-south-1` (Mumbai) | Active Healthy | Mirrored schema (`001`–`103` migrations, 20 public tables, RLS enabled) |
+
+### CLI & Migration Synchronization
+- **Supabase CLI**: Switch projects easily via `supabase link --project-ref <REF>`.
+- **Migrations Directory (`supabase/migrations/`)**: 103 canonical SQL migrations applied sequentially, with automated schema version tracking in `supabase_migrations.schema_migrations`.
+- **Storage Buckets**: Private `user_files` bucket for identity KYC verification (Aadhaar, Driving Licence) secured with short-lived signed URLs.
+
 
 

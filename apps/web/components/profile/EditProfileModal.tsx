@@ -28,6 +28,12 @@ import {
 } from "@/lib/upload";
 import { validateAadhaarNumber, validateLicenseNumber } from "@reachinternational/utils";
 import type { User as UserType } from "@/lib/types/database";
+import {
+  FormSectionCard,
+  UserAddressSection,
+  UserSalaryField,
+  FormSubmitButton,
+} from "@/components/forms";
 
 interface EditProfileModalProps {
   user: UserType;
@@ -35,33 +41,6 @@ interface EditProfileModalProps {
   onClose: () => void;
   onSuccess?: () => void;
 }
-
-const INDIAN_STATES = [
-  { id: 24, name: "Gujarat" },
-  { id: 27, name: "Maharashtra" },
-  { id: 23, name: "Madhya Pradesh" },
-  { id: 8, name: "Rajasthan" },
-  { id: 9, name: "Uttar Pradesh" },
-  { id: 10, name: "Bihar" },
-  { id: 18, name: "Assam" },
-  { id: 19, name: "West Bengal" },
-  { id: 7, name: "Delhi" },
-  { id: 6, name: "Haryana" },
-  { id: 3, name: "Punjab" },
-  { id: 29, name: "Karnataka" },
-  { id: 33, name: "Tamil Nadu" },
-  { id: 36, name: "Telangana" },
-  { id: 28, name: "Andhra Pradesh" },
-  { id: 32, name: "Kerala" },
-  { id: 21, name: "Odisha" },
-  { id: 20, name: "Jharkhand" },
-  { id: 22, name: "Chhattisgarh" },
-  { id: 30, name: "Goa" },
-  { id: 5, name: "Uttarakhand" },
-  { id: 2, name: "Himachal Pradesh" },
-  { id: 1, name: "Jammu and Kashmir" },
-  { id: 38, name: "Dadra and Nagar Haveli and Daman and Diu" },
-];
 
 function parseShiftTimes(shiftStr?: string | null): { start: string; end: string } {
   if (!shiftStr) {
@@ -101,11 +80,15 @@ export function EditProfileModal({
   const [startTime, setStartTime] = useState(initialTimes.start);
   const [endTime, setEndTime] = useState(initialTimes.end);
 
-  const [address, setAddress] = useState(user.address || "");
+  const [street, setStreet] = useState(user.street || user.address || "");
+  const [address, setAddress] = useState(user.address || user.street || "");
   const [city, setCity] = useState(user.city || "");
   const [district, setDistrict] = useState(user.district || "");
   const [stateName, setStateName] = useState(user.state || "Maharashtra");
   const [stateId, setStateId] = useState<number | undefined>(user.state_id || 27);
+  const [monthlySalary, setMonthlySalary] = useState(
+    user.monthly_salary !== null && user.monthly_salary !== undefined ? String(user.monthly_salary) : ""
+  );
   const [aadhaarNumber, setAadhaarNumber] = useState(user.aadhaar_number || "");
   const [licenseNumber, setLicenseNumber] = useState(user.license_number || "");
 
@@ -150,11 +133,15 @@ export function EditProfileModal({
       const times = parseShiftTimes(user.shift_time);
       setStartTime(times.start);
       setEndTime(times.end);
-      setAddress(user.address || "");
+      setStreet(user.street || user.address || "");
+      setAddress(user.address || user.street || "");
       setCity(user.city || "");
       setDistrict(user.district || "");
       setStateName(user.state || "Maharashtra");
       setStateId(user.state_id || 27);
+      setMonthlySalary(
+        user.monthly_salary !== null && user.monthly_salary !== undefined ? String(user.monthly_salary) : ""
+      );
       setAadhaarNumber(user.aadhaar_number || "");
       setLicenseNumber(user.license_number || "");
       setAadhaarError(null);
@@ -239,14 +226,6 @@ export function EditProfileModal({
     }
   };
 
-  const handleStateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedName = e.target.value;
-    setStateName(selectedName);
-    const matched = INDIAN_STATES.find((s) => s.name.toLowerCase() === selectedName.toLowerCase());
-    if (matched) {
-      setStateId(matched.id);
-    }
-  };
 
   const handleAadhaarChange = (val: string) => {
     setAadhaarNumber(val);
@@ -278,12 +257,47 @@ export function EditProfileModal({
   };
 
   const isSuperAdmin = user.role === "super_admin";
+  const isOperator = user.role === "operator";
   const approverHierarchyLabel =
     user.role === "admin"
       ? "Super Administrator"
       : ["manager", "hr"].includes(user.role)
       ? "Administrator"
       : "Manager / Administrator";
+
+  // Section 1: Personal Details (Mandatory)
+  const section1Complete = Boolean(
+    fullName.trim().length >= 2 &&
+    phone.replace(/\D/g, "").length >= 10 &&
+    !aadhaarError &&
+    !licenseError
+  );
+
+  // Section 2: Shift Timing (Mandatory)
+  const section2Complete = Boolean(startTime.trim() && endTime.trim());
+
+  // Section 3: Work Location & Address (Mandatory)
+  const section3Complete = Boolean(
+    street.trim() &&
+    city.trim() &&
+    district.trim() &&
+    (stateName.trim() || stateId)
+  );
+
+  // Section 4: Compensation (Mandatory for operator if super_admin; always valid for others / read-only)
+  const section4Complete = isSuperAdmin && isOperator ? Boolean(monthlySalary && Number(monthlySalary) > 0) : true;
+
+  const isAllMandatoryFilled =
+    section1Complete &&
+    section2Complete &&
+    section3Complete &&
+    section4Complete;
+
+  const missingMandatoryCount =
+    (section1Complete ? 0 : 1) +
+    (section2Complete ? 0 : 1) +
+    (section3Complete ? 0 : 1) +
+    (section4Complete ? 0 : 1);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -296,6 +310,31 @@ export function EditProfileModal({
     const digitsOnly = phone.replace(/\D/g, "");
     if (digitsOnly.length < 10) {
       toast("error", "Please enter a valid 10-digit mobile number.");
+      return;
+    }
+
+    if (!street.trim()) {
+      toast("error", "Street / building address is required.");
+      return;
+    }
+
+    if (!city.trim()) {
+      toast("error", "City / Town is required.");
+      return;
+    }
+
+    if (!district.trim()) {
+      toast("error", "District is required.");
+      return;
+    }
+
+    if (!stateName.trim() && !stateId) {
+      toast("error", "State is required.");
+      return;
+    }
+
+    if (isSuperAdmin && isOperator && (!monthlySalary || Number(monthlySalary) <= 0)) {
+      toast("error", "Monthly salary is required for operator accounts.");
       return;
     }
 
@@ -325,11 +364,13 @@ export function EditProfileModal({
       formData.set("full_name", fullName.trim());
       formData.set("phone", phone.trim());
       formData.set("shift_time", finalShift);
-      formData.set("address", address.trim());
-      formData.set("city", city.trim() || "Mumbai");
-      formData.set("district", district.trim() || "Mumbai");
+      formData.set("street", street.trim());
+      formData.set("address", street.trim());
+      formData.set("city", city.trim());
+      formData.set("district", district.trim());
       formData.set("state", stateName.trim() || "Maharashtra");
       if (stateId) formData.set("state_id", String(stateId));
+      if (monthlySalary) formData.set("monthly_salary", monthlySalary.trim());
       formData.set("aadhaar_number", aadhaarNumber.trim());
       formData.set("license_number", licenseNumber.trim());
 
@@ -390,11 +431,13 @@ export function EditProfileModal({
         </div>
 
         {/* Section 1: Personal Details */}
-        <div className="space-y-3 pt-1">
-          <h4 className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
-            1. Personal Details
-          </h4>
-
+        <FormSectionCard
+          stepNumber={1}
+          title="Personal Details"
+          description="Name, contact, and official identification"
+          isMandatory={true}
+          isCompleted={section1Complete}
+        >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-[var(--color-ink)] mb-1">
@@ -738,14 +781,16 @@ export function EditProfileModal({
               })()}
             </div>
           </div>
-        </div>
+        </FormSectionCard>
 
         {/* Section 2: Shift Timing */}
-        <div className="space-y-3 pt-2 border-t border-[var(--color-hairline)]">
-          <h4 className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
-            2. Shift Timing
-          </h4>
-
+        <FormSectionCard
+          stepNumber={2}
+          title="Shift Timing"
+          description="Operating work schedule window"
+          isMandatory={true}
+          isCompleted={section2Complete}
+        >
           <div className="grid grid-cols-2 gap-2 sm:gap-3">
             <CustomTimePicker
               label="Shift Start Time"
@@ -760,57 +805,50 @@ export function EditProfileModal({
               placeholder="08:00 PM"
             />
           </div>
-        </div>
+        </FormSectionCard>
 
-        {/* Section 3: Address */}
-        <div className="space-y-3 pt-2 border-t border-[var(--color-hairline)]">
-          <h4 className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
-            3. Address
-          </h4>
+        {/* Section 3: Work Location & Address */}
+        <FormSectionCard
+          stepNumber={3}
+          title="Work Location & Address"
+          description="Street + City/Town/Village + District + State"
+          isMandatory={true}
+          isCompleted={section3Complete}
+        >
+          <UserAddressSection
+            street={street}
+            city={city}
+            district={district}
+            state={stateName}
+            stateId={stateId}
+            onChange={(field, val) => {
+              if (field === "street") setStreet(val);
+              else if (field === "city") setCity(val);
+              else if (field === "district") setDistrict(val);
+              else if (field === "state") setStateName(val);
+              else if (field === "state_id") setStateId(Number(val));
+            }}
+            required={true}
+            idPrefix="profile-edit"
+          />
+        </FormSectionCard>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-[var(--color-ink)] mb-1">
-                State / UT
-              </label>
-              <select
-                value={stateName}
-                onChange={handleStateChange}
-                className="w-full h-10 px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-xs font-medium text-[var(--color-ink)] focus:outline-none focus:ring-2 focus:ring-sky-500/30 cursor-pointer"
-              >
-                {INDIAN_STATES.map((st) => (
-                  <option key={st.id} value={st.name}>
-                    {st.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-[var(--color-ink)] mb-1">
-                District
-              </label>
-              <Input
-                value={district}
-                onChange={(e) => setDistrict(e.target.value)}
-                placeholder="e.g. Thane"
-                className="h-10"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-[var(--color-ink)] mb-1">
-                City / Town
-              </label>
-              <Input
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="e.g. Navi Mumbai"
-                className="h-10"
-              />
-            </div>
-          </div>
-        </div>
+        {/* Section 4: Compensation */}
+        <FormSectionCard
+          stepNumber={4}
+          title="Compensation"
+          description={isSuperAdmin ? "Monthly base remuneration (Super Admin editable)" : "Verified base monthly compensation"}
+          isMandatory={isSuperAdmin && isOperator}
+          isCompleted={section4Complete}
+        >
+          <UserSalaryField
+            value={monthlySalary}
+            onChange={setMonthlySalary}
+            role={user.role}
+            readOnly={!isSuperAdmin}
+            id="profile-salary"
+          />
+        </FormSectionCard>
 
         {/* Modal Footer Actions */}
         <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-[var(--color-hairline)]">
@@ -823,14 +861,17 @@ export function EditProfileModal({
           >
             Cancel
           </Button>
-          <Button
-            type="submit"
-            variant="primary"
-            loading={isPending}
-            className="h-10 px-5 text-xs font-bold shadow-sm"
-          >
-            {isSuperAdmin ? "Save Changes Directly" : "Submit for Approval"}
-          </Button>
+          <div className="min-w-[180px]">
+            <FormSubmitButton
+              isReady={isAllMandatoryFilled}
+              loading={isPending}
+              label={isSuperAdmin ? "Save Changes Directly" : "Submit for Approval"}
+              loadingLabel="Submitting Profile Changes..."
+              missingCount={missingMandatoryCount}
+              fullWidth={false}
+              size="md"
+            />
+          </div>
         </div>
       </form>
     </Modal>

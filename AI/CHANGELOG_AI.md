@@ -1,3 +1,719 @@
+- **Standardize Machine Detail & Personnel Modal Card Hover Animations & Proportional Icon Sizing (/machines/[id]) (2026-09-24)**:
+  - **1. User Request**:
+    - Feedback on `/machines/d2390003-21f5-40db-af94-dd9f036de0e5`:
+      "when i hover this card then icon should start animating with default animation behaviour instead of only hover to the icon then icon will animate. make sure dont add any custom animation all imported icon have its default animation keep this only. also make the icon size proper as per titile padding"
+  - **2. Root Cause Analysis**:
+    - Supervisors and Operators panels in `apps/web/app/(app)/machines/[id]/machine-client-view.tsx` used static Lucide icons without parent hover bindings.
+    - Section headers and warning notices in `apps/web/components/machines/MachineEditModals.tsx` used static unbridged icons or had uneven padding relative to the icon size.
+    - In `apps/web/components/icons/icon-bridge.tsx`, `onMouseEnter` on the icon was conditionally bypassed when `hasParentRef.current` was true.
+  - **3. Delivered Solution**:
+    - **apps/web/app/(app)/machines/[id]/machine-client-view.tsx**:
+      - Replaced static icons with bridged animated icons (`AnimatedShield`, `AnimatedWrench`, `AnimatedUsers`, `AnimatedBuilding`, `AnimatedClock`, `AnimatedPhone`, `AnimatedMail`, `AnimatedInfo`, `AnimatedAlertCircle`).
+      - Added `data-hover-parent` to Section 1 (`Basic Info`), Section 2 (`Assigned Shift Personnel`), Section 3 (`Client Details`), inner Supervisors panel (`.rounded-xl`), inner Operators panel (`.rounded-xl`), and all individual `PersonnelCard`s. Hovering anywhere on a card starts the icon's native Framer Motion animation without requiring direct hover over the icon.
+      - Sized section header icons to `size={16}` (`w-4 h-4 shrink-0`) with standardized `pb-2 mb-3 border-b border-[var(--color-hairline)]` title padding.
+    - **apps/web/components/machines/MachineEditModals.tsx**:
+      - Wrapped `MachinePersonnelModal` Supervisors and Operators sections into standardized cards (`rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3 transition-colors`) with `data-hover-parent`, `AnimatedShield size={16}`, `AnimatedWrench size={16}`, and `AnimatedAlertCircle size={14}` for unsaved roster changes notice.
+      - Standardized `MachineInfoModal` and `MachineClientModal` with matching `data-hover-parent` section cards and animated icons.
+    - **apps/web/app/(app)/machines/[id]/edit/machine-edit-client.tsx & apps/web/components/machines/MachineModal.tsx**:
+      - Synchronized full edit page and creation modal cards with `data-hover-parent`, `size={16}` icons, and proportional title padding.
+    - **apps/web/components/icons/icon-bridge.tsx**:
+      - Enabled direct `onMouseEnter` triggering on bridged icons so they respond both to card/parent hover and direct icon hover.
+      - Preserved 100% native default Framer Motion animation behavior without any custom animation hacks.
+  - **4. Verification**:
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile typecheck`).
+    - Permissions unit tests: 3/3 passed (`pnpm --filter @reachinternational/permissions test`).
+- **Fix Machine Operator Update "Failed to verify operator roles" Error (/machines/[id]) (2026-09-24)**:
+  - **1. User Request**:
+    - "Update failed: Failed to verify operator roles. when i update the operator then it show this error fix this"
+  - **2. Root Cause Analysis**:
+    - In `updateMachineOperatorsAction` (`apps/web/app/actions/machines.ts`), the query to pre-fetch operator records selected `id, role, status, full_name, phone, email, shift_start_time, shift_end_time, shift_time`.
+    - In PostgreSQL, the `public.users` table contains `shift_start_time` and `shift_end_time`, but has no `shift_time` column. PostgreSQL returned `ERROR 42703: column "shift_time" does not exist`, which triggered `userError` and returned `{ error: "Failed to verify operator roles." }`.
+    - `updateMachineSupervisorsAction`, `getMachinePersonnelFreshAction`, and `assignments.ts` actions also referenced non-existent `shift_time` on the `users` table.
+  - **3. Delivered Solution**:
+    - **apps/web/app/actions/machines.ts**:
+      - In `updateMachineOperatorsAction`: Removed `shift_time` from `.select(...)` on `users`, query only real columns (`shift_start_time, shift_end_time`), used `createSupabaseAdminClient()`, and added descriptive error messaging (`userError.message`).
+      - In `updateMachineSupervisorsAction`: Fixed query to select `shift_start_time, shift_end_time` and format `shift_time` string dynamically.
+      - In `getMachinePersonnelFreshAction`: Replaced `shift_time` with `shift_start_time, shift_end_time` and used `supabaseAdmin`.
+    - **apps/web/app/actions/assignments.ts**:
+      - In `getOperatorProfileShiftAction`: Replaced non-existent `shift_time` query with `shift_start_time, shift_end_time`.
+      - In `getMachineActiveAssignmentsAction`: Replaced `operator:users(..., shift_time)` with `operator:users(..., shift_start_time, shift_end_time)`.
+    - **apps/web/components/machines/MachineEditModals.tsx**:
+      - Restored `Shield, Wrench, AlertCircle` imports from `lucide-react`.
+  - **4. Verification**:
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile typecheck`).
+    - Permissions unit tests: 3/3 passed (`pnpm --filter @reachinternational/permissions test`).
+- **Fix Machine Rental Status Badge — Auto-Sync status with client_id (/machines/[id]) (2026-09-24)**:
+  - **Root Cause**: Seed data and some code paths set `client_id` on machines without updating `status` to `"rented"`. All 30 machines with assigned clients had `status: "available"`.
+  - **Fix**: (1) Data fix: updated all machines with `client_id IS NOT NULL` to `status = 'rented'`. (2) DB trigger `trg_sync_machine_rental_status` (`sync_machine_rental_status()`) auto-derives `status` from `client_id` on every INSERT/UPDATE — root-cause fix at the DB level. (3) `machine-client-view.tsx`: preserved `status`, `client_id`, `client` in `useEffect` prop merge to prevent stale RSC cache from overwriting optimistic updates.
+  - **Files**: `supabase/migrations/105_sync_machine_rental_status_trigger.sql`, `apps/web/app/(app)/machines/[id]/machine-client-view.tsx`
+  - **Verification**: TypeScript 0 errors. Dev DB `vlmxciuogczumumrwyot` verified: all 30 machines with clients now `status: "rented"`.
+- **Eliminate Automatic/Default Operator Assignment & Enforce Strict Authoritative Personnel Selection (/machines/[id]) (2026-09-24)**:
+  - **1. User Request**:
+    - "when i remove operator then it assign automatically fix this and make sure keep only assign operator rather than default or any automatic assign"
+  - **2. Root Cause Analysis**:
+    - `public.sync_machine_personnel_arrays` trigger on `machines` contained an auto-heal clause: `IF NEW.current_operator_id IS NOT NULL AND NOT (NEW.current_operator_id = ANY(NEW.operator_ids)) THEN NEW.operator_ids := array_prepend(NEW.current_operator_id, NEW.operator_ids);`. When `operator_ids` was updated without explicitly clearing `current_operator_id`, PostgreSQL preserved `OLD.current_operator_id`, causing the trigger to automatically re-add the removed operator back into `operator_ids`.
+    - `public.operator_machine_assignments` retained active assignments (`is_active = true`) when operators were removed via `operator_ids`.
+    - Data layer hydration (`hydrateMachinePersonnelSingle`) was merging active assignments from `operator_machine_assignments` back into the machine's operator list.
+    - Multiple UI and DAL layers (`machine-client-view.tsx`, `MachineEditModals.tsx`, `MachineModal.tsx`, `machine-edit-client.tsx`, `apps/mobile/components/machines/MachineModal.tsx`, `apps/mobile/app/(app)/machines.tsx`) contained fallbacks like `operators.length > 0 ? operators : current_operator ? [current_operator] : []` which resurrected the single operator whenever the array was emptied.
+  - **3. Delivered Solution**:
+    - **Database Migration (`104_fix_machine_operator_assignment_auto_sync.sql` on Dev DB `vlmxciuogczumumrwyot`)**:
+      - Updated `sync_machine_personnel_arrays` trigger function to treat `operator_ids` as strictly authoritative and set `NEW.current_operator_id := NEW.operator_ids[1]` (or `NULL` if empty), removing the auto-prepend clause.
+      - Added `sync_machine_operator_assignments_on_machine_update` trigger on `machines` to automatically deactivate assignments in `operator_machine_assignments` when an operator is removed from `machines.operator_ids`.
+      - Deactivated orphaned assignments for machine `04af5b11-fb7e-46e1-8f08-5442e386573d` on dev DB. Production DB (`dhbbgfzbyatzvqafnsqp`) remained strictly untouched.
+    - **Data Access & Server Actions**:
+      - In `apps/web/lib/data/machines/machine-detail.ts`, `hydrateMachinePersonnelSingle` strictly respects `operator_ids` when defined and syncs `current_operator` to `operatorsList[0] || null`.
+      - In `apps/web/app/actions/machines.ts`, `updateMachineOperatorsAction` explicitly deactivates unassigned operators in `operator_machine_assignments`, sets `current_operator_id = validIds[0] || null`, and returns fresh personnel.
+      - In `apps/web/lib/data/machines/machine-mutations.ts`, `updateMachine` explicitly sets `current_operator_id = validOps[0] || null` and `current_supervisor_id = validSups[0] || null`.
+      - In `apps/web/lib/data/machines/machine-list.ts` and `machine-export.ts`, removed fallback checks that defaulted to `current_operator_id` when `operator_ids` is empty.
+    - **Web UI**:
+      - In `machine-client-view.tsx`, `assignedOperators` and `assignedSupervisors` return `[]` when the array is empty, never falling back to `current_operator`.
+      - In `MachineEditModals.tsx`, `machine-edit-client.tsx`, `MachineModal.tsx`, and `MachineAssignmentsQuickModal.tsx`, fixed initial/saved operator and supervisor ID resolvers to respect empty arrays without defaulting back.
+    - **Mobile Synchronization (`apps/mobile/`)**:
+      - In `apps/mobile/components/machines/MachineModal.tsx`, `AddMachineModal.tsx`, and `apps/mobile/app/(app)/machines.tsx`, updated initial operator and supervisor array resolutions to strictly preserve empty arrays.
+  - **4. Verification**:
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile typecheck`).
+    - Permissions unit tests: 3/3 passed (`pnpm --filter @reachinternational/permissions test`).
+    - Migration verified on Development DB `vlmxciuogczumumrwyot` via Supabase SQL execution.
+- **Instant Operator & Supervisor Assignment Auto-Sync Without Full Page Reload (/machines/[id]) (2026-09-24)**:
+  - **1. User Request**:
+    - "after update any operator like assign and unassign any operator then update this quickly"
+    - "currenly it take arround more than 5 second and also need to refresh the page to see the updated assign operator fix this"
+    - "after assign and unassign then click the submit assignment then auto fetch the fresh assign oerator list from the database quickly make sure only auto refresh the updated changes only instead of whole page refresh"
+    - "same approach follow for the supervisor assignment too"
+  - **2. Root Cause Analysis**:
+    - `MachinePersonnelModal.handleSavePersonnel` called `router.refresh()`, forcing a full RSC re-render of `/machines/[id]/page.tsx` which executed queries for all clients, supervisors, operators, and machine details company-wide.
+    - Due to Data Cache tag invalidation timing with `unstable_cache`, `getMachineById` served stale data to the refreshed page. When the refreshed page props arrived 3-5 seconds later, `useEffect(() => setMachineData(machine), [machine])` in `MachineClientView` overwrote the live state with stale data, requiring a manual hard reload (F5) to see the update.
+    - `updateMachineOperatorsAction` previously ran sequential queries and loops for atomic assignment RPCs, adding unnecessary network round-trip overhead.
+  - **3. Delivered Solution**:
+    - **Fresh Direct Payloads from Mutation Actions (`apps/web/app/actions/machines.ts`)**: Enhanced `updateMachineOperatorsAction` to pre-fetch operator records, run `assign_operator_machine_atomic` in parallel with `Promise.all()`, and directly return fresh operator user objects (`id`, `full_name`, `phone`, `email`, `shift_time`, `role`) alongside `operator_ids` and `current_operator_id`. Enhanced `updateMachineSupervisorsAction` to return fresh supervisor user objects alongside `supervisor_ids` and `current_supervisor_id`.
+    - **Dedicated Fast Query Action (`getMachinePersonnelFreshAction`)**: Added dedicated action querying strictly `machines`, `users`, and `operator_machine_assignments` for the target machine in <20ms without any full-page data overhead.
+    - **No Full-Page Refresh (`MachineEditModals.tsx`)**: Removed `router.refresh()` from `handleSavePersonnel`. Immediately applies the fresh payload to `onMachineUpdated(updatedFields)` and triggers non-blocking background verification with `getMachinePersonnelFreshAction`.
+    - **State Preservation & Unassignment Fallback Prevention (`machine-client-view.tsx`)**: Guarded `useEffect` on `machine` prop to preserve live assigned/unassigned personnel for the same machine ID. Refined memoized `assignedSupervisors` and `assignedOperators` hooks to strictly return `[]` when arrays are empty, preventing resurrection of stale single-lookup records.
+    - **Machine Edit Client State Synchronization (`apps/web/app/(app)/machines/[id]/edit/machine-edit-client.tsx`)**: Synchronized `setSavedMachine` with fresh returned arrays in `machine-edit-client.tsx`.
+    - **Mobile Parity (`apps/mobile/components/machines/MachineDetailView.tsx`)**: Hardened mobile `MachineDetailView.tsx` to respect empty `operator_ids` and `supervisor_ids` arrays without fallback resurrection.
+  - **4. Verification**:
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript check: 0 errors (`node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit`).
+    - Permissions unit tests: 3/3 passed (`pnpm --filter @reachinternational/permissions test`).
+    - Dedicated audit script: 15/15 assertions passed.
+- **Standardize Client Modal Card Hover Animations, Canonical Manual Address Inputs & Uniform Input Padding (/clients) (2026-09-24)**:
+  - **1. User Request**:
+    - "when i hover this card then icon should start animating with default animation behaviour instead of only hover to the icon then icon will animate make sure dont add any custom animation all imported icon have its default animation keep this only also make the icon size proper as per titile padding"
+    - "<LocationHierarchySelector> flex items: remove this completely"
+    - "<LocationHierarchySelector> button 'Use Master Hierarchy': remove this completely this is only manual"
+    - "<Input> input '411001': make properly padding as other input box"
+    - "State → District → City dont follow this instead follow this oder for input the address only aslso make the all input box follow this order: street/area - > city/town/village->district->state->pincode"
+  - **2. Root Cause Analysis**:
+    - `ClientModal` cards lacked `data-hover-parent` attribute, preventing `createAnimatedIconBridge` from binding card `mouseenter`/`mouseleave` to the child icon's animation lifecycle.
+    - Sizing was missing on animated icons, falling back to 20px with 4px title bottom padding, which caused visual misalignment with 12px uppercase title text.
+    - Receipt in Section 3 was an unbridged static icon from `lucide-react`.
+    - `LocationHierarchySelector` used dependent dropdowns and a toggle button rather than direct manual inputs.
+    - Address inputs were a mix of raw `h-9 px-3` inputs and `<Input>` (`h-[42px] px-3.5`), causing mismatched heights and vertical padding.
+  - **3. Delivered Solution**:
+    - **Card-Level Hover Triggers (`ClientModal.tsx`)**: Added `data-hover-parent` to all 3 section cards. When hovering anywhere on the card, the icon animates using its default Framer Motion animation behavior without any custom animations. Sized icons to `size={16}` with `w-4 h-4 shrink-0` and balanced `pb-2` header padding.
+    - **Bridged AnimatedReceipt (`apps/web/components/icons/index.ts` & `animated-icons/index.ts`)**: Bridged `RawReceipt` via `createAnimatedIconBridge` and exported `AnimatedReceipt`.
+    - **Eliminated LocationHierarchySelector**: Removed `<LocationHierarchySelector>` component and "Use Master Hierarchy" button completely.
+    - **Canonical Address Flow**: Enforced strict order across both Site Location and Billing Address: `street/area -> city/town/village -> district -> state -> pincode`.
+    - **Uniform Inputs**: Replaced raw `h-9` inputs with standard `<Input>` components for uniform `h-[42px] sm:h-[44px]` height and `px-3.5` padding.
+    - **Mobile Synchronization (`apps/mobile/app/(app)/clients.tsx`)**: Removed hierarchy selector strips and indicator. Standardized mobile address fields to canonical order with min 44px touch targets.
+  - **4. Verification**:
+    - Web TypeScript check: 0 errors.
+    - Mobile TypeScript check: 0 errors.
+    - Permissions unit tests: 3/3 passed.
+    - Dedicated audit script: 15/15 assertions passed.
+- **Fix React `isSpinning` Unknown DOM Element Attribute Console Error (2026-09-24)**:
+  - **1. User Request**:
+    - "React does not recognize the `isSpinning` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `isspinning` instead. If you accidentally passed it from a parent component, remove it from the DOM element."
+    - "at div (<anonymous>:null:null)"
+    - "at AnimatedBridge(Store) (components/icons/icon-bridge.tsx:116:11)"
+    - "at NavigationItem (components/layout/sidebar/NavigationItem.tsx:166:19)"
+  - **2. Root Cause Analysis**:
+    - `createAnimatedIconBridge` in `apps/web/components/icons/icon-bridge.tsx` unconditionally passed `isSpinning={isSpinning}` to `<IconComponent />`.
+    - When `IconComponent` was an icon bridged from `@animateicons/react/lucide` (e.g. `RawStore` used by `Store`, `Building`, and `Building2` in sidebar `NavigationItem.tsx`), it accepted unknown props in `...rest` and spread them onto its root `<motion.div>`.
+    - In React 19, having an unrecognized property `isSpinning` on a DOM `<div>` element triggers a console error.
+    - Passing `isSpinning` to `IconComponent` was also redundant because the bridge's outer `<span className={cn(..., isSpinning && "animate-spin", className)}>` already handles spinning.
+  - **3. Delivered Solution**:
+    - **Global Animated Icon Bridge (`apps/web/components/icons/icon-bridge.tsx`)**:
+      - Destructured `isSpinning`, `trigger`, `animation`, `interaction`, `motion`, `strokeWidth`, `color` in `WrappedIcon`.
+      - Removed `isSpinning` from `<IconComponent>` props.
+      - Attached `{...rest}` to outer `<span>` instead of leaking down to `<IconComponent>`.
+    - **Static Chevrons Hardening (`chevron-down.tsx`, `chevron-up.tsx`, `chevrons-up-down.tsx`)**:
+      - Destructured `isSpinning`, `trigger`, `animation`, `interaction`, and `motion` so they never reach the root `<svg>` element.
+    - **Bridge Utilities Cleanup (`apps/web/components/ui/animated-icon.tsx`)**:
+      - Destructured legacy animation props in `AnimateIcon` and `InteractiveIcon` before spreading `{...props}`.
+  - **4. Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/permissions test`: 3/3 passed.
+    - Local dev server HTTP check: `/login` returned 200 OK.
+- **Global Search, Filter, Sort & Range URL Persistence & Anti-Caching Policy (2026-09-24)**:
+  - **1. User Request**:
+    - "Persist Search & Filter Query Parameters in URL: The users page (users-client.tsx) uses query parameters (?page=1&role=all&search=...). Now that reloads preserve the active URL, all active filter states will remain intact when refreshing."
+    - "Service Worker / Offline Caching: Ensure any future service worker or PWA caching strategies avoid caching navigation redirect headers on dynamic App Router pages."
+    - "not only one page apply this to all the pages so user dont need to apply all the filter, seach, sorting again after reload the page"
+  - **2. Root Cause Analysis**:
+    - Previously, search inputs, active filter dropdowns, and date ranges on `/machines`, `/clients`, `/payroll`, `/attendance`, and `/audit` were maintained partially in isolated React `useState` hooks without comprehensive bidirectional synchronization to URL query parameters or `window.history.replaceState`.
+    - Page reloads or browser Back/Forward traversal reset filter controls back to defaults or caused navigation history stack bloat via `router.push`.
+    - Mobile lacked a standardized persistence bridge, causing screen re-openings to reset selected filters and search tokens.
+    - Standard Next.js redirect responses (`307`/`308`) lacked explicit anti-caching headers, creating a vulnerability where aggressive service workers or CDN caches could store navigation redirects.
+  - **3. Delivered Solution**:
+    - **Reusable Web Hook (`apps/web/lib/hooks/useListQueryState.ts`)**: Generic hook managing controlled input state, 300ms search debouncing, URL sync via `window.history.replaceState` / `router.replace` without history bloat, and `popstate` browser Back/Forward synchronization.
+    - **Reusable Mobile Hook (`apps/mobile/lib/hooks/usePersistentListState.ts`)**: Generic hook storing search, filters, and sort options in `AsyncStorage` while strictly resetting `page = 1` on mount. Full support for functional updater callbacks `(prev) => next`.
+    - **Web Pages Updated**:
+      - Users (`/users`), Machines (`/machines`), Clients (`/clients`), Attendance (`/attendance`), Payroll (`/payroll`), Audit Logs (`/audit`), Operations (`/operations`).
+    - **Mobile Screens Updated**:
+      - Machines (`machines.tsx`), Users (`users.tsx`), Clients (`clients.tsx`), Attendance (`attendance.tsx`), Payroll (`payroll.tsx`).
+    - **Anti-Caching Architecture**:
+      - Injected `Cache-Control: no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0` in `apps/web/proxy.ts` and `apps/web/next.config.ts`.
+      - Codified binding rule in `AI/RULES/ARCHITECTURE.md` (Section 31) and `AI/RULES/PERFORMANCE.md` (Section 40).
+  - **4. Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile typecheck`: 0 errors.
+    - `pnpm --filter @reachinternational/permissions test`: 3/3 passed.
+    - Headless browser subagent verified URL preservation and reload state on `/users` and `/payroll`.
+- **Standardize Operations Page Icons, Dropdown Selection Static Arrows, and Scoped Card/Button Hover Triggers (2026-09-24)**:
+  - **1. User Request**:
+    - "when i hover this card then icon should start animating with default animation behaviour instead of only hover to the icon then icon will animate make sure dont add any custom animation all imported icon have its default animation keep this only"
+    - "use hover on icon then show the animation where icon dont have any outer layout and padding where icon alone implemented"
+    - "see the screenshot from this dashboard page fix the icon in consistent size , padding , background , incorrect position etc fix it and make it properly make sure dont add any custom animation all imported icon have its default animation keep this only"
+    - "use dropdown icon in the dropdown selection use static arrow which open and close remove animated icon in the dropdown selection from overall website"
+    - "remove this icon: <PresenceChild> <PopChild> <PopChildMeasure> <motion.div> <AnimatedBridge(Check)> <CheckIcon>"
+    - "this icon animate only withing the history layout instead of this machine details layout fix this"
+  - **2. Root Cause Analysis**:
+    - Animated icons in `components/icons/*.tsx` default to `size = 28` on the inner `<svg>`. When callers passed `className="w-3.5 h-3.5"` or `className="h-3 w-3"`, the class was applied to the outer `<div>` while the `<svg>` remained 28px by 28px with no `w-full h-full` constraint. This caused `History` in `OperationsMachineView` and `ChevronUp` in `PageSizeSelect` to overflow outside their buttons.
+    - In `OperationsMachineView`, adding `data-card` to the entire machine container caused the child `History` icon to animate when hovering anywhere across the entire machine card.
+    - In `PageSizeSelect`, the dropdown options rendered redundant checkmark icons `<Check>` inside `<motion.div>`, which cluttered the UI when selected items were already styled with high-contrast ink tokens.
+    - In `OperationsClientView` and `OperationsOperatorView`, the working days badge, contact meta strip, and 4 KPI summary cards lacked `data-hover-parent` containers, and icons were unstandardized in size.
+  - **3. Delivered Solution**:
+    - **Global Animated Icon Bridge (`apps/web/components/icons/icon-bridge.tsx`)**:
+      - Refactored `createAnimatedIconBridge` to dynamically bind to the innermost interactive container (`nearestParent = el.closest('button, a, [role="button"], [data-hover-parent], .interactive-parent, [data-interactive-card], .badge-base')`).
+      - Implemented `hasParentRef.current` tracking: parent `mouseenter`/`mouseleave` controls the animation lifecycle; moving cursor over child icons within an active parent never prematurely halts animation.
+      - Standalone icons without an outer interactive parent directly animate on icon hover.
+      - Strictly zero custom CSS keyframes; preserved 100% default Framer Motion / `@animateicons/react` animation behavior.
+    - **Static Dropdown Chevron SVGs (`apps/web/components/icons/chevron-down.tsx`, `chevron-up.tsx`, `chevrons-up-down.tsx`)**:
+      - Replaced animated chevrons with clean static Lucide SVGs that open/close via standard CSS `rotate-180`.
+      - Completely eliminated animated bouncy icons from dropdown selections across the overall website.
+    - **PageSizeSelect Dropdown (`apps/web/components/ui/PageSizeSelect.tsx`)**:
+      - Replaced `ChevronUp` with static `ChevronDown` dropdown icon (`size={12}`).
+      - Removed redundant `<Check>` checkmark icon from dropdown option items.
+    - **Operations Machine View Card (`apps/web/components/operations/logs/OperationsMachineView.tsx`)**:
+      - Removed `data-card="machine-view"` and `data-hover-card` from the outer machine details layout.
+      - Scoped `History` clock animation strictly to the History button via `data-hover-parent`.
+    - **Operations Client & Operator Views (`OperationsClientView.tsx` & `OperationsOperatorView.tsx`)**:
+      - Badge `"24 Days (September)"`: added `data-hover-parent` and `size={14}` to `Calendar` so badge hover triggers calendar animation.
+      - 4 Summary KPI Cards (`Clock`, `Zap`, `AlertTriangle`, `FileText`): added `data-hover-parent`, `size={16}` (`w-4 h-4`), and subtle card hover backgrounds.
+      - Contact Meta Strip (`MapPin`, `Phone`, `Mail`): added `data-hover-parent` and standardized `size={14}` (`w-3.5 h-3.5`).
+      - Extended `BadgeProps` in `apps/web/components/ui/Badge.tsx` with `React.HTMLAttributes<HTMLSpanElement>` and forwarded `{...props}` to root `<span>`.
+    - **Operations Header Export Button (`apps/web/components/operations/OperationsHeader.tsx`)**:
+      - Fixed `Download` icon sizing to `size={14} className="w-3.5 h-3.5 shrink-0 text-sky-500"` with label `Export Report`.
+    - **Operations Logs Table (`apps/web/components/operations/logs/OperationsLogsTable.tsx`)**:
+      - Styled Edit and Delete action buttons to `h-7 w-7 sm:h-8 sm:w-8 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] shadow-2xs`.
+      - Constrained `Pencil` and `Trash2` icons to `size={14} className="w-3.5 h-3.5 shrink-0"`.
+      - Fixed Date, HMR, and RT sort chevrons to `size={12} className="w-3 h-3 text-sky-500 shrink-0"`.
+  - **4. Verification**:
+    - `pnpm --filter @reachinternational/web typecheck`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile typecheck`: 0 errors.
+    - Dev server `/operations` HTTP check: 200 OK.
+- **Standardize Dashboard Icons & Hover Micro-Interactions on /machines (2026-09-24)**:
+  - **1. User Request**:
+    - "from this dashboard page fix the icon in consistent size , padding , background , incorrect position etc fix it and make it properly make sure dont add any custom animation all imported icon have its default animation keep this only"
+    - "when i hover this card then icon should start animating with default animation behaviour instead of only hover to the icon then icon will animate ... make sure it should not affect default icon animation behavious when icon is implement alone (no card or layout padding) then it will animate like its default animation behaviour"
+  - **2. Root Cause Analysis**:
+    - In `CustomFilterSelector` (`MachineListClient.tsx`), `<ChevronDown className="h-3.5 w-3.5 ..."` omitted explicit `size={14}`, causing the component to default to `size = 28` while wrapped in a 14px container, creating visual distortion, clipping, and off-center placement.
+    - In `ExportButton.tsx`, `<FileSpreadsheet className="h-4 w-4 ..."` omitted `size={16}` and retained legacy custom classes `interactive-icon icon-lift`.
+    - In `HeaderMoreMenu` (`MachineListClient.tsx`), the trigger button rendered a static unicode text character `"⋮"` (`<span className="font-bold text-sm leading-none">⋮</span>`) rather than an animated icon component.
+    - Animated icons in `components/icons/*` and `@animateicons/react` listen to `onMouseEnter` on their local container div or via imperative handles (`ref.current.startAnimation()`). When nested inside buttons and filter cards, hovering anywhere on the button padding or text did not trigger the icon's animation unless the user specifically moved their cursor directly over the tiny 14px SVG bounding box.
+  - **3. Delivered Solution**:
+    - **Button Component Hover Propagation (`apps/web/components/ui/Button.tsx`)**:
+      - Added internal `iconRef` and `trailingIconRef` attached to `icon`, `trailingIcon`, and `size === "icon"` children.
+      - Attached `onMouseEnter` and `onMouseLeave` handlers to `<button>` and `<Link>` to automatically call `iconRef.current?.startAnimation()` on button hover and `stopAnimation()` on mouse leave.
+      - Automatically enabled card-level hover animations on `"Add Machine"`, `"Export"`, and all standard buttons monorepo-wide.
+    - **Standardized Export Button (`apps/web/components/ui/ExportButton.tsx`)**:
+      - Replaced static icons and legacy `interactive-icon icon-lift` / `icon-arrow-down` with real animated icons (`AnimatedFileSpreadsheet`, `AnimatedFileText`, `AnimatedPrinter`, `AnimatedDownload`).
+      - Standardized size to `size={16}` with centered icon alignment and Geist elevation tokens.
+    - **Filter Button & Reset Micro-Interactions (`apps/web/components/ui/FilterToolbar.tsx`)**:
+      - Added `filterIconRef` to `<AnimatedSlidersHorizontal ref={filterIconRef} size={14} className="shrink-0" />`.
+      - Added `resetIconRef` to `<AnimatedRotateCcw ref={resetIconRef} size={14} className="shrink-0" />`.
+      - Wired `onMouseEnter` and `onMouseLeave` on the Filter toggle button and Reset button cards.
+    - **View Switcher & Filter Selectors (`apps/web/components/machines/MachineListClient.tsx`)**:
+      - Added `cardsIconRef` and `tableIconRef` to animate `Cards` (`AnimatedSlidersHorizontal`) and `Table` (`AnimatedFileText`) on button hover at consistent `size={14}`.
+      - Refactored `CustomFilterSelector` to accept an `icon?: React.ReactNode` prop and manage `iconRef`.
+      - Wired card hover `onMouseEnter` and `onMouseLeave` on `CustomFilterSelector` button.
+      - Standardized `CustomFilterSelector` icon size strictly to `size={14}`.
+      - Passed `AnimatedArrowUpDown size={14}` to Sort selector (`[Sort machines]`), cleanly differentiating it from status dropdowns.
+    - **Header More Menu Modernization (`apps/web/components/machines/MachineListClient.tsx`)**:
+      - Replaced static unicode `"⋮"` with `<AnimatedMoreVertical ref={moreIconRef} size={15} className="shrink-0" />`.
+      - Wired card hover handlers `onMouseEnter` and `onMouseLeave`.
+    - **Cross-Component Custom Animation Purge**:
+      - Removed legacy `interactive-icon icon-bounce`, `icon-lift`, and `icon-rotate` classes from `MachineRowActionsMenu.tsx`, `Tabs.tsx`, `EmptyState.tsx`, `MorePageClient.tsx`, and `BottomNav.tsx`.
+      - Aligned `CustomFilterSelector` across `UsersFilters.tsx`, `HMRTab.tsx`, and `ClientsCoordinatorClient.tsx`.
+  - **4. Verification**:
+    - `pnpm --filter @reachinternational/web typecheck` (0 errors).
+    - `pnpm --filter @reachinternational/mobile typecheck` (0 errors).
+    - `pnpm --filter @reachinternational/permissions test` (3/3 passed).
+
+- **Standardize Dashboard & Sidebar Icon Visuals & Card-Level Hover Micro-Interactions (2026-09-24)**:
+  - **1. User Request**:
+    - "when i hover this card then icon should start animating with default animation behaviour instead of only hover to the icon then icon will animate make sure dont add any custom animation all imported icon have its default animation keep this only"
+    - "icon visual is not good in the card dashboard also some card icon size is not aligned and some is small and large and some card have background and some not and padding is also not well please fix this also"
+  - **2. Root Cause Analysis**:
+    - Animated icons (`components/icons/*`) default to size=28 inside an SVG, but their container was styled with classes like `w-3.5 h-3.5` (14px). When no explicit `size` prop was passed, the SVG overflowed the container, blew out of circular badge borders, and broke centering.
+    - `Total Machines` (wrench) and `Active Shifts` (calendar) used low-contrast background classes with no borders, while `Active Users`, `Clients`, and `Logs Today` had distinct circular badges, creating visual inconsistency.
+    - Nested icons listened for hover locally. Hovering anywhere else on the card or button failed to trigger the icon's animation.
+  - **3. Delivered Solution**:
+    - **Sidebar Navigation (`apps/web/components/layout/sidebar/NavigationItem.tsx`)**:
+      - Attached `iconRef` and wired card-level `startAnimation()` / `stopAnimation()` on mouse enter / leave of `NavigationItem` row cards and `SidebarMenuButton`.
+      - Standardized sidebar icons to `size={16}`.
+    - **Card Base (`apps/web/components/ui/Card.tsx`)**:
+      - Extended `CardProps` with `React.HTMLAttributes<HTMLDivElement>` and forwarded `{...props}` to root `<div>` for full card mouse event bubbling.
+    - **Dashboard KPI Cards (`apps/web/components/dashboard/shared/KPICard.tsx`)**:
+      - Added card-level hover animation via `iconRef` on both `<Card>` and `<Link>`.
+      - Standardized circular icon badge container to `w-8 h-8 rounded-full flex items-center justify-center shrink-0` with `size={16}` and `className="w-4 h-4 shrink-0"`.
+      - Upgraded `variantStyles` backgrounds and borders (`bg-sky-500/15`, `bg-amber-500/15`, etc.) so `Total Machines` (sky/wrench) and `Active Shifts` (amber/calendar) have visible, balanced backgrounds matching `Active Users`, `Clients`, `Logs Today`.
+    - **Primary Actions, Alerts Widget & Status Cards (`PrimaryAction.tsx`, `AlertWidget.tsx`, `StatusCard.tsx`)**:
+      - Standardized icon sizes to `size={20}` (PrimaryAction) and `size={16}` (AlertWidget, StatusCard).
+      - Wired card hover micro-interactions via `ref.current.startAnimation()`.
+    - **Flyout & Drawer Sidebar Consistency**:
+      - Standardized `size={16}` in `CollapsedSidebarFlyout.tsx` and `MobileSidebarDrawer.tsx`.
+    - **Type Hardening**:
+      - Updated `MetricIconType` in `apps/web/components/ui/MetricCard.tsx` to `React.ComponentType<any>`.
+      - Typed `filterIconRef`, `resetIconRef`, `moreIconRef`, `cardsIconRef`, and `tableIconRef` in `FilterToolbar.tsx` and `MachineListClient.tsx` to satisfy imperative handle typing.
+  - **4. Verification**:
+    - `pnpm --filter @reachinternational/web typecheck` (0 errors).
+    - `pnpm --filter @reachinternational/mobile typecheck` (0 errors).
+
+- **Persist Search & Filter Query Parameters in URL & Service Worker Anti-Caching Policy (2026-09-24)**:
+  - **1. User Request**:
+    - "Persist Search & Filter Query Parameters in URL: The users page (users-client.tsx) uses query parameters (?page=1&role=all&search=...). Now that reloads preserve the active URL, all active filter states will remain intact when refreshing. Service Worker / Offline Caching: Ensure any future service worker or PWA caching strategies avoid caching navigation redirect headers on dynamic App Router pages."
+  - **2. Root Cause Analysis**:
+    - `users-client.tsx` maintained `localSearchTerm` as purely isolated local React state disconnected from initial `searchParams` on mount, causing the search box and results to reset to empty on page reloads even if the URL contained parameters.
+    - `executeServerSearch` performed asynchronous DAL lookups but never updated the browser address bar with `?search=...`, meaning refreshing lost the user's active search keyword.
+    - If Service Workers or PWA caching caches navigation redirect responses (HTTP `307`/`308`), users can become permanently trapped in redirect loops during authentication or permission state transitions.
+  - **3. Delivered Solution**:
+    - **Search & Filter URL Persistence (`apps/web/app/(app)/users/users-client.tsx`)**:
+      - Initialized `localSearchTerm` directly from `searchParams?.get("search") || ""` on initial mount.
+      - Initialized `searchResults`, `searchTotalCount`, `searchTotalPages`, and `searchPage` directly from `searchParams?.get("search") ? users : null`, eliminating initial empty state flicker on reload.
+      - Updated `executeServerSearch` to synchronize `?search=` and `?page=` to browser URL via `window.history.replaceState(null, "", ...)` without triggering expensive RSC flight tree re-fetches.
+      - Updated `updateFilter`, `handlePageChange`, and `resetFilters` to read and preserve the active search query parameter and properly update URL state.
+      - Added synchronization effects for browser back/forward navigation (`popstate`).
+    - **Service Worker & Edge Redirect Anti-Caching Strategy (`apps/web/proxy.ts`, `apps/web/next.config.ts`)**:
+      - Enhanced `createRedirectResponse` in `apps/web/proxy.ts` to inject strict anti-caching headers on all navigation redirects (`307`/`308`/`302`):
+        `Cache-Control: no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0`, `Pragma: no-cache`, `Expires: 0`, `CDN-Cache-Control: no-store`, `Vercel-CDN-Cache-Control: no-store`.
+      - Added dynamic route cache-control headers in `apps/web/next.config.ts` under `headers()` matching all authenticated application routes (`/dashboard`, `/users`, `/machines`, `/operations`, `/clients`, `/payroll`, `/profile`, `/settings`, etc.) with `no-store, no-cache, must-revalidate`.
+      - Codified architectural and performance rules in `AI/RULES/ARCHITECTURE.md` (Section 31) and `AI/RULES/PERFORMANCE.md` (Section 40) strictly prohibiting Service Workers and PWA caches from caching dynamic App Router routes and navigation redirect headers.
+  - **4. Verification**:
+    - Automated Browser Subagent Session (`verify_users_filters_persist_1790235734790.webp`):
+      - Navigated to `http://localhost:3000/users` -> typed `"admin"`.
+      - URL dynamically updated to `http://localhost:3000/users?search=admin`.
+      - Refreshed browser via `location.reload()`.
+      - URL remained intact as `http://localhost:3000/users?search=admin` without redirecting to `/dashboard`.
+      - Search box retained `"admin"`, and matching admin rows rendered immediately.
+      - Clicked "Reset" button -> URL reverted to clean `/users`, search input cleared, and full directory restored.
+    - TypeScript Quality Gate:
+      - `pnpm --filter @reachinternational/web typecheck` (0 errors).
+      - `pnpm --filter @reachinternational/mobile typecheck` (0 errors).
+      - `pnpm --filter @reachinternational/permissions test` (3/3 passed).
+
+- **Prevent Unwanted Redirection to Home Page on Page Reload (2026-09-24)**:
+  - **1. User Request**:
+    - "only in the desktop user when user in the user page and then reload the page then page load and directed to the home page but user want to keep in the user page after reload the page make sure dont redirect to home page unnecessory only first time open the website or after signin then directed to the home page fix this first find the root cause and analyste the codebase and then fix this"
+  - **2. Root Cause Analysis**:
+    - `apps/web/components/layout/BrowserLifecycleManager.tsx` contained an `useEffect` listening for browser reload events via `window.performance.getEntriesByType("navigation")[0]?.type === "reload"`.
+    - When a desktop user refreshed the page (F5 / Cmd+R / reload button), `detectBrowserReload()` returned `true`, and it called `router.replace(roleHome)` (`/dashboard`), prematurely aborting the user's location on `/users` (or any other page) and redirecting to Home.
+    - Non-existent exports (`CircleAlertIcon`, `CircleXIcon`) from `@animateicons/react/lucide` in `apps/web/components/icons/index.ts` also caused compile errors when rendering components that resolve through `empty-icons.tsx`.
+  - **3. Delivered Solution**:
+    - **Removed Reload Redirection**:
+      - Refactored `apps/web/components/layout/BrowserLifecycleManager.tsx` to remove the reload interceptor.
+      - Removed `<BrowserLifecycleManager />` component invocation and import from `apps/web/app/(app)/layout.tsx`.
+      - Kept authoritative home redirection in `proxy.ts` and `app/page.tsx` for initial site visits to root `/` when authenticated.
+      - Kept post-login redirection in `apps/web/app/actions/auth.ts`.
+    - **Icons Bridge Hardening**:
+      - Removed non-existent `CircleAlertIcon` and `CircleXIcon` from `@animateicons/react/lucide` in `apps/web/components/icons/index.ts`.
+      - Added fallback aliases for `CircleAlert`, `CircleAlertIcon`, `CircleX`, `CircleXIcon`, `ZoomIn`, and `ZoomOut` in `apps/web/components/ui/empty-icons.tsx`.
+  - **4. Verification**:
+    - Real browser session test verified:
+      - Navigating to `/users` and reloading -> stays on `/users`.
+      - Navigating to `/machines` and reloading -> stays on `/machines`.
+      - Visiting root domain `/` -> redirects to `/dashboard`.
+    - Typecheck passed with 0 errors across `@reachinternational/web` and `@reachinternational/mobile`.
+    - Permissions unit tests passed (3/3 pass).
+
+- **Complete Animated Icons Migration from lucide-animated.com & @animateicons/react (2026-09-24)**:
+  - **1. User Request**:
+    - "read all the codebase and understand how all the icon are implemented, remove all the icon from the website completely first make sure there is no icons should left, now read the https://lucide-animated.com/ and https://animateicons.in/, make sure all the icon should import from these and make all the icon at their default settins dont touch it just import and use in the website, make sure everyicon should properly impoted and used where needs"
+    - "yes move to step 2, import directly instead of hardcoded: pnpm dlx shadcn add @lucide-animated/at-sign or npx shadcn add @lucide-animated/battery, if icon not found then use npm i @animateicons/react"
+  - **2. Root Cause Analysis**:
+    - The repository previously had custom CSS `@keyframes` animations (`icon-pulse`, `icon-spin`, `icon-bounce`, `icon-shake`, `icon-gear`, `icon-bell`, `icon-arrow`) and `.interactive-icon` CSS rules in `apps/web/app/globals.css` that created jittery hover animations and artificial transforms.
+    - Custom wrapper shims in `components/ui/animated-icon.tsx` were applying forced scales (`scale(1.09)`) and hover triggers.
+  - **3. Delivered Solution**:
+    - **Step 1 (Cleanup & Strip)**:
+      - Audited all 209 icon imports across 162 files into `scratch/icon-manifest.json` and `scratch/clean-mapping.json`.
+      - Stripped 324 lines of custom keyframe animations and interactive CSS rules from `apps/web/app/globals.css`.
+    - **Step 2 (Official Animated Icons Integration)**:
+      - Added `@lucide-animated` registry to `apps/web/components.json`.
+      - Installed `@animateicons/react@0.5.0` in `apps/web/package.json`.
+      - Downloaded 66 matching animated icon components directly from `lucide-animated.com` into `apps/web/components/icons/*.tsx`.
+      - Enhanced all components with standard props (`size`, `strokeWidth`, `isSpinning`, `className`) preserving their default internal Framer Motion animations.
+      - Integrated `@animateicons/react/lucide` for complementary icons not available on `lucide-animated.com` at default settings.
+    - **Barrels & Compatibility Bridges**:
+      - `apps/web/components/icons/index.ts`: Central export barrel for all 66 components plus complementary icons.
+      - `apps/web/components/ui/animated-icons/index.ts`: Re-export barrel for animated icons at default settings.
+      - `apps/web/components/ui/empty-icons.tsx`: Lucide compatibility bridge aliased in `tsconfig.json` and `next.config.ts`.
+      - `apps/web/components/ui/animated-icon.tsx`: Direct passthrough rendering icons at default settings.
+    - **Component Normalization**:
+      - `NavItem.icon` and `SubNavItem.icon` updated to `React.ComponentType<any>` in `apps/web/components/layout/sidebar/types.ts`.
+      - `GlobalCreateModal` dynamic import in `AppHeader.tsx` typed with `{ userRole: UserRole }`.
+      - Cleaned `Signal` in `EngineerMobileSection.tsx` and `AnimatedArrowRight` in `MetricCard.tsx`.
+  - **4. Verification**:
+    - Monorepo typecheck (`pnpm turbo run typecheck`): 7/7 packages successful (0 errors).
+    - Permissions test suite (`pnpm --filter @reachinternational/permissions test`): 3/3 tests passed.
+    - Dev server HTTP routes (`/`, `/login`, `/dashboard`, `/machines`, `/operations`, `/users`): all returned HTTP 200 OK.
+
+- **Fix GoTrue Auth Null Token Scan Error for Dev Database Users (2026-09-24)**:
+  - **1. User Request**:
+    - "why this id and pass show wrong in the dev supabase" / "retyr"
+  - **2. Root Cause Analysis**:
+    - When test users were seeded via SQL into `auth.users`, token columns (`confirmation_token`, `recovery_token`, `email_change_token_new`, `email_change`) were set to `NULL`.
+    - Supabase GoTrue daemon (written in Go) failed when scanning user records because Go's `database/sql` driver cannot scan SQL `NULL` into a primitive Go string struct field:
+      `sql: Scan error on column index 3, name "confirmation_token": converting NULL to string is unsupported` (HTTP 500).
+    - Next.js Server Action (`apps/web/app/actions/auth.ts`) caught this error and fell through to displaying `"Invalid email or password."`.
+  - **3. Delivered Solution**:
+    - Updated all users in `auth.users` on the Dev Supabase database (`vlmxciuogczumumrwyot`) using `COALESCE(column, '')` so no token fields are `NULL`.
+    - Refactored `apps/web/app/actions/auth.ts` to distinguish 500 server errors from 400 invalid credential errors.
+  - **4. Verification**:
+    - Direct node auth script confirmed successful login across all roles (`admin`, `superadmin`, `manager`, `supervisor`, `hr`, `operator`).
+    - Full end-to-end browser login test confirmed navigating to `/login`, logging in as `admin@reachinternational.co.in`, and redirecting seamlessly to `/dashboard` with header `"Good morning, Admin User Dev"`.
+    - Monorepo typecheck passed cleanly with 0 errors.
+
+- **Completely Remove Email (SendGrid) and WhatsApp (Twilio) Notifications (2026-09-24)**:
+  - **1. User Request**:
+    - "i removed email and whatsapp notification (twillio) so you removed all the implementation related to email and whatsapp mesaage"
+  - **2. Delivered Solution**:
+    - **Removed Actions**:
+      - Removed admin email notification block from `apps/web/app/actions/auth.ts` (`requestAccess`).
+      - Removed all email notification calls from `apps/web/app/actions/users.ts` (`approveUser`, `rejectUser`, `createUser`, `resetUserPassword`, `bulkApproveUsers`, `bulkRejectUsers`).
+      - Removed all imports from `@/lib/email`.
+    - **Deleted Library Service**:
+      - Deleted `apps/web/lib/email.ts` (`@sendgrid/mail`, `sendEmail`, `sendEmailWithTracking`, templates).
+    - **Environment Configuration**:
+      - Cleaned `apps/web/lib/env.ts`: removed `getSendGridApiKey()`, `getSendGridFromEmail()`, `getSendGridFromName()`, `getTwilioConfig()`, and `env.sendgrid`, `env.twilio`.
+      - Cleaned `apps/web/.env.local` and `apps/web/.env.example`: removed all `TWILIO_*` and `SENDGRID_*` environment variables.
+    - **NPM Package Pruning**:
+      - Removed `@sendgrid/mail` and `twilio` from `apps/web/package.json`.
+      - Ran `pnpm install`: pruned 29 packages from lockfile and `node_modules`.
+  - **3. Verification**:
+    - `pnpm --filter @reachinternational/web typecheck` passed with 0 errors (`$ tsc --noEmit`).
+
+- **Diagnose & Fix Localhost Showing Production Data & Centralize Runtime Environment Variables (2026-09-24)**:
+  - **1. User Request**:
+    - "here i use only dev supabase credential then why in local host it show the read users and data, production supabase credential i set only in the vercel(production env), if i run localhost then it should show only dev db data, find the root cause and fix this, also make sure in overall website dont use hardcoded env variable"
+  - **2. Root Cause Analysis**:
+    - `apps/web/.env.local` existed on disk and contained production Supabase credentials (`dhbbgfzbyatzvqafnsqp`). Under Next.js precedence rules, `.env.local` strictly overrides `.env`.
+    - Monorepo root `.env` was also configured with production Supabase credentials (`dhbbgfzbyatzvqafnsqp`).
+    - The running dev server process had cached old environment variables in memory.
+  - **3. Delivered Solution**:
+    - **Synchronized `.env.local`**: Configured `apps/web/.env.local` to point to the Dev Supabase project (`vlmxciuogczumumrwyot`) and `http://localhost:3000`, while preserving Twilio, SendGrid, and Cron secrets.
+    - **Synchronized Monorepo `.env`**: Set root `.env` to point exclusively to the Dev Supabase project (`vlmxciuogczumumrwyot`) and `http://localhost:3000`.
+    - **Centralized Environment Module (`apps/web/lib/env.ts`)**:
+      - Added typed getters for SendGrid (`getSendGridApiKey()`, `getSendGridFromEmail()`, `getSendGridFromName()`).
+      - Added typed getters for Twilio (`getTwilioConfig()`).
+      - Added typed getters for Upstash Redis (`getUpstashRedisConfig()`).
+      - Exposed consolidated namespaces on `env` object (`env.sendgrid`, `env.twilio`, `env.upstash`).
+    - **Eliminated Ad-hoc / Hardcoded Reads Across Web App**:
+      - Refactored `apps/web/lib/email.ts` to consume `env.sendgrid`.
+      - Refactored `apps/web/lib/security/internal-auth-token.ts` to consume `getSupabaseSecretKey()` from `@/lib/env`.
+      - Refactored `apps/web/lib/security/rate-limiter.ts` to consume `env.upstash` from `@/lib/env`.
+      - Confirmed zero hardcoded Supabase project URLs across `apps/web`.
+  - **4. Verification**:
+    - `pnpm --filter @reachinternational/web typecheck` passed with 0 errors.
+    - Dev server environment reloaded and verified.
+
+- **Establish Authoritative Supabase Environment Isolation & Production Protection Rule (2026-09-24)**:
+  - **1. User Request**:
+    - "Target Identification & Isolation: Organization: ljzofzlvjtfiqoffaaua, Development Project (Target): vlmxciuogczumumrwyot (Reach International Dev), Production Project (Protected): dhbbgfzbyatzvqafnsqp (Reach International Production) — strictly untouched. make a rule while developmetn dont touch the dhbbgfzbyatzvqafnsqp (Reach International Production) supabase project, only use vlmxciuogczumumrwyot (Reach International Dev) database to push the migration and other"
+  - **2. Delivered Solution**:
+    - Embedded the binding Supabase Environment Isolation rule across all 5 governing monorepo rule and memory documents:
+      1. `AGENTS.md` (root - read on every session and task).
+      2. `.agents/rules/mandatory_rules_reading_and_enforcement.md` (Section 4).
+      3. `AI/RULES/DEPLOYMENT-DEVOPS-RELEASE.md` (Section 7).
+      4. `AI/RULES/SECURITY.md` (Section 48).
+      5. `AI/PROJECT_MEMORY.md` (Fundamental Architectural Rule 20).
+    - Established that `dhbbgfzbyatzvqafnsqp` (Production) is strictly protected and must never be altered during development, while `vlmxciuogczumumrwyot` (Development) is the sole target for migrations, SQL execution, schema updates, and test data seeding.
+    - Mandated explicit `project_id: "vlmxciuogczumumrwyot"` verification on all Supabase MCP tool invocations.
+
+- **Seed Dev Project with Users, Machinery, Clients, Assignments & Logs via Supabase MCP (2026-09-24)**:
+  - **1. User Request**:
+    - "use supabase mcp and in the reach dev project add test user super admin(1) , admin(1) , manage(1) , hr (1 ) , supervisor (1) , operator(100) role users, machine (30) , client (5 ), auto matically all operator should under 1 supervisor, auto assing 100 operator and 30 machine to different client, also seed the all 100 operator logs of sep 1 to sept 24, make sure all the data seed properly, strickly make sure this seed only apply in the reachinternational dev project"
+  - **2. Target Project Isolation**:
+    - Strictly verified and isolated actions to Development project `vlmxciuogczumumrwyot` (`Reach International Dev`).
+    - Verified Production project `dhbbgfzbyatzvqafnsqp` remained completely untouched (84 users, 2 clients, 19 machines, 400 logs).
+  - **3. Schema Parity Hardening**:
+    - Added `street` column to `public.users` in development to eliminate trigger error in `handle_new_user()`, matching production schema.
+  - **4. Delivered Solution**:
+    - **Clients Master**: 5 clients created with unique codes `CLI-0001` through `CLI-0005` (Tata Projects, L&T, Reliance Infra, Afcons, Shapoorji Pallonji).
+    - **Users & Auth**: 105 total users seeded in both `auth.users`, `auth.identities` and `public.users` with standard test password `Password@123`.
+      - 1 `super_admin` (`superadmin@reachinternational.co.in`)
+      - 1 `admin` (`admin@reachinternational.co.in`)
+      - 1 `manager` (`manager@reachinternational.co.in`)
+      - 1 `hr` (`hr@reachinternational.co.in`)
+      - 1 `supervisor` (`supervisor@reachinternational.co.in`)
+      - 100 `operator` (`operator001@reachinternational.co.in` through `operator100@reachinternational.co.in`) with mandatory monthly salaries (`₹28,000.00`), daily rates, OT rates, and complete KYC profiles.
+    - **Supervisor Relational Hierarchy**: All 100 operators mapped to the 1 supervisor via `users.supervisor_id` and 100 rows in `public.user_supervisors`.
+    - **Machinery Fleet**: 30 machines seeded (`RI-MC-0001` through `RI-MC-0030`) partitioned equally (6 machines per client) with realistic industrial equipment models (JCB 3DX, Genie GS-1930, ACE FX-150, Hyundai 210, CAT 320D, Godrej GX 300D).
+    - **Operator Machine Assignments**: 100 assignments seeded across the 30 machines (20 operators per client). Respected `trg_enforce_max_operators_per_machine` capacity guard (90 active, 10 completed/shift-changed).
+    - **Operational Machine Hour Logs**: 2,400 daily logs seeded for all 100 operators from September 1 to September 24, 2026 (exactly 100 logs per day, exactly 24 logs per operator). Monotonically increasing hour meters, non-overlapping shifts, realistic working hours (4.8h - 5.5h), and synced machine hour meters.
+  - **5. Verification**:
+    - Supabase MCP SQL verification confirmed: 105 users, 5 clients, 30 machines, 100 assignments, 2,400 logs.
+    - Dashboard read model RPCs tested: `get_super_admin_dashboard()` returned 105 users, 5 clients, 30 active machines, 90 active assignments, 100 today logs with 0 alerts; `get_supervisor_dashboard()` returned 30 machines, 100 operators, 100 submitted logs with 0 alerts.
+    - Production project verified untouched.
+
+- **Sync Database Schema to Development Instance via Supabase MCP (2026-09-23)**:
+  - **1. User Request**:
+    - "Sync Schema to Dev: Apply existing migrations (001 through 102) to the Development database so it mirrors Production. use supabase mcp"
+  - **2. Root Cause Analysis & Migration Hardening**:
+    - Discovered both Supabase projects under Organization `ljzofzlvjtfiqoffaaua`: Production (`dhbbgfzbyatzvqafnsqp`) and Development (`vlmxciuogczumumrwyot`).
+    - Development database was completely empty (0 tables).
+    - Five migration files (`026`, `034`, `054`, `064`, `089`) contained UTF-8 BOM (`\uFEFF`), triggering Postgres `ERROR 42601: syntax error at or near "\ufeff"`.
+    - Migration `004` lacked `shift` and `machine_condition` columns in `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, which were expected by downstream migrations `022`, `044`, etc.
+    - Migration `028` attempted to create a GIN trigram index before `pg_trgm` was enabled. Added `CREATE EXTENSION IF NOT EXISTS "pg_trgm";`.
+    - Migration `050` used `v_machine_client_id` in `submit_operator_hour_log_atomic` without declaring it in the `DECLARE` block.
+    - Migration `064` attempted an unconditional update on a quoted `"Street"` column which did not exist on fresh instances. Wrapped in a conditional `DO $$` block.
+  - **3. Delivered Solution**:
+    - Executed all 103 migrations (`001` through `103`) sequentially to the Development database.
+    - All 20 public tables successfully initialized with Row Level Security (RLS) enabled.
+    - Initialized private storage bucket `user_files`.
+    - Initialized all 270 RPC functions and stored procedures.
+    - Tracked 103 migrations in `supabase_migrations.schema_migrations`.
+  - **4. Verification**:
+    - Supabase MCP `list_tables` confirmed 20 tables with RLS active.
+    - Supabase MCP `list_migrations` confirmed 103 tracked migrations.
+    - `pnpm --filter @reachinternational/web typecheck` (0 errors).
+    - `pnpm --filter @reachinternational/mobile typecheck` (0 errors).
+
+- **Fix Sidebar Collapse / Expand Flex Overflow, Jitter & Transition Synchronization (2026-09-23)**:
+  - **1. User Request & Feedback Context**:
+    - Page: `/operations?view=operator&operator=32f8c5f8-861c-4df6-bc4b-23a0fa5e8f2a&month=09` (Viewport: 1536×695)
+    - Component: `<AppShellClient> <AppSidebar> <Sidebar> <SidebarNavigation> <SidebarContent> flex overflow`
+    - Feedback: "side bar animation still broken fix this too"
+  - **2. Root Cause Analysis**:
+    - `NavigationItem.tsx` used split render branches (`if (collapsed) return <CollapsedMode />`). When toggling collapse/expand, React immediately unmounted the entire DOM tree and swapped it for completely different markup at `t = 0ms`. Expanding from 72px immediately forced 240px of content into a 48px container, resulting in a severe horizontal flex overflow and text snapping.
+    - `SidebarContent` had `overflow-y-auto` but lacked `overflow-x-hidden min-w-0`.
+    - Main column padding used `md:pl-[var(--sidebar-width)]` where `--sidebar-width` was an inline style variable. CSS transitions cannot interpolate raw variable changes, so the workspace snapped in 0ms while the sidebar took 200ms to animate.
+    - `AnimatedGauge` had preset `"rotate"`, causing the speedometer to tilt 30 degrees sideways on hover.
+  - **3. Delivered Solution**:
+    - `apps/web/components/layout/sidebar/NavigationItem.tsx`:
+      - Replaced split render branches with a unified permanent DOM structure.
+      - Used fluid CSS transitions for labels (`opacity-0 w-0 max-w-0 ml-0` to `opacity-100 flex-1 ml-3`) and chevrons.
+      - Replaced fixed `w-11` buttons with responsive `w-full h-10 px-3`.
+      - Passed explicit `size={16}` to `<Icon />` and updated `types.ts`.
+    - `apps/web/components/ui/sidebar.tsx`:
+      - Added `overflow-x-hidden min-w-0` to `SidebarContent`.
+      - Added `overflow-hidden` to `SidebarGroup`, `SidebarMenu`, and `SidebarMenuItem`.
+      - Converted `SidebarGroupLabel` to a smooth height/opacity transition.
+      - Standardized `SidebarMenuButton` with `w-full h-10 px-3 overflow-hidden transition-all duration-200`.
+    - `apps/web/components/layout/AppShellClient.tsx`:
+      - Replaced custom property padding with `collapsed ? "md:pl-[72px]" : "md:pl-[280px]"` and `transition-[padding-left] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]`.
+    - `apps/web/components/layout/sidebar/QuickAccessTrigger.tsx` & `UserProfileDropdown.tsx`:
+      - Unified buttons and smoothed text/icon transitions.
+    - `apps/web/components/ui/animated-icons/index.ts`:
+      - Updated `AnimatedGauge` preset to `"scale"`.
+  - **4. Verification**:
+    - `pnpm --filter @reachinternational/web typecheck` (0 errors, exit 0).
+    - Mobile TypeScript check (0 errors, exit 0).
+
+- **Fix Settings Icon Hover Glitch, Remove Infinite Icon Animations & Refine Micro-Interactions (2026-09-23)**:
+  - **1. User Request & Feedback Context**:
+    - Settings gear icon appeared broken/jagged/distorted on hover (from screenshot `media_1790159569759.png`).
+    - Remove infinite animations across all icons; ensure all animations run smoothly and only ONE time per hover.
+    - Page feedback `/dashboard` at `<UserProfileDropdown>`: remove the arrow icon bouncing animation.
+    - Remove icon animations from dropdown selection tabs, select inputs, filter bars, and table headers.
+    - Stop blanket animations on every icon — only icons that intentionally specify an interactive verb should animate.
+  - **2. Root Cause Analysis**:
+    - `NavigationItem.tsx` forced `interactive-icon icon-bounce` (`scale(1.09) !important`) on `<Icon />`.
+    - `AnimatedSettings` had preset `"gear"` mapped to `"icon-rotate"` (`rotate(30deg) !important`), while `[data-interactive-icon="gear"]` also applied `rotate(45deg) !important`.
+    - Framer Motion was simultaneously applying spring transform calculations in JS.
+    - Fractional scaling of 16px gear (17.44px) at an angle caused SVG rasterization distortion and tooth clipping.
+    - CSS declared `iconSmoothSpin ... infinite` and `iconSubtlePulse ... infinite`.
+  - **3. Delivered Solution**:
+    - `apps/web/components/layout/sidebar/UserProfileDropdown.tsx`: Replaced `AnimatedChevronDown` with static `ChevronDown`.
+    - `apps/web/components/layout/sidebar/NavigationItem.tsx`: Removed `interactive-icon icon-bounce` from `<Icon />`; replaced folder chevron with static `ChevronDown`.
+    - Dropdown Controls: Replaced `AnimatedChevronDown` / `AnimatedChevronUp` with standard `ChevronDown` / `ChevronUp` in `Select`, `SearchableSelect`, `UserSelect`, `MultiUserSelect`, `MultiSelect`, `MachineSelect`, `ClientSelect`, `MonthSelect`, `FilterDropdown`, `FilterToolbar`, `EnterpriseTable`, `UsersHeader`, `UsersFilters`, `ProfileChangeRequestsSection`, `PublicNavbar`, and `OperatorDashboard`.
+    - Tabs & Buttons: Removed forced icon animation wrappers from `SegmentedToggle.tsx`, `Tabs.tsx`, `Button.tsx`, `IconButton.tsx`, `MetricCard.tsx`, and `CommandPalette.tsx`.
+    - CSS & Motion Library (`globals.css` & `animated-icon.tsx`):
+      - Added `overflow: visible; backface-visibility: hidden; -webkit-font-smoothing: antialiased;` to all interactive icons.
+      - Removed all conflicting `!important` flags on interactive icon transforms.
+      - Created clean `.icon-gear` / `[data-interactive-icon="gear"]` rule with 45° rotation and `.group/nav` support without scaling.
+      - Removed `[role="tab"]` and `.group/tab` from hover trigger selectors.
+      - Clamped pulse, bell, and shake keyframes to 1 iteration (`animation: ... 1;`).
+      - Clamped hover `.icon-spin` to single smooth 180° rotation, reserving infinite spin strictly for `.animate-spin` and `.icon-spin-infinite`.
+      - Prevented `interactive-icon` class application when interaction is `"none"`.
+  - **4. Verification**:
+    - `pnpm --filter @reachinternational/web typecheck` (0 errors).
+    - Mobile consistency verified.
+
+- **Enforce User Profile Editing Exclusively on Profile Page & Remove Edit Icons Outside /profile (2026-09-23)**:
+  - **1. User Request & Feedback Context**:
+    - Page: `/settings` (Viewport: 1536×695)
+    - Component: `<AnimatePresence> <PresenceChild> <PopChild> <PopChildMeasure> <motion.div> <UserProfileCard> button [Edit Profile]`
+    - Feedback: "remove this edit icon from here, user can edit only from the profile page"
+  - **2. Delivered Solution**:
+    - **Web Application (`apps/web`)**:
+      - `apps/web/components/profile/UserProfileCard.tsx`:
+        - Removed `EditProfileModal` dynamic import, `editModalOpen` state, and `handleEditClick`.
+        - Removed the top-right absolute-positioned edit icon button (`<Edit size={13} />`).
+        - Replaced with subtle `ChevronRight` affordance indicating the card navigates directly to `/profile`.
+        - Removed `<EditProfileModal>` dialog instance and adjusted container padding.
+      - `apps/web/components/profile/UserProfileHeaderCard.tsx`:
+        - Removed `EditProfileModal` dynamic import and `editModalOpen` state.
+        - Replaced the action edit icon button with `<Link href="/profile">` containing `<ChevronRight size={16} />`, providing intuitive navigation to the full profile page.
+    - **Mobile Application Cross-Platform Synchronization (`apps/mobile`)**:
+      - `apps/mobile/app/(app)/settings.tsx`:
+        - Removed `EditProfileModal` import, `editProfileVisible` state, and modal dialog.
+        - Replaced `<Edit size={15} />` in profile touch card with `<ChevronRight size={15} color={theme.colors.mute} />`.
+        - Replaced inline edit modal trigger in Account Details modal with primary navigation button `"View & Edit Full Profile"` linking to `/(app)/profile`.
+      - `apps/mobile/app/(app)/more.tsx`:
+        - Replaced `<Edit size={15} />` in profile touch card with `<ChevronRight size={15} color={theme.colors.mute} />`.
+        - Removed unused `Edit` icon import.
+      - `apps/mobile/components/navigation/MobileProfileSheet.tsx`:
+        - Removed `EditProfileModal` import, `editProfileOpen` state, and modal dialog.
+        - Updated primary action button to `"View & Edit Full Profile"` navigating to `/(app)/profile`.
+  - **3. Verification**:
+    - `pnpm --filter @reachinternational/web typecheck` (0 errors, exit 0)
+    - `node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit` in `apps/mobile` (0 errors, exit 0)
+    - `pnpm --filter @reachinternational/permissions test` (3/3 pass, exit 0)
+
+- **User Lifecycle Forms Harmonization, Optimization & Canonical Address Gating (2026-09-23)**:
+  - **1. User Request**:
+    - Unify and optimize 4 critical user lifecycle forms across both Web (`apps/web`) and Mobile (`apps/mobile`):
+      1. Signup Page (`/signup` & mobile `(auth)/signup.tsx`)
+      2. Onboarding Page (`/onboarding` & mobile `(auth)/onboarding.tsx`)
+      3. Edit Profile Modal / Page (`/profile` & mobile `EditProfileModal.tsx`)
+      4. Add / Edit User via Admin (`/users` -> `UserCreateModal.tsx` & `UserEditModal.tsx` / mobile `CreateUserModal.tsx` & `UserEditModal.tsx`)
+    - Monorepo requirements: Canonical address sequence (`street` + `city` + `district` + `state`), standardized salary input box, explicit Mandatory vs Optional indicators with completion checkmarks, submit button disabled/gated when inputs are incomplete, submit button double-click / rapid tap lock, zero duplicated component code across forms, and removal of legacy dead components and inlined pickers.
+  - **2. Delivered Solution**:
+    - **Validation Package (`packages/validation/src/auth.ts`)**:
+      - Added `monthly_salary: z.number().min(0, "Monthly salary must be positive").optional().nullable()` to `SignupSchema`, `ProfileUpdateSchema`, and `OnboardingProfileSchema`.
+    - **Shared Web Form Components (`apps/web/components/forms/`)**:
+      - `UserAddressSection.tsx`: Canonical address sequence (`street` + `city` + `district` + `state`), automatic `address` mirroring, responsive grid layout.
+      - `UserSalaryField.tsx`: Standardized ₹ INR currency prefix, role-based helper, operator mandatory enforcement.
+      - `FormSectionCard.tsx`: Card container with step number, title, description, `Mandatory` vs `Optional` badges, and dynamic `Completed` checkmark.
+      - `FormSubmitButton.tsx`: Disabled/locked state while required fields are missing, missing field count badge, and double-submit lock.
+    - **Shared Mobile Form Components (`apps/mobile/components/forms/`)**:
+      - `MobileAddressFields.tsx`: Canonical address layout with integrated Indian state selector modal & real-time search.
+      - `MobileSalaryField.tsx`: Pre-formatted ₹ INR salary box with operator-mandatory validation.
+      - `MobileFormSectionCard.tsx`: Native card container with step badge, section headers, mandatory tags, and completion checkmarks.
+      - `MobileSubmitButton.tsx`: Non-responsive when incomplete, remaining count badge, loading spinner, and double-tap prevention lock.
+    - **Web Surfaces Synchronized**:
+      - `apps/web/app/signup/page.tsx`
+      - `apps/web/app/onboarding/OnboardingClient.tsx`
+      - `apps/web/components/profile/EditProfileModal.tsx`
+      - `apps/web/app/(app)/users/UserCreateModal.tsx`
+      - `apps/web/app/(app)/users/UserEditModal.tsx`
+      - `apps/web/app/actions/` (`auth.ts`, `onboarding.ts`, `profile.ts`)
+    - **Mobile Surfaces Synchronized**:
+      - `apps/mobile/app/(auth)/signup.tsx`
+      - `apps/mobile/app/(auth)/onboarding.tsx`
+      - `apps/mobile/components/profile/EditProfileModal.tsx`
+      - `apps/mobile/components/users/CreateUserModal.tsx`
+      - `apps/mobile/components/users/UserEditModal.tsx`
+    - **Code Cleanup & Deduplication**:
+      - Eliminated repeated inlined state pickers, search modals, and duplicate styles across all 5 mobile surfaces.
+  - **3. Verification**:
+    - `pnpm --filter @reachinternational/web typecheck` (0 errors)
+    - `node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit` in `apps/mobile` (0 errors)
+    - `pnpm --filter @reachinternational/permissions test` (3/3 pass)
+
+- **Machine Details Page Supervisor Operator Assignment — Strict Operator-Only Gating (/machines/[id]) (2026-09-23)**:
+  - **1. User Request & Feedback Context**:
+    - Page: `/machines/[id]` (e.g. `/machines/e4d5aa04-2d2f-4c91-880a-09961713e401`)
+    - Component: `<MachineClientView> <FadeIn> <motion.div> <Card>` (Assigned Shift Personnel)
+    - Feedback: "allow supervisor role user to change the assign operator from the machine details page make sure it only assign the operator only"
+  - **2. Root Cause**:
+    - Full machine editing (`canEdit`) was strictly gated to `canManage` (`super_admin`, `admin`, `manager`), completely hiding the edit button on Assigned Shift Personnel from supervisors.
+    - `getActiveOperators()` was only queried when `canManage` was true, leaving `operators` empty for supervisor sessions.
+    - Server action `updateMachineOperatorsAction` did not verify that operator IDs belonged to active users with `role = 'operator'`.
+  - **3. Delivered Changes**:
+    - **Server Action Validation (`apps/web/app/actions/machines.ts` & `machine-mutations.ts`)**:
+      - Verified that all IDs passed in `operatorIds` belong to active users in `public.users` where `role === 'operator'` and `status !== 'inactive'`.
+      - Rejects non-operator assignments with error: `"Invalid assignment: Only active users with the 'operator' role can be assigned as machine operators."`
+    - **Machine Detail Route Data Fetching (`apps/web/app/(app)/machines/[id]/page.tsx`)**:
+      - Defined `isSupervisor = user.role === "supervisor"` and `canAssignOperator = canManage || isSupervisor`.
+      - Fetched active operators in `Promise.all` when `canAssignOperator` is true.
+      - Passed `canAssignOperator` to `<MachineClientView>`.
+    - **Machine Client View (`apps/web/app/(app)/machines/[id]/machine-client-view.tsx`)**:
+      - Gated Assigned Shift Personnel card edit button to `allowPersonnelEdit = allowEdit || isSupervisor || Boolean(canAssignOperator)`.
+      - Rendered `"Assign Operator"` button for supervisors (title: `"Assign Machine Operator"`).
+      - Added dedicated `"Assign Operator"` button with `AnimatedUserCheck` to the Hero machine banner.
+      - Mounted `<MachinePersonnelModal>` when `allowPersonnelEdit` is true while keeping `<MachineInfoModal>` and `<MachineClientModal>` locked to admins/managers.
+    - **Machine Personnel Modal (`apps/web/components/machines/MachineEditModals.tsx`)**:
+      - Set modal title to `"Assign Machine Operator"` when opened by a supervisor.
+      - Rendered supervisors section as a read-only informative card (`"Designated Supervisors — Managed by Administrators"`) without interactive input.
+      - Filtered `allOperators` strictly to active users with `role === "operator"`.
+      - Gated dirty state strictly to operator modifications and set primary submit button to `"Save Operator Assignment"`.
+    - **Mobile Page Header (`apps/web/components/layout/MobilePageHeader.tsx`)**:
+      - Gated machine detail more menu options: hides `"Edit Machine Info"` and `"Edit Client Assignment"` for supervisors, showing only `"Assign Operator"`.
+    - **Mobile App Synchronization (`apps/mobile`)**:
+      - In `MachineDetailView.tsx`: separated `canManage` from `canAssignOperator`, gated Basic Info/Client edits to `canManage`, and enabled `"Assign Operator"` in the Assigned Shift Personnel card.
+      - In `MachineModal.tsx`: rendered supervisor selection read-only for supervisors, set modal title to `"Assign Operator"`, and submit button to `"Save Operator Assignment"`.
+  - **4. Verification**:
+    - `pnpm --filter @reachinternational/web typecheck` (0 errors)
+    - `@reachinternational/permissions` tests (3/3 pass)
+
+- **Supervisor Dashboard RPC Error Fix ("column supervisor_ids does not exist") (2026-09-23)**:
+  - **1. Incident & Stack Trace**:
+    - `[DAL] getSupervisorDashboard RPC error: "column \"supervisor_ids\" does not exist"`
+    - `at push.console.error (components/theme/ThemeProvider.tsx:29:17)`
+    - `at console.error (components/theme/ThemeScript.tsx:14:17)`
+    - `at fetchCached.revalidate (lib/data/dashboard/supervisor-dashboard.ts:32:21)`
+    - `at SupervisorDashboardView (components/dashboard/supervisor/SupervisorDashboardView.tsx:29:16)`
+    - `at DashboardPage (app/(app)/dashboard/page.tsx:41:9)`
+  - **2. Root Cause**:
+    - In migration 100 (`100_user_table_optimization_and_supervisors.sql`), redundant array column `supervisor_ids UUID[]` was dropped from `public.users` in favor of the normalized junction table `public.user_supervisors(user_id, supervisor_id)` and primary foreign key `supervisor_id`.
+    - `public.get_supervisor_dashboard(p_supervisor_id)` and `public.get_users_directory_summary(p_supervisor_id)` still queried `users.supervisor_ids`, throwing PostgreSQL error 42703 at runtime.
+  - **3. Delivered Changes**:
+    - **Database Migration 103 (`supabase/migrations/103_fix_supervisor_dashboard_and_users_directory_rpcs.sql`)**:
+      - Updated `get_supervisor_dashboard(p_supervisor_id)`: replaced obsolete `users.supervisor_ids` checks with `u.supervisor_id = v_sid OR EXISTS (SELECT 1 FROM public.user_supervisors us WHERE us.user_id = u.id AND us.supervisor_id = v_sid)`. Updated alert action URLs to canonical `/operations`.
+      - Updated `get_users_directory_summary(p_supervisor_id)`: replaced obsolete `users.supervisor_ids` checks with `user_supervisors` junction table lookup.
+      - Applied and verified against live Supabase project `dhbbgfzbyatzvqafnsqp`.
+    - **Next.js DAL Cache Key Bump (`apps/web/lib/data/dashboard/supervisor-dashboard.ts`)**:
+      - Bumped cache key to `dashboard-supervisor-v2-${supervisorId}` to flush stale error responses immediately.
+    - **Mobile Forms & Profile Alignment (`apps/mobile`)**:
+      - Aligned `MobileAddressFields.tsx`, `MobileFormSectionCard.tsx`, `MobileSubmitButton.tsx`, and `EditProfileModal.tsx`.
+  - **4. Verification**:
+    - Live Supabase execution confirmed for supervisor `6e0ba19f-43e3-43a4-ad94-f179556d1550` (18 machines, 43 operators, 8 logs submitted, 35 pending, 0 breakdowns).
+    - Monorepo-wide typechecks clean: `@reachinternational/web` (0 errors), `@reachinternational/mobile` (0 errors).
+    - `@reachinternational/permissions` tests passed (3/3 pass).
+
+- **Machines Page Personnel Assignment — Display All Operators & Supervisors from Database (/machines) (2026-09-23)**:
+  - **1. User Feedback & Request**:
+    - "while assign personel show the all list of operator and supervisor from the database" (Viewport: 1536×695, Component: `<MultiUserSelect>` button inside "Assign Shift Personnel" modal on `/machines`)
+  - **2. Root Cause**:
+    - `getActiveSupervisors()` and `getActiveOperators()` in `apps/web/lib/data/machines/machine-filters.ts` queried `shift_time` from `public.users` (dropped in migration 100 in favor of `shift_start_time` and `shift_end_time`) and queried non-existent `public.employees` table, triggering PostgREST runtime errors (42703 and 42P01) and returning empty arrays `[]`.
+    - `MachinePersonnelModal` in `apps/web/components/machines/MachineEditModals.tsx` only accepted `supervisors = []` and `operators = []` as props and had no internal fetch or fallback to load options on demand.
+    - When opened from `MachineListClient.tsx` (where options were not awaited before opening), `supervisors` and `operators` were empty arrays, causing `allSupervisors` and `allOperators` to only show the machine's currently assigned personnel (or empty) rather than the complete database roster.
+    - `machine-detail.ts`, `machine-export.ts`, and `operations-log-detail.ts` still included obsolete `shift_time` in embedded user relations.
+  - **3. Delivered Changes**:
+    - **Database Query Fix in Machine DAL (`apps/web/lib/data/machines/machine-filters.ts`)**:
+      - Refactored `getActiveSupervisors()` to query strictly valid columns (`id, full_name, phone, email, role, status, shift_start_time, shift_end_time`) for roles `['supervisor', 'manager', 'admin', 'super_admin']`, format canonical shift timing string, remove non-existent `employees` table query, add robust error handling, and bump cache key to `active-supervisors-v10` tagged with `TAGS.users`.
+      - Refactored `getActiveOperators()` to query all 74 active operators (`role = 'operator'`), format canonical shift timing string, remove non-existent `employees` table query, and bump cache key to `active-operators-v10` tagged with `TAGS.users`.
+      - Updated `getCachedMachineFilterOptions` cache key to `machine-filter-options-master-v3` with `TAGS.users`.
+    - **Self-Hydrating On-Demand Load in `MachinePersonnelModal` (`apps/web/components/machines/MachineEditModals.tsx`)**:
+      - Added internal `lazySupervisors` and `lazyOperators` state initialized from props.
+      - Implemented on-demand fetch via `getMachineModalOptionsAction()` when modal is open and options are empty, with `isLoadingOptions` state.
+      - Added dynamic loading placeholders in `<MultiUserSelect>` (`"Loading supervisors from database..."` / `"Loading operators from database..."`) while data loads.
+      - Ensured `MachineClientModal` similarly lazy-loads clients on demand via `getClientSelectOptionsAction()`.
+    - **Machine Edit Client On-Demand Hydration (`apps/web/app/(app)/machines/[id]/edit/machine-edit-client.tsx`)**:
+      - Added lazy state and automatic background option fetch via `getMachineModalOptionsAction()`.
+    - **Monorepo-Wide Column Projection Alignment**:
+      - Replaced obsolete `shift_time` with `shift_start_time, shift_end_time` in `machine-detail.ts`, `machine-export.ts`, and `operations-log-detail.ts`.
+  - **4. Verification**:
+    - `pnpm --filter @reachinternational/web typecheck` passed (0 errors).
+    - `pnpm --filter @reachinternational/mobile typecheck` passed (0 errors).
+    - `@reachinternational/permissions` unit tests passed (3/3 pass).
+    - Direct live Supabase database verification confirmed 8 supervisors/managers/admins and 74 active operators.
+
 - **Server Action Logout Runtime Error Fix ("An unexpected response was received from the server") (2026-09-23)**:
   - **1. Incident & Stack Trace**:
     - `Runtime Error: An unexpected response was received from the server.`

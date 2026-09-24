@@ -3,6 +3,8 @@
 -- Official Government IDs: Unique, Stable Integer & Smallint Keys
 -- ==============================================================================
 
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+
 -- 1. States / UTs Table
 CREATE TABLE IF NOT EXISTS public.states (
   id SMALLINT PRIMARY KEY,

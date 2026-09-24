@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useRef } from "react";
 import Link from "next/link";
 import { motion, useReducedMotion } from "framer-motion";
 import {
@@ -29,7 +30,7 @@ import { InfoTooltip } from "./tooltip";
 import { Card } from "./Card";
 import { Sparkline } from "./Sparkline";
 
-const ICON_MAP: Record<string, React.ComponentType<{ className?: string; size?: number | string }>> = {
+const ICON_MAP: Record<string, React.ComponentType<any>> = {
   Wrench: AnimatedWrench,
   CheckCircle: AnimatedCheckCircle,
   AlertTriangle: AnimatedAlertTriangle,
@@ -49,7 +50,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string; size?: 
 
 export type MetricIconType =
   | keyof typeof ICON_MAP
-  | React.ComponentType<{ className?: string; size?: number | string }>;
+  | React.ComponentType<any>;
 
 interface MetricCardProps {
   label: string;
@@ -113,9 +114,18 @@ export function MetricCard({
   sparklineData,
   index = 0,
 }: MetricCardProps) {
+  const iconRef = useRef<{ startAnimation: () => void; stopAnimation: () => void } | null>(null);
   const reduceMotion = useReducedMotion();
   const IconComponent = typeof icon === "string" ? ICON_MAP[icon] ?? AnimatedWrench : icon;
   const styles = variantStyles[variant];
+
+  const handleMouseEnter = () => {
+    iconRef.current?.startAnimation?.();
+  };
+
+  const handleMouseLeave = () => {
+    iconRef.current?.stopAnimation?.();
+  };
 
   const cardContent = (
     <motion.div
@@ -127,6 +137,8 @@ export function MetricCard({
     >
       <Card
         padding="md"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
         className={`relative flex flex-col justify-between gap-2.5 group overflow-hidden h-full w-full ${
           href ? "cursor-pointer card-hover-system" : ""
         }`}
@@ -147,8 +159,8 @@ export function MetricCard({
           <div
             className={`flex h-7.5 w-7.5 sm:h-8 sm:w-8 items-center justify-center rounded-[var(--radius-sm)] transition-transform duration-200 group-hover:scale-105 flex-shrink-0 ${styles.iconBg}`}
           >
-            <span className="interactive-icon icon-bounce flex items-center justify-center">
-              <IconComponent className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" />
+            <span className="flex items-center justify-center">
+              <IconComponent ref={iconRef as any} size={16} className="h-4 w-4 flex-shrink-0" />
             </span>
           </div>
         </div>
@@ -195,7 +207,7 @@ export function MetricCard({
             <span className="text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity">
               View
             </span>
-            <AnimatedArrowRight size={14} trigger="parent-hover" className="interactive-icon icon-arrow" />
+            <AnimatedArrowRight size={14} />
           </div>
         )}
       </Card>

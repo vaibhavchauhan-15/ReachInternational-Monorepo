@@ -2,15 +2,12 @@
 
 import { useState, useMemo, isValidElement, ReactNode } from "react";
 import {
-  AnimatedChevronUp,
-  AnimatedChevronDown,
-  AnimatedChevronsUpDown,
   AnimatedCopy,
   AnimatedCheck,
   AnimatedSlidersHorizontal,
   AnimatedDownload,
 } from "./animated-icons";
-import { Download } from "lucide-react";
+import { Download, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { EmptyState } from "./EmptyState";
 import { InfoTooltip, TooltipWrapper } from "./tooltip";
 import { motion, AnimatePresence } from "framer-motion";
@@ -401,12 +398,12 @@ export function EnterpriseTable<T extends { id: string | number }>({
                       <span className="text-[var(--color-mute)] shrink-0">
                         {sortColumn === col.id ? (
                           sortDirection === "asc" ? (
-                            <AnimatedChevronUp size={12} className="text-[var(--color-ink)]" />
+                            <ChevronUp size={12} className="text-[var(--color-ink)]" />
                           ) : (
-                            <AnimatedChevronDown size={12} className="text-[var(--color-ink)]" />
+                            <ChevronDown size={12} className="text-[var(--color-ink)]" />
                           )
                         ) : (
-                          <AnimatedChevronsUpDown size={12} className="opacity-40 hover:opacity-100" />
+                          <ChevronsUpDown size={12} className="opacity-40 hover:opacity-100" />
                         )}
                       </span>
                     )}

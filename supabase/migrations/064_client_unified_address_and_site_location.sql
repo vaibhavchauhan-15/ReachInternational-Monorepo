@@ -1,4 +1,4 @@
-﻿-- ==============================================================================
+-- ==============================================================================
 -- Migration 064: Client Unified Address & Multi-Site Location Architecture
 -- 1. Ensures street (lowercase) column exists on public.clients and syncs with "Street".
 -- 2. Adds address text column to public.clients storing full unified address:
@@ -66,17 +66,35 @@ CREATE TRIGGER trg_sync_client_address
   EXECUTE FUNCTION public.sync_client_address();
 
 -- 4. Backfill existing clients
-UPDATE public.clients
-SET 
-  street = COALESCE(NULLIF(btrim(street), ''), NULLIF(btrim("Street"), '')),
-  "Street" = COALESCE(NULLIF(btrim("Street"), ''), NULLIF(btrim(street), '')),
-  address = concat_ws(', ',
-    NULLIF(btrim(COALESCE("Street", street)), ''),
-    NULLIF(btrim(city), ''),
-    NULLIF(btrim(district), ''),
-    NULLIF(btrim(state), ''),
-    NULLIF(btrim(pincode), '')
-  );
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'clients' AND column_name = 'Street'
+  ) THEN
+    UPDATE public.clients
+    SET 
+      street = COALESCE(NULLIF(btrim(street), ''), NULLIF(btrim("Street"), '')),
+      "Street" = COALESCE(NULLIF(btrim("Street"), ''), NULLIF(btrim(street), '')),
+      address = concat_ws(', ',
+        NULLIF(btrim(COALESCE("Street", street)), ''),
+        NULLIF(btrim(city), ''),
+        NULLIF(btrim(district), ''),
+        NULLIF(btrim(state), ''),
+        NULLIF(btrim(pincode), '')
+      );
+  ELSE
+    UPDATE public.clients
+    SET 
+      address = concat_ws(', ',
+        NULLIF(btrim(street), ''),
+        NULLIF(btrim(city), ''),
+        NULLIF(btrim(district), ''),
+        NULLIF(btrim(state), ''),
+        NULLIF(btrim(pincode), '')
+      );
+  END IF;
+END $$;
 
 -- 5. Backfill historical machine_hour_logs.location from client unified address
 UPDATE public.machine_hour_logs mhl

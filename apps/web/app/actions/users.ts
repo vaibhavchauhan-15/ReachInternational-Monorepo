@@ -7,12 +7,6 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireRole, getCurrentUser } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
 import { CACHE_TAGS } from "@/lib/cache";
-import {
-  sendWelcomeEmail,
-  sendApprovalEmail,
-  sendRejectionEmail,
-  sendPasswordResetNotification,
-} from "@/lib/email";
 import { validateAadhaarNumber, validateLicenseNumber } from "@reachinternational/utils";
 import { isSupervisedRole } from "@reachinternational/permissions";
 import type { User, UserRole } from "@/lib/types/database";
@@ -203,12 +197,7 @@ export async function approveUser(userId: string): Promise<UserFormState> {
       }),
     ]);
 
-    // 3. Send approval email in background without blocking action latency
-    if (updatedUser.email) {
-      sendApprovalEmail(updatedUser.email, updatedUser.full_name).catch((emailErr) =>
-        console.error("Failed to send approval email in background:", emailErr)
-      );
-    }
+
 
     // 4. Invalidate relevant caches
     revalidatePath("/users");
@@ -278,11 +267,7 @@ export async function rejectUser(userId: string): Promise<UserFormState> {
       }),
     ]);
 
-    if (targetUserEmail) {
-      sendRejectionEmail(targetUserEmail, targetUserName).catch((emailErr) =>
-        console.error("Failed to send rejection email in background:", emailErr)
-      );
-    }
+
 
     revalidatePath("/users");
     revalidateTag(CACHE_TAGS.users, "max");
@@ -530,8 +515,7 @@ export async function createUser(formData: FormData): Promise<UserFormState> {
       console.warn("Note: employees directory record sync skipped or existing:", empErr?.message || empErr);
     }
 
-    // Send welcome email with credentials
-    await sendWelcomeEmail(email, fullName, password);
+
 
     await logAudit({
       action: "user.created",
@@ -603,12 +587,7 @@ export async function resetUserPassword(userId: string): Promise<{ formState: Us
       return { formState: { error: "Failed to reset password. Please try again." } };
     }
 
-    // 4. Send background notification & audit logging asynchronously (non-blocking for high speed)
-    if (targetUser.email) {
-      sendPasswordResetNotification(targetUser.email, targetUser.full_name, newPassword).catch((emailErr) =>
-        console.error("Failed to send password reset email in background:", emailErr)
-      );
-    }
+
 
     logAudit({
       action: "user.password_reset",
@@ -1442,14 +1421,7 @@ export async function bulkApproveUsers(userIds: string[]): Promise<BulkActionRes
       }),
     ]);
 
-    // 3. Background non-blocking email notifications
-    updatedUsers.forEach((u) => {
-      if (u.email) {
-        sendApprovalEmail(u.email, u.full_name).catch((emailErr) =>
-          console.error("Failed to send bulk approval email:", emailErr)
-        );
-      }
-    });
+
 
     // 4. Cache revalidation
     revalidatePath("/users");
@@ -1505,11 +1477,7 @@ export async function bulkRejectUsers(userIds: string[]): Promise<BulkActionResu
       const res = deleteResults[idx];
       if (res.status === "fulfilled" && !res.value.error) {
         successCount++;
-        if (u.email) {
-          sendRejectionEmail(u.email, u.full_name).catch((emailErr) =>
-            console.error("Failed to send bulk rejection email:", emailErr)
-          );
-        }
+        // User rejected successfully
       }
     });
 

@@ -16,17 +16,20 @@ async function MachineDetailContent({ id }: { id: string }) {
   const user = await getCurrentUser();
   if (!user) return null;
 
+  const isSupervisor = user.role === "supervisor";
   const canManage =
     user.role === "super_admin" ||
     user.role === "admin" ||
     user.role === "manager";
+
+  const canAssignOperator = canManage || isSupervisor;
 
   // Parallel fetch: all light queries in one Promise.all()
   const [machine, activeRental, supervisors, operators, clients] = await Promise.all([
     getMachineById(id),
     getMachineActiveRental(id),
     canManage ? getActiveSupervisors() : Promise.resolve([]),
-    canManage ? getActiveOperators() : Promise.resolve([]),
+    canAssignOperator ? getActiveOperators() : Promise.resolve([]),
     canManage ? getClientOptions() : Promise.resolve([]),
   ]);
 
@@ -68,6 +71,7 @@ async function MachineDetailContent({ id }: { id: string }) {
       isAdmin={canManage}
       canEdit={canEdit}
       canDelete={canDelete}
+      canAssignOperator={canAssignOperator}
       isAssignedEngineer={isAssignedEngineer}
       currentUserId={user.id}
       userRole={user.role}

@@ -26,6 +26,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "lucide-react": [
+        "./components/ui/empty-icons.tsx"
       ]
     }
   },

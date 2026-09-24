@@ -129,10 +129,9 @@ Each section independently loads.
   - Server-side: 24-hour static cache (`unstable_cache`, `CACHE_TIERS.CLASS_A_STATIC`, tag: `TAGS.clientsLocations`).
   - Client-side: In-memory `sessionCacheRef` / `mobileLocationHierarchyCacheRef` delivering **0ms re-toggles (<0.002ms)** with 0 database queries.
 - **UI Integration**:
-  - `LocationHierarchySelector.tsx`: Reusable component with 3-tier dropdown cascade, breadcrumb indicator, manual override toggle for custom industrial sites, and min 44px touch targets.
-  - `ClientModal.tsx`: Standardized label to "Site Location" and integrated cascade into Section 2 (Site Location) and Section 3 (Billing Address).
+  - `ClientModal.tsx`: Standardized manual address fields strictly following canonical order (`street/area -> city/town/village -> district -> state -> pincode`) for both Site Location and Billing Address with uniform `<Input>` component sizing/padding. Includes card-level hover triggers (`data-hover-parent`) animating `AnimatedBuilding2`, `AnimatedMapPin`, and `AnimatedReceipt`.
   - `ClientStatusTabs.tsx`: Supports filtering by location with MapPin indicator.
-  - `apps/mobile/app/(app)/clients.tsx`: Integrated progressive selector strips and in-memory caching.
+  - `apps/mobile/app/(app)/clients.tsx`: Standardized manual address fields matching canonical ordering and min 44px touch targets.
 - **Search Support**: Accelerated full-text search across `city`, `district`, and `state` via PostgreSQL GIN trigram indexes (`idx_clients_city_trgm`, `idx_clients_district_trgm`, `idx_clients_state_trgm`).
 
 ---

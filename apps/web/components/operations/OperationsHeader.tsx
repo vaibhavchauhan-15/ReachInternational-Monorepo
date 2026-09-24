@@ -26,12 +26,12 @@ export const OperationsHeader = React.memo(function OperationsHeader({
           <Button
             variant="ghost"
             onClick={onOpenPrintModal}
-            icon={<Download size={15} className="shrink-0 text-sky-500" />}
-            className="h-9 px-2.5 sm:px-3.5 font-bold inline-flex flex-row items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap cursor-pointer shadow-xs border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
+            icon={<Download size={14} className="w-3.5 h-3.5 shrink-0 text-sky-500" />}
+            className="h-9 px-3.5 font-bold inline-flex flex-row items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap cursor-pointer shadow-xs border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-canvas)] text-[var(--color-ink)]"
             title="Export Report"
             aria-label="Export Report"
           >
-            Export
+            Export Report
           </Button>
         )}
       </div>

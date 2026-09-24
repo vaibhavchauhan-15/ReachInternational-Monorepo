@@ -24,7 +24,6 @@ import {
   Building2,
   Users,
   Shield,
-  Edit,
   LogOut,
   Trash2,
   FileText,
@@ -157,9 +156,9 @@ export default function MoreScreen() {
                   backgroundColor: theme.colors.canvas,
                 },
               ]}
-              accessibilityLabel="Edit Profile"
+              accessibilityLabel="View Profile"
             >
-              <Edit size={15} color={theme.colors.mute} />
+              <ChevronRight size={15} color={theme.colors.mute} />
             </View>
           </View>
         </TouchableOpacity>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect, useRef, memo } from "react";
+import React, { useState, useCallback, useMemo, useEffect, useRef, memo } from "react";
 import Link from "next/link";
 import { Check, ChevronDown, RefreshCw } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -35,6 +35,7 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
   ariaLabel,
   align = "left",
   className = "",
+  icon,
 }: {
   label: string;
   value: string;
@@ -43,9 +44,11 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
   ariaLabel?: string;
   align?: "left" | "right";
   className?: string;
+  icon?: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const iconRef = useRef<{ startAnimation?: () => void; stopAnimation?: () => void }>(null);
 
   const selectedOption = options.find((opt) => opt.id === value) || options[0];
 
@@ -72,11 +75,13 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
   return (
     <div
       ref={containerRef}
-      className={`relative w-full ${open ? "z-40" : "z-10"} ${className}`}
+      className={`relative w-full group ${open ? "z-40" : "z-10"} ${className}`}
     >
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
+        onMouseEnter={() => iconRef.current?.startAnimation?.()}
+        onMouseLeave={() => iconRef.current?.stopAnimation?.()}
         aria-expanded={open}
         aria-label={ariaLabel || label}
         className="w-full h-9 px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-xs text-[var(--color-ink)] flex items-center justify-between gap-2 transition-all cursor-pointer select-none active:scale-[0.98] shadow-2xs"
@@ -96,11 +101,32 @@ const CustomFilterSelector = memo(function CustomFilterSelector({
             {selectedOption?.label}
           </span>
         </div>
-        <ChevronDown
-          className={`h-3.5 w-3.5 text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
-            open ? "rotate-180 text-[var(--color-ink)]" : ""
-          }`}
-        />
+        {icon ? (
+          React.isValidElement(icon) ? (
+            React.cloneElement(icon as React.ReactElement<any>, {
+              ref: (node: any) => {
+                iconRef.current = node;
+                const orig = (icon as any).ref;
+                if (typeof orig === "function") orig(node);
+                else if (orig && typeof orig === "object") orig.current = node;
+              },
+              size: (icon as any).props?.size ?? 14,
+              className: `shrink-0 transition-transform duration-200 ${
+                open ? "rotate-180" : ""
+              } ${(icon as any).props?.className || ""}`,
+            })
+          ) : (
+            icon
+          )
+        ) : (
+          <ChevronDown
+            ref={iconRef as any}
+            size={14}
+            className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 group-hover:text-[var(--color-ink)] ${
+              open ? "rotate-180 text-[var(--color-ink)]" : ""
+            }`}
+          />
+        )}
       </button>
 
       <AnimatePresence>

@@ -243,7 +243,9 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
     normalizedRole === 'super_admin' ||
     normalizedRole === 'manager';
   const isSupervisor = normalizedRole === 'supervisor';
-  const canEdit = isAdminOrManager || isSupervisor;
+  const canManage = isAdminOrManager;
+  const canAssignOperator = isAdminOrManager || isSupervisor;
+  const canEdit = isAdminOrManager;
   const canDelete = isAdminOrManager;
 
   // Active Tab: 'overview' (Basic Info), 'running_hours' (Running Logs), or 'audit_trail' (Audit Trail)
@@ -328,14 +330,18 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
   const hasLinkedClient = Boolean(clientCompanyName || fullSiteAddress || clientPhone);
 
   // Supervisors & Operators
-  const supervisors = Array.isArray(machine.supervisors) && machine.supervisors.length > 0
+  const supervisors = Array.isArray(machine.supervisors)
     ? machine.supervisors.filter((s: any) => Boolean(s?.full_name))
+    : Array.isArray(machine.supervisor_ids)
+    ? []
     : machine.current_supervisor?.full_name
     ? [machine.current_supervisor]
     : [];
 
-  const operators = Array.isArray(machine.operators) && machine.operators.length > 0
+  const operators = Array.isArray(machine.operators)
     ? machine.operators.filter((o: any) => Boolean(o?.full_name))
+    : Array.isArray(machine.operator_ids)
+    ? []
     : machine.current_operator?.full_name
     ? [machine.current_operator]
     : [];
@@ -1037,10 +1043,10 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
               >
                 <Share2 size={15} color={theme.colors.ink} />
               </TouchableOpacity>
-              {canEdit && (
+              {(canManage || isSupervisor) && (
                 <TouchableOpacity
                   onPress={() => {
-                    setEditSection('all');
+                    setEditSection(isSupervisor ? 'personnel' : 'all');
                     setEditModalVisible(true);
                   }}
                   style={[
@@ -1051,6 +1057,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     },
                   ]}
                   activeOpacity={0.7}
+                  accessibilityLabel={isSupervisor ? 'Assign Operator' : 'Edit Machine'}
                 >
                   <Edit2 size={15} color={theme.colors.ink} />
                 </TouchableOpacity>
@@ -1187,7 +1194,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                 <Text style={[styles.cardHeaderTitle, { color: theme.colors.ink }]}>
                   Basic Info
                 </Text>
-                {canEdit && (
+                {canManage && (
                   <TouchableOpacity
                     onPress={() => {
                       setEditSection('info');
@@ -1346,7 +1353,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   </Text>
                 </View>
 
-                {canEdit && (
+                {canAssignOperator && (
                   <TouchableOpacity
                     onPress={() => {
                       setEditSection('personnel');
@@ -1356,7 +1363,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                   >
                     <Edit2 size={12} color={theme.colors.link} />
                     <Text style={[styles.manageStaffText, { color: theme.colors.link }]}>
-                      Manage Staff
+                      {isSupervisor ? 'Assign Operator' : 'Manage Staff'}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -1556,7 +1563,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       <MapPin size={13} color="#0ea5e9" />
                     </TouchableOpacity>
                   ) : null}
-                  {canEdit && (
+                  {canManage && (
                     <TouchableOpacity
                       onPress={() => {
                         setEditSection('client');

@@ -229,7 +229,7 @@ export function CollapsedSidebarFlyout({
           {/* Header */}
           <div className="relative z-20 flex items-center justify-between px-4 py-3 bg-[var(--color-hairline-soft-surface)]/50 border-b border-[var(--color-hairline)] rounded-t-2xl">
             <div className="flex items-center gap-2.5 min-w-0 pr-2">
-              <ParentIcon className={`h-4 w-4 shrink-0 ${isActiveParent ? "text-sky-600 dark:text-sky-400 font-bold" : "text-[var(--color-body)]"}`} />
+              <ParentIcon size={16} className={`h-4 w-4 shrink-0 ${isActiveParent ? "text-sky-600 dark:text-sky-400 font-bold" : "text-[var(--color-body)]"}`} />
               <span className="text-xs font-bold text-[var(--color-ink)] truncate">
                 {item.label}
               </span>

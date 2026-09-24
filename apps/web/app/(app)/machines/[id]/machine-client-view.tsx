@@ -11,20 +11,30 @@ import {
   AnimatedCheck,
   AnimatedCopy,
   AnimatedMessageSquare,
+  AnimatedUserCheck,
+  AnimatedShield,
+  AnimatedWrench,
+  AnimatedUsers,
+  AnimatedBuilding,
+  AnimatedClock,
+  AnimatedPhone,
+  AnimatedMail,
+  AnimatedInfo,
+  AnimatedAlertCircle,
 } from "@/components/ui/animated-icons";
 import { ScissorLiftLogoIcon } from "@/components/branding/ScissorLiftLogoIcon";
 import {
-  Phone,
-  Mail,
   MapPin,
-  Clock,
-  Shield,
-  Wrench,
-  Building2,
   ExternalLink,
   Check,
   Copy,
   ChevronDown,
+  Wrench,
+  Shield,
+  Building2,
+  Phone,
+  Mail,
+  Clock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -64,6 +74,7 @@ interface MachineClientViewProps {
   isAdmin: boolean;
   canEdit?: boolean;
   canDelete?: boolean;
+  canAssignOperator?: boolean;
   isAssignedEngineer: boolean;
   currentUserId: string;
   userRole?: string;
@@ -220,6 +231,7 @@ export function MachineClientView({
   isAdmin,
   canEdit,
   canDelete,
+  canAssignOperator,
   userRole = "admin",
 }: MachineClientViewProps) {
   const router = useRouter();
@@ -250,7 +262,28 @@ export function MachineClientView({
   // Local state representing live machine record (instantly updated on modal save)
   const [machineData, setMachineData] = useState<MachineWithEngineer>(machine);
   useEffect(() => {
-    setMachineData(machine);
+    setMachineData((prev) => {
+      // If props update for the same machine, preserve any fresh state already updated in local state
+      if (prev.id === machine.id) {
+        return {
+          ...machine,
+          // Preserve personnel state
+          supervisors: prev.supervisors !== undefined ? prev.supervisors : machine.supervisors,
+          supervisor_ids: prev.supervisor_ids !== undefined ? prev.supervisor_ids : machine.supervisor_ids,
+          current_supervisor: prev.current_supervisor !== undefined ? prev.current_supervisor : machine.current_supervisor,
+          current_supervisor_id: prev.current_supervisor_id !== undefined ? prev.current_supervisor_id : machine.current_supervisor_id,
+          operators: prev.operators !== undefined ? prev.operators : machine.operators,
+          operator_ids: prev.operator_ids !== undefined ? prev.operator_ids : machine.operator_ids,
+          current_operator: prev.current_operator !== undefined ? prev.current_operator : machine.current_operator,
+          current_operator_id: prev.current_operator_id !== undefined ? prev.current_operator_id : machine.current_operator_id,
+          // Preserve client/rental state (prevents stale RSC cache overwriting optimistic update)
+          status: prev.status || machine.status,
+          client_id: prev.client_id !== undefined ? prev.client_id : machine.client_id,
+          client: prev.client !== undefined ? prev.client : machine.client,
+        };
+      }
+      return machine;
+    });
   }, [machine]);
 
   // Separate Modal States
@@ -288,8 +321,10 @@ export function MachineClientView({
   const [copiedGstin, setCopiedGstin] = useState(false);
   const [copiedPan, setCopiedPan] = useState(false);
 
+  const isSupervisor = userRole === "supervisor";
   const allowEdit = canEdit ?? isAdmin;
   const allowDelete = canDelete ?? isAdmin;
+  const allowPersonnelEdit = allowEdit || isSupervisor || Boolean(canAssignOperator);
 
   // ─── Derived Data ───
   const machineTitle =
@@ -298,20 +333,24 @@ export function MachineClientView({
     "Machine Details";
 
   const assignedSupervisors = useMemo((): PersonnelPick[] => {
-    if (Array.isArray(machineData.supervisors) && machineData.supervisors.length > 0) return machineData.supervisors;
-    if (Array.isArray(machineData.supervisor_ids) && machineData.supervisor_ids.length > 0 && supervisors.length > 0) {
+    if (Array.isArray(machineData.supervisors)) return machineData.supervisors;
+    if (Array.isArray(machineData.supervisor_ids)) {
+      if (machineData.supervisor_ids.length === 0) return [];
       const fromProp = supervisors.filter((s) => machineData.supervisor_ids?.includes(s.id));
       if (fromProp.length > 0) return fromProp;
+      return [];
     }
     if (machineData.current_supervisor) return [machineData.current_supervisor];
     return [];
   }, [machineData.supervisors, machineData.supervisor_ids, machineData.current_supervisor, supervisors]);
 
   const assignedOperators = useMemo((): PersonnelPick[] => {
-    if (Array.isArray(machineData.operators) && machineData.operators.length > 0) return machineData.operators;
-    if (Array.isArray(machineData.operator_ids) && machineData.operator_ids.length > 0 && operators.length > 0) {
+    if (Array.isArray(machineData.operators)) return machineData.operators;
+    if (Array.isArray(machineData.operator_ids)) {
+      if (machineData.operator_ids.length === 0) return [];
       const fromProp = operators.filter((o) => machineData.operator_ids?.includes(o.id));
       if (fromProp.length > 0) return fromProp;
+      return [];
     }
     if (machineData.current_operator) return [machineData.current_operator];
     return [];
@@ -442,13 +481,27 @@ export function MachineClientView({
 
               {/* Right: Separate Edit Menu + Delete on header (Touch-friendly 34-36px hit targets) */}
               <div className="flex items-center gap-1.5 shrink-0">
-                {allowEdit && (
+                {allowEdit ? (
                   <MachineHeroEditMenu
                     onEditInfo={() => setInfoModalOpen(true)}
                     onEditPersonnel={() => setPersonnelModalOpen(true)}
                     onEditClient={() => setClientModalOpen(true)}
                   />
-                )}
+                ) : isSupervisor ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    responsive
+                    mobileIconOnly
+                    icon={<AnimatedUserCheck size={14} className="text-teal-600 dark:text-teal-400" />}
+                    onClick={() => setPersonnelModalOpen(true)}
+                    title="Assign Operator"
+                    aria-label="Assign Operator"
+                    className="h-8.5 w-8.5 min-h-[34px] min-w-[34px] p-0 flex items-center justify-center rounded-lg"
+                  >
+                    <span>Assign</span>
+                  </Button>
+                ) : null}
                 {allowDelete && (
                   <Button
                     variant="destructive"
@@ -579,13 +632,25 @@ export function MachineClientView({
 
             {/* Right: Separate Edit Menu + Delete on header (Optimized for Desktop) */}
             <div className="flex items-center gap-2 shrink-0">
-              {allowEdit && (
+              {allowEdit ? (
                 <MachineHeroEditMenu
                   onEditInfo={() => setInfoModalOpen(true)}
                   onEditPersonnel={() => setPersonnelModalOpen(true)}
                   onEditClient={() => setClientModalOpen(true)}
                 />
-              )}
+              ) : isSupervisor ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<AnimatedUserCheck size={14} className="text-teal-600 dark:text-teal-400" />}
+                  onClick={() => setPersonnelModalOpen(true)}
+                  title="Assign Machine Operator"
+                  aria-label="Assign Machine Operator"
+                  className="h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1.5"
+                >
+                  <span>Assign Operator</span>
+                </Button>
+              ) : null}
               {allowDelete && (
                 <Button
                   variant="destructive"
@@ -625,9 +690,12 @@ export function MachineClientView({
         <div className="flex flex-col gap-4 sm:gap-5">
           {/* ═══════════ SECTION 1: BASIC INFO ═══════════ */}
           <FadeIn delay={0.1}>
-        <Card padding="md" className="card-hover-system sm:p-6">
+        <Card padding="md" className="card-hover-system sm:p-6" data-hover-parent>
           <div className="flex items-center justify-between gap-2 pb-3 border-b border-[var(--color-hairline)]">
-            <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">Basic Info</h3>
+            <div className="flex items-center gap-2">
+              <AnimatedInfo size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+              <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">Basic Info</h3>
+            </div>
             {allowEdit && (
               <Button
                 variant="secondary"
@@ -715,32 +783,38 @@ export function MachineClientView({
 
       {/* ═══════════ SECTION 2: ASSIGNED SHIFT PERSONNEL ═══════════ */}
       <FadeIn delay={0.15}>
-        <Card padding="md" className="card-hover-system sm:p-6">
+        <Card padding="md" className="card-hover-system sm:p-6" data-hover-parent>
           <div className="flex items-center justify-between gap-2 pb-3 border-b border-[var(--color-hairline)]">
-            <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">
-              Assigned Shift Personnel
-            </h3>
-            {allowEdit && (
+            <div className="flex items-center gap-2">
+              <AnimatedUsers size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+              <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">
+                Assigned Shift Personnel
+              </h3>
+            </div>
+            {allowPersonnelEdit && (
               <Button
                 variant="secondary"
                 size="sm"
                 icon={<AnimatedEdit size={12} className="text-[var(--color-ink)]" />}
                 onClick={() => setPersonnelModalOpen(true)}
-                title="Edit Assigned Personnel"
-                aria-label="Edit Assigned Personnel"
+                title={isSupervisor ? "Assign Machine Operator" : "Edit Assigned Personnel"}
+                aria-label={isSupervisor ? "Assign Machine Operator" : "Edit Assigned Personnel"}
                 className="h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1"
               >
-                <span>Edit</span>
+                <span>{isSupervisor ? "Assign Operator" : "Edit"}</span>
               </Button>
             )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-3.5">
             {/* Supervisors Panel */}
-            <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/40 p-3 sm:p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-1.5">
-                  <Shield className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+            <div
+              data-hover-parent
+              className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/40 p-3 sm:p-4 transition-colors"
+            >
+              <div className="flex items-center justify-between pb-2 mb-3 border-b border-[var(--color-hairline)]">
+                <div className="flex items-center gap-2">
+                  <AnimatedShield size={16} className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
                   <span className="text-xs font-bold text-[var(--color-ink)]">Supervisors ({assignedSupervisors.length})</span>
                 </div>
               </div>
@@ -756,10 +830,13 @@ export function MachineClientView({
             </div>
 
             {/* Operators Panel */}
-            <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/40 p-3 sm:p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-1.5">
-                  <Wrench className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+            <div
+              data-hover-parent
+              className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-hairline-soft-surface)]/40 p-3 sm:p-4 transition-colors"
+            >
+              <div className="flex items-center justify-between pb-2 mb-3 border-b border-[var(--color-hairline)]">
+                <div className="flex items-center gap-2">
+                  <AnimatedWrench size={16} className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                   <span className="text-xs font-bold text-[var(--color-ink)]">Operators ({assignedOperators.length})</span>
                 </div>
               </div>
@@ -779,9 +856,10 @@ export function MachineClientView({
 
       {/* ═══════════ SECTION 3: CLIENT DETAILS ═══════════ */}
       <FadeIn delay={0.2}>
-        <Card padding="md" className="card-hover-system sm:p-6">
+        <Card padding="md" className="card-hover-system sm:p-6" data-hover-parent>
           <div className="flex items-center justify-between gap-2 pb-3 border-b border-[var(--color-hairline)]">
             <div className="flex items-center gap-2">
+              <AnimatedBuilding size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
               <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">Client Details</h3>
               {clientCode && (
                 <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-mono font-bold bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
@@ -844,7 +922,7 @@ export function MachineClientView({
                   <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Contact Mobile</span>
                   {clientPhone ? (
                     <a href={`tel:${clientPhone}`} className="font-semibold text-[var(--color-link)] hover:underline inline-flex items-center gap-1.5 text-xs sm:text-sm font-mono">
-                      <Phone className="h-3.5 w-3.5 shrink-0" /> {clientPhone}
+                      <AnimatedPhone size={14} className="w-3.5 h-3.5 shrink-0" /> {clientPhone}
                     </a>
                   ) : <p className="text-[var(--color-mute)]">—</p>}
                 </div>
@@ -853,7 +931,7 @@ export function MachineClientView({
                   <div className="flex flex-col p-3 rounded-xl bg-[var(--color-hairline-soft-surface)]/60 border border-[var(--color-hairline)]">
                     <span className="text-[10px] font-bold text-[var(--color-mute)] uppercase tracking-wider mb-1">Contact Email</span>
                     <a href={`mailto:${clientEmail}`} className="font-medium text-[var(--color-link)] hover:underline inline-flex items-center gap-1.5 break-all text-xs sm:text-sm">
-                      <Mail className="h-3.5 w-3.5 shrink-0" /> {clientEmail}
+                      <AnimatedMail size={14} className="w-3.5 h-3.5 shrink-0" /> {clientEmail}
                     </a>
                   </div>
                 )}
@@ -901,7 +979,7 @@ export function MachineClientView({
               {clientPhone && (
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   <motion.a whileTap={{ scale: 0.96 }} href={`tel:${clientPhone}`} className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 transition-all text-center font-semibold text-xs min-h-[44px]">
-                    <Phone className="h-4 w-4 shrink-0" /> <span className="truncate">Call</span>
+                    <AnimatedPhone size={16} className="w-4 h-4 shrink-0" /> <span className="truncate">Call</span>
                   </motion.a>
                   <motion.a whileTap={{ scale: 0.96 }} href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-xl bg-green-500/10 hover:bg-green-500/20 text-green-700 dark:text-green-400 border border-green-500/20 transition-all text-center font-semibold text-xs min-h-[44px]">
                     <AnimatedMessageSquare size={16} className="shrink-0" /> <span className="truncate">WhatsApp</span>
@@ -911,7 +989,7 @@ export function MachineClientView({
             </div>
           ) : (
             <div className="py-8 text-center bg-[var(--color-hairline-soft-surface)]/30 rounded-xl border border-dashed border-[var(--color-hairline)] mt-3 p-4">
-              <Building2 className="h-8 w-8 text-[var(--color-mute)] mx-auto mb-2 opacity-50" />
+              <AnimatedBuilding size={32} className="w-8 h-8 text-[var(--color-mute)] mx-auto mb-2 opacity-50" />
               <p className="font-bold text-[var(--color-ink)] text-xs sm:text-sm">No Client Assigned</p>
               <p className="text-xs text-[var(--color-mute)] mt-1 max-w-sm mx-auto">This machine is currently available in the fleet inventory.</p>
               {allowEdit && (
@@ -948,30 +1026,32 @@ export function MachineClientView({
 
       {/* ═══════════ DEDICATED SEPARATE DIALOGS ═══════════ */}
       {allowEdit && (
-        <>
-          <MachineInfoModal
-            isOpen={infoModalOpen}
-            onClose={() => setInfoModalOpen(false)}
-            machine={machineData}
-            onMachineUpdated={handleMachineUpdated}
-          />
-          <MachinePersonnelModal
-            isOpen={personnelModalOpen}
-            onClose={() => setPersonnelModalOpen(false)}
-            machine={machineData}
-            supervisors={supervisors}
-            operators={operators}
-            userRole={userRole}
-            onMachineUpdated={handleMachineUpdated}
-          />
-          <MachineClientModal
-            isOpen={clientModalOpen}
-            onClose={() => setClientModalOpen(false)}
-            machine={machineData}
-            clients={clients}
-            onMachineUpdated={handleMachineUpdated}
-          />
-        </>
+        <MachineInfoModal
+          isOpen={infoModalOpen}
+          onClose={() => setInfoModalOpen(false)}
+          machine={machineData}
+          onMachineUpdated={handleMachineUpdated}
+        />
+      )}
+      {allowPersonnelEdit && (
+        <MachinePersonnelModal
+          isOpen={personnelModalOpen}
+          onClose={() => setPersonnelModalOpen(false)}
+          machine={machineData}
+          supervisors={supervisors}
+          operators={operators}
+          userRole={userRole}
+          onMachineUpdated={handleMachineUpdated}
+        />
+      )}
+      {allowEdit && (
+        <MachineClientModal
+          isOpen={clientModalOpen}
+          onClose={() => setClientModalOpen(false)}
+          machine={machineData}
+          clients={clients}
+          onMachineUpdated={handleMachineUpdated}
+        />
       )}
 
       {/* Delete Confirmation */}
@@ -1048,7 +1128,10 @@ function PersonnelCard({ person, shiftIndex, color }: { person: PersonnelPick; s
     : "text-amber-700 dark:text-amber-300 bg-amber-500/10 border-amber-500/25";
 
   return (
-    <div className="flex items-center justify-between p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] gap-2.5">
+    <div
+      data-hover-parent
+      className="flex items-center justify-between p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] gap-2.5 transition-colors"
+    >
       {/* Left side: Name, Shift badge, Shift time */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -1060,7 +1143,7 @@ function PersonnelCard({ person, shiftIndex, color }: { person: PersonnelPick; s
           </span>
         </div>
         <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--color-mute)] mt-1">
-          <Clock size={11} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+          <AnimatedClock size={12} className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
           <span className="font-mono text-[var(--color-ink)] font-semibold">
             {person.shift_time || (isTeal ? "08:00 AM - 08:00 PM" : "08:00 AM - 04:00 PM")}
           </span>
@@ -1077,7 +1160,7 @@ function PersonnelCard({ person, shiftIndex, color }: { person: PersonnelPick; s
               aria-label={`Call ${person.full_name}`}
               className="p-1.5 rounded-md text-[var(--color-mute)] hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-500/10 transition-colors inline-flex items-center justify-center cursor-pointer"
             >
-              <Phone size={13} />
+              <AnimatedPhone size={13} className="w-3.5 h-3.5" />
             </a>
           )}
           {person.phone && person.email && (
@@ -1090,7 +1173,7 @@ function PersonnelCard({ person, shiftIndex, color }: { person: PersonnelPick; s
               aria-label={`Email ${person.full_name}`}
               className="p-1.5 rounded-md text-[var(--color-mute)] hover:text-sky-600 dark:hover:text-sky-400 hover:bg-sky-500/10 transition-colors inline-flex items-center justify-center cursor-pointer"
             >
-              <Mail size={13} />
+              <AnimatedMail size={13} className="w-3.5 h-3.5" />
             </a>
           )}
         </div>

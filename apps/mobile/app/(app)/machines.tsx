@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTheme, MobileHeader, Skeleton, HeaderActionItem } from '../../components/ui';
+import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { MobileMachineCard } from '../../components/machines/MobileMachineCard';
 import { MachineModal } from '../../components/machines/MachineModal';
 import { MachineDetailView } from '../../components/machines/MachineDetailView';
@@ -134,54 +135,55 @@ export default function MachinesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Filter & Search states
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [isSearching, setIsSearching] = useState(false);
+  // Filter & Search states backed by persistent AsyncStorage (auto-resets pagination to page 1)
+  const {
+    search: debouncedSearch,
+    inputValue: search,
+    setSearch,
+    filters,
+    setFilter,
+    resetFilters: resetListFilters,
+    isDebouncing: isSearching,
+  } = usePersistentListState<{
+    rentalFilter: RentalFilterType;
+    healthFilter: HealthFilterType;
+    supervisorFilter: string;
+    sortBy: SortOptionType;
+  }>({
+    storageKey: 'reach_filters_machines',
+    defaultSearch: '',
+    defaultFilters: {
+      rentalFilter: 'all',
+      healthFilter: 'all',
+      supervisorFilter: 'all',
+      sortBy: 'machine_id_asc',
+    },
+    debounceMs: 280,
+  });
+
+  const rentalFilter = filters.rentalFilter;
+  const healthFilter = filters.healthFilter;
+  const supervisorFilter = filters.supervisorFilter;
+  const sortBy = filters.sortBy;
+
+  const setRentalFilter = useCallback((val: RentalFilterType | ((prev: RentalFilterType) => RentalFilterType)) => setFilter('rentalFilter', val), [setFilter]);
+  const setHealthFilter = useCallback((val: HealthFilterType | ((prev: HealthFilterType) => HealthFilterType)) => setFilter('healthFilter', val), [setFilter]);
+  const setSupervisorFilter = useCallback((val: string | ((prev: string) => string)) => setFilter('supervisorFilter', val), [setFilter]);
+  const setSortBy = useCallback((val: SortOptionType | ((prev: SortOptionType) => SortOptionType)) => setFilter('sortBy', val), [setFilter]);
+
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const searchInputRef = useRef<TextInput>(null);
-  const [rentalFilter, setRentalFilter] = useState<RentalFilterType>('all');
-  const [healthFilter, setHealthFilter] = useState<HealthFilterType>('all');
-  const [supervisorFilter, setSupervisorFilter] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<SortOptionType>('machine_id_asc');
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const filterAnim = useRef(new Animated.Value(0)).current;
   const [panelContentHeight, setPanelContentHeight] = useState(0);
   const isWeb = Platform.OS === 'web';
 
-  // Snappy 280ms search debounce for fluid typing and instant skeleton loading
-  useEffect(() => {
-    const trimmed = search.trim();
-    if (trimmed === debouncedSearch.trim()) {
-      setIsSearching(false);
-      return;
-    }
-
-    if (trimmed === '') {
-      setDebouncedSearch('');
-      setIsSearching(false);
-      return;
-    }
-
-    setIsSearching(true);
-    const timer = setTimeout(() => {
-      setDebouncedSearch(trimmed);
-      setIsSearching(false);
-    }, 280);
-
-    return () => clearTimeout(timer);
-  }, [search, debouncedSearch]);
-
   const handleSearchSubmit = () => {
-    const trimmed = search.trim();
-    setDebouncedSearch(trimmed);
-    setIsSearching(false);
+    setSearch(search, true);
   };
 
   const handleClearSearch = () => {
-    setSearch('');
-    setDebouncedSearch('');
-    setIsSearching(false);
+    setSearch('', true);
     searchInputRef.current?.focus();
   };
 
@@ -442,17 +444,17 @@ export default function MachinesScreen() {
           const activeAssignments = assignmentsByMachine.get(m.id) || [];
 
           const supIds =
-            Array.isArray(m.supervisor_ids) && m.supervisor_ids.length > 0
+            Array.isArray(m.supervisor_ids)
               ? m.supervisor_ids
               : m.current_supervisor_id
               ? [m.current_supervisor_id]
               : [];
 
           const opIds =
-            activeAssignments.length > 0
-              ? activeAssignments.map((a: any) => a.operator_id)
-              : Array.isArray(m.operator_ids) && m.operator_ids.length > 0
+            Array.isArray(m.operator_ids)
               ? m.operator_ids
+              : activeAssignments.length > 0
+              ? activeAssignments.map((a: any) => a.operator_id)
               : m.current_operator_id
               ? [m.current_operator_id]
               : [];
@@ -607,13 +609,7 @@ export default function MachinesScreen() {
   }, [rentalFilter, healthFilter, supervisorFilter, debouncedSearch, sortBy]);
 
   const handleResetAllFilters = () => {
-    setSearch('');
-    setDebouncedSearch('');
-    setIsSearching(false);
-    setRentalFilter('all');
-    setHealthFilter('all');
-    setSupervisorFilter('all');
-    setSortBy('machine_id_asc');
+    resetListFilters();
   };
 
   // Client-side search, filtering and sorting

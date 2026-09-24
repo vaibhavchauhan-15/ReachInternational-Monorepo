@@ -3,14 +3,14 @@ import type { User, UserRole } from "@/lib/types/database";
 export interface SubNavItem {
   label: string;
   tab: string;
-  icon?: React.ComponentType<{ className?: string }>;
+  icon?: React.ComponentType<any>;
   roles?: UserRole[];
 }
 
 export interface NavItem {
   href: string;
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<any>;
   roles?: UserRole[];
   badge?: string | number;
   subItems?: SubNavItem[];

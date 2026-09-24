@@ -4,11 +4,11 @@ import React, { useState, useRef, useEffect, useMemo, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AnimatedCalendar,
-  AnimatedChevronDown,
   AnimatedChevronLeft,
   AnimatedChevronRight,
   AnimatedCheck,
 } from "./animated-icons";
+import { ChevronDown } from "lucide-react";
 
 export interface MonthSelectProps {
   /** Formatted month string in YYYY-MM format, e.g. "2026-09" */
@@ -215,7 +215,7 @@ export function MonthSelect({
           <AnimatedCalendar size={14} className="text-[var(--color-mute)] shrink-0" />
           <span className="font-semibold tracking-tight whitespace-nowrap">{displayLabel}</span>
         </div>
-        <AnimatedChevronDown
+        <ChevronDown
           size={13}
           className={`text-[var(--color-mute)] transition-transform duration-200 ${
             isOpen ? "rotate-180 text-[var(--color-ink)]" : ""

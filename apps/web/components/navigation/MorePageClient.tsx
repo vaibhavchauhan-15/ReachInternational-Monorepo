@@ -70,7 +70,7 @@ export function MorePageClient({ user, overflowItems }: MorePageClientProps) {
                 >
                   <Icon
                     size={22}
-                    className="text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors shrink-0 interactive-icon icon-bounce"
+                    className="text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors shrink-0"
                   />
                   <span className="text-sm font-medium text-[var(--color-ink)] leading-tight">
                     {item.label}
@@ -89,10 +89,10 @@ export function MorePageClient({ user, overflowItems }: MorePageClientProps) {
           className="flex items-center justify-between px-4 py-3.5 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors group interactive-parent"
         >
           <span className="flex items-center gap-2.5">
-            <Settings size={17} className="text-[var(--color-mute)] group-hover:text-sky-500 transition-colors shrink-0 interactive-icon icon-rotate" />
+            <Settings size={17} className="text-[var(--color-mute)] group-hover:text-sky-500 transition-colors shrink-0" />
             Settings
           </span>
-          <ChevronRight size={16} className="text-[var(--color-mute)] shrink-0 interactive-icon icon-chevron" />
+          <ChevronRight size={16} className="text-[var(--color-mute)] shrink-0" />
         </Link>
       </div>
 

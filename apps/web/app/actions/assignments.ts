@@ -297,19 +297,26 @@ export async function getOperatorProfileShiftAction(
   try {
     if (!operatorId) return { profileShift: null };
 
-    const supabase = await createSupabaseServerClient();
+    const supabase = createSupabaseAdminClient();
     const { data: user } = await supabase
       .from("users")
-      .select("id, shift_time")
+      .select("id, shift_start_time, shift_end_time")
       .eq("id", operatorId)
       .maybeSingle();
 
-    if (!user || !user.shift_time) {
+    if (!user || !user.shift_start_time || !user.shift_end_time) {
       return { profileShift: null };
     }
 
-    const parsed = parseProfileShiftTime(user.shift_time);
-    return { profileShift: parsed };
+    const startTime = String(user.shift_start_time).slice(0, 5);
+    const endTime = String(user.shift_end_time).slice(0, 5);
+    return {
+      profileShift: {
+        startTime,
+        endTime,
+        displayString: `${startTime} - ${endTime}`,
+      },
+    };
   } catch {
     return { profileShift: null };
   }
@@ -324,7 +331,7 @@ export async function getMachineActiveAssignmentsAction(
   try {
     if (!machineId) return { assignments: [] };
 
-    const supabase = await createSupabaseServerClient();
+    const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase
       .from("operator_machine_assignments")
       .select(`
@@ -342,7 +349,7 @@ export async function getMachineActiveAssignmentsAction(
         end_reason,
         created_at,
         updated_at,
-        operator:users!operator_machine_assignments_operator_id_fkey(id, full_name, phone, email, shift_time),
+        operator:users!operator_machine_assignments_operator_id_fkey(id, full_name, phone, email, shift_start_time, shift_end_time),
         assigner:users!operator_machine_assignments_assigned_by_fkey(id, full_name)
       `)
       .eq("machine_id", machineId)

@@ -30,7 +30,7 @@ export function ActivityWidget({
     >
       <div className="flex items-center justify-between pb-3 mb-3 border-b border-[var(--color-hairline)]">
         <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-[var(--color-mute)]" />
+          <Activity size={16} className="w-4 h-4 text-[var(--color-mute)] shrink-0" />
           <h3 className="text-xs sm:text-sm font-semibold text-[var(--color-ink)] uppercase tracking-wider">
             {title}
           </h3>

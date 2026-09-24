@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 
-interface CardProps {
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
   className?: string;
   elevated?: boolean;
@@ -24,6 +24,7 @@ export function Card({
   padding = "lg",
   id,
   onClick,
+  ...props
 }: CardProps) {
   const isInteractive = Boolean(onClick || className.includes("card-hover") || className.includes("cursor-pointer"));
   const interactiveClasses = isInteractive ? "group group/card interactive-parent cursor-pointer card-hover-system" : "";
@@ -33,6 +34,7 @@ export function Card({
       id={id}
       className={`${elevated ? "card-elevated" : "card-base"} ${paddingClasses[padding]} ${interactiveClasses} ${className}`}
       onClick={onClick}
+      {...props}
     >
       {children}
     </div>

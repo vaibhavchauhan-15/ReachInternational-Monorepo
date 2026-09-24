@@ -165,7 +165,7 @@ export function EngineerMobileSection() {
                         <div className="w-1.5 h-1.5 rounded-full bg-[var(--color-success)] opacity-90" title="Location active" />
                       </div>
                       <div className="flex items-center gap-2">
-                        <Signal className="w-3.5 h-3.5" strokeWidth={2.5} />
+                        <Signal className="w-3.5 h-3.5" />
                         <Wifi className="w-3.5 h-3.5" strokeWidth={2.5} />
                         {/* iPhone Battery Capsule */}
                         <div className="flex items-center gap-1 border border-[var(--color-ink)]/40 rounded-[5px] px-1 py-0.5 h-3.5 w-6 relative">

@@ -2,7 +2,8 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AnimatedChevronDown, AnimatedCheck } from "./animated-icons";
+import { ChevronDown } from "lucide-react";
+import { AnimatedCheck } from "./animated-icons";
 
 export interface FilterDropdownOption {
   value: string;
@@ -109,7 +110,7 @@ export function FilterDropdown({
           )}
         </div>
 
-        <AnimatedChevronDown
+        <ChevronDown
           size={13}
           className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 ml-1 ${
             isOpen ? "rotate-180 text-sky-500" : ""
