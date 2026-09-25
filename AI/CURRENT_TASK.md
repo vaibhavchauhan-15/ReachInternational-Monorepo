@@ -4,15 +4,19 @@ Status: COMPLETED (2026-09-24)
 
 ## Delivered Solution
 1. **Supabase Migration Workflow** (`.github/workflows/supabase-migrate.yml`):
-   - Single reusable workflow for both environments.
-   - On push to `development`/`Production`: runs `supabase db push` (applies pending migrations).
-   - On PR to `Production`: runs `supabase db diff --linked` as a dry-run check.
-   - Uses GitHub Environments for secret scoping (same secret names, different values).
+   - Single reusable workflow for both environments (`development` and `production`).
+   - On push to `development`/`production`: runs `supabase db push` (applies pending migrations).
+   - On PR to `production`: runs `supabase db diff --linked` as a dry-run check.
+   - Uses GitHub Environments for secret scoping (`development` and `production`).
    - Uses `supabase/setup-cli@v1` (official action).
 
 2. **CI Workflow Update** (`.github/workflows/ci.yml`):
-   - Branch targets changed from `main`/`develop` to `development`/`Production`.
+   - Branch targets changed to `development` and `production`.
    - Typecheck + mobile tests remain as required status checks.
+
+3. **Deleted Duplicate Branch**:
+   - Remote and local `Production` (capital P) branch deleted.
+   - Kept canonical lowercase `production` and `development`.
 
 3. **Deleted** `.github/workflows/deploy-web.yml`:
    - Redundant — Vercel's native Git integration handles deployments.

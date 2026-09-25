@@ -130,14 +130,30 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
     formData.append("billingPincode", billingPincode);
     formData.append("status", client?.status || "active");
 
-    if (!companyName.trim()) {
-      setFormState({ error: "Company Name is required." });
-      setIsSubmitting(false);
-      return;
+    // Validate all required fields
+    const missingFields: string[] = [];
+
+    if (!companyName.trim()) missingFields.push("Company Name");
+    if (!contactPerson.trim()) missingFields.push("Contact Person");
+    if (!phone.trim()) missingFields.push("Phone Number");
+    if (!gstin.trim()) missingFields.push("GSTIN Number");
+    if (!panNumber.trim()) missingFields.push("PAN Number");
+    if (!address.trim()) missingFields.push("Street / Area");
+    if (!city.trim()) missingFields.push("City / Town / Village");
+    if (!district.trim()) missingFields.push("District");
+    if (!stateName.trim()) missingFields.push("State");
+    if (!pincode.trim()) missingFields.push("Pincode");
+
+    if (isBillingAddressDifferent) {
+      if (!billingAddress.trim()) missingFields.push("Billing Street / Area");
+      if (!billingCity.trim()) missingFields.push("Billing City");
+      if (!billingDistrict.trim()) missingFields.push("Billing District");
+      if (!billingState.trim()) missingFields.push("Billing State");
+      if (!billingPincode.trim()) missingFields.push("Billing Pincode");
     }
 
-    if (!address.trim() || !city.trim() || !stateName.trim()) {
-      setFormState({ error: "Site Address, City, and State are required." });
+    if (missingFields.length > 0) {
+      setFormState({ error: `Required fields missing: ${missingFields.join(", ")}.` });
       setIsSubmitting(false);
       return;
     }
@@ -213,6 +229,7 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
                   label="Contact Person"
+                  required
                   value={contactPerson}
                   onChange={(e) => setContactPerson(e.target.value)}
                   placeholder="e.g. Rajesh Sharma"
@@ -221,6 +238,7 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
 
                 <Input
                   label="Phone Number"
+                  required
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
@@ -232,6 +250,7 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
                   label="GSTIN Number"
+                  required
                   value={gstin}
                   onChange={(e) => setGstin(e.target.value.toUpperCase())}
                   placeholder="e.g. 07AAAAA0000A1Z5"
@@ -241,6 +260,7 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
 
                 <Input
                   label="PAN Number"
+                  required
                   value={panNumber}
                   onChange={(e) => setPanNumber(e.target.value.toUpperCase())}
                   placeholder="e.g. ABCDE1234F"
@@ -285,6 +305,7 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
 
                 <Input
                   label="District"
+                  required
                   value={district}
                   onChange={(e) => setDistrict(e.target.value)}
                   placeholder="e.g. Pune"
@@ -305,6 +326,7 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
 
                 <Input
                   label="Pincode"
+                  required
                   value={pincode}
                   onChange={(e) => setPincode(e.target.value)}
                   placeholder="411001"
@@ -339,6 +361,7 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
                 {/* 1. Billing Street / Area */}
                 <Input
                   label="Billing Street / Area"
+                  required
                   value={billingAddress}
                   onChange={(e) => setBillingAddress(e.target.value)}
                   placeholder="e.g. Corporate HQ, 5th Floor, Tower B, Cyber City"
@@ -349,6 +372,7 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input
                     label="Billing City / Town / Village"
+                    required
                     value={billingCity}
                     onChange={(e) => setBillingCity(e.target.value)}
                     placeholder="e.g. Gurugram"
@@ -357,6 +381,7 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
 
                   <Input
                     label="Billing District"
+                    required
                     value={billingDistrict}
                     onChange={(e) => setBillingDistrict(e.target.value)}
                     placeholder="e.g. Gurugram"
@@ -368,6 +393,7 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Input
                     label="Billing State"
+                    required
                     value={billingState}
                     onChange={(e) => setBillingState(e.target.value)}
                     placeholder="e.g. Haryana"
@@ -376,6 +402,7 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
 
                   <Input
                     label="Billing Pincode"
+                    required
                     value={billingPincode}
                     onChange={(e) => setBillingPincode(e.target.value)}
                     placeholder="122002"
