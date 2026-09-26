@@ -1649,7 +1649,8 @@ export function PayrollClient({
           {/* Section 1: Basic & Attendance */}
           <div className="p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3">
             <h5 className="font-bold text-xs text-[var(--color-ink)] uppercase tracking-wider flex items-center gap-1.5">
-              <span>🗓️ Basic Salary &amp; Attendance Days</span>
+              <AnimatedCalendar size={14} className="text-blue-600 dark:text-blue-400 shrink-0" />
+              <span>Basic Salary &amp; Attendance Days</span>
             </h5>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               <Input
@@ -1702,7 +1703,8 @@ export function PayrollClient({
           {/* Section 2: Allowances & Deductions */}
           <div className="p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3">
             <h5 className="font-bold text-xs text-[var(--color-ink)] uppercase tracking-wider flex items-center gap-1.5">
-              <span>📉 Deductions &amp; Allowances</span>
+              <AnimatedCreditCard size={14} className="text-rose-600 dark:text-rose-400 shrink-0" />
+              <span>Deductions &amp; Allowances</span>
             </h5>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
               <Input
@@ -1753,7 +1755,8 @@ export function PayrollClient({
           {/* Section 3: Agency Disbursements & Unpaid Balance */}
           <div className="p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3">
             <h5 className="font-bold text-xs text-[var(--color-ink)] uppercase tracking-wider flex items-center gap-1.5">
-              <span>🏛️ Agency Disbursements</span>
+              <AnimatedBriefcase size={14} className="text-amber-600 dark:text-amber-400 shrink-0" />
+              <span>Agency Disbursements</span>
             </h5>
             <div className="grid grid-cols-3 gap-2.5">
               <Input
@@ -1787,7 +1790,8 @@ export function PayrollClient({
           {/* Section 4: Bank Details & Leave Ledger */}
           <div className="p-3 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] space-y-3">
             <h5 className="font-bold text-xs text-[var(--color-ink)] uppercase tracking-wider flex items-center gap-1.5">
-              <span>🏦 Bank Account &amp; Leave Ledger</span>
+              <AnimatedBuilding size={14} className="text-indigo-600 dark:text-indigo-400 shrink-0" />
+              <span>Bank Account &amp; Leave Ledger</span>
             </h5>
             <div className="grid grid-cols-2 gap-2.5">
               <Input
