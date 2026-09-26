@@ -180,7 +180,7 @@ export function AttendanceClient({
         }
       } catch (err: any) {
         console.error("Failed to query attendance:", err);
-        toast("error", err?.message || "Failed to load attendance records");
+        toast("error", err?.message || "Failed to load records");
       } finally {
         setIsQueryLoading(false);
       }
@@ -628,11 +628,10 @@ export function AttendanceClient({
               handleStatusFilterChange("all");
             }
           }}
-          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
-            statusFilter === "all" || !statusFilter
+          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${statusFilter === "all" || !statusFilter
               ? "bg-[var(--color-canvas-elevated)] border-[var(--color-ink)] shadow-xs ring-1 ring-[var(--color-ink)]/10"
               : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-[var(--color-ink)]/30"
-          }`}
+            }`}
         >
           <div className="flex items-center justify-between text-[var(--color-mute)] gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
             <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider truncate">
@@ -658,11 +657,10 @@ export function AttendanceClient({
               handleStatusFilterChange(statusFilter === "present" ? "all" : "present");
             }
           }}
-          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
-            statusFilter === "present"
+          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${statusFilter === "present"
               ? "bg-emerald-50/40 border-emerald-500 shadow-xs ring-1 ring-emerald-500/20 dark:bg-emerald-950/20"
               : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-emerald-500/40"
-          }`}
+            }`}
         >
           <div className="flex items-center justify-between text-[var(--color-mute)] gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
             <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 truncate">
@@ -688,11 +686,10 @@ export function AttendanceClient({
               handleStatusFilterChange(statusFilter === "absent" ? "all" : "absent");
             }
           }}
-          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
-            statusFilter === "absent"
+          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${statusFilter === "absent"
               ? "bg-rose-50/40 border-rose-500 shadow-xs ring-1 ring-rose-500/20 dark:bg-rose-950/20"
               : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-rose-500/40"
-          }`}
+            }`}
         >
           <div className="flex items-center justify-between text-[var(--color-mute)] gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
             <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-rose-600 dark:text-rose-400 truncate">
@@ -718,11 +715,10 @@ export function AttendanceClient({
               handleStatusFilterChange(statusFilter === "half_day" ? "all" : "half_day");
             }
           }}
-          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${
-            statusFilter === "half_day"
+          className={`cursor-pointer p-3.5 sm:p-4 rounded-xl border transition-all ${statusFilter === "half_day"
               ? "bg-amber-50/40 border-amber-500 shadow-xs ring-1 ring-amber-500/20 dark:bg-amber-950/20"
               : "bg-[var(--color-canvas-elevated)] border-[var(--color-hairline)] hover:border-amber-500/40"
-          }`}
+            }`}
         >
           <div className="flex items-center justify-between text-[var(--color-mute)] gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60">
             <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-400 truncate">
