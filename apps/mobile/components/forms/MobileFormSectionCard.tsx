@@ -1,15 +1,17 @@
 import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import { useTheme } from '../ui/ThemeProvider';
-import { Check } from 'lucide-react-native';
+import { Check, Lock } from 'lucide-react-native';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
 export interface MobileFormSectionCardProps {
   stepNumber?: number;
   title: string;
   description?: string;
+  icon?: React.ReactNode;
   isMandatory?: boolean;
   isCompleted?: boolean;
+  isReadOnly?: boolean;
   children: React.ReactNode;
   style?: ViewStyle;
 }
@@ -18,8 +20,10 @@ export const MobileFormSectionCard: React.FC<MobileFormSectionCardProps> = ({
   stepNumber,
   title,
   description,
+  icon,
   isMandatory = false,
   isCompleted = false,
+  isReadOnly = false,
   children,
   style,
 }) => {
@@ -31,12 +35,12 @@ export const MobileFormSectionCard: React.FC<MobileFormSectionCardProps> = ({
         styles.container,
         {
           backgroundColor: isDark ? 'rgba(255, 255, 255, 0.03)' : '#ffffff',
-          borderColor: isCompleted
+          borderColor: isCompleted && !isReadOnly
             ? isDark
               ? 'rgba(52, 211, 153, 0.8)'
               : '#10b981'
             : theme.colors.hairline,
-          borderWidth: isCompleted ? 1.5 : 1,
+          borderWidth: isCompleted && !isReadOnly ? 1.5 : 1,
         },
         style,
       ]}
@@ -49,12 +53,16 @@ export const MobileFormSectionCard: React.FC<MobileFormSectionCardProps> = ({
               style={[
                 styles.stepCircle,
                 {
-                  backgroundColor: isCompleted
+                  backgroundColor: isCompleted && !isReadOnly
                     ? '#10b981'
+                    : isReadOnly
+                    ? isDark
+                      ? 'rgba(255, 255, 255, 0.05)'
+                      : 'rgba(0, 0, 0, 0.04)'
                     : isDark
                     ? 'rgba(255, 255, 255, 0.1)'
                     : 'rgba(0, 0, 0, 0.06)',
-                  borderColor: isCompleted
+                  borderColor: isCompleted && !isReadOnly
                     ? '#10b981'
                     : theme.colors.hairline,
                 },
@@ -63,13 +71,19 @@ export const MobileFormSectionCard: React.FC<MobileFormSectionCardProps> = ({
               <Text
                 style={[
                   styles.stepNumberText,
-                  { color: isCompleted ? '#ffffff' : theme.colors.ink },
+                  { color: isCompleted && !isReadOnly ? '#ffffff' : theme.colors.ink },
                 ]}
               >
                 {stepNumber}
               </Text>
             </View>
           )}
+
+          {icon ? (
+            <View style={{ marginRight: 2, alignItems: 'center', justifyContent: 'center' }}>
+              {icon}
+            </View>
+          ) : null}
 
           <Text style={[styles.title, { color: theme.colors.ink }]} numberOfLines={1}>
             {title}
@@ -78,7 +92,20 @@ export const MobileFormSectionCard: React.FC<MobileFormSectionCardProps> = ({
 
         {/* Badges */}
         <View style={styles.badgeRow}>
-          {isCompleted ? (
+          {isReadOnly ? (
+            <View
+              style={[
+                styles.readOnlyBadge,
+                {
+                  backgroundColor: isDark ? 'rgba(255, 255, 255, 0.06)' : '#f3f4f6',
+                  borderColor: theme.colors.hairline,
+                },
+              ]}
+            >
+              <Lock size={10} color={theme.colors.mute} />
+              <Text style={[styles.readOnlyBadgeText, { color: theme.colors.mute }]}>Read-only</Text>
+            </View>
+          ) : isCompleted ? (
             <View style={styles.completedBadge}>
               <Check size={12} color="#10b981" strokeWidth={2.5} />
             </View>
@@ -191,6 +218,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   optionalBadgeText: {
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  readOnlyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  readOnlyBadgeText: {
     fontSize: 10,
     fontWeight: '500',
   },

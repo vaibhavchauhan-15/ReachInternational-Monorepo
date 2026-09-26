@@ -12,7 +12,7 @@ export interface FileTextIconHandle {
   stopAnimation: () => void;
 }
 
-export interface FileTextIconProps extends Omit<HTMLAttributes<HTMLDivElement>, "color"> {
+export interface FileTextIconProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   size?: number | string;
   strokeWidth?: number | string;
   color?: string;
@@ -38,7 +38,7 @@ const FILE_TEXT = forwardRef<FileTextIconHandle, FileTextIconProps>(
     });
 
     const handleMouseEnter = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseEnter?.(e);
         } else {
@@ -49,7 +49,7 @@ const FILE_TEXT = forwardRef<FileTextIconHandle, FileTextIconProps>(
     );
 
     const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseLeave?.(e);
         } else {
@@ -60,8 +60,8 @@ const FILE_TEXT = forwardRef<FileTextIconHandle, FileTextIconProps>(
     );
 
     return (
-      <div
-        className={cn(isSpinning && "animate-spin", className)}
+      <span
+        className={cn("inline-flex items-center justify-center", isSpinning && "animate-spin", className)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         {...props}
@@ -156,7 +156,7 @@ const FILE_TEXT = forwardRef<FileTextIconHandle, FileTextIconProps>(
             }}
           />
         </motion.svg>
-      </div>
+      </span>
     );
   }
 );

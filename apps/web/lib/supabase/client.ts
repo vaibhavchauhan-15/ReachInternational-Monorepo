@@ -1,5 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
-import { getSupabaseUrl, getSupabasePublishableKey } from "@/lib/env";
+import { getSupabaseUrl, getSupabasePublishableKey } from "@/lib/env/client";
 
 let browserClient: ReturnType<typeof createBrowserClient> | null = null;
 

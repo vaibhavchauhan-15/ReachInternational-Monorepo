@@ -1,3 +1,349 @@
+- **Attendance Page Feedback Resolution — Scheduled vs Present Days Parity & Clean UI (/attendance) (2026-09-26)**:
+  - **1. User Request (6 Page Feedback Items on /attendance)**:
+    - Item 1: `<AttendanceClient> <PageHeader> <FadeIn> <motion.div> paragraph: "Monthly operator attendance tracking der..."` -> "remove this text"
+    - Item 2: `<AttendanceClient> <motion.div> paragraph: "Active operators this month"` -> "remove this text"
+    - Item 3: `<AttendanceClient> <motion.div> paragraph: "Full daily work log completed"` -> "remove this text"
+    - Item 4: `<AttendanceClient> <motion.div> paragraph: "No machine logs submitted"` -> "remove this text"
+    - Item 5: `<AttendanceClient> <motion.div> paragraph: "Under 4 hours operation"` -> "remove this text"
+    - Item 6: `<AttendanceClient> hidden md:block` -> "sheduled and presnt day show the wrong data / present day <= scheduled day / correct it proprely"
+  - **2. Delivered Solution**:
+    - **Header & KPI Subtitle Paragraph Removals**:
+      - Removed `description` prop from `<PageHeader />` in `apps/web/app/(app)/attendance/AttendanceClient.tsx`.
+      - Removed subtitle paragraphs from all 4 KPI cards: "Active operators this month", "Full daily work log completed", "No machine logs submitted", and "Under 4 hours operation".
+    - **Scheduled vs Present Days Calculation Fix (Migration `111_fix_attendance_scheduled_and_present_days.sql` on Dev DB `vlmxciuogczumumrwyot`)**:
+      - Fixed `v_scheduled_days` to represent total scheduled working days in the month (weekdays excluding Sundays) = 26 in September 2026, rather than capping at `LEAST(v_month_end, v_today)`.
+      - Fixed `present_days` to count distinct scheduled weekdays (`EXTRACT(DOW FROM mhl.log_date) <> 0`) with at least 4 normal working hours (`day_hours.day_normal_hours >= 4`), capped at `v_scheduled_days`.
+      - Sunday shift work is tracked in total worked/OT minutes, but does not count as a weekday scheduled attendance day.
+      - Solved the data discrepancy where `present_days` was 24 while `scheduled_days` was 23. Operator 001 now shows Scheduled: 26, Present: 21, Absent: 1, Half Day: 0, 100% matching `get_attendance_daily_detail`.
+      - Guaranteed `present_days <= scheduled_days` across all operators monorepo-wide.
+    - **Client-Side Defensive Guards**:
+      - Added `Math.min(emp.present_days, emp.scheduled_days)` across web table, web mobile cards, web CSV export, and mobile touch cards.
+  - **3. Verification**:
+    - Web TypeScript check: `pnpm --filter @reachinternational/web exec tsc --noEmit` clean (0 errors).
+    - Mobile TypeScript check: `pnpm --filter @reachinternational/mobile exec tsc --noEmit` clean (0 errors).
+    - Permissions RBAC suite: `pnpm --filter @reachinternational/permissions test` passed (3/3 pass).
+    - Dev Server: `GET /attendance?month=2026-09` HTTP 200 OK.
+
+- **Attendance Search, Filter & Infinite Pagination — Remove Blur Overlay & Implement Skeleton Loading (/attendance) (2026-09-26)**:
+  - **1. User Request**:
+    - "in this page when i seach , sort , filter the data then while load the data it blur the whole screen instead of using skeleton loading only seached value so now remove the blur and use skeleton loading just like user , machine pages also use infinite pagination so it just load only those data whose visible on the screen use lazy loading where neede also make sure seach , sort , filter etc work on whole data instead of only loaded data just like user page implement it properly"
+  - **2. Delivered Solution**:
+    - **Removed Full-Screen Blur Overlay**:
+      - Deleted the blocking backdrop-blur spinner overlay (`fixed inset-0 bg-[var(--color-canvas)]/50 backdrop-blur-xs`) that blurred the entire page and blocked user interaction.
+    - **Localized Table & Card Skeletons**:
+      - Desktop: Added `AttendanceTableSkeletonRows` rendering pulsing placeholder rows matching the 8 table columns.
+      - Mobile: Added `AttendanceMobileCardSkeleton` rendering pulsing touch cards.
+      - Month selector, KPI summary cards, and search/filter toolbar stay completely sharp, visible, and interactive.
+    - **Infinite Scroll with Lazy Loading**:
+      - Replaced manual pagination buttons with `IntersectionObserver` sentinel on both table and mobile views.
+      - Initial page load is 25 items; scrolling down lazily loads subsequent 25-item chunks in the background and appends to the list.
+    - **Global Search, Sort & Filter Across Whole Database**:
+      - Migration `110_enhance_attendance_search_and_pagination.sql` applied on Dev DB (`vlmxciuogczumumrwyot`).
+      - Upgraded `get_attendance_monthly_summary` to support whitespace-normalized name search (e.g. `operator100` matches `Operator 100`), email search, and phone digit search.
+      - Searches, sorts, and filters query the entire PostgreSQL database instead of in-memory loaded items.
+    - **Web-to-Mobile Synchronization**:
+      - Added whitespace and digit search normalization to `apps/mobile/app/(app)/attendance.tsx`.
+    - **Full-Roster CSV Export**:
+      - Connected `handleExportCSV` to `getAttendanceExportAction` to export all matching records across the entire roster.
+  - **3. Verification**:
+    - Web TypeScript check: `pnpm --filter @reachinternational/web exec tsc --noEmit` passed (0 errors).
+    - Mobile TypeScript check: `pnpm --filter @reachinternational/mobile exec tsc --noEmit` passed (0 errors).
+    - Permissions RBAC test suite: `pnpm --filter @reachinternational/permissions test` passed (3/3 pass).
+    - Browser Subagent visual verification: verified desktop (1536x800) and mobile (375x812), recorded `verify_attendance_loading_1790405056198.webp`.
+
+- **Profile Modal Feedback Resolution — Instant Validation, Mandatory KYC, Read-Only Badge & Clean Copy (/profile) (2026-09-26)**:
+  - **1. User Request (10 Page Feedback Items on /profile)**:
+    - Items 1, 2, 3, 4, 5: "make it mandatory to fill also after entered the number then quickly validate it if failed then mark the outer edge of the input box in red color and below the error message" (Aadhaar number, Driving Licence number, KYC document uploads, input grids)
+    - Item 6: "remove this text" (`Street + City/Town/Village + District + ...` in Section 3)
+    - Item 7: "remove this" (`Verified base monthly compensation` in Section 4)
+    - Item 8: "this is read only so remove this and add here read only text with icon" (Section 4 header indicator)
+    - Items 9 & 10: "after entered the value then quickly validate it if failed then mark the outer edge of the input box in red colour and below the error message" (Full Name & Phone inputs)
+  - **2. Delivered Solution**:
+    - **Instant Live Validation with Red Box Borders & Inline Error Text**:
+      - Configured instant validation on `onChange` and `onBlur` for Full Name, Phone (10 digits), Aadhaar Number (12 digits), and Driving Licence Number.
+      - Handled invalid state by passing `error={fieldError || undefined}` to `<Input />`, applying red border (`border-rose-500 bg-rose-500/5 dark:bg-rose-500/10`) and displaying error text below.
+      - Wired live address validation across Street, City, District, and State into `UserAddressSection` and `MobileAddressFields`.
+    - **Mandatory Fields & KYC Uploads**:
+      - Marked Full Name, Phone, Aadhaar, Licence numbers, and KYC document uploads with red asterisk `*` and `Required` badges.
+      - Integrated missing document error handling with inline warning banner and red border if submission is attempted without uploads.
+    - **Section 3 & 4 Description Text Removal**:
+      - Removed `"Street + City/Town/Village + District + State"` description from Section 3 header card.
+      - Removed `"Verified base monthly compensation"` description from Section 4 header card.
+    - **Read-Only Section 4 Indicator with Lock Icon**:
+      - Added `isReadOnly?: boolean` prop to `FormSectionCard` and `MobileFormSectionCard`.
+      - Renders `<Lock /> Read-only` badge with lock icon in the section header when read-only for non-superadmin users.
+      - Suppresses green completion checkmark and "Optional" badge when read-only.
+    - **Mandatory Web-to-Mobile Synchronization**:
+      - Synchronized all validation logic, mandatory badges, red borders, inline error messages, description removals, and read-only lock badges across both `apps/web` and `apps/mobile`.
+  - **3. Verification**:
+    - Web TypeScript check: `pnpm --filter @reachinternational/web exec tsc --noEmit` clean (0 errors).
+    - Mobile TypeScript check: `pnpm --filter @reachinternational/mobile exec tsc --noEmit` clean (0 errors).
+    - Permissions RBAC suite: `pnpm --filter @reachinternational/permissions test` passed (3/3 pass).
+
+- **Signup Page Feedback Resolution — Input-Box Scoped Hover Animations & Mandatory Aadhaar Upload (/signup) (2026-09-26)**:
+  - **1. User Request (22 Page Feedback Items on /signup)**:
+    - "when i hover to the input box then only animate this box's icon" (Inputs: full_name, phone, email, address street/city/district, state selector, salary, aadhaar number, license number, document upload dropzones, password, confirm password, card headers)
+    - "this eye icon act ac btn so only hover in this icon then only animate instaed of card" (Password and confirm password visibility toggle eye icon)
+    - "make this mandatory to fill" (Aadhaar document upload card)
+  - **2. Delivered Solution**:
+    - **Input-Box Scoped Hover Animations**:
+      - Removed `data-hover-parent` from `FormSectionCard.tsx`, eliminating card-level hover animation triggers over section header icons or nested input boxes.
+      - Moved `data-hover-parent` in `Input.tsx` from the outer column wrapper `<div className="flex flex-col gap-1 w-full">` directly to the actual input box container `<div data-hover-parent className="relative w-full flex items-center">`. Only hovering the input box itself animates the input's icon. Hovering labels, hints, or whitespace does not animate.
+      - Removed outer `data-hover-parent` from `UserSalaryField.tsx`, delegating input box hover directly to `<Input>`.
+      - Added `icon={<AnimatedMapPin size={15} />}` to State `SearchableSelect` in `UserAddressSection.tsx` for visual and interactive consistency across all address fields.
+      - Added `icon={<AnimatedUser size={15} />}` to Role and `icon={<AnimatedShieldCheck size={15} />}` to Supervisor `SearchableSelect` in `signup/page.tsx`.
+    - **Password Eye Icon Button Hover Isolation**:
+      - The eye toggle `<button>` in `Input.tsx` acts as the immediate interactive parent for `AnimatedEye` / `AnimatedEyeOff`.
+      - Hovering the input box or card does NOT animate the eye icon. It only animates when hovering directly on the eye button itself.
+    - **Mandatory Aadhaar Document Upload**:
+      - Added red asterisk `*` to Aadhaar Document header on `/signup`.
+      - Integrated `Boolean(aadhaarFile)` requirement into `section3Complete` and `missingMandatoryList`.
+      - Added client-side pre-flight validation in `handleSubmit` and styled error border and message when missing.
+      - Added server-side validation in `signup` action (`apps/web/app/actions/auth.ts`) requiring a valid uploaded `aadhaar_file`.
+      - Removed card-level `data-hover-parent` from Aadhaar and Licence upload cards; integrated `<AnimatedUpload size={16} />` into dropzone buttons, animating only when hovering the dropzone itself.
+    - **Mandatory Web-to-Mobile Synchronization (`apps/mobile/app/(auth)/signup.tsx`)**:
+      - Added `Boolean(aadhaarDoc)` to mobile `section3Complete` and `missingFields`.
+      - Added validation check for `!aadhaarDoc` in mobile `handleSignup`.
+      - Added mandatory indicator `*` to mobile `MobileDocumentUploadCard`.
+  - **3. Verification**:
+    - Web TypeScript check: `pnpm --filter @reachinternational/web exec tsc --noEmit` clean (0 errors).
+    - Mobile TypeScript check: `pnpm --filter @reachinternational/mobile exec tsc --noEmit` clean (0 errors).
+    - Permissions RBAC suite: `pnpm --filter @reachinternational/permissions test` passed (3/3 pass).
+    - Dev Server: `GET /signup` HTTP 200 OK.
+- **Standardize Profile Modal Card Hover Animations, Proportional Icon Sizing, and Footer Alignment (/profile) (2026-09-26)**:
+  - **1. User Request (15 Page Feedback Items on /profile)**:
+    - "when i hover this card then icon should start animating with default animation behaviour instead of only hover to the icon then icon will animate make sure dont add any custom animation all imported icon have its default animation keep this only also make the icon size proper as per titile padding" (across section cards, subcards, timepicker, address inputs, document rows, preview rows)
+    - "when i hover only this card then icon will animate also make the size of the icon as same as text" (UserSalaryField)
+    - "make the proper icon size as per the font size" (Lock in read-only badge)
+    - "make proper format and in one row only also make sure responsive both mobile and desktop" (Cancel and Submit modal footer actions)
+  - **2. Delivered Solution**:
+    - **Card-Level Hover Micro-Interactions**:
+      - Configured `data-hover-parent` on `FormSectionCard`, subcards (Aadhaar & Licence), `CustomTimePicker`, `Input` root container, `UserSalaryField`, uploaded document items, and file preview rows.
+      - Hovering anywhere on a card starts the icon's native default Framer Motion animation via `createAnimatedIconBridge` without requiring direct cursor hover on the icon SVG.
+      - Strictly zero custom animation keyframes or CSS transforms; 100% native default animation behavior preserved.
+    - **Proportional Icon Sizing & Standardized Title Padding**:
+      - Section header icons: standardized to `size={16}` (`w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0`).
+      - Aadhaar & Licence subcards: standardized to `size={16}` (`AnimatedShieldCheck`, `AnimatedCreditCard`) with title padding `pb-1.5 border-b border-[var(--color-hairline)]/60`.
+      - CustomTimePicker: standardized to `AnimatedClock size={14}` (`w-3.5 h-3.5`) matching label font and padding.
+      - Address inputs: container `data-hover-parent` with `AnimatedMapPin size={15}` matching input scale.
+      - Salary field: isolated card-level hover to `UserSalaryField` only (`data-hover-parent`) and scaled lock icon to `AnimatedLock size={10}` (`w-2.5 h-2.5`) matching `text-[10px]` typography.
+      - FormSectionCard read-only badge: updated to `AnimatedLock size={10}`.
+      - Document rows & previews: updated to `AnimatedFileText size={16}` / `size={18}` with `data-hover-parent`.
+    - **Clean Single-Row Modal Footer**:
+      - Separated incomplete field warning notice cleanly above the action row.
+      - Formatted Cancel and Submit buttons cleanly into ONE unified row (`flex flex-row items-center justify-end gap-2.5 pt-3 border-t`, `flex-1 sm:flex-initial h-10 min-h-[40px] px-5 text-xs font-semibold`), fully responsive on desktop and mobile.
+    - **Mandatory Mobile Synchronization & Monorepo Consistency**:
+      - Extended `MobileFormSectionCard.tsx` with `icon` prop support.
+      - Synchronized `apps/mobile/components/profile/EditProfileModal.tsx` passing canonical section icons (`User`, `Clock`, `MapPin`, `CreditCard`).
+      - Synchronized `UserEditModal.tsx` and `UserCreateModal.tsx` passing canonical section icons to `FormSectionCard`.
+  - **3. Verification**:
+    - Web TypeScript check: `tsc --noEmit` exited code 0 (0 errors).
+    - Mobile TypeScript check: `tsc --noEmit` exited code 0 (0 errors).
+    - Permissions RBAC test suite: 3/3 passed (Exit code 0).
+- **Operator Monthly Salary Statement — Full Excel Reference Parity (/payroll) (2026-09-25)**:
+  - **1. User Request**:
+    - "read this payroll sample excel file and make like this payroll for each and everyoperator also maek sure this payrolll should be scalable and clean ui/ux also make sure it should be responsive and both mobile and desktop"
+  - **2. Delivered Solution**:
+    - **Database Migration (`109_operator_salary_statement_excel_parity.sql`)**:
+      - Applied to Dev DB `vlmxciuogczumumrwyot` (Production `dhbbgfzbyatzvqafnsqp` strictly untouched).
+      - Added salary statement columns to `public.users` (`doj`, `bank_account_number`, `bank_ifsc_code`, `total_pl_quota`, `pl_used_as_on_date`).
+      - Added all 28 statement breakdown columns to `public.operator_payrolls`.
+      - Rewrote `get_hr_payroll_summary` to auto-calculate all 32 fields across all active operators (100 operators) with exact Excel formula parity.
+      - Created `update_operator_salary_statement` RPC for atomic statement mutations and calculations.
+    - **Monorepo Shared Types (`packages/types/src/database.ts`)**:
+      - Extended `HRPayrollOperator`, `OperatorPayroll`, and `User` with all salary statement fields.
+    - **Server Actions (`apps/web/app/actions/payroll.ts`)**:
+      - Added `updateOperatorSalaryStatementAction` with RBAC authorization and path/tag revalidation.
+    - **Web Payroll Client (`apps/web/app/(app)/payroll/PayrollClient.tsx`)**:
+      - 4 KPI summary cards (Total Gross, Net Payable, Disbursed vs Unpaid, Days & Leave Summary).
+      - 6 View Mode switcher tabs: Full Statement (Excel Reference), Attendance & Days, Earnings Breakdown, Deductions & Banking, Agency Payouts, Leave Ledger.
+      - Desktop table with sticky left freeze columns (`SL NO`, `NAME`) during horizontal scrolling across all columns.
+      - Printable Salary Statement Slip modal (`PrintSlipModal`) with complete industrial breakdown.
+      - Interactive live calculation edit modal (`EditSalaryStatementModal`).
+      - CSV export matching the exact 32 Excel reference headers.
+      - Mobile touch cards view with Net Pay highlight and expandable details.
+    - **Mandatory Mobile Synchronization (`apps/mobile/app/(app)/payroll.tsx`)**:
+      - Synchronized data model, KPI cards, month picker, expandable operator touch cards, digital salary slip modal, and interactive editing modal.
+    - **Quality Gate**:
+      - Web TypeScript check: 0 errors.
+      - Mobile TypeScript check: 0 errors.
+      - Permissions RBAC suite: 3/3 passed.
+      - Browser subagent visual verification: captured `verify_payroll_statement_1790340659447.webp`.
+- **Attendance Detail Page Feedback Resolution — /attendance/[userId]?month=2026-09 (2026-09-25)**:
+  - **1. User Request (15 Feedback Items)**:
+    - "rename to start time" (`<AttendanceDetailClient> th` Punch In)
+    - "rename to end time" (`<AttendanceDetailClient> th` Punch Out)
+    - "remove this" (`<AttendanceDetailClient> th` Late)
+    - "remove this since whole rows is clickable" (`<AttendanceDetailClient> th` Shift Details / Inspect)
+    - "use seprate column for machine and location" (`<AttendanceDetailClient> th`)
+    - "make this default selection in both mobile and desktop" (`<AttendanceDetailClient> button "Calendar Matrix"`)
+    - "remove this filter completely" (`<AttendanceDetailClient> flex items` filter strip)
+    - "remove this" (`<AttendanceDetailClient> flex flex` Scheduled Working Hours)
+    - "remove this since we dont have any department in the database" (`<AttendanceDetailClient> flex flex` Department)
+    - "remove this since we dont have any department in the database" (`<AttendanceDetailClient> flex flex` Designation)
+    - "this is the site location of the operator" (`<AttendanceDetailClient> flex flex` Branch / Site Yard -> Site Location)
+    - "only show start and end time use AM/PM" (`<AttendanceDetailClient> "18:00 – 23:59 (5.983333333333333h)"`)
+    - "REMOVE THIS SINCE this have in the bottom" (`<AttendanceDetailClient> flex flex` Payable Days in master card)
+    - "remove this card" (`<AttendanceDetailClient> <motion.div> rounded border` Late Arrival KPI card)
+    - "remove this back navigation" (`<AttendanceDetailClient> <LinkComponent> link "Back to Directory"`)
+  - **2. Delivered Solution**:
+    - **Start Time & End Time Headers**: Renamed `Punch In` to `Start Time` and `Punch Out` to `End Time`, formatting timestamps using `formatTimeAMPM`.
+    - **Late & Inspect Columns Removed**: Removed the `Late` column from `<thead>`, `<tbody>`, and `<tfoot>`, and removed `Shift Details` / `Inspect` column since entire row is clickable.
+    - **Machine & Location Columns Separated**: Split into dedicated `Machine` and `Location` columns with corresponding icons.
+    - **Calendar Matrix Default**: Initialized `viewMode` state to `"calendar"` by default for both mobile and desktop viewports.
+    - **Filter Strip Removed**: Completely eliminated the day status filter strip from the ledger section.
+    - **Master Card Metadata Cleaned**: Pruned to 4 clean symmetrical fields (`Employee ID`, `Phone Number`, `Site Location`, and `Shift Schedule` in 12h AM/PM format); removed Department, Designation, Scheduled Working Hours, and duplicate Payable Days. Removed "Back to Directory" back button.
+    - **Summary Cards Streamlined**: Removed `Late Arrival` card, establishing a balanced 7-card KPI grid (`lg:grid-cols-7`).
+    - **Mobile App Synchronization (`apps/mobile/app/(app)/attendance.tsx`)**: Aligned modal employee card to 4 fields (Employee ID, Phone, Site Location, Shift Schedule with AM/PM); formatted day card and entry timestamps with AM/PM.
+  - **3. Verification**:
+    - Web TypeScript check: `tsc --noEmit` exited code 0 (0 errors).
+    - Mobile TypeScript check: `tsc --noEmit` exited code 0 (0 errors).
+    - Permissions RBAC test suite: 3/3 passed (exit code 0).
+- **Page Feedback Resolution — /attendance & /attendance?month=2026-09 (2026-09-25)**:
+  - **1. User Request**:
+    - "remove this icon" (<AttendanceClient> <LinkComponent> <AnimatedBridge(ExternalLink)> <ExternalLinkIcon>)
+    - "make whole row clickable instead of only click the operator name" (<AttendanceClient> hidden md:block)
+    - "just like user search just highlight the match character with search character in the result" (<AttendanceClient> <FilterToolbar> input)
+    - "remove this status column" (<AttendanceClient> th)
+    - "implement the filter option as per needed" (<AttendanceClient> <FilterToolbar> flex flex)
+  - **2. Delivered Solution**:
+    - **ExternalLink Icon Removed**: Removed the external link icon beside the employee name in `AttendanceClient.tsx`.
+    - **Clickable Row Navigation**: Made the entire `<tr>` element interactive (`role="link"`, `tabIndex={0}`, `cursor-pointer`, `onClick={() => router.push(...)}`, keyboard navigation via Enter/Space, and focus/hover background styles) to navigate to `/attendance/[userId]?month=[currentMonth]`.
+    - **Search Match Highlighting**: Integrated `highlightText` from `@/components/ui/Highlight` on desktop table and mobile touch cards for employee name, phone number, and location matching Geist tokens (`text-[#0070f3] dark:text-[#3291ff] font-semibold`).
+    - **Status Column Removed**: Removed the redundant monthly "Status" column header and cell from the desktop table (and adjusted EmptyState `colSpan` from 9 to 8), as monthly breakdown counts (Scheduled, Present, Absent, Half Day) are already granularly detailed per operator.
+    - **Comprehensive Filter Options**:
+      - Expandable filter drawer with 4 responsive `FilterDropdown` selectors:
+        1. `Attendance Standing`: All Attendance, Present Only, Absent, Half Day, Has Absences, Perfect.
+        2. `Overtime`: All Overtime, With Overtime (>0h), No Overtime.
+        3. `Location / State`: All States + dynamically derived state list.
+        4. `Sort By`: Name (A-Z), Name (Z-A), Most Present Days, Most Absent Days, Most Worked Hours, Most Overtime Hours.
+      - Integrated URL query parameter synchronization, active filter count, filter chips with removal pills, and reset support.
+    - **Database Migration (`supabase/migrations/107_enhance_attendance_monthly_summary_filters.sql`)**:
+      - Applied to Dev DB `vlmxciuogczumumrwyot` (Production `dhbbgfzbyatzvqafnsqp` strictly untouched).
+      - Enhanced `get_attendance_monthly_summary` with `p_overtime`, `p_state`, `p_sort_by`, `has_absences`, `perfect`, and city/state search.
+    - **Mandatory Mobile Synchronization (`apps/mobile/app/(app)/attendance.tsx`)**:
+      - Integrated `HighlightText` component on operator name, phone, and location.
+      - Removed redundant monthly status badge from the mobile card header.
+      - Extended `statusFilter` to include `has_absences` and `perfect` in both local state and filter strip chips.
+  - **3. Verification**:
+    - Web TypeScript Check: `tsc --noEmit` passed (0 errors).
+    - Mobile TypeScript Check: `tsc --noEmit` passed (0 errors).
+    - Permissions RBAC Suite: `3/3 passed` (Exit code 0).
+    - Dev Server: `GET /attendance` 307 redirect (standard protected route).
+- **Attendance Detail Revamp — Machine Telemetry, Modal Hover Micro-Interactions, and Full Mobile Responsiveness (/attendance/[userId]) (2026-09-25)**:
+  - **1. User Request**:
+    - "here show the machine detail properly like machine id , serail , model etc"
+    - "when i hover this card then icon should start animating with default animation behaviour instead of only hover to the icon then icon will animate make sure dont add any custom animation all imported icon have its default animation keep this only also make the icon size proper as per titile padding"
+    - "make whole whole attendance page responsive for the mobile also"
+  - **2. Root Cause Analysis**:
+    - Machine identifiers were displayed as truncated UUIDs (`Machine: d2390003…`) because `get_attendance_daily_detail` RPC did not join `public.machines` to retrieve `machine_id` (e.g. `RI-MC-0001`), `model`, `serial_number`, and `name`.
+    - The machine entry card in the modal lacked `data-hover-parent` and consistent title padding / icon sizing.
+    - Squeezing `[All Attendance] [<] [MonthSelect] [>] [Export]` into a single row on viewports <450px clipped controls horizontally; raw seconds in shift timings (`00:00:00-06:00:00`) created visual clutter; the 7 KPI cards created an uneven layout on 2-col mobile views; and lack of bottom safe padding caused content to hide behind the mobile app shell navigation bar.
+  - **3. Delivered Solution**:
+    - **Database Migration (`supabase/migrations/106_fix_attendance_future_days_and_detail_rpcs.sql` on Dev DB `vlmxciuogczumumrwyot`)**:
+      - Joined `public.machines m ON m.id = mhl.machine_id` in `get_attendance_daily_detail` to return `machine_code`, `machine_name`, `model`, `serial_number`, and `manufacturer`.
+      - Marked unlogged ongoing and future days (`>= CURRENT_DATE`) as `DISABLED`. Recalculated `absentDays` to evaluate past days only (`< CURRENT_DATE`).
+    - **Web Attendance Detail Client (`apps/web/app/(app)/attendance/[userId]/AttendanceDetailClient.tsx`)**:
+      - Modal Machine Details: Displays badge with `machine_code` (e.g. `RI-MC-0001`), `model` (e.g. `JCB 3DX`), serial number (`SN: SN-2026-001`), and machine name.
+      - Card Hover Micro-Interactions: Added `data-hover-parent` to the machine card in the modal with `AnimatedTruck size={16}` and standardized title padding `pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60`. No custom keyframes; 100% native default animation behavior preserved.
+      - Comprehensive Mobile Responsiveness: Removed redundant `All Attendance` back button from page content on mobile viewports (<md) as the app shell header already supplies the canonical `← Attendance Details` back button. Streamlined mobile action controls to a single row with `MonthSelect` and `Export` button. Clean shift time formatting (`formatShiftTime`), 2-column balanced KPI grid with Breakdown card spanning `col-span-2 sm:col-span-1`, and bottom clearance `pb-28 sm:pb-24 md:pb-6` preventing navigation bar overlap.
+    - **Mobile App Synchronization (`apps/mobile/app/(app)/attendance.tsx`)**:
+      - Extended `AttendanceDayEntry` with `machine_code`, `machine_name`, `model`, `serial_number`, `manufacturer`.
+      - Extended `AttendanceDay` status union with `'DISABLED'` and updated `renderStatusBadge` with a neutral disabled chip (`—`).
+  - **4. Verification**:
+    - Migration 106 applied to Dev DB `vlmxciuogczumumrwyot` (Production `dhbbgfzbyatzvqafnsqp` strictly untouched).
+    - Monorepo Typecheck: Clean (0 errors across `@reachinternational/web` and `@reachinternational/mobile`).
+    - Permissions RBAC Suite: 3/3 passed (Exit code 0).
+    - Dev Server Verification: `GET /attendance/becf13d1-aba6-44db-b566-83e419363bec?month=2026-09` HTTP 200 OK.
+    - Browser Subagent Verification: Captured `verify_attendance_detail_v2_1790333509883.webp` verifying desktop (1536×695) and mobile (427×952) viewports.
+- **Fix Hydration Error: In HTML, `<div>` Cannot Be a Descendant of `<p>` (/attendance) (2026-09-25)**:
+  - **1. Objective**: Eliminate React 19 SSR hydration mismatch error (`In HTML, <div> cannot be a descendant of <p>`) occurring on `/attendance` where `<ChevronRight>` (wrapped in an animated icon component) was rendered inside an item title `<p>` tag in `AttendanceClient.tsx`.
+  - **2. Root Cause**:
+    - Animated icon components from `lucide-animated.com` in `apps/web/components/icons/*.tsx` rendered root `<div ...><svg>...</svg></div>` elements.
+    - Under HTML5 specifications, `<p>` is strictly phrasing content and cannot contain block-level `<div>` elements. When the browser HTML parser encounters `<div>` inside `<p>`, it prematurely terminates `<p>`, mutilating the client DOM and crashing React hydration.
+  - **3. Delivered Solution**:
+    - **apps/web/components/icons/*.tsx (All 63 Animated Icons)**: Converted root wrapper element from `<div ...>` to `<span className={cn("inline-flex items-center justify-center", ...)} ...>` and migrated prop types from `HTMLDivElement` to `HTMLSpanElement`. Ensures all icons are 100% compliant phrasing content.
+    - **apps/web/components/icons/icon-bridge.tsx**: Added `[&>span]` selectors to normalize child span wrappers alongside `[&>div]`.
+    - **apps/web/app/(app)/attendance/AttendanceClient.tsx**: Changed employee mobile card header container from `<p>` to semantic `<div className="font-semibold text-sm text-[var(--color-ink)] truncate flex items-center gap-1">`.
+    - **apps/web/components/branches/BranchesClient.tsx**: Converted branch location subtitle and metric card labels from `<p>` to `<div>`.
+    - **apps/web/components/profile/EditProfileModal.tsx**: Converted Aadhaar and driving license inline error alert containers from `<p>` to `<div>`.
+    - **apps/web/components/ui/CustomTimePicker.tsx**: Converted validation error message container from `<p>` to `<div>`.
+    - **apps/web/components/settings/SettingsClient.tsx**: Converted real-time password match indicator containers from `<p>` to `<div>`.
+  - **4. Verification**:
+    - `pnpm turbo run typecheck --force`: Turbo 7/7 packages clean (0 errors).
+    - `pnpm --filter @reachinternational/permissions test`: 3/3 passed (Exit code 0).
+    - `node apps/mobile/run-tests.mjs`: 21/21 passed (Exit code 0).
+    - Local dev server `/attendance`: HTTP 200 OK with zero console/hydration errors.
+- **Standardize Attendance Card Hover Animations, Proportional Icon Sizing & Title Padding (/attendance) (2026-09-25)**:
+  - **1. Objective**: Resolve 4 page feedback items on `/attendance?month=2026-09`: enable card-level hover micro-interactions so hovering any of the 4 KPI cards (`Total Staff`, `Present`, `Absent`, `Half Day`) starts the icon's default Framer Motion animation (instead of only animating when hovering directly on the 16x16 icon SVG), ensure strictly zero custom animations are added so all imported icons retain their native animation behavior, and standardize proportional icon sizing with proper title padding.
+  - **2. Delivered Solution**:
+    - **apps/web/components/icons/icon-bridge.tsx**:
+      - Extended `el.closest<HTMLElement>(...)` interactive parent selector to include `.cursor-pointer`, enabling any clickable container with cursor-pointer to trigger inner bridged icon animations on container hover.
+      - Added span wrapper dimension normalization rules (`[&>span]:w-full [&>span]:h-full`).
+    - **apps/web/app/(app)/attendance/AttendanceClient.tsx**:
+      - Added `data-hover-parent`, `role="button"`, and `tabIndex={0}` to all 4 `<motion.div>` KPI cards (`Total Staff`, `Present`, `Absent`, `Half Day`).
+      - Added keyboard accessibility handlers (`onKeyDown` for Enter & Space) allowing keyboard users to filter by card.
+      - Standardized card title headers with proportional title padding: `gap-2 pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60`.
+      - Standardized all 4 icons (`AnimatedUsers`, `AnimatedUserCheck`, `AnimatedUserX`, `AnimatedClock`) to `size={16}` and `className="w-4 h-4 shrink-0 ..."` matching title line height and padding.
+      - Updated card values to `mt-2` for balanced vertical rhythm with the title padding separator.
+      - Preserved 100% native default Framer Motion animation behavior without any custom animation overrides.
+    - **apps/web/components/icons/truck.tsx**: Added missing `import { cn } from "@/lib/utils";` ensuring zero TypeScript build errors.
+  - **3. Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: Exited code 0 (0 errors).
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: Exited code 0 (0 errors).
+    - `pnpm typecheck`: Turbo 7/7 packages clean (Exit code 0).
+    - `pnpm --filter @reachinternational/permissions test`: 3/3 passed (Exit code 0).
+- **Standardize Payroll Card Hover Animations, Proportional Icon Sizing & Title Padding (/payroll) (2026-09-25)**:
+  - **1. Objective**: Resolve 7 page feedback items on `/payroll`: enable card-level hover micro-interactions so hovering any KPI card, notice card, or period badge automatically triggers the icon's default Framer Motion animation (without requiring direct cursor hover on the icon SVG), replace static icons (`Briefcase`, `HelpCircle`) with bridged animated icons (`AnimatedBriefcase`, `AnimatedHelpCircle`), eliminate any custom animation overrides, and standardize proportional icon sizes and title padding across all cards and badges.
+  - **2. Delivered Solution**:
+    - **apps/web/components/icons/index.ts**: Added `HelpCircle` and `HelpCircleIcon` aliases mapped to bridged `CircleHelpIcon`.
+    - **apps/web/components/ui/animated-icons/index.ts**: Exported `AnimatedHelpCircle` and `AnimatedCircleHelp` from bridged icons.
+    - **apps/web/app/(app)/payroll/PayrollClient.tsx**:
+      - Replaced static `Briefcase` and `HelpCircle` from `lucide-react` with `AnimatedBriefcase` and `AnimatedHelpCircle` from `@/components/ui/animated-icons`.
+      - **Item 7 (Notice Card)**: Added `data-hover-parent`, `AnimatedHelpCircle size={16} className="w-4 h-4 text-sky-500 mt-0.5 shrink-0"`, and card hover border styling.
+      - **Item 6 (Regular Period Badge)**: Added `data-hover-parent`, `AnimatedBriefcase size={14} className="w-3.5 h-3.5 shrink-0"`, `gap-1.5`, and hover background styling.
+      - **Item 5 (Overtime Period Badge)**: Added `data-hover-parent`, `AnimatedClock size={14} className="w-3.5 h-3.5 shrink-0"`, `gap-1.5`, and hover background styling.
+      - **Items 1-4 (4 KPI Cards)**: Added `data-hover-parent` to all 4 `<motion.div>` cards, standardized icons to `size={16} className="w-4 h-4 shrink-0"`, replaced static `Briefcase` in Card 2 with `AnimatedBriefcase`, and applied standardized title padding (`pb-1.5 sm:pb-2 border-b border-[var(--color-hairline)]/60`) for clean visual separation.
+      - Strictly zero custom animation keyframes or CSS transforms; 100% default imported Framer Motion animations preserved.
+  - **3. Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: Exited code 0 (0 errors).
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: Exited code 0 (0 errors).
+    - `pnpm --filter @reachinternational/permissions test`: 3/3 passed (Exit code 0).
+- **Web `env.ts` Hardening & Security Boundary Isolation (2026-09-25)**:
+  - **1. Objective**: Partition web environment accessors into strict client-safe and server-only modules (`apps/web/lib/env/client.ts` and `apps/web/lib/env/server.ts`), guard server secrets with `import "server-only"`, remove hardcoded localhost:3000 fallback, omit barrel re-exports to eliminate accidental client leaks, and migrate all 12 consumer files.
+  - **2. Delivered Solution**:
+    - **`apps/web/lib/env/client.ts`**: Migrated from `lib/env.ts` via `git mv`. Exports client-safe helpers: `getAppUrl` (window.origin first, throws if NEXT_PUBLIC_APP_URL unconfigured), `getSupabaseUrl`, `getSupabasePublishableKey`, `getGaMeasurementId`, and `getResetPasswordRedirectUrl`.
+    - **`apps/web/lib/env/server.ts`**: Created server-only module with `import "server-only"`. Exports `getSupabaseSecretKey` and `getUpstashRedisConfig`.
+    - **Zero Barrel File**: Explicitly omitted `index.ts` to ensure client components cannot import server secrets through re-exports.
+    - **Consumer Migrations (12 Files)**:
+      - `apps/web/lib/supabase/admin.ts`: `getSupabaseUrl` from `@/lib/env/client`, `getSupabaseSecretKey` from `@/lib/env/server`.
+      - `apps/web/lib/security/internal-auth-token.ts`: `getSupabaseSecretKey` from `@/lib/env/server`.
+      - `apps/web/lib/security/rate-limiter.ts`: `getUpstashRedisConfig` from `@/lib/env/server`.
+      - `apps/web/proxy.ts`, `apps/web/lib/supabase/client.ts`, `apps/web/lib/supabase/server.ts`, `apps/web/lib/analytics.ts`, `apps/web/app/sitemap.ts`, `apps/web/app/layout.tsx`, `apps/web/app/api/auth/callback/route.ts`, `apps/web/app/api/auth/forgot-password/route.ts`, `apps/web/app/actions/auth.ts`: updated imports to `@/lib/env/client`.
+    - **`apps/web/.env.development`**: Added local development override `NEXT_PUBLIC_APP_URL=http://localhost:3000`.
+  - **3. Verification**:
+    - Secret Leak Audit: 0 imports of `lib/env/server` in components or client tree.
+    - `pnpm --filter @reachinternational/web typecheck`: 0 errors.
+    - `pnpm typecheck`: 7/7 packages clean (0 errors).
+    - `pnpm --filter @reachinternational/permissions test`: 3/3 passed (Exit code 0).
+    - `node apps/mobile/run-tests.mjs`: 21/21 scenarios passed (Exit code 0).
+- **CI/CD Quality Gate & Vercel Deployment Architecture Separation (2026-09-25)**:
+  - **1. Objective**: Isolate GitHub Actions strictly to automated code quality and testing (frozen lockfile, typecheck, tests, web build validation); eliminate all Vercel deployment and Supabase database push workflows from GitHub Actions.
+  - **2. Delivered Solution**:
+    - **Deleted `.github/workflows/supabase-migrate.yml`**: Removed all automated Supabase CLI database push/migration execution from GitHub Actions.
+    - **Confirmed 0 Vercel Deployment Workflows**: Verified `.github/workflows/deploy-web.yml` remains completely deleted. Deployment is handled natively by Vercel Git Integration.
+    - **apps/mobile/run-tests.mjs**: Fixed outdated assertion looking for `FALLBACK_SUPABASE_URL` in `lib/supabase.ts`. Replaced with assertions validating that `lib/supabase.ts` uses centralized getters `getSupabaseUrl()` and `getSupabaseAnonKey()` from `lib/env.ts`, and verified `lib/env.ts` exports authoritative getters. Resolves GitHub Actions CI failure (21/21 tests pass).
+    - **apps/web/scripts/guard-build.js**: Added early exit bypass when `process.platform !== "win32"` or `process.env.NODE_ENV === "production"`, preventing Linux/Vercel build runners from aborting on port scans.
+    - **apps/web/lib/env.ts**: Enhanced `getAppUrl()` with automatic detection of Vercel deployment URLs (`process.env.VERCEL_URL`, `process.env.VERCEL_PROJECT_PRODUCTION_URL`) and compiler fallbacks for static prerendering (`sitemap.ts`, `layout.tsx`). Added safe build-time fallbacks for `getSupabaseUrl()` and `getSupabasePublishableKey()`.
+    - **apps/web/app/layout.tsx**: Protected preconnect link to only render when `process.env.NEXT_PUBLIC_SUPABASE_URL` is defined.
+    - **turbo.json**: Added `globalEnv` specifying `NODE_ENV`, `CI`, `VERCEL`, `VERCEL_URL`, `VERCEL_ENV`, `VERCEL_PROJECT_PRODUCTION_URL`, `SKIP_BUILD_GUARD`, `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` so platform variables pass cleanly into package tasks.
+    - **.github/workflows/ci.yml**: Strengthened Quality Gate with Permissions RBAC tests (`pnpm --filter @reachinternational/permissions test`) and Web application build dry-run validation (`pnpm --filter @reachinternational/web build`).
+  - **3. Verification**:
+    - `node apps/mobile/run-tests.mjs`: 21/21 scenarios passed (Exit code 0).
+    - `pnpm --filter @reachinternational/permissions test`: 3/3 tests passed (Exit code 0).
+    - `pnpm typecheck`: 7/7 packages clean (0 errors).
+    - `pnpm --filter @reachinternational/web build`: Clean Next.js 16 App Router build (36 routes generated).
+    - `pnpm build`: Turborepo build 7/7 packages successful (Exit code 0).
 - **Dev/Prod CI/CD Pipeline Implementation (2026-09-24)**:
   - **1. Delivered**:
     - Created `.github/workflows/supabase-migrate.yml`: single reusable workflow for Supabase migration automation. On push to `development`/`Production`, applies `supabase db push`. On PR to `Production`, runs `supabase db diff --linked` dry-run as a required check. Uses GitHub Environments for secret scoping.

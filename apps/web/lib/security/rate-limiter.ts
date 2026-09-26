@@ -1,5 +1,5 @@
 import "server-only";
-import { env } from "@/lib/env";
+import { getUpstashRedisConfig } from "@/lib/env/server";
 
 /**
  * ReachInternational Edge & Server Rate Limiter (LPDoS & Brute-Force Safeguard)
@@ -109,7 +109,7 @@ export async function checkRateLimitAsync(
     };
   }
 
-  const upstash = env.upstash;
+  const upstash = getUpstashRedisConfig();
 
   // SECURITY (F-05): Warn if distributed rate limiter is not configured in production.
   // In-memory Map resets on serverless cold starts and is not shared across instances.

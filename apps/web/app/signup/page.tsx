@@ -15,6 +15,7 @@ import {
   AnimatedShieldCheck,
   AnimatedCreditCard,
   AnimatedClock,
+  AnimatedUpload,
 } from "@/components/ui/animated-icons";
 import { signup, getSupervisorsAction, type AuthFormState } from "@/app/actions/auth";
 import { isSupervisedRole } from "@reachinternational/permissions";
@@ -107,6 +108,11 @@ export default function SignupPage() {
     } else {
       setAadhaarFile(file);
       setAadhaarFileError(null);
+      setFieldErrors((prev) => {
+        const copy = { ...prev };
+        delete copy.aadhaar_file;
+        return copy;
+      });
       if (file.type.startsWith("image/")) {
         setAadhaarPreviewUrl(URL.createObjectURL(file));
       } else {
@@ -198,8 +204,9 @@ export default function SignupPage() {
     const hasState = formValues.state.trim().length >= 2 || Boolean(formValues.state_id);
     const hasSalary = formValues.monthly_salary.trim().length > 0 && Number(formValues.monthly_salary) > 0;
     const hasAadhaar = formValues.aadhaar_number.trim().replace(/\D/g, "").length === 12;
-    return hasStreet && hasCity && hasDistrict && hasState && hasSalary && hasAadhaar;
-  }, [formValues.street, formValues.address, formValues.city, formValues.district, formValues.state, formValues.state_id, formValues.monthly_salary, formValues.aadhaar_number]);
+    const hasAadhaarDoc = Boolean(aadhaarFile);
+    return hasStreet && hasCity && hasDistrict && hasState && hasSalary && hasAadhaar && hasAadhaarDoc;
+  }, [formValues.street, formValues.address, formValues.city, formValues.district, formValues.state, formValues.state_id, formValues.monthly_salary, formValues.aadhaar_number, aadhaarFile]);
 
   const section4Complete = useMemo(() => {
     return (
@@ -248,6 +255,9 @@ export default function SignupPage() {
     }
     if (formValues.aadhaar_number.trim().replace(/\D/g, "").length !== 12) {
       list.push("Aadhaar Number");
+    }
+    if (!aadhaarFile) {
+      list.push("Aadhaar Document");
     }
     if (formValues.password.length < 8) {
       list.push("Password");
@@ -406,6 +416,10 @@ export default function SignupPage() {
       if (!aadhaarRes.isValid) {
         errors.aadhaar_number = aadhaarRes.error || "Invalid Aadhaar number.";
       }
+    }
+    if (!aadhaarFile) {
+      errors.aadhaar_file = "Aadhaar document upload is required.";
+      setAadhaarFileError("Aadhaar document (Photo / PDF) is required.");
     }
     if (formValues.license_number.trim()) {
       const licRes = validateLicenseNumber(formValues.license_number);
@@ -662,6 +676,7 @@ export default function SignupPage() {
                       placeholder="Select role..."
                       clearable={false}
                       error={fieldErrors.role}
+                      icon={<AnimatedUser size={15} />}
                       className="w-full text-xs sm:text-[13px]"
                     />
                   </div>
@@ -692,6 +707,7 @@ export default function SignupPage() {
                       }
                       clearable={true}
                       error={fieldErrors.supervisor_id}
+                      icon={<AnimatedShieldCheck size={15} />}
                       className="w-full text-xs sm:text-[13px]"
                     />
                   </div>
@@ -811,20 +827,25 @@ export default function SignupPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 pt-1">
                     {/* Aadhaar Upload Card */}
                     <div
-                      data-hover-parent
-                      className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2 transition-colors hover:border-sky-500/30"
+                      className={`rounded-xl border ${
+                        aadhaarFileError || fieldErrors.aadhaar_file
+                          ? "border-rose-500 dark:border-rose-400 bg-rose-500/5"
+                          : "border-[var(--color-hairline)] bg-[var(--color-canvas)]"
+                      } p-3 space-y-2 transition-colors hover:border-sky-500/30`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
                           <AnimatedShieldCheck size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
-                          Aadhaar Document <span className="text-[10px] font-normal text-[var(--color-mute)]">(Front Photo / PDF)</span>
+                          <span>Aadhaar Document</span>
+                          <span className="text-rose-500 font-semibold">*</span>
+                          <span className="text-[10px] font-normal text-[var(--color-mute)]">(Front Photo / PDF)</span>
                         </span>
                         <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
                       </div>
 
                       {!aadhaarFile ? (
                         <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
-                          <Upload className="h-4 w-4 text-[var(--color-mute)] group-hover:text-sky-600 transition-colors" />
+                          <AnimatedUpload size={16} className="h-4 w-4 text-[var(--color-mute)] group-hover:text-sky-600 transition-colors shrink-0" />
                           <span className="text-xs text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
                             Upload Aadhaar (JPG, PNG, PDF)
                           </span>
@@ -869,16 +890,15 @@ export default function SignupPage() {
                         </div>
                       )}
 
-                      {aadhaarFileError && (
+                      {(aadhaarFileError || fieldErrors.aadhaar_file) && (
                         <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1">
-                          {aadhaarFileError}
+                          {aadhaarFileError || fieldErrors.aadhaar_file}
                         </p>
                       )}
                     </div>
 
                     {/* Licence Upload Card */}
                     <div
-                      data-hover-parent
                       className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2 transition-colors hover:border-sky-500/30"
                     >
                       <div className="flex items-center justify-between">
@@ -891,7 +911,7 @@ export default function SignupPage() {
 
                       {!licenseFile ? (
                         <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
-                          <Upload className="h-4 w-4 text-[var(--color-mute)] group-hover:text-sky-600 transition-colors" />
+                          <AnimatedUpload size={16} className="h-4 w-4 text-[var(--color-mute)] group-hover:text-sky-600 transition-colors shrink-0" />
                           <span className="text-xs text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
                             Upload Licence (JPG, PNG, PDF)
                           </span>

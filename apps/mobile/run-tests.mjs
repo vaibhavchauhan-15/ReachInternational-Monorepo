@@ -61,7 +61,12 @@ try {
   assert(layoutContent.includes('export function ErrorBoundary'), '_layout.tsx exports ErrorBoundary to catch runtime exceptions gracefully');
 
   const supabaseContent = fs.readFileSync(path.join(__dirname, 'lib', 'supabase.ts'), 'utf8');
-  assert(supabaseContent.includes('FALLBACK_SUPABASE_URL'), 'supabase.ts defines production fallback URL to guarantee non-empty createClient');
+  assert(supabaseContent.includes('getSupabaseUrl'), 'supabase.ts utilizes centralized environment getter for Supabase URL');
+  assert(supabaseContent.includes('getSupabaseAnonKey'), 'supabase.ts utilizes centralized environment getter for Supabase Anon Key');
+
+  const envContent = fs.readFileSync(path.join(__dirname, 'lib', 'env.ts'), 'utf8');
+  assert(envContent.includes('export function getSupabaseUrl'), 'env.ts exports authoritative getSupabaseUrl helper');
+  assert(envContent.includes('export function getSupabaseAnonKey'), 'env.ts exports authoritative getSupabaseAnonKey helper');
 
   const pkgContent = fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8');
   assert(pkgContent.includes('expo-system-ui'), 'package.json includes expo-system-ui for Android 15 system UI theme');

@@ -36,3 +36,9 @@ jobs:
 
       - name: Run Mobile Test Suite
         run: node apps/mobile/run-tests.mjs
+
+      - name: Run Permissions RBAC Test Suite
+        run: pnpm --filter @reachinternational/permissions test
+
+      - name: Web Application Build Validation
+        run: pnpm --filter @reachinternational/web build

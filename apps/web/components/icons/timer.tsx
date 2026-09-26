@@ -12,7 +12,7 @@ export interface TimerIconHandle {
   stopAnimation: () => void;
 }
 
-export interface TimerIconProps extends Omit<HTMLAttributes<HTMLDivElement>, "color"> {
+export interface TimerIconProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   size?: number | string;
   strokeWidth?: number | string;
   color?: string;
@@ -75,7 +75,7 @@ const TimerIcon = forwardRef<TimerIconHandle, TimerIconProps>(
     });
 
     const handleMouseEnter = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseEnter?.(e);
         } else {
@@ -86,7 +86,7 @@ const TimerIcon = forwardRef<TimerIconHandle, TimerIconProps>(
     );
 
     const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseLeave?.(e);
         } else {
@@ -97,8 +97,8 @@ const TimerIcon = forwardRef<TimerIconHandle, TimerIconProps>(
     );
 
     return (
-      <div
-        className={cn(isSpinning && "animate-spin", className)}
+      <span
+        className={cn("inline-flex items-center justify-center", isSpinning && "animate-spin", className)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         {...props}
@@ -133,7 +133,7 @@ const TimerIcon = forwardRef<TimerIconHandle, TimerIconProps>(
           />
           <circle cx="12" cy="14" r="8" />
         </svg>
-      </div>
+      </span>
     );
   }
 );

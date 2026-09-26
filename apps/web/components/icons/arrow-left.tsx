@@ -12,7 +12,7 @@ export interface ArrowLeftIconHandle {
   stopAnimation: () => void;
 }
 
-export interface ArrowLeftIconProps extends Omit<HTMLAttributes<HTMLDivElement>, "color"> {
+export interface ArrowLeftIconProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   size?: number | string;
   strokeWidth?: number | string;
   color?: string;
@@ -59,7 +59,7 @@ const ArrowLeftIcon = forwardRef<ArrowLeftIconHandle, ArrowLeftIconProps>(
     });
 
     const handleMouseEnter = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseEnter?.(e);
         } else {
@@ -70,7 +70,7 @@ const ArrowLeftIcon = forwardRef<ArrowLeftIconHandle, ArrowLeftIconProps>(
     );
 
     const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseLeave?.(e);
         } else {
@@ -81,8 +81,8 @@ const ArrowLeftIcon = forwardRef<ArrowLeftIconHandle, ArrowLeftIconProps>(
     );
 
     return (
-      <div
-        className={cn(isSpinning && "animate-spin", className)}
+      <span
+        className={cn("inline-flex items-center justify-center", isSpinning && "animate-spin", className)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         {...props}
@@ -109,7 +109,7 @@ const ArrowLeftIcon = forwardRef<ArrowLeftIconHandle, ArrowLeftIconProps>(
             variants={SECOND_PATH_VARIANTS}
           />
         </svg>
-      </div>
+      </span>
     );
   }
 );

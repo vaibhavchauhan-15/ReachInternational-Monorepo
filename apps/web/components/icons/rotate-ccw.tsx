@@ -11,7 +11,7 @@ export interface RotateCCWIconHandle {
   stopAnimation: () => void;
 }
 
-export interface RotateCCWIconProps extends Omit<HTMLAttributes<HTMLDivElement>, "color"> {
+export interface RotateCCWIconProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   size?: number | string;
   strokeWidth?: number | string;
   color?: string;
@@ -36,7 +36,7 @@ const RotateCCWIcon = forwardRef<RotateCCWIconHandle, RotateCCWIconProps>(
     });
 
     const handleMouseEnter = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) onMouseEnter?.(e);
         else controls.start("animate");
       },
@@ -44,7 +44,7 @@ const RotateCCWIcon = forwardRef<RotateCCWIconHandle, RotateCCWIconProps>(
     );
 
     const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) onMouseLeave?.(e);
         else controls.start("normal");
       },
@@ -52,8 +52,8 @@ const RotateCCWIcon = forwardRef<RotateCCWIconHandle, RotateCCWIconProps>(
     );
 
     return (
-      <div
-        className={cn(isSpinning && "animate-spin", className)}
+      <span
+        className={cn("inline-flex items-center justify-center", isSpinning && "animate-spin", className)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         {...props}
@@ -78,7 +78,7 @@ const RotateCCWIcon = forwardRef<RotateCCWIconHandle, RotateCCWIconProps>(
           <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
           <path d="M3 3v5h5" />
         </motion.svg>
-      </div>
+      </span>
     );
   }
 );

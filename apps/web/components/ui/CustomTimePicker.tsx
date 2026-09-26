@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Clock } from "lucide-react";
 import { motion } from "framer-motion";
-import { AnimatedAlertTriangle } from "./animated-icons";
+import { AnimatedAlertTriangle, AnimatedClock } from "./animated-icons";
 import { cn } from "@/lib/utils";
 
 export interface CustomTimePickerProps {
@@ -391,7 +391,7 @@ export function CustomTimePicker({
   };
 
   return (
-    <div className={`relative w-full ${className}`}>
+    <div data-hover-parent className={`relative w-full ${className}`}>
       {label && (
         <label
           className={
@@ -399,7 +399,7 @@ export function CustomTimePicker({
             "block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 flex items-center gap-1.5 min-w-0"
           }
         >
-          {!hideIcon && showIcon && <Clock className={`h-3.5 w-3.5 ${iconColor} shrink-0`} />}
+          {!hideIcon && showIcon && <AnimatedClock size={14} className={`h-3.5 w-3.5 ${iconColor} shrink-0`} />}
           <span className="truncate">{label}</span>
           {required && <span className="text-rose-500 font-semibold ml-0.5 shrink-0">*</span>}
         </label>
@@ -540,10 +540,10 @@ export function CustomTimePicker({
 
       {/* Inline Validation Error Message */}
       {validation.errorMessage && (
-        <p className="text-[10px] sm:text-[11px] text-rose-500 dark:text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
+        <div className="text-[10px] sm:text-[11px] text-rose-500 dark:text-rose-400 font-medium flex items-center gap-1 mt-1 animate-in fade-in duration-150">
           <AnimatedAlertTriangle size={12} className="shrink-0 text-rose-500" />
           <span>{validation.errorMessage}</span>
-        </p>
+        </div>
       )}
 
       {helperText && !validation.errorMessage && (

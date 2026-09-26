@@ -12,7 +12,7 @@ export interface MessageSquareIconHandle {
   stopAnimation: () => void;
 }
 
-export interface MessageSquareIconProps extends Omit<HTMLAttributes<HTMLDivElement>, "color"> {
+export interface MessageSquareIconProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   size?: number | string;
   strokeWidth?: number | string;
   color?: string;
@@ -62,7 +62,7 @@ const MessageSquareIcon = forwardRef<
   });
 
   const handleMouseEnter = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
+    (e: React.MouseEvent<HTMLSpanElement>) => {
       if (isControlledRef.current) {
         onMouseEnter?.(e);
       } else {
@@ -73,7 +73,7 @@ const MessageSquareIcon = forwardRef<
   );
 
   const handleMouseLeave = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
+    (e: React.MouseEvent<HTMLSpanElement>) => {
       if (isControlledRef.current) {
         onMouseLeave?.(e);
       } else {
@@ -84,8 +84,8 @@ const MessageSquareIcon = forwardRef<
   );
 
   return (
-    <div
-      className={cn(isSpinning && "animate-spin", className)}
+    <span
+      className={cn("inline-flex items-center justify-center", isSpinning && "animate-spin", className)}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       {...props}
@@ -105,7 +105,7 @@ const MessageSquareIcon = forwardRef<
       >
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
       </motion.svg>
-    </div>
+    </span>
   );
 });
 

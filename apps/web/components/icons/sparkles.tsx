@@ -12,7 +12,7 @@ export interface SparklesIconHandle {
   stopAnimation: () => void;
 }
 
-export interface SparklesIconProps extends Omit<HTMLAttributes<HTMLDivElement>, "color"> {
+export interface SparklesIconProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   size?: number | string;
   strokeWidth?: number | string;
   color?: string;
@@ -78,7 +78,7 @@ const SparklesIcon = forwardRef<SparklesIconHandle, SparklesIconProps>(
     });
 
     const handleMouseEnter = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseEnter?.(e);
         } else {
@@ -90,7 +90,7 @@ const SparklesIcon = forwardRef<SparklesIconHandle, SparklesIconProps>(
     );
 
     const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseLeave?.(e);
         } else {
@@ -102,8 +102,8 @@ const SparklesIcon = forwardRef<SparklesIconHandle, SparklesIconProps>(
     );
 
     return (
-      <div
-        className={cn(isSpinning && "animate-spin", className)}
+      <span
+        className={cn("inline-flex items-center justify-center", isSpinning && "animate-spin", className)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         {...props}
@@ -145,7 +145,7 @@ const SparklesIcon = forwardRef<SparklesIconHandle, SparklesIconProps>(
             variants={STAR_VARIANTS}
           />
         </svg>
-      </div>
+      </span>
     );
   }
 );

@@ -12,7 +12,7 @@ export interface UploadIconHandle {
   stopAnimation: () => void;
 }
 
-export interface UploadIconProps extends Omit<HTMLAttributes<HTMLDivElement>, "color"> {
+export interface UploadIconProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   size?: number | string;
   strokeWidth?: number | string;
   color?: string;
@@ -51,7 +51,7 @@ const UploadIcon = forwardRef<UploadIconHandle, UploadIconProps>(
     });
 
     const handleMouseEnter = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseEnter?.(e);
         } else {
@@ -62,7 +62,7 @@ const UploadIcon = forwardRef<UploadIconHandle, UploadIconProps>(
     );
 
     const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseLeave?.(e);
         } else {
@@ -73,8 +73,8 @@ const UploadIcon = forwardRef<UploadIconHandle, UploadIconProps>(
     );
 
     return (
-      <div
-        className={cn(isSpinning && "animate-spin", className)}
+      <span
+        className={cn("inline-flex items-center justify-center", isSpinning && "animate-spin", className)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         {...props}
@@ -96,7 +96,7 @@ const UploadIcon = forwardRef<UploadIconHandle, UploadIconProps>(
             <line x1="12" x2="12" y1="3" y2="15" />
           </motion.g>
         </svg>
-      </div>
+      </span>
     );
   }
 );

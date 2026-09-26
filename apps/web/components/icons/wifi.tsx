@@ -11,7 +11,7 @@ export interface WifiIconHandle {
   stopAnimation: () => void;
 }
 
-export interface WifiIconProps extends Omit<HTMLAttributes<HTMLDivElement>, "color"> {
+export interface WifiIconProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   size?: number | string;
   strokeWidth?: number | string;
   color?: string;
@@ -48,7 +48,7 @@ const WifiIcon = forwardRef<WifiIconHandle, WifiIconProps>(
     });
 
     const handleMouseEnter = useCallback(
-      async (e: React.MouseEvent<HTMLDivElement>) => {
+      async (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseEnter?.(e);
         } else {
@@ -60,7 +60,7 @@ const WifiIcon = forwardRef<WifiIconHandle, WifiIconProps>(
     );
 
     const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         controls.start("fadeIn");
         onMouseLeave?.(e);
       },
@@ -68,8 +68,8 @@ const WifiIcon = forwardRef<WifiIconHandle, WifiIconProps>(
     );
 
     return (
-      <div
-        className={cn(isSpinning && "animate-spin", className)}
+      <span
+        className={cn("inline-flex items-center justify-center", isSpinning && "animate-spin", className)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         {...props}
@@ -109,7 +109,7 @@ const WifiIcon = forwardRef<WifiIconHandle, WifiIconProps>(
             />
           ))}
         </svg>
-      </div>
+      </span>
     );
   }
 );

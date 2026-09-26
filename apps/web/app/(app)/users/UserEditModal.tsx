@@ -7,6 +7,8 @@ import {
   AnimatedPhone,
   AnimatedShieldCheck,
   AnimatedCreditCard,
+  AnimatedClock,
+  AnimatedMapPin,
 } from "@/components/ui/animated-icons";
 import { ShieldAlert, ShieldCheck, Activity, Users } from "lucide-react";
 import { Modal, Input, SearchableSelect, Button } from "@/components/ui";
@@ -284,6 +286,7 @@ export function UserEditModal({
           stepNumber={1}
           title="Contact & Identity Info"
           description="Employee full legal name and active communication phone number."
+          icon={<AnimatedUser size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />}
           isMandatory={true}
           isCompleted={section1Complete}
         >
@@ -315,6 +318,7 @@ export function UserEditModal({
           stepNumber={2}
           title="Address & Shift Schedule"
           description="Operational deployment address and daily work shift timing."
+          icon={<AnimatedMapPin size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />}
           isMandatory={true}
           isCompleted={section2Complete}
         >
@@ -360,6 +364,7 @@ export function UserEditModal({
           stepNumber={3}
           title="Identity & Regulatory Documents"
           description="Government-issued compliance identifiers for payroll and field operations."
+          icon={<AnimatedShieldCheck size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />}
           isMandatory={false}
           isCompleted={section3Complete}
         >
@@ -394,6 +399,7 @@ export function UserEditModal({
           stepNumber={4}
           title="System Access & Compensation"
           description="Role-based permissions, supervisory hierarchy, and salary configuration."
+          icon={<AnimatedCreditCard size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />}
           isMandatory={true}
           isCompleted={section4Complete}
         >

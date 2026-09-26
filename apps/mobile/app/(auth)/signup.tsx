@@ -234,6 +234,11 @@ export default function SignupScreen() {
       }
     }
 
+    if (!aadhaarDoc) {
+      errors.aadhaar_doc = 'Aadhaar document (Photo / PDF) is required.';
+      setAadhaarDocError('Aadhaar document (Photo / PDF) is required.');
+    }
+
     if (licenseNumber.trim()) {
       const licRes = validateLicenseNumber(licenseNumber);
       if (!licRes.isValid) {
@@ -369,7 +374,8 @@ export default function SignupScreen() {
     city.trim().length >= 2 &&
     district.trim().length >= 2 &&
     (stateVal.trim().length > 0 || stateId !== null) &&
-    aadhaarNumber.replace(/\D/g, '').length === 12
+    aadhaarNumber.replace(/\D/g, '').length === 12 &&
+    Boolean(aadhaarDoc)
   );
 
   const section4Complete = Boolean(
@@ -394,6 +400,7 @@ export default function SignupScreen() {
   if (!district.trim() || district.trim().length < 2) missingFields.push('District');
   if (!stateVal.trim() && !stateId) missingFields.push('State');
   if (aadhaarNumber.replace(/\D/g, '').length !== 12) missingFields.push('12-digit Aadhaar');
+  if (!aadhaarDoc) missingFields.push('Aadhaar Document');
   if (!password || password.length < 8) missingFields.push('Password (8+ chars)');
   if (password !== confirmPassword) missingFields.push('Matching Passwords');
   if (!agreedToTerms) missingFields.push('Terms Agreement');
@@ -674,7 +681,7 @@ export default function SignupScreen() {
                 />
 
                 <MobileDocumentUploadCard
-                  title="Aadhaar Card Document (Front / PDF)"
+                  title="Aadhaar Card Document (Front / PDF) *"
                   subtitle="Front page or full e-Aadhaar PDF (max 2 MB)"
                   docTypeCode="aadhaar"
                   selectedDoc={aadhaarDoc}

@@ -12,8 +12,12 @@ import {
   AnimatedAlertTriangle,
   AnimatedShieldCheck,
   AnimatedCreditCard,
+  AnimatedUser,
+  AnimatedClock,
+  AnimatedMapPin,
+  AnimatedFileText,
 } from "@/components/ui/animated-icons";
-import { CheckCircle2, AlertCircle, FileText, Upload, X, Check, ExternalLink, Trash2 } from "lucide-react";
+import { CheckCircle2, AlertCircle, Upload, X, Check, ExternalLink, Trash2 } from "lucide-react";
 import { updateMyProfile } from "@/app/actions/profile";
 import {
   getUserDocumentsAction,
@@ -92,8 +96,15 @@ export function EditProfileModal({
   const [aadhaarNumber, setAadhaarNumber] = useState(user.aadhaar_number || "");
   const [licenseNumber, setLicenseNumber] = useState(user.license_number || "");
 
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [aadhaarError, setAadhaarError] = useState<string | null>(null);
   const [licenseError, setLicenseError] = useState<string | null>(null);
+  const [streetError, setStreetError] = useState<string | null>(null);
+  const [cityError, setCityError] = useState<string | null>(null);
+  const [districtError, setDistrictError] = useState<string | null>(null);
+  const [stateError, setStateError] = useState<string | null>(null);
+  const [docErrors, setDocErrors] = useState(false);
 
   // Document state
   const [existingDocs, setExistingDocs] = useState<UserDocument[]>([]);
@@ -144,8 +155,15 @@ export function EditProfileModal({
       );
       setAadhaarNumber(user.aadhaar_number || "");
       setLicenseNumber(user.license_number || "");
+      setNameError(null);
+      setPhoneError(null);
       setAadhaarError(null);
       setLicenseError(null);
+      setStreetError(null);
+      setCityError(null);
+      setDistrictError(null);
+      setStateError(null);
+      setDocErrors(false);
 
       setAadhaarFile(null);
       setAadhaarPreviewUrl(null);
@@ -226,34 +244,110 @@ export function EditProfileModal({
     }
   };
 
+  // Instant Validation Handlers
+  const validateName = (val: string) => {
+    const trimmed = val.trim();
+    if (!trimmed) {
+      setNameError("Full name is required.");
+      return false;
+    }
+    if (trimmed.length < 2) {
+      setNameError("Full name must be at least 2 characters.");
+      return false;
+    }
+    setNameError(null);
+    return true;
+  };
+
+  const validatePhone = (val: string) => {
+    const clean = val.replace(/\D/g, "");
+    if (!clean) {
+      setPhoneError("Mobile number is required.");
+      return false;
+    }
+    if (clean.length < 10) {
+      setPhoneError("Enter a valid 10-digit mobile number.");
+      return false;
+    }
+    setPhoneError(null);
+    return true;
+  };
+
+  const validateAadhaar = (val: string) => {
+    const trimmed = val.trim();
+    if (!trimmed) {
+      setAadhaarError("Aadhaar card number is required.");
+      return false;
+    }
+    const res = validateAadhaarNumber(trimmed);
+    if (!res.isValid) {
+      setAadhaarError(res.error || "Invalid Aadhaar format (must be 12 digits).");
+      return false;
+    }
+    setAadhaarError(null);
+    return true;
+  };
+
+  const validateLicense = (val: string) => {
+    const trimmed = val.trim().toUpperCase();
+    if (!trimmed) {
+      setLicenseError("Driving licence number is required.");
+      return false;
+    }
+    const res = validateLicenseNumber(trimmed);
+    if (!res.isValid) {
+      setLicenseError(res.error || "Invalid licence format.");
+      return false;
+    }
+    setLicenseError(null);
+    return true;
+  };
+
+  const validateStreet = (val: string) => {
+    if (!val.trim()) {
+      setStreetError("Street / building address is required.");
+      return false;
+    }
+    setStreetError(null);
+    return true;
+  };
+
+  const validateCity = (val: string) => {
+    if (!val.trim()) {
+      setCityError("City / Town / Village is required.");
+      return false;
+    }
+    setCityError(null);
+    return true;
+  };
+
+  const validateDistrict = (val: string) => {
+    if (!val.trim()) {
+      setDistrictError("District is required.");
+      return false;
+    }
+    setDistrictError(null);
+    return true;
+  };
+
+  const validateState = (val: string, id?: number) => {
+    if (!val.trim() && !id) {
+      setStateError("State is required.");
+      return false;
+    }
+    setStateError(null);
+    return true;
+  };
 
   const handleAadhaarChange = (val: string) => {
     setAadhaarNumber(val);
-    if (!val.trim()) {
-      setAadhaarError(null);
-      return;
-    }
-    const res = validateAadhaarNumber(val);
-    if (!res.isValid) {
-      setAadhaarError(res.error || "Invalid Aadhaar format");
-    } else {
-      setAadhaarError(null);
-    }
+    validateAadhaar(val);
   };
 
   const handleLicenseChange = (val: string) => {
     const upper = val.toUpperCase();
     setLicenseNumber(upper);
-    if (!upper.trim()) {
-      setLicenseError(null);
-      return;
-    }
-    const res = validateLicenseNumber(upper);
-    if (!res.isValid) {
-      setLicenseError(res.error || "Invalid licence format");
-    } else {
-      setLicenseError(null);
-    }
+    validateLicense(upper);
   };
 
   const isSuperAdmin = user.role === "super_admin";
@@ -265,12 +359,21 @@ export function EditProfileModal({
       ? "Administrator"
       : "Manager / Administrator";
 
+  const hasUploadedAadhaar = existingDocs.some((d) => d.document_type_code === "aadhaar");
+  const hasUploadedLicense = existingDocs.some((d) => d.document_type_code === "driving_license");
+
   // Section 1: Personal Details (Mandatory)
   const section1Complete = Boolean(
     fullName.trim().length >= 2 &&
+    !nameError &&
     phone.replace(/\D/g, "").length >= 10 &&
+    !phoneError &&
+    aadhaarNumber.trim() &&
     !aadhaarError &&
-    !licenseError
+    licenseNumber.trim() &&
+    !licenseError &&
+    hasUploadedAadhaar &&
+    hasUploadedLicense
   );
 
   // Section 2: Shift Timing (Mandatory)
@@ -279,9 +382,13 @@ export function EditProfileModal({
   // Section 3: Work Location & Address (Mandatory)
   const section3Complete = Boolean(
     street.trim() &&
+    !streetError &&
     city.trim() &&
+    !cityError &&
     district.trim() &&
-    (stateName.trim() || stateId)
+    !districtError &&
+    (stateName.trim() || stateId) &&
+    !stateError
   );
 
   // Section 4: Compensation (Mandatory for operator if super_admin; always valid for others / read-only)
@@ -297,61 +404,43 @@ export function EditProfileModal({
     (section1Complete ? 0 : 1) +
     (section2Complete ? 0 : 1) +
     (section3Complete ? 0 : 1) +
-    (section4Complete ? 0 : 1);
+    (isSuperAdmin && isOperator && !section4Complete ? 1 : 0);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!fullName.trim()) {
-      toast("error", "Full name is required.");
+    const isNameValid = validateName(fullName);
+    const isPhoneValid = validatePhone(phone);
+    const isAadhaarValid = validateAadhaar(aadhaarNumber);
+    const isLicenseValid = validateLicense(licenseNumber);
+    const isStreetValid = validateStreet(street);
+    const isCityValid = validateCity(city);
+    const isDistrictValid = validateDistrict(district);
+    const isStateValid = validateState(stateName, stateId);
+
+    if (!hasUploadedAadhaar || !hasUploadedLicense) {
+      setDocErrors(true);
+      toast("error", "Official Aadhaar and Driving Licence documents are mandatory.");
       return;
     }
 
-    const digitsOnly = phone.replace(/\D/g, "");
-    if (digitsOnly.length < 10) {
-      toast("error", "Please enter a valid 10-digit mobile number.");
-      return;
-    }
-
-    if (!street.trim()) {
-      toast("error", "Street / building address is required.");
-      return;
-    }
-
-    if (!city.trim()) {
-      toast("error", "City / Town is required.");
-      return;
-    }
-
-    if (!district.trim()) {
-      toast("error", "District is required.");
-      return;
-    }
-
-    if (!stateName.trim() && !stateId) {
-      toast("error", "State is required.");
+    if (
+      !isNameValid ||
+      !isPhoneValid ||
+      !isAadhaarValid ||
+      !isLicenseValid ||
+      !isStreetValid ||
+      !isCityValid ||
+      !isDistrictValid ||
+      !isStateValid
+    ) {
+      toast("error", "Please fix all highlighted errors before submitting.");
       return;
     }
 
     if (isSuperAdmin && isOperator && (!monthlySalary || Number(monthlySalary) <= 0)) {
       toast("error", "Monthly salary is required for operator accounts.");
       return;
-    }
-
-    if (aadhaarNumber.trim()) {
-      const aRes = validateAadhaarNumber(aadhaarNumber);
-      if (!aRes.isValid) {
-        toast("error", aRes.error || "Invalid Aadhaar number.");
-        return;
-      }
-    }
-
-    if (licenseNumber.trim()) {
-      const lRes = validateLicenseNumber(licenseNumber);
-      if (!lRes.isValid) {
-        toast("error", lRes.error || "Invalid driving licence number.");
-        return;
-      }
     }
 
     const finalShift =
@@ -435,85 +524,78 @@ export function EditProfileModal({
           stepNumber={1}
           title="Personal Details"
           description="Name, contact, and official identification"
+          icon={<AnimatedUser size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />}
           isMandatory={true}
           isCompleted={section1Complete}
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-[var(--color-ink)] mb-1">
-                Full Name <span className="text-rose-500">*</span>
-              </label>
               <Input
+                label="Full Name"
                 value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                onChange={(e) => {
+                  setFullName(e.target.value);
+                  validateName(e.target.value);
+                }}
+                onBlur={() => validateName(fullName)}
                 placeholder="e.g. Rahul Sharma"
                 required
+                error={nameError || undefined}
                 className="h-10"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[var(--color-ink)] mb-1">
-                Mobile Number <span className="text-rose-500">*</span>
-              </label>
               <Input
+                label="Mobile Number"
                 type="tel"
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  validatePhone(e.target.value);
+                }}
+                onBlur={() => validatePhone(phone)}
                 placeholder="e.g. 9876543210"
                 required
                 maxLength={15}
+                error={phoneError || undefined}
                 className="h-10 font-mono"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[var(--color-ink)] mb-1">
-                Aadhaar Card Number
-              </label>
               <Input
+                label="Aadhaar Card Number"
                 value={aadhaarNumber}
                 onChange={(e) => handleAadhaarChange(e.target.value)}
+                onBlur={() => validateAadhaar(aadhaarNumber)}
                 placeholder="12-digit Aadhaar Number"
+                required
                 maxLength={14}
-                className={`h-10 font-mono ${
-                  aadhaarError ? "border-rose-500 focus:ring-rose-500/30" : ""
-                }`}
+                error={aadhaarError || undefined}
+                className="h-10 font-mono"
               />
-              {aadhaarError && (
-                <p className="text-[11px] text-rose-500 font-medium mt-1 flex items-center gap-1">
-                  <AnimatedAlertTriangle size={12} />
-                  {aadhaarError}
-                </p>
-              )}
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-[var(--color-ink)] mb-1">
-                Driving Licence Number
-              </label>
               <Input
+                label="Driving Licence Number"
                 value={licenseNumber}
                 onChange={(e) => handleLicenseChange(e.target.value)}
+                onBlur={() => validateLicense(licenseNumber)}
                 placeholder="e.g. MH12 20110012345"
+                required
                 maxLength={25}
-                className={`h-10 font-mono uppercase ${
-                  licenseError ? "border-rose-500 focus:ring-rose-500/30" : ""
-                }`}
+                error={licenseError || undefined}
+                className="h-10 font-mono uppercase"
               />
-              {licenseError && (
-                <p className="text-[11px] text-rose-500 font-medium mt-1 flex items-center gap-1">
-                  <AnimatedAlertTriangle size={12} />
-                  {licenseError}
-                </p>
-              )}
             </div>
           </div>
 
           {/* Identity Document Attachments */}
           <div className="pt-2 border-t border-[var(--color-hairline)] space-y-2">
             <h5 className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] flex items-center justify-between">
-              <span>Official Identity Documents (KYC)</span>
+              <span>Official Identity Documents (KYC) <span className="text-rose-500 font-semibold">*</span></span>
               <span className="text-[10px] font-mono font-normal">2 MB max per file</span>
             </h5>
 
@@ -521,26 +603,39 @@ export function EditProfileModal({
               {/* Aadhaar Card Document */}
               {(() => {
                 const existingAadhaar = existingDocs.find((d) => d.document_type_code === "aadhaar");
+                const isMissing = docErrors && !existingAadhaar && !aadhaarFile;
                 return (
-                  <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2">
-                    <div className="flex items-center justify-between">
+                  <div
+                    data-hover-parent
+                    className={`rounded-xl border p-3 space-y-2 transition-colors ${
+                      isMissing
+                        ? "border-rose-500 bg-rose-500/5 dark:bg-rose-500/10"
+                        : "border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:border-sky-500/40"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between pb-1.5 border-b border-[var(--color-hairline)]/60">
                       <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
-                        <AnimatedShieldCheck size={14} className="text-sky-600 dark:text-sky-400" />
-                        Aadhaar Document
+                        <AnimatedShieldCheck size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                        Aadhaar Document <span className="text-rose-500 font-semibold">*</span>
                       </span>
                       {existingAadhaar ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
                           <Check className="h-3 w-3" /> Uploaded
                         </span>
                       ) : (
-                        <span className="text-[10px] text-[var(--color-mute)]">Not uploaded</span>
+                        <span className="inline-flex items-center text-[10px] font-semibold text-rose-500 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
+                          Required
+                        </span>
                       )}
                     </div>
 
                     {existingAadhaar && !aadhaarFile && (
-                      <div className="flex items-center justify-between p-2 rounded-lg bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)]">
+                      <div
+                        data-hover-parent
+                        className="flex items-center justify-between p-2 rounded-lg bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
+                      >
                         <div className="flex items-center gap-2 min-w-0">
-                          <FileText className="h-4 w-4 text-sky-600 shrink-0" />
+                          <AnimatedFileText size={16} className="w-4 h-4 text-sky-600 shrink-0" />
                           <div className="min-w-0">
                             <p className="text-[11px] font-medium text-[var(--color-ink)] truncate">
                               Aadhaar Card
@@ -565,7 +660,7 @@ export function EditProfileModal({
                           <button
                             type="button"
                             onClick={() => handleDeleteDoc("aadhaar")}
-                            className="p-1 rounded text-[var(--color-mute)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                            className="p-1 rounded text-[var(--color-mute)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
                             title="Delete Document"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -599,13 +694,13 @@ export function EditProfileModal({
                         />
                       </label>
                     ) : (
-                      <div className="space-y-2 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
+                      <div data-hover-parent className="space-y-2 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
                         <div className="flex items-center gap-2">
                           {aadhaarPreviewUrl ? (
                             /* eslint-disable-next-line @next/next/no-img-element */
                             <img src={aadhaarPreviewUrl} alt="Preview" className="h-8 w-8 rounded object-cover border border-[var(--color-hairline)]" />
                           ) : (
-                            <FileText className="h-6 w-6 text-sky-600" />
+                            <AnimatedFileText size={18} className="w-4.5 h-4.5 text-sky-600 shrink-0" />
                           )}
                           <div className="flex-1 min-w-0">
                             <p className="text-[11px] font-medium text-[var(--color-ink)] truncate">{aadhaarFile.name}</p>
@@ -645,6 +740,12 @@ export function EditProfileModal({
                         )}
                       </div>
                     )}
+
+                    {isMissing && (
+                      <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1">
+                        <AnimatedAlertTriangle size={12} /> Aadhaar document upload is required.
+                      </p>
+                    )}
                   </div>
                 );
               })()}
@@ -652,26 +753,39 @@ export function EditProfileModal({
               {/* Driving Licence Document */}
               {(() => {
                 const existingLicense = existingDocs.find((d) => d.document_type_code === "driving_license");
+                const isMissing = docErrors && !existingLicense && !licenseFile;
                 return (
-                  <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3 space-y-2">
-                    <div className="flex items-center justify-between">
+                  <div
+                    data-hover-parent
+                    className={`rounded-xl border p-3 space-y-2 transition-colors ${
+                      isMissing
+                        ? "border-rose-500 bg-rose-500/5 dark:bg-rose-500/10"
+                        : "border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:border-sky-500/40"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between pb-1.5 border-b border-[var(--color-hairline)]/60">
                       <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
-                        <AnimatedCreditCard size={14} className="text-sky-600 dark:text-sky-400" />
-                        Licence Document
+                        <AnimatedCreditCard size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                        Licence Document <span className="text-rose-500 font-semibold">*</span>
                       </span>
                       {existingLicense ? (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
                           <Check className="h-3 w-3" /> Uploaded
                         </span>
                       ) : (
-                        <span className="text-[10px] text-[var(--color-mute)]">Not uploaded</span>
+                        <span className="inline-flex items-center text-[10px] font-semibold text-rose-500 bg-rose-500/10 px-1.5 py-0.5 rounded border border-rose-500/20">
+                          Required
+                        </span>
                       )}
                     </div>
 
                     {existingLicense && !licenseFile && (
-                      <div className="flex items-center justify-between p-2 rounded-lg bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)]">
+                      <div
+                        data-hover-parent
+                        className="flex items-center justify-between p-2 rounded-lg bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors"
+                      >
                         <div className="flex items-center gap-2 min-w-0">
-                          <FileText className="h-4 w-4 text-sky-600 shrink-0" />
+                          <AnimatedFileText size={16} className="w-4 h-4 text-sky-600 shrink-0" />
                           <div className="min-w-0">
                             <p className="text-[11px] font-medium text-[var(--color-ink)] truncate">
                               Driving Licence
@@ -696,7 +810,7 @@ export function EditProfileModal({
                           <button
                             type="button"
                             onClick={() => handleDeleteDoc("driving_license")}
-                            className="p-1 rounded text-[var(--color-mute)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                            className="p-1 rounded text-[var(--color-mute)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
                             title="Delete Document"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -730,13 +844,13 @@ export function EditProfileModal({
                         />
                       </label>
                     ) : (
-                      <div className="space-y-2 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
+                      <div data-hover-parent className="space-y-2 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
                         <div className="flex items-center gap-2">
                           {licensePreviewUrl ? (
                             /* eslint-disable-next-line @next/next/no-img-element */
                             <img src={licensePreviewUrl} alt="Preview" className="h-8 w-8 rounded object-cover border border-[var(--color-hairline)]" />
                           ) : (
-                            <FileText className="h-6 w-6 text-sky-600" />
+                            <AnimatedFileText size={18} className="w-4.5 h-4.5 text-sky-600 shrink-0" />
                           )}
                           <div className="flex-1 min-w-0">
                             <p className="text-[11px] font-medium text-[var(--color-ink)] truncate">{licenseFile.name}</p>
@@ -776,6 +890,12 @@ export function EditProfileModal({
                         )}
                       </div>
                     )}
+
+                    {isMissing && (
+                      <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1 mt-1">
+                        <AnimatedAlertTriangle size={12} /> Driving licence document upload is required.
+                      </p>
+                    )}
                   </div>
                 );
               })()}
@@ -788,6 +908,7 @@ export function EditProfileModal({
           stepNumber={2}
           title="Shift Timing"
           description="Operating work schedule window"
+          icon={<AnimatedClock size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />}
           isMandatory={true}
           isCompleted={section2Complete}
         >
@@ -811,7 +932,7 @@ export function EditProfileModal({
         <FormSectionCard
           stepNumber={3}
           title="Work Location & Address"
-          description="Street + City/Town/Village + District + State"
+          icon={<AnimatedMapPin size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />}
           isMandatory={true}
           isCompleted={section3Complete}
         >
@@ -822,11 +943,29 @@ export function EditProfileModal({
             state={stateName}
             stateId={stateId}
             onChange={(field, val) => {
-              if (field === "street") setStreet(val);
-              else if (field === "city") setCity(val);
-              else if (field === "district") setDistrict(val);
-              else if (field === "state") setStateName(val);
-              else if (field === "state_id") setStateId(Number(val));
+              if (field === "street") {
+                setStreet(val);
+                validateStreet(val);
+              } else if (field === "city") {
+                setCity(val);
+                validateCity(val);
+              } else if (field === "district") {
+                setDistrict(val);
+                validateDistrict(val);
+              } else if (field === "state") {
+                setStateName(val);
+                validateState(val, stateId);
+              } else if (field === "state_id") {
+                const num = Number(val);
+                setStateId(num);
+                validateState(stateName, num);
+              }
+            }}
+            errors={{
+              street: streetError || undefined,
+              city: cityError || undefined,
+              district: districtError || undefined,
+              state: stateError || undefined,
             }}
             required={true}
             idPrefix="profile-edit"
@@ -837,9 +976,10 @@ export function EditProfileModal({
         <FormSectionCard
           stepNumber={4}
           title="Compensation"
-          description={isSuperAdmin ? "Monthly base remuneration (Super Admin editable)" : "Verified base monthly compensation"}
+          icon={<AnimatedCreditCard size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />}
           isMandatory={isSuperAdmin && isOperator}
           isCompleted={section4Complete}
+          isReadOnly={!isSuperAdmin}
         >
           <UserSalaryField
             value={monthlySalary}
@@ -850,28 +990,48 @@ export function EditProfileModal({
           />
         </FormSectionCard>
 
-        {/* Modal Footer Actions */}
-        <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-[var(--color-hairline)]">
+        {/* Incomplete Mandatory Fields Notification */}
+        {!isAllMandatoryFilled && !isPending && (
+          <div
+            data-hover-parent
+            className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-700 dark:text-amber-300 transition-colors"
+          >
+            <span className="flex items-center gap-1.5 min-w-0">
+              <AlertCircle size={13} className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
+              <span className="truncate">
+                Please complete all mandatory fields ({missingMandatoryCount} remaining)
+              </span>
+            </span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-800 dark:text-amber-200 shrink-0">
+              Incomplete
+            </span>
+          </div>
+        )}
+
+        {/* Modal Footer Actions — 1 Unified Row (Desktop & Mobile Responsive) */}
+        <div className="flex flex-row items-center justify-end gap-2.5 pt-3 border-t border-[var(--color-hairline)]">
           <Button
             type="button"
             variant="ghost"
             onClick={onClose}
             disabled={isPending}
-            className="h-10 px-4 text-xs font-semibold"
+            className="flex-1 sm:flex-initial h-10 min-h-[40px] px-4 text-xs sm:text-sm font-semibold rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] cursor-pointer active:scale-[0.98] transition-all"
           >
             Cancel
           </Button>
-          <div className="min-w-[180px]">
-            <FormSubmitButton
-              isReady={isAllMandatoryFilled}
-              loading={isPending}
-              label={isSuperAdmin ? "Save Changes Directly" : "Submit for Approval"}
-              loadingLabel="Submitting Profile Changes..."
-              missingCount={missingMandatoryCount}
-              fullWidth={false}
-              size="md"
-            />
-          </div>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={!isAllMandatoryFilled || isPending}
+            loading={isPending}
+            className="flex-1 sm:flex-initial h-10 min-h-[40px] px-5 text-xs sm:text-sm font-bold rounded-lg cursor-pointer active:scale-[0.98] transition-all"
+          >
+            {isPending
+              ? "Submitting Profile Changes..."
+              : isSuperAdmin
+              ? "Save Changes Directly"
+              : "Submit for Approval"}
+          </Button>
         </div>
       </form>
     </Modal>

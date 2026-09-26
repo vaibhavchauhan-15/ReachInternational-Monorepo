@@ -6,7 +6,7 @@
  * while preventing header forgery via HMAC-SHA256 signature verification.
  */
 
-import { getSupabaseSecretKey } from "@/lib/env";
+import { getSupabaseSecretKey } from "@/lib/env/server";
 
 const enc = new TextEncoder();
 

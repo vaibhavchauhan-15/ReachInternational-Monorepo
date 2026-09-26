@@ -12,7 +12,7 @@ export interface UserCheckIconHandle {
   stopAnimation: () => void;
 }
 
-export interface UserCheckIconProps extends Omit<HTMLAttributes<HTMLDivElement>, "color"> {
+export interface UserCheckIconProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   size?: number | string;
   strokeWidth?: number | string;
   color?: string;
@@ -56,7 +56,7 @@ const UserCheckIcon = forwardRef<UserCheckIconHandle, UserCheckIconProps>(
     });
 
     const handleMouseEnter = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseEnter?.(e);
         } else {
@@ -67,7 +67,7 @@ const UserCheckIcon = forwardRef<UserCheckIconHandle, UserCheckIconProps>(
     );
 
     const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseLeave?.(e);
         } else {
@@ -78,8 +78,8 @@ const UserCheckIcon = forwardRef<UserCheckIconHandle, UserCheckIconProps>(
     );
 
     return (
-      <div
-        className={cn(isSpinning && "animate-spin", className)}
+      <span
+        className={cn("inline-flex items-center justify-center", isSpinning && "animate-spin", className)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         {...props}
@@ -105,7 +105,7 @@ const UserCheckIcon = forwardRef<UserCheckIconHandle, UserCheckIconProps>(
             variants={CHECK_VARIANTS}
           />
         </svg>
-      </div>
+      </span>
     );
   }
 );

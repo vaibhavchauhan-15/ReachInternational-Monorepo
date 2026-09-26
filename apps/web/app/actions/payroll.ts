@@ -119,3 +119,47 @@ export async function bulkUpdateOperatorRates(
   revalidateTag(CACHE_TAGS.users, "max");
   return { success: true, count };
 }
+
+/**
+ * Updates full industrial salary statement fields for an operator in a given payroll month.
+ */
+export async function updateOperatorSalaryStatementAction(
+  operatorId: string,
+  payrollMonth: string,
+  fields: Record<string, any>
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  await requireRole(...ALLOWED_ROLES);
+
+  if (!operatorId || typeof operatorId !== "string") {
+    return { success: false, error: "Invalid operator ID" };
+  }
+
+  let targetDate: string;
+  if (payrollMonth && /^\d{4}-\d{2}/.test(payrollMonth)) {
+    const parts = payrollMonth.split("-");
+    targetDate = `${parts[0]}-${parts[1].padStart(2, "0")}-01`;
+  } else {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    targetDate = `${year}-${month}-01`;
+  }
+
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase.rpc("update_operator_salary_statement", {
+    p_operator_id: operatorId,
+    p_payroll_month: targetDate,
+    p_fields: fields,
+  });
+
+  if (error) {
+    console.error("[updateOperatorSalaryStatementAction] Error:", error);
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath("/payroll");
+  revalidatePath("/hr");
+  revalidateTag(CACHE_TAGS.users, "max");
+  return { success: true, data };
+}
+

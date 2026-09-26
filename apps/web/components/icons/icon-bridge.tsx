@@ -66,7 +66,7 @@ export function createAnimatedIconBridge(
 
         // Find nearest interactive parent container (innermost matching container)
         const nearestParent = el.closest<HTMLElement>(
-          'button, a, [role="button"], [data-hover-parent], .interactive-parent, [data-interactive-card], .badge-base'
+          'button, a, [role="button"], [data-hover-parent], .interactive-parent, [data-interactive-card], .badge-base, .cursor-pointer'
         );
 
         if (!nearestParent || nearestParent === el) {
@@ -107,7 +107,7 @@ export function createAnimatedIconBridge(
         <span
           ref={containerRef}
           className={cn(
-            "inline-flex items-center justify-center shrink-0 align-middle leading-none [&>svg]:w-full [&>svg]:h-full [&>div]:w-full [&>div]:h-full [&>div>svg]:w-full [&>div>svg]:h-full [&>div]:inline-flex [&>div]:items-center [&>div]:justify-center",
+            "inline-flex items-center justify-center shrink-0 align-middle leading-none [&>svg]:w-full [&>svg]:h-full [&>span]:w-full [&>span]:h-full [&>span>svg]:w-full [&>span>svg]:h-full [&>span]:inline-flex [&>span]:items-center [&>span]:justify-center [&>div]:w-full [&>div]:h-full [&>div>svg]:w-full [&>div>svg]:h-full [&>div]:inline-flex [&>div]:items-center [&>div]:justify-center",
             isSpinning && "animate-spin",
             className
           )}

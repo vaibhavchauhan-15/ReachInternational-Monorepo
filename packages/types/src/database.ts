@@ -120,6 +120,11 @@ export interface User {
   daily_rate?: number | null;
   ot_hourly_rate?: number | null;
   monthly_salary?: number | null;
+  doj?: string | null;
+  bank_account_number?: string | null;
+  bank_ifsc_code?: string | null;
+  total_pl_quota?: number | null;
+  pl_used_as_on_date?: number | null;
   email: string;
   created_at: string;
   updated_at: string;
@@ -177,17 +182,51 @@ export interface OperatorPayroll {
   notes?: string | null;
   created_at: string;
   updated_at: string;
+
+  // Statement fields
+  basic_salary?: number;
+  earned_basic?: number;
+  working_days?: number;
+  attended_days?: number;
+  ot_days?: number;
+  pl_adjusted?: number;
+  total_days?: number;
+  attended_amount?: number;
+  pl_amount?: number;
+  night_travel_days?: number;
+  night_travel_amount?: number;
+  total_earned?: number;
+  loan_deduction?: number;
+  additional_balance_salary?: number;
+  advance_deduction?: number;
+  advance_balance?: number;
+  other_deductions?: number;
+  pl_used_as_on_date?: number;
+  ot_amount?: number;
+  gross_pay?: number;
+  net_pay?: number;
+  paid_reach?: number;
+  paid_ss?: number;
+  paid_quess?: number;
+  balance_pay?: number;
+  total_pl_quota?: number;
+  pl_balance?: number;
+  bank_account_number?: string | null;
+  bank_ifsc_code?: string | null;
+
   // Operator profile dynamically joined from public.users (not duplicated in table)
   operator?: Pick<User, "id" | "full_name" | "phone" | "city" | "state">;
 }
 
 export interface HRPayrollOperator {
   id?: string;
+  sl_no?: number;
   operator_id: string;
   full_name: string;
   phone: string | null;
   city: string | null;
   state: string | null;
+  doj?: string | null;
   daily_rate: number;
   ot_hourly_rate: number;
   work_days: number;
@@ -199,6 +238,37 @@ export interface HRPayrollOperator {
   status?: "draft" | "reviewed" | "approved" | "paid";
   paid_at?: string | null;
   notes?: string | null;
+
+  // Full Industrial Salary Statement Fields (Excel Reference Parity)
+  basic_salary: number;
+  earned_basic: number;
+  working_days: number;
+  attended_days: number;
+  ot_days: number;
+  pl_adjusted: number;
+  total_days: number;
+  attended_amount: number;
+  pl_amount: number;
+  night_travel_days: number;
+  night_travel_amount: number;
+  total_earned: number;
+  loan_deduction: number;
+  additional_balance_salary: number;
+  advance_deduction: number;
+  advance_balance: number;
+  other_deductions: number;
+  pl_used_as_on_date: number;
+  ot_amount: number;
+  gross_pay: number;
+  net_pay: number;
+  paid_reach: number;
+  paid_ss: number;
+  paid_quess: number;
+  balance_pay: number;
+  total_pl_quota: number;
+  pl_balance: number;
+  bank_account_number?: string | null;
+  bank_ifsc_code?: string | null;
 }
 
 export interface HRPayrollSummary {

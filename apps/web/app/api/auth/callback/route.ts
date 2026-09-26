@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import type { EmailOtpType } from "@supabase/supabase-js";
-import { getSupabaseUrl, getSupabasePublishableKey } from "@/lib/env";
+import { getSupabaseUrl, getSupabasePublishableKey } from "@/lib/env/client";
 
 /**
  * /api/auth/callback — Server-side Auth code & OTP token exchange.

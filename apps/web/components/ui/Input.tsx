@@ -32,7 +32,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             {labelRight && <div className="text-xs">{labelRight}</div>}
           </div>
         )}
-        <div className="relative w-full flex items-center">
+        <div data-hover-parent className="relative w-full flex items-center">
           {icon && (
             <div
               className={`absolute left-3 sm:left-3.5 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center transition-colors ${

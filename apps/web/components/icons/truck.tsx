@@ -4,13 +4,14 @@ import type { Variants } from "motion/react";
 import { motion, useAnimation } from "motion/react";
 import type { HTMLAttributes } from "react";
 import { forwardRef, useCallback, useImperativeHandle, useRef } from "react";
+import { cn } from "@/lib/utils";
 
 export interface TruckIconHandle {
   startAnimation: () => void;
   stopAnimation: () => void;
 }
 
-export interface TruckIconProps extends Omit<HTMLAttributes<HTMLDivElement>, "color"> {
+export interface TruckIconProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   size?: number | string;
   strokeWidth?: number | string;
   color?: string;
@@ -81,7 +82,7 @@ const TruckIcon = forwardRef<TruckIconHandle, TruckIconProps>(
     });
 
     const handleMouseEnter = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (!isControlledRef.current) {
           controls.start("animate");
         }
@@ -91,7 +92,7 @@ const TruckIcon = forwardRef<TruckIconHandle, TruckIconProps>(
     );
 
     const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (!isControlledRef.current) {
           controls.start("normal");
         }
@@ -101,8 +102,8 @@ const TruckIcon = forwardRef<TruckIconHandle, TruckIconProps>(
     );
 
     return (
-      <div
-        className={className}
+      <span
+        className={cn("inline-flex items-center justify-center", className)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         {...props}
@@ -183,7 +184,7 @@ const TruckIcon = forwardRef<TruckIconHandle, TruckIconProps>(
             </motion.g>
           </motion.g>
         </svg>
-      </div>
+      </span>
     );
   }
 );

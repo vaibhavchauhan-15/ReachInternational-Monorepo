@@ -6,7 +6,7 @@ import { headers } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
-import { getAppUrl, getResetPasswordRedirectUrl } from "@/lib/env";
+import { getAppUrl, getResetPasswordRedirectUrl } from "@/lib/env/client";
 import { validateAadhaarNumber, validateLicenseNumber, getStateById, getStateByName } from "@reachinternational/utils";
 import { isSupervisedRole, getRoleHomeRoute } from "@reachinternational/permissions";
 
@@ -365,6 +365,10 @@ export async function signup(
     fieldErrors.monthly_salary = "Monthly salary is required and must be greater than 0.";
   }
   if (!aadhaarNumber) fieldErrors.aadhaar_number = "Aadhaar card number is required.";
+  const aadhaarFileRaw = formData.get("aadhaar_file") as File | null;
+  if (!aadhaarFileRaw || aadhaarFileRaw.size === 0) {
+    fieldErrors.aadhaar_file = "Aadhaar document (Photo / PDF) is required.";
+  }
   if (!password) fieldErrors.password = "Password is required.";
   if (!confirmPassword) fieldErrors.confirm_password = "Confirm password is required.";
 

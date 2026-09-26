@@ -601,15 +601,15 @@ export function SettingsClient({ user, profileDetail }: SettingsClientProps) {
               {confirmPassword.length > 0 && (
                 <div className="mt-1.5">
                   {passwordsMatch ? (
-                    <p className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                    <div className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                       <CheckCircle2 size={13} className="shrink-0" />
                       Passwords match
-                    </p>
+                    </div>
                   ) : (
-                    <p className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
+                    <div className="text-[11px] font-semibold text-rose-600 dark:text-rose-400 flex items-center gap-1">
                       <XCircle size={13} className="shrink-0" />
                       Passwords do not match
-                    </p>
+                    </div>
                   )}
                 </div>
               )}

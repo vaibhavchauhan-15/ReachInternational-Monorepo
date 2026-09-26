@@ -82,6 +82,9 @@ export {
   UsersSkeleton,
   OperationsSkeleton,
   ClientsSkeleton,
+  AttendanceSkeleton,
+  AttendanceTableSkeletonRows,
+  AttendanceMobileCardSkeleton,
 } from "./Skeleton";
 
 // 7. Export Controls

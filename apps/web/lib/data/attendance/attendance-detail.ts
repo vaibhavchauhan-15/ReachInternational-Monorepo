@@ -6,6 +6,11 @@ import { TAGS } from "@/lib/cache/tags";
 export interface AttendanceDayEntry {
   id: string;
   machine_id: string;
+  machine_code?: string;
+  machine_name?: string;
+  model?: string;
+  serial_number?: string;
+  manufacturer?: string;
   start_time: string | null;
   end_time: string | null;
   start_meter: number;
@@ -20,11 +25,13 @@ export interface AttendanceDayEntry {
 export interface AttendanceDay {
   date: string;
   dow: number;
-  status: "PRESENT" | "ABSENT" | "HALF_DAY" | "WEEK_OFF";
+  status: "PRESENT" | "ABSENT" | "HALF_DAY" | "WEEK_OFF" | "DISABLED";
   worked_minutes: number;
   overtime_minutes: number;
   breakdown_minutes: number;
   log_count: number;
+  punch_in?: string | null;
+  punch_out?: string | null;
   entries: AttendanceDayEntry[];
 }
 
@@ -35,6 +42,7 @@ export interface AttendanceWeekdayRollup {
   absent_days: number;
   half_days: number;
   week_offs: number;
+  disabled_days?: number;
   avg_worked_minutes: number;
 }
 
@@ -43,6 +51,7 @@ export interface AttendanceDetailSummary {
   absentDays: number;
   halfDays: number;
   weekOffs: number;
+  disabledDays?: number;
   totalWorkedMinutes: number;
   totalOtMinutes: number;
   totalBreakdownMinutes: number;
@@ -51,9 +60,11 @@ export interface AttendanceDetailSummary {
 export interface AttendanceDetailEmployee {
   id: string;
   full_name: string;
+  email?: string | null;
   phone: string | null;
   role: string;
   city: string | null;
+  district?: string | null;
   state: string | null;
   shift_start_time: string | null;
   shift_end_time: string | null;

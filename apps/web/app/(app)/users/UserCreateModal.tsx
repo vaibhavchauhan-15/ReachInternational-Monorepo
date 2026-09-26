@@ -284,6 +284,7 @@ export function UserCreateModal({
           stepNumber={1}
           title="Employee Identity & Login Credentials"
           description="Basic personal details and login access"
+          icon={<AnimatedUser size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />}
           isMandatory={true}
           isCompleted={section1Complete}
         >
@@ -338,6 +339,7 @@ export function UserCreateModal({
           stepNumber={2}
           title="User Address & Operations"
           description="Street + City/Town/Village + District + State and Shift schedule"
+          icon={<AnimatedMapPin size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />}
           isMandatory={true}
           isCompleted={section2Complete}
         >
@@ -378,6 +380,7 @@ export function UserCreateModal({
           stepNumber={3}
           title="Identity & Regulatory Documents"
           description="Government identification records (Optional)"
+          icon={<AnimatedShieldCheck size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />}
           isMandatory={false}
           isCompleted={section3Complete}
         >
@@ -412,6 +415,7 @@ export function UserCreateModal({
           stepNumber={4}
           title="User Access Role & System Permissions"
           description="Platform role, supervisor oversight, and compensation"
+          icon={<AnimatedCreditCard size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />}
           isMandatory={true}
           isCompleted={section4Complete}
         >

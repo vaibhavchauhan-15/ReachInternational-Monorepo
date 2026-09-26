@@ -152,9 +152,9 @@ export function BranchesClient({ branches, canCreateBranch = false, canEditBranc
                 </div>
                 <div>
                   <h3 className="font-extrabold text-base text-[var(--color-ink)]">{b.name}</h3>
-                  <p className="text-xs text-[var(--color-mute)] flex items-center gap-1">
+                  <div className="text-xs text-[var(--color-mute)] flex items-center gap-1">
                     <AnimatedMapPin size={12} className="text-rose-500" /> {b.city}, {b.state}
-                  </p>
+                  </div>
                 </div>
               </div>
 
@@ -178,36 +178,36 @@ export function BranchesClient({ branches, canCreateBranch = false, canEditBranc
             {/* Metrics Breakdown */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-[var(--color-hairline)] text-center">
               <div className="p-2 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)]">
-                <p className="text-[10px] font-bold text-[var(--color-mute)] flex items-center justify-center gap-1">
+                <div className="text-[10px] font-bold text-[var(--color-mute)] flex items-center justify-center gap-1">
                   <AnimatedWrench size={12} className="text-sky-500" /> Machines
-                </p>
+                </div>
                 <p className="text-lg font-black text-[var(--color-ink)] mt-0.5">
                   {b.machines_count ?? 0}
                 </p>
               </div>
 
               <div className="p-2 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)]">
-                <p className="text-[10px] font-bold text-[var(--color-mute)] flex items-center justify-center gap-1">
+                <div className="text-[10px] font-bold text-[var(--color-mute)] flex items-center justify-center gap-1">
                   <AnimatedUsers size={12} className="text-emerald-500" /> Staff
-                </p>
+                </div>
                 <p className="text-lg font-black text-[var(--color-ink)] mt-0.5">
                   {b.employees_count ?? 0}
                 </p>
               </div>
 
               <div className="p-2 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)]">
-                <p className="text-[10px] font-bold text-[var(--color-mute)] flex items-center justify-center gap-1">
+                <div className="text-[10px] font-bold text-[var(--color-mute)] flex items-center justify-center gap-1">
                   <AnimatedPackage size={12} className="text-purple-500" /> Store Parts
-                </p>
+                </div>
                 <p className="text-lg font-black text-[var(--color-ink)] mt-0.5">
                   {b.inventory_items_count ?? 0}
                 </p>
               </div>
 
               <div className="p-2 rounded-xl bg-[var(--color-canvas)] border border-[var(--color-hairline)]">
-                <p className="text-[10px] font-bold text-[var(--color-mute)] flex items-center justify-center gap-1">
+                <div className="text-[10px] font-bold text-[var(--color-mute)] flex items-center justify-center gap-1">
                   <AnimatedAlertTriangle size={12} className="text-amber-500" /> Open CMP
-                </p>
+                </div>
                 <p className="text-lg font-black text-rose-600 dark:text-rose-400 mt-0.5">
                   {b.open_complaints_count ?? 0}
                 </p>

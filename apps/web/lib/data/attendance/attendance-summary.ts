@@ -46,6 +46,9 @@ interface AttendanceSummaryParams {
   role?: string | null;
   search?: string | null;
   status?: string | null;
+  overtime?: string | null;
+  state?: string | null;
+  sortBy?: string | null;
   page?: number;
   pageSize?: number;
 }
@@ -57,7 +60,7 @@ interface AttendanceSummaryParams {
 export async function getAttendanceSummary(
   params: AttendanceSummaryParams
 ): Promise<AttendanceSummaryResult> {
-  const { year, month, role, search, status, page = 1, pageSize = 25 } = params;
+  const { year, month, role, search, status, overtime, state, sortBy, page = 1, pageSize = 25 } = params;
   const yearMonth = `${year}-${String(month).padStart(2, "0")}`;
 
   const fetcher = async () => {
@@ -70,6 +73,9 @@ export async function getAttendanceSummary(
       p_status: status || null,
       p_page: page,
       p_page_size: pageSize,
+      p_overtime: overtime || null,
+      p_state: state || null,
+      p_sort_by: sortBy || null,
     });
 
     if (error) {
@@ -90,7 +96,7 @@ export async function getAttendanceSummary(
   // ponytail: 45s TTL, same tolerance as operations logs
   return unstable_cache(
     fetcher,
-    [`attendance-summary-${yearMonth}-${page}-${pageSize}-${role || ""}-${search || ""}-${status || ""}`],
+    [`attendance-summary-${yearMonth}-${page}-${pageSize}-${role || ""}-${search || ""}-${status || ""}-${overtime || ""}-${state || ""}-${sortBy || ""}`],
     { revalidate: 45, tags: [TAGS.attendance, TAGS.attendanceSummary(yearMonth)] }
   )();
 }

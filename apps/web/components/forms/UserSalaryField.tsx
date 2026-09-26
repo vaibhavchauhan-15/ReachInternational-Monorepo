@@ -1,7 +1,7 @@
 "use client";
 
 import { Input } from "@/components/ui";
-import { Lock } from "lucide-react";
+import { AnimatedLock } from "@/components/ui/animated-icons";
 
 export interface UserSalaryFieldProps {
   value: string | number;
@@ -37,11 +37,11 @@ export function UserSalaryField({
 
   if (readOnly) {
     return (
-      <div className={`flex flex-col gap-1 w-full ${className}`}>
+      <div data-hover-parent className={`flex flex-col gap-1 w-full ${className}`}>
         <label className="text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none flex items-center justify-between">
           <span>Monthly Salary (₹)</span>
           <span className="inline-flex items-center gap-1 text-[10px] font-mono text-[var(--color-mute)] bg-[var(--color-hairline)] px-2 py-0.5 rounded">
-            <Lock className="w-2.5 h-2.5" /> Read-only
+            <AnimatedLock size={10} className="w-2.5 h-2.5 shrink-0" /> Read-only
           </span>
         </label>
         <div className="flex items-center h-10 px-3 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)]/50 text-xs sm:text-[13px] font-semibold text-[var(--color-ink)] select-all">

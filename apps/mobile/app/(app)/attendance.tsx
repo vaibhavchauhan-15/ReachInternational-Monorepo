@@ -16,7 +16,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../components/ui/ThemeProvider';
 import { useAuth } from '../../lib/auth/useAuth';
-import { MobileHeader, Card, Badge, EmptyState } from '../../components/ui';
+import { MobileHeader, Card, Badge, EmptyState, HighlightText } from '../../components/ui';
 import { usePersistentListState } from '../../lib/hooks/usePersistentListState';
 import { supabase } from '../../lib/supabase';
 import {
@@ -70,6 +70,11 @@ export interface AttendanceKpis {
 export interface AttendanceDayEntry {
   id: string;
   machine_id: string;
+  machine_code?: string;
+  machine_name?: string;
+  model?: string;
+  serial_number?: string;
+  manufacturer?: string;
   start_time: string | null;
   end_time: string | null;
   start_meter: number | null;
@@ -84,11 +89,13 @@ export interface AttendanceDayEntry {
 export interface AttendanceDay {
   date: string;
   dow: number;
-  status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'WEEK_OFF';
+  status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'WEEK_OFF' | 'DISABLED';
   worked_minutes: number;
   overtime_minutes: number;
   breakdown_minutes: number;
   log_count: number;
+  punch_in?: string | null;
+  punch_out?: string | null;
   entries: AttendanceDayEntry[];
 }
 
@@ -96,9 +103,11 @@ export interface AttendanceDetailData {
   employee: {
     id: string;
     full_name: string;
+    email?: string | null;
     phone: string | null;
     role: string;
     city: string | null;
+    district?: string | null;
     state: string | null;
     shift_start_time: string | null;
     shift_end_time: string | null;
@@ -144,7 +153,7 @@ export default function AttendanceScreen() {
     setFilter,
     resetFilters: resetListFilters,
   } = usePersistentListState<{
-    statusFilter: 'all' | 'present' | 'absent' | 'half_day';
+    statusFilter: 'all' | 'present' | 'absent' | 'half_day' | 'has_absences' | 'perfect';
   }>({
     storageKey: 'reach_filters_attendance',
     defaultSearch: '',
@@ -156,7 +165,7 @@ export default function AttendanceScreen() {
 
   const statusFilter = filters.statusFilter;
   const setStatusFilter = useCallback(
-    (val: 'all' | 'present' | 'absent' | 'half_day') => setFilter('statusFilter', val),
+    (val: 'all' | 'present' | 'absent' | 'half_day' | 'has_absences' | 'perfect') => setFilter('statusFilter', val),
     [setFilter]
   );
 
@@ -263,10 +272,12 @@ export default function AttendanceScreen() {
     let list = employees;
     const q = searchQuery.toLowerCase().trim();
     if (q) {
+      const qNorm = q.replace(/\s+/g, "");
       list = list.filter(
         (emp) =>
           emp.full_name.toLowerCase().includes(q) ||
-          (emp.phone && emp.phone.includes(q)) ||
+          emp.full_name.toLowerCase().replace(/\s+/g, "").includes(qNorm) ||
+          (emp.phone && emp.phone.replace(/[\s+-]/g, "").includes(qNorm)) ||
           (emp.city && emp.city.toLowerCase().includes(q))
       );
     }
@@ -277,6 +288,10 @@ export default function AttendanceScreen() {
         list = list.filter((e) => e.present_days === 0);
       } else if (statusFilter === 'half_day') {
         list = list.filter((e) => e.half_days > 0);
+      } else if (statusFilter === 'has_absences') {
+        list = list.filter((e) => e.absent_days > 0);
+      } else if (statusFilter === 'perfect') {
+        list = list.filter((e) => e.absent_days === 0 && e.present_days > 0);
       }
     }
     return list;
@@ -299,7 +314,19 @@ export default function AttendanceScreen() {
     return `${parts[0]}:${parts[1]}`;
   };
 
-  const renderStatusBadge = (status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'WEEK_OFF') => {
+  const formatTimeAMPM = (t: string | null) => {
+    if (!t) return '—';
+    const parts = t.trim().split(':');
+    if (parts.length < 2) return t;
+    const hours = parseInt(parts[0], 10);
+    const minutes = parseInt(parts[1], 10);
+    if (isNaN(hours) || isNaN(minutes)) return t;
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const h12 = hours % 12 === 0 ? 12 : hours % 12;
+    return `${String(h12).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${period}`;
+  };
+
+  const renderStatusBadge = (status: 'PRESENT' | 'ABSENT' | 'HALF_DAY' | 'WEEK_OFF' | 'DISABLED') => {
     switch (status) {
       case 'PRESENT':
         return (
@@ -317,6 +344,12 @@ export default function AttendanceScreen() {
         return (
           <View style={[styles.statusBadge, { backgroundColor: 'rgba(107, 114, 128, 0.12)', borderColor: 'rgba(107, 114, 128, 0.3)' }]}>
             <Text style={[styles.statusBadgeText, { color: '#6b7280' }]}>Week Off</Text>
+          </View>
+        );
+      case 'DISABLED':
+        return (
+          <View style={[styles.statusBadge, { backgroundColor: 'rgba(156, 163, 175, 0.12)', borderColor: 'rgba(156, 163, 175, 0.25)' }]}>
+            <Text style={[styles.statusBadgeText, { color: '#9ca3af' }]}>—</Text>
           </View>
         );
       case 'ABSENT':
@@ -438,13 +471,15 @@ export default function AttendanceScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterStrip}
         >
-          {(['all', 'present', 'absent', 'half_day'] as const).map((st) => {
+          {(['all', 'present', 'absent', 'half_day', 'has_absences', 'perfect'] as const).map((st) => {
             const active = statusFilter === st;
-            const labels = {
+            const labels: Record<string, string> = {
               all: `All (${employees.length})`,
               present: `Present (${kpis.presentCount})`,
               absent: `Absent (${kpis.absentCount})`,
               half_day: `Half Day (${kpis.halfDayCount})`,
+              has_absences: `Absences (${employees.filter((e) => e.absent_days > 0).length})`,
+              perfect: `Perfect (${employees.filter((e) => e.absent_days === 0 && e.present_days > 0).length})`,
             };
             return (
               <TouchableOpacity
@@ -501,23 +536,33 @@ export default function AttendanceScreen() {
                 {/* Header Row */}
                 <View style={styles.cardHeader}>
                   <View style={styles.nameRow}>
-                    <Text style={[styles.empName, { color: theme.colors.ink }]} numberOfLines={1}>
-                      {emp.full_name}
-                    </Text>
-                    {renderStatusBadge(emp.status)}
+                    <HighlightText
+                      text={emp.full_name}
+                      query={searchQuery}
+                      style={[styles.empName, { color: theme.colors.ink }]}
+                      numberOfLines={1}
+                    />
                   </View>
 
                   <View style={styles.metaRow}>
                     {emp.phone ? (
                       <View style={styles.metaItem}>
                         <Phone size={12} color={theme.colors.mute} style={{ marginRight: 3 }} />
-                        <Text style={[styles.metaText, { color: theme.colors.mute }]}>{emp.phone}</Text>
+                        <HighlightText
+                          text={emp.phone}
+                          query={searchQuery}
+                          style={[styles.metaText, { color: theme.colors.mute }]}
+                        />
                       </View>
                     ) : null}
                     {emp.city ? (
                       <View style={styles.metaItem}>
                         <MapPin size={12} color={theme.colors.mute} style={{ marginRight: 3 }} />
-                        <Text style={[styles.metaText, { color: theme.colors.mute }]}>{emp.city}</Text>
+                        <HighlightText
+                          text={emp.city}
+                          query={searchQuery}
+                          style={[styles.metaText, { color: theme.colors.mute }]}
+                        />
                       </View>
                     ) : null}
                   </View>
@@ -531,7 +576,7 @@ export default function AttendanceScreen() {
                   </View>
                   <View style={styles.statDivider} />
                   <View style={styles.statCol}>
-                    <Text style={[styles.statVal, { color: '#16a34a' }]}>{emp.present_days}</Text>
+                    <Text style={[styles.statVal, { color: '#16a34a' }]}>{Math.min(emp.present_days, emp.scheduled_days)}</Text>
                     <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Present</Text>
                   </View>
                   <View style={styles.statDivider} />
@@ -612,6 +657,41 @@ export default function AttendanceScreen() {
                 { paddingBottom: insets.bottom + 32 },
               ]}
             >
+              {/* Employee Meta Card (Synchronized with Web & User PDF) */}
+              <View style={[styles.modalEmpCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+                <View style={styles.modalEmpRow}>
+                  <View style={styles.modalEmpCol}>
+                    <Text style={[styles.modalEmpLabel, { color: theme.colors.mute }]}>EMPLOYEE ID</Text>
+                    <Text style={[styles.modalEmpValue, { color: theme.colors.ink }]}>
+                      {`EMP-${detailData.employee.id.slice(0, 8).toUpperCase()}`}
+                    </Text>
+                  </View>
+                  <View style={styles.modalEmpCol}>
+                    <Text style={[styles.modalEmpLabel, { color: theme.colors.mute }]}>PHONE</Text>
+                    <Text style={[styles.modalEmpValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                      {detailData.employee.phone || '—'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={[styles.modalEmpRow, { marginTop: 8 }]}>
+                  <View style={styles.modalEmpCol}>
+                    <Text style={[styles.modalEmpLabel, { color: theme.colors.mute }]}>SITE LOCATION</Text>
+                    <Text style={[styles.modalEmpValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                      {detailData.employee.city ? `${detailData.employee.city}${detailData.employee.state ? `, ${detailData.employee.state}` : ''}` : '—'}
+                    </Text>
+                  </View>
+                  <View style={styles.modalEmpCol}>
+                    <Text style={[styles.modalEmpLabel, { color: theme.colors.mute }]}>SHIFT</Text>
+                    <Text style={[styles.modalEmpValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                      {detailData.employee.shift_start_time && detailData.employee.shift_end_time
+                        ? `${formatTimeAMPM(detailData.employee.shift_start_time)} – ${formatTimeAMPM(detailData.employee.shift_end_time)}`
+                        : '08:00 AM – 05:00 PM'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
               {/* Summary Cards */}
               <View style={styles.detailSummaryRow}>
                 <View style={[styles.detailStatCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
@@ -655,6 +735,12 @@ export default function AttendanceScreen() {
                 const dayNum = day.date.split('-')[2];
                 const dowLabel = DOW_LABELS[day.dow];
                 const isSunday = day.dow === 0;
+                const todayStr = new Date().toISOString().slice(0, 10);
+                const isFuture = day.date > todayStr;
+                const isToday = day.date === todayStr;
+                const isTodayNoLog = isToday && day.log_count === 0 && day.worked_minutes === 0;
+                const isDisabled = (day.status === 'DISABLED' || isFuture || isTodayNoLog) && !isSunday;
+                const effectiveStatus = isDisabled ? 'DISABLED' : day.status;
 
                 return (
                   <View
@@ -665,22 +751,28 @@ export default function AttendanceScreen() {
                         backgroundColor: theme.colors.canvasElevated,
                         borderColor: isSunday
                           ? (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')
+                          : isDisabled
+                          ? (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)')
                           : theme.colors.hairline,
-                        opacity: isSunday ? 0.75 : 1,
+                        opacity: isDisabled ? 0.45 : isSunday ? 0.75 : 1,
                       },
                     ]}
                   >
                     <View style={styles.dayDateCol}>
-                      <Text style={[styles.dayNum, { color: theme.colors.ink }]}>{dayNum}</Text>
+                      <Text style={[styles.dayNum, { color: isDisabled ? theme.colors.faint : theme.colors.ink }]}>{dayNum}</Text>
                       <Text style={[styles.dayDow, { color: isSunday ? '#ef4444' : theme.colors.mute }]}>{dowLabel}</Text>
                     </View>
 
                     <View style={styles.dayDetailsCol}>
                       <View style={styles.dayStatusRow}>
-                        {renderStatusBadge(day.status)}
+                        {renderStatusBadge(effectiveStatus)}
                         {day.worked_minutes > 0 ? (
                           <Text style={[styles.dayWorkedText, { color: theme.colors.ink }]}>
                             {formatMins(day.worked_minutes)}
+                          </Text>
+                        ) : isDisabled ? (
+                          <Text style={{ fontSize: 11, color: theme.colors.faint }}>
+                            {isToday ? 'In progress' : 'Upcoming'}
                           </Text>
                         ) : null}
                         {day.overtime_minutes > 0 ? (
@@ -690,12 +782,19 @@ export default function AttendanceScreen() {
                         ) : null}
                       </View>
 
+                      {day.punch_in && day.punch_out ? (
+                        <Text style={{ fontSize: 11, color: theme.colors.mute, marginTop: 2, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                          Shift: {formatTimeAMPM(day.punch_in)} – {formatTimeAMPM(day.punch_out)}
+                        </Text>
+                      ) : null}
+
                       {day.entries && day.entries.length > 0 ? (
                         <View style={styles.dayEntriesWrap}>
                           {day.entries.map((entry, idx) => (
                             <View key={entry.id || idx} style={styles.dayEntryItem}>
                               <Text style={[styles.entryTime, { color: theme.colors.mute }]} numberOfLines={1}>
-                                {formatTime(entry.start_time)} - {formatTime(entry.end_time)}
+                                {entry.machine_code ? `${entry.machine_code} • ` : ''}
+                                {formatTimeAMPM(entry.start_time)} - {formatTimeAMPM(entry.end_time)}
                                 {entry.location ? ` • ${entry.location}` : ''}
                               </Text>
                             </View>
@@ -953,6 +1052,30 @@ const styles = StyleSheet.create({
   },
   modalScrollContent: {
     padding: 16,
+  },
+  modalEmpCard: {
+    padding: 12,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  modalEmpRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalEmpCol: {
+    flex: 1,
+  },
+  modalEmpLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  modalEmpValue: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   detailSummaryRow: {
     flexDirection: 'row',

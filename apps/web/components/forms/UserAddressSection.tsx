@@ -131,6 +131,7 @@ export function UserAddressSection({
             clearable={!required}
             disabled={disabled}
             error={errors.state}
+            icon={<AnimatedMapPin size={15} />}
             className="w-full text-xs sm:text-[13px]"
           />
         </div>

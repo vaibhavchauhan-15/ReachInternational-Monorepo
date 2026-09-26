@@ -59,6 +59,8 @@ export const ChevronRight = ChevronRightIcon;
 import { CircleHelpIcon as RawCircleHelp } from "./circle-help";
 export const CircleHelpIcon = createAnimatedIconBridge(RawCircleHelp, "CircleHelp");
 export const CircleHelp = CircleHelpIcon;
+export const HelpCircleIcon = CircleHelpIcon;
+export const HelpCircle = CircleHelpIcon;
 
 import { ClipboardCheckIcon as RawClipboardCheck } from "./clipboard-check";
 export const ClipboardCheckIcon = createAnimatedIconBridge(RawClipboardCheck, "ClipboardCheck");

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { getSupabaseUrl, getSupabasePublishableKey } from "@/lib/env";
+import { getSupabaseUrl, getSupabasePublishableKey } from "@/lib/env/client";
 import { checkRateLimitAsync, getClientIp, RATE_LIMIT_PROFILES } from "@/lib/security/rate-limiter";
 import { signInternalUser } from "@/lib/security/internal-auth-token";
 import {

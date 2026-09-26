@@ -12,7 +12,7 @@ export interface PaletteIconHandle {
   stopAnimation: () => void;
 }
 
-export interface PaletteIconProps extends Omit<HTMLAttributes<HTMLDivElement>, "color"> {
+export interface PaletteIconProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   size?: number | string;
   strokeWidth?: number | string;
   color?: string;
@@ -103,7 +103,7 @@ const PaletteIcon = forwardRef<PaletteIconHandle, PaletteIconProps>(
     });
 
     const handleMouseEnter = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseEnter?.(e);
         } else {
@@ -114,7 +114,7 @@ const PaletteIcon = forwardRef<PaletteIconHandle, PaletteIconProps>(
     );
 
     const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseLeave?.(e);
         } else {
@@ -125,7 +125,7 @@ const PaletteIcon = forwardRef<PaletteIconHandle, PaletteIconProps>(
     );
 
     return (
-      <div
+      <span
         className={cn("inline-flex items-center justify-center", className)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -167,7 +167,7 @@ const PaletteIcon = forwardRef<PaletteIconHandle, PaletteIconProps>(
             ))}
           </motion.g>
         </svg>
-      </div>
+      </span>
     );
   }
 );

@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getResetPasswordRedirectUrl } from "@/lib/env";
+import { getResetPasswordRedirectUrl } from "@/lib/env/client";
 
 export async function POST(request: NextRequest) {
   try {

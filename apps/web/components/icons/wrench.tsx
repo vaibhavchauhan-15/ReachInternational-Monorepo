@@ -12,7 +12,7 @@ export interface WrenchIconHandle {
   stopAnimation: () => void;
 }
 
-export interface WrenchIconProps extends Omit<HTMLAttributes<HTMLDivElement>, "color"> {
+export interface WrenchIconProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   size?: number | string;
   strokeWidth?: number | string;
   color?: string;
@@ -52,7 +52,7 @@ const WrenchIcon = forwardRef<WrenchIconHandle, WrenchIconProps>(
     });
 
     const handleMouseEnter = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseEnter?.(e);
         } else {
@@ -63,7 +63,7 @@ const WrenchIcon = forwardRef<WrenchIconHandle, WrenchIconProps>(
     );
 
     const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseLeave?.(e);
         } else {
@@ -74,8 +74,8 @@ const WrenchIcon = forwardRef<WrenchIconHandle, WrenchIconProps>(
     );
 
     return (
-      <div
-        className={cn(isSpinning && "animate-spin", className)}
+      <span
+        className={cn("inline-flex items-center justify-center", isSpinning && "animate-spin", className)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         {...props}
@@ -97,7 +97,7 @@ const WrenchIcon = forwardRef<WrenchIconHandle, WrenchIconProps>(
         >
           <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z" />
         </motion.svg>
-      </div>
+      </span>
     );
   }
 );

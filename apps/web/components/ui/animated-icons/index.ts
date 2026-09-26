@@ -48,9 +48,10 @@ export { TriangleAlertIcon as AnimatedAlertTriangle } from "../../icons";
 export { TriangleAlertIcon as AnimatedAlertCircle } from "../../icons";
 export { InfoIcon as AnimatedInfo } from "../../icons";
 export { SparklesIcon as AnimatedSparkles } from "../../icons";
+export { CircleHelpIcon as AnimatedHelpCircle, CircleHelpIcon as AnimatedCircleHelp } from "../../icons";
 
 // App Modules & Objects
-export { LayersIcon as AnimatedDashboard } from "../../icons";
+export { LayersIcon as AnimatedDashboard, LayersIcon as AnimatedLayers } from "../../icons";
 export { HomeIcon as AnimatedHome } from "../../icons";
 export { WrenchIcon as AnimatedWrench } from "../../icons";
 export { StoreIcon as AnimatedBuilding } from "../../icons";
@@ -98,7 +99,7 @@ export { KeyIcon as AnimatedKey } from "../../icons";
 export { KeyRoundIcon as AnimatedKeyRound } from "../../icons";
 export { CreditCardIcon as AnimatedCreditCard } from "../../icons";
 export { ReceiptIcon as AnimatedReceipt } from "../../icons";
-export { ZapIcon as AnimatedPower } from "../../icons";
+export { ZapIcon as AnimatedPower, ZapIcon as AnimatedZap } from "../../icons";
 export { ServerIcon as AnimatedDatabase } from "../../icons";
 export { ClipboardCheckIcon as AnimatedClipboardList } from "../../icons";
 export { FileCheckIcon as AnimatedFileCheck } from "../../icons";

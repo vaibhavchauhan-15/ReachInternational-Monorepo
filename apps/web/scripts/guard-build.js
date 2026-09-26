@@ -11,6 +11,8 @@ const { execFileSync } = require("child_process");
 // ============================================================================
 
 if (
+  process.platform !== "win32" ||
+  process.env.NODE_ENV === "production" ||
   process.env.CI ||
   process.env.VERCEL ||
   process.env.SKIP_BUILD_GUARD === "1" ||

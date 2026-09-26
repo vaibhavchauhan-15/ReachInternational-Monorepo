@@ -105,7 +105,7 @@
     - **PDF Viewer**: Embedded native browser `<iframe>` on Web and `react-native-webview` on Mobile with toolbar controls, page navigation, and download shortcuts.
     - **DOC/DOCX/Other Files**: External system viewer, download, and native OS share sheet (`expo-sharing`, `expo-file-system`).
   - **Signup Page Integration (`/signup` & `/(auth)/signup`)**: Section 3 ("Work Location & Identity") displays dedicated Aadhaar and Licence upload cards with pre-flight file size checks (2MB cap), format badges, and automatic document upload via `adminSupabase` immediately upon account registration.
-  - **Edit Profile Modal Integration (`EditProfileModal`)**: Section 1 ("Personal Details") displays existing uploaded identity documents with secure signed URLs, one-click replacement with real XHR progress tracking, in-app full-screen viewing, and deletion confirmation.
+  - **Edit Profile Modal Integration (`EditProfileModal`)**: Full personal details, shift timing, worksite location, compensation, and uploaded identity documents with secure signed URLs, one-click replacement with real XHR progress tracking, in-app full-screen viewing, and deletion confirmation. Standardized with card-level Framer Motion hover micro-interactions (`data-hover-parent`), proportional icon sizing (`size={16}` for headers & document subcards, `size={14}` for timepickers, `size={10}` for read-only badges), title padding (`pb-1.5 border-b`), and a clean, responsive single-row modal action footer synchronized across Web and Mobile (`apps/mobile/components/profile/EditProfileModal.tsx`).
   - **Onboarding Page Integration (`/onboarding` & `/(auth)/onboarding`)**: Section 4 ("Identity & Verification") incorporates Aadhaar and Driving Licence document uploads for newly registered users completing initial profile setup.
   - **Staff User Inspection (`UserDetailSheet` on Web & `UserDetailModal` on Mobile)**: Privileged staff (`super_admin`, `admin`, `hr`) inspect employee identity documents directly in the in-app viewer modal with audit logging.
   - **Cross-Platform Mobile Parity (`apps/mobile`)**: Native document picker via `expo-document-picker` (~57.0.2), `MobileDocumentUploadCard`, and `MobileDocumentViewerModal` with Vercel Geist design tokens, min 44px touch targets, and full Android/iOS compatibility.
@@ -212,35 +212,40 @@
     - **Audit Trail Direct Index Seek**: Replaced unindexed JSONB extraction queries in `getCachedLogAudit` with indexed `entity_id` lookups backed by `idx_audit_logs_entity_id_created`, dropping log audit query time from $71.6\text{ms}$ to **$0.084\text{ms}$ (852x faster)**.
     - **Index Hygiene & Bloat Prevention**: Dropped legacy redundant prefix indexes (`idx_machine_hour_logs_machine_date`, `idx_machine_hour_logs_client_date`, `idx_machine_hour_logs_operator_date`), saving index write overhead and storage bloat on every insert.
 
-### 4. 💰 Operator Payroll (`/payroll`)
-- **Split-Month Overtime Lag Payroll Engine (Migration 094)**:
-  - **Authoritative Business Formula**:
-    $$\text{Total Payroll} = (\text{Work Days}_{\text{Previous Month}} \times \text{Daily Rate}) + (\text{OT Hours}_{\text{Month Before Previous}} \times \text{Hourly OT Rate})$$
-  - **Client Confirmation Delay Model**: Normal daily wages are calculated from the immediate preceding calendar month (e.g., Aug 1–Aug 31 for a Sept 1 run) from distinct machine log dates. Overtime is paid on a strict 1-month delay (e.g., Jul 1–Jul 31 for a Sept 1 run) due to required client worksite timesheet verification and billing approval.
-  - **High-Performance PostgreSQL RPCs (`get_hr_payroll_summary`, `update_operator_payroll_rates`, `bulk_update_operator_payroll_rates`) (Migration 094 & 095)**:
-    - Sub-millisecond read model function executing under `SECURITY DEFINER` and `STABLE` mode with built-in caller authorization checking (`super_admin`, `admin`, `manager`, `hr`).
-    - Dedicated rate mutation RPCs (`update_operator_payroll_rates` and `bulk_update_operator_payroll_rates`) executing under `SECURITY DEFINER` with strict RBAC guards, eliminating client-side RLS permission blocks on Mobile for HR and Manager roles.
-  - **Operator Wage Governance (`public.users`)**: `daily_rate` (₹ per day) and `ot_hourly_rate` (₹ per hour) columns added directly to `public.users`. Enables HR, Admins, and Super Admins to configure individual operator compensation inline or in bulk.
-  - **Accessibility Restricted to HR & Admins (Manager Excluded)**:
-    - Accessible strictly to `super_admin`, `admin`, and `hr`.
-    - **Manager role is explicitly restricted** from `/payroll` and `/attendance` across RBAC matrices, Server Actions, database RPCs, and UI navigation bars.
-    - Whitelisted in Next.js Edge Auth Proxy (`apps/web/proxy.ts` `activeProtectedRoutes`) as `/payroll`, with legacy `/hr` automatically redirected to `/payroll`.
-    - Integrated into Command Palette (`⌘P`) on both Web (`CommandPalette.tsx`) and Mobile (`MobileCommandPalette.tsx`).
-    - Dynamic bottom navigation highlight for overflow roles (`BottomNav.tsx` and `MobileBottomNav.tsx`) linking via "More" menu and Lucide `Banknote` icon.
-  - **Interactive Web Management (`apps/web/app/(app)/payroll/`)**:
-    - Month selector navigating across calendar payroll cycles with automatic date range resolution.
-    - 4 real-time KPI metric cards: Active Operators with Submitted Logs, Total Work Days, Approved Overtime Hours, and Estimated Total Payroll (INR).
-    - Multi-select capability with floating bulk action bar: batch update daily rates and OT rates across selected operators in one click.
-    - Inline quick-edit mode: update daily or OT rates directly in table rows or mobile cards with immediate recalculation.
-    - 1-click browser-native CSV export generating complete audit-ready compensation worksheets.
+### 4. 💰 Operator Payroll & Salary Statement (`/payroll`)
+- **Comprehensive 32-Column Excel Salary Statement Parity (Migration 109)**:
+  - **Full Parity with Industry Standard Format**: Modeled directly after the industrial Excel "SALARY STATEMENT — SAMPLE MONTH" reference standard, delivering an enterprise-grade compensation and disbursement ledger for every active operator.
+  - **Mathematical Exactness & Real-Time Recalculation Engine**:
+    - **Total Days**: $\text{Attended Days (A/D)} + \text{PL Adjusted} + \text{OT Days}$
+    - **Earned Basic**: $\text{Basic Monthly Salary}$
+    - **Base Amount**: $(\text{Basic} / \text{Working Days (W/D)}) \times \text{A/D}$
+    - **PL Amount**: $(\text{Basic} / \text{W/D}) \times \text{PL Adjusted}$
+    - **Total Base Wages**: $\text{Amount} + \text{PL Amt} + \text{Non-Taxable Allowance (Amt)}$
+    - **OT Amount**: $(\text{Basic} / \text{W/D}) \times \text{OT Days}$
+    - **Gross Pay**: $\text{Total Base Wages} + \text{OT Amount} + \text{Add Bal Salary}$
+    - **Net Pay**: $\text{Gross Pay} - (\text{Loan} + \text{ADV./Other Deduction} + \text{Dedu})$
+    - **Unpaid Balance**: $\text{Net Pay} - (\text{PAID REACH} + \text{S\&S} + \text{QUESS Agency Payouts})$
+    - **PL Balance**: $\text{Total PL Quota} - (\text{PL Used as on Date} + \text{PL Adjusted})$
+  - **High-Performance Database Engine & RPCs (`get_hr_payroll_summary`, `update_operator_salary_statement`)**:
+    - `public.users` expanded with statement columns: Date of Joining (`doj`), Bank Account Number (`bank_account_number`), IFSC Code (`bank_ifsc_code`), Total PL Quota (`total_pl_quota`), and Historical PL Used (`pl_used_as_on_date`).
+    - `public.operator_payrolls` expanded with all 28 breakdown line items (`working_days`, `attended_days`, `ot_days`, `pl_adjusted_days`, `base_amount`, `pl_amount`, `nt_days`, `nt_amount`, `total_amount`, `loan_deduction`, `add_bal_salary`, `advance_deduction`, `advance_balance`, `other_deductions`, `ot_amount`, `gross_pay`, `net_pay`, `paid_reach`, `paid_sns`, `paid_quess`, `balance_payable`, `pl_used_as_on_date`, `total_pl_quota`, `pl_balance`).
+    - Upgraded `get_hr_payroll_summary(date)` automatically hydrates and calculates all 32 statement fields for all active operators, cross-referencing live machine hour logs for attended days and overtime.
+    - Dedicated `update_operator_salary_statement` RPC performing atomic line-item mutations with instant real-time recalculations and audit trail logging.
+  - **Scalable Enterprise UX & 6 View Mode Switcher Tabs**:
+    - **Full Statement (Excel Reference)**: Complete 32-column ledger mirroring the exact Excel spreadsheet with sticky left freeze columns (`SL NO`, `NAME`) and category header tints.
+    - **Attendance & Days**: Focuses on W/D, A/D, OT days, PL Adjusted, and Total Days.
+    - **Earnings Breakdown**: Displays Basic, Earned, Base Amount, PL Amount, N/T Allowance, OT Amount, and Gross Pay.
+    - **Deductions & Banking**: Dedicated view for Loans, Advances, Other Deductions, Net Pay, Bank Account, and IFSC code.
+    - **Agency Payouts**: Tracks disbursements across Reach Direct, S&S Agency, Quess Corp, and Unpaid Balance.
+    - **Leave Ledger**: Tracks Total PL Quota, PL Used as on Date, PL Adjusted, and Remaining PL Balance.
+  - **Official Printable Salary Slip Modal (`PrintSlipModal`)**: Generates an A4 print-ready employee payslip with company header, employee details, attendance summary, earnings breakdown, deductions, net payable in INR words, and dual sign-off blocks.
+  - **Live Statement Editor Modal (`EditStatementModal`)**: Full line-item adjustment modal with real-time recalculation of Gross Pay, Net Pay, Unpaid Balance, and PL Balance prior to server persistence.
+  - **Exact 32-Column CSV Export**: 1-click export generating an audit-ready CSV spreadsheet matching the exact column layout and headers of the reference Excel file.
   - **Full Cross-Platform React Native Mobile Parity (`apps/mobile/app/(app)/payroll.tsx`)**:
-    - Dedicated native screen with month selector horizontal pill strip, rule explanation banner, KPI cards, search bar, and operator touch cards.
-    - Native rate editing modal with numeric inputs and immediate state updates via `update_operator_payroll_rates` RPC.
-    - Primary bottom bar navigation access for HR (`["home", "operations", "attendance", "payroll"]`) and More menu tiles for Admin and Super Admin.
-    - Legacy route `apps/mobile/app/(app)/hr.tsx` provides automatic redirect to `/(app)/payroll`.
-  - **Operator Logs & Running Hours Report Access for HR**:
-    - Granted `machine.view`, `operator.view`, and `operator.log_approve` permissions to the `hr` role in `@reachinternational/permissions`.
-    - HR has full read-only access to `/operations?tab=logs` on both Web and Mobile, allowing complete verification of operator running hours across Machine, Client, and Operator views.
+    - Synchronized mobile screen featuring calendar payroll cycle picker, 4 KPI cards, search, operator touch cards, view-mode filters, digital salary slip modal, and interactive editing modal with Geist design tokens.
+  - **Accessibility Restricted to HR & Admins**:
+    - Accessible strictly to `super_admin`, `admin`, and `hr` across both Web and Mobile.
+    - Manager role remains strictly gated from compensation figures.
 
 ### 5. 📅 Operator Attendance Management (`/attendance`)
 - **Zero-Table Architecture Derived from Operational Machine Hour Logs (Migration 097)**:
@@ -250,17 +255,18 @@
     - `ABSENT`: Scheduled weekday with 0 submitted operator hour logs.
     - `WEEK_OFF`: Fixed weekly off-day (Sunday).
   - **Sub-5ms PostgreSQL Kernel RPCs (`get_attendance_monthly_summary`, `get_attendance_daily_detail`)**:
-    - `get_attendance_monthly_summary(p_year, p_month, p_role, p_search, p_status, p_page, p_page_size)`: Paginated operator directory with scheduled days, present days, absent days, half-days, worked minutes, overtime minutes, and fleet KPI summary cards. Leverages composite index `idx_mhl_operator_date_created` on `(operator_id, log_date DESC, created_at DESC, id DESC)`.
-    - `get_attendance_daily_detail(p_employee_id, p_year, p_month)`: Calendar-day breakdown (1st through 31st) for a single operator including shift intervals, breakdown minutes, individual log entries, machine IDs, and day-of-week rollup averages (`dow` 0–6).
+    - `get_attendance_monthly_summary(p_year, p_month, p_role, p_search, p_status, p_page, p_page_size, p_overtime, p_state, p_sort_by)`: Paginated operator directory with scheduled days, present days, absent days, half-days, worked minutes, overtime minutes, fleet KPI summary cards, advanced overtime/state/sorting filters, and search across names, phones, cities, and states (Migrations 097, 106, 107). Leverages composite index `idx_mhl_operator_date_created` on `(operator_id, log_date DESC, created_at DESC, id DESC)`.
+    - `get_attendance_daily_detail(p_employee_id, p_year, p_month)`: Calendar-day breakdown (1st through 31st) for a single operator including shift intervals, breakdown minutes, individual log entries, machine telemetry (`machine_code`, `model`, `serial_number`, `machine_name`), and day-of-week rollup averages (`dow` 0–6).
     - Hardened under `SECURITY DEFINER` and `STABLE` with caller authorization checks allowing `service_role` and authenticated `super_admin`, `admin`, and `hr`.
 - **Targeted Cache Strategy & Next.js Data Access Layer**:
   - `apps/web/lib/data/attendance/`: Cached with Next.js `unstable_cache` (45s TTL for monthly summary tagged `attendance:summary:${yearMonth}`, 60s TTL for operator daily detail tagged `attendance:detail:${userId}:${yearMonth}`).
   - Server actions in `apps/web/app/actions/attendance.ts` gated strictly via `requireRole("super_admin", "admin", "hr")`.
 - **Interactive 3-Tier Responsive Web Experience (`/attendance` & `/attendance/[userId]`)**:
-  - **KPI Summary Strip**: 4 real-time cards (Total Operators, Present Count, Absent Count, Half-Day Count) calculating attendance dynamically.
+  - **KPI Summary Strip**: 4 real-time interactive cards (Total Operators, Present Count, Absent Count, Half-Day Count) calculating attendance dynamically with hover micro-interactions.
   - **Month Navigation**: URL-synced calendar selector (`?month=YYYY-MM`).
-  - **Fuzzy Search & Status Filter Chips**: Filter operators across name, mobile phone number, city, and status (`all`, `present`, `absent`, `half_day`).
-  - **High-Density Desktop Table (`hidden md:block`)**: Tabular view with Operator Name (links to `/attendance/[userId]`), Phone, Role, Scheduled Days, Present Days, Absent Days, Half Days, Worked Hours, Overtime, and color-coded status badges.
+  - **Character Match Highlighting**: Highlights search query matches inside employee name, phone, and location across desktop and mobile using Geist tokens (`#0070f3`).
+  - **FilterToolbar Drawer & Chips**: 4 responsive dropdown filters (Attendance Standing, Overtime, Location/State, Sort By) with active filter count, dismissible chips, and one-click reset.
+  - **Clickable High-Density Desktop Table (`hidden md:block`)**: Whole table row `<tr>` is clickable (`role="link"`, `cursor-pointer`, `tabIndex={0}`, keyboard accessible via Enter/Space) navigating to `/attendance/[userId]`. Scheduled Days, Present Days, Absent Days, Half Days, Worked Hours, and Overtime displayed cleanly without redundant status columns.
   - **Mobile Touch Cards (`block md:hidden`)**: Minimum 44px touch targets with operator name, contact chip, day counts grid, and worked/OT time badges.
   - **Server-Side Pagination & Browser-Native CSV Export**: On-demand unpaginated CSV export streaming filtered records directly in browser.
   - **Employee Attendance Detail Route (`/attendance/[userId]`)**: Operator profile hero card with shift schedules, 31-day visual calendar grid with status badges, and day-of-week average work hour rollup table.
@@ -826,11 +832,11 @@ Reach International manages isolated Supabase environments under organization `l
 | Environment | Project Name | Project Ref | Region | Status | Tables / Schema |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Production** | `Reach International Production` | `dhbbgfzbyatzvqafnsqp` | `ap-south-1` (Mumbai) | Active Healthy | Live fleet, operations & production data |
-| **Development** | `Reach International Dev` | `vlmxciuogczumumrwyot` | `ap-south-1` (Mumbai) | Active Healthy | Mirrored schema (`001`–`103` migrations, 20 public tables, RLS enabled) |
+| **Development** | `Reach International Dev` | `vlmxciuogczumumrwyot` | `ap-south-1` (Mumbai) | Active Healthy | Mirrored schema (`001`–`110` migrations, 20 public tables, RLS enabled) |
 
 ### CLI & Migration Synchronization
 - **Supabase CLI**: Switch projects easily via `supabase link --project-ref <REF>`.
-- **Migrations Directory (`supabase/migrations/`)**: 103 canonical SQL migrations applied sequentially, with automated schema version tracking in `supabase_migrations.schema_migrations`.
+- **Migrations Directory (`supabase/migrations/`)**: 110 canonical SQL migrations applied sequentially, with automated schema version tracking in `supabase_migrations.schema_migrations`.
 - **Storage Buckets**: Private `user_files` bucket for identity KYC verification (Aadhaar, Driving Licence) secured with short-lived signed URLs.
 
 

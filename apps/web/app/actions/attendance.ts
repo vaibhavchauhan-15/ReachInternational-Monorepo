@@ -16,6 +16,9 @@ export async function getAttendanceSummaryAction(
     role?: string | null;
     search?: string | null;
     status?: string | null;
+    overtime?: string | null;
+    state?: string | null;
+    sortBy?: string | null;
     page?: number;
     pageSize?: number;
   }
@@ -28,6 +31,9 @@ export async function getAttendanceSummaryAction(
     role: filters?.role,
     search: filters?.search,
     status: filters?.status,
+    overtime: filters?.overtime,
+    state: filters?.state,
+    sortBy: filters?.sortBy,
     page: filters?.page || 1,
     pageSize: filters?.pageSize || 25,
   });
@@ -60,6 +66,9 @@ export async function getAttendanceExportAction(
     role?: string | null;
     search?: string | null;
     status?: string | null;
+    overtime?: string | null;
+    state?: string | null;
+    sortBy?: string | null;
   }
 ): Promise<AttendanceSummaryResult> {
   await requireRole(...ALLOWED_ROLES);
@@ -70,6 +79,9 @@ export async function getAttendanceExportAction(
     role: filters?.role,
     search: filters?.search,
     status: filters?.status,
+    overtime: filters?.overtime,
+    state: filters?.state,
+    sortBy: filters?.sortBy,
     page: 1,
     pageSize: 10000, // ponytail: large enough for export, not infinity
   });

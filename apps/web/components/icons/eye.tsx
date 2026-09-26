@@ -11,7 +11,7 @@ export interface EyeIconHandle {
   stopAnimation: () => void;
 }
 
-export interface EyeIconProps extends Omit<HTMLAttributes<HTMLDivElement>, "color"> {
+export interface EyeIconProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   size?: number | string;
   strokeWidth?: number | string;
   color?: string;
@@ -36,7 +36,7 @@ const EyeIcon = forwardRef<EyeIconHandle, EyeIconProps>(
     });
 
     const handleMouseEnter = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseEnter?.(e);
         } else {
@@ -47,7 +47,7 @@ const EyeIcon = forwardRef<EyeIconHandle, EyeIconProps>(
     );
 
     const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseLeave?.(e);
         } else {
@@ -58,8 +58,8 @@ const EyeIcon = forwardRef<EyeIconHandle, EyeIconProps>(
     );
 
     return (
-      <div
-        className={cn(isSpinning && "animate-spin", className)}
+      <span
+        className={cn("inline-flex items-center justify-center", isSpinning && "animate-spin", className)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         {...props}
@@ -97,7 +97,7 @@ const EyeIcon = forwardRef<EyeIconHandle, EyeIconProps>(
             }}
           />
         </svg>
-      </div>
+      </span>
     );
   }
 );

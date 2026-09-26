@@ -1,8 +1,13 @@
 import { MetadataRoute } from "next";
-import { getAppUrl } from "@/lib/env";
+import { getAppUrl } from "@/lib/env/client";
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = getAppUrl();
+  let baseUrl = "";
+  try {
+    baseUrl = getAppUrl();
+  } catch {
+    return [];
+  }
 
   return [
     {

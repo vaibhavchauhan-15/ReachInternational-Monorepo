@@ -44,6 +44,10 @@ import {
   X,
   CheckCircle,
   AlertCircle,
+  User,
+  Clock,
+  MapPin,
+  CreditCard,
 } from 'lucide-react-native';
 
 interface EditProfileModalProps {
@@ -100,8 +104,16 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
   const [licenseUploading, setLicenseUploading] = useState(false);
   const [aadhaarProgress, setAadhaarProgress] = useState(0);
   const [licenseProgress, setLicenseProgress] = useState(0);
+
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [aadhaarError, setAadhaarError] = useState<string | null>(null);
   const [licenseError, setLicenseError] = useState<string | null>(null);
+  const [streetError, setStreetError] = useState<string | null>(null);
+  const [cityError, setCityError] = useState<string | null>(null);
+  const [districtError, setDistrictError] = useState<string | null>(null);
+  const [stateError, setStateError] = useState<string | null>(null);
+  const [docErrors, setDocErrors] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -135,8 +147,15 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
 
       setAadhaarDoc(null);
       setLicenseDoc(null);
+      setNameError(null);
+      setPhoneError(null);
       setAadhaarError(null);
       setLicenseError(null);
+      setStreetError(null);
+      setCityError(null);
+      setDistrictError(null);
+      setStateError(null);
+      setDocErrors(false);
 
       // Fetch user documents
       const targetUserId = currentUser?.id || user?.id;
@@ -232,6 +251,101 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
     );
   };
 
+  // Instant Validation Handlers
+  const validateName = (val: string) => {
+    const trimmed = val.trim();
+    if (!trimmed) {
+      setNameError('Full name is required.');
+      return false;
+    }
+    if (trimmed.length < 2) {
+      setNameError('Full name must be at least 2 characters.');
+      return false;
+    }
+    setNameError(null);
+    return true;
+  };
+
+  const validatePhone = (val: string) => {
+    const clean = val.replace(/\D/g, '');
+    if (!clean) {
+      setPhoneError('Mobile number is required.');
+      return false;
+    }
+    if (clean.length < 10) {
+      setPhoneError('Enter a valid 10-digit mobile number.');
+      return false;
+    }
+    setPhoneError(null);
+    return true;
+  };
+
+  const validateAadhaar = (val: string) => {
+    const trimmed = val.trim();
+    if (!trimmed) {
+      setAadhaarError('Aadhaar card number is required.');
+      return false;
+    }
+    const res = validateAadhaarNumber(trimmed);
+    if (!res.isValid) {
+      setAadhaarError(res.error || 'Invalid Aadhaar format (must be 12 digits).');
+      return false;
+    }
+    setAadhaarError(null);
+    return true;
+  };
+
+  const validateLicense = (val: string) => {
+    const trimmed = val.trim().toUpperCase();
+    if (!trimmed) {
+      setLicenseError('Driving licence number is required.');
+      return false;
+    }
+    const res = validateLicenseNumber(trimmed);
+    if (!res.isValid) {
+      setLicenseError(res.error || 'Invalid licence format.');
+      return false;
+    }
+    setLicenseError(null);
+    return true;
+  };
+
+  const validateStreet = (val: string) => {
+    if (!val.trim()) {
+      setStreetError('Street address is required.');
+      return false;
+    }
+    setStreetError(null);
+    return true;
+  };
+
+  const validateCity = (val: string) => {
+    if (!val.trim()) {
+      setCityError('City / Town / Village is required.');
+      return false;
+    }
+    setCityError(null);
+    return true;
+  };
+
+  const validateDistrict = (val: string) => {
+    if (!val.trim()) {
+      setDistrictError('District is required.');
+      return false;
+    }
+    setDistrictError(null);
+    return true;
+  };
+
+  const validateState = (val: string, id?: number) => {
+    if (!val.trim() && !id) {
+      setStateError('State is required.');
+      return false;
+    }
+    setStateError(null);
+    return true;
+  };
+
   const isSuperAdmin = role === 'super_admin';
   const approverLabel =
     role === 'admin'
@@ -243,9 +357,32 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
   const isOperator = (currentUser?.role || role) === 'operator';
   const isSalaryRequired = isSuperAdmin && isOperator;
 
-  const section1Complete = Boolean(fullName.trim() && phone.replace(/\D/g, '').length >= 10);
+  const hasUploadedAadhaar = Boolean(existingDocs['aadhaar']);
+  const hasUploadedLicense = Boolean(existingDocs['driving_license']);
+
+  const section1Complete = Boolean(
+    fullName.trim().length >= 2 &&
+    !nameError &&
+    phone.replace(/\D/g, '').length >= 10 &&
+    !phoneError &&
+    aadhaarNumber.trim() &&
+    !aadhaarError &&
+    licenseNumber.trim() &&
+    !licenseError &&
+    hasUploadedAadhaar &&
+    hasUploadedLicense
+  );
   const section2Complete = Boolean(startTime.trim() && endTime.trim());
-  const section3Complete = Boolean(street.trim() && city.trim() && district.trim() && stateName.trim());
+  const section3Complete = Boolean(
+    street.trim() &&
+    !streetError &&
+    city.trim() &&
+    !cityError &&
+    district.trim() &&
+    !districtError &&
+    stateName.trim() &&
+    !stateError
+  );
   const section4Complete = isSalaryRequired ? Boolean(monthlySalary && Number(monthlySalary) > 0) : true;
 
   const isAllMandatoryFilled = section1Complete && section2Complete && section3Complete && section4Complete;
@@ -257,14 +394,32 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
   ].filter(Boolean).length;
 
   const handleSubmit = async () => {
-    if (!fullName.trim()) {
-      Alert.alert('Required Field', 'Please enter your full name.');
+    const isNameValid = validateName(fullName);
+    const isPhoneValid = validatePhone(phone);
+    const isAadhaarValid = validateAadhaar(aadhaarNumber);
+    const isLicenseValid = validateLicense(licenseNumber);
+    const isStreetValid = validateStreet(street);
+    const isCityValid = validateCity(city);
+    const isDistrictValid = validateDistrict(district);
+    const isStateValid = validateState(stateName, stateId);
+
+    if (!hasUploadedAadhaar || !hasUploadedLicense) {
+      setDocErrors(true);
+      Alert.alert('Required Documents', 'Official Aadhaar and Driving Licence documents are mandatory.');
       return;
     }
 
-    const digitsOnly = phone.replace(/\D/g, '');
-    if (digitsOnly.length < 10) {
-      Alert.alert('Invalid Phone', 'Please enter a valid 10-digit mobile number.');
+    if (
+      !isNameValid ||
+      !isPhoneValid ||
+      !isAadhaarValid ||
+      !isLicenseValid ||
+      !isStreetValid ||
+      !isCityValid ||
+      !isDistrictValid ||
+      !isStateValid
+    ) {
+      Alert.alert('Validation Error', 'Please fix all highlighted errors before submitting.');
       return;
     }
 
@@ -287,6 +442,8 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
       }
       formattedLicense = lRes.formatted || licenseNumber.trim().toUpperCase();
     }
+
+    const digitsOnly = phone.replace(/\D/g, '');
 
     const finalShift =
       startTime.trim() && endTime.trim()
@@ -565,36 +722,55 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
               stepNumber={1}
               title="Personal Details & KYC"
               description="Name, contact, and identity credentials"
+              icon={<User size={14} color={theme.colors.link} />}
               isMandatory={true}
               isCompleted={section1Complete}
             >
               <Input
-                label="Full Name *"
+                label="Full Name"
+                required
                 value={fullName}
-                onChangeText={setFullName}
+                onChangeText={(t) => {
+                  setFullName(t);
+                  validateName(t);
+                }}
+                onBlur={() => validateName(fullName)}
                 placeholder="e.g. Rahul Sharma"
+                error={nameError || undefined}
                 containerStyle={styles.inputSpacing}
               />
               <Input
-                label="Mobile Phone *"
+                label="Mobile Phone"
+                required
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={(t) => {
+                  setPhone(t);
+                  validatePhone(t);
+                }}
+                onBlur={() => validatePhone(phone)}
                 placeholder="e.g. 9876543210"
                 keyboardType="phone-pad"
+                error={phoneError || undefined}
                 containerStyle={styles.inputSpacing}
               />
               <Input
                 label="Aadhaar Card Number"
+                required
                 value={aadhaarNumber}
-                onChangeText={setAadhaarNumber}
+                onChangeText={(t) => {
+                  setAadhaarNumber(t);
+                  validateAadhaar(t);
+                }}
+                onBlur={() => validateAadhaar(aadhaarNumber)}
                 placeholder="12-digit Aadhaar"
                 keyboardType="numeric"
                 maxLength={14}
+                error={aadhaarError || undefined}
                 containerStyle={styles.inputSpacing}
               />
 
               <MobileDocumentUploadCard
-                title="Aadhaar Card Document"
+                title="Aadhaar Card Document *"
                 subtitle="Front page image or PDF (max 2 MB)"
                 docTypeCode="aadhaar"
                 selectedDoc={aadhaarDoc}
@@ -612,20 +788,27 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
                 }}
                 uploading={aadhaarUploading}
                 uploadProgress={aadhaarProgress}
-                errorMessage={aadhaarError}
+                errorMessage={aadhaarError || (docErrors && !existingDocs['aadhaar'] ? 'Aadhaar document upload is required.' : undefined)}
               />
 
               <Input
                 label="Driving Licence"
+                required
                 value={licenseNumber}
-                onChangeText={(t) => setLicenseNumber(t.toUpperCase())}
+                onChangeText={(t) => {
+                  const upper = t.toUpperCase();
+                  setLicenseNumber(upper);
+                  validateLicense(upper);
+                }}
+                onBlur={() => validateLicense(licenseNumber)}
                 placeholder="e.g. MH12 20110012345"
                 autoCapitalize="characters"
+                error={licenseError || undefined}
                 containerStyle={styles.inputSpacing}
               />
 
               <MobileDocumentUploadCard
-                title="Driving Licence Document"
+                title="Driving Licence Document *"
                 subtitle="Smart card scan or PDF (max 2 MB)"
                 docTypeCode="driving_license"
                 selectedDoc={licenseDoc}
@@ -643,7 +826,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
                 }}
                 uploading={licenseUploading}
                 uploadProgress={licenseProgress}
-                errorMessage={licenseError}
+                errorMessage={licenseError || (docErrors && !existingDocs['driving_license'] ? 'Driving licence document upload is required.' : undefined)}
               />
             </MobileFormSectionCard>
 
@@ -652,6 +835,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
               stepNumber={2}
               title="Shift Timing"
               description="Operating work schedule window"
+              icon={<Clock size={14} color={theme.colors.link} />}
               isMandatory={true}
               isCompleted={section2Complete}
             >
@@ -679,7 +863,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
             <MobileFormSectionCard
               stepNumber={3}
               title="Work Location & Address"
-              description="Street + City/Town/Village + District + State"
+              icon={<MapPin size={14} color={theme.colors.link} />}
               isMandatory={true}
               isCompleted={section3Complete}
             >
@@ -689,12 +873,28 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
                 district={district}
                 stateName={stateName}
                 stateId={stateId}
-                onStreetChange={setStreet}
-                onCityChange={setCity}
-                onDistrictChange={setDistrict}
+                onStreetChange={(v) => {
+                  setStreet(v);
+                  validateStreet(v);
+                }}
+                onCityChange={(v) => {
+                  setCity(v);
+                  validateCity(v);
+                }}
+                onDistrictChange={(v) => {
+                  setDistrict(v);
+                  validateDistrict(v);
+                }}
                 onStateChange={(id, name) => {
                   setStateId(id);
                   setStateName(name);
+                  validateState(name, id);
+                }}
+                errors={{
+                  street: streetError || undefined,
+                  city: cityError || undefined,
+                  district: districtError || undefined,
+                  state: stateError || undefined,
                 }}
                 required={true}
               />
@@ -704,13 +904,10 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
             <MobileFormSectionCard
               stepNumber={4}
               title="Compensation"
-              description={
-                isSuperAdmin
-                  ? 'Monthly base remuneration (Super Admin editable)'
-                  : 'Verified base monthly compensation'
-              }
+              icon={<CreditCard size={14} color={theme.colors.link} />}
               isMandatory={isSalaryRequired}
               isCompleted={section4Complete}
+              isReadOnly={!isSuperAdmin}
             >
               <MobileSalaryField
                 value={monthlySalary}

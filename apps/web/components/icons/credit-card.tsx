@@ -12,7 +12,7 @@ export interface CreditCardIconHandle {
   stopAnimation: () => void;
 }
 
-export interface CreditCardIconProps extends Omit<HTMLAttributes<HTMLDivElement>, "color"> {
+export interface CreditCardIconProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   size?: number | string;
   strokeWidth?: number | string;
   color?: string;
@@ -56,7 +56,7 @@ const CreditCardIcon = forwardRef<CreditCardIconHandle, CreditCardIconProps>(
     });
 
     const handleMouseEnter = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseEnter?.(e);
         } else {
@@ -67,7 +67,7 @@ const CreditCardIcon = forwardRef<CreditCardIconHandle, CreditCardIconProps>(
     );
 
     const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseLeave?.(e);
         } else {
@@ -78,8 +78,8 @@ const CreditCardIcon = forwardRef<CreditCardIconHandle, CreditCardIconProps>(
     );
 
     return (
-      <div
-        className={cn(isSpinning && "animate-spin", className)}
+      <span
+        className={cn("inline-flex items-center justify-center", isSpinning && "animate-spin", className)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         {...props}
@@ -105,7 +105,7 @@ const CreditCardIcon = forwardRef<CreditCardIconHandle, CreditCardIconProps>(
             <line x1="2" x2="22" y1="10" y2="10" />
           </motion.g>
         </svg>
-      </div>
+      </span>
     );
   }
 );

@@ -10,7 +10,7 @@
  */
 
 import { track as vercelTrack } from "@vercel/analytics";
-import { getGaMeasurementId } from "./env";
+import { getGaMeasurementId } from "@/lib/env/client";
 
 export const GA_MEASUREMENT_ID = getGaMeasurementId() || "";
 

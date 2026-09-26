@@ -157,6 +157,11 @@ export function getSearchMatchSegments(
   const allTerms: string[] = [];
   for (const t of terms) {
     allTerms.push(t);
+    const alphaNumMatch = t.match(/^([a-z]+)(\d+)$/i);
+    if (alphaNumMatch) {
+      if (alphaNumMatch[1].length >= 2) allTerms.push(alphaNumMatch[1]);
+      if (alphaNumMatch[2].length >= 1) allTerms.push(alphaNumMatch[2]);
+    }
     if (matchDigits) {
       const digits = t.replace(/\D/g, "");
       if (digits.length >= 2 && digits !== t) {

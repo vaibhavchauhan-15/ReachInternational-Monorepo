@@ -12,7 +12,7 @@ export interface ActivityIconHandle {
   stopAnimation: () => void;
 }
 
-export interface ActivityIconProps extends Omit<HTMLAttributes<HTMLDivElement>, "color"> {
+export interface ActivityIconProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   size?: number | string;
   strokeWidth?: number | string;
   color?: string;
@@ -60,7 +60,7 @@ const ActivityIcon = forwardRef<ActivityIconHandle, ActivityIconProps>(
     });
 
     const handleMouseEnter = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseEnter?.(e);
         } else {
@@ -71,7 +71,7 @@ const ActivityIcon = forwardRef<ActivityIconHandle, ActivityIconProps>(
     );
 
     const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseLeave?.(e);
         } else {
@@ -82,8 +82,8 @@ const ActivityIcon = forwardRef<ActivityIconHandle, ActivityIconProps>(
     );
 
     return (
-      <div
-        className={cn(isSpinning && "animate-spin", className)}
+      <span
+        className={cn("inline-flex items-center justify-center", isSpinning && "animate-spin", className)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         {...props}
@@ -106,7 +106,7 @@ const ActivityIcon = forwardRef<ActivityIconHandle, ActivityIconProps>(
             variants={VARIANTS}
           />
         </svg>
-      </div>
+      </span>
     );
   }
 );

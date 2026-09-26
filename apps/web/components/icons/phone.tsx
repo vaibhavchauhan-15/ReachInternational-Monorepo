@@ -10,7 +10,7 @@ export interface PhoneIconHandle {
   stopAnimation: () => void;
 }
 
-export interface PhoneIconProps extends Omit<HTMLAttributes<HTMLDivElement>, "color"> {
+export interface PhoneIconProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   size?: number | string;
   strokeWidth?: number | string;
   color?: string;
@@ -50,7 +50,7 @@ const PhoneIcon = forwardRef<PhoneIconHandle, PhoneIconProps>(
     });
 
     const handleMouseEnter = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseEnter?.(e);
         } else {
@@ -61,7 +61,7 @@ const PhoneIcon = forwardRef<PhoneIconHandle, PhoneIconProps>(
     );
 
     const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseLeave?.(e);
         } else {
@@ -72,8 +72,8 @@ const PhoneIcon = forwardRef<PhoneIconHandle, PhoneIconProps>(
     );
 
     return (
-      <div
-        className={cn(isSpinning && "animate-spin", className)}
+      <span
+        className={cn("inline-flex items-center justify-center", isSpinning && "animate-spin", className)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         {...props}
@@ -94,7 +94,7 @@ const PhoneIcon = forwardRef<PhoneIconHandle, PhoneIconProps>(
         >
           <path d="M13.832 16.568a1 1 0 0 0 1.213-.303l.355-.465A2 2 0 0 1 17 15h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2A18 18 0 0 1 2 4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3a2 2 0 0 1-.8 1.6l-.468.351a1 1 0 0 0-.292 1.233 14 14 0 0 0 6.392 6.384" />
         </motion.svg>
-      </div>
+      </span>
     );
   }
 );

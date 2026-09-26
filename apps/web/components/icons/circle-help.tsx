@@ -12,7 +12,7 @@ export interface CircleHelpIconHandle {
   stopAnimation: () => void;
 }
 
-export interface CircleHelpIconProps extends Omit<HTMLAttributes<HTMLDivElement>, "color"> {
+export interface CircleHelpIconProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   size?: number | string;
   strokeWidth?: number | string;
   color?: string;
@@ -43,7 +43,7 @@ const CircleHelpIcon = forwardRef<CircleHelpIconHandle, CircleHelpIconProps>(
     });
 
     const handleMouseEnter = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseEnter?.(e);
         } else {
@@ -54,7 +54,7 @@ const CircleHelpIcon = forwardRef<CircleHelpIconHandle, CircleHelpIconProps>(
     );
 
     const handleMouseLeave = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
+      (e: React.MouseEvent<HTMLSpanElement>) => {
         if (isControlledRef.current) {
           onMouseLeave?.(e);
         } else {
@@ -65,8 +65,8 @@ const CircleHelpIcon = forwardRef<CircleHelpIconHandle, CircleHelpIconProps>(
     );
 
     return (
-      <div
-        className={cn(isSpinning && "animate-spin", className)}
+      <span
+        className={cn("inline-flex items-center justify-center", isSpinning && "animate-spin", className)}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         {...props}
@@ -95,7 +95,7 @@ const CircleHelpIcon = forwardRef<CircleHelpIconHandle, CircleHelpIconProps>(
             <path d="M12 17h.01" />
           </motion.g>
         </svg>
-      </div>
+      </span>
     );
   }
 );

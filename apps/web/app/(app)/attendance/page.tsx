@@ -13,6 +13,9 @@ interface AttendancePageProps {
     page?: string;
     status?: string;
     search?: string;
+    overtime?: string;
+    state?: string;
+    sortBy?: string;
   }>;
 }
 
@@ -39,6 +42,9 @@ export default async function AttendancePage({ searchParams }: AttendancePagePro
   const initialData = await getAttendanceSummaryAction(year, month, {
     status: params.status || null,
     search: params.search || null,
+    overtime: params.overtime || null,
+    state: params.state || null,
+    sortBy: params.sortBy || null,
     page,
     pageSize: 25,
   });
