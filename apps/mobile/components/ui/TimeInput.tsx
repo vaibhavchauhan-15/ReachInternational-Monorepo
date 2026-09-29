@@ -463,7 +463,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   label: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '600',
     marginBottom: 6,
     textTransform: 'uppercase',
@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    height: 42,
+    height: 44,
     paddingHorizontal: 4,
     borderRadius: radiusNumeric.sm,
     borderWidth: 1,
@@ -496,16 +496,16 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   digitInput: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     textAlign: 'center',
-    width: 32,
-    height: 38,
+    width: 34,
+    height: 40,
     padding: 0,
     fontVariant: ['tabular-nums'],
   },
   colonText: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     paddingHorizontal: 2,
     opacity: 0.7,
@@ -520,11 +520,11 @@ const styles = StyleSheet.create({
   },
   periodContainerStacked: {
     width: '100%',
-    height: 38,
+    height: 40,
   },
   periodContainerSide: {
-    height: 42,
-    minWidth: 88,
+    height: 44,
+    minWidth: 92,
   },
   periodBtn: {
     flex: 1,
@@ -537,16 +537,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   periodText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   errorText: {
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 4,
     fontWeight: '600',
   },
   helperText: {
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 4,
   },
 });

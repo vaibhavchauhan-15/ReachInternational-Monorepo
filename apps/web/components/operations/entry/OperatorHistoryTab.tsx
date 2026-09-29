@@ -39,8 +39,8 @@ import {
   OperationsLogTableSkeletonRows,
 } from "../skeletons/OperationsSkeletons";
 
-const PrintableOperatorLogsModal = dynamic(
-  () => import("@/components/dashboard/PrintableOperatorLogsModal").then((mod) => mod.PrintableOperatorLogsModal),
+const PrintableSupervisorLogsModal = dynamic(
+  () => import("@/components/operations/PrintableSupervisorLogsModal").then((mod) => mod.PrintableSupervisorLogsModal),
   { ssr: false }
 );
 
@@ -364,7 +364,7 @@ function matchesDateSearch(log: OperatorHourLog, query: string): boolean {
     if (isExportingExcel) return;
     try {
       setIsExportingExcel(true);
-      const { exportOperatorLogsToExcel } = await import("@/lib/utils/operator-logs-export");
+      const { exportSupervisorRunningLogsToExcel } = await import("@/lib/utils/supervisor-logs-export");
 
       let exportMonth = "all";
       let exportStart: string | undefined;
@@ -397,14 +397,17 @@ function matchesDateSearch(log: OperatorHourLog, query: string): boolean {
         return;
       }
 
-      exportOperatorLogsToExcel(
-        res.logs as OperatorHourLog[],
-        user,
-        assignedMachine,
-        exportMonth,
-        exportStart,
-        exportEnd
-      );
+      exportSupervisorRunningLogsToExcel({
+        logs: res.logs as unknown as MachineHourLog[],
+        viewMode: "operator",
+        selectedEntityId: user.id,
+        selectedOperatorId: user.id,
+        selectedMonthValue: exportMonth,
+        supervisorName: user.full_name,
+        machines: assignedMachine ? [assignedMachine] : [],
+        customStartDate: exportStart,
+        customEndDate: exportEnd,
+      });
 
       toast("success", "Export Successful", `Exported ${res.logs.length} machine logs to Excel.`);
     } catch (err: unknown) {
@@ -944,14 +947,19 @@ function matchesDateSearch(log: OperatorHourLog, query: string): boolean {
         </>
       )}
 
-      {/* Printable Modal (Loaded dynamically on-demand) */}
+      {/* Printable Modal (Loaded dynamically on-demand from running logs export component) */}
       {showPrintModal && (
-        <PrintableOperatorLogsModal
+        <PrintableSupervisorLogsModal
           open={showPrintModal}
           onClose={() => setShowPrintModal(false)}
           user={user}
-          assignedMachine={assignedMachine || null}
-          logs={logsList}
+          viewMode="operator"
+          selectedEntityId={user.id}
+          selectedEntityName={user.full_name || "Operator"}
+          selectedOperatorId={user.id}
+          selectedMonthValue={dateFilter === "month" ? "current" : "all"}
+          machines={assignedMachine ? [assignedMachine] : []}
+          logs={logsList as unknown as MachineHourLog[]}
         />
       )}
 

@@ -86,6 +86,7 @@ export const TAGS = {
   clientOperations: (clientId: string) => `operations:client:${clientId}`,
   machineOperations: (machineId: string) => `operations:machine:${machineId}`,
   operatorOperations: (operatorId: string) => `operations:operator:${operatorId}`,
+  todayShiftMonitor: "operations:today-shift-monitor",
 
   // Attendance Domain
   attendance: "attendance",

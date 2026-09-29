@@ -37,7 +37,7 @@ export function ClientExportModal({ isOpen, onClose, currentFilter }: ClientExpo
 
       // Convert records to CSV format with Excel UTF-8 BOM
       const headers = [
-        "Client Code",
+        "Client ID",
         "Company Name",
         "Contact Person",
         "Phone",

@@ -35,7 +35,7 @@ export interface UserListResponse {
  * Reuses the machine-list.ts projection pattern.
  */
 export const USER_LIST_COLUMNS =
-  "id, full_name, email, phone, role, status, street, city, district, state, state_id, aadhaar_number, license_number, shift_start_time, shift_end_time, supervisor_id, monthly_salary, daily_rate, ot_hourly_rate, complete_profile, created_at, updated_at";
+  "id, employee_id, full_name, email, phone, role, status, street, city, district, state, state_id, aadhaar_number, license_number, shift_start_time, shift_end_time, supervisor_id, monthly_salary, daily_rate, ot_hourly_rate, complete_profile, created_at, updated_at";
 
 export function sanitizeSearchToken(token: string): string {
   return token
@@ -62,10 +62,10 @@ export function applyOptimizedUserSearch<T extends { or: (filters: string) => T 
 
   // Single-character fast prefix search: hits B-Tree index on prefix without full table scan
   if (trimmed.length === 1) {
-    return query.or(`full_name.ilike.${sanitized}%,email.ilike.${sanitized}%,role.ilike.${sanitized}%`);
+    return query.or(`full_name.ilike.${sanitized}%,email.ilike.${sanitized}%,role.ilike.${sanitized}%,employee_id.ilike.${sanitized}%`);
   }
 
-  // 1. Phone or Aadhaar search: input consists mostly of numbers, +, -, spaces, ()
+  // 1. Phone, Aadhaar, or Employee ID search: input consists mostly of numbers, +, -, spaces, ()
   const isDigitsOnly = /^[0-9+\s\-()]+$/.test(trimmed);
   const digits = trimmed.replace(/\D/g, "");
 
@@ -79,6 +79,7 @@ export function applyOptimizedUserSearch<T extends { or: (filters: string) => T 
 
     const conditions: string[] = [];
     conditions.push(`phone.ilike.%${phoneDigits}%`);
+    conditions.push(`employee_id.ilike.%${digits}%`);
     if (digits.length >= 4) {
       conditions.push(`aadhaar_number.ilike.%${digits}%`);
     }
@@ -95,14 +96,14 @@ export function applyOptimizedUserSearch<T extends { or: (filters: string) => T 
   if (tokens.length > 1) {
     const andClauses = tokens.map((t) => {
       const s = sanitizeSearchToken(t);
-      return `and(or(full_name.ilike.%${s}%,role.ilike.%${s}%,city.ilike.%${s}%,district.ilike.%${s}%,state.ilike.%${s}%))`;
+      return `and(or(full_name.ilike.%${s}%,employee_id.ilike.%${s}%,role.ilike.%${s}%,city.ilike.%${s}%,district.ilike.%${s}%,state.ilike.%${s}%))`;
     });
     return query.or(andClauses.join(","));
   }
 
-  // 4. Default: single-token broad text search across indexed name, email, role, and address
+  // 4. Default: single-token broad text search across indexed name, employee_id, email, role, and address
   return query.or(
-    `full_name.ilike.%${sanitized}%,email.ilike.%${sanitized}%,role.ilike.%${sanitized}%,city.ilike.%${sanitized}%,district.ilike.%${sanitized}%,state.ilike.%${sanitized}%,street.ilike.%${sanitized}%`
+    `full_name.ilike.%${sanitized}%,employee_id.ilike.%${sanitized}%,email.ilike.%${sanitized}%,role.ilike.%${sanitized}%,city.ilike.%${sanitized}%,district.ilike.%${sanitized}%,state.ilike.%${sanitized}%,street.ilike.%${sanitized}%`
   );
 }
 

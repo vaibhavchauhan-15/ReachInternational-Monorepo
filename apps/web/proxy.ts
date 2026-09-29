@@ -169,11 +169,37 @@ export async function proxy(request: NextRequest) {
     return createRedirectResponse(targetUrl.pathname + (targetUrl.search || ""));
   }
 
-  // Normalize /operations by stripping obsolete ?tab=logs / ?tab=entry parameter
-  if (path === "/operations" && (request.nextUrl.searchParams.get("tab") === "logs" || request.nextUrl.searchParams.get("tab") === "entry")) {
+  // Redirect legacy /operations?tab=logs to dedicated /running-logs route (preserving query params)
+  if (path === "/operations" && request.nextUrl.searchParams.get("tab") === "logs") {
+    // If the authenticated user is an operator, do NOT redirect to /running-logs; strip tab and remain on /operations
+    if (authenticatedUser?.user_metadata?.role === "operator") {
+      const targetUrl = new URL(request.nextUrl);
+      targetUrl.searchParams.delete("tab");
+      return createRedirectResponse(targetUrl.pathname + (targetUrl.search || ""));
+    }
+    const targetUrl = new URL(request.nextUrl);
+    targetUrl.pathname = "/running-logs";
+    targetUrl.searchParams.delete("tab");
+    return createRedirectResponse(targetUrl.pathname + (targetUrl.search || ""));
+  }
+
+  // Normalize /operations by stripping obsolete ?tab=today / ?tab=entry parameter
+  if (path === "/operations" && (request.nextUrl.searchParams.get("tab") === "today" || request.nextUrl.searchParams.get("tab") === "entry")) {
     const targetUrl = new URL(request.nextUrl);
     targetUrl.searchParams.delete("tab");
     return createRedirectResponse(targetUrl.pathname + (targetUrl.search || ""));
+  }
+
+  // Normalize /running-logs by stripping obsolete ?tab= parameter
+  if (path === "/running-logs" && request.nextUrl.searchParams.has("tab")) {
+    const targetUrl = new URL(request.nextUrl);
+    targetUrl.searchParams.delete("tab");
+    return createRedirectResponse(targetUrl.pathname + (targetUrl.search || ""));
+  }
+
+  // Restrict operator role from accessing /running-logs directly (redirect to /operations entry hub)
+  if ((path === "/running-logs" || path.startsWith("/running-logs/")) && authenticatedUser?.user_metadata?.role === "operator") {
+    return createRedirectResponse("/operations");
   }
 
   // Normalize /machines by stripping obsolete ?tab= parameter

@@ -15,5 +15,7 @@ export * from './operations-keys';
 export * from './operations-dates';
 export * from './client-keys';
 export * from './search';
+export * from './shift';
+export * from './maintenance';
 
 export const UTILS_PACKAGE = "@reachinternational/utils";

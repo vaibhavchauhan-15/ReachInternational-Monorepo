@@ -10,10 +10,10 @@ import {
   Phone,
   Mail,
   Clock,
-  Zap,
   AlertTriangle,
   FileText,
   Loader2,
+  UserCheck,
 } from "lucide-react";
 
 export interface OperationsClientViewProps {
@@ -29,6 +29,7 @@ export interface OperationsClientViewProps {
   onToggleExpand: () => void;
   totalFilteredRunHours: number;
   totalFilteredOtHours: number;
+  totalFilteredWorkingHours?: number;
   totalFilteredBreakdowns: number;
   totalMatchingLogs: number;
   isLoadingLogs?: boolean;
@@ -47,6 +48,7 @@ export const OperationsClientView = React.memo(function OperationsClientView({
   onToggleExpand,
   totalFilteredRunHours,
   totalFilteredOtHours,
+  totalFilteredWorkingHours = 0,
   totalFilteredBreakdowns,
   totalMatchingLogs,
   isLoadingLogs = false,
@@ -96,7 +98,7 @@ export const OperationsClientView = React.memo(function OperationsClientView({
             >
               <Calendar size={14} className="w-3.5 h-3.5 shrink-0" />
               <span>
-                {displayWorkingDays} Days ({selectedMonthLabel})
+                {displayWorkingDays} {displayWorkingDays === 1 ? "Day" : "Days"} ({selectedMonthLabel})
               </span>
             </Badge>
           </div>
@@ -174,7 +176,7 @@ export const OperationsClientView = React.memo(function OperationsClientView({
                   >
                     <Calendar size={12} className="w-3 h-3 shrink-0" />
                     <span>
-                      {displayWorkingDays} Days ({selectedMonthLabel})
+                      {displayWorkingDays} {displayWorkingDays === 1 ? "Day" : "Days"} ({selectedMonthLabel})
                     </span>
                   </Badge>
                 </div>
@@ -206,14 +208,14 @@ export const OperationsClientView = React.memo(function OperationsClientView({
                   className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] space-y-1 transition-colors cursor-default select-none"
                 >
                   <div className="flex items-center gap-1.5 text-[var(--color-mute)]">
-                    <Zap size={16} className="w-4 h-4 text-amber-500 shrink-0" />
+                    <UserCheck size={16} className="w-4 h-4 text-emerald-500 shrink-0" />
                     <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
-                      <span className="sm:hidden">OT</span>
-                      <span className="hidden sm:inline">Overtime</span>
+                      <span className="sm:hidden">Working</span>
+                      <span className="hidden sm:inline">Working Hours</span>
                     </span>
                   </div>
-                  <div className="text-base sm:text-lg font-extrabold font-mono text-amber-600 dark:text-amber-400">
-                    {Math.round(totalFilteredOtHours * 10) / 10}{" "}
+                  <div className="text-base sm:text-lg font-extrabold font-mono text-emerald-600 dark:text-emerald-400">
+                    {Math.round((totalFilteredWorkingHours || 0) * 10) / 10}{" "}
                     <span className="text-[11px] sm:text-xs font-semibold text-[var(--color-mute)]">
                       hrs
                     </span>
@@ -244,9 +246,9 @@ export const OperationsClientView = React.memo(function OperationsClientView({
                   className="p-2.5 sm:p-3 rounded-xl bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] space-y-1 transition-colors cursor-default select-none"
                 >
                   <div className="flex items-center gap-1.5 text-[var(--color-mute)]">
-                    <FileText size={16} className="w-4 h-4 text-[var(--color-mute)] shrink-0" />
+                    <FileText size={16} className="w-4 h-4 text-sky-500 shrink-0" />
                     <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-[var(--color-mute)]">
-                      Logs
+                      Shifts
                     </span>
                   </div>
                   <div className="text-base sm:text-lg font-extrabold font-mono text-[var(--color-ink)] flex items-center gap-1.5">
@@ -259,7 +261,7 @@ export const OperationsClientView = React.memo(function OperationsClientView({
                       <>
                         {totalMatchingLogs}{" "}
                         <span className="text-[11px] sm:text-xs font-semibold text-[var(--color-mute)]">
-                          {totalMatchingLogs === 1 ? "Record" : "Records"}
+                          {totalMatchingLogs === 1 ? "Shift" : "Shifts"}
                         </span>
                       </>
                     )}

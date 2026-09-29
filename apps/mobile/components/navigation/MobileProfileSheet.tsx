@@ -729,7 +729,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   userEmail: {
-    fontSize: 11,
+    fontSize: 12.5,
     marginTop: 1,
   },
   roleBadgeWrapper: {
@@ -760,7 +760,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   sectionHeaderLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.6,
     marginLeft: 4,
@@ -788,13 +788,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   rowLabel: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   rowValue: {
-    fontSize: 12.5,
+    fontSize: 13.5,
     fontWeight: '600',
     marginTop: 1,
   },
@@ -803,9 +803,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   addressValue: {
-    lineHeight: 17,
+    lineHeight: 18,
     fontWeight: '500',
-    fontSize: 12,
+    fontSize: 13,
   },
   cardDivider: {
     height: 1,
@@ -822,7 +822,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   brandFooterText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '500',
     letterSpacing: 0.5,
   },
@@ -851,8 +851,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   modalSubtitle: {
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 13,
+    lineHeight: 18,
     marginBottom: spacingNumeric.sm,
   },
   errorBanner: {
@@ -865,7 +865,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: '#ef4444',
-    fontSize: 11.5,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   modalButtons: {

@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   codeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   metaText: {
-    fontSize: 11,
+    fontSize: 12.5,
   },
   checkBadge: {
     width: 22,
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
     gap: spacingNumeric.sm,
   },
   emptyText: {
-    fontSize: 12,
+    fontSize: 13,
     textAlign: 'center',
   },
 });

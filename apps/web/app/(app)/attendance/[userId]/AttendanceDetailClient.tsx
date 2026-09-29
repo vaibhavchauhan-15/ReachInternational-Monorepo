@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useTransition, useCallback, useState, useMemo } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -22,16 +23,20 @@ import {
   AnimatedMapPin,
   AnimatedDownload,
   AnimatedChevronRight,
+  AnimatedChevronLeft,
   AnimatedInfo,
   AnimatedTruck,
   AnimatedCreditCard,
   AnimatedLayers,
 } from "@/components/ui/animated-icons";
 import type { AttendanceDetailResult, AttendanceDay, AttendanceDayEntry } from "@/lib/data/attendance/attendance-detail";
+import { PrintableAttendanceModal } from "@/components/attendance/PrintableAttendanceModal";
 
 interface AttendanceDetailClientProps {
   data: AttendanceDetailResult;
   currentMonth: string;
+  userRole?: string;
+  isSelf?: boolean;
 }
 
 const STATUS_CHIP: Record<string, { label: string; name: string; color: string; cellBg: string; badgeVariant: "success" | "warning" | "error" | "neutral" }> = {
@@ -126,12 +131,19 @@ function getInitials(name: string): string {
 
 type ViewMode = "calendar" | "table";
 
-export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailClientProps) {
+export function AttendanceDetailClient({
+  data,
+  currentMonth,
+  userRole,
+  isSelf,
+}: AttendanceDetailClientProps) {
+  const isOperator = userRole === "operator" || isSelf;
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [selectedDay, setSelectedDay] = useState<AttendanceDay | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("calendar");
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   const { employee, days, weekdayRollup, summary } = data;
 
@@ -274,7 +286,10 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
 
   const handleMonthChange = (newMonth: string) => {
     startTransition(() => {
-      router.push(`/attendance/${employee.id}?month=${newMonth}`);
+      const targetUrl = isOperator
+        ? `/attendance?month=${newMonth}`
+        : `/attendance/${employee.employee_id || employee.id}?month=${newMonth}`;
+      router.push(targetUrl);
     });
   };
 
@@ -335,19 +350,27 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
   }, []);
 
   // Formatted employee ID
-  const formattedEmpId = `EMP-${employee.id.slice(0, 8).toUpperCase()}`;
+  const formattedEmpId = employee.employee_id || `EMP-${employee.id.slice(0, 8).toUpperCase()}`;
 
   return (
-    <div className="flex flex-col gap-4 sm:gap-6 pb-28 sm:pb-24 md:pb-8 px-1 sm:px-0">
-      {/* 1. Header Toolbar (Hidden when printing) */}
-      <div className="print:hidden">
+    <div className="flex flex-col gap-3.5 sm:gap-5 md:gap-6 pb-28 sm:pb-24 md:pb-8 px-2.5 sm:px-4 md:px-0">
+      {/* 1. Desktop Page Header Toolbar (Hidden on mobile < md & when printing) */}
+      <div className="hidden md:block print:hidden">
         <PageHeader
-          title={employee.full_name}
-          description={`Monthly attendance ledger and operational shift records for ${monthName}`}
-          breadcrumbs={[
-            { label: "Attendance", href: `/attendance?month=${currentMonth}` },
-            { label: employee.full_name },
-          ]}
+          title={isOperator ? "My Attendance" : employee.full_name}
+          description={
+            isOperator
+              ? `Your monthly attendance ledger, daily shift logs, and worked hours for ${monthName}`
+              : `Monthly attendance ledger and operational shift records for ${monthName}`
+          }
+          breadcrumbs={
+            isOperator
+              ? [{ label: "My Attendance" }]
+              : [
+                  { label: "Attendance", href: `/attendance?month=${currentMonth}` },
+                  { label: `${employee.full_name} (${formattedEmpId})` },
+                ]
+          }
           actions={
             <div className="flex items-center gap-2 flex-wrap justify-end">
               <MonthSelect
@@ -359,136 +382,163 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={handlePrint}
-                className="h-9 px-3 text-xs font-semibold gap-1.5"
-                title="Print or Save as PDF"
-              >
-                <span>Print / PDF</span>
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleExportCSV}
+                onClick={() => setIsExportModalOpen(true)}
                 icon={<AnimatedDownload size={14} className="text-[var(--color-mute)]" />}
                 className="h-9 px-3 text-xs font-semibold gap-1.5"
-                title="Export CSV"
+                title="Export Attendance (Excel / PDF / Print)"
               >
-                <span>Export CSV</span>
+                <span>Export</span>
               </Button>
             </div>
           }
         />
       </div>
 
-      {/* Mobile Month & Export Bar (<md) */}
-      <div className="flex md:hidden items-center justify-between gap-2 print:hidden">
-        <MonthSelect
-          value={currentMonth}
-          onChange={handleMonthChange}
-          disabled={isPending}
-          showQuickNav
-          className="flex-1"
-        />
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={handleExportCSV}
-          icon={<AnimatedDownload size={14} className="text-[var(--color-mute)]" />}
-          className="h-11 px-3 text-xs font-semibold gap-1.5 shrink-0"
-        >
-          <span>Export</span>
-        </Button>
+      {/* Mobile Title & Action Bar (<md) */}
+      <div className="flex md:hidden flex-col gap-3 print:hidden">
+        {/* Navigation Breadcrumb & Page Title */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            {!isOperator && (
+              <Link
+                href={`/attendance?month=${currentMonth}`}
+                className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors mb-1 active:scale-95"
+              >
+                <AnimatedChevronLeft size={12} className="shrink-0" />
+                <span>All Operators</span>
+              </Link>
+            )}
+            <h1 className="text-lg sm:text-xl font-bold text-[var(--color-ink)] tracking-tight truncate">
+              {isOperator ? "My Attendance" : employee.full_name}
+            </h1>
+            <p className="text-xs text-[var(--color-mute)] mt-0.5 truncate">
+              {isOperator
+                ? `Attendance ledger • ${monthName}`
+                : `${formattedEmpId} • ${employee.role}`}
+            </p>
+          </div>
+          {isOperator && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              Active
+            </span>
+          )}
+        </div>
+
+        {/* Action Controls: MonthSelect & Export */}
+        <div className="flex items-center justify-between gap-2 w-full">
+          <MonthSelect
+            value={currentMonth}
+            onChange={handleMonthChange}
+            disabled={isPending}
+            showQuickNav
+            compact
+            className="flex-1 min-w-0"
+          />
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setIsExportModalOpen(true)}
+            icon={<AnimatedDownload size={14} className="text-[var(--color-mute)]" />}
+            className="h-10 px-3 text-xs font-semibold gap-1.5 shrink-0"
+            title="Export Attendance"
+          >
+            <span>Export</span>
+          </Button>
+        </div>
       </div>
 
-      {/* 2. Employee Details Master Card (Elevated from the user's PDF) */}
-      <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-5 shadow-xs transition-colors">
-        {/* Top Title Row */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3.5 border-b border-[var(--color-hairline)]/80">
-          <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
-            {/* Avatar Badge */}
-            <div className="w-12 h-12 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] flex items-center justify-center font-bold text-base font-mono shrink-0 shadow-2xs">
-              {getInitials(employee.full_name)}
+      {/* 2. Employee Details Master Card (Hidden when user sees their own attendance) */}
+      {!isSelf && !isOperator && (
+        <div className="rounded-xl sm:rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 sm:p-5 shadow-xs transition-colors">
+          {/* Top Title Row */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3.5 border-b border-[var(--color-hairline)]/80">
+            <div className="flex items-center gap-3 sm:gap-3.5 min-w-0">
+              {/* Avatar Badge */}
+              <div className="w-11 sm:w-12 h-11 sm:h-12 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[var(--color-ink)] flex items-center justify-center font-bold text-sm sm:text-base font-mono shrink-0 shadow-2xs">
+                {getInitials(employee.full_name)}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-base sm:text-lg font-bold text-[var(--color-ink)] tracking-tight truncate">
+                    {employee.full_name}
+                  </h2>
+                  <Badge variant="neutral" className="text-[10px] uppercase font-mono font-semibold tracking-wider">
+                    {employee.role}
+                  </Badge>
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    Active
+                  </span>
+                </div>
+                <p className="text-xs text-[var(--color-mute)] mt-0.5 font-mono truncate">
+                  {employee.email || "reachinternational.co.in"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Structured 4-Column Metadata Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4 pt-3 sm:pt-3.5 text-xs">
+            {/* Employee ID */}
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[11px] font-semibold text-[var(--color-mute)] uppercase tracking-wider">
+                Employee ID
+              </span>
+              <span className="font-mono font-bold text-[var(--color-ink)] text-xs sm:text-sm">
+                {formattedEmpId}
+              </span>
             </div>
 
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-base sm:text-lg font-bold text-[var(--color-ink)] tracking-tight truncate">
-                  {employee.full_name}
-                </h1>
-                <Badge variant="neutral" className="text-[10px] uppercase font-mono font-semibold tracking-wider">
-                  {employee.role}
-                </Badge>
-                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  Active
+            {/* Phone Number */}
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[11px] font-semibold text-[var(--color-mute)] uppercase tracking-wider">
+                Phone Number
+              </span>
+              {employee.phone ? (
+                <a
+                  href={`tel:${employee.phone}`}
+                  className="inline-flex items-center gap-1.5 font-mono font-semibold text-[var(--color-ink)] hover:text-[#0070f3] transition-colors"
+                >
+                  <AnimatedPhone size={13} className="text-[var(--color-mute)] shrink-0" />
+                  <span>{employee.phone}</span>
+                </a>
+              ) : (
+                <span className="text-[var(--color-mute)] font-mono">—</span>
+              )}
+            </div>
+
+            {/* Site Location */}
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[11px] font-semibold text-[var(--color-mute)] uppercase tracking-wider">
+                Site Location
+              </span>
+              <div className="inline-flex items-center gap-1.5 font-semibold text-[var(--color-ink)] truncate">
+                <AnimatedMapPin size={13} className="text-[var(--color-mute)] shrink-0" />
+                <span className="truncate">
+                  {employee.city ? `${employee.city}${employee.state ? `, ${employee.state}` : ""}` : "—"}
                 </span>
               </div>
-              <p className="text-xs text-[var(--color-mute)] mt-0.5 font-mono truncate">
-                {employee.email || "reachinternational.co.in"}
-              </p>
+            </div>
+
+            {/* Shift Schedule */}
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[11px] font-semibold text-[var(--color-mute)] uppercase tracking-wider">
+                Shift Schedule
+              </span>
+              <div className="inline-flex items-center gap-1 font-mono font-medium text-[var(--color-ink)]">
+                <AnimatedClock size={13} className="text-[var(--color-mute)] shrink-0" />
+                <span>
+                  {employee.shift_start_time && employee.shift_end_time
+                    ? `${formatTimeAMPM(employee.shift_start_time)} – ${formatTimeAMPM(employee.shift_end_time)}`
+                    : "08:00 AM – 05:00 PM"}
+                </span>
+              </div>
             </div>
           </div>
         </div>
-
-        {/* Structured 4-Column Metadata Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 pt-3.5 text-xs">
-          {/* Employee ID */}
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[11px] font-semibold text-[var(--color-mute)] uppercase tracking-wider">
-              Employee ID
-            </span>
-            <span className="font-mono font-bold text-[var(--color-ink)] text-xs sm:text-sm">
-              {formattedEmpId}
-            </span>
-          </div>
-
-          {/* Phone Number */}
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[11px] font-semibold text-[var(--color-mute)] uppercase tracking-wider">
-              Phone Number
-            </span>
-            {employee.phone ? (
-              <a
-                href={`tel:${employee.phone}`}
-                className="inline-flex items-center gap-1.5 font-mono font-semibold text-[var(--color-ink)] hover:text-[#0070f3] transition-colors"
-              >
-                <AnimatedPhone size={13} className="text-[var(--color-mute)] shrink-0" />
-                <span>{employee.phone}</span>
-              </a>
-            ) : (
-              <span className="text-[var(--color-mute)] font-mono">—</span>
-            )}
-          </div>
-
-          {/* Site Location */}
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[11px] font-semibold text-[var(--color-mute)] uppercase tracking-wider">
-              Site Location
-            </span>
-            <div className="inline-flex items-center gap-1.5 font-semibold text-[var(--color-ink)] truncate">
-              <AnimatedMapPin size={13} className="text-[var(--color-mute)] shrink-0" />
-              <span className="truncate">
-                {employee.city ? `${employee.city}${employee.state ? `, ${employee.state}` : ""}` : "—"}
-              </span>
-            </div>
-          </div>
-
-          {/* Shift Schedule */}
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[11px] font-semibold text-[var(--color-mute)] uppercase tracking-wider">
-              Shift Schedule
-            </span>
-            <div className="inline-flex items-center gap-1 font-mono font-medium text-[var(--color-ink)]">
-              <AnimatedClock size={13} className="text-[var(--color-mute)] shrink-0" />
-              <span>
-                {employee.shift_start_time && employee.shift_end_time
-                  ? `${formatTimeAMPM(employee.shift_start_time)} – ${formatTimeAMPM(employee.shift_end_time)}`
-                  : "08:00 AM – 05:00 PM"}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* 3. Executive Attendance Summary Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-2.5">
@@ -549,26 +599,36 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
             iconColor: metrics.totalOtMins > 0 ? "text-amber-600 dark:text-amber-400" : "text-[var(--color-mute)]",
             icon: AnimatedZap,
           },
-        ].map((kpi) => {
+        ].map((kpi, idx) => {
           const IconComp = kpi.icon;
           return (
             <motion.div
               key={kpi.label}
               data-hover-parent
               whileHover={{ y: -1 }}
+              whileTap={{ scale: 0.98 }}
               transition={{ duration: 0.15 }}
-              className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3 sm:p-3.5 shadow-xs transition-colors hover:border-[var(--color-ink)]/25 flex flex-col justify-between"
+              className={`rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-2.5 sm:p-3.5 shadow-xs transition-colors hover:border-[var(--color-ink)]/25 flex flex-col justify-between ${
+                idx === 0 ? "col-span-2 sm:col-span-1 lg:col-span-1" : ""
+              }`}
             >
-              <div className="flex items-center justify-between gap-1.5 pb-1.5 border-b border-[var(--color-hairline)]/60">
-                <span className="text-[10px] sm:text-[11px] font-semibold text-[var(--color-mute)] uppercase tracking-wider truncate">
+              <div className="flex items-center justify-between gap-1.5 pb-1 border-b border-[var(--color-hairline)]/60">
+                <span className="text-[10px] sm:text-xs font-semibold text-[var(--color-mute)] uppercase tracking-wider truncate">
                   {kpi.label}
                 </span>
-                <IconComp size={15} className={`w-3.5 h-3.5 shrink-0 ${kpi.iconColor}`} />
+                <IconComp size={14} className={`w-3.5 h-3.5 shrink-0 ${kpi.iconColor}`} />
               </div>
-              <div className={`mt-2 text-lg sm:text-xl font-extrabold tracking-tight font-mono ${kpi.color}`}>
-                {kpi.value}
+              <div className="mt-1.5 flex items-baseline justify-between gap-1">
+                <span className={`text-base sm:text-xl font-extrabold tracking-tight font-mono ${kpi.color}`}>
+                  {kpi.value}
+                </span>
+                {idx === 0 && (
+                  <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded font-mono sm:hidden">
+                    {metrics.attendanceRate}% compliance
+                  </span>
+                )}
               </div>
-              <p className="mt-1 text-[10px] sm:text-[11px] text-[var(--color-mute)] truncate">
+              <p className="mt-0.5 text-[10px] sm:text-xs text-[var(--color-mute)] truncate">
                 {kpi.caption}
               </p>
             </motion.div>
@@ -577,9 +637,9 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
       </div>
 
       {/* 4. Daily Attendance Records Section: Controls & View Switcher */}
-      <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-4 sm:p-5 shadow-xs space-y-4">
+      <div className="rounded-xl sm:rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3 sm:p-5 shadow-xs space-y-3 sm:space-y-4">
         {/* Section Header with View Toggle */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-[var(--color-hairline)]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-[var(--color-hairline)]">
           <div>
             <h2 className="text-sm sm:text-base font-bold text-[var(--color-ink)]">
               Daily Attendance Ledger
@@ -589,13 +649,13 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap print:hidden">
+          <div className="w-full sm:w-auto print:hidden">
             {/* View Mode Toggle (Calendar Matrix vs. Table Ledger) */}
-            <div className="inline-flex items-center rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-0.5 shadow-2xs">
+            <div className="grid grid-cols-2 sm:inline-flex items-center rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-0.5 shadow-2xs w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => setViewMode("calendar")}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
                   viewMode === "calendar"
                     ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-xs"
                     : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
@@ -607,7 +667,7 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
               <button
                 type="button"
                 onClick={() => setViewMode("table")}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
                   viewMode === "table"
                     ? "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] shadow-xs"
                     : "text-[var(--color-mute)] hover:text-[var(--color-ink)]"
@@ -846,32 +906,32 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
                 >
                   <div className="flex items-center justify-between gap-2 pb-2 border-b border-[var(--color-hairline)]/60">
                     <div className="flex items-center gap-2">
-                      <span className="font-bold text-xs text-[var(--color-ink)]">{dateStr}</span>
+                      <span className="font-bold text-xs sm:text-sm text-[var(--color-ink)]">{dateStr}</span>
                       {d.isToday && (
-                        <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.2 rounded bg-[var(--color-ink)] text-[var(--color-canvas)]">
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[var(--color-ink)] text-[var(--color-canvas)]">
                           Today
                         </span>
                       )}
                     </div>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold ${chip.color}`}>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold ${chip.color}`}>
                       {chip.name}
                     </span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 pt-2 text-xs font-mono">
                     <div>
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase block">Shift Timings</span>
-                      <span className="text-[var(--color-ink)] font-semibold">
+                      <span className="text-xs text-[var(--color-mute)] uppercase font-semibold block">Shift Timings</span>
+                      <span className="text-[var(--color-ink)] font-semibold text-xs sm:text-sm">
                         {d.punchIn ? formatTimeAMPM(d.punchIn) : "—"} → {d.punchOut ? formatTimeAMPM(d.punchOut) : "—"}
                       </span>
                     </div>
                     <div className="text-right">
-                      <span className="text-[10px] text-[var(--color-mute)] uppercase block">Hours</span>
-                      <span className="text-[var(--color-ink)] font-bold">
+                      <span className="text-xs text-[var(--color-mute)] uppercase font-semibold block">Hours</span>
+                      <span className="text-[var(--color-ink)] font-bold text-xs sm:text-sm">
                         {d.worked_minutes > 0 ? formatMinutes(d.worked_minutes) : d.status === "WEEK_OFF" ? "Week Off" : "0h"}
                       </span>
                       {d.overtime_minutes > 0 && (
-                        <span className="text-[10px] text-amber-600 font-bold block">
+                        <span className="text-xs text-amber-600 font-bold block">
                           +{formatMinutes(d.overtime_minutes)} OT
                         </span>
                       )}
@@ -879,12 +939,12 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
                   </div>
 
                   {(d.primaryMachine || d.primaryLocation) && (
-                    <div className="flex items-center justify-between gap-2 pt-2 mt-2 border-t border-[var(--color-hairline)]/40 text-[11px] text-[var(--color-mute)]">
+                    <div className="flex items-center justify-between gap-2 pt-2 mt-2 border-t border-[var(--color-hairline)]/40 text-xs text-[var(--color-mute)]">
                       <div className="flex items-center gap-2 truncate">
                         {d.primaryMachine && (
                           <div className="flex items-center gap-1.5 truncate">
-                            <AnimatedTruck size={13} className="text-sky-600 shrink-0" />
-                            <span className="font-mono text-[var(--color-ink)] truncate">{d.primaryMachine}</span>
+                            <AnimatedTruck size={14} className="text-sky-600 shrink-0" />
+                            <span className="font-mono font-semibold text-[var(--color-ink)] truncate">{d.primaryMachine}</span>
                           </div>
                         )}
                         {d.primaryLocation && (
@@ -895,7 +955,7 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
                         )}
                       </div>
                       {isClickable && (
-                        <span className="inline-flex items-center text-[#0070f3] text-[11px] font-semibold shrink-0">
+                        <span className="inline-flex items-center text-[#0070f3] text-xs font-semibold shrink-0">
                           <span>Details</span>
                           <AnimatedChevronRight size={13} />
                         </span>
@@ -913,36 +973,36 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
         {viewMode === "calendar" && (
           <div className="space-y-3">
             {/* Status Legend Strip */}
-            <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap text-[11px] pb-2 border-b border-[var(--color-hairline)]/60">
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar pb-2 pt-0.5 border-b border-[var(--color-hairline)]/60 text-[11px] select-none">
+              <span className="shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                 P (Present)
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              <span className="shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
                 HD (Half Day)
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+              <span className="shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
                 A (Absent)
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[var(--color-canvas)] text-[var(--color-mute)] border border-[var(--color-hairline)] font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-gray-400" />
+              <span className="shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[var(--color-canvas)] text-[var(--color-mute)] border border-[var(--color-hairline)] font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-400 shrink-0" />
                 WO (Week Off)
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[var(--color-canvas)] text-[var(--color-ink)] border border-[var(--color-ink)]/30 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-ink)]" />
+              <span className="shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[var(--color-canvas)] text-[var(--color-ink)] border border-[var(--color-ink)]/30 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-ink)] shrink-0" />
                 Today
               </span>
             </div>
 
             {/* 7-Column Calendar Grid */}
-            <div className="grid grid-cols-7 gap-2">
+            <div className="grid grid-cols-7 gap-1 sm:gap-2">
               {/* Day headers */}
               {DOW_LABELS.map((label, idx) => (
                 <div
                   key={label}
-                  className={`text-center text-[11px] font-semibold uppercase tracking-wider py-1.5 ${
+                  className={`text-center text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider py-1 sm:py-1.5 ${
                     idx === 0 ? "text-rose-500/70" : "text-[var(--color-mute)]"
                   }`}
                 >
@@ -953,7 +1013,7 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
               {/* Leading empty cells */}
               {days.length > 0 &&
                 Array.from({ length: days[0].dow }).map((_, i) => (
-                  <div key={`empty-${i}`} className="min-h-[76px]" />
+                  <div key={`empty-${i}`} className="min-h-[52px] sm:min-h-[76px]" />
                 ))}
 
               {/* Day Cells */}
@@ -976,51 +1036,54 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
                         setSelectedDay(d);
                       }
                     }}
-                    className={`rounded-xl border p-2 min-h-[76px] flex flex-col justify-between transition-all ${
+                    className={`rounded-lg sm:rounded-xl border p-1 sm:p-2 min-h-[52px] sm:min-h-[76px] flex flex-col justify-between transition-all select-none ${
                       d.isToday ? "ring-2 ring-[var(--color-ink)] shadow-xs" : ""
                     } ${
                       d.isDisabled
                         ? "opacity-40 bg-[var(--color-canvas)]/30 border border-dashed border-[var(--color-hairline)] cursor-not-allowed select-none"
                         : isClickable
-                        ? `${chip.cellBg} cursor-pointer group shadow-2xs`
+                        ? `${chip.cellBg} cursor-pointer group shadow-2xs active:scale-95`
                         : `${chip.cellBg} cursor-default`
                     }`}
                   >
-                    {/* Date Number + Today */}
+                    {/* Date Number + Today indicator */}
                     <div className="flex items-center justify-between w-full">
                       <span
-                        className={`text-xs font-mono font-semibold ${
-                          d.isDisabled ? "text-[var(--color-faint)]" : d.isToday ? "text-[var(--color-ink)] font-bold" : "text-[var(--color-ink)]"
+                        className={`text-[11px] sm:text-xs font-mono font-bold ${
+                          d.isDisabled ? "text-[var(--color-faint)]" : d.isToday ? "text-[#0070f3]" : "text-[var(--color-ink)]"
                         }`}
                       >
                         {dateNum}
                       </span>
                       {d.isToday && (
-                        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-[var(--color-ink)] text-[var(--color-canvas)]">
-                          Today
-                        </span>
+                        <>
+                          <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-ink)] sm:hidden shrink-0" title="Today" />
+                          <span className="hidden sm:inline-flex text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.2 rounded bg-[var(--color-ink)] text-[var(--color-canvas)]">
+                            Today
+                          </span>
+                        </>
                       )}
                     </div>
 
                     {/* Status Chip */}
                     <div className="flex items-center justify-center my-0.5">
                       <span
-                        className={`inline-flex items-center justify-center w-7 h-5 rounded text-[10px] font-bold ${chip.color}`}
+                        className={`inline-flex items-center justify-center px-1 sm:px-1.5 py-0.2 sm:py-0.5 rounded text-[10px] sm:text-xs font-bold ${chip.color}`}
                       >
                         {chip.label}
                       </span>
                     </div>
 
                     {/* Timings or Hours Footer */}
-                    <div className="flex flex-col gap-0.5 text-[9px] font-mono w-full text-center">
+                    <div className="flex flex-col gap-0.5 text-[9px] sm:text-xs font-mono w-full text-center">
                       {d.punchIn && d.punchOut ? (
-                        <span className="text-[var(--color-mute)] truncate">
+                        <span className="text-[var(--color-mute)] truncate hidden sm:block text-[11px]">
                           {formatTimeAMPM(d.punchIn)} → {formatTimeAMPM(d.punchOut)}
                         </span>
                       ) : null}
-                      <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center justify-center sm:justify-between w-full">
                         {d.worked_minutes > 0 ? (
-                          <span className="font-semibold text-[var(--color-ink)]">
+                          <span className="font-semibold text-[var(--color-ink)] truncate">
                             {formatMinutesShort(d.worked_minutes)}
                           </span>
                         ) : d.status === "WEEK_OFF" ? (
@@ -1029,7 +1092,7 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
                           <span className="text-[var(--color-mute)] w-full text-center">0h</span>
                         )}
                         {d.overtime_minutes > 0 && (
-                          <span className="text-amber-600 dark:text-amber-400 font-bold">
+                          <span className="text-amber-600 dark:text-amber-400 font-bold hidden sm:inline">
                             +{formatMinutesShort(d.overtime_minutes)}
                           </span>
                         )}
@@ -1054,7 +1117,9 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
               Average working hours and past attendance distribution by day of week
             </p>
           </div>
-          <div className="overflow-x-auto -mx-1 sm:mx-0">
+
+          {/* Desktop Table (≥640px) */}
+          <div className="overflow-x-auto -mx-1 sm:mx-0 hidden sm:block">
             <table className="w-full text-xs text-left border-collapse min-w-[520px]">
               <thead>
                 <tr className="border-b border-[var(--color-hairline)] bg-[var(--color-canvas)]/60 text-[var(--color-mute)] uppercase tracking-wider font-semibold text-[11px]">
@@ -1102,6 +1167,75 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
               </tbody>
             </table>
           </div>
+
+          {/* Mobile Cards (≤640px) */}
+          <div className="block sm:hidden divide-y divide-[var(--color-hairline)]/80">
+            {weekdayRollup.map((row) => {
+              const isSunday = row.dow === 0;
+              const attendancePercent = row.total_days > 0 ? Math.round(((row.present_days + row.half_days * 0.5) / row.total_days) * 100) : 0;
+              return (
+                <div
+                  key={row.dow}
+                  className={`p-3 space-y-2 ${
+                    isSunday ? "bg-[var(--color-canvas)]/40" : ""
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-xs text-[var(--color-ink)]">
+                        {DOW_LABELS[row.dow]}
+                      </span>
+                      {isSunday && (
+                        <span className="text-[10px] text-[var(--color-mute)]">
+                          (Rest Day)
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-mono text-xs font-bold text-[var(--color-ink)]">
+                      Avg: {formatMinutes(row.avg_worked_minutes)}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 font-mono font-semibold text-[10px]">
+                        {row.present_days} Present
+                      </span>
+                      {row.half_days > 0 && (
+                        <span className="px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 font-mono font-semibold text-[10px]">
+                          {row.half_days} Half
+                        </span>
+                      )}
+                      {row.absent_days > 0 && (
+                        <span className="px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/20 font-mono font-semibold text-[10px]">
+                          {row.absent_days} Absent
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] font-mono text-[var(--color-mute)] shrink-0">
+                      {row.total_days} {row.total_days === 1 ? "day" : "days"} ({attendancePercent}%)
+                    </span>
+                  </div>
+
+                  {/* Visual Attendance Ratio Bar */}
+                  <div className="h-1.5 w-full rounded-full bg-[var(--color-canvas)] border border-[var(--color-hairline)] overflow-hidden flex">
+                    <div
+                      className="bg-emerald-500 h-full"
+                      style={{ width: `${row.total_days > 0 ? (row.present_days / row.total_days) * 100 : 0}%` }}
+                    />
+                    <div
+                      className="bg-amber-500 h-full"
+                      style={{ width: `${row.total_days > 0 ? (row.half_days / row.total_days) * 100 : 0}%` }}
+                    />
+                    <div
+                      className="bg-rose-500 h-full"
+                      style={{ width: `${row.total_days > 0 ? (row.absent_days / row.total_days) * 100 : 0}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -1129,7 +1263,7 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
             {/* Quick Metrics Strip */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-2.5 sm:p-3 text-center">
-                <span className="text-[10px] uppercase font-semibold text-[var(--color-mute)] tracking-wider block">
+                <span className="text-xs uppercase font-semibold text-[var(--color-mute)] tracking-wider block">
                   Status
                 </span>
                 <span className="mt-1 inline-flex items-center justify-center font-bold text-xs">
@@ -1137,7 +1271,7 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
                 </span>
               </div>
               <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-2.5 sm:p-3 text-center">
-                <span className="text-[10px] uppercase font-semibold text-[var(--color-mute)] tracking-wider block">
+                <span className="text-xs uppercase font-semibold text-[var(--color-mute)] tracking-wider block">
                   Worked
                 </span>
                 <span className="mt-1 font-mono font-bold text-xs sm:text-sm text-[var(--color-ink)] block">
@@ -1145,7 +1279,7 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
                 </span>
               </div>
               <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-2.5 sm:p-3 text-center">
-                <span className="text-[10px] uppercase font-semibold text-[var(--color-mute)] tracking-wider block">
+                <span className="text-xs uppercase font-semibold text-[var(--color-mute)] tracking-wider block">
                   Overtime
                 </span>
                 <span className="mt-1 font-mono font-bold text-xs sm:text-sm text-amber-600 block">
@@ -1153,7 +1287,7 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
                 </span>
               </div>
               <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-2.5 sm:p-3 text-center">
-                <span className="text-[10px] uppercase font-semibold text-[var(--color-mute)] tracking-wider block">
+                <span className="text-xs uppercase font-semibold text-[var(--color-mute)] tracking-wider block">
                   Logs Count
                 </span>
                 <span className="mt-1 font-mono font-bold text-xs sm:text-sm text-[var(--color-ink)] block">
@@ -1168,7 +1302,7 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
                 <h4 className="text-xs font-semibold text-[var(--color-ink)] uppercase tracking-wider">
                   Machine Operation Entries ({selectedDay.entries.length})
                 </h4>
-                <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
+                <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1 custom-scrollbar">
                   {selectedDay.entries.map((entry: AttendanceDayEntry, idx: number) => (
                     <div
                       key={entry.id || idx}
@@ -1193,17 +1327,17 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
 
                         <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
                           {entry.model && (
-                            <Badge variant="neutral" className="text-[10px] font-mono">
+                            <Badge variant="neutral" className="text-xs font-mono">
                               {entry.model}
                             </Badge>
                           )}
                           {entry.serial_number && (
-                            <Badge variant="neutral" className="text-[10px] font-mono hidden sm:inline-flex">
+                            <Badge variant="neutral" className="text-xs font-mono hidden sm:inline-flex">
                               SN: {entry.serial_number}
                             </Badge>
                           )}
                           {entry.is_breakdown && (
-                            <Badge variant="error" className="text-[10px]">
+                            <Badge variant="error" className="text-xs">
                               Breakdown
                             </Badge>
                           )}
@@ -1211,27 +1345,27 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
                       </div>
 
                       {/* Shift Telemetry Grid */}
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono text-[11px] text-[var(--color-mute)]">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 font-mono text-xs text-[var(--color-mute)]">
                         <div className="bg-[var(--color-canvas-elevated)] p-2 rounded-lg border border-[var(--color-hairline)]/60">
-                          <span className="text-[10px] uppercase block text-[var(--color-mute)]/70">Time</span>
+                          <span className="text-xs uppercase block text-[var(--color-mute)]/70">Time</span>
                           <span className="text-[var(--color-ink)] font-medium">
                             {formatTimeAMPM(entry.start_time)} → {formatTimeAMPM(entry.end_time)}
                           </span>
                         </div>
                         <div className="bg-[var(--color-canvas-elevated)] p-2 rounded-lg border border-[var(--color-hairline)]/60">
-                          <span className="text-[10px] uppercase block text-[var(--color-mute)]/70">Meters</span>
+                          <span className="text-xs uppercase block text-[var(--color-mute)]/70">Meters</span>
                           <span className="text-[var(--color-ink)] font-medium">
                             {entry.start_meter} → {entry.end_meter}
                           </span>
                         </div>
                         <div className="bg-[var(--color-canvas-elevated)] p-2 rounded-lg border border-[var(--color-hairline)]/60">
-                          <span className="text-[10px] uppercase block text-[var(--color-mute)]/70">Running</span>
+                          <span className="text-xs uppercase block text-[var(--color-mute)]/70">Running</span>
                           <span className="text-[var(--color-ink)] font-medium">
                             {entry.running_hours.toFixed(1)} hrs
                           </span>
                         </div>
                         <div className="bg-[var(--color-canvas-elevated)] p-2 rounded-lg border border-[var(--color-hairline)]/60">
-                          <span className="text-[10px] uppercase block text-[var(--color-mute)]/70">Normal / OT</span>
+                          <span className="text-xs uppercase block text-[var(--color-mute)]/70">Normal / OT</span>
                           <span className="text-[var(--color-ink)] font-medium">
                             {entry.normal_working_hours.toFixed(1)}h / {entry.overtime_hours.toFixed(1)}h
                           </span>
@@ -1274,6 +1408,18 @@ export function AttendanceDetailClient({ data, currentMonth }: AttendanceDetailC
           </div>
         </Modal>
       )}
+
+      {/* 5. Printable Attendance Export Modal */}
+      <PrintableAttendanceModal
+        open={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        employee={employee}
+        currentMonth={currentMonth}
+        days={enrichedDays}
+        metrics={metrics}
+        userRole={userRole}
+        isSelf={isSelf}
+      />
 
       {/* Loading overlay */}
       {isPending && (

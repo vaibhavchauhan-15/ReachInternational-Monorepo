@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   errorText: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: '#f43f5e',
     marginTop: 4,
   },
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   stateItemCode: {
-    fontSize: 11,
+    fontSize: 12.5,
     marginTop: 2,
   },
   checkedCircle: {

@@ -35,7 +35,7 @@ export function createAnimatedIconBridge(
   const WrappedIcon = forwardRef<any, AnimatedIconBridgeProps>(
     (
       {
-        size = 20,
+        size,
         className,
         isSpinning,
         trigger: _trigger,
@@ -100,7 +100,17 @@ export function createAnimatedIconBridge(
         };
       }, []);
 
-      const sizeVal = size !== undefined ? (typeof size === "number" ? `${size}px` : size) : undefined;
+      const hasExplicitClassSize = Boolean(
+        className && /\b(w-\S+|h-\S+|size-\S+)\b/.test(className)
+      );
+      const effectiveSize =
+        size !== undefined ? size : hasExplicitClassSize ? undefined : 20;
+      const sizeVal =
+        effectiveSize !== undefined
+          ? typeof effectiveSize === "number"
+            ? `${effectiveSize}px`
+            : effectiveSize
+          : undefined;
       const sizeStyle = sizeVal ? { width: sizeVal, height: sizeVal } : undefined;
 
       return (

@@ -583,7 +583,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
                           <Text style={[styles.roleItemText, { color: isSelected ? theme.colors.link : theme.colors.ink, fontWeight: isSelected ? '700' : '600' }]}>
                             {s.full_name}
                           </Text>
-                          {s.email ? <Text style={{ fontSize: 11, color: theme.colors.mute, marginTop: 2 }}>{s.email}</Text> : null}
+                          {s.email ? <Text style={{ fontSize: 12.5, color: theme.colors.mute, marginTop: 2 }}>{s.email}</Text> : null}
                         </View>
                         {isSelected && <Check size={18} color={theme.colors.link} />}
                       </TouchableOpacity>
@@ -636,7 +636,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   subtitle: {
-    fontSize: 11,
+    fontSize: 13.5,
     marginTop: 1,
   },
   closeBtn: {
@@ -653,7 +653,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   activationBannerText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
     flex: 1,
     lineHeight: 15,

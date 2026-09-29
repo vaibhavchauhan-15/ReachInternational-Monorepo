@@ -8,7 +8,10 @@ import {
   buildExportFileName,
   buildMachineExportFileName,
 } from "@/lib/pdf/pdf-config";
-import { formatCompactTiming } from "@/lib/pdf/pdf-utils";
+import {
+  groupLogsByDate,
+  formatHoursWithUnit,
+} from "@/components/operations/logs/OperationsLogsTable";
 
 export interface ExportSupervisorLogsOptions {
   logs: MachineHourLog[];
@@ -105,370 +108,231 @@ export function exportSupervisorRunningLogsToExcel({
     filtered = filtered.filter((log) => log.operator_id === targetOpId);
   }
 
-  const { displayDateTime, slugDateTime } = formatExportDateTimeSlug();
+  // 3. Group filtered logs into 1-row-per-day cohesive summaries
+  const effectiveMode = viewMode === "all" ? "client" : viewMode;
+  const isClientView = effectiveMode === "client";
+  const isOperatorView = effectiveMode === "operator";
+  const { slugDateTime } = formatExportDateTimeSlug();
 
-  let monthLabel = "Month: All Months";
-  if (selectedMonthValue === "custom") {
-    if (customStartDate && customEndDate) {
-      monthLabel = `Date Range: ${formatDate(customStartDate)} to ${formatDate(customEndDate)}`;
-    } else if (customStartDate) {
-      monthLabel = `Date Range: From ${formatDate(customStartDate)}`;
-    } else if (customEndDate) {
-      monthLabel = `Date Range: Up to ${formatDate(customEndDate)}`;
-    } else {
-      monthLabel = "Date Range: Custom";
-    }
-  } else if (selectedMonthValue !== "all") {
-    const mObj = MONTH_NAMES.find((m) => m.value === selectedMonthValue);
-    monthLabel = `Month: ${mObj ? mObj.label : selectedMonthValue}`;
-  }
+  let worksheetData: (string | number)[][];
+  let merges: XLSX.Range[] = [];
+  let colWidths: { wch: number }[];
 
-  const firstOpObj = filtered[0]?.operator as any;
-  const opName = firstOpObj?.full_name || "Selected Operator";
-  const opPhone = firstOpObj?.phone || "—";
-
-  let filterLabel = "All Fleet Logs";
-  if (viewMode === "machine" && selectedEntityId !== "all") {
-    const mName = (filtered[0]?.machine as any)?.machine_name || "Selected Machine";
-    const mCode = (filtered[0]?.machine as any)?.machine_code || "";
-    filterLabel = `Machine: ${mName} (${mCode})`;
-  } else if (viewMode === "client" && selectedEntityId !== "all") {
-    const isUuid = (val?: string | null) =>
-      Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim()));
-    const resolvedClientName =
-      (selectedClientName && !isUuid(selectedClientName) ? selectedClientName : null) ||
-      (filtered[0]?.client as any)?.company_name ||
-      (filtered[0]?.client as any)?.client_name ||
-      (selectedEntityId && !isUuid(selectedEntityId) ? selectedEntityId : "Client");
-    const siteText = selectedSite && selectedSite !== "all" ? ` | Site: ${selectedSite}` : "";
-    const machineText = selectedClientMachineId && selectedClientMachineId !== "all"
-      ? ` | Machine: ${filtered.find((l) => l.machine_id === selectedClientMachineId)?.machine?.machine_name || selectedClientMachineId}`
-      : "";
-    filterLabel = `Client: ${resolvedClientName}${siteText}${machineText}`;
-  } else if (viewMode === "operator" && selectedEntityId !== "all") {
-    filterLabel = `Operator: ${opName}`;
-  }
-
-  // Header Rows
-  const isOperatorView = viewMode === "operator";
-  const titleRow = [
-    isOperatorView
-      ? "OPERATOR DAILY MACHINE LOG REPORT"
-      : viewMode === "client"
-      ? "SITE MACHINE RUNNING HOURS REPORT"
-      : viewMode === "machine"
-      ? "MACHINE RUNNING HOURS REPORT"
-      : "SUPERVISOR MACHINE RUNNING HOURS REPORT",
-  ];
-
-  let filterScopeText = `Filter Scope: ${filterLabel}`;
-  if (viewMode === "client" && selectedEntityId !== "all") {
-    const isUuid = (val?: string | null) =>
-      Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val.trim()));
-    const resolvedClientName =
-      (selectedClientName && !isUuid(selectedClientName) ? selectedClientName : null) ||
-      (filtered[0]?.client as any)?.company_name ||
-      (filtered[0]?.client as any)?.client_name ||
-      (selectedEntityId && !isUuid(selectedEntityId) ? selectedEntityId : "Client");
-    const siteText = selectedSite && selectedSite !== "all"
-      ? selectedSite
-      : filtered[0]?.location ||
-        ((filtered[0]?.client as any)?.city ? `${(filtered[0]?.client as any).city}${(filtered[0]?.client as any).state ? `, ${(filtered[0]?.client as any).state}` : ""}` : "") ||
-        ((filtered[0]?.machine as any)?.customer_address ? `${(filtered[0]?.machine as any).customer_address}${(filtered[0]?.machine as any).city ? `, ${(filtered[0]?.machine as any).city}` : ""}` : (filtered[0]?.machine as any)?.city) ||
-        "—";
-    filterScopeText = `Client: ${resolvedClientName} | Location: ${siteText}`;
-  } else if (viewMode === "machine" && selectedEntityId !== "all") {
-    const mMfr = (filtered[0]?.machine as any)?.manufacturer || "—";
-    const mModel = (filtered[0]?.machine as any)?.model || "—";
-    const mSerial = (filtered[0]?.machine as any)?.serial_number || "—";
-    filterScopeText = `Manufacturer: ${mMfr} | Model: ${mModel} | Serial No.: ${mSerial}`;
-  }
-
-  let totalRunningHoursAcc = 0;
-  let totalOtHoursAcc = 0;
-  let totalBreakdownsAcc = 0;
-
-  const dataRows = filtered.map((log, idx) => {
-    const startMtr = log.start_meter ?? 0;
-    const endMtr = log.end_meter ?? startMtr;
-    const runningHrs = log.running_hours ?? Math.max(0, Math.round((endMtr - startMtr) * 10) / 10);
-    const otHrs = log.overtime_hours || 0;
-    const isBkd = log.is_breakdown;
-
-    totalRunningHoursAcc += runningHrs;
-    totalOtHoursAcc += otHrs;
-    if (isBkd) totalBreakdownsAcc++;
-
-    const mObj = log.machine as any;
-    const opObj = log.operator as any;
-    const clientName = (log as any)?.client?.client_name || mObj?.customer_name || "Unassigned Client";
-
-    const bkdMatch = (log.remarks || "").match(/\[Breakdown Duration:\s*([^\]]+)\]/i) || (log.remarks || "").match(/Breakdown\s*(?:Duration)?:?\s*(\d+h?\s*\d*m?)/i);
-    const bkdDetails = (log as any).breakdown_duration || (bkdMatch ? bkdMatch[1].trim() : isBkd ? "Breakdown" : null);
-    const cleanRemarks = (log.remarks || "").replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim() || "—";
-    let bkdDurationOnly = bkdDetails;
-    if (bkdDurationOnly) {
-      bkdDurationOnly = bkdDurationOnly.replace(/^Breakdown\s*\((.*)\)$/i, "$1").replace(/^Machine Breakdown\s*\((.*)\)$/i, "$1").replace(/^Breakdown\s*/i, "").replace(/\s*duration$/i, "").trim();
-    }
-    const displayBkdText = isBkd ? (bkdDurationOnly && bkdDurationOnly.toLowerCase() !== "breakdown" ? bkdDurationOnly : "Breakdown") : "0";
-
-    const locationStr = log.location || ((log as any)?.client?.city ? `${(log as any).client.city}, ${(log as any).client.state || ""}` : mObj?.customer_address ? `${mObj.customer_address}${mObj.city ? `, ${mObj.city}` : ""}` : mObj?.city || "—");
-
-    if (isOperatorView) {
-      return [
-        idx + 1,
-        formatDate(log.log_date),
-        mObj?.model || "—",
-        mObj?.serial_number || mObj?.machine_code || "—",
-        mObj?.machine_code || "—",
-        clientName,
-        locationStr,
-        formatCompactTiming(log.start_time, log.end_time),
-        `${runningHrs} hrs`,
-        `${otHrs} hrs`,
-        displayBkdText,
-        cleanRemarks,
-      ];
+  if (isClientView) {
+    // Client view: Machine-wise grouping with machine details at top and separate summary per machine
+    const machineGroupsMap = new Map<string, MachineHourLog[]>();
+    for (const log of filtered) {
+      const mId = log.machine_id || "unknown";
+      if (!machineGroupsMap.has(mId)) {
+        machineGroupsMap.set(mId, []);
+      }
+      machineGroupsMap.get(mId)!.push(log);
     }
 
-    if (viewMode === "client") {
-      return [
-        idx + 1,
-        formatDate(log.log_date),
-        mObj?.model || "—",
-        mObj?.serial_number || mObj?.machine_code || "—",
-        opObj?.full_name || "Unassigned",
-        log.start_time || "—",
-        log.end_time || "—",
-        `${runningHrs} hrs`,
-        displayBkdText,
-        cleanRemarks,
-      ];
-    }
-
-    if (viewMode === "machine") {
-      return [
-        idx + 1,
-        formatDate(log.log_date),
-        clientName,
-        mObj?.city ? `${mObj.city}, ${mObj.state || ""}` : "—",
-        opObj?.full_name || "Unassigned",
-        startMtr,
-        endMtr,
-        `${runningHrs} hrs`,
-        displayBkdText,
-        cleanRemarks,
-      ];
-    }
-
-    return [
-      idx + 1,
-      formatDate(log.log_date),
-      mObj?.machine_name || "Machine",
-      mObj?.machine_code || "—",
-      mObj?.model || "—",
-      clientName,
-      mObj?.city ? `${mObj.city}, ${mObj.state || ""}` : "—",
-      opObj?.full_name || "Unassigned",
-      startMtr,
-      endMtr,
-      `${runningHrs} hrs`,
-      displayBkdText,
-      cleanRemarks,
+    const clientHeaders = [
+      "Date",
+      "Shift",
+      "OPERATOR NAME",
+      "M/C RT",
+      "WH",
+      "B/D",
     ];
-  });
 
-  const metaRow = isOperatorView ? [
-    `Operator: ${opName}`,
-    `Operator Number: ${opPhone}`,
-    `Supervisor: ${supervisorName}`,
-    `Month: ${monthLabel}`,
-    `Export Date: ${displayDateTime}`,
-  ] : viewMode === "machine" && selectedEntityId !== "all" ? [
-    filterScopeText,
-    `Total Run: ${Math.round(totalRunningHoursAcc * 10) / 10} hrs`,
-    `Month: ${monthLabel}`,
-    `Export Date: ${displayDateTime}`,
-  ] : [
-    `Supervisor: ${supervisorName}`,
-    `Filter Mode: ${viewMode.toUpperCase()}`,
-    filterScopeText,
-    `Month: ${monthLabel}`,
-    `Export Date: ${displayDateTime}`,
-  ];
-  const blankRow = [""];
+    const clientRows: (string | number)[][] = [];
+    let grandDayRT = 0;
+    let grandWorkingHours = 0;
+    let grandBreakdownHours = 0;
+    let grandDaysCount = 0;
 
-  // Table Columns
-  const tableHeaders = isOperatorView ? [
-    "S.No",
-    "Log Date",
-    "Model",
-    "Serial Number",
-    "Machine Code",
-    "Client Name",
-    "Site / Location",
-    "Timings",
-    "Operating Hours (OP)",
-    "Overtime Hours (OT)",
-    "Breakdown",
-    "Remarks / Notes",
-  ] : viewMode === "client" ? [
-    "S.No",
-    "Log Date",
-    "Model",
-    "Serial Number",
-    "Operator Name",
-    "Start Time",
-    "End Time",
-    "Work Time (WT)",
-    "Breakdown",
-    "Remarks / Notes",
-  ] : viewMode === "machine" ? [
-    "S.No",
-    "Log Date",
-    "Client / Customer Name",
-    "Location / City",
-    "Operator Name",
-    "Start Meter (hrs)",
-    "End Meter (hrs)",
-    "Run Hours (RT)",
-    "Breakdown",
-    "Remarks / Notes",
-  ] : [
-    "S.No",
-    "Log Date",
-    "Machine Name",
-    "Machine Code",
-    "Model",
-    "Client / Customer Name",
-    "Location / City",
-    "Operator Name",
-    "Start Meter (hrs)",
-    "End Meter (hrs)",
-    "Run Hours (RT)",
-    "Breakdown",
-    "Remarks / Notes",
-  ];
+    const groupKeys = Array.from(machineGroupsMap.keys());
+    groupKeys.forEach((mId, groupIdx) => {
+      const machineLogs = machineGroupsMap.get(mId)!;
+      const mObj = (machineLogs[0]?.machine as any) || machines?.find((m) => m.id === mId) || {};
+      const mModel = mObj?.model || mObj?.machine_name || "Machine";
+      const mSerial = mObj?.serial_number || mObj?.machine_code || "";
+      const mCode = mObj?.machine_code && mObj?.machine_code !== mSerial ? mObj.machine_code : "";
+      const mSite = machineLogs[0]?.location || (mObj?.customer_address ? `${mObj.customer_address}${mObj.city ? `, ${mObj.city}` : ""}` : mObj?.city || "");
 
-  const summaryRow = isOperatorView ? [
-    "SUMMARY TOTALS",
-    `Total Logs: ${filtered.length}`,
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    `Total Run: ${Math.round(totalRunningHoursAcc * 10) / 10} hrs`,
-    `Total OT: ${Math.round(totalOtHoursAcc * 10) / 10} hrs`,
-    `Breakdowns: ${totalBreakdownsAcc}`,
-    "",
-  ] : viewMode === "client" ? [
-    "SUMMARY TOTALS",
-    `Total Logs: ${filtered.length}`,
-    "",
-    "",
-    "",
-    "",
-    "",
-    `Total Run: ${Math.round(totalRunningHoursAcc * 10) / 10} hrs`,
-    `Breakdowns: ${totalBreakdownsAcc}`,
-    "",
-  ] : viewMode === "machine" ? [
-    "SUMMARY TOTALS",
-    `Total Logs: ${filtered.length}`,
-    "",
-    "",
-    "",
-    "",
-    "",
-    `Total Run: ${Math.round(totalRunningHoursAcc * 10) / 10} hrs`,
-    `Breakdowns: ${totalBreakdownsAcc}`,
-    "",
-  ] : [
-    "SUMMARY TOTALS",
-    `Total Logs: ${filtered.length}`,
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    `Total Run: ${Math.round(totalRunningHoursAcc * 10) / 10} hrs`,
-    `Breakdowns: ${totalBreakdownsAcc}`,
-    "",
-  ];
+      const machineTitle = [
+        `Machine: ${mModel}`,
+        mSerial ? `(SN: ${mSerial})` : "",
+        mCode ? `[${mCode}]` : "",
+        mSite ? `• Site: ${mSite}` : "",
+      ].filter(Boolean).join(" ");
 
-  const worksheetData = [
-    titleRow,
-    metaRow,
-    blankRow,
-    tableHeaders,
-    ...dataRows,
-    blankRow,
-    summaryRow,
-  ];
+      const machineGroupedDaily = groupLogsByDate(machineLogs, "client");
+      const machineDays = machineGroupedDaily.length;
+      const machineDayRT = machineGroupedDaily.reduce((acc, g) => acc + g.totalRunningHours, 0);
+      const machineWorking = machineGroupedDaily.reduce((acc, g) => acc + g.totalWorkingHours, 0);
+      const machineBreakdown = machineGroupedDaily.reduce((acc, g) => acc + g.totalBreakdownHours, 0);
+
+      grandDaysCount += machineDays;
+      grandDayRT += machineDayRT;
+      grandWorkingHours += machineWorking;
+      grandBreakdownHours += machineBreakdown;
+
+      // Machine header row
+      const titleRowIdx = clientRows.length;
+      clientRows.push([machineTitle, "", "", "", "", ""]);
+      merges.push({ s: { r: titleRowIdx, c: 0 }, e: { r: titleRowIdx, c: 5 } });
+
+      // Table headers
+      clientRows.push(clientHeaders);
+
+      // Daily shift rows for this machine
+      machineGroupedDaily.forEach((group) => {
+        const totalBdMin = Math.round(group.totalBreakdownHours * 60);
+        const maintMin = group.totalMaintenanceMinutes;
+        const netBdMin = Math.max(0, totalBdMin - maintMin);
+        const fmtMin = (m: number) => { const h = Math.floor(m / 60); const r = m % 60; return r > 0 ? `${h}h ${r}m` : `${h}h`; };
+        let bdCell: string;
+        if (totalBdMin === 0) bdCell = "0h";
+        else if (maintMin >= totalBdMin && maintMin > 0) bdCell = `MT ${fmtMin(maintMin)}`;
+        else if (maintMin > 0 && netBdMin > 0) bdCell = `MT ${fmtMin(maintMin)} / ${fmtMin(netBdMin)}`;
+        else bdCell = fmtMin(totalBdMin);
+        clientRows.push([
+          group.formattedDate,
+          group.shiftsDisplay,
+          group.operatorsDisplay,
+          formatHoursWithUnit(group.totalRunningHours),
+          formatHoursWithUnit(group.totalWorkingHours),
+          bdCell,
+        ]);
+      });
+
+      // Machine total summary row
+      clientRows.push([
+        `Total (${machineDays} days)`,
+        "",
+        "",
+        formatHoursWithUnit(machineDayRT),
+        formatHoursWithUnit(machineWorking),
+        formatHoursWithUnit(machineBreakdown),
+      ]);
+
+      // Blank spacing row between machines
+      if (groupIdx < groupKeys.length - 1) {
+        clientRows.push(["", "", "", "", "", ""]);
+      }
+    });
+
+    // If multiple machines, append overall grand total row
+    if (groupKeys.length > 1) {
+      clientRows.push(["", "", "", "", "", ""]);
+      clientRows.push([
+        `Grand Total (${grandDaysCount} days across ${groupKeys.length} machines)`,
+        "",
+        "",
+        formatHoursWithUnit(grandDayRT),
+        formatHoursWithUnit(grandWorkingHours),
+        formatHoursWithUnit(grandBreakdownHours),
+      ]);
+    }
+
+    worksheetData = clientRows;
+    colWidths = [
+      { wch: 14 }, // Date
+      { wch: 14 }, // Shift
+      { wch: 38 }, // OPERATOR NAME
+      { wch: 12 }, // M/C RT
+      { wch: 12 }, // WH
+      { wch: 12 }, // B/D
+    ];
+  } else {
+    // Machine view or Operator view: standard single table layout
+    const groupedLogs = groupLogsByDate(filtered, effectiveMode);
+
+    const titleText = isOperatorView
+      ? "selected operator summery"
+      : "selected machine summery";
+
+    const clientColHeader = isOperatorView ? "Machine" : "Client";
+
+    const tableHeaders = [
+      "Date",
+      clientColHeader,
+      "Shift",
+      "OPERATOR NAME",
+      "M/C RT",
+      "WH",
+      "B/D",
+    ];
+
+    const dataRows = groupedLogs.map((group) => {
+      const entityDisplay = isOperatorView
+        ? (group.machineModel ? `${group.machineModel}${group.machineSerial ? ` (${group.machineSerial})` : ""}` : group.clientName || "—")
+        : group.clientName;
+      const totalBdMin = Math.round(group.totalBreakdownHours * 60);
+      const maintMin = group.totalMaintenanceMinutes;
+      const netBdMin = Math.max(0, totalBdMin - maintMin);
+      const fmtMin = (m: number) => { const h = Math.floor(m / 60); const r = m % 60; return r > 0 ? `${h}h ${r}m` : `${h}h`; };
+      let bdCell: string;
+      if (totalBdMin === 0) bdCell = "0h";
+      else if (maintMin >= totalBdMin && maintMin > 0) bdCell = `MT ${fmtMin(maintMin)}`;
+      else if (maintMin > 0 && netBdMin > 0) bdCell = `MT ${fmtMin(maintMin)} / ${fmtMin(netBdMin)}`;
+      else bdCell = fmtMin(totalBdMin);
+      return [
+        group.formattedDate,
+        entityDisplay,
+        group.shiftsDisplay,
+        group.operatorsDisplay,
+        formatHoursWithUnit(group.totalRunningHours),
+        formatHoursWithUnit(group.totalWorkingHours),
+        bdCell,
+      ];
+    });
+
+    const totalDays = groupedLogs.length;
+    const sumDayRT = groupedLogs.reduce((acc, g) => acc + g.totalRunningHours, 0);
+    const sumWorkingHours = groupedLogs.reduce((acc, g) => acc + g.totalWorkingHours, 0);
+    const sumBreakdownHours = groupedLogs.reduce((acc, g) => acc + g.totalBreakdownHours, 0);
+
+    const totalHeaderRow = ["Total", "", "", "", "", "", ""];
+    const totalValuesRow = [
+      `${totalDays} days`,
+      "",
+      "",
+      "",
+      formatHoursWithUnit(sumDayRT),
+      formatHoursWithUnit(sumWorkingHours),
+      formatHoursWithUnit(sumBreakdownHours),
+    ];
+
+    worksheetData = [
+      ["", "", "", "", "", "", ""],
+      ["", "", "", titleText, "", "", ""],
+      tableHeaders,
+      ...dataRows,
+      totalHeaderRow,
+      totalValuesRow,
+    ];
+
+    merges.push({ s: { r: 1, c: 0 }, e: { r: 1, c: 6 } });
+
+    colWidths = [
+      { wch: 14 }, // Date (e.g. 28-Sep-26)
+      { wch: 28 }, // Client (e.g. Tata Projects LTD)
+      { wch: 14 }, // Shift (e.g. S1/S2/S3)
+      { wch: 38 }, // OPERATOR NAME
+      { wch: 12 }, // M/C RT
+      { wch: 12 }, // WH
+      { wch: 12 }, // B/D
+    ];
+  }
 
   const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
-
-  worksheet["!cols"] = isOperatorView ? [
-    { wch: 8 },  // S.No
-    { wch: 15 }, // Log Date
-    { wch: 18 }, // Model
-    { wch: 22 }, // Serial Number
-    { wch: 18 }, // Machine Code
-    { wch: 24 }, // Client Name
-    { wch: 24 }, // Site / Location
-    { wch: 20 }, // Timings
-    { wch: 20 }, // Operating Hours
-    { wch: 16 }, // Overtime Hours
-    { wch: 18 }, // Breakdown
-    { wch: 35 }, // Remarks
-  ] : viewMode === "client" ? [
-    { wch: 8 },  // S.No
-    { wch: 15 }, // Log Date
-    { wch: 18 }, // Model
-    { wch: 22 }, // Serial Number
-    { wch: 22 }, // Operator Name
-    { wch: 14 }, // Start Time
-    { wch: 14 }, // End Time
-    { wch: 18 }, // Work Time (WT)
-    { wch: 18 }, // Breakdown
-    { wch: 35 }, // Remarks
-  ] : viewMode === "machine" ? [
-    { wch: 8 },  // S.No
-    { wch: 15 }, // Log Date
-    { wch: 28 }, // Client Name
-    { wch: 20 }, // Location
-    { wch: 22 }, // Operator Name
-    { wch: 18 }, // Start Meter
-    { wch: 18 }, // End Meter
-    { wch: 18 }, // Running Hours
-    { wch: 18 }, // Breakdown
-    { wch: 35 }, // Remarks
-  ] : [
-    { wch: 8 },  // S.No
-    { wch: 15 }, // Log Date
-    { wch: 30 }, // Machine Name
-    { wch: 18 }, // Machine Code
-    { wch: 18 }, // Model
-    { wch: 28 }, // Client Name
-    { wch: 20 }, // Location
-    { wch: 22 }, // Operator Name
-    { wch: 18 }, // Start Meter
-    { wch: 18 }, // End Meter
-    { wch: 18 }, // Running Hours
-    { wch: 18 }, // Breakdown
-    { wch: 35 }, // Remarks
-  ];
+  if (merges.length > 0) {
+    worksheet["!merges"] = merges;
+  }
+  worksheet["!cols"] = colWidths;
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Running Hours Logs");
 
   let fileName = "";
   if (isOperatorView) {
+    const firstOpObj = filtered[0]?.operator as any;
+    const opName = firstOpObj?.full_name || "Operator";
     fileName = buildExportFileName(opName, selectedMonthValue, "xlsx", customStartDate, customEndDate);
   } else if (viewMode === "machine") {
     const selectedMachine = machines?.find((m) => m.id === (selectedMachineId || selectedEntityId)) || (filtered[0]?.machine as any);

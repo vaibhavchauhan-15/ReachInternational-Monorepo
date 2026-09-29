@@ -13,7 +13,8 @@ import {
 import { Input, useTheme } from '../ui';
 import { supabase } from '../../lib/supabase';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
-import { X, ChevronDown, AlertCircle, Check } from 'lucide-react-native';
+import { formatTo12Hour, parseTimeToMinutes } from '@reachinternational/utils';
+import { X, ChevronDown, AlertCircle, Check, Clock } from 'lucide-react-native';
 import { MultiUserSelectModal, type SelectableUser } from './MultiUserSelectModal';
 import { ClientSelectModal, type SelectableClient } from './ClientSelectModal';
 import { CustomFilterSelectorModal, type FilterOption } from './CustomFilterSelectorModal';
@@ -39,11 +40,52 @@ const RENTAL_OPTIONS: FilterOption[] = [
   { id: 'rented', label: 'Rented', dotColor: '#0ea5e9' },
 ];
 
+export const DEFAULT_MOBILE_SHIFTS: Array<{
+  code: string;
+  name: string;
+  start_time: string;
+  end_time: string;
+}> = [
+  { code: 'S1', name: 'Shift S1', start_time: '06:00:00', end_time: '14:00:00' },
+  { code: 'S2', name: 'Shift S2', start_time: '14:00:00', end_time: '22:00:00' },
+  { code: 'S3', name: 'Shift S3', start_time: '22:00:00', end_time: '06:00:00' },
+];
+
+export interface MobileActiveAssignment {
+  operator_id: string;
+  machine_id: string;
+  shift_code: string | null;
+  shift_start_time: string | null;
+  shift_end_time: string | null;
+  machine_code?: string;
+}
+
+function shiftToMinuteRanges(startStr?: string | null, endStr?: string | null): Array<[number, number]> {
+  if (!startStr || !endStr) return [];
+  const s = parseTimeToMinutes(startStr);
+  const e = parseTimeToMinutes(endStr);
+  if (s === null || e === null) return [];
+  if (e <= s) {
+    return [[s, 1440], [0, e]];
+  }
+  return [[s, e]];
+}
+
+function doRangesOverlap(rangesA: Array<[number, number]>, rangesB: Array<[number, number]>): boolean {
+  for (const [sA, eA] of rangesA) {
+    for (const [sB, eB] of rangesB) {
+      if (sA < eB && eA > sB) return true;
+    }
+  }
+  return false;
+}
+
 // Session cache for mobile machine modal dropdown options
 interface MobileModalOptionsCache {
   supervisors: SelectableUser[];
   operators: SelectableUser[];
   clients: SelectableClient[];
+  activeAssignments: MobileActiveAssignment[];
   timestamp: number;
 }
 let mobileModalOptionsCache: MobileModalOptionsCache | null = null;
@@ -79,12 +121,15 @@ export const MachineModal: React.FC<MachineModalProps> = ({
   // Personnel assignments
   const [supervisorIds, setSupervisorIds] = useState<string[]>([]);
   const [operatorIds, setOperatorIds] = useState<string[]>([]);
+  const [operatorShifts, setOperatorShifts] = useState<Record<string, string>>({});
+  const [clientShifts, setClientShifts] = useState(DEFAULT_MOBILE_SHIFTS);
   const [selectedClient, setSelectedClient] = useState<SelectableClient | null>(null);
 
   // Available data lists from Supabase
   const [supervisorsList, setSupervisorsList] = useState<SelectableUser[]>([]);
   const [operatorsList, setOperatorsList] = useState<SelectableUser[]>([]);
   const [clientsList, setClientsList] = useState<SelectableClient[]>([]);
+  const [activeAssignmentsList, setActiveAssignmentsList] = useState<MobileActiveAssignment[]>([]);
 
   // Sub-modals
   const [supervisorModalOpen, setSupervisorModalOpen] = useState(false);
@@ -125,7 +170,22 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           : [];
         setOperatorIds(ops);
 
-        // Extract client
+        // Extract operator shift codes
+        const initialShifts: Record<string, string> = {};
+        if (Array.isArray(machineToEdit.operators)) {
+          machineToEdit.operators.forEach((o: any, idx: number) => {
+            if (o?.id) {
+              initialShifts[o.id] = (o.shift_code || DEFAULT_MOBILE_SHIFTS[idx % DEFAULT_MOBILE_SHIFTS.length].code).toUpperCase();
+            }
+          });
+        }
+        ops.forEach((id: string, idx: number) => {
+          if (!initialShifts[id]) {
+            initialShifts[id] = DEFAULT_MOBILE_SHIFTS[idx % DEFAULT_MOBILE_SHIFTS.length].code;
+          }
+        });
+        setOperatorShifts(initialShifts);
+
         if (machineToEdit.client) {
           setSelectedClient(machineToEdit.client);
         } else if (machineToEdit.client_id) {
@@ -146,6 +206,8 @@ export const MachineModal: React.FC<MachineModalProps> = ({
         setRentalStatus('available');
         setSupervisorIds([]);
         setOperatorIds([]);
+        setOperatorShifts({});
+        setClientShifts(DEFAULT_MOBILE_SHIFTS);
         setSelectedClient(null);
       }
       setFieldErrors({});
@@ -153,6 +215,47 @@ export const MachineModal: React.FC<MachineModalProps> = ({
       fetchDropdownOptions();
     }
   }, [visible, machineToEdit]);
+
+  // Load client shift codes for target client dynamically
+  useEffect(() => {
+    const targetClientId = selectedClient?.id || machineToEdit?.client_id;
+    if (!targetClientId) {
+      setClientShifts(DEFAULT_MOBILE_SHIFTS);
+      return;
+    }
+    let isMounted = true;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('client_shift_codes')
+          .select('id, code, name, start_time, end_time, crosses_midnight, is_active')
+          .eq('client_id', targetClientId)
+          .eq('is_active', true)
+          .order('display_order', { ascending: true });
+        if (isMounted && data && data.length > 0) {
+          setClientShifts(
+            data.map((s: any) => ({
+              id: s.id,
+              code: s.code,
+              name: s.name || `Shift ${s.code}`,
+              start_time: String(s.start_time).slice(0, 8),
+              end_time: String(s.end_time).slice(0, 8),
+              crosses_midnight: s.crosses_midnight,
+            }))
+          );
+        } else if (isMounted) {
+          setClientShifts(DEFAULT_MOBILE_SHIFTS);
+        }
+      } catch (err) {
+        if (isMounted) setClientShifts(DEFAULT_MOBILE_SHIFTS);
+      }
+    })();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedClient?.id, machineToEdit?.client_id, visible]);
+
+  const maxMobileShifts = clientShifts.length > 0 ? clientShifts.length : 3;
 
 
   const fetchDropdownOptions = async () => {
@@ -163,10 +266,11 @@ export const MachineModal: React.FC<MachineModalProps> = ({
       setSupervisorsList(mobileModalOptionsCache.supervisors);
       setOperatorsList(mobileModalOptionsCache.operators);
       setClientsList(mobileModalOptionsCache.clients);
+      setActiveAssignmentsList(mobileModalOptionsCache.activeAssignments || []);
       return;
     }
     try {
-      const [supsRes, opsRes, clientsRes] = await Promise.all([
+      const [supsRes, opsRes, clientsRes, assignmentsRes] = await Promise.all([
         supabase
           .from('users')
           .select('id, full_name, phone, email, shift_start_time, shift_end_time')
@@ -184,6 +288,21 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           .select('id, code, company_name, contact_person, phone, street, city, district, state, pincode')
           .is('deleted_at', null)
           .order('company_name', { ascending: true }),
+        supabase
+          .from('operator_machine_assignments')
+          .select(`
+            operator_id,
+            machine_id,
+            shift_code,
+            shift_start_time,
+            shift_end_time,
+            is_active,
+            machines!operator_machine_assignments_machine_id_fkey (
+              id,
+              machine_id
+            )
+          `)
+          .eq('is_active', true),
       ]);
 
       const formatUserShift = (u: any) => ({
@@ -196,20 +315,52 @@ export const MachineModal: React.FC<MachineModalProps> = ({
       const sups = (supsRes.data || []).map(formatUserShift);
       const ops = (opsRes.data || []).map(formatUserShift);
       const cls = clientsRes.data || [];
+      const activeAssignments: MobileActiveAssignment[] = (assignmentsRes.data || []).map((a: any) => ({
+        operator_id: a.operator_id,
+        machine_id: a.machine_id,
+        shift_code: a.shift_code,
+        shift_start_time: a.shift_start_time,
+        shift_end_time: a.shift_end_time,
+        machine_code: a.machines?.machine_id || 'Other M/C',
+      }));
 
       mobileModalOptionsCache = {
         supervisors: sups,
         operators: ops,
         clients: cls,
+        activeAssignments,
         timestamp: Date.now(),
       };
 
       setSupervisorsList(sups);
       setOperatorsList(ops);
       setClientsList(cls);
+      setActiveAssignmentsList(activeAssignments);
     } catch (e) {
       console.warn('Error fetching machine dropdown options:', e);
     }
+  };
+
+  const getOperatorConflict = (opId: string, opShiftCode: string): MobileActiveAssignment | null => {
+    if (!opId || !activeAssignmentsList || activeAssignmentsList.length === 0) return null;
+    const shiftObj = clientShifts.find((s) => s.code.toUpperCase() === opShiftCode.toUpperCase()) || DEFAULT_MOBILE_SHIFTS[0];
+    if (!shiftObj) return null;
+
+    const currentRanges = shiftToMinuteRanges(shiftObj.start_time, shiftObj.end_time);
+    if (currentRanges.length === 0) return null;
+
+    const otherAssignments = activeAssignmentsList.filter(
+      (a) => a.operator_id === opId && a.machine_id !== machineToEdit?.id
+    );
+
+    for (const other of otherAssignments) {
+      if (!other.shift_start_time || !other.shift_end_time) continue;
+      const otherRanges = shiftToMinuteRanges(other.shift_start_time, other.shift_end_time);
+      if (doRangesOverlap(currentRanges, otherRanges)) {
+        return other;
+      }
+    }
+    return null;
   };
 
   const handleRemoveSupervisor = (id: string) => {
@@ -218,6 +369,34 @@ export const MachineModal: React.FC<MachineModalProps> = ({
 
   const handleRemoveOperator = (id: string) => {
     setOperatorIds((prev) => prev.filter((item) => item !== id));
+    setOperatorShifts((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const handleSelectOperatorShift = (opId: string, shiftCode: string) => {
+    setOperatorShifts((prev) => ({
+      ...prev,
+      [opId]: shiftCode,
+    }));
+  };
+
+  const handleOperatorSelectConfirm = (selectedIds: string[]) => {
+    const cappedIds = selectedIds.slice(0, maxMobileShifts);
+    const nextShifts = { ...operatorShifts };
+    const usedCodes = new Set(cappedIds.map((id) => nextShifts[id]).filter(Boolean));
+    cappedIds.forEach((id) => {
+      if (!nextShifts[id]) {
+        const unused = clientShifts.find((s) => !usedCodes.has(s.code.toUpperCase()));
+        const codeToAssign = unused ? unused.code : clientShifts[0]?.code || 'S1';
+        nextShifts[id] = codeToAssign;
+        usedCodes.add(codeToAssign);
+      }
+    });
+    setOperatorShifts(nextShifts);
+    setOperatorIds(cappedIds);
   };
 
   const handleSave = async () => {
@@ -243,6 +422,40 @@ export const MachineModal: React.FC<MachineModalProps> = ({
       setFieldErrors(errors);
       setFormError('Please complete all mandatory machine specification fields.');
       return;
+    }
+
+    if (operatorIds.length > maxMobileShifts) {
+      setFormError(`A machine can have at most ${maxMobileShifts} assigned operators across shifts for client fleet coverage.`);
+      return;
+    }
+
+    // Validate duplicate shift codes among assigned operators
+    if (operatorIds.length > 0) {
+      const shiftCounts = new Map<string, number>();
+      for (const opId of operatorIds) {
+        const code = (operatorShifts[opId] || 'S1').toUpperCase();
+        shiftCounts.set(code, (shiftCounts.get(code) || 0) + 1);
+      }
+      for (const [code, count] of shiftCounts.entries()) {
+        if (count > 1) {
+          setFormError(`Shift ${code} is assigned to multiple operators. Each operator must have a distinct shift.`);
+          return;
+        }
+      }
+    }
+
+    // Validate that no assigned operator has an overlapping assignment on another machine
+    for (const opId of operatorIds) {
+      const shiftCode = (operatorShifts[opId] || clientShifts[0]?.code || 'S1').toUpperCase();
+      const conflict = getOperatorConflict(opId, shiftCode);
+      if (conflict) {
+        const opUser = operatorsList.find((u) => u.id === opId);
+        const opName = opUser?.full_name || 'Operator';
+        const startFmt = formatTo12Hour(conflict.shift_start_time) || conflict.shift_start_time;
+        const endFmt = formatTo12Hour(conflict.shift_end_time) || conflict.shift_end_time;
+        setFormError(`${opName} is already assigned to ${conflict.machine_code} (${startFmt} – ${endFmt}).`);
+        return;
+      }
     }
 
     setIsSaving(true);
@@ -274,6 +487,43 @@ export const MachineModal: React.FC<MachineModalProps> = ({
 
       const effectiveStatus = selectedClient?.id ? 'rented' : 'available';
       const effectiveClientId = selectedClient?.id || null;
+
+      // Atomically sync operator assignments table if editing existing machine
+      if (machineToEdit?.id && (isSupervisor || initialSection === 'personnel' || initialSection === 'all')) {
+        if (operatorIds.length === 0) {
+          await supabase
+            .from('operator_machine_assignments')
+            .update({ is_active: false, ended_at: new Date().toISOString(), end_reason: 'removed' })
+            .eq('machine_id', machineToEdit.id)
+            .eq('is_active', true);
+        } else {
+          await supabase
+            .from('operator_machine_assignments')
+            .update({ is_active: false, ended_at: new Date().toISOString(), end_reason: 'removed' })
+            .eq('machine_id', machineToEdit.id)
+            .eq('is_active', true)
+            .not('operator_id', 'in', `(${operatorIds.join(',')})`);
+
+          for (const opId of operatorIds) {
+            const shiftCode = (operatorShifts[opId] || 'S1').toUpperCase();
+            const shiftObj = clientShifts.find((s) => s.code.toUpperCase() === shiftCode) || DEFAULT_MOBILE_SHIFTS[0];
+            const { data: rpcData, error: rpcError } = await supabase.rpc('assign_operator_machine_atomic', {
+              p_machine_id: machineToEdit.id,
+              p_operator_id: opId,
+              p_shift_start: shiftObj.start_time,
+              p_shift_end: shiftObj.end_time,
+              p_shift_start_time: shiftObj.start_time,
+              p_shift_end_time: shiftObj.end_time,
+              p_shift_code: shiftCode,
+              p_notes: 'Assigned via mobile app',
+            });
+            if (rpcError) throw new Error(rpcError.message);
+            if (rpcData && (rpcData as any).success === false) {
+              throw new Error((rpcData as any).error || 'Failed to assign operator.');
+            }
+          }
+        }
+      }
 
       if (isSupervisor && machineToEdit?.id) {
         // Supervisor limited update payload
@@ -562,7 +812,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                     <View style={styles.fieldGroup}>
                       <View style={styles.labelRow}>
                         <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
-                          Assigned Supervisors (Multi-Shift Oversight)
+                          Assigned Supervisors
                         </Text>
                         <Text style={[styles.assignedCountText, { color: theme.colors.mute }]}>
                           {supervisorIds.length} assigned
@@ -678,69 +928,135 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                   <View style={styles.fieldGroup}>
                     <View style={styles.labelRow}>
                       <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>
-                        Assigned Operators (24h Shift Execution)
+                        Assigned Operators (24h)
                       </Text>
                       <Text style={[styles.assignedCountText, { color: theme.colors.mute }]}>
-                        {operatorIds.length} assigned
+                        {operatorIds.length}/{maxMobileShifts} assigned
                       </Text>
                     </View>
 
-                    <TouchableOpacity
-                      onPress={() => setOperatorModalOpen(true)}
-                      activeOpacity={0.7}
-                      style={[
-                        styles.multiSelectTrigger,
-                        {
-                          backgroundColor: theme.colors.canvasElevated,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ]}
-                    >
-                      <View style={styles.selectedPillsWrap}>
-                        {selectedOperators.length === 0 ? (
-                          <Text style={[styles.placeholderText, { color: theme.colors.mute }]}>
-                            Search & assign operators...
-                          </Text>
-                        ) : (
-                          selectedOperators.map((o) => (
+                    {operatorIds.length < maxMobileShifts && (
+                      <TouchableOpacity
+                        onPress={() => setOperatorModalOpen(true)}
+                        activeOpacity={0.7}
+                        style={[
+                          styles.addOperatorTrigger,
+                          {
+                            backgroundColor: theme.colors.canvasElevated,
+                            borderColor: theme.colors.hairline,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.addOperatorText, { color: theme.colors.ink }]}>
+                          + Search & Assign Operators ({operatorIds.length}/{maxMobileShifts})
+                        </Text>
+                        <ChevronDown size={14} color={theme.colors.mute} />
+                      </TouchableOpacity>
+                    )}
+
+                    {selectedOperators.length === 0 ? (
+                      <View
+                        style={[
+                          styles.emptyOperatorsBox,
+                          {
+                            backgroundColor: theme.colors.canvas,
+                            borderColor: theme.colors.hairline,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.placeholderText, { color: theme.colors.mute }]}>
+                          No operators assigned. Tap above to assign up to {maxMobileShifts} shift operators.
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={styles.operatorCardsContainer}>
+                        {selectedOperators.map((o, idx) => {
+                          const currentShift = (operatorShifts[o.id] || (clientShifts[idx % clientShifts.length]?.code || 'S1')).toUpperCase();
+                          const conflict = getOperatorConflict(o.id, currentShift);
+                          const conflictMsg = conflict
+                            ? `Already assigned to ${conflict.machine_code} (${formatTo12Hour(conflict.shift_start_time) || conflict.shift_start_time} – ${formatTo12Hour(conflict.shift_end_time) || conflict.shift_end_time})`
+                            : null;
+                          return (
                             <View
                               key={o.id}
                               style={[
-                                styles.userChip,
+                                styles.operatorCard,
                                 {
-                                  backgroundColor: theme.colors.canvas,
-                                  borderColor: theme.colors.hairline,
+                                  backgroundColor: theme.colors.canvasElevated,
+                                  borderColor: conflictMsg ? '#ef4444' : theme.colors.hairline,
                                 },
                               ]}
                             >
-                              <Text style={[styles.userChipText, { color: theme.colors.ink }]}>
-                                {o.full_name}
-                              </Text>
-                              <TouchableOpacity
-                                onPress={() => handleRemoveOperator(o.id)}
-                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                              >
-                                <X size={11} color={theme.colors.mute} />
-                              </TouchableOpacity>
-                            </View>
-                          ))
-                        )}
-                      </View>
+                              <View style={styles.operatorCardHeader}>
+                                <View style={styles.operatorCardInfo}>
+                                  <Text style={[styles.operatorCardName, { color: theme.colors.ink }]}>
+                                    {o.full_name}
+                                  </Text>
+                                  <View style={[styles.shiftBadge, conflictMsg ? { backgroundColor: '#ef444420' } : null]}>
+                                    <Text style={[styles.shiftBadgeText, conflictMsg ? { color: '#ef4444' } : null]}>
+                                      Shift {currentShift}
+                                    </Text>
+                                  </View>
+                                </View>
+                                <TouchableOpacity
+                                  onPress={() => handleRemoveOperator(o.id)}
+                                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                                  style={styles.removeOperatorBtn}
+                                >
+                                  <X size={15} color={theme.colors.mute} />
+                                </TouchableOpacity>
+                              </View>
 
-                      <View style={styles.triggerRightActions}>
-                        {operatorIds.length > 0 && (
-                          <TouchableOpacity
-                            onPress={() => setOperatorIds([])}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          >
-                            <Text style={[styles.clearBtnText, { color: theme.colors.mute }]}>
-                              Clear
-                            </Text>
-                          </TouchableOpacity>
-                        )}
-                        <ChevronDown size={14} color={theme.colors.mute} />
+                              {/* Shift Selection Chips */}
+                              <View style={styles.shiftChipsRow}>
+                                {clientShifts.map((sc) => {
+                                  const isSelected = currentShift.toUpperCase() === sc.code.toUpperCase();
+                                  const isShiftConflicting = Boolean(getOperatorConflict(o.id, sc.code));
+                                  return (
+                                    <TouchableOpacity
+                                      key={sc.code}
+                                      onPress={() => handleSelectOperatorShift(o.id, sc.code)}
+                                      activeOpacity={0.7}
+                                      style={[
+                                        styles.shiftChip,
+                                        {
+                                          backgroundColor: isSelected
+                                            ? (isShiftConflicting ? '#ef4444' : '#0ea5e9')
+                                            : theme.colors.canvas,
+                                          borderColor: isSelected
+                                            ? (isShiftConflicting ? '#dc2626' : '#0284c7')
+                                            : (isShiftConflicting ? '#ef444460' : theme.colors.hairline),
+                                        },
+                                      ]}
+                                    >
+                                      <Text
+                                        style={[
+                                          styles.shiftChipText,
+                                          {
+                                            color: isSelected ? '#ffffff' : (isShiftConflicting ? '#ef4444' : theme.colors.ink),
+                                            fontWeight: isSelected ? '700' : '500',
+                                          },
+                                        ]}
+                                      >
+                                        Shift {sc.code}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  );
+                                })}
+                              </View>
+
+                              {/* Overlap Conflict Pill */}
+                              {conflictMsg && (
+                                <View style={styles.operatorConflictBadge}>
+                                  <AlertCircle size={12} color="#ef4444" style={{ marginTop: 1 }} />
+                                  <Text style={styles.operatorConflictText}>{conflictMsg}</Text>
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })}
                       </View>
-                    </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               </View>
@@ -863,7 +1179,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
                   <ActivityIndicator size="small" color={theme.colors.onPrimary} />
                 ) : (
                   <Text style={[styles.primaryActionBtnText, { color: theme.colors.onPrimary }]}>
-                    {isSupervisor ? 'Save Operator Assignment' : isEdit ? 'Update Machine' : 'Register Machine'}
+                    {isSupervisor || initialSection === 'personnel' ? 'Save Assignments' : isEdit ? 'Update Machine' : 'Register Machine'}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -891,7 +1207,7 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           <MultiUserSelectModal
             visible={supervisorModalOpen}
             onClose={() => setSupervisorModalOpen(false)}
-            title="Assigned Supervisors (Multi-Shift)"
+            title="Assigned Supervisors"
             users={supervisorsList}
             selectedIds={supervisorIds}
             onConfirm={setSupervisorIds}
@@ -901,10 +1217,10 @@ export const MachineModal: React.FC<MachineModalProps> = ({
           <MultiUserSelectModal
             visible={operatorModalOpen}
             onClose={() => setOperatorModalOpen(false)}
-            title="Assigned Operators (24h Shifts)"
+            title="Assigned Operators (24h)"
             users={operatorsList}
             selectedIds={operatorIds}
-            onConfirm={setOperatorIds}
+            onConfirm={handleOperatorSelectConfirm}
             roleLabel="operators"
           />
 
@@ -1028,7 +1344,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   sectionHeaderTitle: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
@@ -1050,11 +1366,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   fieldLabel: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '600',
   },
   assignedCountText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     textTransform: 'uppercase',
   },
@@ -1085,7 +1401,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   userChipText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   triggerRightActions: {
@@ -1094,11 +1410,95 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   clearBtnText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   placeholderText: {
+    fontSize: 13.5,
+  },
+  addOperatorTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    paddingHorizontal: spacingNumeric.md,
+    height: 44,
+    marginBottom: spacingNumeric.xs,
+  },
+  addOperatorText: {
+    fontSize: 13.5,
+    fontWeight: '600',
+  },
+  emptyOperatorsBox: {
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    padding: spacingNumeric.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  operatorCardsContainer: {
+    gap: spacingNumeric.sm,
+    marginTop: spacingNumeric.xs,
+  },
+  operatorCard: {
+    borderRadius: radiusNumeric.lg,
+    borderWidth: 1,
+    padding: spacingNumeric.sm,
+  },
+  operatorCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacingNumeric.xs,
+  },
+  operatorCardInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacingNumeric.xs,
+    flex: 1,
+  },
+  operatorCardName: {
+    fontSize: 14.5,
+    fontWeight: '700',
+  },
+  shiftBadge: {
+    backgroundColor: '#0ea5e918',
+    borderColor: '#0ea5e940',
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  shiftBadgeText: {
     fontSize: 12,
+    fontWeight: '700',
+    color: '#0ea5e9',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  removeOperatorBtn: {
+    padding: 6,
+  },
+  shiftChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+  },
+  shiftChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radiusNumeric.md,
+    borderWidth: 1,
+    minHeight: 34,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  shiftChipText: {
+    fontSize: 12.5,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   singleSelectTrigger: {
     flexDirection: 'row',
@@ -1121,7 +1521,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   selectValueText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
   },
   clientChipRow: {
@@ -1131,7 +1531,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   clientNameText: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '700',
   },
   clientCodeBadge: {
@@ -1143,7 +1543,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   clientCodeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: '#0ea5e9',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
@@ -1161,7 +1561,7 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   primaryActionBtnText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
   },
   cancelActionBtn: {
@@ -1174,7 +1574,25 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   cancelActionBtnText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
+  },
+  operatorConflictBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: spacingNumeric.xs,
+    paddingHorizontal: spacingNumeric.xs,
+    paddingVertical: 4,
+    backgroundColor: '#ef444415',
+    borderColor: '#ef444430',
+    borderWidth: 1,
+    borderRadius: radiusNumeric.sm,
+  },
+  operatorConflictText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#ef4444',
+    flex: 1,
   },
 });

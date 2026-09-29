@@ -270,4 +270,29 @@ Audit         not loaded (unmounted until tab click)
   - Canonical `filterToolbar` with search, Add CTA, dropdown selectors for Status and Sort, and dismissible filter chips.
   - Server-side sorting for `company_name`, `code`, and `created_at` in both directions.
 
+---
+
+## 16. Dedicated Client Details Page & Sidebar Removal (/clients/[id]) (2026-09-26)
+- **Removal of Side-Over Drawer (`ClientDetailDrawer`)**:
+  - Removed drawer slide-over modal from `ClientsCoordinatorClient.tsx` in favor of a dedicated full-page experience.
+  - Deleted `ClientDetailDrawer.tsx` and updated component index exports.
+  - Converted table row code, company name, and action eye button in `ClientsTable.tsx` to direct Next.js App Router `<Link href={`/clients/${client.id}`}>` elements.
+  - Mobile cards (`MobileClientCard.tsx`) push `/clients/${client.id}` on click.
+- **Dual UUID / Code Identifier Resolution (`resolveClientId`)**:
+  - `apps/web/lib/data/clients/client-detail.ts` exports `resolveClientId(idOrCode: string)`.
+  - Supports both direct UUID lookups (`/clients/<uuid>`) and human-readable client code lookups (`/clients/CLI-0001`).
+- **Full-Page Architecture (`apps/web/app/(app)/clients/[id]/`)**:
+  - `page.tsx`: Server Component with role authorization (`super_admin`, `admin`, `manager`, `supervisor`), parallel data loading (`Promise.all`), dynamic metadata generation, and `<EmptyState>` fallbacks.
+  - `loading.tsx`: Full-page skeleton adhering to Vercel Geist design system tokens (`#171717`, `#fafafa`, `#ffffff`, `#ebebeb`).
+  - `ClientDetailClient.tsx`: Reusable client coordinator containing:
+    1. Breadcrumb navigation (`Home / Clients / [Company Name]`) and `< Back to Clients` link.
+    2. Master Hero Card with company name, copyable client code pill, status badge, and action shortcuts (`Edit Profile` launching `ClientModal`, `Call`, `WhatsApp`).
+    3. 4 High-Density Metadata Cards: Contact Person (with direct phone link), Tax & Statutory (GSTIN & PAN with copy buttons), Operational Site Location (with Google Maps link), and Registered Billing Address.
+    4. 4 Interactive KPI Metric Cards: Assigned Fleet Units, Running Hours, Operators Assigned, Account Standing.
+    5. 5 Operational Sub-Tabs: Machines (with `Inspect →` links to `/machines/[id]`), Running Logs, Operator Assignments, Account History, and Security Audit Trail.
+    6. In-tab search filter across displayed records.
+- **Component Reuse**:
+  - Maximizes existing reusable components: `Button`, `EmptyState`, `TooltipWrapper`, `Badge`, `ClientModal`, `EnterpriseTable`, and bridged `AnimatedIcons`.
+
+
 

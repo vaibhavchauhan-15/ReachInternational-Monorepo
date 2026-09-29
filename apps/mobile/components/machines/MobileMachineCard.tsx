@@ -424,12 +424,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   codeText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   modelText: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '700',
   },
   badgeWrap: {
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
     gap: spacingNumeric.xs,
   },
   metaText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   specsWell: {
@@ -463,18 +463,18 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   specLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     textTransform: 'uppercase',
   },
   specValueHmr: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
     marginTop: 1,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   specValueClient: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
     marginTop: 1,
   },
@@ -485,7 +485,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   moreCountBadge: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '700',
     color: '#10b981',
   },
@@ -496,23 +496,23 @@ const styles = StyleSheet.create({
     marginBottom: 1,
   },
   personnelName: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
-    lineHeight: 15,
+    lineHeight: 16,
   },
   inlineBadge: {
-    paddingHorizontal: 4,
-    paddingVertical: 1,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
     borderRadius: 4,
     borderWidth: 1,
   },
   inlineBadgeText: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '700',
-    lineHeight: 11,
+    lineHeight: 14,
   },
   unassignedText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontStyle: 'italic',
   },
   cardFooter: {
@@ -533,27 +533,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderRadius: 6,
     borderWidth: 1,
-    minHeight: 32,
+    minHeight: 36,
   },
   actionBtnText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
   },
   viewDetailsBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderRadius: 6,
-    minHeight: 32,
+    minHeight: 36,
   },
   viewDetailsText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
   },
 });

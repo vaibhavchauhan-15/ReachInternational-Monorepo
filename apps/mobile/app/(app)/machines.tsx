@@ -1739,7 +1739,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   kpiLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -1779,7 +1779,7 @@ const styles = StyleSheet.create({
   },
   searchInputText: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 15,
     paddingVertical: 0,
     height: '100%',
   },
@@ -1797,19 +1797,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   filterToggleBtnText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
   },
   activeCountBadge: {
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
   activeCountBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
   },
   quickResetBtn: {
@@ -1822,7 +1822,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   quickResetBtnText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   filterPanelWebContainer: {
@@ -1850,7 +1850,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   activeBadgesHeader: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
     marginRight: 2,
   },
@@ -1864,7 +1864,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   badgeChipText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   resetAllLink: {
@@ -1875,7 +1875,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   resetAllLinkText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   resultsCountRow: {
@@ -1883,7 +1883,7 @@ const styles = StyleSheet.create({
     marginTop: -4,
   },
   resultsCountText: {
-    fontSize: 12,
+    fontSize: 12.5,
   },
   cardsContainer: {
     gap: spacingNumeric.md,

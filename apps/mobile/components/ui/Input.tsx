@@ -160,14 +160,14 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   label: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 13.5,
+    fontWeight: '600',
     letterSpacing: -0.1,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 46,
+    height: 48,
     borderWidth: 1,
     borderRadius: radiusNumeric.sm + 2,
     paddingHorizontal: 12,
@@ -186,17 +186,17 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     height: '100%',
-    fontSize: 14,
+    fontSize: 15,
     paddingVertical: 0,
     ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : {}),
   },
   errorText: {
-    fontSize: 12,
+    fontSize: 12.5,
     marginTop: 4,
     fontWeight: '500',
   },
   helperText: {
-    fontSize: 12,
+    fontSize: 12.5,
     marginTop: 4,
   },
 });

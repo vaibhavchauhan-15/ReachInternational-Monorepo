@@ -38,7 +38,7 @@ import {
 export interface MobileDocumentUploadCardProps {
   title: string;
   subtitle?: string;
-  docTypeCode: 'aadhaar' | 'driving_license';
+  docTypeCode: 'aadhaar' | 'driving_license' | 'bank_document' | 'bank_passbook' | string;
   required?: boolean;
   selectedDoc: MobilePickedDocument | null;
   existingDoc?: UserDocumentInfo | null;
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   subtitle: {
-    fontSize: 11,
+    fontSize: 13.5,
     marginTop: 2,
   },
   badge: {
@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
   },
   progressContainer: {
@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   progressText: {
-    fontSize: 10,
+    fontSize: 12,
     textAlign: 'right',
   },
   errorBox: {
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(239, 68, 68, 0.08)',
   },
   errorText: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: '#ef4444',
     flex: 1,
   },
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   formatBadgeText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   fileName: {
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   fileMeta: {
-    fontSize: 10,
+    fontSize: 12,
     marginTop: 2,
   },
   actionButtons: {

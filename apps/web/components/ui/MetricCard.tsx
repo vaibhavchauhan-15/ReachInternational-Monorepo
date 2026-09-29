@@ -169,7 +169,7 @@ export function MetricCard({
           <AnimatedCounter value={value} className={`text-2xl sm:text-3xl font-bold tracking-tight tabular-nums ${styles.text}`} />
           {trend && (
             <span
-              className={`inline-flex items-center gap-0.5 text-[10px] sm:text-[11px] font-semibold ${
+              className={`inline-flex items-center gap-0.5 text-xs font-semibold ${
                 trend.isUp
                   ? "text-[var(--color-success-deep)] dark:text-[var(--color-success)]"
                   : "text-[var(--color-error-deep)] dark:text-[var(--color-error)]"
@@ -197,14 +197,14 @@ export function MetricCard({
         )}
 
         {subtitle && (
-          <p className="relative text-[10px] sm:text-[11px] text-[var(--color-mute)] leading-tight">
+          <p className="relative text-xs text-[var(--color-mute)] leading-tight">
             {subtitle}
           </p>
         )}
 
         {href && (
           <div className="relative flex items-center gap-1 text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
-            <span className="text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity">
+            <span className="text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity">
               View
             </span>
             <AnimatedArrowRight size={14} />

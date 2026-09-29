@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
   },
   subtitle: {
-    fontSize: 11,
+    fontSize: 13.5,
     marginTop: 2,
   },
   headerActions: {
@@ -354,7 +354,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   clearBtnText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#ef4444',
   },
@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   filterChipText: {
-    fontSize: 11,
+    fontSize: 12.5,
   },
   feedScroll: {
     paddingHorizontal: spacingNumeric.md,
@@ -418,11 +418,11 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   itemTime: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '500',
   },
   itemBody: {
-    fontSize: 11,
+    fontSize: 13,
     lineHeight: 15,
   },
   emptyWrap: {

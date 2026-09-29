@@ -1,26 +1,22 @@
 import { requirePermission, getCurrentUser } from "@/lib/dal";
 import { redirect } from "next/navigation";
-import { getOperationsHubData } from "@/lib/queries/operators";
 import { getOperatorEntryContext } from "@/lib/queries/operator-entry";
+import { getTodayShiftLogMonitor } from "@/lib/data/operations/today-shift-monitor";
+import { getMachines } from "@/lib/queries/machines";
+import { getClients } from "@/lib/queries/clients";
+import { getActiveOperators } from "@/lib/data/machines/machine-filters";
 import { OperationsClient } from "@/components/operations/OperationsClient";
 import { OperatorEntryClient } from "@/components/operations/entry/OperatorEntryClient";
-import { getOperationsCurrentMonth } from "@reachinternational/utils";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Today's Shift Logs | Reach International",
+  description: "Real-time daily shift roster, operator submissions, and operational coverage monitor",
+  robots: { index: false, follow: false },
+};
 
 export interface OperationsPageSearchParams {
   tab?: string;
-  page?: string;
-  pageSize?: string;
-  view?: "machine" | "client" | "operator";
-  machine?: string;
-  client?: string;
-  site?: string;
-  operator?: string;
-  month?: string;
-  start?: string;
-  end?: string;
-  search?: string;
-  sort?: "date-desc" | "date-asc" | "hours-desc" | "hours-asc" | "meter-desc" | "meter-asc" | string;
-  expanded?: string;
 }
 
 export default async function OperationsPage(props: {
@@ -32,108 +28,37 @@ export default async function OperationsPage(props: {
     redirect("/login");
   }
   const searchParams = await props.searchParams;
-  const tab = searchParams?.tab;
-  const effectiveTab = user?.role === "operator" ? (tab === "history" ? "history" : "entry") : "logs";
+  const rawTab = searchParams?.tab;
+  const currentTab = typeof rawTab === "string" ? rawTab : Array.isArray(rawTab) ? rawTab[0] : undefined;
 
-  // Fast Path: Operator Entry/History landing loads ONLY the tiny entry context
+  // Fast Path: Operator Entry/History landing loads ONLY the lightweight entry context
   if (user?.role === "operator") {
     const entryContext = await getOperatorEntryContext(user.id);
     return (
       <OperatorEntryClient
         initialContext={entryContext}
         user={user}
-        initialTab={effectiveTab === "history" ? "history" : "entry"}
+        initialTab={currentTab === "history" ? "history" : "entry"}
       />
     );
   }
 
-  const page = searchParams?.page ? Math.max(1, parseInt(searchParams.page, 10)) : 1;
-  const rawView = searchParams?.view;
-  const machineId = searchParams?.machine;
-  const clientId = searchParams?.client;
-  const site = searchParams?.site;
-  const operatorId = searchParams?.operator;
-  const rawMonth = searchParams?.month;
-  const currentMonthNumber = getOperationsCurrentMonth();
-  // Default to current month unless explicitly provided (e.g. 'all', specific month '01'-'12', or 'custom')
-  const month = rawMonth && rawMonth.trim() !== "" ? rawMonth : currentMonthNumber;
-  const customStart = searchParams?.start;
-  const customEnd = searchParams?.end;
-  const search = searchParams?.search;
-  const sort = searchParams?.sort;
-
-  const viewMode: "machine" | "client" | "operator" =
-    rawView === "client" || rawView === "operator" || rawView === "machine"
-      ? rawView
-      : clientId
-      ? "client"
-      : operatorId
-      ? "operator"
-      : machineId
-      ? "machine"
-      : "machine";
-
-  const rawPageSize = searchParams?.pageSize ? parseInt(searchParams.pageSize, 10) : undefined;
-  const effectivePageSize =
-    rawPageSize && !isNaN(rawPageSize) && rawPageSize > 0
-      ? rawPageSize
-      : 20;
-
-  const expanded = searchParams?.expanded;
-
-  const data = await getOperationsHubData(user!, effectiveTab, {
-    page,
-    pageSize: effectivePageSize,
-    viewMode,
-    machineId,
-    clientId,
-    site,
-    operatorId,
-    month,
-    customStart,
-    customEnd,
-    search,
-    sort,
-    expanded: expanded === "true",
-  });
-
-  const dataMap = data as unknown as Record<string, string | undefined>;
-  const effectiveInitialClientId =
-    clientId || dataMap.activeClientId || dataMap.effectiveClientId || dataMap.mostRecentClientId;
-  const effectiveInitialMachineId = machineId || dataMap.activeMachineId;
-  const effectiveInitialOperatorId = operatorId || dataMap.activeOperatorId;
+  // Dedicated Today's Shift Logs view for supervisors, managers, admins, and HR
+  const [initialTodayRows, machineRes, dbClients, activeOperators] = await Promise.all([
+    getTodayShiftLogMonitor(user.id),
+    getMachines({ pageSize: 100 }),
+    getClients(),
+    getActiveOperators(),
+  ]);
 
   return (
     <OperationsClient
-      machines={data.machines}
-      dbClients={data.dbClients}
-      operators={data.operators}
-      assignments={data.assignments}
-      hourLogs={data.hourLogs}
       userRole={user?.role}
       user={user!}
-      assignedMachine={data.assignedMachine}
-      recentLogs={data.recentLogs}
-      allMachines={data.allMachines}
-      totalLogsCount={data.totalLogsCount}
-      currentPage={data.currentPage}
-      logsPageSize={data.logsPageSize}
-      logsSummary={data.logsSummary}
-      initialViewMode={viewMode}
-      initialMachineId={effectiveInitialMachineId}
-      initialClientId={effectiveInitialClientId}
-      mostRecentClientId={dataMap.mostRecentClientId}
-      initialSite={site}
-      initialOperatorId={effectiveInitialOperatorId}
-      initialMonth={month}
-      initialCustomStart={customStart}
-      initialCustomEnd={customEnd}
-      initialSearch={search}
-      initialSort={sort}
-      initialExpanded={expanded === "true"}
+      machines={machineRes?.machines || []}
+      dbClients={dbClients}
+      operators={activeOperators}
+      initialTodayRows={initialTodayRows}
     />
   );
 }
-
-
-

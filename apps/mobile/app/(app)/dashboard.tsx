@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     marginBottom: spacingNumeric.md,
   },
   eyebrowHeader: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.8,
     marginBottom: spacingNumeric.xs,
@@ -313,11 +313,11 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   alertTitle: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '700',
   },
   alertDesc: {
-    fontSize: 11,
+    fontSize: 12.5,
     marginTop: 2,
   },
   actionCardWrapper: {

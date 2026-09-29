@@ -6,7 +6,7 @@ import { TAGS, CACHE_TIERS } from "@/lib/cache";
 import type { CRMClient } from "@/lib/types/database";
 
 const CLIENT_SELECT_COLUMNS =
-  "id, code, company_name, contact_person, phone, gstin, pan_number, street, city, district, state, pincode, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode, status, deleted_at, created_at, updated_at";
+  "id, client_id, code, company_name, contact_person, phone, gstin, pan_number, street, city, district, state, pincode, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode, status, deleted_at, created_at, updated_at";
 
 const getCachedClients = unstable_cache(
   async (includeDeleted: boolean = false): Promise<CRMClient[]> => {
@@ -37,6 +37,7 @@ const getCachedClients = unstable_cache(
           .join(", ");
       return {
         ...client,
+        client_id: client.client_id || client.code,
         street,
         address: fullAddress,
         client_name: client.company_name,

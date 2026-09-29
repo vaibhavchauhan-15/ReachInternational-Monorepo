@@ -37,7 +37,7 @@ export const UuidIdSchema = z
   .uuid("Invalid resource identifier format");
 
 /**
- * Machine ID Schema (allows UUID or standard machine code e.g. RI-MC-0001).
+ * Machine ID Schema (allows UUID or standard machine code e.g. M/C-0001).
  */
 export const MachineIdSchema = z
   .string()
@@ -45,7 +45,7 @@ export const MachineIdSchema = z
   .min(1, "Machine ID is required")
   .max(50, "Machine ID cannot exceed 50 characters")
   .regex(
-    /^[A-Za-z0-9._-]+$/,
+    /^[A-Za-z0-9._\-\/]+$/,
     "Invalid machine ID format"
   );
 

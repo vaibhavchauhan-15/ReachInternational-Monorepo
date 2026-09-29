@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, Modal, TextInput, Switch, ActivityIndicator, Linking } from 'react-native';
 import { Card, Badge, Input, Button, useTheme, MobileHeader, HeaderActionItem } from '../../components/ui';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { Search, Building2, MapPin, Phone, Mail, Plus, Edit2, Trash2, X, CheckCircle2, ShieldAlert, ReceiptText, RefreshCw, Truck, Clock, UserCheck, History, ShieldCheck, ChevronDown, ChevronUp, Lock, Wrench, AlertCircle } from 'lucide-react-native';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../lib/auth/useAuth';
@@ -29,14 +29,15 @@ const CLIENT_STATUS_FILTER_OPTIONS: FilterOption[] = [
 const CLIENT_SORT_OPTIONS: FilterOption[] = [
   { id: 'company_name_asc', label: 'Company (A → Z)' },
   { id: 'company_name_desc', label: 'Company (Z → A)' },
-  { id: 'code_asc', label: 'Client Code (A → Z)' },
-  { id: 'code_desc', label: 'Client Code (Z → A)' },
+  { id: 'code_asc', label: 'Client ID (A → Z)' },
+  { id: 'code_desc', label: 'Client ID (Z → A)' },
   { id: 'created_at_desc', label: 'Newest Registered' },
   { id: 'created_at_asc', label: 'Oldest Registered' },
 ];
 
 interface ClientItem {
   id: string;
+  client_id?: string;
   code: string;
   company_name: string;
   contact_person?: string;
@@ -56,6 +57,7 @@ interface ClientItem {
   billing_district?: string;
   billing_state?: string;
   billing_pincode?: string;
+  maintenance_allowance_minutes?: number;
   status: 'active' | 'inactive';
   deleted_at?: string | null;
 }
@@ -208,6 +210,8 @@ export default function ClientsScreen() {
   const [billingDistrict, setBillingDistrict] = useState('');
   const [billingState, setBillingState] = useState('');
   const [billingPincode, setBillingPincode] = useState('');
+  const [allowanceHours, setAllowanceHours] = useState('0');
+  const [allowanceMinutes, setAllowanceMinutes] = useState('0');
 
   // C11 Client Detail State & In-Memory Session Cache
   const [detailModalVisible, setDetailModalVisible] = useState(false);
@@ -324,7 +328,7 @@ export default function ClientsScreen() {
         // C10 Lean projection: strictly returns CODE, COMPANY & TAX, CONTACT PERSON, PHONE, SITE LOCATION, STATUS
         // Absolutely zero relations (machines, logs, assignments, audits)
         const CLIENT_PROJECTION =
-          'id, code, company_name, contact_person, phone, gstin, pan_number, street, city, district, state, pincode, is_billing_address_different, status, deleted_at';
+          'id, client_id, code, company_name, contact_person, phone, gstin, pan_number, street, city, district, state, pincode, is_billing_address_different, status, deleted_at, maintenance_allowance_minutes';
 
         let dbQuery = supabase
           .from('clients')
@@ -337,11 +341,11 @@ export default function ClientsScreen() {
           dbQuery = dbQuery.or('status.eq.inactive,deleted_at.not.is.null');
         }
 
-        // Server-side full-text search across all 8 indexed dimensions
+        // Server-side full-text search across all 9 indexed dimensions
         const s = (searchQuery || '').trim().replace(/[,()"\\]/g, '');
         if (s) {
           dbQuery = dbQuery.or(
-            `company_name.ilike.%${s}%,code.ilike.%${s}%,gstin.ilike.%${s}%,pan_number.ilike.%${s}%,contact_person.ilike.%${s}%,phone.ilike.%${s}%,city.ilike.%${s}%,district.ilike.%${s}%,state.ilike.%${s}%`
+            `company_name.ilike.%${s}%,client_id.ilike.%${s}%,code.ilike.%${s}%,gstin.ilike.%${s}%,pan_number.ilike.%${s}%,contact_person.ilike.%${s}%,phone.ilike.%${s}%,city.ilike.%${s}%,district.ilike.%${s}%,state.ilike.%${s}%`
           );
         }
 
@@ -458,6 +462,8 @@ export default function ClientsScreen() {
     setBillingDistrict('');
     setBillingState('');
     setBillingPincode('');
+    setAllowanceHours('0');
+    setAllowanceMinutes('0');
     setModalVisible(true);
   };
 
@@ -479,6 +485,9 @@ export default function ClientsScreen() {
     setBillingDistrict(client.billing_district || '');
     setBillingState(client.billing_state || '');
     setBillingPincode(client.billing_pincode || '');
+    const totalMin = client.maintenance_allowance_minutes ?? 0;
+    setAllowanceHours(String(Math.floor(totalMin / 60)));
+    setAllowanceMinutes(String(totalMin % 60));
     setModalVisible(true);
   };
 
@@ -497,6 +506,8 @@ export default function ClientsScreen() {
     const fullUnifiedAddress = [streetVal, city.trim(), district.trim(), stateName.trim(), pincode.trim()]
       .filter(Boolean)
       .join(', ');
+
+    const parsedAllowanceMin = Math.max(0, (parseInt(allowanceHours, 10) || 0) * 60 + (parseInt(allowanceMinutes, 10) || 0));
 
     if (editingClient) {
       setClients((prev) =>
@@ -521,6 +532,7 @@ export default function ClientsScreen() {
                 billing_district: isBillingAddressDifferent ? billingDistrict.trim() : undefined,
                 billing_state: isBillingAddressDifferent ? billingState.trim() : undefined,
                 billing_pincode: isBillingAddressDifferent ? billingPincode.trim() : undefined,
+                maintenance_allowance_minutes: parsedAllowanceMin,
               }
             : c
         )
@@ -530,6 +542,7 @@ export default function ClientsScreen() {
       const code = `CLI-${nextNum.toString().padStart(4, '0')}`;
       const newClient: ClientItem = {
         id: `cli-${Date.now()}`,
+        client_id: code,
         code,
         company_name: companyName.trim(),
         contact_person: contactPerson.trim(),
@@ -548,6 +561,7 @@ export default function ClientsScreen() {
         billing_district: isBillingAddressDifferent ? billingDistrict.trim() : undefined,
         billing_state: isBillingAddressDifferent ? billingState.trim() : undefined,
         billing_pincode: isBillingAddressDifferent ? billingPincode.trim() : undefined,
+        maintenance_allowance_minutes: parsedAllowanceMin,
         status: 'active',
       };
       setClients([newClient, ...clients]);
@@ -1056,7 +1070,7 @@ export default function ClientsScreen() {
           <View style={[styles.modalContent, { backgroundColor: theme.colors.canvasElevated }]}>
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.colors.ink }]}>
-                {editingClient ? `Edit (${editingClient.code})` : 'Add New Client'}
+                {editingClient ? `Edit (${editingClient.client_id || editingClient.code})` : 'Add New Client'}
               </Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
                 <X size={20} color={theme.colors.mute} />
@@ -1067,6 +1081,23 @@ export default function ClientsScreen() {
               <View style={styles.formSection}>
                 <Text style={[styles.sectionTitle, { color: theme.colors.mute }]}>Company & Tax Details</Text>
                 
+                {editingClient && (
+                  <View style={styles.formGroup}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <Text style={[styles.fieldLabel, { color: theme.colors.ink, marginBottom: 0 }]}>Client ID</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.colors.canvas, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: theme.colors.hairline }}>
+                        <Lock size={10} color="#f59e0b" />
+                        <Text style={{ fontSize: 12, fontFamily: 'monospace', color: theme.colors.mute }}>Permanent</Text>
+                      </View>
+                    </View>
+                    <TextInput
+                      value={editingClient.client_id || editingClient.code}
+                      editable={false}
+                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.mute, backgroundColor: theme.colors.canvas, fontFamily: 'monospace' }]}
+                    />
+                  </View>
+                )}
+
                 <View style={styles.formGroup}>
                   <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Company Name *</Text>
                   <TextInput
@@ -1271,6 +1302,53 @@ export default function ClientsScreen() {
                   </View>
                 )}
               </View>
+
+              {/* Section 4: Monthly Maintenance Allowance */}
+              <View style={styles.formSection}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Wrench size={14} color="#d97706" />
+                    <Text style={[styles.sectionTitle, { color: theme.colors.mute, marginBottom: 0 }]}>Monthly Maintenance Allowance</Text>
+                  </View>
+                  {(parseInt(allowanceHours, 10) > 0 || parseInt(allowanceMinutes, 10) > 0) && (
+                    <View style={{ backgroundColor: isDark ? 'rgba(251, 191, 36, 0.15)' : '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(251, 191, 36, 0.3)' : '#fcd34d' }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: isDark ? '#fbbf24' : '#92400e' }}>
+                        {parseInt(allowanceHours, 10) > 0 ? `${allowanceHours}h ` : ''}{parseInt(allowanceMinutes, 10) > 0 ? `${allowanceMinutes}m` : ''} / mo
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                <Text style={{ fontSize: 11, color: theme.colors.mute, marginBottom: 8, lineHeight: 16 }}>
+                  Breakdowns up to this monthly limit per machine are classified as Maintenance instead of B/D. Leave at 0 for no allowance.
+                </Text>
+
+                <View style={styles.rowInputs}>
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Allowance Hours</Text>
+                    <TextInput
+                      value={allowanceHours}
+                      onChangeText={setAllowanceHours}
+                      placeholder="0"
+                      placeholderTextColor={theme.colors.mute}
+                      keyboardType="numeric"
+                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
+                    />
+                  </View>
+
+                  <View style={[styles.formGroup, { flex: 1 }]}>
+                    <Text style={[styles.fieldLabel, { color: theme.colors.ink }]}>Allowance Minutes</Text>
+                    <TextInput
+                      value={allowanceMinutes}
+                      onChangeText={setAllowanceMinutes}
+                      placeholder="0"
+                      placeholderTextColor={theme.colors.mute}
+                      keyboardType="numeric"
+                      style={[styles.modalInput, { borderColor: theme.colors.hairline, color: theme.colors.ink, minHeight: 44 }]}
+                    />
+                  </View>
+                </View>
+              </View>
             </ScrollView>
 
             <View style={styles.modalFooter}>
@@ -1288,15 +1366,30 @@ export default function ClientsScreen() {
             {/* Header: Summary */}
             <View style={styles.modalHeader}>
               <View style={{ flex: 1, paddingRight: 8 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2, flexWrap: 'wrap' }}>
                   <Text style={[styles.codeText, { color: theme.colors.primary }]}>
-                    {selectedDetailClient?.code}
+                    {selectedDetailClient?.client_id || selectedDetailClient?.code}
                   </Text>
                   {selectedDetailClient?.status && (
                     <Badge
                       status={selectedDetailClient.deleted_at ? 'inactive' : selectedDetailClient.status}
                       customLabel={selectedDetailClient.deleted_at ? 'SOFT DELETED' : selectedDetailClient.status.toUpperCase()}
                     />
+                  )}
+                  {typeof selectedDetailClient?.maintenance_allowance_minutes === 'number' && selectedDetailClient.maintenance_allowance_minutes > 0 ? (
+                    <View style={{ backgroundColor: isDark ? 'rgba(251, 191, 36, 0.15)' : '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(251, 191, 36, 0.3)' : '#fcd34d', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Wrench size={10} color={isDark ? '#fbbf24' : '#d97706'} />
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: isDark ? '#fbbf24' : '#92400e' }}>
+                        MAINT: {Math.floor(selectedDetailClient.maintenance_allowance_minutes / 60)}h{selectedDetailClient.maintenance_allowance_minutes % 60 > 0 ? ` ${selectedDetailClient.maintenance_allowance_minutes % 60}m` : ''}/MO
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={{ backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#fca5a5', flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <AlertCircle size={10} color="#dc2626" />
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#dc2626' }}>
+                        MAINT: NOT ALLOWED
+                      </Text>
+                    </View>
                   )}
                 </View>
                 <Text style={[styles.modalTitle, { color: theme.colors.ink }]} numberOfLines={1}>
@@ -1345,18 +1438,58 @@ export default function ClientsScreen() {
                   <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>GSTIN</Text>
-                      <Text style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: '700', color: theme.colors.ink }}>
+                      <Text style={{ fontFamily: 'monospace', fontSize: 13.5, fontWeight: '700', color: theme.colors.ink }}>
                         {selectedDetailClient?.gstin || 'Not Registered'}
                       </Text>
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>PAN</Text>
-                      <Text style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: '700', color: theme.colors.ink }}>
+                      <Text style={{ fontFamily: 'monospace', fontSize: 13.5, fontWeight: '700', color: theme.colors.ink }}>
                         {selectedDetailClient?.pan_number || '—'}
                       </Text>
                     </View>
                   </View>
                 </View>
+
+                {/* 2.5 Monthly Maintenance Allowance Card */}
+                {(() => {
+                  const mMin = selectedDetailClient?.maintenance_allowance_minutes ?? 0;
+                  const isAllowed = mMin > 0;
+                  const mH = Math.floor(mMin / 60);
+                  const mM = mMin % 60;
+                  const label = `${mH > 0 ? `${mH}h` : ''}${mH > 0 && mM > 0 ? ' ' : ''}${mM > 0 ? `${mM}m` : ''}`;
+
+                  return (
+                    <View style={[styles.detailSectionCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Wrench size={13} color={isAllowed ? (isDark ? '#fbbf24' : '#d97706') : '#dc2626'} />
+                          <Text style={[styles.detailCardTitle, { color: isAllowed ? (isDark ? '#fbbf24' : '#d97706') : '#dc2626' }]}>
+                            Monthly Maintenance Allowance
+                          </Text>
+                        </View>
+                        {isAllowed ? (
+                          <View style={{ backgroundColor: isDark ? 'rgba(251, 191, 36, 0.15)' : '#fef3c7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(251, 191, 36, 0.3)' : '#fcd34d' }}>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#fbbf24' : '#92400e' }}>
+                              {label} / machine / mo
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={{ backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#fca5a5' }}>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#dc2626' }}>
+                              NOT ALLOWED
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={[styles.detailTextSmall, { color: theme.colors.mute, marginTop: 4 }]}>
+                        {isAllowed
+                          ? 'Breakdown time within this monthly allowance is classified as Maintenance instead of B/D.'
+                          : 'No monthly maintenance allowance. All machine breakdowns are classified directly as B/D.'}
+                      </Text>
+                    </View>
+                  );
+                })()}
 
                 {/* 3. Location & Billing Card (On Demand) */}
                 <View style={[styles.detailSectionCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
@@ -1368,7 +1501,7 @@ export default function ClientsScreen() {
                       onPress={handleToggleMobileLocation}
                       style={{ flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingHorizontal: 6 }}
                     >
-                      <Text style={{ fontSize: 10, fontWeight: '700', color: theme.colors.primary }}>
+                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: theme.colors.primary }}>
                         {mobileLocationExpanded ? 'Hide' : 'Load On Demand'}
                       </Text>
                       {mobileLocationExpanded ? <ChevronUp size={12} color={theme.colors.primary} /> : <ChevronDown size={12} color={theme.colors.primary} />}
@@ -1376,25 +1509,25 @@ export default function ClientsScreen() {
                   </View>
 
                   {!mobileLocationExpanded ? (
-                    <Text style={{ fontSize: 11, color: theme.colors.mute, marginTop: 2 }}>
+                    <Text style={{ fontSize: 13, color: theme.colors.mute, marginTop: 2 }}>
                       {[selectedDetailClient?.street, selectedDetailClient?.city, selectedDetailClient?.state].filter(Boolean).join(', ') || '—'}
                     </Text>
                   ) : mobileLocationLoading ? (
                     <View style={{ paddingVertical: 12, alignItems: 'center', gap: 4 }}>
                       <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text style={{ fontSize: 10, color: theme.colors.mute }}>Fetching location details...</Text>
+                      <Text style={{ fontSize: 12, color: theme.colors.mute }}>Fetching location details...</Text>
                     </View>
                   ) : (
                     <View style={{ gap: 8, marginTop: 6, borderTopWidth: 1, borderTopColor: theme.colors.hairline, paddingTop: 6 }}>
                       <View>
                         <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>Site Address:</Text>
-                        <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '500' }}>
+                        <Text style={{ fontSize: 13, color: theme.colors.ink, fontWeight: '500' }}>
                           {mobileLocationData?.site_address || '—'}
                         </Text>
                       </View>
                       <View>
                         <Text style={[styles.detailTextSmall, { color: theme.colors.mute }]}>Billing Address:</Text>
-                        <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '500' }}>
+                        <Text style={{ fontSize: 13, color: theme.colors.ink, fontWeight: '500' }}>
                           {mobileLocationData?.billing_address || 'Same as site location'}
                         </Text>
                       </View>
@@ -1453,7 +1586,7 @@ export default function ClientsScreen() {
                     <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.ink }}>
                       Operational Records (On Demand)
                     </Text>
-                    <Text style={{ fontSize: 11, color: theme.colors.mute, textAlign: 'center', marginTop: 4, marginBottom: 10 }}>
+                    <Text style={{ fontSize: 12.5, color: theme.colors.mute, textAlign: 'center', marginTop: 4, marginBottom: 10 }}>
                       Select a tab above to load machines, logs, assignments, history, or audit logs on demand.
                     </Text>
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
@@ -1462,21 +1595,21 @@ export default function ClientsScreen() {
                         style={[styles.detailTabChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated, minHeight: 44 }]}
                       >
                         <Truck size={12} color={theme.colors.primary} />
-                        <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.ink }}>Machines</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.ink }}>Machines</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => handleMobileTabChange('logs')}
                         style={[styles.detailTabChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated, minHeight: 44 }]}
                       >
                         <Clock size={12} color="#059669" />
-                        <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.ink }}>Running Logs</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.ink }}>Running Logs</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => handleMobileTabChange('assignments')}
                         style={[styles.detailTabChip, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvasElevated, minHeight: 44 }]}
                       >
                         <UserCheck size={12} color="#7e22ce" />
-                        <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.ink }}>Assignments</Text>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.ink }}>Assignments</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1488,20 +1621,20 @@ export default function ClientsScreen() {
                   {mobileTabLoading === 'machines' ? (
                     <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
                       <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text style={{ fontSize: 11, color: theme.colors.mute }}>Loading deployed machines...</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Loading deployed machines...</Text>
                     </View>
                   ) : mobileMachines.length === 0 ? (
-                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 11, color: theme.colors.mute }}>
+                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 12.5, color: theme.colors.mute }}>
                       No equipment assigned to this client.
                     </Text>
                   ) : (
                     mobileMachines.map((m: any) => (
                       <View key={m.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
                         <View>
-                          <Text style={{ fontFamily: 'monospace', fontWeight: '800', color: theme.colors.primary, fontSize: 12 }}>
+                          <Text style={{ fontFamily: 'monospace', fontWeight: '800', color: theme.colors.primary, fontSize: 13 }}>
                             {m.machine_id}
                           </Text>
-                          <Text style={{ fontSize: 10, color: theme.colors.mute }}>{m.model}</Text>
+                          <Text style={{ fontSize: 12, color: theme.colors.mute }}>{m.model}</Text>
                         </View>
                         <Badge status={m.status === 'rented' || m.status === 'active' ? 'active' : 'inactive'} customLabel={m.status.toUpperCase()} />
                       </View>
@@ -1516,22 +1649,22 @@ export default function ClientsScreen() {
                   {mobileTabLoading === 'logs' ? (
                     <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
                       <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text style={{ fontSize: 11, color: theme.colors.mute }}>Loading running logs...</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Loading running logs...</Text>
                     </View>
                   ) : mobileLogs.length === 0 ? (
-                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 11, color: theme.colors.mute }}>
+                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 12.5, color: theme.colors.mute }}>
                       No running logs recorded.
                     </Text>
                   ) : (
                     mobileLogs.map((l: any) => (
                       <View key={l.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
                         <View>
-                          <Text style={{ fontFamily: 'monospace', fontWeight: '700', fontSize: 11, color: theme.colors.ink }}>
+                          <Text style={{ fontFamily: 'monospace', fontWeight: '700', fontSize: 13, color: theme.colors.ink }}>
                             {l.machine_code} • {l.log_date}
                           </Text>
-                          <Text style={{ fontSize: 10, color: theme.colors.mute }}>Operator: {l.operator_name}</Text>
+                          <Text style={{ fontSize: 12, color: theme.colors.mute }}>Operator: {l.operator_name}</Text>
                         </View>
-                        <Text style={{ fontFamily: 'monospace', fontWeight: '800', color: '#059669', fontSize: 12 }}>
+                        <Text style={{ fontFamily: 'monospace', fontWeight: '800', color: '#059669', fontSize: 13 }}>
                           {l.running_hours} hrs
                         </Text>
                       </View>
@@ -1546,18 +1679,18 @@ export default function ClientsScreen() {
                   {mobileTabLoading === 'assignments' ? (
                     <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
                       <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text style={{ fontSize: 11, color: theme.colors.mute }}>Loading assignments...</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Loading assignments...</Text>
                     </View>
                   ) : mobileAssignments.length === 0 ? (
-                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 11, color: theme.colors.mute }}>
+                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 12.5, color: theme.colors.mute }}>
                       No operator assignments found.
                     </Text>
                   ) : (
                     mobileAssignments.map((a: any) => (
                       <View key={a.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
                         <View>
-                          <Text style={{ fontWeight: '700', fontSize: 12, color: theme.colors.ink }}>{a.operator_name}</Text>
-                          <Text style={{ fontSize: 10, color: theme.colors.mute }}>{a.machine_code} ({a.shift})</Text>
+                          <Text style={{ fontWeight: '700', fontSize: 13.5, color: theme.colors.ink }}>{a.operator_name}</Text>
+                          <Text style={{ fontSize: 12, color: theme.colors.mute }}>{a.machine_code} ({a.shift})</Text>
                         </View>
                         <Badge status={a.is_active ? 'active' : 'inactive'} customLabel={a.is_active ? 'ACTIVE' : 'ENDED'} />
                       </View>
@@ -1572,20 +1705,20 @@ export default function ClientsScreen() {
                   {mobileTabLoading === 'history' ? (
                     <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
                       <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text style={{ fontSize: 11, color: theme.colors.mute }}>Loading history...</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Loading history...</Text>
                     </View>
                   ) : mobileHistory.length === 0 ? (
-                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 11, color: theme.colors.mute }}>
+                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 12.5, color: theme.colors.mute }}>
                       No timeline history events found.
                     </Text>
                   ) : (
                     mobileHistory.map((h: any) => (
                       <View key={h.id} style={[styles.detailSectionCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <Text style={{ fontWeight: '700', fontSize: 12, color: theme.colors.ink }}>{h.title}</Text>
-                          <Text style={{ fontSize: 9, color: theme.colors.mute }}>{new Date(h.date).toLocaleDateString()}</Text>
+                          <Text style={{ fontWeight: '700', fontSize: 13, color: theme.colors.ink }}>{h.title}</Text>
+                          <Text style={{ fontSize: 12, color: theme.colors.mute }}>{new Date(h.date).toLocaleDateString()}</Text>
                         </View>
-                        <Text style={{ fontSize: 11, color: theme.colors.mute, marginTop: 2 }}>{h.desc}</Text>
+                        <Text style={{ fontSize: 12.5, color: theme.colors.mute, marginTop: 2 }}>{h.desc}</Text>
                       </View>
                     ))
                   )}
@@ -1598,22 +1731,22 @@ export default function ClientsScreen() {
                   {mobileTabLoading === 'audit' ? (
                     <View style={{ paddingVertical: 24, alignItems: 'center', gap: 6 }}>
                       <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text style={{ fontSize: 11, color: theme.colors.mute }}>Loading audit trail...</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Loading audit trail...</Text>
                     </View>
                   ) : mobileAudits.length === 0 ? (
-                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 11, color: theme.colors.mute }}>
+                    <Text style={{ textAlign: 'center', paddingVertical: 20, fontSize: 12.5, color: theme.colors.mute }}>
                       Zero audit entries logged.
                     </Text>
                   ) : (
                     mobileAudits.map((a: any) => (
                       <View key={a.id} style={[styles.detailItemCard, { borderColor: theme.colors.hairline, backgroundColor: theme.colors.canvas }]}>
                         <View>
-                          <Text style={{ fontFamily: 'monospace', fontWeight: '700', fontSize: 11, color: theme.colors.primary }}>
+                          <Text style={{ fontFamily: 'monospace', fontWeight: '700', fontSize: 13, color: theme.colors.primary }}>
                             {a.action}
                           </Text>
-                          <Text style={{ fontSize: 10, color: theme.colors.mute }}>Actor: {a.actor_name || 'System'}</Text>
+                          <Text style={{ fontSize: 12, color: theme.colors.mute }}>Actor: {a.actor_name || 'System'}</Text>
                         </View>
-                        <Text style={{ fontSize: 9, color: theme.colors.mute }}>{new Date(a.created_at).toLocaleDateString()}</Text>
+                        <Text style={{ fontSize: 12, color: theme.colors.mute }}>{new Date(a.created_at).toLocaleDateString()}</Text>
                       </View>
                     ))
                   )}
@@ -1665,13 +1798,13 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   kpiLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   kpiValue: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '800',
     marginTop: 4,
   },
@@ -1707,7 +1840,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   activeChipsLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     marginRight: 2,
   },
@@ -1716,12 +1849,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radiusNumeric.sm,
+    paddingVertical: 4,
+    borderRadius: radiusNumeric.full,
     borderWidth: 1,
   },
   activeChipText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   clearAllBtn: {
@@ -1729,51 +1862,51 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   clearAllText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   listContainer: { gap: spacingNumeric.sm },
   emptyCard: { padding: spacingNumeric.lg, alignItems: 'center' },
-  emptyText: { fontSize: 12, fontWeight: '600' },
+  emptyText: { fontSize: 13.5, fontWeight: '600' },
   clientCard: { padding: spacingNumeric.md, borderRadius: radiusNumeric.md, gap: spacingNumeric.xs },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  codeText: { fontSize: 11, fontWeight: '800', fontFamily: 'monospace' },
-  clientName: { fontSize: 14, fontWeight: '800' },
+  codeText: { fontSize: 12.5, fontWeight: '800', fontFamily: 'monospace' },
+  clientName: { fontSize: 15.5, fontWeight: '800' },
   tagRow: { flexDirection: 'row', gap: 6, marginTop: 4, flexWrap: 'wrap' },
   taxBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1 },
-  taxBadgeText: { fontSize: 9, fontWeight: '700', fontFamily: 'monospace' },
-  subText: { fontSize: 10 },
+  taxBadgeText: { fontSize: 12, fontWeight: '700', fontFamily: 'monospace' },
+  subText: { fontSize: 12.5 },
   cardDetails: { borderTopWidth: 1, paddingTop: 8, gap: 4 },
-  detailRow: { fontSize: 11 },
+  detailRow: { fontSize: 13 },
   cardActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, borderTopWidth: 1, paddingTop: 8 },
   actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, minHeight: 44 },
-  actionBtnText: { fontSize: 11, fontWeight: '700' },
+  actionBtnText: { fontSize: 13, fontWeight: '700' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: spacingNumeric.md },
   modalContent: { borderRadius: radiusNumeric.lg, padding: spacingNumeric.md, gap: spacingNumeric.sm, maxHeight: '90%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  modalTitle: { fontSize: 15, fontWeight: '800' },
+  modalTitle: { fontSize: 16, fontWeight: '800' },
   formSection: { marginBottom: 12, borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 8, padding: 10 },
-  sectionTitle: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  sectionTitle: { fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
   formGroup: { marginBottom: 8 },
   rowInputs: { flexDirection: 'row', gap: 8 },
-  fieldLabel: { fontSize: 11, fontWeight: '600', marginBottom: 4 },
-  modalInput: { borderWidth: 1, borderRadius: radiusNumeric.sm, paddingHorizontal: 10, paddingVertical: 8, fontSize: 12 },
+  fieldLabel: { fontSize: 13.5, fontWeight: '600', marginBottom: 4 },
+  modalInput: { borderWidth: 1, borderRadius: radiusNumeric.sm, paddingHorizontal: 10, paddingVertical: 8, fontSize: 15 },
   toggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   switchWrapper: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  switchLabel: { fontSize: 11, fontWeight: '600' },
+  switchLabel: { fontSize: 13.5, fontWeight: '600' },
   modalFooter: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 8 },
   paginationRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingHorizontal: 4 },
   pageBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 6, borderWidth: 1 },
-  pageBtnText: { fontSize: 12, fontWeight: '600' },
-  pageIndicator: { fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  pageBtnText: { fontSize: 13, fontWeight: '600' },
+  pageIndicator: { fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
   pageSizeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, marginBottom: 20 },
-  pageSizeLabel: { fontSize: 11, fontWeight: '600' },
+  pageSizeLabel: { fontSize: 12.5, fontWeight: '600' },
   pageSizeChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6, borderWidth: 1, minHeight: 32, justifyContent: 'center', alignItems: 'center' },
-  pageSizeChipText: { fontSize: 11, fontWeight: '700' },
+  pageSizeChipText: { fontSize: 12.5, fontWeight: '700' },
   detailTabChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: radiusNumeric.full, borderWidth: 1, minHeight: 44 },
-  detailTabChipText: { fontSize: 11, fontWeight: '700' },
+  detailTabChipText: { fontSize: 13, fontWeight: '700' },
   detailSectionCard: { borderWidth: 1, borderRadius: radiusNumeric.sm, padding: 10 },
-  detailCardTitle: { fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
-  detailTextSmall: { fontSize: 10, fontWeight: '500' },
+  detailCardTitle: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5 },
+  detailTextSmall: { fontSize: 12, fontWeight: '500' },
   detailItemCard: { borderWidth: 1, borderRadius: radiusNumeric.sm, padding: 10, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 44 },
 });

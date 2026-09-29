@@ -2,6 +2,7 @@
 
 import { memo, useState, useCallback, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { highlightText } from "./user-search";
 import {
   AnimatedKey,
@@ -34,7 +35,6 @@ interface UserRowProps {
   isSelected?: boolean;
   supervisors?: Array<{ value: string; label: string; description?: string }>;
   onToggleSelect?: (userId: string) => void;
-  onViewDetails?: (user: User) => void;
   onResetPassword: (userId: string) => void;
   onToggleStatus: (userId: string) => void;
   onEdit: (user: User) => void;
@@ -134,7 +134,6 @@ export const UserRow = memo(function UserRow({
   isSelected = false,
   supervisors = [],
   onToggleSelect,
-  onViewDetails,
   onResetPassword,
   onToggleStatus,
   onEdit,
@@ -143,6 +142,7 @@ export const UserRow = memo(function UserRow({
   onDelete,
   searchTerm,
 }: UserRowProps) {
+  const router = useRouter();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -257,26 +257,24 @@ export const UserRow = memo(function UserRow({
     ? [user.supervisor]
     : [];
 
+  const userDetailUrl = `/users/${user.employee_id || user.id}`;
+
   return (
     <tr
       onClick={() => {
-        if (onViewDetails) {
-          onViewDetails(user);
-        }
+        router.push(userDetailUrl);
       }}
       className={`transition-colors border-b border-[var(--color-hairline)] last:border-0 cursor-pointer group ${
         isSelected
           ? "bg-[var(--color-link-soft)]/25 dark:bg-[var(--color-link)]/15"
           : "hover:bg-[var(--color-hairline-soft-surface)]"
       }`}
-      role="button"
+      role="link"
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          if (onViewDetails) {
-            onViewDetails(user);
-          }
+          router.push(userDetailUrl);
         }
       }}
       aria-label={`View details for ${user.full_name}`}
@@ -295,14 +293,21 @@ export const UserRow = memo(function UserRow({
         </td>
       )}
 
-      {/* 1. User Name */}
+      {/* 1. User Name & Employee ID */}
       <td className="py-3 px-4">
-        <span
-          className="text-sm font-semibold text-[var(--color-ink)] group-hover:text-[var(--color-link)] transition-colors block max-w-full"
-          title={user.full_name}
-        >
-          {highlightText(truncateText(user.full_name, 15), searchTerm)}
-        </span>
+        <div className="flex items-center gap-2 min-w-0">
+          {user.employee_id && (
+            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-ink)] shrink-0 shadow-2xs">
+              {user.employee_id}
+            </span>
+          )}
+          <span
+            className="text-sm font-semibold text-[var(--color-ink)] group-hover:text-[var(--color-link)] transition-colors truncate max-w-full"
+            title={user.full_name}
+          >
+            {highlightText(truncateText(user.full_name, 15), searchTerm)}
+          </span>
+        </div>
       </td>
 
       {/* 2. Contact Phone & Email */}
@@ -413,6 +418,16 @@ export const UserRow = memo(function UserRow({
                     <>
                       <button
                         onClick={() => {
+                          closeDropdown();
+                          router.push(userDetailUrl);
+                        }}
+                        className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium rounded-[calc(var(--radius-sm)-2px)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer text-left"
+                      >
+                        <AnimatedUser size={14} className="text-[var(--color-link)] shrink-0" />
+                        <span>View Profile Details</span>
+                      </button>
+                      <button
+                        onClick={() => {
                           onResetPassword(user.id);
                           closeDropdown();
                         }}
@@ -511,7 +526,7 @@ export const UserRow = memo(function UserRow({
                   ) : (
                     <button
                       onClick={() => {
-                        onViewDetails?.(user);
+                        router.push(`/users/${user.id}`);
                         closeDropdown();
                       }}
                       className="flex items-center gap-2.5 w-full px-3 py-2 text-xs font-medium rounded-[calc(var(--radius-sm)-2px)] hover:bg-[var(--color-hairline-soft-surface)] transition-colors cursor-pointer text-left text-[var(--color-ink)]"

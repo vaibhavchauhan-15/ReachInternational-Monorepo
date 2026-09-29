@@ -42,6 +42,84 @@ export interface OperationsExportModalProps {
   supervisorName?: string;
 }
 
+const formatCompactTiming = (startStr?: string | null, endStr?: string | null): string => {
+  const formattedStart = formatTo12Hour(startStr) || '06:00 AM';
+  const formattedEnd = formatTo12Hour(endStr) || '02:00 PM';
+  return `${formattedStart.replace(/\s+/g, '')}-${formattedEnd.replace(/\s+/g, '')}`;
+};
+
+const formatExcelDate = (dateStr: string): string => {
+  try {
+    const clean = dateStr.split('T')[0];
+    const parts = clean.split('-').map(Number);
+    if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      const day = parts[2] < 10 ? `0${parts[2]}` : `${parts[2]}`;
+      const monthNames = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ];
+      const mon = monthNames[parts[1] - 1] || '';
+      const yearStr = String(parts[0]).slice(-2);
+      return `${day}-${mon}-${yearStr}`;
+    }
+  } catch {}
+  return dateStr;
+};
+
+const formatHoursWithUnit = (val: number): string => {
+  if (val == null || isNaN(val)) return '0h';
+  const rounded = Math.abs(val - Math.round(val)) < 0.05 ? Math.round(val) : Math.round(val * 10) / 10;
+  return `${rounded}h`;
+};
+
+const calculateShiftWorkHours = (log: HourLogRecord): number => {
+  if (log.normal_working_hours != null && Number(log.normal_working_hours) > 0) {
+    return Number(log.normal_working_hours) + Number(log.overtime_hours || 0);
+  }
+  if (log.start_time && log.end_time) {
+    const sParts = log.start_time.split(':').map(Number);
+    const eParts = log.end_time.split(':').map(Number);
+    if (!isNaN(sParts[0]) && !isNaN(eParts[0])) {
+      const sMin = sParts[0] * 60 + (sParts[1] || 0);
+      let eMin = eParts[0] * 60 + (eParts[1] || 0);
+      if (eMin <= sMin) {
+        if (eParts[0] === 23 && (eParts[1] || 0) === 59) {
+          eMin = 1440;
+        } else {
+          eMin += 1440;
+        }
+      }
+      return (eMin - sMin) / 60;
+    }
+  }
+  return Number(log.running_hours || 0);
+};
+
+const calculateShiftBreakdownHours = (log: HourLogRecord): number => {
+  if (!log.is_breakdown) return 0;
+  if ((log as any).breakdown_hours != null && Number((log as any).breakdown_hours) > 0) {
+    return Number((log as any).breakdown_hours);
+  }
+  const parsed = parseBreakdownString((log as any).breakdown_duration || log.remarks);
+  if (parsed?.durationFormatted) {
+    const matchH = parsed.durationFormatted.match(/(\d+(?:\.\d+)?)\s*h/i);
+    const matchM = parsed.durationFormatted.match(/(\d+)\s*m/i);
+    const h = matchH ? parseFloat(matchH[1]) : 0;
+    const m = matchM ? parseInt(matchM[1], 10) : 0;
+    if (h > 0 || m > 0) return h + m / 60;
+  }
+  return 0;
+};
+
+const getShiftOrderWeight = (log: HourLogRecord): number => {
+  const s = (log.shift_code || log.shift || '').toLowerCase();
+  if (s.includes('s1') || s.includes('morning') || s.includes('day')) return 1;
+  if (s.includes('s2') || s.includes('afternoon')) return 2;
+  if (s.includes('s3') || s.includes('evening')) return 3;
+  if (s.includes('s4') || s.includes('night')) return 4;
+  return 5;
+};
+
 export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
   visible,
   onClose,
@@ -99,78 +177,100 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
       .trim()
       .replace(/[,:\s]+$/, '');
 
-    const formatCompactTiming = (startStr?: string | null, endStr?: string | null): string => {
-      const formattedStart = formatTo12Hour(startStr) || '06:00 AM';
-      const formattedEnd = formatTo12Hour(endStr) || '02:00 PM';
-      return `${formattedStart.replace(/\s+/g, '')}-${formattedEnd.replace(/\s+/g, '')}`;
-    };
+    // Sort logs chronologically by date and shift
+    const sortedLogs = [...logs].sort((a, b) => {
+      const dateA = a.log_date ? new Date(a.log_date).getTime() : 0;
+      const dateB = b.log_date ? new Date(b.log_date).getTime() : 0;
+      if (dateA !== dateB) return dateA - dateB;
+      return getShiftOrderWeight(a) - getShiftOrderWeight(b);
+    });
 
-    const rowsHtml = logs
-      .map((log, index) => {
-        const startMtr = log.start_meter ?? 0;
-        const endMtr = log.end_meter ?? startMtr;
-        const runningHrs = log.running_hours ?? Math.max(0, Math.round((endMtr - startMtr) * 10) / 10);
-        const otHrs = log.overtime_hours ?? 0;
-        const mModel = log.machine?.model || log.machine_code || '—';
-        const mSerial = log.machine?.serial_number || '—';
-        const logClientName = log.client?.company_name || log.client?.client_name || log.client?.name || 'Unassigned';
-        const opName = log.operator?.full_name || 'Unassigned';
-        const shiftTimes = formatCompactTiming(log.start_time, log.end_time);
+        // Group logs by date
+    const dateGroupsMap = new Map<string, HourLogRecord[]>();
+    sortedLogs.forEach((log) => {
+      const key = log.log_date ? log.log_date.split('T')[0] : 'unknown';
+      if (!dateGroupsMap.has(key)) {
+        dateGroupsMap.set(key, []);
+      }
+      dateGroupsMap.get(key)!.push(log);
+    });
 
-        const isBkd = log.is_breakdown;
-        const bkdMatch = (log.remarks || '').match(/\[Breakdown Duration:\s*([^\]]+)\]/i) || (log.remarks || '').match(/Breakdown\s*(?:Duration)?:?\s*(\d+h?\s*\d*m?)/i);
-        const bkdRaw = (log as any).breakdown_duration || (bkdMatch ? bkdMatch[1].trim() : null);
-        const bkdParsed = parseBreakdownString(bkdRaw || log.remarks);
-        const bkdStartTime = (log as any).breakdown_start_time || bkdParsed?.startTime || null;
-        const bkdEndTime = (log as any).breakdown_end_time || bkdParsed?.endTime || null;
-        const bkdDurationOnly = bkdParsed?.durationFormatted || bkdParsed?.durationText || bkdRaw || (isBkd ? 'Breakdown' : null);
+    let sumDayRT = 0;
+    let sumWorkingHours = 0;
+    let sumBreakdownHours = 0;
 
-        let cleanRemarks = (log.remarks || '—').replace(/\[Breakdown Duration:[^\]]+\]/gi, '').trim();
-        if (cleanRemarks.toLowerCase() === 'breakdown' || cleanRemarks.toLowerCase() === 'machine breakdown') {
-          cleanRemarks = '—';
-        }
-        cleanRemarks = cleanRemarks || '—';
+    const tbodyRowsHtml = Array.from(dateGroupsMap.entries()).map(([dateKey, groupLogs]) => {
+      const formattedDate = formatExcelDate(dateKey);
 
-        let breakdownCellHtml = '<span style="font-weight: 700; color: #525252; font-family: monospace;">0</span>';
-        if (isBkd) {
-          if (bkdStartTime && bkdEndTime) {
-            breakdownCellHtml = `
-              <div style="color: #be123c; font-family: monospace; text-align: center; line-height: 1.2;">
-                <div style="font-weight: 800; font-size: 9px; white-space: nowrap;">${formatCompactTiming(bkdStartTime, bkdEndTime)}</div>
-                <div style="font-weight: 700; font-size: 8.5px;">(${bkdDurationOnly})</div>
-              </div>
-            `;
-          } else {
-            breakdownCellHtml = `
-              <div style="color: #be123c; font-family: monospace; text-align: center; line-height: 1.2; word-break: break-word;">
-                <span style="font-weight: 800; font-size: 9px;">${bkdDurationOnly && bkdDurationOnly.toLowerCase() !== 'breakdown' ? bkdDurationOnly : 'Breakdown'}</span>
-              </div>
-            `;
-          }
-        }
+      let dayRT = 0;
+      let dayWork = 0;
+      let dayBkd = 0;
 
-        return `
-          <tr style="border-bottom: 1px solid #e5e5e5; font-size: 10px;">
-            <td style="padding: 5px 4px; text-align: center; font-weight: bold; color: #171717;">${index + 1}</td>
-            <td style="padding: 5px 4px; text-align: center; white-space: nowrap; font-family: monospace; font-weight: 600;">${formatDate(log.log_date)}</td>
-            <td style="padding: 5px 4px; text-align: center; font-weight: bold; font-family: monospace;">${mModel}</td>
-            <td style="padding: 5px 4px; text-align: center; font-family: monospace; color: #171717; font-weight: bold;">${mSerial}</td>
-            <td style="padding: 5px 4px; text-align: center;">
-              <div style="font-weight: 700; font-size: 9.5px; text-align: center;">${logClientName}</div>
-              <div style="font-size: 8.5px; color: #737373; text-align: center;">${log.location || '—'}</div>
-            </td>
-            <td style="padding: 5px 4px; text-align: center; font-weight: 600;">
-              <div style="text-align: center;">${opName}</div>
-            </td>
-            <td style="padding: 5px 4px; text-align: center; font-family: monospace; font-size: 9px; white-space: nowrap;">${shiftTimes}</td>
-            <td style="padding: 5px 4px; text-align: center; font-family: monospace; font-weight: 800; color: #0284c7;">${runningHrs}h</td>
-            <td style="padding: 5px 4px; text-align: center; font-family: monospace; font-weight: 800; color: #d97706;">${otHrs > 0 ? `${otHrs}h` : '0h'}</td>
-            <td style="padding: 5px 4px; text-align: center;">${breakdownCellHtml}</td>
-            <td style="padding: 5px 4px; text-align: center; font-style: italic; color: #525252; word-break: break-word;">${cleanRemarks}</td>
-          </tr>
-        `;
-      })
-      .join('');
+      groupLogs.forEach((l) => {
+        const sMtr = l.start_meter ?? 0;
+        const eMtr = l.end_meter ?? sMtr;
+        const rt = l.running_hours ?? Math.max(0, Math.round((eMtr - sMtr) * 10) / 10);
+        dayRT += rt;
+        dayWork += calculateShiftWorkHours(l);
+        dayBkd += calculateShiftBreakdownHours(l);
+      });
+
+      dayRT = Math.round(dayRT * 10) / 10;
+      dayWork = Math.abs(dayWork - Math.round(dayWork)) < 0.05 ? Math.round(dayWork) : Math.round(dayWork * 10) / 10;
+      dayBkd = Math.abs(dayBkd - Math.round(dayBkd)) < 0.05 ? Math.round(dayBkd) : Math.round(dayBkd * 10) / 10;
+
+      sumDayRT += dayRT;
+      sumWorkingHours += dayWork;
+      sumBreakdownHours += dayBkd;
+
+      const firstLog = groupLogs[0];
+      const clientOrMachine =
+        viewMode === 'client' || viewMode === 'operator'
+          ? (firstLog?.machine?.model ? `${firstLog.machine.model}${firstLog.machine.serial_number || firstLog.machine_code ? ` (${firstLog.machine.serial_number || firstLog.machine_code})` : ''}` : firstLog?.machine_code || 'Machine')
+          : (firstLog?.client?.company_name || firstLog?.client?.client_name || firstLog?.client?.name || cleanClientName || 'Unassigned');
+
+      const shiftsStr = groupLogs
+        .map((l) => {
+          const c = l.shift_code || (l.shift?.toLowerCase().includes('night') ? 'S4' : l.shift?.toLowerCase().includes('morning') ? 'S1' : l.shift?.toLowerCase().includes('afternoon') ? 'S2' : 'S3');
+          return c.toUpperCase().startsWith('S') ? c : `S${c}`;
+        })
+        .join('/');
+
+      const operatorsStr = groupLogs
+        .map((l) => l.operator?.full_name || 'Unassigned')
+        .join('/');
+
+      const cleanRemarksList = groupLogs
+        .map((l) => (l.remarks || '').replace(/\[Breakdown Duration:[^\]]+\]/gi, '').trim())
+        .filter((r) => r.length > 0 && r.toLowerCase() !== 'breakdown' && r !== '—');
+      const cleanRemarks = Array.from(new Set(cleanRemarksList)).join('; ') || '—';
+
+      let dayMaintMin = 0;
+      groupLogs.forEach((l) => {
+        dayMaintMin += Number((l as any).maintenance_minutes || 0);
+      });
+
+      const totalBdMin = Math.round(dayBkd * 60);
+      const netBdMin = Math.max(0, totalBdMin - dayMaintMin);
+      const fmtMin = (m: number) => { const h = Math.floor(m / 60); const r = m % 60; return r > 0 ? `${h}h ${r}m` : `${h}h`; };
+      let bdCellHtml: string;
+      if (totalBdMin === 0) bdCellHtml = `<span style="color:#737373">0h</span>`;
+      else if (dayMaintMin >= totalBdMin && dayMaintMin > 0) bdCellHtml = `<span style="color:#b45309;font-weight:bold">MT ${fmtMin(dayMaintMin)}</span>`;
+      else if (dayMaintMin > 0 && netBdMin > 0) bdCellHtml = `<span style="color:#b45309">MT ${fmtMin(dayMaintMin)}</span> / <span style="color:#be123c">${fmtMin(netBdMin)}</span>`;
+      else bdCellHtml = `<span style="color:#be123c">${fmtMin(totalBdMin)}</span>`;
+
+      return `
+        <tr style="border-bottom: 1px solid #ebebeb; font-size: 8px; line-height: 1.2;">
+          <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace; font-weight: bold; word-break: break-word;">${formattedDate}</td>
+          <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-weight: 600; word-break: break-word;">${clientOrMachine}</td>
+          <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace; font-weight: 700; color: #0369a1; word-break: break-word;">${shiftsStr}</td>
+          <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-weight: 500; word-break: break-word;">${operatorsStr}</td>
+          <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace; font-weight: 700; color: #0284c7; white-space: nowrap;">${formatHoursWithUnit(dayRT)}</td>
+          <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace; font-weight: 700; white-space: nowrap;">${formatHoursWithUnit(dayWork)}</td>
+          <td style="padding: 4px 2px; text-align: center; vertical-align: middle; font-family: monospace; font-weight: 700; white-space: nowrap;">${bdCellHtml}</td>
+        </tr>
+      `;
+    }).join('');
 
     const headerHtml = buildPdfHtmlHeader({
       title: reportTitle,
@@ -188,35 +288,56 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
       ],
     });
 
-    const kpiStripHtml = buildPdfHtmlKpiStrip([
-      { label: 'Total Logs', value: String(logs.length) },
-      { label: 'Operating Hours', value: `${Math.round(totalRunningHours * 10) / 10} hrs`, color: '#0369a1' },
-      { label: 'Overtime Hours', value: `${Math.round(totalOtHours * 10) / 10} hrs`, color: '#b45309' },
-      { label: 'Breakdown Events', value: String(totalBreakdowns), color: '#be123c' },
-    ]);
+    const kpiStripHtml = viewMode === 'client'
+      ? buildPdfHtmlKpiStrip([
+          { label: 'Total Shifts', value: `${logs.length} ${logs.length === 1 ? 'Shift' : 'Shifts'}` },
+          { label: 'Operating Hours', value: `${Math.round(totalRunningHours * 10) / 10} hrs`, color: '#0369a1' },
+          { label: 'Breakdown Events', value: String(totalBreakdowns), color: '#be123c' },
+        ])
+      : buildPdfHtmlKpiStrip([
+          { label: 'Total Logs', value: String(logs.length) },
+          { label: 'Operating Hours', value: `${Math.round(totalRunningHours * 10) / 10} hrs`, color: '#0369a1' },
+          { label: 'Overtime Hours', value: `${Math.round(totalOtHours * 10) / 10} hrs`, color: '#b45309' },
+          { label: 'Breakdown Events', value: String(totalBreakdowns), color: '#be123c' },
+        ]);
+
+    const entityHeader = viewMode === 'client' || viewMode === 'operator' ? 'Machine' : 'Client';
 
     const tableHtml = `
       <table>
         <thead>
-          <tr>
-            <th style="width: 4%;">#</th>
-            <th style="width: 9%;">DATE</th>
-            <th style="width: 10%;">MODEL</th>
-            <th style="width: 11%;">SERIAL NO</th>
-            <th style="width: 17%;">CLIENT / SITE</th>
-            <th style="width: 14%;">OPERATOR</th>
-            <th style="width: 12%;">TIMINGS</th>
-            <th style="width: 6%;">WT (H)</th>
-            <th style="width: 5%;">OT</th>
-            <th style="width: 12%;">BREAKDOWN</th>
-            <th style="width: 14%;">REMARKS</th>
+          <tr style="background-color: #f5f5f5; font-size: 8.5px; text-transform: uppercase; font-weight: 800; border-bottom: 2px solid #171717;">
+            <th style="width: 12%; text-align: center; vertical-align: middle; padding: 4px 2px;">Date</th>
+            <th style="width: 18%; text-align: center; vertical-align: middle; padding: 4px 2px;">${entityHeader}</th>
+            <th style="width: 9%; text-align: center; vertical-align: middle; padding: 4px 2px;">Shift</th>
+            <th style="width: 35%; text-align: center; vertical-align: middle; padding: 4px 2px;">OPERATOR NAME</th>
+            <th style="width: 9%; text-align: center; vertical-align: middle; padding: 4px 2px;">M/C RT</th>
+            <th style="width: 9%; text-align: center; vertical-align: middle; padding: 4px 2px;">WH</th>
+            <th style="width: 8%; text-align: center; vertical-align: middle; padding: 4px 2px;">B/D</th>
           </tr>
         </thead>
         <tbody>
-          ${rowsHtml || '<tr><td colspan="11" style="text-align:center; padding: 20px; color:#737373;">No daily running hour logs found.</td></tr>'}
+          ${tbodyRowsHtml || '<tr><td colspan="7" style="text-align:center; padding: 12px; color:#737373;">No daily running hour logs found.</td></tr>'}
         </tbody>
+        ${dateGroupsMap.size > 0 ? `
+        <tfoot>
+          <tr style="border-top: 2px solid #171717; font-weight: 800; font-size: 8px;">
+            <td colspan="7" style="padding: 4px 2px; text-align: center; vertical-align: middle;">Total</td>
+          </tr>
+          <tr style="border-bottom: 2px solid #171717; font-family: monospace; font-weight: 700; font-size: 8px;">
+            <td style="padding: 4px 2px; text-align: center; vertical-align: middle;">${dateGroupsMap.size} ${dateGroupsMap.size === 1 ? 'day' : 'days'}</td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td style="padding: 4px 2px; text-align: center; vertical-align: middle; color: #0369a1;">${formatHoursWithUnit(sumDayRT)}</td>
+            <td style="padding: 4px 2px; text-align: center; vertical-align: middle;">${formatHoursWithUnit(sumWorkingHours)}</td>
+            <td style="padding: 4px 2px; text-align: center; vertical-align: middle;">${formatHoursWithUnit(sumBreakdownHours)}</td>
+          </tr>
+        </tfoot>
+        ` : ''}
       </table>
     `;
+
 
     const signaturesHtml = buildPdfHtmlSignatureBlock([
       {
@@ -295,64 +416,120 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
     }
   };
 
-  // Handler 3: Export CSV Spreadsheet
+    // Handler 3: Export CSV Spreadsheet
   const handleExportCsv = async () => {
     try {
       setIsExportingCsv(true);
 
-      const headers = [
-        'S.No',
-        'Date',
-        'Exact Timestamp',
-        'Model',
-        'Serial Number',
-        'Machine Code',
-        'Client Name',
-        'Site Location',
-        'Operator Name',
-        'Shift Timings',
-        'Start Meter (HMR)',
-        'End Meter (HMR)',
-        'Operating Run Hours',
-        'Overtime Hours',
-        'Is Breakdown',
-        'Remarks',
-      ];
-
-      const rows = logs.map((log, index) => {
-        const startMtr = log.start_meter ?? 0;
-        const endMtr = log.end_meter ?? startMtr;
-        const runningHrs = log.running_hours ?? Math.max(0, Math.round((endMtr - startMtr) * 10) / 10);
-        const otHrs = log.overtime_hours ?? 0;
-        const exactTime = log.created_at ? formatExactTimestamp(log.created_at, true) : '—';
-        const shiftTimes = log.start_time && log.end_time
-          ? `${formatTo12Hour(log.start_time)} - ${formatTo12Hour(log.end_time)}`
-          : '—';
-        const cleanRemarks = (log.remarks || '').replace(/[\r\n]+/g, ' ').replace(/"/g, '""');
-
-        return [
-          index + 1,
-          `"${formatDate(log.log_date)}"`,
-          `"${exactTime}"`,
-          `"${log.machine?.model || ''}"`,
-          `"${log.machine?.serial_number || ''}"`,
-          `"${log.machine_code || ''}"`,
-          `"${log.client?.company_name || log.client?.client_name || log.client?.name || ''}"`,
-          `"${log.location || ''}"`,
-          `"${log.operator?.full_name || ''}"`,
-          `"${shiftTimes}"`,
-          startMtr,
-          endMtr,
-          runningHrs,
-          otHrs,
-          log.is_breakdown ? 'YES' : 'NO',
-          `"${cleanRemarks}"`,
-        ].join(',');
+      const sortedLogsForCsv = [...logs].sort((a, b) => {
+        const dateA = a.log_date ? new Date(a.log_date).getTime() : 0;
+        const dateB = b.log_date ? new Date(b.log_date).getTime() : 0;
+        if (dateA !== dateB) return dateA - dateB;
+        return getShiftOrderWeight(a) - getShiftOrderWeight(b);
       });
 
-      const csvContent = [headers.join(','), ...rows].join('\r\n');
+      const dateGroupsMap = new Map<string, HourLogRecord[]>();
+      sortedLogsForCsv.forEach((l) => {
+        const key = l.log_date ? l.log_date.split('T')[0] : 'unknown';
+        if (!dateGroupsMap.has(key)) {
+          dateGroupsMap.set(key, []);
+        }
+        dateGroupsMap.get(key)!.push(l);
+      });
+
+      const headers = [
+        'Date',
+        viewMode === 'client' || viewMode === 'operator' ? 'Machine' : 'Client',
+        'Shift',
+        'OPERATOR NAME',
+        'M/C RT',
+        'WH',
+        'B/D',
+      ];
+
+      const rows: string[] = [];
+      let totalDayRT = 0;
+      let totalWorkHours = 0;
+      let totalBkdHours = 0;
+
+      dateGroupsMap.forEach((groupLogs, dateKey) => {
+        const formattedDate = formatExcelDate(dateKey);
+        let dayRT = 0;
+        let dayWork = 0;
+        let dayBkd = 0;
+
+        groupLogs.forEach((l) => {
+          const sMtr = l.start_meter ?? 0;
+          const eMtr = l.end_meter ?? sMtr;
+          const rt = l.running_hours ?? Math.max(0, Math.round((eMtr - sMtr) * 10) / 10);
+          dayRT += rt;
+          dayWork += calculateShiftWorkHours(l);
+          dayBkd += calculateShiftBreakdownHours(l);
+        });
+
+        dayRT = Math.round(dayRT * 10) / 10;
+        dayWork = Math.abs(dayWork - Math.round(dayWork)) < 0.05 ? Math.round(dayWork) : Math.round(dayWork * 10) / 10;
+        dayBkd = Math.abs(dayBkd - Math.round(dayBkd)) < 0.05 ? Math.round(dayBkd) : Math.round(dayBkd * 10) / 10;
+
+        totalDayRT += dayRT;
+        totalWorkHours += dayWork;
+        totalBkdHours += dayBkd;
+
+        const firstLog = groupLogs[0];
+        const clientOrMachine =
+          viewMode === 'client' || viewMode === 'operator'
+            ? (firstLog?.machine?.model ? `${firstLog.machine.model}${firstLog.machine.serial_number || firstLog.machine_code ? ` (${firstLog.machine.serial_number || firstLog.machine_code})` : ''}` : firstLog?.machine_code || 'Machine')
+            : (firstLog?.client?.company_name || firstLog?.client?.client_name || firstLog?.client?.name || selectedEntityName || 'Unassigned');
+
+        const shiftsStr = groupLogs
+          .map((l) => {
+            const c = l.shift_code || (l.shift?.toLowerCase().includes('night') ? 'S4' : l.shift?.toLowerCase().includes('morning') ? 'S1' : l.shift?.toLowerCase().includes('afternoon') ? 'S2' : 'S3');
+            return c.toUpperCase().startsWith('S') ? c : `S${c}`;
+          })
+          .join('/');
+
+        const operatorsStr = groupLogs
+          .map((l) => l.operator?.full_name || 'Unassigned')
+          .join('/');
+
+        let dayMaintMin2 = 0;
+        groupLogs.forEach((l) => { dayMaintMin2 += Number((l as any).maintenance_minutes || 0); });
+        const totalBdMin2 = Math.round(dayBkd * 60);
+        const netBdMin2 = Math.max(0, totalBdMin2 - dayMaintMin2);
+        const fmtMin2 = (m: number) => { const h = Math.floor(m / 60); const r = m % 60; return r > 0 ? `${h}h ${r}m` : `${h}h`; };
+        let bdCsv: string;
+        if (totalBdMin2 === 0) bdCsv = '0h';
+        else if (dayMaintMin2 >= totalBdMin2 && dayMaintMin2 > 0) bdCsv = `MT ${fmtMin2(dayMaintMin2)}`;
+        else if (dayMaintMin2 > 0 && netBdMin2 > 0) bdCsv = `MT ${fmtMin2(dayMaintMin2)} / ${fmtMin2(netBdMin2)}`;
+        else bdCsv = fmtMin2(totalBdMin2);
+
+        rows.push([
+          `"${formattedDate}"`,
+          `"${clientOrMachine}"`,
+          `"${shiftsStr}"`,
+          `"${operatorsStr}"`,
+          `"${formatHoursWithUnit(dayRT)}"`,
+          `"${formatHoursWithUnit(dayWork)}"`,
+          `"${bdCsv}"`,
+        ].join(','));
+      });
+
+      const totalRow1 = ['"Total"', '""', '""', '""', '""', '""', '""'].join(',');
+      const totalRow2 = [
+        `"${dateGroupsMap.size} days"`,
+        '""',
+        '""',
+        '""',
+        `"${formatHoursWithUnit(totalDayRT)}"`,
+        `"${formatHoursWithUnit(totalWorkHours)}"`,
+        `"${formatHoursWithUnit(totalBkdHours)}"`,
+      ].join(',');
+
+      const titleRow = [`"selected machine summery"`, '""', '""', '""', '""', '""', '""'].join(',');
+      const csvContent = [titleRow, headers.join(','), ...rows, totalRow1, totalRow2].join('\r\n');
       const filename = getExportFilename('csv');
       const targetUri = `${FileSystem.cacheDirectory}${filename}`;
+
 
       await FileSystem.writeAsStringAsync(targetUri, csvContent, {
         encoding: FileSystem.EncodingType.UTF8,
@@ -416,8 +593,12 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
               {/* Summary Stats Box */}
               <View style={[styles.summaryBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                 <View style={styles.summaryItem}>
-                  <Text style={[styles.summaryLabel, { color: theme.colors.mute }]}>MATCHING LOGS</Text>
-                  <Text style={[styles.summaryValue, { color: theme.colors.ink }]}>{logs.length}</Text>
+                  <Text style={[styles.summaryLabel, { color: theme.colors.mute }]}>
+                    {viewMode === 'client' ? 'TOTAL SHIFTS' : 'MATCHING LOGS'}
+                  </Text>
+                  <Text style={[styles.summaryValue, { color: theme.colors.ink }]}>
+                    {viewMode === 'client' ? `${logs.length} ${logs.length === 1 ? 'Shift' : 'Shifts'}` : logs.length}
+                  </Text>
                 </View>
                 <View style={styles.summaryItem}>
                   <Text style={[styles.summaryLabel, { color: theme.colors.mute }]}>OPERATING RUN</Text>
@@ -425,12 +606,14 @@ export const OperationsExportModal: React.FC<OperationsExportModalProps> = ({
                     {Math.round(totalRunningHours * 10) / 10} hrs
                   </Text>
                 </View>
-                <View style={styles.summaryItem}>
-                  <Text style={[styles.summaryLabel, { color: theme.colors.mute }]}>TOTAL OVERTIME</Text>
-                  <Text style={[styles.summaryValue, { color: '#f59e0b' }]}>
-                    {Math.round(totalOtHours * 10) / 10} hrs
-                  </Text>
-                </View>
+                {viewMode !== 'client' && (
+                  <View style={styles.summaryItem}>
+                    <Text style={[styles.summaryLabel, { color: theme.colors.mute }]}>TOTAL OVERTIME</Text>
+                    <Text style={[styles.summaryValue, { color: '#f59e0b' }]}>
+                      {Math.round(totalOtHours * 10) / 10} hrs
+                    </Text>
+                  </View>
+                )}
                 <View style={styles.summaryItem}>
                   <Text style={[styles.summaryLabel, { color: theme.colors.mute }]}>BREAKDOWNS</Text>
                   <Text style={[styles.summaryValue, { color: '#f43f5e' }]}>{totalBreakdowns}</Text>
@@ -567,7 +750,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   subTitle: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '500',
     marginTop: 2,
   },
@@ -591,12 +774,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   summaryLabel: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '800',
     marginBottom: 4,
   },
   summaryValue: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },

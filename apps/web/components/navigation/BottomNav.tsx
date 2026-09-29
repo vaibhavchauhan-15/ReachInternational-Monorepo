@@ -113,7 +113,7 @@ export function BottomNav({ role }: { role: UserRole }) {
                 aria-selected={active}
                 aria-current={active ? "page" : undefined}
                 aria-label={t.label}
-                className={`group group/nav interactive-parent relative flex flex-col items-center justify-center h-14 min-h-[44px] gap-0.5 text-[10px] tracking-tight transition-colors duration-150 ${
+                className={`group group/nav interactive-parent relative flex flex-col items-center justify-center h-14 min-h-[44px] gap-0.5 text-[11.5px] sm:text-xs tracking-tight transition-colors duration-150 ${
                   active
                     ? "text-[var(--color-ink)] font-semibold"
                     : "text-[var(--color-mute)] font-medium"

@@ -5,15 +5,22 @@ import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Send } from "lucide-react";
 import { useToast, Button } from "@/components/ui";
-import { getISTDateString, computeBreakdownDuration } from "@reachinternational/utils";
-import type { User, OperatorEntryContext, Machine, OperatorLastLogSummary } from "@reachinternational/types";
-import { submitOperatorHourLogAction } from "@/app/actions/operators";
+import {
+  getISTDateString,
+  computeBreakdownDuration,
+  resolveDefaultOperatorShift,
+  formatTo12Hour,
+  calculateEffectiveShiftDurationHours,
+} from "@reachinternational/utils";
+import type { User, OperatorEntryContext, Machine, OperatorLastLogSummary, ClientShiftCode } from "@reachinternational/types";
+import { submitOperatorHourLogAction, getOperatorEntryContextAction } from "@/app/actions/operators";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 import { EntryHeader } from "./EntryHeader";
 import { OperatorMachineInfo } from "./OperatorMachineInfo";
 import { LastMachineLogCard } from "./LastMachineLogCard";
 import { HMRInputs } from "./HMRInputs";
-import { ShiftInputs } from "./ShiftInputs";
+import { ShiftInputs, DEFAULT_CLIENT_SHIFTS } from "./ShiftInputs";
 
 // Dynamic code-split secondary / heavy features
 const BreakdownSection = dynamic(
@@ -66,6 +73,86 @@ export function OperatorEntryClient({
     }
   }, [searchParams, router]);
 
+  // Real-time listener & offline resilience sync for assisted shift logs dispatched on operator's behalf
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const supabase = createSupabaseBrowserClient();
+
+    // 1. Sync any notifications persisted while the operator was offline
+    const syncOfflineNotifications = async () => {
+      try {
+        const { data: unreadNotifications } = await supabase
+          .from("notifications")
+          .select("id, title, message, metadata")
+          .eq("user_id", user.id)
+          .eq("is_read", false)
+          .order("created_at", { ascending: true });
+
+        if (unreadNotifications && unreadNotifications.length > 0) {
+          const ids: string[] = [];
+          for (const item of unreadNotifications) {
+            ids.push(item.id);
+            toast("info", item.title || "Shift Logged on Your Behalf", item.message);
+          }
+          await supabase
+            .from("notifications")
+            .update({ is_read: true, read_at: new Date().toISOString() })
+            .in("id", ids);
+
+          router.refresh();
+        }
+      } catch (err) {
+        console.warn("[WebNotifications] Offline sync notice:", err);
+      }
+    };
+
+    syncOfflineNotifications();
+
+    // 2. Real-time WebSocket alert channel
+    const alertChannel = supabase.channel(`operator-alerts:${user.id}`);
+
+    alertChannel
+      .on("broadcast", { event: "assisted_shift_logged" }, (eventPayload: { payload: any }) => {
+        const data = eventPayload?.payload;
+        if (data) {
+          toast(
+            "info",
+            data.title || "Shift Logged on Your Behalf",
+            data.body || `A supervisor recorded your shift on equipment ${data.machineCode || "Equipment"} (${data.runningHours}h).`
+          );
+
+          // Native OS Desktop Notification if supported and permitted
+          if (
+            typeof window !== "undefined" &&
+            "Notification" in window &&
+            window.Notification.permission === "granted"
+          ) {
+            try {
+              new window.Notification(data.title || "Shift Logged on Your Behalf", {
+                body: data.body || `A supervisor recorded your shift on equipment ${data.machineCode || "Equipment"} (${data.runningHours}h).`,
+                icon: "/light-favicon.ico",
+              });
+            } catch {
+              // Non-blocking notification fallback
+            }
+          }
+
+          // Trigger Next.js router refresh to update entry context & logs in real-time
+          router.refresh();
+        }
+      })
+      .subscribe((status: string) => {
+        if (status === "SUBSCRIBED") {
+          syncOfflineNotifications();
+        }
+      });
+
+    return () => {
+      supabase.removeChannel(alertChannel);
+    };
+  }, [user?.id, router, toast]);
+
   // Form State initialized directly from fast read-model
   const initialHmrStr = initialContext.last_hmr !== undefined && initialContext.last_hmr !== null
     ? String(initialContext.last_hmr)
@@ -83,13 +170,75 @@ export function OperatorEntryClient({
     setStartMeter(val);
   }, [startMeter]);
 
-  const [startTime, setStartTime] = useState<string>(
-    initialContext.operator?.shift_start || "06:00 AM"
+  // Compute effective shifts available for this machine / client
+  const availableShifts = useMemo<ClientShiftCode[]>(() => {
+    return initialContext.shift_codes && initialContext.shift_codes.length > 0
+      ? initialContext.shift_codes
+      : DEFAULT_CLIENT_SHIFTS;
+  }, [initialContext.shift_codes]);
+
+  // Resolve operator's own shift by code, timing, or distance
+  const resolvedInitialShift = useMemo(() => {
+    return resolveDefaultOperatorShift(initialContext, availableShifts);
+  }, [initialContext, availableShifts]);
+
+  const [selectedShiftCode, setSelectedShiftCode] = useState<string>(
+    resolvedInitialShift?.code || initialContext.assigned_shift_code || "S1"
   );
-  const [endTime, setEndTime] = useState<string>(
-    initialContext.operator?.shift_end || "02:00 PM"
+
+  const [startTime, setStartTime] = useState<string>(() => {
+    const raw = resolvedInitialShift?.start_time || resolvedInitialShift?.raw_start_time || initialContext.operator?.shift_start;
+    return (raw ? formatTo12Hour(raw) : "") || "06:00 AM";
+  });
+  const [endTime, setEndTime] = useState<string>(() => {
+    const raw = resolvedInitialShift?.end_time || resolvedInitialShift?.raw_end_time || initialContext.operator?.shift_end;
+    return (raw ? formatTo12Hour(raw) : "") || "02:00 PM";
+  });
+  const [overtimeHours, setOvertimeHours] = useState<string>(
+    resolvedInitialShift?.default_ot_minutes && resolvedInitialShift.default_ot_minutes > 0
+      ? (resolvedInitialShift.default_ot_minutes / 60).toString()
+      : "0"
   );
-  const [overtimeHours, setOvertimeHours] = useState<string>("0");
+
+  // Synchronize operator's default shift whenever initialContext or available shifts load/revalidate
+  useEffect(() => {
+    if (resolvedInitialShift) {
+      setSelectedShiftCode(resolvedInitialShift.code);
+      const s = formatTo12Hour(resolvedInitialShift.start_time || resolvedInitialShift.raw_start_time);
+      if (s) setStartTime(s);
+      const e = formatTo12Hour(resolvedInitialShift.end_time || resolvedInitialShift.raw_end_time);
+      if (e) setEndTime(e);
+      if (resolvedInitialShift.default_ot_minutes && resolvedInitialShift.default_ot_minutes > 0) {
+        setOvertimeHours((resolvedInitialShift.default_ot_minutes / 60).toString());
+      }
+    }
+  }, [resolvedInitialShift]);
+
+  // Eager re-fetch guard: If initialContext had no assigned_shift_code, fetch fresh context in background
+  useEffect(() => {
+    if (!initialContext.assigned_shift_code && !initialContext.operator?.shift_code && user?.id) {
+      getOperatorEntryContextAction(user.id)
+        .then((res) => {
+          if (res.success && res.data) {
+            const freshShifts = res.data.shift_codes && res.data.shift_codes.length > 0
+              ? res.data.shift_codes
+              : DEFAULT_CLIENT_SHIFTS;
+            const freshDefault = resolveDefaultOperatorShift(res.data, freshShifts);
+            if (freshDefault) {
+              setSelectedShiftCode(freshDefault.code);
+              const s = formatTo12Hour(freshDefault.start_time || freshDefault.raw_start_time);
+              const e = formatTo12Hour(freshDefault.end_time || freshDefault.raw_end_time);
+              if (s) setStartTime(s);
+              if (e) setEndTime(e);
+              if (freshDefault.default_ot_minutes && freshDefault.default_ot_minutes > 0) {
+                setOvertimeHours((freshDefault.default_ot_minutes / 60).toString());
+              }
+            }
+          }
+        })
+        .catch((e) => console.warn("[OperatorEntryClient] Fresh context fetch error:", e));
+    }
+  }, [initialContext.assigned_shift_code, initialContext.operator?.shift_code, user?.id]);
 
   // Breakdown state (Lazy)
   const [isBreakdown, setIsBreakdown] = useState<boolean>(false);
@@ -141,24 +290,25 @@ export function OperatorEntryClient({
     return computeBreakdownDuration(breakdownStartTime, breakdownEndTime);
   }, [isBreakdown, breakdownStartTime, breakdownEndTime]);
 
-  // Shift duration hours calculation
+  // Active shift object for metadata resolution
+  const activeShift = useMemo(() => {
+    return availableShifts.find((s) => {
+      const sNorm = s.code.replace(/^shift\s+/i, "").trim().toUpperCase();
+      const selNorm = (selectedShiftCode || "").replace(/^shift\s+/i, "").trim().toUpperCase();
+      return s.code.toUpperCase() === (selectedShiftCode || "").toUpperCase() || (selNorm !== "" && sNorm === selNorm);
+    });
+  }, [availableShifts, selectedShiftCode]);
+
+  // Shift duration hours calculation (Robust to 12h, 24h, seconds, shift template fallback, and overtime)
   const shiftDurationHours = useMemo(() => {
-    const parseM = (t: string) => {
-      const match = t.trim().toUpperCase().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/);
-      if (!match) return null;
-      let h = parseInt(match[1], 10);
-      const m = parseInt(match[2], 10);
-      if (match[3] === "PM" && h < 12) h += 12;
-      if (match[3] === "AM" && h === 12) h = 0;
-      return h * 60 + m;
-    };
-    const s = parseM(startTime);
-    const e = parseM(endTime);
-    if (s === null || e === null) return 0;
-    let diff = e - s;
-    if (diff < 0) diff += 24 * 60;
-    return Math.round((diff / 60) * 10) / 10;
-  }, [startTime, endTime]);
+    return calculateEffectiveShiftDurationHours({
+      startTime,
+      endTime,
+      scheduledMinutes: activeShift?.scheduled_minutes,
+      normalMinutes: activeShift?.normal_minutes,
+      overtimeHours,
+    });
+  }, [startTime, endTime, activeShift, overtimeHours]);
 
   // Save Draft
   const handleSaveDraft = useCallback(() => {
@@ -205,6 +355,11 @@ export function OperatorEntryClient({
       return;
     }
 
+    if (!selectedShiftCode || !selectedShiftCode.trim()) {
+      toast("error", "Shift Required", "Please select an operational shift before submitting.");
+      return;
+    }
+
     if (!endMeter.trim() || endNum < startNum) {
       toast("error", "Invalid Meter Reading", "Please enter an end meter reading that is at least equal to start meter.");
       return;
@@ -220,11 +375,12 @@ export function OperatorEntryClient({
         toast("error", "Breakdown Window Required", "Please enter both breakdown start and end times.");
         return;
       }
-      if (breakdownStats && breakdownStats.durationDecimalHours > shiftDurationHours) {
+      const maxAllowedDuration = shiftDurationHours > 0 ? shiftDurationHours : 24;
+      if (breakdownStats && breakdownStats.durationDecimalHours > maxAllowedDuration) {
         toast(
           "error",
           "Breakdown Exceeds Shift",
-          `Breakdown duration (${breakdownStats.durationDecimalHours}h) cannot exceed total shift duration (${shiftDurationHours}h).`
+          `Breakdown duration (${breakdownStats.durationDecimalHours}h) cannot exceed total shift duration (${maxAllowedDuration}h).`
         );
         return;
       }
@@ -264,12 +420,41 @@ export function OperatorEntryClient({
         breakdownEndTime: isBreakdown ? breakdownEndTime : undefined,
         breakdownDuration: bkdDurationStr,
         breakdownHours: bkdHours,
+        shiftCode: selectedShiftCode || undefined,
         machineCondition: isBreakdown ? "breakdown" : "good",
         remarks: finalRemarks,
       });
 
       if (res.success) {
         toast("success", "Log Submitted Successfully", "Daily machine running hours recorded.");
+
+        // Broadcast log_entered to operations-roster channel for supervisors/admins
+        if (initialContext.machine?.id) {
+          try {
+            const supabase = createSupabaseBrowserClient();
+            const rosterChannel = supabase.channel("operations-roster");
+            rosterChannel.subscribe((status: string) => {
+              if (status === "SUBSCRIBED") {
+                rosterChannel.send({
+                  type: "broadcast",
+                  event: "log_entered",
+                  payload: {
+                    machineId: initialContext.machine!.id,
+                    operatorId: user.id,
+                    shiftCode: selectedShiftCode || undefined,
+                    startMeter: startNum,
+                    endMeter: endNum,
+                    runningHours,
+                    logDate,
+                  },
+                });
+              }
+            });
+          } catch (bcastErr) {
+            console.warn("Failed to broadcast operator log_entered:", bcastErr);
+          }
+        }
+
         setStartMeter(String(endNum));
         setEndMeter(String(endNum));
         setIsStartMeterLocked(true);
@@ -359,6 +544,9 @@ export function OperatorEntryClient({
               overtimeHours={overtimeHours}
               onOvertimeChange={setOvertimeHours}
               shiftDurationHours={shiftDurationHours}
+              shiftCodes={availableShifts}
+              selectedShiftCode={selectedShiftCode}
+              onSelectShiftCode={setSelectedShiftCode}
             />
 
             {/* Section D: Machine Breakdown (Code-Split / Lazy) */}

@@ -2,6 +2,7 @@ import {
   Home,
   Wrench,
   Gauge,
+  Activity,
   Star,
   Building2,
   Users,
@@ -41,6 +42,12 @@ export const mobileNavItems: MobileNavItem[] = [
     label: 'Operations',
     icon: Gauge,
     roles: ['super_admin', 'admin', 'manager', 'supervisor', 'operator'],
+  },
+  {
+    href: '/(app)/running-logs',
+    label: 'Running Logs',
+    icon: Activity,
+    roles: ['super_admin', 'admin', 'manager', 'supervisor', 'hr'],
   },
   {
     href: '/(app)/clients',

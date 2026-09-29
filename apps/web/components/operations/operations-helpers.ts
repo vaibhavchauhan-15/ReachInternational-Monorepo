@@ -34,6 +34,14 @@ export function formatClientFullAddress(c?: any): string {
   return parts.join(", ");
 }
 
+/**
+ * Canonical client site address (primary street location stored in DB).
+ */
+export function getClientSiteAddress(c?: any): string {
+  if (!c) return "";
+  return (c.street || "").trim() || formatClientFullAddress(c);
+}
+
 import { getOperationsCurrentMonth } from "@reachinternational/utils";
 
 /**

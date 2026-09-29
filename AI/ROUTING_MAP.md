@@ -21,7 +21,8 @@ All routes inside `(app)` require an active session and inherit layout from `app
 | `/machines` | `app/(app)/machines/page.tsx` | `super_admin`, `admin`, `manager`, `supervisor`, `operator` | Fleet machinery directory, 24h shift assignments, HMR logs |
 | `/machines/[id]` | `app/(app)/machines/[id]/page.tsx` | `super_admin`, `admin`, `manager`, `supervisor`, `operator` | Machine detail, 24h personnel assignments, HMR history, audit trail |
 | `/clients` | `app/(app)/clients/page.tsx` | `super_admin`, `admin`, `manager`, `supervisor` | Client CRM, site locations, equipment deployments, contact/tax info |
-| `/operations` | `app/(app)/operations/page.tsx` | `super_admin`, `admin`, `manager`, `supervisor`, `operator` | Daily running hour logs, machine/client/operator views, operator fast entry |
+| `/operations` | `app/(app)/operations/page.tsx` | `super_admin`, `admin`, `manager`, `supervisor`, `operator` | Today's shift log monitor (management) & operator single-shift fast entry |
+| `/running-logs` | `app/(app)/running-logs/page.tsx` | `super_admin`, `admin`, `manager`, `supervisor`, `hr` | Dedicated daily running hour logs summary, machine/client/operator historical views & exports (Operator strictly disallowed) |
 | `/users` | `app/(app)/users/page.tsx` | `super_admin`, `admin`, `manager`, `supervisor`, `hr` | Employee & account management, approvals, profile change diffs |
 | `/audit` | `app/(app)/audit/page.tsx` | `super_admin`, `admin`, `manager`, `hr` | Immutable security audit logs, state mutations, before/after diffs |
 

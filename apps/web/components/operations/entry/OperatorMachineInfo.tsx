@@ -32,7 +32,7 @@ export function OperatorMachineInfo({
     <div className="p-3.5 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/50 space-y-3">
       <div className="flex items-center justify-between">
         <span className="text-[10px] sm:text-[11px] font-bold tracking-wider uppercase text-[var(--color-mute)] font-mono">
-          Assigned Equipment &amp; Worksite
+          Assigned Machine &amp; Site
         </span>
       </div>
 

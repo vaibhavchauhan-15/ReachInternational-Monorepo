@@ -59,6 +59,7 @@ export interface AttendanceDetailSummary {
 
 export interface AttendanceDetailEmployee {
   id: string;
+  employee_id?: string | null;
   full_name: string;
   email?: string | null;
   phone: string | null;
@@ -101,6 +102,10 @@ export async function getAttendanceDetail(
     if (error) {
       console.error("[getAttendanceDetail] RPC error:", error);
       throw new Error(error.message || "Failed to load attendance detail");
+    }
+
+    if (data && typeof data === "object" && "error" in data) {
+      throw new Error((data as { error: string }).error || "Employee not found");
     }
 
     return data as unknown as AttendanceDetailResult;

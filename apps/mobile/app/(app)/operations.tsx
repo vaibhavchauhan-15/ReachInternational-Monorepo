@@ -28,6 +28,8 @@ import {
 import { supabase } from '../../lib/supabase';
 import { useOperationsMasterData, useOperationsLogs, useOperatorEntryContext } from '../../lib/hooks/useOperationsData';
 import { MobileOperatorEntryCard } from '../../components/operations/MobileOperatorEntryCard';
+import { MobileTodayShiftMonitorTab } from '../../components/operations/MobileTodayShiftMonitorTab';
+import type { TodayShiftMonitorRow } from '@reachinternational/types';
 import { useAuth } from '../../lib/auth/useAuth';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import {
@@ -70,6 +72,7 @@ import {
   FileText,
   Edit2,
   Trash2,
+  UserPlus,
 } from 'lucide-react-native';
 import { isManagerOrAbove } from '@reachinternational/permissions';
 
@@ -77,7 +80,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export type OpsTab = 'logs' | 'entry' | 'history';
+export type OpsTab = 'logs' | 'entry' | 'history' | 'today';
 export type LogsViewMode = 'machine' | 'client' | 'operator';
 
 export interface HourLogRecord {
@@ -86,6 +89,8 @@ export interface HourLogRecord {
   machine_code: string;
   log_date: string;
   shift?: string;
+  shift_code?: string;
+  shift_scheduled_minutes?: number;
   start_meter: number;
   end_meter: number;
   running_hours: number;
@@ -144,6 +149,7 @@ export interface ActiveShiftAssignment {
   operator_id: string;
   shift_start_time: string;
   shift_end_time: string;
+  shift_code?: string | null;
   crosses_midnight: boolean;
   assigned_at: string;
   assigned_by?: string;
@@ -207,17 +213,21 @@ export default function OperationsScreen() {
   const params = useLocalSearchParams<{ tab?: string }>();
 
   const [activeTab, setActiveTab] = useState<OpsTab>(() => {
-    if (params.tab === 'logs' || params.tab === 'entry' || params.tab === 'history') {
+    if (params.tab === 'logs' || params.tab === 'entry' || params.tab === 'history' || params.tab === 'today') {
       return params.tab as OpsTab;
     }
-    return isOperator ? 'entry' : 'logs';
+    return isOperator ? 'entry' : 'today';
   });
 
   useEffect(() => {
-    if (params.tab && (params.tab === 'logs' || params.tab === 'entry' || params.tab === 'history')) {
+    if (params.tab && (params.tab === 'logs' || params.tab === 'entry' || params.tab === 'history' || params.tab === 'today')) {
       setActiveTab(params.tab as OpsTab);
     }
   }, [params.tab]);
+
+  // Assisted Shift Entry state for Supervisors/Managers/Admins
+  const [assistedRow, setAssistedRow] = useState<TodayShiftMonitorRow | null>(null);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
 
   // Master Data State
   const [logs, setLogs] = useState<HourLogRecord[]>([]);
@@ -841,6 +851,15 @@ export default function OperationsScreen() {
   const headerActions = useMemo<HeaderActionItem[]>(() => {
     const list: HeaderActionItem[] = [];
 
+    if (!isOperator) {
+      list.push({
+        id: 'assign-operator',
+        label: 'Assign Operator',
+        icon: <UserPlus size={16} color={theme.colors.link} />,
+        onPress: () => setIsAssignModalOpen(true),
+      });
+    }
+
     list.push({
       id: 'export-print',
       label: 'Export / Print Report',
@@ -866,7 +885,7 @@ export default function OperationsScreen() {
     }
 
     return list;
-  }, [theme.colors.ink, onRefresh, pendingConflicts]);
+  }, [theme.colors.ink, theme.colors.link, isOperator, onRefresh, pendingConflicts]);
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
@@ -874,97 +893,93 @@ export default function OperationsScreen() {
 
       {/* 1. TOP STANDARDIZED MOBILE HEADER: [Logo] + [Page Title] + [Quick Access] + [3-Dot Actions] */}
       <MobileHeader
-        title="Fleet Operations"
+        title={isOperator ? "Fleet Operations" : "Today's Shift Logs"}
         actions={headerActions}
       />
 
-      {/* 2. TOP NAVBAR (ABOVE NAVBAR) — Operators only (Log Entry / Log History) */}
+      {/* 2. TOP NAVBAR (ONLY FOR OPERATORS: LOG ENTRY VS LOG HISTORY) */}
       {isOperator && (
-      <View
-        style={[
-          styles.aboveNavbar,
-          {
-            backgroundColor: theme.colors.canvas,
-            borderBottomColor: theme.colors.hairline,
-          },
-        ]}
-      >
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.aboveNavbarContent}
+        <View
+          style={[
+            styles.aboveNavbar,
+            {
+              backgroundColor: theme.colors.canvas,
+              borderBottomColor: theme.colors.hairline,
+            },
+          ]}
         >
-          {isOperator ? (
-            <>
-              {/* Operator Tab 1: Log Entry */}
-              <TouchableOpacity
-                onPress={() => setActiveTab('entry')}
-                activeOpacity={0.8}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.aboveNavbarContent}
+          >
+            {/* Operator Tab 1: Log Entry */}
+            <TouchableOpacity
+              onPress={() => setActiveTab('entry')}
+              activeOpacity={0.8}
+              style={[
+                styles.aboveNavbarTab,
+                activeTab === 'entry'
+                  ? [styles.aboveNavbarTabActive, { backgroundColor: theme.colors.ink }]
+                  : [
+                      styles.aboveNavbarTabInactive,
+                      {
+                        backgroundColor: theme.colors.canvasElevated,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ],
+              ]}
+            >
+              <Text
                 style={[
-                  styles.aboveNavbarTab,
-                  activeTab === 'entry'
-                    ? [styles.aboveNavbarTabActive, { backgroundColor: theme.colors.ink }]
-                    : [
-                        styles.aboveNavbarTabInactive,
-                        {
-                          backgroundColor: theme.colors.canvasElevated,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ],
+                  styles.aboveNavbarTabText,
+                  {
+                    color:
+                      activeTab === 'entry'
+                        ? theme.colors.canvas
+                        : theme.colors.body,
+                  },
+                  activeTab === 'entry' && styles.aboveNavbarTabTextActive,
                 ]}
               >
-                <Text
-                  style={[
-                    styles.aboveNavbarTabText,
-                    {
-                      color:
-                        activeTab === 'entry'
-                          ? theme.colors.canvas
-                          : theme.colors.body,
-                    },
-                    activeTab === 'entry' && styles.aboveNavbarTabTextActive,
-                  ]}
-                >
-                  Log Entry
-                </Text>
-              </TouchableOpacity>
+                Log Entry
+              </Text>
+            </TouchableOpacity>
 
-              {/* Operator Tab 2: Log History */}
-              <TouchableOpacity
-                onPress={() => setActiveTab('history')}
-                activeOpacity={0.8}
+            {/* Operator Tab 2: Log History */}
+            <TouchableOpacity
+              onPress={() => setActiveTab('history')}
+              activeOpacity={0.8}
+              style={[
+                styles.aboveNavbarTab,
+                activeTab === 'history'
+                  ? [styles.aboveNavbarTabActive, { backgroundColor: theme.colors.ink }]
+                  : [
+                      styles.aboveNavbarTabInactive,
+                      {
+                        backgroundColor: theme.colors.canvasElevated,
+                        borderColor: theme.colors.hairline,
+                      },
+                    ],
+              ]}
+            >
+              <Text
                 style={[
-                  styles.aboveNavbarTab,
-                  activeTab === 'history'
-                    ? [styles.aboveNavbarTabActive, { backgroundColor: theme.colors.ink }]
-                    : [
-                        styles.aboveNavbarTabInactive,
-                        {
-                          backgroundColor: theme.colors.canvasElevated,
-                          borderColor: theme.colors.hairline,
-                        },
-                      ],
+                  styles.aboveNavbarTabText,
+                  {
+                    color:
+                      activeTab === 'history'
+                        ? theme.colors.canvas
+                        : theme.colors.body,
+                  },
+                  activeTab === 'history' && styles.aboveNavbarTabTextActive,
                 ]}
               >
-                <Text
-                  style={[
-                    styles.aboveNavbarTabText,
-                    {
-                      color:
-                        activeTab === 'history'
-                          ? theme.colors.canvas
-                          : theme.colors.body,
-                    },
-                    activeTab === 'history' && styles.aboveNavbarTabTextActive,
-                  ]}
-                >
-                  Log History
-                </Text>
-              </TouchableOpacity>
-            </>
-          ) : null}
-        </ScrollView>
-      </View>
+                Log History
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
       )}
 
       {/* 2. TAB: OPERATOR LOG ENTRY */}
@@ -983,8 +998,32 @@ export default function OperationsScreen() {
         </ScrollView>
       )}
 
-      {/* 3. TAB: DAILY RUNNING HOURS FEED / OPERATOR LOG HISTORY */}
-      {((!isOperator && activeTab === 'logs') || (isOperator && activeTab === 'history')) && (
+      {/* 2.5. TODAY'S SHIFT MONITOR (SUPERVISORS / MANAGERS / ADMINS) */}
+      {!isOperator && (
+        <ScrollView
+          style={styles.contentScroll}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.link} />}
+        >
+          <MobileTodayShiftMonitorTab
+            actorId={user?.id}
+            userRole={user?.role}
+            onEnterLog={(row) => {
+              if (isManagerOrAbove(user?.role)) {
+                setAssistedRow(row);
+              }
+            }}
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            isAssignModalOpen={isAssignModalOpen}
+            onCloseAssignModal={() => setIsAssignModalOpen(false)}
+          />
+        </ScrollView>
+      )}
+
+      {/* 3. TAB: OPERATOR LOG HISTORY */}
+      {isOperator && activeTab === 'history' && (
         <ScrollView
           style={styles.contentScroll}
           contentContainerStyle={styles.contentContainer}
@@ -1035,7 +1074,7 @@ export default function OperationsScreen() {
                     onPress={() => setShowAllConflicts(!showAllConflicts)}
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                   >
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#fbbf24' : '#d97706' }}>
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: isDark ? '#fbbf24' : '#d97706' }}>
                       {showAllConflicts ? 'Show Fewer' : `View All (${pendingConflicts.length})`}
                     </Text>
                     {showAllConflicts ? (
@@ -1294,7 +1333,7 @@ export default function OperationsScreen() {
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                       <Text style={[styles.fieldLabel, { color: theme.colors.mute, marginBottom: 0 }]}>Select Client</Text>
                       <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline }}>
-                        <Text style={{ fontSize: 10, fontFamily: 'monospace', color: theme.colors.mute }}>{clientsList.length} Total</Text>
+                        <Text style={{ fontSize: 12, fontFamily: 'monospace', color: theme.colors.mute }}>{clientsList.length} Total</Text>
                       </View>
                     </View>
                     <TouchableOpacity
@@ -1311,7 +1350,7 @@ export default function OperationsScreen() {
                               .filter(Boolean);
                             const loc = parts.length > 0 ? parts.join(', ') : ((selectedClientObj as any).address ? String((selectedClientObj as any).address).trim() : '');
                             return loc ? (
-                              <Text style={{ color: theme.colors.mute, fontWeight: '400', fontSize: 11 }}>
+                              <Text style={{ color: theme.colors.mute, fontWeight: '400', fontSize: 12.5 }}>
                                 {` â€¢ ${loc}`}
                               </Text>
                             ) : null;
@@ -1330,7 +1369,7 @@ export default function OperationsScreen() {
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                       <Text style={[styles.fieldLabel, { color: theme.colors.mute, marginBottom: 0 }]}>Select Location</Text>
                       <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline }}>
-                        <Text style={{ fontSize: 10, fontFamily: 'monospace', color: theme.colors.mute }}>{clientLocations.length} Total</Text>
+                        <Text style={{ fontSize: 12, fontFamily: 'monospace', color: theme.colors.mute }}>{clientLocations.length} Total</Text>
                       </View>
                     </View>
                     <TouchableOpacity
@@ -1348,7 +1387,7 @@ export default function OperationsScreen() {
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                       <Text style={[styles.fieldLabel, { color: theme.colors.mute, marginBottom: 0 }]}>Select Machine</Text>
                       <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline }}>
-                        <Text style={{ fontSize: 10, fontFamily: 'monospace', color: theme.colors.mute }}>{clientMachines.length} Total</Text>
+                        <Text style={{ fontSize: 12, fontFamily: 'monospace', color: theme.colors.mute }}>{clientMachines.length} Total</Text>
                       </View>
                     </View>
                     <TouchableOpacity
@@ -1496,7 +1535,7 @@ export default function OperationsScreen() {
                       {selectedClientObj.company_name}
                     </Text>
                     <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#e0f2fe' }}>
-                      <Text style={{ fontSize: 10, fontFamily: 'monospace', color: theme.colors.link, fontWeight: '700' }}>
+                      <Text style={{ fontSize: 12, fontFamily: 'monospace', color: theme.colors.link, fontWeight: '700' }}>
                         {clientMachines.length} {clientMachines.length === 1 ? 'Machine' : 'Machines'}
                       </Text>
                     </View>
@@ -1504,7 +1543,7 @@ export default function OperationsScreen() {
                 </View>
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: '800', color: theme.colors.link }}>
+                  <Text style={{ fontSize: 13.5, fontFamily: 'monospace', fontWeight: '800', color: theme.colors.link }}>
                     {Math.round(activeMetrics.runHours * 10) / 10} hrs
                   </Text>
                   {isClientSummaryExpanded ? (
@@ -1518,19 +1557,19 @@ export default function OperationsScreen() {
               {isClientSummaryExpanded && (
                 <>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 8, marginBottom: 8 }}>
-                    <Text style={{ fontSize: 11, color: theme.colors.mute }} numberOfLines={2}>
-                      ðŸ“ {[selectedClientObj.street, selectedClientObj.city, selectedClientObj.district, selectedClientObj.state, selectedClientObj.pincode].filter(Boolean).map((s) => String(s).trim()).filter(Boolean).join(', ') || 'â€”'}
+                    <Text style={{ fontSize: 12.5, color: theme.colors.mute }} numberOfLines={2}>
+                      ðŸ“  {[selectedClientObj.street, selectedClientObj.city, selectedClientObj.district, selectedClientObj.state, selectedClientObj.pincode].filter(Boolean).map((s) => String(s).trim()).filter(Boolean).join(', ') || 'â€”'}
                     </Text>
                     {selectedClientObj.phone ? (
                       <TouchableOpacity onPress={() => Linking.openURL(`tel:${selectedClientObj.phone}`)}>
-                        <Text style={{ fontSize: 11, color: theme.colors.link, fontFamily: 'monospace' }}>
+                        <Text style={{ fontSize: 12.5, color: theme.colors.link, fontFamily: 'monospace' }}>
                           ðŸ“ž {selectedClientObj.phone}
                         </Text>
                       </TouchableOpacity>
                     ) : null}
                   </View>
 
-                  {/* 4 Summary Metric Cards in Client Detail View */}
+                  {/* 3 Summary Metric Cards in Client Detail View (OT omitted for client) */}
                   <View style={styles.metricsGrid4}>
                     <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -1539,15 +1578,6 @@ export default function OperationsScreen() {
                       </View>
                       <Text style={[styles.kpiValue, { color: theme.colors.link }]}>
                         {Math.round(activeMetrics.runHours * 10) / 10} hrs
-                      </Text>
-                    </View>
-                    <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <Zap size={12} color={isDark ? '#fbbf24' : '#d97706'} />
-                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>OT</Text>
-                      </View>
-                      <Text style={[styles.kpiValue, { color: isDark ? '#fbbf24' : '#d97706' }]}>
-                        {Math.round(activeMetrics.otHours * 10) / 10} hrs
                       </Text>
                     </View>
                     <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
@@ -1562,10 +1592,10 @@ export default function OperationsScreen() {
                     <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline }]}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                         <FileText size={12} color={theme.colors.mute} />
-                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>LOGS</Text>
+                        <Text style={[styles.kpiLabel, { color: theme.colors.mute }]}>SHIFTS</Text>
                       </View>
                       <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>
-                        {activeMetrics.totalLogs} {activeMetrics.totalLogs === 1 ? 'Record' : 'Records'}
+                        {activeMetrics.totalLogs} {activeMetrics.totalLogs === 1 ? 'Shift' : 'Shifts'}
                       </Text>
                     </View>
                   </View>
@@ -1591,7 +1621,7 @@ export default function OperationsScreen() {
                       {selectedOperatorObj?.full_name || 'Operator'}
                     </Text>
                     <View style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#e0f2fe' }}>
-                      <Text style={{ fontSize: 10, fontFamily: 'monospace', color: theme.colors.link, fontWeight: '700' }}>
+                      <Text style={{ fontSize: 12, fontFamily: 'monospace', color: theme.colors.link, fontWeight: '700' }}>
                         OPERATOR
                       </Text>
                     </View>
@@ -1599,7 +1629,7 @@ export default function OperationsScreen() {
                 </View>
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: '800', color: theme.colors.link }}>
+                  <Text style={{ fontSize: 13.5, fontFamily: 'monospace', fontWeight: '800', color: theme.colors.link }}>
                     {Math.round(activeMetrics.runHours * 10) / 10} hrs
                   </Text>
                   {isOperatorSummaryExpanded ? (
@@ -1616,14 +1646,14 @@ export default function OperationsScreen() {
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 8, marginBottom: 8 }}>
                       {selectedOperatorObj?.phone ? (
                         <TouchableOpacity onPress={() => Linking.openURL(`tel:${selectedOperatorObj.phone}`)}>
-                          <Text style={{ fontSize: 11, color: theme.colors.link, fontFamily: 'monospace' }}>
+                          <Text style={{ fontSize: 12.5, color: theme.colors.link, fontFamily: 'monospace' }}>
                             ðŸ“ž {selectedOperatorObj.phone}
                           </Text>
                         </TouchableOpacity>
                       ) : null}
                       {selectedOperatorObj?.email ? (
-                        <Text style={{ fontSize: 11, color: theme.colors.mute }}>
-                          âœ‰ï¸ {selectedOperatorObj.email}
+                        <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>
+                          âœ‰ï¸  {selectedOperatorObj.email}
                         </Text>
                       ) : null}
                     </View>
@@ -1790,7 +1820,7 @@ export default function OperationsScreen() {
                         <View style={{ flex: 1, alignItems: 'flex-end' }}>
                           <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Shift Timings:</Text>
                           <Text style={[styles.logDetailValueMono, { color: theme.colors.ink }]}>
-                            {formatCompactTiming(log.start_time, log.end_time)}
+                            {`Shift ${log.shift_code || (log.shift?.toLowerCase().includes('night') ? 'S4' : log.shift?.toLowerCase().includes('morning') ? 'S1' : log.shift?.toLowerCase().includes('afternoon') ? 'S2' : 'S3')} • ${formatCompactTiming(log.start_time, log.end_time)}`}
                           </Text>
                         </View>
                       </View>
@@ -1816,9 +1846,9 @@ export default function OperationsScreen() {
                       <View style={[styles.logTimingRow, { borderTopColor: theme.colors.hairline }]}>
                         {logsViewMode !== 'client' && (
                         <View>
-                          <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Shift Timings:</Text>
+                          <Text style={[styles.logDetailLabel, { color: theme.colors.mute }]}>Shift & Timings:</Text>
                           <Text style={[styles.logDetailValueMono, { color: theme.colors.ink }]}>
-                            {formatCompactTiming(log.start_time, log.end_time)}
+                            {`Shift ${log.shift_code || (log.shift?.toLowerCase().includes('night') ? 'S4' : log.shift?.toLowerCase().includes('morning') ? 'S1' : log.shift?.toLowerCase().includes('afternoon') ? 'S2' : 'S3')} • ${formatCompactTiming(log.start_time, log.end_time)}`}
                           </Text>
                         </View>
                         )}
@@ -1933,7 +1963,7 @@ export default function OperationsScreen() {
                               </Text>
                             </View>
                           ) : null}
-                          <Text style={{ fontSize: 11, color: isPendingConflict ? (isDark ? '#fde68a' : '#92400e') : (isDark ? '#a7f3d0' : '#065f46'), fontWeight: '600' }}>
+                          <Text style={{ fontSize: 12.5, color: isPendingConflict ? (isDark ? '#fde68a' : '#92400e') : (isDark ? '#a7f3d0' : '#065f46'), fontWeight: '600' }}>
                             {isPendingConflict
                               ? cardConflict.conflictingEntity
                                 ? `Collides with active shift on ${cardConflict.conflictingEntity}`
@@ -1952,7 +1982,7 @@ export default function OperationsScreen() {
 
                     {/* Log Card Footer: Timestamp & Actions */}
                     <View style={[styles.logCardFooterActions, { borderTopColor: theme.colors.hairline }]}>
-                      <Text style={[styles.logIdMono, { color: theme.colors.mute, fontSize: 10, fontFamily: 'monospace' }]}>
+                      <Text style={[styles.logIdMono, { color: theme.colors.mute, fontSize: 12, fontFamily: 'monospace' }]}>
                         {log.created_at ? formatCompactExactTimestamp(log.created_at) : ''}
                       </Text>
                       {(canEditLogRecord(log) || canDeleteLogRecord) && (
@@ -1984,7 +2014,7 @@ export default function OperationsScreen() {
                               <Trash2 size={13} color={isDark ? '#fb7185' : '#e11d48'} />
                               <Text
                                 style={{
-                                  fontSize: 11,
+                                  fontSize: 13,
                                   fontWeight: '700',
                                   color: isDark ? '#fb7185' : '#e11d48',
                                 }}
@@ -2102,6 +2132,7 @@ export default function OperationsScreen() {
           machineCode={targetMachineForLog.machine_id}
           model={targetMachineForLog.model}
           serialNumber={targetMachineForLog.serial_number}
+          initialShiftCode={(entryContext?.assigned_shift_code || entryContext?.operator?.shift_code) ?? undefined}
           onSubmit={() => {
             setMeterModalVisible(false);
             handleDataRefresh();
@@ -2121,6 +2152,26 @@ export default function OperationsScreen() {
           existingLog={editingLogRecord}
           onSubmit={() => {
             setEditingLogRecord(null);
+            handleDataRefresh();
+          }}
+        />
+      )}
+
+      {/* Assisted Shift Entry Modal for Managers & Admins (Strictly above supervisor) */}
+      {assistedRow && isManagerOrAbove(user?.role) && (
+        <MeterLogModal
+          visible={Boolean(assistedRow && isManagerOrAbove(user?.role))}
+          onClose={() => setAssistedRow(null)}
+          machineId={assistedRow.machine_id}
+          machineCode={assistedRow.machine_code}
+          targetOperatorId={assistedRow.operator_id || undefined}
+          targetOperatorName={assistedRow.operator_name || undefined}
+          initialClientId={assistedRow.client_id || undefined}
+          initialShiftCode={assistedRow.shift_code || undefined}
+          initialStartMeter={assistedRow.current_meter != null ? assistedRow.current_meter : undefined}
+          initialLogDate={assistedRow.log_date || undefined}
+          onSubmit={() => {
+            setAssistedRow(null);
             handleDataRefresh();
           }}
         />
@@ -2201,12 +2252,12 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   conflictActionBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
   },
   conflictBannerDesc: {
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   cleanConflictCard: {
     borderRadius: radiusNumeric.lg,
@@ -2230,13 +2281,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cleanConflictMachineCode: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '800',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     letterSpacing: 0.2,
   },
   cleanConflictMachineModel: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   cleanSeverityPill: {
@@ -2246,7 +2297,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   cleanSeverityPillText: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.4,
   },
@@ -2259,7 +2310,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   cleanReviewBtnText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
   },
   cleanInfoStrip: {
@@ -2281,12 +2332,12 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   cleanInfoLabel: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.6,
   },
   cleanConflictTargetLabel: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.6,
   },
@@ -2296,11 +2347,11 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   cleanInfoValueText: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
   },
   cleanInfoValueMono: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
@@ -2311,7 +2362,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   cleanOtPillText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
@@ -2322,7 +2373,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   cleanConflictEntityBadgeText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '800',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
@@ -2335,7 +2386,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   conflictBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
   },
   conflictResolvedBadge: {
@@ -2347,7 +2398,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   conflictResolvedBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
   },
   logConflictAdvisoryWell: {
@@ -2363,16 +2414,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   logConflictTitle: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '800',
   },
   logConflictDesc: {
-    fontSize: 10.5,
-    lineHeight: 14,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: '500',
   },
   logConflictNotes: {
-    fontSize: 10,
+    fontSize: 12,
     fontStyle: 'italic',
     marginTop: 2,
   },
@@ -2385,7 +2436,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   resolveInlineBtnText: {
-    fontSize: 10,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   filterCard: {
@@ -2443,7 +2494,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   fieldLabel: {
-    fontSize: 11,
+    fontSize: 13.5,
     fontWeight: '700',
   },
   selectorTrigger: {
@@ -2456,7 +2507,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   selectorTriggerText: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '600',
     flex: 1,
   },
@@ -2472,7 +2523,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   summaryHeaderTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '900',
     letterSpacing: -0.2,
   },
@@ -2482,7 +2533,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   statusPrefix: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   statusBadgePill: {
@@ -2491,7 +2542,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   statusBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
@@ -2505,16 +2556,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   specLabel: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '800',
     marginBottom: 2,
   },
   specValue: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
   },
   specValueMono: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '800',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
@@ -2530,7 +2581,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   infoPillText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
   },
   clientContactGrid: {
@@ -2554,11 +2605,11 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   kpiLabel: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '800',
   },
   kpiValue: {
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: '900',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
@@ -2587,7 +2638,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   logDateText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
@@ -2599,17 +2650,17 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   timestampText: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   logMachineModel: {
-    fontSize: 14,
+    fontSize: 15.5,
     fontWeight: '800',
     marginTop: 1,
   },
   logMachineSerial: {
-    fontSize: 10,
+    fontSize: 12,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   breakdownBadge: {
@@ -2620,7 +2671,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   breakdownBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
   },
   normalBadge: {
@@ -2630,7 +2681,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   normalBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
@@ -2646,18 +2697,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   logDetailLabel: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '700',
   },
   logDetailValue: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
   },
   logDetailSub: {
-    fontSize: 10,
+    fontSize: 12,
   },
   logDetailPhone: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
@@ -2669,12 +2720,12 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   logDetailValueMono: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   logHoursValue: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '900',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
@@ -2687,12 +2738,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   logOtValue: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '800',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   logRemarksText: {
-    fontSize: 10,
+    fontSize: 12,
     fontStyle: 'italic',
     flex: 1,
   },
@@ -2713,11 +2764,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   paginationBtnText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
   },
   paginationPageText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   emptyCard: {
@@ -2727,7 +2778,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyCardText: {
-    fontSize: 12,
+    fontSize: 13,
     textAlign: 'center',
     fontStyle: 'italic',
   },
@@ -2740,7 +2791,7 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   logIdMono: {
-    fontSize: 10,
+    fontSize: 12,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
   logCardActionButtons: {

@@ -25,6 +25,7 @@ import {
   Search,
   Wrench,
   Gauge,
+  Activity,
   Clock,
   ClipboardList,
   Users,
@@ -133,10 +134,10 @@ export const MobileCommandPalette: React.FC<MobileCommandPaletteProps> = ({
         title: 'Daily Running Hours Logs',
         subtitle: 'View and export daily equipment meter logs and overtime disputes',
         category: 'Navigation',
-        icon: Clock,
-        href: '/(app)/operations',
-        keywords: ['running hours', 'meter log', 'log history', 'daily log'],
-        roles: ['super_admin', 'admin', 'manager', 'supervisor', 'hr', 'operator'],
+        icon: Activity,
+        href: '/(app)/running-logs',
+        keywords: ['running hours', 'meter log', 'log history', 'daily log', 'running logs'],
+        roles: ['super_admin', 'admin', 'manager', 'supervisor', 'hr'],
       },
       {
         id: 'nav-payroll',
@@ -528,7 +529,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   categoryLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.8,
     marginLeft: 4,
@@ -557,11 +558,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   itemTitle: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '600',
   },
   itemSubtitle: {
-    fontSize: 11,
+    fontSize: 12.5,
     marginTop: 1,
   },
 });

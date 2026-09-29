@@ -44,6 +44,7 @@ async function hydrateMachinePersonnelSingle(machine: any, supabase: any): Promi
       operator_id,
       shift_start_time,
       shift_end_time,
+      shift_code,
       crosses_midnight,
       is_active,
       assigned_by,
@@ -143,6 +144,9 @@ async function hydrateMachinePersonnelSingle(machine: any, supabase: any): Promi
       return {
         ...user,
         shift_time,
+        shift_code: assignment?.shift_code || user.shift_code || null,
+        shift_start_time: assignment?.shift_start_time || user.shift_start_time || null,
+        shift_end_time: assignment?.shift_end_time || user.shift_end_time || null,
       };
     })
     .filter(Boolean);
@@ -173,13 +177,41 @@ async function hydrateMachinePersonnelSingle(machine: any, supabase: any): Promi
   };
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidUuid(id?: string | null): boolean {
+  if (!id || typeof id !== "string") return false;
+  return UUID_REGEX.test(id.trim());
+}
+
 /**
- * Fetch detailed machine record by UUID.
+ * Resolves a machine identifier string (UUID or M/C-XXXX code) to canonical database UUID.
+ */
+export async function resolveMachineId(idOrCode: string): Promise<string | null> {
+  if (!idOrCode || typeof idOrCode !== "string") return null;
+  const trimmed = idOrCode.trim();
+  if (isValidUuid(trimmed)) return trimmed;
+
+  const supabase = createSupabaseAdminClient();
+  const { data } = await supabase
+    .from("machines")
+    .select("id")
+    .or(`machine_id.ilike.${trimmed}`)
+    .maybeSingle();
+
+  return data?.id || null;
+}
+
+/**
+ * Fetch detailed machine record by UUID or M/C-XXXX machine ID.
  * Deduplicates in-flight calls via React cache() and caches cross-request with targeted tag TAGS.machineDetail(id).
  */
-export const getMachineById = cache(async (id: string): Promise<Machine | null> => {
+export const getMachineById = cache(async (idOrCode: string): Promise<Machine | null> => {
   const user = await getCurrentUser();
   if (!user) throw new Error("Unauthorized");
+
+  const targetId = isValidUuid(idOrCode) ? idOrCode : await resolveMachineId(idOrCode);
+  if (!targetId) return null;
 
   const fetchCached = unstable_cache(
     async (): Promise<Machine | null> => {
@@ -187,7 +219,7 @@ export const getMachineById = cache(async (id: string): Promise<Machine | null> 
       const { data, error } = await supabase
         .from("machines")
         .select(MACHINE_DETAIL_COLUMNS)
-        .eq("id", id)
+        .eq("id", targetId)
         .maybeSingle();
 
       if (error || !data) {
@@ -198,10 +230,10 @@ export const getMachineById = cache(async (id: string): Promise<Machine | null> 
       const hydrated = await hydrateMachinePersonnelSingle(data, supabase);
       return hydrated as unknown as Machine;
     },
-    [`machines-detail-${id}`],
+    [`machines-detail-${targetId}`],
     {
       revalidate: CACHE_TIERS.CLASS_B_FLEET, // 60 seconds SWR
-      tags: [TAGS.machineDetail(id), TAGS.machines],
+      tags: [TAGS.machineDetail(targetId), TAGS.machines],
     }
   );
 

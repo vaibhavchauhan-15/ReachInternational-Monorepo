@@ -176,12 +176,90 @@
      Bottom Navigation Bar Height
      ============================================ */
   --bottom-nav-h: 0px;
+
+  /* Card Title & Caption tokens */
+  --text-card-title-size: 16px;
+  --text-card-title-line: 22px;
+  --text-caption-size: 12px;
+  --text-caption-line: 16px;
 }
 
 /* Mobile bottom nav height (56px bar + safe-area for notched devices) */
 @media (max-width: 767px) {
   :root {
     --bottom-nav-h: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* ============================================
+   Mobile Viewport Typography Scale (Industry Standard for Smartphones & Touch)
+   Increases legibility on ≤640px screens and guarantees consistent Primary,
+   Secondary, and Tertiary font sizes monorepo-wide.
+   ============================================ */
+@media (max-width: 640px) {
+  :root {
+    /* Primary Tier on Mobile: Headings, Body, Buttons */
+    --text-display-xl-size: 26px;
+    --text-display-xl-line: 32px;
+    --text-heading-lg-size: 22px;
+    --text-heading-lg-line: 28px;
+    --text-heading-md-size: 18px;
+    --text-heading-md-line: 24px;
+    --text-card-title-size: 16px;
+    --text-card-title-line: 22px;
+    --text-body-lg-size: 16px;
+    --text-body-lg-line: 24px;
+    --text-body-md-size: 15px; /* Primary mobile body */
+    --text-body-md-line: 22px;
+    --text-button-lg-size: 16px;
+    --text-button-lg-line: 22px;
+    --text-button-md-size: 15px; /* Primary mobile button */
+    --text-button-md-line: 20px;
+
+    /* Secondary Tier on Mobile: Subtitles, Labels, Badges, Filter Pills */
+    --text-subtitle-size: 14px;
+    --text-subtitle-line: 20px;
+    --text-label-sm-size: 13.5px;
+    --text-label-sm-line: 18px;
+    --text-body-sm-size: 13px;
+    --text-body-sm-line: 18px;
+
+    /* Tertiary Tier on Mobile: Captions, Metadata, Eyebrows (Strict floor: 12px) */
+    --text-caption-size: 12px;
+    --text-caption-line: 16px;
+    --text-mono-eyebrow-size: 12px;
+    --text-mono-eyebrow-line: 16px;
+    --text-code-size: 13px;
+    --text-code-line: 18px;
+  }
+
+  /* Industry Standard Minimum Accessible Font Size on Mobile:
+     Clamp all microscopic 8px/9px/10px/11px utility text to at least 12px-13px */
+  .text-\[8px\],
+  .text-\[9px\],
+  .text-\[9\.5px\],
+  .text-\[10px\],
+  [class*="text-[8px]"],
+  [class*="text-[9px]"],
+  [class*="text-[9.5px]"],
+  [class*="text-[10px]"] {
+    font-size: 12px !important;
+    line-height: 16px !important;
+  }
+
+  .text-\[10\.5px\],
+  .text-\[11px\],
+  [class*="text-[10.5px]"],
+  [class*="text-[11px]"] {
+    font-size: 12.5px !important;
+    line-height: 17px !important;
+  }
+
+  /* Mobile Touch Screen Form Inputs: Prevent unwanted iOS Safari viewport auto-zoom */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"]):not([type="hidden"]),
+  select,
+  textarea {
+    font-size: 16px;
   }
 }
 
@@ -724,13 +802,13 @@ html {
   cursor: not-allowed;
 }
 
-/* Inputs */
+/* Inputs — Standardized Cross-Platform Sizing */
 .input-base {
   background: var(--color-canvas);
   color: var(--color-ink);
   border: 1px solid var(--color-hairline);
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 15px; /* 15px minimum on mobile for touch clarity */
   font-weight: 500;
   height: 42px;
   min-height: 42px;
@@ -743,6 +821,7 @@ html {
 
 @media (min-width: 640px) {
   .input-base {
+    font-size: 14px;
     height: 44px;
     min-height: 44px;
   }
@@ -767,16 +846,46 @@ html {
   opacity: 0.7;
 }
 
-/* Badges */
+/* Badges — Standardized Cross-Platform Status Indicator */
 .badge-base {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 8px;
+  gap: 5px;
+  padding: 2.5px 9px;
   border-radius: var(--radius-full);
-  font-size: var(--text-body-sm-size);
-  font-weight: 500;
-  line-height: var(--text-body-sm-line);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 16px;
+  letter-spacing: 0.01em;
+}
+
+@media (min-width: 640px) {
+  .badge-base {
+    font-size: 12px;
+    padding: 2px 8px;
+  }
+}
+
+/* ============================================
+   Cross-Platform Typography Utility Classes
+   Strictly uniform across all web and mobile pages
+   ============================================ */
+.font-mobile-primary {
+  font-size: 15px !important;
+  line-height: 22px !important;
+  font-weight: 600 !important;
+}
+
+.font-mobile-secondary {
+  font-size: 13.5px !important;
+  line-height: 19px !important;
+  font-weight: 500 !important;
+}
+
+.font-mobile-tertiary {
+  font-size: 12px !important;
+  line-height: 16px !important;
+  font-weight: 500 !important;
 }
 
 /* ============================================

@@ -174,7 +174,7 @@ export function normalizeOperationsFilter(raw: RawOperationsFilterInput = {}): N
   // 6. Resolve pagination
   const page = Math.max(1, Number(raw.page) || 1);
   const parsedPageSize = Number(raw.pageSize);
-  const pageSize = [10, 20, 25, 50].includes(parsedPageSize) ? parsedPageSize : 20;
+  const pageSize = parsedPageSize > 0 ? parsedPageSize : 500;
 
   return {
     machineId,

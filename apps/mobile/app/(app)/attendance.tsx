@@ -37,7 +37,7 @@ import {
 } from 'lucide-react-native';
 import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens';
 
-const ALLOWED_ROLES = ['super_admin', 'admin', 'hr'];
+const ALLOWED_ROLES = ['super_admin', 'admin', 'hr', 'manager', 'supervisor', 'operator'];
 
 export interface AttendanceEmployee {
   employee_id: string;
@@ -102,6 +102,7 @@ export interface AttendanceDay {
 export interface AttendanceDetailData {
   employee: {
     id: string;
+    employee_id?: string | null;
     full_name: string;
     email?: string | null;
     phone: string | null;
@@ -128,13 +129,14 @@ const DOW_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function AttendanceScreen() {
   const { theme, isDark } = useTheme();
-  const { role } = useAuth();
+  const { role, user } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
   // Guard access
   const normalizedRole = (role || '').toLowerCase();
   const isAllowed = ALLOWED_ROLES.includes(normalizedRole);
+  const isOperator = normalizedRole === 'operator';
 
   useEffect(() => {
     if (role && !isAllowed) {
@@ -184,7 +186,7 @@ export default function AttendanceScreen() {
     totalOtMinutes: 0,
   });
 
-  // Detail Modal State
+  // Detail State (Used for both operator direct view and manager modal view)
   const [selectedEmployee, setSelectedEmployee] = useState<AttendanceEmployee | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailData, setDetailData] = useState<AttendanceDetailData | null>(null);
@@ -192,20 +194,40 @@ export default function AttendanceScreen() {
   const fetchAttendance = useCallback(async (y: number, m: number) => {
     try {
       setLoading(true);
-      const { data, error } = await supabase.rpc('get_attendance_monthly_summary', {
-        p_year: y,
-        p_month: m,
-        p_page: 1,
-        p_page_size: 200,
-      });
+      if (normalizedRole === 'operator') {
+        if (!user?.id) {
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        }
+        const { data, error } = await supabase.rpc('get_attendance_daily_detail', {
+          p_employee_id: user.id,
+          p_year: y,
+          p_month: m,
+        });
 
-      if (error) {
-        console.error('[AttendanceScreen] Fetch error:', error);
-        Alert.alert('Error', error.message || 'Failed to fetch attendance data');
-      } else if (data) {
-        setEmployees(data.rows || []);
-        if (data.kpis) {
-          setKpis(data.kpis);
+        if (error) {
+          console.error('[AttendanceScreen] Operator fetch error:', error);
+          Alert.alert('Error', error.message || 'Failed to fetch attendance data');
+        } else if (data) {
+          setDetailData(data as unknown as AttendanceDetailData);
+        }
+      } else {
+        const { data, error } = await supabase.rpc('get_attendance_monthly_summary', {
+          p_year: y,
+          p_month: m,
+          p_page: 1,
+          p_page_size: 200,
+        });
+
+        if (error) {
+          console.error('[AttendanceScreen] Fetch error:', error);
+          Alert.alert('Error', error.message || 'Failed to fetch attendance data');
+        } else if (data) {
+          setEmployees(data.rows || []);
+          if (data.kpis) {
+            setKpis(data.kpis);
+          }
         }
       }
     } catch (err: any) {
@@ -214,13 +236,19 @@ export default function AttendanceScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [normalizedRole, user?.id]);
 
   useEffect(() => {
     if (isAllowed) {
-      fetchAttendance(year, month);
+      if (normalizedRole === 'operator') {
+        if (user?.id) {
+          fetchAttendance(year, month);
+        }
+      } else {
+        fetchAttendance(year, month);
+      }
     }
-  }, [year, month, isAllowed, fetchAttendance]);
+  }, [year, month, isAllowed, normalizedRole, user?.id, fetchAttendance]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -362,13 +390,170 @@ export default function AttendanceScreen() {
     }
   };
 
+  const renderDetailBody = (data: AttendanceDetailData) => {
+    return (
+      <View>
+        {/* Employee Meta Card (Hidden when operator views their own attendance) */}
+        {!isOperator && (
+          <View style={[styles.modalEmpCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+            <View style={styles.modalEmpRow}>
+              <View style={styles.modalEmpCol}>
+                <Text style={[styles.modalEmpLabel, { color: theme.colors.mute }]}>EMPLOYEE ID</Text>
+                <Text style={[styles.modalEmpValue, { color: theme.colors.ink }]}>
+                  {data.employee.employee_id || `EMP-${data.employee.id.slice(0, 8).toUpperCase()}`}
+                </Text>
+              </View>
+              <View style={styles.modalEmpCol}>
+                <Text style={[styles.modalEmpLabel, { color: theme.colors.mute }]}>PHONE</Text>
+                <Text style={[styles.modalEmpValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                  {data.employee.phone || '—'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={[styles.modalEmpRow, { marginTop: 8 }]}>
+              <View style={styles.modalEmpCol}>
+                <Text style={[styles.modalEmpLabel, { color: theme.colors.mute }]}>SITE LOCATION</Text>
+                <Text style={[styles.modalEmpValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                  {data.employee.city ? `${data.employee.city}${data.employee.state ? `, ${data.employee.state}` : ''}` : '—'}
+                </Text>
+              </View>
+              <View style={styles.modalEmpCol}>
+                <Text style={[styles.modalEmpLabel, { color: theme.colors.mute }]}>SHIFT</Text>
+                <Text style={[styles.modalEmpValue, { color: theme.colors.ink }]} numberOfLines={1}>
+                  {data.employee.shift_start_time && data.employee.shift_end_time
+                    ? `${formatTimeAMPM(data.employee.shift_start_time)} – ${formatTimeAMPM(data.employee.shift_end_time)}`
+                    : '08:00 AM – 05:00 PM'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Summary Cards */}
+        <View style={styles.detailSummaryRow}>
+          <View style={[styles.detailStatCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+            <Text style={[styles.detailStatNum, { color: '#16a34a' }]}>{data.summary.presentDays}</Text>
+            <Text style={[styles.detailStatLabel, { color: theme.colors.mute }]}>Present</Text>
+          </View>
+          <View style={[styles.detailStatCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+            <Text style={[styles.detailStatNum, { color: '#dc2626' }]}>{data.summary.absentDays}</Text>
+            <Text style={[styles.detailStatLabel, { color: theme.colors.mute }]}>Absent</Text>
+          </View>
+          <View style={[styles.detailStatCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+            <Text style={[styles.detailStatNum, { color: '#d97706' }]}>{data.summary.halfDays}</Text>
+            <Text style={[styles.detailStatLabel, { color: theme.colors.mute }]}>Half Days</Text>
+          </View>
+          <View style={[styles.detailStatCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+            <Text style={[styles.detailStatNum, { color: '#6b7280' }]}>{data.summary.weekOffs}</Text>
+            <Text style={[styles.detailStatLabel, { color: theme.colors.mute }]}>Week Offs</Text>
+          </View>
+        </View>
+
+        {/* Total Hours Card */}
+        <View style={[styles.hoursSummaryCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+          <View style={styles.hoursCol}>
+            <Text style={[styles.hoursSub, { color: theme.colors.mute }]}>Total Worked</Text>
+            <Text style={[styles.hoursMain, { color: theme.colors.ink }]}>
+              {formatMins(data.summary.totalWorkedMinutes)}
+            </Text>
+          </View>
+          <View style={styles.hoursCol}>
+            <Text style={[styles.hoursSub, { color: theme.colors.mute }]}>Total Overtime</Text>
+            <Text style={[styles.hoursMain, { color: '#2563eb' }]}>
+              {formatMins(data.summary.totalOtMinutes)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Day-by-Day Log List */}
+        <Text style={[styles.sectionHeading, { color: theme.colors.ink }]}>Daily Attendance Records</Text>
+
+        {data.days.map((day) => {
+          const dayNum = day.date.split('-')[2];
+          const dowLabel = DOW_LABELS[day.dow];
+          const isSunday = day.dow === 0;
+          const todayStr = new Date().toISOString().slice(0, 10);
+          const isFuture = day.date > todayStr;
+          const isToday = day.date === todayStr;
+          const isTodayNoLog = isToday && day.log_count === 0 && day.worked_minutes === 0;
+          const isDisabled = (day.status === 'DISABLED' || isFuture || isTodayNoLog) && !isSunday;
+          const effectiveStatus = isDisabled ? 'DISABLED' : day.status;
+
+          return (
+            <View
+              key={day.date}
+              style={[
+                styles.dayRowCard,
+                {
+                  backgroundColor: theme.colors.canvasElevated,
+                  borderColor: isSunday
+                    ? (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')
+                    : isDisabled
+                    ? (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)')
+                    : theme.colors.hairline,
+                  opacity: isDisabled ? 0.45 : isSunday ? 0.75 : 1,
+                },
+              ]}
+            >
+              <View style={styles.dayDateCol}>
+                <Text style={[styles.dayNum, { color: isDisabled ? theme.colors.faint : theme.colors.ink }]}>{dayNum}</Text>
+                <Text style={[styles.dayDow, { color: isSunday ? '#ef4444' : theme.colors.mute }]}>{dowLabel}</Text>
+              </View>
+
+              <View style={styles.dayDetailsCol}>
+                <View style={styles.dayStatusRow}>
+                  {renderStatusBadge(effectiveStatus)}
+                  {day.worked_minutes > 0 ? (
+                    <Text style={[styles.dayWorkedText, { color: theme.colors.ink }]}>
+                      {formatMins(day.worked_minutes)}
+                    </Text>
+                  ) : isDisabled ? (
+                    <Text style={{ fontSize: 12.5, color: theme.colors.faint }}>
+                      {isToday ? 'In progress' : 'Upcoming'}
+                    </Text>
+                  ) : null}
+                  {day.overtime_minutes > 0 ? (
+                    <Text style={[styles.dayOtText, { color: '#2563eb' }]}>
+                      +{formatMins(day.overtime_minutes)} OT
+                    </Text>
+                  ) : null}
+                </View>
+
+                {day.punch_in && day.punch_out ? (
+                  <Text style={{ fontSize: 12.5, color: theme.colors.mute, marginTop: 2, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                    Shift: {formatTimeAMPM(day.punch_in)} – {formatTimeAMPM(day.punch_out)}
+                  </Text>
+                ) : null}
+
+                {day.entries && day.entries.length > 0 ? (
+                  <View style={styles.dayEntriesWrap}>
+                    {day.entries.map((entry, idx) => (
+                      <View key={entry.id || idx} style={styles.dayEntryItem}>
+                        <Text style={[styles.entryTime, { color: theme.colors.mute }]} numberOfLines={1}>
+                          {entry.machine_code ? `${entry.machine_code} • ` : ''}
+                          {formatTimeAMPM(entry.start_time)} - {formatTimeAMPM(entry.end_time)}
+                          {entry.location ? ` • ${entry.location}` : ''}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
   if (!isAllowed) {
     return null;
   }
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.canvas }]}>
-      <MobileHeader title="Attendance" />
+      <MobileHeader title={isOperator ? 'My Attendance' : 'Attendance'} />
 
       <ScrollView
         style={styles.scroll}
@@ -408,409 +593,283 @@ export default function AttendanceScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* KPI Strip */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.kpiRow}
-        >
-          <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <View style={styles.kpiHeader}>
-              <Users size={14} color={theme.colors.mute} />
-              <Text style={[styles.kpiTitle, { color: theme.colors.mute }]}>Total Operators</Text>
-            </View>
-            <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>{kpis.totalEmployees}</Text>
-          </View>
-
-          <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <View style={styles.kpiHeader}>
-              <UserCheck size={14} color="#16a34a" />
-              <Text style={[styles.kpiTitle, { color: theme.colors.mute }]}>Present</Text>
-            </View>
-            <Text style={[styles.kpiValue, { color: '#16a34a' }]}>{kpis.presentCount}</Text>
-          </View>
-
-          <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <View style={styles.kpiHeader}>
-              <UserX size={14} color="#dc2626" />
-              <Text style={[styles.kpiTitle, { color: theme.colors.mute }]}>Absent</Text>
-            </View>
-            <Text style={[styles.kpiValue, { color: '#dc2626' }]}>{kpis.absentCount}</Text>
-          </View>
-
-          <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <View style={styles.kpiHeader}>
-              <Clock size={14} color="#d97706" />
-              <Text style={[styles.kpiTitle, { color: theme.colors.mute }]}>Half Day</Text>
-            </View>
-            <Text style={[styles.kpiValue, { color: '#d97706' }]}>{kpis.halfDayCount}</Text>
-          </View>
-        </ScrollView>
-
-        {/* Search Input */}
-        <View style={[styles.searchBox, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-          <Search size={16} color={theme.colors.mute} style={{ marginRight: 8 }} />
-          <TextInput
-            style={[styles.searchInput, { color: theme.colors.ink }]}
-            placeholder="Search operator by name, phone, city..."
-            placeholderTextColor={theme.colors.mute}
-            value={searchQuery}
-            onChangeText={(text) => setSearchQuery(text)}
-            autoCapitalize="none"
-          />
-          {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('', true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <X size={16} color={theme.colors.mute} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
-        {/* Status Filter Strip */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterStrip}
-        >
-          {(['all', 'present', 'absent', 'half_day', 'has_absences', 'perfect'] as const).map((st) => {
-            const active = statusFilter === st;
-            const labels: Record<string, string> = {
-              all: `All (${employees.length})`,
-              present: `Present (${kpis.presentCount})`,
-              absent: `Absent (${kpis.absentCount})`,
-              half_day: `Half Day (${kpis.halfDayCount})`,
-              has_absences: `Absences (${employees.filter((e) => e.absent_days > 0).length})`,
-              perfect: `Perfect (${employees.filter((e) => e.absent_days === 0 && e.present_days > 0).length})`,
-            };
-            return (
-              <TouchableOpacity
-                key={st}
-                onPress={() => setStatusFilter(st)}
-                style={[
-                  styles.filterChip,
-                  {
-                    backgroundColor: active
-                      ? (isDark ? '#262626' : '#171717')
-                      : theme.colors.canvasElevated,
-                    borderColor: active
-                      ? (isDark ? '#525252' : '#171717')
-                      : theme.colors.hairline,
-                  },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    { color: active ? '#ffffff' : theme.colors.ink },
-                  ]}
-                >
-                  {labels[st]}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-
-        {/* List Content */}
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={theme.colors.ink} />
-            <Text style={[styles.loadingText, { color: theme.colors.mute }]}>Loading attendance...</Text>
-          </View>
-        ) : filteredEmployees.length === 0 ? (
-          <EmptyState
-            title="No Attendance Found"
-            description="No operator records match your filter criteria for this month."
-          />
-        ) : (
-          <View style={styles.cardList}>
-            {filteredEmployees.map((emp) => (
-              <TouchableOpacity
-                key={emp.employee_id}
-                style={[
-                  styles.employeeCard,
-                  { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
-                ]}
-                activeOpacity={0.7}
-                onPress={() => handleOpenDetail(emp)}
-              >
-                {/* Header Row */}
-                <View style={styles.cardHeader}>
-                  <View style={styles.nameRow}>
-                    <HighlightText
-                      text={emp.full_name}
-                      query={searchQuery}
-                      style={[styles.empName, { color: theme.colors.ink }]}
-                      numberOfLines={1}
-                    />
-                  </View>
-
-                  <View style={styles.metaRow}>
-                    {emp.phone ? (
-                      <View style={styles.metaItem}>
-                        <Phone size={12} color={theme.colors.mute} style={{ marginRight: 3 }} />
-                        <HighlightText
-                          text={emp.phone}
-                          query={searchQuery}
-                          style={[styles.metaText, { color: theme.colors.mute }]}
-                        />
-                      </View>
-                    ) : null}
-                    {emp.city ? (
-                      <View style={styles.metaItem}>
-                        <MapPin size={12} color={theme.colors.mute} style={{ marginRight: 3 }} />
-                        <HighlightText
-                          text={emp.city}
-                          query={searchQuery}
-                          style={[styles.metaText, { color: theme.colors.mute }]}
-                        />
-                      </View>
-                    ) : null}
-                  </View>
-                </View>
-
-                {/* Day Counts Strip */}
-                <View style={[styles.statsRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }]}>
-                  <View style={styles.statCol}>
-                    <Text style={[styles.statVal, { color: theme.colors.ink }]}>{emp.scheduled_days}</Text>
-                    <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Scheduled</Text>
-                  </View>
-                  <View style={styles.statDivider} />
-                  <View style={styles.statCol}>
-                    <Text style={[styles.statVal, { color: '#16a34a' }]}>{Math.min(emp.present_days, emp.scheduled_days)}</Text>
-                    <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Present</Text>
-                  </View>
-                  <View style={styles.statDivider} />
-                  <View style={styles.statCol}>
-                    <Text style={[styles.statVal, { color: '#dc2626' }]}>{emp.absent_days}</Text>
-                    <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Absent</Text>
-                  </View>
-                  <View style={styles.statDivider} />
-                  <View style={styles.statCol}>
-                    <Text style={[styles.statVal, { color: '#d97706' }]}>{emp.half_days}</Text>
-                    <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Half-Day</Text>
-                  </View>
-                </View>
-
-                {/* Hours & Shift Footer */}
-                <View style={styles.cardFooter}>
-                  <View style={styles.hoursItem}>
-                    <Clock size={13} color={theme.colors.mute} style={{ marginRight: 4 }} />
-                    <Text style={[styles.hoursLabel, { color: theme.colors.mute }]}>Worked: </Text>
-                    <Text style={[styles.hoursValue, { color: theme.colors.ink }]}>
-                      {formatMins(emp.worked_minutes)}
-                    </Text>
-                    {emp.overtime_minutes > 0 ? (
-                      <Text style={[styles.otBadge, { color: '#2563eb' }]}>
-                        {' '}+{formatMins(emp.overtime_minutes)} OT
-                      </Text>
-                    ) : null}
-                  </View>
-
-                  <View style={styles.viewDetailBtn}>
-                    <Text style={styles.viewDetailText}>View Calendar</Text>
-                    <ChevronRight size={14} color="#0070f3" />
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Employee Detail / Calendar Modal */}
-      <Modal
-        visible={!!selectedEmployee}
-        animationType="slide"
-        transparent={false}
-        onRequestClose={() => setSelectedEmployee(null)}
-      >
-        <View style={[styles.modalContainer, { backgroundColor: theme.colors.canvas, paddingTop: insets.top }]}>
-          {/* Modal Header */}
-          <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.modalTitle, { color: theme.colors.ink }]} numberOfLines={1}>
-                {selectedEmployee?.full_name}
-              </Text>
-              <Text style={[styles.modalSubtitle, { color: theme.colors.mute }]}>
-                {monthLabel} • Shift: {formatTime(selectedEmployee?.shift_start_time ?? null)} - {formatTime(selectedEmployee?.shift_end_time ?? null)}
-              </Text>
-            </View>
-            <TouchableOpacity
-              onPress={() => setSelectedEmployee(null)}
-              style={styles.closeBtn}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <X size={22} color={theme.colors.ink} />
-            </TouchableOpacity>
-          </View>
-
-          {detailLoading ? (
+        {isOperator ? (
+          loading ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color={theme.colors.ink} />
-              <Text style={[styles.loadingText, { color: theme.colors.mute }]}>Loading daily calendar...</Text>
+              <Text style={[styles.loadingText, { color: theme.colors.mute }]}>Loading attendance...</Text>
             </View>
           ) : detailData ? (
+            renderDetailBody(detailData)
+          ) : (
+            <EmptyState
+              title="No Attendance Found"
+              description="No attendance records found for this month."
+            />
+          )
+        ) : (
+          <>
+            {/* KPI Strip */}
             <ScrollView
-              style={styles.modalScroll}
-              contentContainerStyle={[
-                styles.modalScrollContent,
-                { paddingBottom: insets.bottom + 32 },
-              ]}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.kpiRow}
             >
-              {/* Employee Meta Card (Synchronized with Web & User PDF) */}
-              <View style={[styles.modalEmpCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                <View style={styles.modalEmpRow}>
-                  <View style={styles.modalEmpCol}>
-                    <Text style={[styles.modalEmpLabel, { color: theme.colors.mute }]}>EMPLOYEE ID</Text>
-                    <Text style={[styles.modalEmpValue, { color: theme.colors.ink }]}>
-                      {`EMP-${detailData.employee.id.slice(0, 8).toUpperCase()}`}
-                    </Text>
-                  </View>
-                  <View style={styles.modalEmpCol}>
-                    <Text style={[styles.modalEmpLabel, { color: theme.colors.mute }]}>PHONE</Text>
-                    <Text style={[styles.modalEmpValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                      {detailData.employee.phone || '—'}
-                    </Text>
-                  </View>
+              <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+                <View style={styles.kpiHeader}>
+                  <Users size={14} color={theme.colors.mute} />
+                  <Text style={[styles.kpiTitle, { color: theme.colors.mute }]}>Total Operators</Text>
                 </View>
-
-                <View style={[styles.modalEmpRow, { marginTop: 8 }]}>
-                  <View style={styles.modalEmpCol}>
-                    <Text style={[styles.modalEmpLabel, { color: theme.colors.mute }]}>SITE LOCATION</Text>
-                    <Text style={[styles.modalEmpValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                      {detailData.employee.city ? `${detailData.employee.city}${detailData.employee.state ? `, ${detailData.employee.state}` : ''}` : '—'}
-                    </Text>
-                  </View>
-                  <View style={styles.modalEmpCol}>
-                    <Text style={[styles.modalEmpLabel, { color: theme.colors.mute }]}>SHIFT</Text>
-                    <Text style={[styles.modalEmpValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                      {detailData.employee.shift_start_time && detailData.employee.shift_end_time
-                        ? `${formatTimeAMPM(detailData.employee.shift_start_time)} – ${formatTimeAMPM(detailData.employee.shift_end_time)}`
-                        : '08:00 AM – 05:00 PM'}
-                    </Text>
-                  </View>
-                </View>
+                <Text style={[styles.kpiValue, { color: theme.colors.ink }]}>{kpis.totalEmployees}</Text>
               </View>
 
-              {/* Summary Cards */}
-              <View style={styles.detailSummaryRow}>
-                <View style={[styles.detailStatCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                  <Text style={[styles.detailStatNum, { color: '#16a34a' }]}>{detailData.summary.presentDays}</Text>
-                  <Text style={[styles.detailStatLabel, { color: theme.colors.mute }]}>Present</Text>
+              <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+                <View style={styles.kpiHeader}>
+                  <UserCheck size={14} color="#16a34a" />
+                  <Text style={[styles.kpiTitle, { color: theme.colors.mute }]}>Present</Text>
                 </View>
-                <View style={[styles.detailStatCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                  <Text style={[styles.detailStatNum, { color: '#dc2626' }]}>{detailData.summary.absentDays}</Text>
-                  <Text style={[styles.detailStatLabel, { color: theme.colors.mute }]}>Absent</Text>
-                </View>
-                <View style={[styles.detailStatCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                  <Text style={[styles.detailStatNum, { color: '#d97706' }]}>{detailData.summary.halfDays}</Text>
-                  <Text style={[styles.detailStatLabel, { color: theme.colors.mute }]}>Half Days</Text>
-                </View>
-                <View style={[styles.detailStatCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                  <Text style={[styles.detailStatNum, { color: '#6b7280' }]}>{detailData.summary.weekOffs}</Text>
-                  <Text style={[styles.detailStatLabel, { color: theme.colors.mute }]}>Week Offs</Text>
-                </View>
+                <Text style={[styles.kpiValue, { color: '#16a34a' }]}>{kpis.presentCount}</Text>
               </View>
 
-              {/* Total Hours Card */}
-              <View style={[styles.hoursSummaryCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-                <View style={styles.hoursCol}>
-                  <Text style={[styles.hoursSub, { color: theme.colors.mute }]}>Total Worked</Text>
-                  <Text style={[styles.hoursMain, { color: theme.colors.ink }]}>
-                    {formatMins(detailData.summary.totalWorkedMinutes)}
-                  </Text>
+              <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+                <View style={styles.kpiHeader}>
+                  <UserX size={14} color="#dc2626" />
+                  <Text style={[styles.kpiTitle, { color: theme.colors.mute }]}>Absent</Text>
                 </View>
-                <View style={styles.hoursCol}>
-                  <Text style={[styles.hoursSub, { color: theme.colors.mute }]}>Total Overtime</Text>
-                  <Text style={[styles.hoursMain, { color: '#2563eb' }]}>
-                    {formatMins(detailData.summary.totalOtMinutes)}
-                  </Text>
-                </View>
+                <Text style={[styles.kpiValue, { color: '#dc2626' }]}>{kpis.absentCount}</Text>
               </View>
 
-              {/* Day-by-Day Log List */}
-              <Text style={[styles.sectionHeading, { color: theme.colors.ink }]}>Daily Attendance Records</Text>
+              <View style={[styles.kpiCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+                <View style={styles.kpiHeader}>
+                  <Clock size={14} color="#d97706" />
+                  <Text style={[styles.kpiTitle, { color: theme.colors.mute }]}>Half Day</Text>
+                </View>
+                <Text style={[styles.kpiValue, { color: '#d97706' }]}>{kpis.halfDayCount}</Text>
+              </View>
+            </ScrollView>
 
-              {detailData.days.map((day) => {
-                const dayNum = day.date.split('-')[2];
-                const dowLabel = DOW_LABELS[day.dow];
-                const isSunday = day.dow === 0;
-                const todayStr = new Date().toISOString().slice(0, 10);
-                const isFuture = day.date > todayStr;
-                const isToday = day.date === todayStr;
-                const isTodayNoLog = isToday && day.log_count === 0 && day.worked_minutes === 0;
-                const isDisabled = (day.status === 'DISABLED' || isFuture || isTodayNoLog) && !isSunday;
-                const effectiveStatus = isDisabled ? 'DISABLED' : day.status;
+            {/* Search Input */}
+            <View style={[styles.searchBox, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
+              <Search size={16} color={theme.colors.mute} style={{ marginRight: 8 }} />
+              <TextInput
+                style={[styles.searchInput, { color: theme.colors.ink }]}
+                placeholder="Search operator by name, phone, city..."
+                placeholderTextColor={theme.colors.mute}
+                value={searchQuery}
+                onChangeText={(text) => setSearchQuery(text)}
+                autoCapitalize="none"
+              />
+              {searchQuery ? (
+                <TouchableOpacity onPress={() => setSearchQuery('', true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <X size={16} color={theme.colors.mute} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
 
+            {/* Status Filter Strip */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterStrip}
+            >
+              {(['all', 'present', 'absent', 'half_day', 'has_absences', 'perfect'] as const).map((st) => {
+                const active = statusFilter === st;
+                const labels: Record<string, string> = {
+                  all: `All (${employees.length})`,
+                  present: `Present (${kpis.presentCount})`,
+                  absent: `Absent (${kpis.absentCount})`,
+                  half_day: `Half Day (${kpis.halfDayCount})`,
+                  has_absences: `Absences (${employees.filter((e) => e.absent_days > 0).length})`,
+                  perfect: `Perfect (${employees.filter((e) => e.absent_days === 0 && e.present_days > 0).length})`,
+                };
                 return (
-                  <View
-                    key={day.date}
+                  <TouchableOpacity
+                    key={st}
+                    onPress={() => setStatusFilter(st)}
                     style={[
-                      styles.dayRowCard,
+                      styles.filterChip,
                       {
-                        backgroundColor: theme.colors.canvasElevated,
-                        borderColor: isSunday
-                          ? (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')
-                          : isDisabled
-                          ? (isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)')
+                        backgroundColor: active
+                          ? (isDark ? '#262626' : '#171717')
+                          : theme.colors.canvasElevated,
+                        borderColor: active
+                          ? (isDark ? '#525252' : '#171717')
                           : theme.colors.hairline,
-                        opacity: isDisabled ? 0.45 : isSunday ? 0.75 : 1,
                       },
                     ]}
                   >
-                    <View style={styles.dayDateCol}>
-                      <Text style={[styles.dayNum, { color: isDisabled ? theme.colors.faint : theme.colors.ink }]}>{dayNum}</Text>
-                      <Text style={[styles.dayDow, { color: isSunday ? '#ef4444' : theme.colors.mute }]}>{dowLabel}</Text>
+                    <Text
+                      style={[
+                        styles.filterChipText,
+                        { color: active ? '#ffffff' : theme.colors.ink },
+                      ]}
+                    >
+                      {labels[st]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* List Content */}
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={theme.colors.ink} />
+                <Text style={[styles.loadingText, { color: theme.colors.mute }]}>Loading attendance...</Text>
+              </View>
+            ) : filteredEmployees.length === 0 ? (
+              <EmptyState
+                title="No Attendance Found"
+                description="No operator records match your filter criteria for this month."
+              />
+            ) : (
+              <View style={styles.cardList}>
+                {filteredEmployees.map((emp) => (
+                  <TouchableOpacity
+                    key={emp.employee_id}
+                    style={[
+                      styles.employeeCard,
+                      { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline },
+                    ]}
+                    activeOpacity={0.7}
+                    onPress={() => handleOpenDetail(emp)}
+                  >
+                    {/* Header Row */}
+                    <View style={styles.cardHeader}>
+                      <View style={styles.nameRow}>
+                        <HighlightText
+                          text={emp.full_name}
+                          query={searchQuery}
+                          style={[styles.empName, { color: theme.colors.ink }]}
+                          numberOfLines={1}
+                        />
+                      </View>
+
+                      <View style={styles.metaRow}>
+                        {emp.phone ? (
+                          <View style={styles.metaItem}>
+                            <Phone size={12} color={theme.colors.mute} style={{ marginRight: 3 }} />
+                            <HighlightText
+                              text={emp.phone}
+                              query={searchQuery}
+                              style={[styles.metaText, { color: theme.colors.mute }]}
+                            />
+                          </View>
+                        ) : null}
+                        {emp.city ? (
+                          <View style={styles.metaItem}>
+                            <MapPin size={12} color={theme.colors.mute} style={{ marginRight: 3 }} />
+                            <HighlightText
+                              text={emp.city}
+                              query={searchQuery}
+                              style={[styles.metaText, { color: theme.colors.mute }]}
+                            />
+                          </View>
+                        ) : null}
+                      </View>
                     </View>
 
-                    <View style={styles.dayDetailsCol}>
-                      <View style={styles.dayStatusRow}>
-                        {renderStatusBadge(effectiveStatus)}
-                        {day.worked_minutes > 0 ? (
-                          <Text style={[styles.dayWorkedText, { color: theme.colors.ink }]}>
-                            {formatMins(day.worked_minutes)}
-                          </Text>
-                        ) : isDisabled ? (
-                          <Text style={{ fontSize: 11, color: theme.colors.faint }}>
-                            {isToday ? 'In progress' : 'Upcoming'}
-                          </Text>
-                        ) : null}
-                        {day.overtime_minutes > 0 ? (
-                          <Text style={[styles.dayOtText, { color: '#2563eb' }]}>
-                            +{formatMins(day.overtime_minutes)} OT
+                    {/* Day Counts Strip */}
+                    <View style={[styles.statsRow, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)' }]}>
+                      <View style={styles.statCol}>
+                        <Text style={[styles.statVal, { color: theme.colors.ink }]}>{emp.scheduled_days}</Text>
+                        <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Scheduled</Text>
+                      </View>
+                      <View style={styles.statDivider} />
+                      <View style={styles.statCol}>
+                        <Text style={[styles.statVal, { color: '#16a34a' }]}>{Math.min(emp.present_days, emp.scheduled_days)}</Text>
+                        <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Present</Text>
+                      </View>
+                      <View style={styles.statDivider} />
+                      <View style={styles.statCol}>
+                        <Text style={[styles.statVal, { color: '#dc2626' }]}>{emp.absent_days}</Text>
+                        <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Absent</Text>
+                      </View>
+                      <View style={styles.statDivider} />
+                      <View style={styles.statCol}>
+                        <Text style={[styles.statVal, { color: '#d97706' }]}>{emp.half_days}</Text>
+                        <Text style={[styles.statLbl, { color: theme.colors.mute }]}>Half-Day</Text>
+                      </View>
+                    </View>
+
+                    {/* Hours & Shift Footer */}
+                    <View style={styles.cardFooter}>
+                      <View style={styles.hoursItem}>
+                        <Clock size={13} color={theme.colors.mute} style={{ marginRight: 4 }} />
+                        <Text style={[styles.hoursLabel, { color: theme.colors.mute }]}>Worked: </Text>
+                        <Text style={[styles.hoursValue, { color: theme.colors.ink }]}>
+                          {formatMins(emp.worked_minutes)}
+                        </Text>
+                        {emp.overtime_minutes > 0 ? (
+                          <Text style={[styles.otBadge, { color: '#2563eb' }]}>
+                            {' '}+{formatMins(emp.overtime_minutes)} OT
                           </Text>
                         ) : null}
                       </View>
 
-                      {day.punch_in && day.punch_out ? (
-                        <Text style={{ fontSize: 11, color: theme.colors.mute, marginTop: 2, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
-                          Shift: {formatTimeAMPM(day.punch_in)} – {formatTimeAMPM(day.punch_out)}
-                        </Text>
-                      ) : null}
-
-                      {day.entries && day.entries.length > 0 ? (
-                        <View style={styles.dayEntriesWrap}>
-                          {day.entries.map((entry, idx) => (
-                            <View key={entry.id || idx} style={styles.dayEntryItem}>
-                              <Text style={[styles.entryTime, { color: theme.colors.mute }]} numberOfLines={1}>
-                                {entry.machine_code ? `${entry.machine_code} • ` : ''}
-                                {formatTimeAMPM(entry.start_time)} - {formatTimeAMPM(entry.end_time)}
-                                {entry.location ? ` • ${entry.location}` : ''}
-                              </Text>
-                            </View>
-                          ))}
-                        </View>
-                      ) : null}
+                      <View style={styles.viewDetailBtn}>
+                        <Text style={styles.viewDetailText}>View Calendar</Text>
+                        <ChevronRight size={14} color="#0070f3" />
+                      </View>
                     </View>
-                  </View>
-                );
-              })}
-            </ScrollView>
-          ) : null}
-        </View>
-      </Modal>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </>
+        )}
+      </ScrollView>
+
+      {/* Employee Detail / Calendar Modal (Managers & Admins only) */}
+      {!isOperator && (
+        <Modal
+          visible={!!selectedEmployee}
+          animationType="slide"
+          transparent={false}
+          onRequestClose={() => setSelectedEmployee(null)}
+        >
+          <View style={[styles.modalContainer, { backgroundColor: theme.colors.canvas, paddingTop: insets.top }]}>
+            {/* Modal Header */}
+            <View style={[styles.modalHeader, { borderBottomColor: theme.colors.hairline }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.modalTitle, { color: theme.colors.ink }]} numberOfLines={1}>
+                  {selectedEmployee?.full_name}
+                </Text>
+                <Text style={[styles.modalSubtitle, { color: theme.colors.mute }]}>
+                  {monthLabel} • Shift: {formatTime(selectedEmployee?.shift_start_time ?? null)} - {formatTime(selectedEmployee?.shift_end_time ?? null)}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setSelectedEmployee(null)}
+                style={styles.closeBtn}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <X size={22} color={theme.colors.ink} />
+              </TouchableOpacity>
+            </View>
+
+            {detailLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={theme.colors.ink} />
+                <Text style={[styles.loadingText, { color: theme.colors.mute }]}>Loading daily calendar...</Text>
+              </View>
+            ) : detailData ? (
+              <ScrollView
+                style={styles.modalScroll}
+                contentContainerStyle={[
+                  styles.modalScrollContent,
+                  { paddingBottom: insets.bottom + 32 },
+                ]}
+              >
+                {renderDetailBody(detailData)}
+              </ScrollView>
+            ) : null}
+          </View>
+        </Modal>
+      )}
     </View>
   );
+
 }
 
 const styles = StyleSheet.create({
@@ -866,8 +925,8 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   kpiTitle: {
-    fontSize: 11,
-    fontWeight: '500',
+    fontSize: 12.5,
+    fontWeight: '600',
   },
   kpiValue: {
     fontSize: 20,
@@ -945,7 +1004,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   statusBadgeText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
     textTransform: 'uppercase',
   },
@@ -959,7 +1018,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   metaText: {
-    fontSize: 12,
+    fontSize: 12.5,
   },
   statsRow: {
     flexDirection: 'row',
@@ -977,7 +1036,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   statLbl: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '500',
     marginTop: 2,
   },
@@ -996,14 +1055,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   hoursLabel: {
-    fontSize: 12,
+    fontSize: 12.5,
   },
   hoursValue: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   otBadge: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   viewDetailBtn: {
@@ -1015,7 +1074,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   viewDetailText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#0070f3',
   },
@@ -1037,7 +1096,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   modalSubtitle: {
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 2,
   },
   closeBtn: {
@@ -1068,13 +1127,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalEmpLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   modalEmpValue: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '600',
   },
   detailSummaryRow: {
@@ -1094,7 +1153,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   detailStatLabel: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '500',
     marginTop: 2,
   },
@@ -1110,7 +1169,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   hoursSub: {
-    fontSize: 12,
+    fontSize: 12.5,
     marginBottom: 4,
   },
   hoursMain: {
@@ -1142,7 +1201,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   dayDow: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
     marginTop: 1,
   },
@@ -1156,11 +1215,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   dayWorkedText: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '600',
   },
   dayOtText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   dayEntriesWrap: {
@@ -1172,6 +1231,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   entryTime: {
-    fontSize: 11,
+    fontSize: 12.5,
   },
 });

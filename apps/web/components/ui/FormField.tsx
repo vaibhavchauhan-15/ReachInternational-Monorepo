@@ -44,11 +44,11 @@ export function Label({ required: requiredProp, className = "", children, ...pro
   return (
     <label
       htmlFor={props.htmlFor || context.id}
-      className={`text-[12px] sm:text-[13px] font-medium text-[var(--color-ink)] select-none flex items-center justify-between ${className}`}
+      className={`text-[13.5px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] select-none flex items-center justify-between ${className}`}
       {...props}
     >
       <span>{children}</span>
-      {isRequired && <span className="text-[10px] text-rose-500 font-bold">* Required</span>}
+      {isRequired && <span className="text-xs text-rose-500 font-bold">* Required</span>}
     </label>
   );
 }
@@ -62,7 +62,7 @@ export function HelperText({ className = "", children, ...props }: HelperTextPro
   if (context.error) return null; // Hide helper if error is active
 
   return (
-    <p className={`text-[11px] text-[var(--color-mute)] mt-0.5 ${className}`} {...props}>
+    <p className={`text-xs text-[var(--color-mute)] mt-0.5 ${className}`} {...props}>
       {children}
     </p>
   );
@@ -80,7 +80,7 @@ export function ErrorMessage({ className = "", children, ...props }: ErrorMessag
 
   return (
     <p
-      className={`text-[11px] sm:text-xs font-medium text-rose-500 dark:text-rose-400 mt-0.5 flex items-center gap-1 form-error-enter ${className}`}
+      className={`text-xs font-medium text-rose-500 dark:text-rose-400 mt-0.5 flex items-center gap-1 form-error-enter ${className}`}
       {...props}
     >
       {error}

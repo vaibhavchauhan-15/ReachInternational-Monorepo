@@ -71,13 +71,14 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   title: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 16.5,
+    fontWeight: '700',
     textAlign: 'center',
     marginBottom: spacingNumeric.xxs,
   },
   description: {
-    fontSize: 13,
+    fontSize: 13.5,
+    lineHeight: 19,
     textAlign: 'center',
     marginBottom: spacingNumeric.sm,
   },

@@ -24,6 +24,9 @@ export {
   resolvePeriodLabel,
   resolveClientLocation,
   handleBrowserPrint,
+  openPrintWindow,
+  resolveShiftCode,
+  getShiftOrderWeight,
 } from "@/lib/pdf/pdf-utils";
 
 // ─── Configuration ───────────────────────────────────────────────────────────

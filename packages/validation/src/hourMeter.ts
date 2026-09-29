@@ -50,7 +50,8 @@ export const CreateHourLogSchema = z.object({
     const eMs = new Date(data.end_datetime).getTime();
     if (!isNaN(sMs) && !isNaN(eMs) && eMs > sMs) {
       const shiftDurationHours = (eMs - sMs) / (1000 * 60 * 60);
-      return data.breakdown_hours <= shiftDurationHours;
+      const ot = typeof data.overtime_hours === "number" && data.overtime_hours > 0 ? data.overtime_hours : 0;
+      return data.breakdown_hours <= (shiftDurationHours + ot);
     }
   }
   return true;
@@ -79,6 +80,7 @@ export const SubmitHourLogSchema = z.object({
   breakdownDuration: z.string().max(100).optional().nullable(),
   breakdownHours: z.number().min(0).optional().nullable(),
   shift: z.string().max(50).optional().nullable(),
+  shiftCode: z.string().max(20).optional().nullable(),
   machineCondition: z.enum(["good", "fair", "needs_attention", "breakdown"]).optional().nullable(),
   location: z.string().max(255).optional().nullable(),
   remarks: z.string().max(500).optional().nullable(),
@@ -109,6 +111,7 @@ export const UpdateHourLogSchema = z.object({
   breakdownDuration: z.string().max(100).optional().nullable(),
   breakdownHours: z.number().min(0).optional().nullable(),
   shift: z.string().max(50).optional().nullable(),
+  shiftCode: z.string().max(50).optional().nullable(),
   machineCondition: z.enum(["good", "fair", "needs_attention", "breakdown"]).optional().nullable(),
   location: z.string().max(255).optional().nullable(),
   remarks: z.string().max(500).optional().nullable(),

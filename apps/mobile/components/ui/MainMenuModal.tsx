@@ -15,6 +15,7 @@ import { radiusNumeric, spacingNumeric } from '@reachinternational/design-tokens
 import {
   Wrench,
   Gauge,
+  Activity,
   Users,
   User,
   X,
@@ -46,6 +47,13 @@ export const MainMenuModal: React.FC<MainMenuModalProps> = ({ visible, onClose }
     normalizedRole === 'hr' ||
     normalizedRole === 'supervisor';
 
+  const canAccessRunningLogs =
+    normalizedRole === 'admin' ||
+    normalizedRole === 'super_admin' ||
+    normalizedRole === 'manager' ||
+    normalizedRole === 'supervisor' ||
+    normalizedRole === 'hr';
+
   const menuItems = [
     {
       id: 'machines',
@@ -56,11 +64,22 @@ export const MainMenuModal: React.FC<MainMenuModalProps> = ({ visible, onClose }
     },
     {
       id: 'operations',
-      title: 'Operations Hub',
-      subtitle: 'Daily running hours, shift logs & operator assignments',
+      title: 'Operations (Today)',
+      subtitle: 'Real-time shift monitor & operator shift assignments',
       route: '/(app)/operations',
       icon: Gauge,
     },
+    ...(canAccessRunningLogs
+      ? [
+          {
+            id: 'running-logs',
+            title: 'Daily Running Logs',
+            subtitle: 'Monthly machinery running hours, daily shifts & breakdowns',
+            route: '/(app)/running-logs',
+            icon: Activity,
+          },
+        ]
+      : []),
     ...(canAccessUsers
       ? [
           {
@@ -303,7 +322,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   sectionEyebrow: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.8,
     marginLeft: 4,
@@ -340,7 +359,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   itemTitle: {
-    fontSize: 14,
+    fontSize: 15,
     letterSpacing: -0.2,
   },
   activePill: {
@@ -349,13 +368,13 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   activePillText: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '800',
     color: '#ffffff',
     letterSpacing: 0.5,
   },
   itemSubtitle: {
-    fontSize: 11,
+    fontSize: 13,
     marginTop: 2,
   },
 });

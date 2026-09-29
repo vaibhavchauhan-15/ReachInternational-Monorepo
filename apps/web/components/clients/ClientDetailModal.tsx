@@ -15,7 +15,10 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
+  Wrench,
+  AlertCircle,
 } from "lucide-react";
+import { formatAllowance, hasMaintenanceAllowance } from "@reachinternational/utils";
 import type { CRMClient } from "@/lib/types/database";
 import {
   getClientLocationAction,
@@ -195,7 +198,7 @@ export function ClientDetailModal({ isOpen, onClose, client }: ClientDetailModal
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-mono text-xs font-bold text-sky-600 dark:text-sky-400">
-                  {client.code}
+                  {client.client_id || client.code}
                 </span>
                 {client.deleted_at ? (
                   <span className="rounded-full bg-red-50 dark:bg-red-950/60 px-2 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/80">
@@ -208,6 +211,17 @@ export function ClientDetailModal({ isOpen, onClose, client }: ClientDetailModal
                 ) : (
                   <span className="rounded-full bg-neutral-100 dark:bg-neutral-800 px-2 py-0.5 text-[10px] font-bold text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700">
                     INACTIVE
+                  </span>
+                )}
+                {hasMaintenanceAllowance(client.maintenance_allowance_minutes) ? (
+                  <span className="rounded-full bg-amber-50 dark:bg-amber-950/60 px-2 py-0.5 text-[10px] font-bold text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800 flex items-center gap-1">
+                    <Wrench size={10} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                    <span>Maint: {formatAllowance(client.maintenance_allowance_minutes ?? 0)}/mo</span>
+                  </span>
+                ) : (
+                  <span className="rounded-full bg-red-50 dark:bg-red-950/60 px-2 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/80 flex items-center gap-1">
+                    <AlertCircle size={10} className="text-red-600 dark:text-red-400 shrink-0" />
+                    <span>Maint: Not Allowed</span>
                   </span>
                 )}
               </div>
@@ -228,17 +242,17 @@ export function ClientDetailModal({ isOpen, onClose, client }: ClientDetailModal
 
         {/* Persistent Top: Contact, Tax & On-Demand Location */}
         <div className="border-b border-[var(--color-hairline)] p-3.5 bg-[var(--color-canvas)] space-y-2.5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
             {/* Primary Contact (Immediate) */}
             <div className="rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-2.5 space-y-1">
               <span className="text-[10px] font-bold text-sky-600 uppercase tracking-wider block">
                 Primary Contact
               </span>
-              <p className="font-semibold text-xs text-[var(--color-ink)]">{client.contact_person || "—"}</p>
+              <p className="font-semibold text-xs text-[var(--color-ink)] truncate">{client.contact_person || "—"}</p>
               {client.phone ? (
-                <a href={`tel:${client.phone}`} className="font-mono text-[11px] text-[var(--color-mute)] hover:text-sky-600 flex items-center gap-1">
-                  <Phone className="h-3 w-3" />
-                  <span>{client.phone}</span>
+                <a href={`tel:${client.phone}`} className="font-mono text-[11px] text-[var(--color-mute)] hover:text-sky-600 flex items-center gap-1 truncate">
+                  <Phone className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{client.phone}</span>
                 </a>
               ) : (
                 <span className="text-[10px] text-[var(--color-mute)]">No phone</span>
@@ -252,12 +266,39 @@ export function ClientDetailModal({ isOpen, onClose, client }: ClientDetailModal
               </span>
               <div className="flex items-center justify-between text-[11px]">
                 <span className="text-[10px] text-[var(--color-mute)]">GSTIN:</span>
-                <span className="font-mono font-semibold text-[var(--color-ink)]">{client.gstin || "Unregistered"}</span>
+                <span className="font-mono font-semibold text-[var(--color-ink)] truncate ml-1">{client.gstin || "Unregistered"}</span>
               </div>
               <div className="flex items-center justify-between text-[11px]">
                 <span className="text-[10px] text-[var(--color-mute)]">PAN:</span>
-                <span className="font-mono font-semibold text-[var(--color-ink)]">{client.pan_number || "—"}</span>
+                <span className="font-mono font-semibold text-[var(--color-ink)] truncate ml-1">{client.pan_number || "—"}</span>
               </div>
+            </div>
+
+            {/* Maintenance Allowance */}
+            <div className="rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-2.5 space-y-1">
+              <span className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 ${hasMaintenanceAllowance(client.maintenance_allowance_minutes) ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`}>
+                <Wrench className="h-3 w-3 shrink-0" />
+                <span>Maint. Allowance</span>
+              </span>
+              {hasMaintenanceAllowance(client.maintenance_allowance_minutes) ? (
+                <div>
+                  <span className="font-mono font-bold text-xs text-amber-700 dark:text-amber-300">
+                    {formatAllowance(client.maintenance_allowance_minutes ?? 0)}
+                  </span>
+                  <span className="text-[10px] text-[var(--color-mute)] block mt-0.5">
+                    / machine / month
+                  </span>
+                </div>
+              ) : (
+                <div>
+                  <span className="inline-flex items-center rounded-sm bg-red-50 dark:bg-red-950/60 px-1.5 py-0.5 text-[10px] font-bold text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
+                    Not Allowed
+                  </span>
+                  <span className="text-[10px] text-[var(--color-mute)] block mt-0.5">
+                    Breakdowns logged as B/D
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

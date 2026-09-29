@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const CreateClientSchema = z.object({
+  clientId: z.string().trim().max(50, "Client ID cannot exceed 50 characters").optional().nullable(),
   companyName: z.string().trim().min(2, "Company name must be at least 2 characters").max(100, "Company name cannot exceed 100 characters"),
   contactPerson: z.string().trim().min(1, "Contact person is required").max(100, "Contact person cannot exceed 100 characters"),
   phone: z.string().trim().min(1, "Phone number is required").max(20, "Phone number cannot exceed 20 characters"),
@@ -19,6 +20,11 @@ export const CreateClientSchema = z.object({
   billingState: z.string().trim().max(100, "Billing state cannot exceed 100 characters").optional().nullable().or(z.literal("")),
   billingPincode: z.string().trim().max(20, "Billing pincode cannot exceed 20 characters").optional().nullable().or(z.literal("")),
   status: z.enum(["active", "inactive"]).default("active"),
+  /**
+   * Monthly maintenance allowance in integer minutes per machine (per calendar month).
+   * 0 = no allowance (all breakdown is B/D). Max 44640 = 31 full days.
+   */
+  maintenanceAllowanceMinutes: z.number().int("Must be a whole number").min(0, "Cannot be negative").max(44640, "Cannot exceed 31 days (44640 minutes)").optional().default(0),
 }).refine(
   (data) => Boolean((data.street && data.street.trim().length > 0) || (data.address && data.address.trim().length > 0)),
   {
@@ -79,6 +85,8 @@ export const UpdateClientSchema = z.object({
   billingState: z.string().trim().max(100, "Billing state cannot exceed 100 characters").optional().nullable().or(z.literal("")),
   billingPincode: z.string().trim().max(20, "Billing pincode cannot exceed 20 characters").optional().nullable().or(z.literal("")),
   status: z.enum(["active", "inactive"]).default("active"),
+  /** Monthly maintenance allowance in integer minutes per machine (per calendar month). 0 = no allowance. */
+  maintenanceAllowanceMinutes: z.number().int("Must be a whole number").min(0, "Cannot be negative").max(44640, "Cannot exceed 31 days (44640 minutes)").optional().default(0),
 }).refine(
   (data) => Boolean((data.street && data.street.trim().length > 0) || (data.address && data.address.trim().length > 0)),
   {
@@ -118,3 +126,26 @@ export const UpdateClientSchema = z.object({
 );
 
 export type UpdateClientInput = z.infer<typeof UpdateClientSchema>;
+
+export const UpsertClientShiftCodeSchema = z.object({
+  id: z.string().uuid().optional(),
+  clientId: z.string().uuid("Valid client ID is required"),
+  code: z.string().trim().min(1, "Shift code is required").max(10, "Code max 10 chars").toUpperCase(),
+  name: z.string().trim().max(100).optional().nullable(),
+  startTime: z.string().trim().min(1, "Start time is required"),
+  endTime: z.string().trim().min(1, "End time is required"),
+  crossesMidnight: z.boolean().default(false),
+  scheduledMinutes: z.number().int().positive("Scheduled minutes must be greater than 0"),
+  normalMinutes: z.number().int().min(0, "Normal minutes must be 0 or greater"),
+  displayOrder: z.number().int().default(0),
+  isActive: z.boolean().default(true),
+}).refine(
+  (data) => data.normalMinutes <= data.scheduledMinutes,
+  {
+    message: "Normal working minutes cannot exceed total scheduled minutes",
+    path: ["normalMinutes"],
+  }
+);
+
+export type UpsertClientShiftCodeInput = z.infer<typeof UpsertClientShiftCodeSchema>;
+

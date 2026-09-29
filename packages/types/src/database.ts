@@ -76,6 +76,7 @@ export interface Permission {
 
 export interface User {
   id: string;
+  employee_id?: string | null;
   full_name: string;
   phone: string | null;
   role: UserRole;
@@ -85,6 +86,7 @@ export interface User {
   street?: string | null;
   address?: string | null;
   shift_time?: string | null;
+  shift_code?: string | null;
   shift_start_time?: string | null;
   shift_end_time?: string | null;
   city?: string | null;
@@ -125,6 +127,13 @@ export interface User {
   bank_ifsc_code?: string | null;
   total_pl_quota?: number | null;
   pl_used_as_on_date?: number | null;
+  assigned_machines?: Array<{
+    id: string;
+    machine_id: string;
+    machine_name: string;
+    model?: string | null;
+    status?: string | null;
+  }> | null;
   email: string;
   created_at: string;
   updated_at: string;
@@ -511,6 +520,7 @@ export interface OperatorMachineAssignment {
   operator_id: string;
   shift_start_time: string;
   shift_end_time: string;
+  shift_code?: string | null;
   crosses_midnight: boolean;
   is_active: boolean;
   assigned_by: string;
@@ -520,9 +530,27 @@ export interface OperatorMachineAssignment {
   end_reason: "reassigned" | "removed" | "shift_changed" | "migrated" | null;
   created_at: string;
   updated_at: string;
-  operator?: Pick<User, "id" | "full_name" | "phone" | "email" | "shift_time"> | null;
+  operator?: Pick<User, "id" | "full_name" | "phone" | "email" | "shift_time" | "shift_code"> | null;
   assigner?: Pick<User, "id" | "full_name"> | null;
   machine?: Pick<Machine, "id" | "machine_id" | "model" | "serial_number"> | null;
+}
+
+export interface MachineOperatorAssignmentPayload {
+  operatorId: string;
+  shiftCode?: string | null;
+  shiftStartTime?: string | null;
+  shiftEndTime?: string | null;
+  notes?: string | null;
+}
+
+export interface ActiveOperatorOtherAssignment {
+  operatorId: string;
+  operatorName: string;
+  machineId: string;
+  machineCode: string;
+  shiftCode?: string | null;
+  shiftStartTime: string;
+  shiftEndTime: string;
 }
 
 export interface MachineAssignment {
@@ -556,6 +584,8 @@ export interface MachineHourLog {
   location: string | null;
   remarks: string | null;
   shift?: "shift_1" | "shift_2" | "shift_3" | "custom" | string | null;
+  shift_code?: string | null;
+  shift_scheduled_minutes?: number | null;
   machine_condition?: "good" | "fair" | "needs_attention" | "breakdown" | string | null;
   start_time?: string | null;
   end_time?: string | null;
@@ -566,6 +596,14 @@ export interface MachineHourLog {
   breakdown_end_time?: string | null;
   breakdown_duration?: string | null;
   breakdown_hours?: number | null;
+  /** Integer minutes of breakdown for this log. Derived from breakdown_hours * 60. */
+  breakdown_minutes?: number | null;
+  /**
+   * Minutes of breakdown_minutes covered by the client monthly maintenance allowance.
+   * Auto-computed by the recompute_maintenance database trigger — never set by callers.
+   * net_breakdown_minutes = breakdown_minutes - maintenance_minutes.
+   */
+  maintenance_minutes?: number;
   idempotency_key?: string | null;
   conflict_flag?: boolean | null;
   conflict_reason?: string | null;
@@ -573,11 +611,32 @@ export interface MachineHourLog {
   conflict_resolved_by?: string | null;
   conflict_resolved_at?: string | null;
   conflict_resolution_notes?: string | null;
+  entered_by?: string | null;
+  entry_source?: "operator" | "supervisor" | "manager" | "admin" | "super_admin" | string | null;
   created_at: string;
   operator?: Pick<User, "id" | "full_name" | "phone" | "email"> | null;
   supervisor?: Pick<User, "id" | "full_name" | "phone" | "email"> | null;
   machine?: Pick<Machine, "id" | "machine_code" | "machine_name" | "model" | "serial_number"> | null;
   client?: CRMClient | null;
+}
+
+export interface ClientShiftCode {
+  id: string;
+  client_id: string;
+  code: string;
+  name?: string | null;
+  start_time: string;
+  end_time: string;
+  raw_start_time?: string;
+  raw_end_time?: string;
+  crosses_midnight: boolean;
+  scheduled_minutes: number;
+  normal_minutes: number;
+  default_ot_minutes?: number;
+  display_order: number;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface OperatorLastLogSummary {
@@ -588,11 +647,17 @@ export interface OperatorLastLogSummary {
   start_time?: string | null;
   end_time?: string | null;
   running_hours: number;
+  normal_working_hours?: number;
   overtime_hours: number;
+  shift?: string | null;
+  shift_code?: string | null;
   is_breakdown: boolean;
   breakdown_duration?: string | null;
   operator_id?: string | null;
   operator_name?: string | null;
+  entered_by?: string | null;
+  entered_by_name?: string | null;
+  entry_source?: string | null;
 }
 
 export interface OperatorEntryContext {
@@ -600,6 +665,7 @@ export interface OperatorEntryContext {
     id: string;
     name: string;
     role: string;
+    shift_code?: string | null;
     shift_start: string;
     shift_end: string;
     raw_shift_start: string;
@@ -618,6 +684,36 @@ export interface OperatorEntryContext {
   } | null;
   last_hmr: number;
   last_log?: OperatorLastLogSummary | null;
+  shift_codes?: ClientShiftCode[];
+  assigned_shift_code?: string | null;
+}
+
+export interface TodayShiftMonitorRow {
+  operator_id: string | null;
+  operator_name: string | null;
+  operator_phone?: string | null;
+  machine_id: string;
+  machine_code: string;
+  machine_serial_number?: string | null;
+  machine_model?: string | null;
+  client_id?: string | null;
+  client_code?: string | null;
+  client_name: string;
+  current_meter?: number | null;
+  shift_code: string;
+  shift_name?: string | null;
+  shift_start: string | null;
+  shift_end: string | null;
+  status: "entered" | "pending" | "unassigned";
+  log_id: string | null;
+  entered_by: string | null;
+  entered_by_name: string | null;
+  entry_source: string | null;
+  log_date: string | null;
+  start_meter: number | null;
+  end_meter: number | null;
+  running_hours: number | null;
+  remarks: string | null;
 }
 
 export interface MachineComplaint {
@@ -1062,6 +1158,7 @@ export interface StoreManagerDashboardMetrics {
 
 export interface CRMClient {
   id: string;
+  client_id: string;
   code: string;
   company_name: string;
   contact_person: string | null;
@@ -1084,6 +1181,12 @@ export interface CRMClient {
   branch_id?: string | null;
   machine_count?: number;
   open_complaints?: number;
+  /**
+   * Monthly maintenance allowance in minutes per machine.
+   * 0 = no allowance. Resets on 1st of each month.
+   * Breakdowns up to this total per machine per month are classified as Maintenance.
+   */
+  maintenance_allowance_minutes?: number;
   status: "active" | "inactive";
   deleted_at?: string | null;
   created_at: string;

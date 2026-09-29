@@ -7,7 +7,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { getAppUrl, getResetPasswordRedirectUrl } from "@/lib/env/client";
-import { validateAadhaarNumber, validateLicenseNumber, getStateById, getStateByName } from "@reachinternational/utils";
+import { validateAadhaarNumber, validateLicenseNumber, validateBankAccountNumber, validateIfscCode, getStateById, getStateByName } from "@reachinternational/utils";
 import { isSupervisedRole, getRoleHomeRoute } from "@reachinternational/permissions";
 
 
@@ -296,14 +296,14 @@ export async function signup(
   }
 
   const address = ((formData.get("address") as string) || "").trim();
+  const bankAccountNumber = ((formData.get("bank_account_number") as string) || "").trim();
+  const bankIfscCode = ((formData.get("bank_ifsc_code") as string) || "").trim().toUpperCase();
   const aadhaarNumber = ((formData.get("aadhaar_number") as string) || "").trim();
   const licenseNumber = ((formData.get("license_number") as string) || "").trim();
   const shiftStartTimeRaw = ((formData.get("shift_start_time") as string) || "").trim();
   const shiftEndTimeRaw = ((formData.get("shift_end_time") as string) || "").trim();
   const shiftTimeRaw = ((formData.get("shift_time") as string) || "").trim();
   const supervisorIdRaw = ((formData.get("supervisor_id") as string) || "").trim();
-  const rawMonthlySalary = formData.get("monthly_salary");
-  const monthlySalary = rawMonthlySalary !== null && rawMonthlySalary !== "" && !isNaN(Number(rawMonthlySalary)) ? Number(rawMonthlySalary) : null;
 
   const resolvedShiftTime =
     shiftTimeRaw ||
@@ -340,7 +340,8 @@ export async function signup(
     district,
     state: resolvedStateName,
     state_id: resolvedStateId ? String(resolvedStateId) : "",
-    monthly_salary: rawMonthlySalary ? String(rawMonthlySalary) : "",
+    bank_account_number: bankAccountNumber,
+    bank_ifsc_code: bankIfscCode,
     aadhaar_number: aadhaarNumber,
     license_number: licenseNumber,
     password,
@@ -361,9 +362,31 @@ export async function signup(
   if (!city) fieldErrors.city = "City/Town/Village is required.";
   if (!district) fieldErrors.district = "District is required.";
   if (!resolvedStateName) fieldErrors.state = "State is required.";
-  if (monthlySalary === null || monthlySalary <= 0) {
-    fieldErrors.monthly_salary = "Monthly salary is required and must be greater than 0.";
+
+  // Banking Validation
+  if (!bankAccountNumber) {
+    fieldErrors.bank_account_number = "Bank account number is required.";
+  } else {
+    const bankRes = validateBankAccountNumber(bankAccountNumber);
+    if (!bankRes.isValid) {
+      fieldErrors.bank_account_number = bankRes.error || "Please enter a valid bank account number (9 to 18 digits).";
+    }
   }
+
+  if (!bankIfscCode) {
+    fieldErrors.bank_ifsc_code = "IFSC code is required.";
+  } else {
+    const ifscRes = validateIfscCode(bankIfscCode);
+    if (!ifscRes.isValid) {
+      fieldErrors.bank_ifsc_code = ifscRes.error || "Please enter a valid 11-character IFSC code (e.g. SBIN0001234).";
+    }
+  }
+
+  const bankFileRaw = (formData.get("bank_document_file") || formData.get("bank_passbook_file")) as File | null;
+  if (!bankFileRaw || bankFileRaw.size === 0) {
+    fieldErrors.bank_document_file = "Bank document (Passbook front page, cancelled cheque, or statement) is required.";
+  }
+
   if (!aadhaarNumber) fieldErrors.aadhaar_number = "Aadhaar card number is required.";
   const aadhaarFileRaw = formData.get("aadhaar_file") as File | null;
   if (!aadhaarFileRaw || aadhaarFileRaw.size === 0) {
@@ -582,7 +605,8 @@ export async function signup(
         state: resolvedStateName,
         state_id: resolvedStateId,
         location: `${address ? `${address}, ` : ""}${city}, ${district}, ${resolvedStateName}`,
-        monthly_salary: monthlySalary,
+        bank_account_number: bankAccountNumber.replace(/[\s\-]/g, ""),
+        bank_ifsc_code: bankIfscCode.replace(/[\s\-]/g, ""),
         aadhaar_number: cleanAadhaar,
         license_number: formattedLicense,
         supervisor_id: supervisorIdRaw || null,
@@ -654,6 +678,54 @@ export async function signup(
 
   const userId = data.user.id;
 
+  // Direct sync to public.users for guaranteed bank account & IFSC persistence
+  try {
+    const cleanBank = bankAccountNumber.replace(/[\s\-]/g, "");
+    const cleanIfsc = bankIfscCode.replace(/[\s\-]/g, "");
+    await adminSupabase.from("users").update({
+      bank_account_number: cleanBank,
+      bank_ifsc_code: cleanIfsc,
+    }).eq("id", userId);
+  } catch (syncErr) {
+    console.warn("Direct bank info sync warning:", syncErr);
+  }
+
+  // Upload Bank Document (Passbook Front Page / Cancelled Cheque / Statement)
+  const bankFile = (formData.get("bank_document_file") || formData.get("bank_passbook_file")) as File | null;
+  if (bankFile && bankFile.size > 0) {
+    try {
+      const ext = bankFile.name.split(".").pop()?.toLowerCase() || "bin";
+      const storagePath = `documents/${userId}/bank_document.${ext}`;
+      const fileBytes = await bankFile.arrayBuffer();
+
+      const { error: uploadErr } = await adminSupabase.storage
+        .from("user_files")
+        .upload(storagePath, fileBytes, {
+          contentType: bankFile.type,
+          upsert: true,
+        });
+
+      if (!uploadErr) {
+        await adminSupabase.from("user_documents").upsert(
+          {
+            user_id: userId,
+            document_type_code: "bank_document",
+            storage_path: storagePath,
+            mime_type: bankFile.type,
+            file_size_bytes: bankFile.size,
+            file_name: bankFile.name,
+            status: "pending",
+          },
+          { onConflict: "user_id,document_type_code" }
+        );
+      } else {
+        console.error("Failed to upload signup Bank document file:", uploadErr);
+      }
+    } catch (err) {
+      console.error("Exception uploading signup Bank document file:", err);
+    }
+  }
+
   // Upload Aadhaar & Driving Licence documents if provided during signup
   const aadhaarFile = formData.get("aadhaar_file") as File | null;
   const licenseFile = formData.get("license_file") as File | null;
@@ -679,6 +751,8 @@ export async function signup(
             storage_path: storagePath,
             mime_type: aadhaarFile.type,
             file_size_bytes: aadhaarFile.size,
+            file_name: aadhaarFile.name,
+            status: "pending",
           },
           { onConflict: "user_id,document_type_code" }
         );
@@ -711,6 +785,8 @@ export async function signup(
             storage_path: storagePath,
             mime_type: licenseFile.type,
             file_size_bytes: licenseFile.size,
+            file_name: licenseFile.name,
+            status: "pending",
           },
           { onConflict: "user_id,document_type_code" }
         );
@@ -738,6 +814,8 @@ export async function signup(
       state: resolvedStateName, 
       state_id: resolvedStateId,
       location: `${city}, ${district}, ${resolvedStateName}`,
+      has_bank_details: !!bankAccountNumber,
+      has_bank_document: !!bankFile,
       has_aadhaar: !!aadhaarNumber,
       has_license: !!licenseNumber,
     },

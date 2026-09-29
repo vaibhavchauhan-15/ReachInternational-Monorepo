@@ -57,6 +57,7 @@ test("ROLE_HOME_ROUTES and getRoleHomeRoute resolve properly for all roles", () 
 test("route classification helpers classify accurately", () => {
   assert.equal(isProtectedRoute("/operations"), true);
   assert.equal(isProtectedRoute("/operations?tab=logs"), true);
+  assert.equal(isProtectedRoute("/running-logs"), true);
   assert.equal(isProtectedRoute("/dashboard"), true);
   assert.equal(isProtectedRoute("/users/123"), true);
   assert.equal(isProtectedRoute("/login"), false);
@@ -76,6 +77,12 @@ test("route classification helpers classify accurately", () => {
   assert.equal(isRouteAllowedForRole("/dashboard", "operator"), true);
   assert.equal(isRouteAllowedForRole("/operations", "operator"), true);
   assert.equal(isRouteAllowedForRole("/machines", "operator"), true);
+  assert.equal(isRouteAllowedForRole("/running-logs", "operator"), false);
+  assert.equal(isRouteAllowedForRole("/running-logs", "supervisor"), true);
+  assert.equal(isRouteAllowedForRole("/running-logs", "manager"), true);
+  assert.equal(isRouteAllowedForRole("/running-logs", "admin"), true);
+  assert.equal(isRouteAllowedForRole("/running-logs", "super_admin"), true);
+  assert.equal(isRouteAllowedForRole("/running-logs", "hr"), true);
   assert.equal(isRouteAllowedForRole("/audit", "operator"), false);
   assert.equal(isRouteAllowedForRole("/audit", "super_admin"), true);
   assert.equal(isRouteAllowedForRole("/payroll", "operator"), false);
@@ -84,10 +91,11 @@ test("route classification helpers classify accurately", () => {
   assert.equal(isRouteAllowedForRole("/hr", "operator"), false);
   assert.equal(isRouteAllowedForRole("/hr", "hr"), true);
   assert.equal(isRouteAllowedForRole("/hr", "manager"), false);
-  assert.equal(isRouteAllowedForRole("/attendance", "manager"), false);
+  assert.equal(isRouteAllowedForRole("/attendance", "manager"), true);
   assert.equal(isRouteAllowedForRole("/attendance", "hr"), true);
   assert.equal(isRouteAllowedForRole("/attendance", "admin"), true);
   assert.equal(isRouteAllowedForRole("/attendance", "super_admin"), true);
-  assert.equal(isRouteAllowedForRole("/attendance", "operator"), false);
+  assert.equal(isRouteAllowedForRole("/attendance", "supervisor"), true);
+  assert.equal(isRouteAllowedForRole("/attendance", "operator"), true);
 });
 

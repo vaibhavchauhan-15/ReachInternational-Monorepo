@@ -176,14 +176,14 @@ function applyOptimizedUserSearch(query: any, search?: string) {
   const sanitized = sanitizeSearchToken(trimmed);
   if (!sanitized) return query;
 
-  if (trimmed.length === 1) {
-    return query.or(`full_name.ilike.${sanitized}%,email.ilike.${sanitized}%,role.ilike.${sanitized}%`);
+  if (/^emp/i.test(trimmed)) {
+    return query.or(`employee_id.ilike.%${sanitized}%,full_name.ilike.%${sanitized}%`);
   }
 
   const isDigitsOnly = /^[0-9+\s\-()]+$/.test(trimmed);
   const digits = trimmed.replace(/\D/g, '');
 
-  if (isDigitsOnly && digits.length >= 3) {
+  if (isDigitsOnly && digits.length >= 1) {
     let phoneDigits = digits;
     if (digits.length === 12 && digits.startsWith('91')) {
       phoneDigits = digits.slice(2);
@@ -192,6 +192,7 @@ function applyOptimizedUserSearch(query: any, search?: string) {
     }
 
     const conditions: string[] = [];
+    conditions.push(`employee_id.ilike.%${digits}%`);
     if (phoneDigits.length >= 3) {
       conditions.push(`phone.ilike.%${phoneDigits}%`);
     }
@@ -227,7 +228,7 @@ function applyOptimizedUserSearch(query: any, search?: string) {
     for (const word of words) {
       const wRole = word.toLowerCase().replace(/s$/, '');
       query = query.or(
-        `full_name.ilike.%${word}%,role.ilike.%${wRole}%,city.ilike.%${word}%,district.ilike.%${word}%,state.ilike.%${word}%,email.ilike.%${word}%`
+        `employee_id.ilike.%${word}%,full_name.ilike.%${word}%,role.ilike.%${wRole}%,city.ilike.%${word}%,district.ilike.%${word}%,state.ilike.%${word}%,email.ilike.%${word}%`
       );
     }
     return query;
@@ -235,6 +236,7 @@ function applyOptimizedUserSearch(query: any, search?: string) {
 
   const roleVariant = sanitized.toLowerCase().replace(/s$/, '');
   const conditions = [
+    `employee_id.ilike.%${sanitized}%`,
     `full_name.ilike.%${sanitized}%`,
     `email.ilike.%${sanitized}%`,
     `role.ilike.%${sanitized}%`,
@@ -317,9 +319,18 @@ const UserTouchCard = React.memo(function UserTouchCard({
               </View>
             )}
             <View style={{ flex: 1 }}>
-              <Text style={[styles.userName, { color: theme.colors.ink }]} numberOfLines={1}>
-                {truncateText(u.full_name, 24)}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <Text style={[styles.userName, { color: theme.colors.ink, flexShrink: 1 }]} numberOfLines={1}>
+                  {truncateText(u.full_name, 20)}
+                </Text>
+                {u.employee_id ? (
+                  <View style={{ backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 }}>
+                    <Text style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: '700', color: theme.colors.ink }}>
+                      {u.employee_id}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
               <Text style={[styles.userEmail, { color: theme.colors.mute }]} numberOfLines={1}>
                 {truncateText(u.email, 28)}
               </Text>
@@ -782,7 +793,7 @@ export default function UsersScreen() {
     let query = supabase
       .from('users')
       .select(
-        'id, full_name, email, phone, role, status, city, district, state, state_id, shift_start_time, shift_end_time, street, aadhaar_number, license_number, supervisor_id, monthly_salary, created_at',
+        'id, employee_id, full_name, email, phone, role, status, city, district, state, state_id, shift_start_time, shift_end_time, street, aadhaar_number, license_number, supervisor_id, monthly_salary, created_at',
         { count: 'exact' }
       );
 
@@ -2423,7 +2434,7 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.sm,
   },
   retryLoadMoreBtnText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
   },
   endOfListFooter: {
@@ -2443,7 +2454,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   endOfListText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
     letterSpacing: 0.2,
   },
@@ -2457,11 +2468,11 @@ const styles = StyleSheet.create({
     marginTop: spacingNumeric.md,
   },
   initialErrorTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
   },
   initialErrorSubtext: {
-    fontSize: 12,
+    fontSize: 13,
     textAlign: 'center',
     maxWidth: 280,
   },
@@ -2475,7 +2486,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   retryInitialBtnText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
   },
   kpiGrid: {
@@ -2496,7 +2507,7 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   kpiLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -2558,15 +2569,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   activeCountBadge: {
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
   activeCountBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
   },
   quickResetBtn: {
@@ -2579,7 +2590,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   quickResetBtnText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   filterPanelWebContainer: {
@@ -2607,7 +2618,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
   },
   activeBadgesHeader: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
     marginRight: 2,
   },
@@ -2621,7 +2632,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   badgeChipText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   resetAllLink: {
@@ -2632,7 +2643,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   resetAllLinkText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   resultsCountRow: {
@@ -2640,7 +2651,7 @@ const styles = StyleSheet.create({
     marginTop: -4,
   },
   resultsCountText: {
-    fontSize: 12,
+    fontSize: 12.5,
   },
   changeReqsContainer: {
     borderRadius: radiusNumeric.lg,
@@ -2661,7 +2672,7 @@ const styles = StyleSheet.create({
     borderRadius: 3.5,
   },
   changeReqsTitle: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '700',
   },
   miniActionBtn: {
@@ -2671,11 +2682,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   miniActionBtnText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
   },
   miniActionBtnTextWhite: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
     color: '#ffffff',
   },
@@ -2691,14 +2702,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   changeReqUserName: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '700',
   },
   changeReqUserSub: {
-    fontSize: 11,
+    fontSize: 12.5,
   },
   changeReqTime: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
   },
   diffsBox: {
@@ -2708,7 +2719,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   diffItem: {
-    fontSize: 11,
+    fontSize: 12.5,
     lineHeight: 16,
   },
   diffOld: {
@@ -2736,7 +2747,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   reqBtnTextWhite: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
     color: '#ffffff',
   },
@@ -2749,7 +2760,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   reqBtnText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
   },
   deletionReqsContainer: {
@@ -2767,12 +2778,12 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.full,
   },
   deletionCountPillText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
   },
   deletionSectionSubtext: {
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   deletionCard: {
     borderRadius: radiusNumeric.md,
@@ -2790,7 +2801,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   sourceBadgeText: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '700',
   },
   deletionReasonBox: {
@@ -2800,13 +2811,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   deletionReasonLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
   },
   deletionReasonText: {
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 13,
+    lineHeight: 17,
     fontStyle: 'italic',
   },
   userCard: {
@@ -2838,11 +2849,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   userName: {
-    fontSize: 14,
+    fontSize: 15.5,
     fontWeight: '700',
   },
   userEmail: {
-    fontSize: 11,
+    fontSize: 13,
     marginTop: 1,
   },
   cardStatusBadge: {
@@ -2860,7 +2871,7 @@ const styles = StyleSheet.create({
     borderRadius: 2.5,
   },
   cardStatusText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
   },
   cardMetaBox: {
@@ -2882,7 +2893,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   roleBadgePillText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
   },
   metaChip: {
@@ -2891,7 +2902,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   metaChipText: {
-    fontSize: 11,
+    fontSize: 12.5,
   },
   metaChipRow: {
     flexDirection: 'row',
@@ -2904,7 +2915,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   loadingText: {
-    fontSize: 13,
+    fontSize: 13.5,
   },
   emptyContainer: {
     padding: 24,
@@ -2914,11 +2925,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   emptyTitle: {
-    fontSize: 15,
+    fontSize: 15.5,
     fontWeight: '700',
   },
   emptySubtext: {
-    fontSize: 12,
+    fontSize: 13,
     textAlign: 'center',
     maxWidth: 280,
   },
@@ -2930,7 +2941,7 @@ const styles = StyleSheet.create({
   },
   resetEmptyBtnText: {
     color: '#ffffff',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
   },
   mobileBulkBar: {
@@ -2970,12 +2981,12 @@ const styles = StyleSheet.create({
   },
   bulkBadgeText: {
     color: '#ffffff',
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   bulkSelectedText: {
     color: '#ffffff',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '500',
   },
   bulkActionsRow: {
@@ -2994,7 +3005,7 @@ const styles = StyleSheet.create({
   },
   bulkBtnSecondaryText: {
     color: '#ffffff',
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
   },
   bulkBtnDanger: {
@@ -3007,7 +3018,7 @@ const styles = StyleSheet.create({
   },
   bulkBtnDangerText: {
     color: '#ffffff',
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
   },
 });

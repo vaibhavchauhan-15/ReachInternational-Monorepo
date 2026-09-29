@@ -13,7 +13,7 @@ import {
 import { Button, Input, TimeInput, useTheme } from '../ui';
 import { supabase } from '../../lib/supabase';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { X, Check, ChevronDown, Clock, AlertTriangle } from 'lucide-react-native';
+import { X, Check, ChevronDown, Clock, AlertTriangle, User } from 'lucide-react-native';
 import { validateMobileClipboardInput } from '../../lib/security/clipboard';
 import { HmrSchema } from '@reachinternational/validation';
 import {
@@ -24,10 +24,12 @@ import {
   parseProfileShiftTime,
   formatDate,
   getISTDateString,
+  resolveDefaultOperatorShift,
+  getShiftSubtitle,
 } from '@reachinternational/utils';
 import { useNetworkStatus } from '../../lib/offline/useNetworkStatus';
 import { offlineQueueManager } from '../../lib/offline/OfflineQueueManager';
-import { notifyLogEntryCreated, notifyMachineStatusChanged } from '../../lib/notifications';
+import { notifyLogEntryCreated, notifyMachineStatusChanged, notifyAssistedShiftLogged } from '../../lib/notifications';
 
 export interface MeterLogModalProps {
   visible: boolean;
@@ -38,6 +40,12 @@ export interface MeterLogModalProps {
   serialNumber?: string;
   onSubmit?: (log?: any) => void;
   existingLog?: any;
+  targetOperatorId?: string;
+  targetOperatorName?: string;
+  initialShiftCode?: string;
+  initialClientId?: string;
+  initialStartMeter?: number | string;
+  initialLogDate?: string;
 }
 
 export const MeterLogModal: React.FC<MeterLogModalProps> = ({
@@ -49,6 +57,12 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   serialNumber = '',
   onSubmit,
   existingLog,
+  targetOperatorId,
+  targetOperatorName,
+  initialShiftCode,
+  initialClientId,
+  initialStartMeter,
+  initialLogDate,
 }) => {
   const { theme } = useTheme();
   const { isOffline } = useNetworkStatus();
@@ -119,6 +133,53 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [clientModalVisible, setClientModalVisible] = useState(false);
 
+  // Client Shift Codes
+  const [shiftCodes, setShiftCodes] = useState<any[]>([]);
+  const [selectedShiftCode, setSelectedShiftCode] = useState<string | null>(null);
+  const [showManualTimes, setShowManualTimes] = useState(false);
+
+  const fetchShiftCodes = async (cId: string) => {
+    try {
+      const { data } = await supabase
+        .from('client_shift_codes')
+        .select('*')
+        .eq('client_id', cId)
+        .eq('is_active', true)
+        .order('display_order', { ascending: true })
+        .order('code', { ascending: true });
+      if (data && data.length > 0) {
+        setShiftCodes(data);
+        const match = resolveDefaultOperatorShift({ assigned_shift_code: initialShiftCode }, data);
+        const target = match || (!selectedShiftCode ? data[0] : null);
+        if (target) {
+          setSelectedShiftCode(target.code);
+          const s = formatTo12Hour(target.start_time) || target.start_time;
+          const e = formatTo12Hour(target.end_time) || target.end_time;
+          if (s) setStartTime(s);
+          if (e) setEndTime(e);
+        }
+      } else {
+        setShiftCodes([]);
+      }
+    } catch {
+      // Non-blocking fallback
+    }
+  };
+
+  useEffect(() => {
+    if (selectedClientId) {
+      fetchShiftCodes(selectedClientId);
+    }
+  }, [selectedClientId]);
+
+  const handleSelectShift = (shift: any) => {
+    setSelectedShiftCode(shift.code);
+    const s = formatTo12Hour(shift.start_time) || shift.start_time;
+    const e = formatTo12Hour(shift.end_time) || shift.end_time;
+    if (s) setStartTime(s);
+    if (e) setEndTime(e);
+  };
+
   const [latestTimeline, setLatestTimeline] = useState<{
     latestLog: any | null;
     endDateTime: Date | null;
@@ -168,20 +229,20 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     return null;
   }, [latestTimeline, shiftStats.isValid, shiftStats.startDateTime, startTime, logDate]);
 
-  const fetchCurrentUserShift = async () => {
+  const fetchTargetUserShift = async () => {
     try {
-      const { data: authData } = await supabase.auth.getUser();
-      if (!authData?.user?.id) return;
+      const opId = targetOperatorId || (await supabase.auth.getUser()).data?.user?.id;
+      if (!opId) return;
       const { data: uData } = await supabase
         .from('users')
         .select('shift_start_time, shift_end_time')
-        .eq('id', authData.user.id)
+        .eq('id', opId)
         .single();
       if (uData) {
         let s = uData.shift_start_time ? formatTo12Hour(uData.shift_start_time) : '';
         let e = uData.shift_end_time ? formatTo12Hour(uData.shift_end_time) : '';
-        if (s) setStartTime(s);
-        if (e) setEndTime(e);
+        if (s && !initialShiftCode) setStartTime(s);
+        if (e && !initialShiftCode) setEndTime(e);
       }
     } catch {
       // Non-blocking fallback to defaults
@@ -190,7 +251,16 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
 
   useEffect(() => {
     if (visible) {
-      fetchCurrentUserShift();
+      if (initialLogDate) setLogDate(initialLogDate);
+      if (initialShiftCode) setSelectedShiftCode(initialShiftCode);
+      if (initialClientId) setSelectedClientId(initialClientId);
+      if (initialStartMeter !== undefined && initialStartMeter !== null && initialStartMeter !== '') {
+        const smStr = String(initialStartMeter);
+        setStartMeter(smStr);
+        const sVal = parseFloat(smStr) || 0;
+        setEndMeter(String(sVal + 8));
+      }
+      fetchTargetUserShift();
       fetchClients();
       setError('');
       setSuccess('');
@@ -198,7 +268,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         fetchLatestMachineLog();
       }
     }
-  }, [visible, machineId]);
+  }, [visible, machineId, targetOperatorId, initialLogDate, initialShiftCode, initialClientId, initialStartMeter]);
 
   const fetchClients = async () => {
     try {
@@ -218,7 +288,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
           pincode: c.pincode,
         }));
         setClients(clientItems);
-        if (clientItems.length > 0 && !selectedClientId && !location) {
+        if (clientItems.length > 0 && !selectedClientId && !initialClientId && !location) {
           setSelectedClientId(clientItems[0].id);
           const firstClient = clientItems[0];
           const fullAddr = [firstClient.street, firstClient.city, firstClient.district, firstClient.state, firstClient.pincode].filter(Boolean).map((s: any) => String(s).trim()).filter(Boolean).join(', ');
@@ -242,12 +312,13 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       if (data && data.length > 0) {
         const timeline = findLatestMachineLogTimeline(data, machineId);
         setLatestTimeline(timeline);
-        if (timeline.latestLog?.end_meter) {
+        const hasInitMeter = initialStartMeter !== undefined && initialStartMeter !== null && initialStartMeter !== '';
+        if (!hasInitMeter && timeline.latestLog?.end_meter) {
           setStartMeter(String(timeline.latestLog.end_meter));
           setEndMeter(String(timeline.latestLog.end_meter + 8));
         }
-        if (timeline.latestLog?.location) setLocation(timeline.latestLog.location);
-        if (timeline.latestLog?.client_id) setSelectedClientId(timeline.latestLog.client_id);
+        if (timeline.latestLog?.location && !location) setLocation(timeline.latestLog.location);
+        if (!initialClientId && timeline.latestLog?.client_id) setSelectedClientId(timeline.latestLog.client_id);
       }
     } catch (e) {
       // Ignore if no prior log
@@ -318,6 +389,11 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       return;
     }
 
+    if (shiftCodes.length > 0 && (!selectedShiftCode || !selectedShiftCode.trim())) {
+      setError('Please select an operational shift.');
+      return;
+    }
+
     if (shiftStats.isFutureEnd || !shiftStats.isValid) {
       setError(shiftStats.errorMessage || 'Cannot log before shift end.');
       return;
@@ -333,8 +409,9 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         setError(breakdownStats?.errorMessage || 'Please enter valid breakdown start and end times.');
         return;
       }
-      if (shiftStats.isValid && breakdownStats.durationDecimalHours > shiftStats.durationHours) {
-        setError(`Breakdown duration (${breakdownStats.durationDecimalHours}h) cannot exceed total shift duration (${shiftStats.durationHours}h).`);
+      const maxAllowedDuration = shiftStats.durationHours > 0 ? shiftStats.durationHours : 24;
+      if (shiftStats.isValid && breakdownStats.durationDecimalHours > maxAllowedDuration) {
+        setError(`Breakdown duration (${breakdownStats.durationDecimalHours}h) cannot exceed total shift duration (${maxAllowedDuration}h).`);
         return;
       }
     }
@@ -347,6 +424,17 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
     try {
       const { data: userData } = await supabase.auth.getUser();
       const userId = userData?.user?.id;
+      const effectiveOperatorId = targetOperatorId || userId;
+      const isAssisted = Boolean(targetOperatorId && targetOperatorId !== userId);
+
+      if (isAssisted && userId) {
+        const { data: userRow } = await supabase.from('users').select('role').eq('id', userId).single();
+        if (userRow && !['super_admin', 'admin', 'manager'].includes(userRow.role)) {
+          setError('Only roles above supervisor (manager, admin, super_admin) can enter logs on behalf of operators.');
+          setIsSubmitting(false);
+          return;
+        }
+      }
 
       let bkdDurationFormatted = '';
       let bkdStart = '';
@@ -386,7 +474,9 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         shift: null,
         machine_condition: isBreakdown ? 'breakdown' : 'good',
         remarks: remarksPayload || null,
-        operator_id: userId || null,
+        operator_id: effectiveOperatorId || null,
+        entered_by: userId || null,
+        entry_source: isAssisted ? 'supervisor' : 'operator',
         log_date: shiftStats.resolvedStartDate,
         end_date: shiftStats.resolvedEndDate,
         start_datetime: shiftStats.startDateTime?.toISOString(),
@@ -478,8 +568,9 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
       try {
         const { data: rpcRes, error: rpcErr } = await supabase.rpc('submit_operator_hour_log_atomic', {
           p_machine_id: machineId,
-          p_operator_id: userId,
+          p_operator_id: effectiveOperatorId,
           p_client_id: selectedClientId || null,
+          p_shift_code: selectedShiftCode || null,
           p_log_date: shiftStats.resolvedStartDate,
           p_end_date: shiftStats.resolvedEndDate,
           p_start_datetime: shiftStats.startDateTime?.toISOString() || null,
@@ -500,6 +591,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
           p_location: location.trim() || null,
           p_remarks: remarksPayload || null,
           p_idempotency_key: idempotencyKey,
+          p_entered_by: userId || null,
         });
 
         if (!rpcErr && rpcRes && (rpcRes as any).success) {
@@ -557,10 +649,13 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
           breakdown_end_time: bkdEnd || null,
           breakdown_duration: bkdDurationFormatted || null,
           breakdown_hours: bkdDecimalHours,
-          shift: null,
+          shift: selectedShiftCode ? `Shift ${selectedShiftCode}` : null,
+          shift_code: selectedShiftCode || null,
           machine_condition: isBreakdown ? 'breakdown' : 'good',
           remarks: remarksPayload || null,
-          operator_id: userId || null,
+          operator_id: effectiveOperatorId || null,
+          entered_by: userId || null,
+          entry_source: isAssisted ? 'supervisor' : 'operator',
           idempotency_key: idempotencyKey,
           log_date: shiftStats.resolvedStartDate,
           end_date: shiftStats.resolvedEndDate,
@@ -581,8 +676,8 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
             health_status: isBreakdown ? 'breakdown' : 'active',
             updated_at: new Date().toISOString(),
           };
-          if (userId) {
-            mUpdate.current_operator_id = userId;
+          if (effectiveOperatorId) {
+            mUpdate.current_operator_id = effectiveOperatorId;
           }
           await supabase
             .from('machines')
@@ -591,9 +686,60 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
         }
       }
 
-      notifyLogEntryCreated(machineCode || 'Machine', runningHours, shiftStats.overtimeHours);
+      if (isAssisted && targetOperatorName) {
+        notifyAssistedShiftLogged(targetOperatorName, machineCode || 'Equipment', runningHours);
+        if (effectiveOperatorId) {
+          try {
+            const alertChannel = supabase.channel(`operator-alerts:${effectiveOperatorId}`);
+            alertChannel.subscribe((status) => {
+              if (status === 'SUBSCRIBED') {
+                alertChannel.send({
+                  type: 'broadcast',
+                  event: 'assisted_shift_logged',
+                  payload: {
+                    title: 'Shift Logged on Your Behalf',
+                    body: `A supervisor recorded your shift on equipment ${machineCode || 'Equipment'} (${runningHours}h).`,
+                    operatorId: effectiveOperatorId,
+                    machineCode: machineCode || 'Equipment',
+                    runningHours,
+                    logDate: shiftStats.resolvedStartDate,
+                  },
+                });
+              }
+            });
+          } catch {
+            // Non-blocking broadcast
+          }
+        }
+      } else {
+        notifyLogEntryCreated(machineCode || 'Machine', runningHours, shiftStats.overtimeHours);
+      }
       if (isBreakdown) {
         notifyMachineStatusChanged(machineCode || 'Machine', 'breakdown');
+      }
+
+      // Broadcast log_entered to operations-roster channel for supervisors & admins
+      try {
+        const rosterChannel = supabase.channel('operations-roster');
+        rosterChannel.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            rosterChannel.send({
+              type: 'broadcast',
+              event: 'log_entered',
+              payload: {
+                machineId,
+                operatorId: effectiveOperatorId,
+                shiftCode: selectedShiftCode || null,
+                startMeter: startVal,
+                endMeter: endVal,
+                runningHours,
+                logDate: shiftStats.resolvedStartDate,
+              },
+            });
+          }
+        });
+      } catch {
+        // Non-blocking broadcast
       }
 
       setSuccess('Daily machine log recorded successfully!');
@@ -685,9 +831,14 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               </View>
               <View>
                 <Text style={[styles.title, { color: theme.colors.ink }]}>
-                  {existingLog ? 'Edit Machine Running Hours' : 'Log Machine Running Hours'}
+                  {targetOperatorName
+                    ? 'Assisted Shift Entry'
+                    : existingLog
+                    ? 'Edit Machine Running Hours'
+                    : 'Log Machine Running Hours'}
                 </Text>
                 <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
+                  {targetOperatorName ? `Operator: ${targetOperatorName} • ` : ''}
                   {model || machineCode} {serialNumber ? `• S/N: ${serialNumber}` : ''}
                 </Text>
               </View>
@@ -697,6 +848,29 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
               <X size={20} color={theme.colors.mute} />
             </TouchableOpacity>
           </View>
+
+          {targetOperatorName && (
+            <View
+              style={{
+                marginHorizontal: spacingNumeric.sm,
+                marginTop: spacingNumeric.xs,
+                paddingVertical: 6,
+                paddingHorizontal: 10,
+                borderRadius: radiusNumeric.sm,
+                backgroundColor: theme.colors.link + '15',
+                borderWidth: 1,
+                borderColor: theme.colors.link + '30',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              <User size={14} color={theme.colors.link} />
+              <Text style={{ fontSize: 12.5, color: theme.colors.link, fontWeight: '600', flex: 1 }}>
+                Logging shift on behalf of {targetOperatorName}
+              </Text>
+            </View>
+          )}
 
           {error ? (
             <View style={[styles.alertBox, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error }]}>
@@ -714,8 +888,8 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
             {/* Log Date Selector Strip (Today + Past 7 Days) */}
             <View style={styles.inputGroup}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.ink, marginBottom: 0 }]}>Log Date *</Text>
-                <Text style={{ fontSize: 10, color: theme.colors.link, fontWeight: '600' }}>Allowed: 7 days window</Text>
+                <Text style={[styles.fieldLabel, { color: theme.colors.ink, marginBottom: 0 }]}>Select Date *</Text>
+                <Text style={{ fontSize: 12, color: theme.colors.link, fontWeight: '600' }}>Allowed: 7 days window</Text>
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingBottom: 2 }}>
                 {pastDates.map((item) => {
@@ -799,7 +973,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
             {/* Shift Timing Section */}
             <View style={{ gap: 8, marginTop: 4 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={[styles.fieldLabel, { color: theme.colors.ink, marginBottom: 0 }]}>Shift Timing</Text>
+                <Text style={[styles.fieldLabel, { color: theme.colors.ink, marginBottom: 0 }]}>Shift</Text>
                 {shiftStats.durationMinutes > 0 ? (
                   <View style={{
                     paddingHorizontal: 8,
@@ -808,7 +982,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                     backgroundColor: shiftStats.isOvernight ? 'rgba(99, 102, 241, 0.12)' : theme.colors.hairlineSoft,
                   }}>
                     <Text style={{
-                      fontSize: 10,
+                      fontSize: 12,
                       fontWeight: '700',
                       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
                       color: shiftStats.isOvernight ? '#6366f1' : theme.colors.link,
@@ -818,6 +992,80 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                   </View>
                 ) : null}
               </View>
+
+              {/* Client Shift Codes Horizontal Touch Strip */}
+              {shiftCodes.length > 0 && (
+                <View style={{ marginVertical: 4 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.mute }}>
+                      Select Shift *
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setShowManualTimes(!showManualTimes)}
+                      style={{ paddingVertical: 2, paddingHorizontal: 6 }}
+                    >
+                      <Text style={{ fontSize: 12.5, fontWeight: '600', color: theme.colors.link }}>
+                        {showManualTimes ? 'Hide Manual Times' : 'Manual Time Entry'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 2 }}>
+                    {shiftCodes.map((s) => {
+                      const isSelected = selectedShiftCode === s.code;
+                      const subtitle = getShiftSubtitle(s);
+                      return (
+                        <TouchableOpacity
+                          key={s.id}
+                          onPress={() => handleSelectShift(s)}
+                          style={{
+                            minHeight: 44,
+                            paddingHorizontal: 12,
+                            paddingVertical: 8,
+                            borderRadius: 10,
+                            borderWidth: 1.5,
+                            borderColor: isSelected ? theme.colors.ink : theme.colors.hairline,
+                            backgroundColor: isSelected ? theme.colors.ink : theme.colors.canvasElevated,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 6,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 12.5,
+                              fontWeight: '800',
+                              fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+                              color: isSelected ? theme.colors.onPrimary : theme.colors.ink,
+                            }}
+                          >
+                            Shift {s.code}
+                          </Text>
+                          {subtitle ? (
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                fontWeight: '600',
+                                color: isSelected ? 'rgba(255,255,255,0.9)' : theme.colors.ink,
+                              }}
+                            >
+                              ({subtitle})
+                            </Text>
+                          ) : null}
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              fontWeight: '500',
+                              color: isSelected ? 'rgba(255,255,255,0.7)' : theme.colors.mute,
+                            }}
+                          >
+                            {formatTo12Hour(s.start_time) || s.start_time} - {formatTo12Hour(s.end_time) || s.end_time}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
 
               {/* Machine Timeline Context Strip */}
               {latestTimeline?.latestLog && (
@@ -832,7 +1080,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                   gap: 6,
                 }}>
                   <Clock size={14} color="#0284c7" />
-                  <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '500', flex: 1 }}>
+                  <Text style={{ fontSize: 12.5, color: theme.colors.ink, fontWeight: '500', flex: 1 }}>
                     <Text style={{ fontWeight: '700' }}>Handover from</Text>{' '}
                     <Text style={{ fontWeight: '700', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
                       {latestTimeline.formattedEndDate}, {latestTimeline.formattedEndTime}
@@ -841,30 +1089,32 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                 </View>
               )}
 
-              <View style={styles.rowInputs}>
-                <View style={{ flex: 1 }}>
-                  <TimeInput
-                    label="Start Time *"
-                    required
-                    value={startTime}
-                    onChangeText={setStartTime}
-                  />
+              {(shiftCodes.length === 0 || showManualTimes) && (
+                <View style={styles.rowInputs}>
+                  <View style={{ flex: 1 }}>
+                    <TimeInput
+                      label="Start Time *"
+                      required
+                      value={startTime}
+                      onChangeText={setStartTime}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <TimeInput
+                      label="End Time *"
+                      required
+                      value={endTime}
+                      onChangeText={setEndTime}
+                      isInvalid={shiftStats.isFutureEnd}
+                    />
+                  </View>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <TimeInput
-                    label="End Time *"
-                    required
-                    value={endTime}
-                    onChangeText={setEndTime}
-                    isInvalid={shiftStats.isFutureEnd}
-                  />
-                </View>
-              </View>
+              )}
 
               {/* Sequencing Error Alert */}
               {sequencingError?.isInvalid && (
                 <View style={[styles.alertBox, { backgroundColor: theme.colors.error + '1a', borderColor: theme.colors.error, marginVertical: 2, padding: 10, gap: 8 }]}>
-                  <Text style={{ color: theme.colors.error, fontSize: 11, fontWeight: '600' }}>
+                  <Text style={{ color: theme.colors.error, fontSize: 12, fontWeight: '600' }}>
                     {sequencingError.message}
                   </Text>
                   <TouchableOpacity
@@ -881,7 +1131,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                       paddingHorizontal: 12,
                     }}
                   >
-                    <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 12 }}>
+                    <Text style={{ color: '#ffffff', fontWeight: '700', fontSize: 13 }}>
                       Align to {sequencingError.recommendedTime}
                     </Text>
                   </TouchableOpacity>
@@ -902,7 +1152,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                   gap: 8,
                 }]}>
                   <AlertTriangle size={14} color={theme.colors.error} />
-                  <Text style={{ color: theme.colors.error, fontSize: 11, fontWeight: '600', flex: 1 }}>
+                  <Text style={{ color: theme.colors.error, fontSize: 12, fontWeight: '600', flex: 1 }}>
                     {shiftStats.errorMessage || 'Cannot log before shift end.'}
                   </Text>
                 </View>
@@ -959,8 +1209,8 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                     borderWidth: 1,
                     borderColor: theme.colors.error + '35',
                   }}>
-                    <Clock size={11} color={theme.colors.error} />
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: theme.colors.error, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                    <Clock size={12} color={theme.colors.error} />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.error, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
                       Total: {breakdownStats?.isValid ? (breakdownStats.hours > 0 ? `${breakdownStats.durationFormatted} (${breakdownStats.totalMinutes} min)` : breakdownStats.durationFormatted) : '0 min'}
                     </Text>
                   </View>
@@ -992,7 +1242,7 @@ export const MeterLogModal: React.FC<MeterLogModalProps> = ({
                     padding: 8,
                     borderRadius: 8,
                   }]}>
-                    <Text style={{ color: theme.colors.warning, fontSize: 11, fontWeight: '700' }}>
+                    <Text style={{ color: theme.colors.warning, fontSize: 12, fontWeight: '700' }}>
                       {breakdownStats.errorMessage || 'Invalid breakdown timing.'}
                     </Text>
                   </View>
@@ -1124,7 +1374,7 @@ const styles = StyleSheet.create({
     marginBottom: spacingNumeric.xs,
   },
   fieldLabel: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '600',
     marginBottom: 6,
   },
@@ -1138,10 +1388,10 @@ const styles = StyleSheet.create({
     minWidth: 64,
   },
   dateChipLabel: {
-    fontSize: 11,
+    fontSize: 12.5,
   },
   dateChipSub: {
-    fontSize: 9,
+    fontSize: 12,
     marginTop: 1,
   },
   clientSelectTrigger: {
@@ -1153,7 +1403,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   clientSelectText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '500',
   },
   rowInputs: {
@@ -1170,11 +1420,11 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   calcLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '500',
   },
   calcValue: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
   },
   breakdownRow: {
@@ -1192,11 +1442,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   breakdownTitle: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '600',
   },
   breakdownDesc: {
-    fontSize: 11,
+    fontSize: 12.5,
     marginTop: 1,
   },
   footer: {
@@ -1226,7 +1476,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   modalTitle: {
-    fontSize: 16,
+    fontSize: 16.5,
     fontWeight: '700',
   },
   modalListScroll: {
@@ -1241,10 +1491,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   clientItemName: {
-    fontSize: 14,
+    fontSize: 14.5,
   },
   clientItemLoc: {
-    fontSize: 11,
+    fontSize: 12.5,
     marginTop: 2,
   },
 });

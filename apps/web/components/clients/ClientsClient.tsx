@@ -12,7 +12,6 @@ export { ClientsTable } from "./ClientsTable";
 export { ClientsMobileList } from "./ClientsMobileList";
 export { ClientModal } from "./ClientModal";
 export { ClientDetailModal } from "./ClientDetailModal";
-export { ClientDetailDrawer } from "./ClientDetailDrawer";
 export { ClientDeleteModal } from "./ClientDeleteModal";
 export { ClientExportModal } from "./ClientExportModal";
 

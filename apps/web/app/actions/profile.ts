@@ -7,7 +7,7 @@ import { getCurrentUser } from "@/lib/dal";
 import { logAudit } from "@/lib/audit";
 import { CACHE_TAGS } from "@/lib/cache";
 import { ProfileUpdateSchema } from "@reachinternational/validation";
-import { validateAadhaarNumber, validateLicenseNumber } from "@reachinternational/utils";
+import { validateAadhaarNumber, validateLicenseNumber, parseProfileShiftTime } from "@reachinternational/utils";
 import type { UserRole, ProfileChangeRequest, User } from "@/lib/types/database";
 
 export interface ProfileFormState {
@@ -103,10 +103,24 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
       ? Number(monthlySalaryRaw)
       : null;
 
+    const shiftTimeRaw = (formData.get("shift_time") as string)?.trim() || null;
+    let shiftStartRaw = (formData.get("shift_start_time") as string)?.trim() || null;
+    let shiftEndRaw = (formData.get("shift_end_time") as string)?.trim() || null;
+
+    if ((!shiftStartRaw || !shiftEndRaw) && shiftTimeRaw) {
+      const parsedShift = parseProfileShiftTime(shiftTimeRaw);
+      if (parsedShift) {
+        shiftStartRaw = parsedShift.startTime;
+        shiftEndRaw = parsedShift.endTime;
+      }
+    }
+
     const rawData = {
       full_name: (formData.get("full_name") as string)?.trim() || "",
       phone: (formData.get("phone") as string)?.trim() || "",
-      shift_time: (formData.get("shift_time") as string)?.trim() || null,
+      shift_time: shiftTimeRaw,
+      shift_start_time: shiftStartRaw,
+      shift_end_time: shiftEndRaw,
       street: (formData.get("street") as string)?.trim() || (formData.get("address") as string)?.trim() || "",
       address: (formData.get("address") as string)?.trim() || (formData.get("street") as string)?.trim() || "",
       city: (formData.get("city") as string)?.trim() || "",
@@ -268,6 +282,7 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
       });
 
       revalidatePath("/");
+      revalidatePath("/profile");
       revalidatePath("/users");
       revalidateTag(CACHE_TAGS.users, "max");
 
@@ -355,6 +370,7 @@ export async function updateMyProfile(formData: FormData): Promise<ProfileFormSt
       },
     });
 
+    revalidatePath("/profile");
     revalidatePath("/users");
     revalidateTag(CACHE_TAGS.users, "max");
 
@@ -550,6 +566,7 @@ export async function approveProfileChangeRequest(requestId: string): Promise<Pr
       },
     });
 
+    revalidatePath("/profile");
     revalidatePath("/users");
     revalidateTag(CACHE_TAGS.users, "max");
     revalidateTag(CACHE_TAGS.dashboard, "max");

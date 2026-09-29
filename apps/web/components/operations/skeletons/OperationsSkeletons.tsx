@@ -197,3 +197,29 @@ export function OperatorHistoryCardSkeletonList({ count = 3 }: { count?: number 
   );
 }
 
+export function OperationsLogsTabSkeleton() {
+  return (
+    <div className="space-y-4 animate-pulse">
+      {/* Filter toolbar skeleton */}
+      <div className="rounded-2xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] p-3.5 space-y-3">
+        <div className="w-48 h-8 rounded-lg bg-[var(--color-hairline)]/60" />
+        <div className="pt-3 border-t border-[var(--color-hairline)] grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="h-10 rounded-lg bg-[var(--color-hairline)]/50" />
+          <div className="h-10 rounded-lg bg-[var(--color-hairline)]/50" />
+        </div>
+      </div>
+      {/* Subview card skeleton */}
+      <OperationsSubViewCardSkeleton />
+      {/* Table skeleton */}
+      <div className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] overflow-hidden">
+        <div className="h-9 border-b border-[var(--color-hairline)] bg-[var(--color-canvas)]" />
+        <table className="w-full">
+          <tbody>
+            <OperationsLogTableSkeletonRows count={6} />
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+

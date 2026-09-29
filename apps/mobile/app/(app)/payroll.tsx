@@ -713,57 +713,57 @@ export default function PayrollScreen() {
                     <Text style={{ fontSize: 13, fontWeight: '800', color: theme.colors.ink, textTransform: 'uppercase' }}>
                       REACH INTERNATIONAL
                     </Text>
-                    <Text style={{ fontSize: 11, color: theme.colors.mute }}>
+                    <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>
                       Operator Salary Statement Slip
                     </Text>
                     <View style={{ marginTop: 6, gap: 4 }}>
-                      <Text style={{ fontSize: 11, color: theme.colors.ink }}>A/C: {viewSlipOp.bank_account_number || 'XXXXXXXX1234'}</Text>
-                      <Text style={{ fontSize: 11, color: theme.colors.ink }}>IFSC: {viewSlipOp.bank_ifsc_code || 'BANK0001234'}</Text>
-                      <Text style={{ fontSize: 11, color: theme.colors.mute }}>DOJ: {viewSlipOp.doj || '—'}</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.ink }}>A/C: {viewSlipOp.bank_account_number || 'XXXXXXXX1234'}</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.ink }}>IFSC: {viewSlipOp.bank_ifsc_code || 'BANK0001234'}</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>DOJ: {viewSlipOp.doj || '—'}</Text>
                     </View>
                   </View>
 
                   {/* Attendance Strip */}
                   <View style={[styles.slipBox, { backgroundColor: '#2563eb10', borderColor: '#2563eb25' }]}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#2563eb', textTransform: 'uppercase', marginBottom: 6 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#2563eb', textTransform: 'uppercase', marginBottom: 6 }}>
                       Attendance & Days
                     </Text>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: 11, color: theme.colors.mute }}>Working: {viewSlipOp.working_days || 30}d</Text>
-                      <Text style={{ fontSize: 11, color: '#2563eb', fontWeight: '700' }}>Attended: {viewSlipOp.attended_days || viewSlipOp.work_days || 0}d</Text>
-                      <Text style={{ fontSize: 11, color: theme.colors.mute }}>OT: {viewSlipOp.ot_days || 0}d</Text>
-                      <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '700' }}>Total: {viewSlipOp.total_days || 0}d</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Working: {viewSlipOp.working_days || 30}d</Text>
+                      <Text style={{ fontSize: 12.5, color: '#2563eb', fontWeight: '700' }}>Attended: {viewSlipOp.attended_days || viewSlipOp.work_days || 0}d</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>OT: {viewSlipOp.ot_days || 0}d</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.ink, fontWeight: '700' }}>Total: {viewSlipOp.total_days || 0}d</Text>
                     </View>
                   </View>
 
                   {/* Financial Breakdown */}
                   <View style={[styles.slipBox, { backgroundColor: theme.colors.canvas, borderColor: theme.colors.hairline, gap: 6 }]}>
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: theme.colors.ink, textTransform: 'uppercase' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.ink, textTransform: 'uppercase' }}>
                       Earnings & Deductions
                     </Text>
                     <View style={styles.detailRow}>
-                      <Text style={{ fontSize: 11, color: theme.colors.mute }}>Basic Salary:</Text>
-                      <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '600' }}>₹{(viewSlipOp.basic_salary || 0).toLocaleString('en-IN')}</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Basic Salary:</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.ink, fontWeight: '600' }}>₹{(viewSlipOp.basic_salary || 0).toLocaleString('en-IN')}</Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Text style={{ fontSize: 11, color: theme.colors.mute }}>Attended Amount:</Text>
-                      <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '600' }}>₹{(viewSlipOp.attended_amount || 0).toLocaleString('en-IN')}</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Attended Amount:</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.ink, fontWeight: '600' }}>₹{(viewSlipOp.attended_amount || 0).toLocaleString('en-IN')}</Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Text style={{ fontSize: 11, color: theme.colors.mute }}>Overtime Amount:</Text>
-                      <Text style={{ fontSize: 11, color: '#d97706', fontWeight: '600' }}>₹{(viewSlipOp.ot_amount || 0).toLocaleString('en-IN')}</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Overtime Amount:</Text>
+                      <Text style={{ fontSize: 12.5, color: '#d97706', fontWeight: '600' }}>₹{(viewSlipOp.ot_amount || 0).toLocaleString('en-IN')}</Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Text style={{ fontSize: 11, color: theme.colors.mute }}>Paid Leave (PL) Pay:</Text>
-                      <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '600' }}>₹{(viewSlipOp.pl_amount || 0).toLocaleString('en-IN')}</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Paid Leave (PL) Pay:</Text>
+                      <Text style={{ fontSize: 12.5, color: theme.colors.ink, fontWeight: '600' }}>₹{(viewSlipOp.pl_amount || 0).toLocaleString('en-IN')}</Text>
                     </View>
                     <View style={[styles.detailRow, { paddingTop: 4, borderTopWidth: 1, borderTopColor: theme.colors.hairline }]}>
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: theme.colors.ink }}>Gross Pay:</Text>
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: theme.colors.ink }}>₹{(viewSlipOp.gross_pay || viewSlipOp.total_pay || 0).toLocaleString('en-IN')}</Text>
+                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: theme.colors.ink }}>Gross Pay:</Text>
+                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: theme.colors.ink }}>₹{(viewSlipOp.gross_pay || viewSlipOp.total_pay || 0).toLocaleString('en-IN')}</Text>
                     </View>
                     <View style={styles.detailRow}>
-                      <Text style={{ fontSize: 11, color: '#dc2626' }}>Total Deductions (Loan/Adv):</Text>
-                      <Text style={{ fontSize: 11, color: '#dc2626', fontWeight: '600' }}>
+                      <Text style={{ fontSize: 12.5, color: '#dc2626' }}>Total Deductions (Loan/Adv):</Text>
+                      <Text style={{ fontSize: 12.5, color: '#dc2626', fontWeight: '600' }}>
                         -₹{((viewSlipOp.loan_deduction || 0) + (viewSlipOp.advance_deduction || 0) + (viewSlipOp.other_deductions || 0)).toLocaleString('en-IN')}
                       </Text>
                     </View>
@@ -771,7 +771,7 @@ export default function PayrollScreen() {
 
                   {/* Net Pay Banner */}
                   <View style={[styles.slipBox, { backgroundColor: '#05966915', borderColor: '#05966930', alignItems: 'center' }]}>
-                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#059669', textTransform: 'uppercase' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#059669', textTransform: 'uppercase' }}>
                       Net Salary Payable
                     </Text>
                     <Text style={{ fontSize: 20, fontWeight: '800', color: '#059669', marginTop: 2 }}>
@@ -906,12 +906,12 @@ export default function PayrollScreen() {
                 {/* Live Preview Strip */}
                 <View style={[styles.slipBox, { backgroundColor: '#05966910', borderColor: '#05966925', gap: 4 }]}>
                   <View style={styles.detailRow}>
-                    <Text style={{ fontSize: 11, color: theme.colors.mute }}>Gross Pay:</Text>
-                    <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '700' }}>₹{editComputed.gross.toLocaleString('en-IN')}</Text>
+                    <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Gross Pay:</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.ink, fontWeight: '700' }}>₹{editComputed.gross.toLocaleString('en-IN')}</Text>
                   </View>
                   <View style={styles.detailRow}>
-                    <Text style={{ fontSize: 11, color: '#059669', fontWeight: '700' }}>Calculated Net Pay:</Text>
-                    <Text style={{ fontSize: 13, color: '#059669', fontWeight: '800' }}>₹{editComputed.net.toLocaleString('en-IN')}</Text>
+                    <Text style={{ fontSize: 12.5, color: '#059669', fontWeight: '700' }}>Calculated Net Pay:</Text>
+                    <Text style={{ fontSize: 14, color: '#059669', fontWeight: '800' }}>₹{editComputed.net.toLocaleString('en-IN')}</Text>
                   </View>
                 </View>
               </View>
@@ -981,17 +981,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   kpiLabel: {
-    fontSize: 11,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '600',
     textTransform: 'uppercase',
   },
   kpiValue: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     marginTop: 4,
   },
   kpiSub: {
-    fontSize: 11,
+    fontSize: 12,
     marginTop: 2,
   },
   searchBar: {
@@ -1005,7 +1005,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 14,
     padding: 0,
   },
   filterStripContainer: {
@@ -1025,15 +1025,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   filterChipText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
   },
   listSection: {
     gap: spacingNumeric.sm,
   },
   sectionTitle: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
     letterSpacing: 0.5,
     marginLeft: 4,
   },
@@ -1056,30 +1056,30 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   slBadge: {
-    fontSize: 10,
+    fontSize: 12,
     fontFamily: 'monospace',
     fontWeight: '700',
     borderWidth: 1,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
     borderRadius: 4,
   },
   operatorName: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
   },
   operatorLocation: {
-    fontSize: 11,
+    fontSize: 12.5,
   },
   totalPayAmount: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
     fontFamily: 'monospace',
   },
   totalPayLabel: {
-    fontSize: 10,
+    fontSize: 12,
     textTransform: 'uppercase',
-    fontWeight: '500',
+    fontWeight: '600',
   },
   breakdownRow: {
     flexDirection: 'row',
@@ -1092,11 +1092,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   colSub: {
-    fontSize: 10,
+    fontSize: 12,
     textTransform: 'uppercase',
   },
   colMain: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
     fontFamily: 'monospace',
     marginTop: 2,
@@ -1112,10 +1112,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   detailKey: {
-    fontSize: 11,
+    fontSize: 12.5,
   },
   detailVal: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '500',
   },
   cardFooter: {
@@ -1134,7 +1134,7 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   actionBtnText: {
-    fontSize: 12,
+    fontSize: 13,
   },
   modalBackdrop: {
     flex: 1,
@@ -1154,19 +1154,19 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   modalTitle: {
-    fontSize: 16,
+    fontSize: 16.5,
     fontWeight: '700',
   },
   modalSubtitle: {
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 2,
   },
   formGroup: {
     gap: 4,
   },
   inputLabel: {
-    fontSize: 11,
-    fontWeight: '500',
+    fontSize: 13.5,
+    fontWeight: '600',
   },
   textInput: {
     borderWidth: 1,

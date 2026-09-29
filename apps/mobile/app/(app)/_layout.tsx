@@ -65,6 +65,7 @@ export default function AppLayout() {
         <Tabs.Screen name="more" options={{ title: 'More' }} />
 
         {/* Operational Modules Accessible via Settings & Command Palette */}
+        <Tabs.Screen name="running-logs" options={{ title: 'Running Logs', href: null }} />
         <Tabs.Screen name="hr" options={{ title: 'HR', href: null }} />
         <Tabs.Screen name="profile" options={{ title: 'Profile', href: null }} />
         <Tabs.Screen name="privacy" options={{ title: 'Privacy Policy', href: null }} />

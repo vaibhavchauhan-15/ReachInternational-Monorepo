@@ -54,7 +54,7 @@ export function ClientDeleteModal({
             </div>
             <div>
               <h3 className="text-base font-bold text-[var(--color-ink)]">Soft Delete Client?</h3>
-              <p className="text-xs text-[var(--color-mute)] font-mono">{client.code}</p>
+              <p className="text-xs text-[var(--color-mute)] font-mono">{client.client_id || client.code}</p>
             </div>
           </div>
           <button

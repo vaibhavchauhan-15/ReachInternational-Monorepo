@@ -8,7 +8,7 @@ import { getMachines } from "@/lib/queries/machines";
 import { getClients } from "@/lib/queries/clients";
 import type { Machine, MachineWithEngineer, User } from "@reachinternational/types";
 import type { OperatorHourLog } from "@/components/dashboard/OperatorDashboard";
-import { parseBreakdownString, parseProfileShiftTime, parseTimeToMinutes } from "@reachinternational/utils";
+import { parseBreakdownString, parseProfileShiftTime, parseTimeToMinutes, resolveSiteMatchCandidates } from "@reachinternational/utils";
 import {
   getOperationsMachineLogsData,
   getOperationsClientLogsData,
@@ -539,25 +539,11 @@ export const getOperationsLogsPage = cache(
           query = query.eq("machine_id", params.machineId);
         }
         if (params.site && params.site !== "all") {
-          // Extract safe alphanumeric search tokens from the selected site
-          const siteTokens = params.site
-            .split(",")
-            .map((t) => t.replace(/[^a-zA-Z0-9\s-]/g, " ").trim())
-            .filter((t) => t.length >= 3);
-
-          // Find the most distinctive geographical token (e.g. city or district, avoiding generic words)
-          const primaryToken = siteTokens.find(
-            (t) =>
-              !t.toLowerCase().includes("mill") &&
-              !t.toLowerCase().includes("plot") &&
-              !t.toLowerCase().includes("centre") &&
-              !t.toLowerCase().includes("industrial")
-          ) || siteTokens[0];
-
-          if (primaryToken) {
-            query = query.ilike("location", `%${primaryToken}%`);
-          } else {
-            query = query.ilike("location", `%${params.site.replace(/[%_\\]/g, "").trim()}%`);
+          const siteCandidates = resolveSiteMatchCandidates(params.site);
+          if (siteCandidates.length === 1) {
+            query = query.eq("location", siteCandidates[0]);
+          } else if (siteCandidates.length > 1) {
+            query = query.in("location", siteCandidates);
           }
         }
       } else if (params.viewMode === "operator" && params.operatorId && params.operatorId !== "all") {
@@ -748,6 +734,37 @@ export const getOperationsHubData = cache(async (
 
 
 
+  // 1.5. Today's Shift Monitor Tab: Only lightweight machines and clients for assisted modal (0 hour logs queried)
+  if (tab === "today") {
+    const { getCachedOperationsMachines, getCachedOperationsClients } = await import("@/lib/data/operations/operations-filters");
+    const [machines, dbClients] = await Promise.all([
+      getCachedOperationsMachines(),
+      getCachedOperationsClients(),
+    ]);
+
+    return {
+      machines: machines as unknown as Machine[],
+      dbClients: dbClients as any,
+      operators: [],
+      assignments: [],
+      hourLogs: [],
+      siteMovements: [],
+      operatorPayouts: [],
+      assignedMachine: null,
+      recentLogs: [],
+      allMachines: machines as unknown as MachineWithEngineer[],
+      totalLogsCount: 0,
+      currentPage: 1,
+      logsPageSize: 20,
+      logsSummary: {
+        totalRunHours: 0,
+        totalOtHours: 0,
+        totalBreakdowns: 0,
+        loggedDaysCount: 0,
+      },
+    };
+  }
+
   // 2. Supervisor Logs Tab: Sub-tab isolated loaders with server-side pagination & GIN trigram indexes
   if (tab === "logs") {
     const viewMode =
@@ -755,25 +772,23 @@ export const getOperationsHubData = cache(async (
       (params.clientId ? "client" : params.operatorId ? "operator" : "machine");
 
     if (viewMode === "machine") {
-      const [res, opsList] = await Promise.all([
-        getOperationsMachineLogsData({
-          machineId: params.machineId,
-          month: params.month,
-          customStart: params.customStart,
-          customEnd: params.customEnd,
-          site: params.site,
-          search: params.search,
-          sort: params.sort,
-          page: params.page,
-          pageSize: params.pageSize || 20,
-        }),
-        getCachedOperationsOperators(),
-      ]);
+      // Only fetch machine logs data — operators dropdown is NOT visible on screen
+      const res = await getOperationsMachineLogsData({
+        machineId: params.machineId,
+        month: params.month,
+        customStart: params.customStart,
+        customEnd: params.customEnd,
+        site: params.site,
+        search: params.search,
+        sort: params.sort,
+        page: params.page,
+        pageSize: params.pageSize || 500,
+      });
 
       return {
         machines: res.machines as unknown as Machine[],
         dbClients: [],
-        operators: (opsList || []) as unknown as User[],
+        operators: [],
         assignments: [],
         hourLogs: res.hourLogs,
         siteMovements: [],
@@ -790,27 +805,25 @@ export const getOperationsHubData = cache(async (
     }
 
     if (viewMode === "client") {
-      const [res, opsList] = await Promise.all([
-        getOperationsClientLogsData({
-          clientId: params.clientId,
-          machineId: params.machineId,
-          site: params.site,
-          month: params.month,
-          customStart: params.customStart,
-          customEnd: params.customEnd,
-          search: params.search,
-          sort: params.sort,
-          page: params.page,
-          pageSize: params.pageSize || 20,
-          fetchLogs: true,
-        }),
-        getCachedOperationsOperators(),
-      ]);
+      // Only fetch client logs data — operators dropdown is NOT visible on screen
+      const res = await getOperationsClientLogsData({
+        clientId: params.clientId,
+        machineId: params.machineId,
+        site: params.site,
+        month: params.month,
+        customStart: params.customStart,
+        customEnd: params.customEnd,
+        search: params.search,
+        sort: params.sort,
+        page: params.page,
+        pageSize: params.pageSize || 500,
+        fetchLogs: true,
+      });
 
       return {
         machines: res.machines as unknown as Machine[],
         dbClients: res.dbClients as any,
-        operators: (opsList || []) as unknown as User[],
+        operators: [],
         assignments: [],
         hourLogs: res.hourLogs,
         siteMovements: [],

@@ -1,6 +1,7 @@
 "use client";
 
 import { memo } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { highlightText } from "./user-search";
 import {
@@ -18,7 +19,6 @@ interface MobileUserCardProps {
   selectable?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (userId: string) => void;
-  onOpenSheet: (user: User) => void;
   onResetPassword?: (userId: string) => void;
   onToggleStatus?: (userId: string) => void;
   searchTerm?: string;
@@ -28,43 +28,43 @@ function getRoleBadge(role: string) {
   switch (role) {
     case "super_admin":
       return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/80 shadow-xs whitespace-nowrap">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800/80 shadow-xs whitespace-nowrap">
           Super Admin
         </span>
       );
     case "admin":
       return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 shadow-xs whitespace-nowrap">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 shadow-xs whitespace-nowrap">
           Admin
         </span>
       );
     case "manager":
       return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 shadow-xs whitespace-nowrap">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 shadow-xs whitespace-nowrap">
           Manager
         </span>
       );
     case "supervisor":
       return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/80 shadow-xs whitespace-nowrap">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800/80 shadow-xs whitespace-nowrap">
           Supervisor
         </span>
       );
     case "hr":
       return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 shadow-xs whitespace-nowrap">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 shadow-xs whitespace-nowrap">
           HR
         </span>
       );
     case "operator":
       return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 shadow-xs whitespace-nowrap">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80 shadow-xs whitespace-nowrap">
           Operator
         </span>
       );
     default:
       return (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] shadow-xs whitespace-nowrap">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] border border-[var(--color-hairline)] shadow-xs whitespace-nowrap">
           {role ? role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "User"}
         </span>
       );
@@ -101,25 +101,25 @@ function getStatusIndicator(status: string) {
   switch (status) {
     case "active":
       return (
-        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
-          <span className="relative flex h-1.5 w-1.5">
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60">
+          <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
           </span>
           Active
         </span>
       );
     case "inactive":
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800">
-          <span className="inline-flex rounded-full h-1.5 w-1.5 bg-slate-400"></span>
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800">
+          <span className="inline-flex rounded-full h-2 w-2 bg-slate-400"></span>
           Inactive
         </span>
       );
     case "pending":
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">
-          <span className="inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60">
+          <span className="inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
           Pending
         </span>
       );
@@ -140,9 +140,10 @@ export const MobileUserCard = memo(function MobileUserCard({
   selectable = false,
   isSelected = false,
   onToggleSelect,
-  onOpenSheet,
   searchTerm,
 }: MobileUserCardProps) {
+  const router = useRouter();
+
   const canViewContactInfo = () => {
     if (currentUser.role === "super_admin" || currentUser.role === "admin") return true;
     if (user.id === currentUser.id) return true;
@@ -172,6 +173,8 @@ export const MobileUserCard = memo(function MobileUserCard({
       ? "border-l-[3px] border-l-amber-500"
       : "border-l-[3px] border-l-slate-400";
 
+  const userDetailUrl = `/users/${user.employee_id || user.id}`;
+
   return (
     <motion.div
       layout
@@ -180,7 +183,7 @@ export const MobileUserCard = memo(function MobileUserCard({
       exit={{ opacity: 0, scale: 0.96 }}
       whileTap={{ scale: 0.98 }}
       transition={{ duration: 0.2, type: "spring", stiffness: 350, damping: 25 }}
-      onClick={() => onOpenSheet(user)}
+      onClick={() => router.push(userDetailUrl)}
       className={`p-3.5 rounded-xl border ${
         isSelected
           ? "border-[var(--color-ink)] dark:border-white ring-1 ring-[var(--color-ink)] dark:ring-white bg-[var(--color-link-soft)]/20"
@@ -212,11 +215,18 @@ export const MobileUserCard = memo(function MobileUserCard({
           </div>
 
           <div className="flex flex-col min-w-0 flex-1">
-            <h3 className="text-xs font-bold text-[var(--color-ink)] truncate leading-tight group-hover:text-[var(--color-link)] transition-colors" title={user.full_name}>
-              {highlightText(truncateText(user.full_name, 15), searchTerm)}
-            </h3>
+            <div className="flex items-center gap-1.5 min-w-0">
+              {user.employee_id && (
+                <span className="font-mono text-xs font-semibold px-1.5 py-0.5 rounded bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-[var(--color-ink)] shrink-0 shadow-2xs">
+                  {user.employee_id}
+                </span>
+              )}
+              <h3 className="text-sm sm:text-base font-bold text-[var(--color-ink)] truncate leading-tight group-hover:text-[var(--color-link)] transition-colors" title={user.full_name}>
+                {highlightText(truncateText(user.full_name, 18), searchTerm)}
+              </h3>
+            </div>
             {user.location && (
-              <span className="text-[11px] text-[var(--color-mute)] truncate mt-0.5">
+              <span className="text-xs text-[var(--color-mute)] truncate mt-0.5">
                 {user.location}
               </span>
             )}
@@ -226,7 +236,7 @@ export const MobileUserCard = memo(function MobileUserCard({
         <div className="flex items-center gap-1.5 shrink-0">
           {getStatusIndicator(user.status)}
           <AnimatedChevronRight
-            size={14}
+            size={16}
             className="text-[var(--color-mute)] group-hover:text-[var(--color-ink)] group-hover:translate-x-0.5 transition-all"
           />
         </div>
@@ -237,32 +247,32 @@ export const MobileUserCard = memo(function MobileUserCard({
         <div className="flex flex-col gap-1 min-w-0 flex-1">
           {showContact ? (
             <>
-              <div className="flex items-center gap-1.5 font-mono text-[11px] truncate">
-                <AnimatedMail size={12} className="flex-shrink-0 text-[var(--color-ink)] opacity-60" />
-                <span className="truncate" title={user.email}>{highlightText(truncateText(user.email, 20), searchTerm)}</span>
+              <div className="flex items-center gap-1.5 font-mono text-xs truncate">
+                <AnimatedMail size={13} className="flex-shrink-0 text-[var(--color-ink)] opacity-60" />
+                <span className="truncate" title={user.email}>{highlightText(truncateText(user.email, 22), searchTerm)}</span>
               </div>
               {user.phone && (
-                <div className="flex items-center gap-1.5 font-mono text-[11px] truncate">
-                  <AnimatedPhone size={12} className="flex-shrink-0 text-[var(--color-ink)] opacity-60" />
+                <div className="flex items-center gap-1.5 font-mono text-xs truncate">
+                  <AnimatedPhone size={13} className="flex-shrink-0 text-[var(--color-ink)] opacity-60" />
                   <span>{highlightText(user.phone, searchTerm)}</span>
                 </div>
               )}
             </>
           ) : (
-            <div className="text-[11px] text-[var(--color-mute)] italic">
+            <div className="text-xs text-[var(--color-mute)] italic">
               Restricted contact
             </div>
           )}
           {(user.city || user.location) && (
-            <div className="flex items-center gap-1.5 text-[11px] truncate">
-              <AnimatedMapPin size={12} className="flex-shrink-0 text-[var(--color-ink)] opacity-60" />
+            <div className="flex items-center gap-1.5 text-xs truncate">
+              <AnimatedMapPin size={13} className="flex-shrink-0 text-[var(--color-ink)] opacity-60" />
               <span className="truncate">{user.city || user.location}</span>
             </div>
           )}
           {(user.supervisors && user.supervisors.length > 0) || user.supervisor?.full_name ? (
-            <div className="flex items-center gap-1.5 text-[11px] truncate">
-              <span className="text-[var(--color-mute)]">Sup:</span>
-              <span className="text-[var(--color-ink)] font-medium truncate">
+            <div className="flex items-center gap-1.5 text-xs truncate">
+              <span className="text-[var(--color-mute)] font-medium">Sup:</span>
+              <span className="text-[var(--color-ink)] font-semibold truncate">
                 {user.supervisors && user.supervisors.length > 0
                   ? user.supervisors.map((s) => truncateText(s.full_name, 15)).join(", ")
                   : truncateText(user.supervisor?.full_name, 15)}
@@ -270,10 +280,10 @@ export const MobileUserCard = memo(function MobileUserCard({
             </div>
           ) : null}
           {user.working_location?.name && (
-            <div className="flex items-center gap-1.5 text-[11px] truncate">
-              <AnimatedMapPin size={12} className="flex-shrink-0 text-[var(--color-link)] opacity-70" />
-              <span className="text-[var(--color-mute)]">Base:</span>
-              <span className="text-[var(--color-ink)] font-medium truncate">{user.working_location.name}</span>
+            <div className="flex items-center gap-1.5 text-xs truncate">
+              <AnimatedMapPin size={13} className="flex-shrink-0 text-[var(--color-link)] opacity-70" />
+              <span className="text-[var(--color-mute)] font-medium">Base:</span>
+              <span className="text-[var(--color-ink)] font-semibold truncate">{user.working_location.name}</span>
             </div>
           )}
         </div>

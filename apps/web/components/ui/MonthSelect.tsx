@@ -188,11 +188,11 @@ export function MonthSelect({
           type="button"
           onClick={handlePrevMonth}
           disabled={disabled || (currentYear <= minYear && currentMonthIndex === 0)}
-          className="h-11 sm:h-9 w-11 sm:w-9 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-xs transition-all active:scale-95 cursor-pointer"
+          className="h-10 sm:h-9 w-10 sm:w-9 shrink-0 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-xs transition-all active:scale-95 cursor-pointer"
           title="Previous Month"
           aria-label="Previous Month"
         >
-          <AnimatedChevronLeft size={14} className="text-[var(--color-mute)] hover:text-[var(--color-ink)]" />
+          <AnimatedChevronLeft size={14} className="text-[var(--color-mute)] hover:text-[var(--color-ink)] shrink-0" />
         </button>
       )}
 
@@ -203,21 +203,21 @@ export function MonthSelect({
         onClick={() => !disabled && setIsOpen((prev) => !prev)}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
-        className={`inline-flex items-center justify-between gap-2 rounded-lg border text-xs font-semibold select-none shadow-xs transition-all cursor-pointer ${
-          compact ? "h-8 px-2.5" : "h-11 sm:h-9 px-3"
+        className={`inline-flex items-center justify-between gap-1.5 sm:gap-2 rounded-lg border text-xs font-semibold select-none shadow-xs transition-all cursor-pointer min-w-0 ${
+          compact ? "h-9 sm:h-8 px-2 sm:px-2.5" : "h-10 sm:h-9 px-2.5 sm:px-3"
         } ${
           isOpen
             ? "border-[var(--color-ink)] ring-1 ring-[var(--color-ink)]/10 bg-[var(--color-canvas-elevated)] text-[var(--color-ink)]"
             : "border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)]"
         } ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
           <AnimatedCalendar size={14} className="text-[var(--color-mute)] shrink-0" />
-          <span className="font-semibold tracking-tight whitespace-nowrap">{displayLabel}</span>
+          <span className="font-semibold tracking-tight whitespace-nowrap truncate">{displayLabel}</span>
         </div>
         <ChevronDown
           size={13}
-          className={`text-[var(--color-mute)] transition-transform duration-200 ${
+          className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 ${
             isOpen ? "rotate-180 text-[var(--color-ink)]" : ""
           }`}
         />
@@ -229,11 +229,11 @@ export function MonthSelect({
           type="button"
           onClick={handleNextMonth}
           disabled={disabled || (currentYear >= maxYear && currentMonthIndex === 11)}
-          className="h-11 sm:h-9 w-11 sm:w-9 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-xs transition-all active:scale-95 cursor-pointer"
+          className="h-10 sm:h-9 w-10 sm:w-9 shrink-0 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed shadow-xs transition-all active:scale-95 cursor-pointer"
           title="Next Month"
           aria-label="Next Month"
         >
-          <AnimatedChevronRight size={14} className="text-[var(--color-mute)] hover:text-[var(--color-ink)]" />
+          <AnimatedChevronRight size={14} className="text-[var(--color-mute)] hover:text-[var(--color-ink)] shrink-0" />
         </button>
       )}
 
@@ -245,7 +245,7 @@ export function MonthSelect({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -4, scale: 0.98 }}
             transition={{ duration: 0.15, ease: [0.16, 1, 0.3, 1] }}
-            className="absolute right-0 top-full mt-1.5 z-50 w-[280px] rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl backdrop-blur-md text-[var(--color-ink)] p-3 space-y-3"
+            className="absolute left-0 sm:left-auto right-auto sm:right-0 top-full mt-1.5 z-50 w-[280px] max-w-[calc(100vw-24px)] rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-2xl backdrop-blur-md text-[var(--color-ink)] p-3 space-y-3"
           >
             {/* Header: Browse Year with Steppers */}
             <div className="flex items-center justify-between border-b border-[var(--color-hairline)] pb-2.5">

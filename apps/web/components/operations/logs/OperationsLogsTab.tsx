@@ -1,12 +1,11 @@
 "use client";
 
 import React, { useState, useMemo, useTransition, useEffect, useRef, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   getOperationsClientLogsAction,
   getOperationsMachineLogsAction,
   getOperationsOperatorLogsAction,
-  deleteOperatorHourLogAction,
 } from "@/app/actions/operators";
 import dynamic from "next/dynamic";
 import {
@@ -16,7 +15,6 @@ import {
   SearchableSelect,
   DateRangePicker,
   useToast,
-  ConfirmationDialog,
   usePullToRefresh,
 } from "@/components/ui";
 import type {
@@ -35,12 +33,25 @@ import {
   OPERATIONS_CACHE_TTLS,
 } from "@reachinternational/utils";
 import { formatClientFullAddress, getCurrentMonthValue } from "../operations-helpers";
-import { OperationsMachineView } from "./OperationsMachineView";
-import { OperationsClientView } from "./OperationsClientView";
-import { OperationsOperatorView } from "./OperationsOperatorView";
-import { OperationsLogsTable } from "./OperationsLogsTable";
+import { OperationsLogsTable, calculateShiftWorkingHours } from "./OperationsLogsTable";
 import { OperationsLogsMobileList } from "./OperationsLogsMobileList";
 import { OperationsSubViewCardSkeleton } from "../skeletons/OperationsSkeletons";
+
+// Code-split sub-view cards: only loaded when the respective view mode is active
+const OperationsMachineView = dynamic(
+  () => import("./OperationsMachineView").then((mod) => mod.OperationsMachineView),
+  { loading: () => <OperationsSubViewCardSkeleton />, ssr: true }
+);
+
+const OperationsClientView = dynamic(
+  () => import("./OperationsClientView").then((mod) => mod.OperationsClientView),
+  { loading: () => <OperationsSubViewCardSkeleton />, ssr: false }
+);
+
+const OperationsOperatorView = dynamic(
+  () => import("./OperationsOperatorView").then((mod) => mod.OperationsOperatorView),
+  { loading: () => <OperationsSubViewCardSkeleton />, ssr: false }
+);
 
 // Dynamic on-demand modals: only loaded when clicked
 const PrintableSupervisorLogsModal = dynamic(
@@ -59,20 +70,10 @@ const ConflictResolutionModal = dynamic(
   { ssr: false }
 );
 
-import { isManagerOrAbove } from "@reachinternational/permissions";
-
 const MachineHistoryQuickModal = dynamic(
   () =>
     import("../../machines/MachineHistoryQuickModal").then(
       (mod) => mod.MachineHistoryQuickModal
-    ),
-  { ssr: false }
-);
-
-const OperationsEditLogModal = dynamic(
-  () =>
-    import("../modals/OperationsEditLogModal").then(
-      (mod) => mod.OperationsEditLogModal
     ),
   { ssr: false }
 );
@@ -118,7 +119,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
   user,
   totalLogsCount,
   currentPage = 1,
-  logsPageSize = 10,
+  logsPageSize = 500,
   logsSummary,
   initialViewMode,
   initialMachineId,
@@ -135,6 +136,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
 }: OperationsLogsTabProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const pathname = usePathname() || "/running-logs";
   const [isPending, startTransition] = useTransition();
 
   // Supervisor Running Hours Log Filtering & View Mode State
@@ -148,7 +150,9 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     initialClientId || ""
   );
   const [logsSelectedSite, setLogsSelectedSite] = useState<string>(initialSite || "");
-  const [logsSelectedClientMachineId, setLogsSelectedClientMachineId] = useState<string>("all");
+  const [logsSelectedClientMachineId, setLogsSelectedClientMachineId] = useState<string>(
+    initialMachineId && initialMachineId !== "all" ? initialMachineId : "all"
+  );
   const [logsSelectedOperatorId, setLogsSelectedOperatorId] = useState<string>(
     initialOperatorId || ""
   );
@@ -199,9 +203,6 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
   }, []);
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [selectedConflictLog, setSelectedConflictLog] = useState<MachineHourLog | null>(null);
-  const [logToDelete, setLogToDelete] = useState<MachineHourLog | null>(null);
-  const [logToEdit, setLogToEdit] = useState<MachineHourLog | null>(null);
-  const [isDeletingLog, setIsDeletingLog] = useState(false);
   const [showMachineHistoryModal, setShowMachineHistoryModal] = useState(false);
 
   // Mobile Lazy Loading Scroll Stream State
@@ -214,15 +215,15 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
   const [loadMoreMobileError, setLoadMoreMobileError] = useState<string | null>(null);
   const isFetchingMobileRef = useRef<boolean>(false);
   const mobileSentinelRef = useRef<HTMLDivElement | null>(null);
-  // Strip legacy tab parameter (e.g. ?tab=logs) to normalize URL to clean /operations
+  // Strip legacy tab parameter (e.g. ?tab=logs) to normalize URL to clean path
   useEffect(() => {
     if (searchParams?.has("tab")) {
       const params = new URLSearchParams(searchParams.toString());
       params.delete("tab");
       const newQuery = params.toString();
-      window.history.replaceState(null, "", newQuery ? `/operations?${newQuery}` : "/operations");
+      window.history.replaceState(null, "", newQuery ? `${pathname}?${newQuery}` : pathname);
     }
-  }, [searchParams]);
+  }, [searchParams, pathname]);
 
   // Support browser Back/Forward navigation
   useEffect(() => {
@@ -237,128 +238,6 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     setShowMachineHistoryModal(true);
   }, []);
 
-  const handleRequestEditLog = useCallback((log: MachineHourLog) => {
-    setLogToEdit(log);
-  }, []);
-
-  const handleRequestDeleteLog = useCallback((log: MachineHourLog) => {
-    setLogToDelete(log);
-  }, []);
-
-  // Manager and above have full edit access; operators can edit own logs within 7 days
-  const canEditLog = useCallback(
-    (log: MachineHourLog) => {
-      const role = (user?.role || userRole || "").toLowerCase();
-      if (isManagerOrAbove(role)) return true;
-      if (role === "operator" && log.operator_id === user?.id && log.log_date) {
-        const parts = log.log_date.split("T")[0].split("-").map(Number);
-        const now = new Date();
-        const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-        if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
-          const logDateMidnight = new Date(parts[0], parts[1] - 1, parts[2]).getTime();
-          const diffDays = Math.floor((todayMidnight - logDateMidnight) / (1000 * 60 * 60 * 24));
-          return diffDays <= 7 && diffDays >= 0;
-        }
-      }
-      return false;
-    },
-    [user?.role, userRole, user?.id]
-  );
-
-  // Strictly Super Admin only can delete any machine/operator hour log
-  const canDeleteLog = useCallback(
-    (_log: MachineHourLog) => {
-      const role = (user?.role || userRole || "").toLowerCase();
-      return role === "super_admin";
-    },
-    [user?.role, userRole]
-  );
-
-  const handleLogUpdated = useCallback((updatedLog: MachineHourLog) => {
-    setActiveLogs((prev) =>
-      prev.map((l) =>
-        l.id === updatedLog.id
-          ? {
-              ...l,
-              ...updatedLog,
-              machine: updatedLog.machine || l.machine,
-              operator: updatedLog.operator || l.operator,
-              client: updatedLog.client || l.client,
-            }
-          : l
-      )
-    );
-    setMobileLogsList((prev) =>
-      prev.map((l) =>
-        l.id === updatedLog.id
-          ? {
-              ...l,
-              ...updatedLog,
-              machine: updatedLog.machine || l.machine,
-              operator: updatedLog.operator || l.operator,
-              client: updatedLog.client || l.client,
-            }
-          : l
-      )
-    );
-    queryCacheRef.current.clear();
-    Object.keys(subTabCacheRef.current).forEach((key) => {
-      const entry = subTabCacheRef.current[key as keyof typeof subTabCacheRef.current];
-      if (entry) {
-        entry.hourLogs = entry.hourLogs.map((l) =>
-          l.id === updatedLog.id
-            ? {
-                ...l,
-                ...updatedLog,
-                machine: updatedLog.machine || l.machine,
-                operator: updatedLog.operator || l.operator,
-                client: updatedLog.client || l.client,
-              }
-            : l
-        );
-      }
-    });
-  }, []);
-
-  const handleDeleteLog = useCallback((deletedId: string) => {
-    setActiveLogs((prev) => prev.filter((l) => l.id !== deletedId));
-    setActiveTotalCount((prev) => Math.max(0, prev - 1));
-    setMobileLogsList((prev) => prev.filter((l) => l.id !== deletedId));
-    queryCacheRef.current.clear();
-    Object.keys(subTabCacheRef.current).forEach((key) => {
-      const entry = subTabCacheRef.current[key as keyof typeof subTabCacheRef.current];
-      if (entry) {
-        entry.hourLogs = entry.hourLogs.filter((l) => l.id !== deletedId);
-        entry.totalLogsCount = Math.max(0, entry.totalLogsCount - 1);
-      }
-    });
-  }, []);
-
-  const handleConfirmDeleteLog = useCallback(async () => {
-    if (!logToDelete) return;
-    setIsDeletingLog(true);
-    try {
-      const res = await deleteOperatorHourLogAction({
-        logId: logToDelete.id,
-        reason: "Deleted from Operations Daily Running Hours table",
-      });
-      if (res.success) {
-        toast("success", "Log Deleted", "The daily running hour log has been permanently deleted.");
-        handleDeleteLog(logToDelete.id);
-        setLogToDelete(null);
-        startTransition(() => {
-          router.refresh();
-        });
-      } else {
-        toast("error", "Delete Failed", res.error || "Failed to delete log.");
-      }
-    } catch (err: any) {
-      toast("error", "Delete Failed", err?.message || "An unexpected error occurred.");
-    } finally {
-      setIsDeletingLog(false);
-    }
-  }, [logToDelete, handleDeleteLog, router, toast]);
-
   // Local active dataset state (allows instant 0ms cached switching between sub-tabs)
   const [activeLogs, setActiveLogs] = useState<MachineHourLog[]>(hourLogs);
   const [activeSummary, setActiveSummary] = useState(
@@ -366,7 +245,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
   );
   const [activeTotalCount, setActiveTotalCount] = useState<number>(totalLogsCount || 0);
   const [activeCurrentPage, setActiveCurrentPage] = useState<number>(currentPage || 1);
-  const [activeLogsPageSize, setActiveLogsPageSize] = useState<number>(logsPageSize || 20);
+  const [activeLogsPageSize, setActiveLogsPageSize] = useState<number>(logsPageSize || 500);
   const [activeMachinesList, setActiveMachinesList] = useState<Machine[]>(machines);
   const [activeDbClients, setActiveDbClients] = useState<CRMClient[]>(dbClients);
   const [activeOperatorsList, setActiveOperatorsList] = useState<User[]>(operators || []);
@@ -486,11 +365,15 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     setActiveSummary(logsSummary || { totalRunHours: 0, totalOtHours: 0, totalBreakdowns: 0, loggedDaysCount: 0 });
     setActiveTotalCount(totalLogsCount || 0);
     setActiveCurrentPage(currentPage || 1);
-    setActiveLogsPageSize(logsPageSize || 20);
+    setActiveLogsPageSize(logsPageSize || 500);
     setActiveMachinesList(machines);
     setActiveDbClients(dbClients);
     if (operators && operators.length > 0) {
       setActiveOperatorsList(operators);
+    }
+    if (initialMachineId && initialMachineId !== "all") {
+      setLogsSelectedClientMachineId(initialMachineId);
+      setLogsSelectedMachineId(initialMachineId);
     }
 
     const mode = initialViewMode || logsViewMode || "machine";
@@ -499,7 +382,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       logsSummary: logsSummary || { totalRunHours: 0, totalOtHours: 0, totalBreakdowns: 0, loggedDaysCount: 0 },
       totalLogsCount: totalLogsCount || 0,
       currentPage: currentPage || 1,
-      logsPageSize: logsPageSize || 20,
+      logsPageSize: logsPageSize || 500,
       machines,
       dbClients,
       operators: operators || [],
@@ -519,7 +402,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       search: initialSearch,
       sort: initialSort,
       page: currentPage || 1,
-      pageSize: logsPageSize || 20,
+      pageSize: logsPageSize || 500,
     });
     const initialKey = serializeNormalizedOperationsFilter(initialNormalized);
     queryCacheRef.current.set(initialKey, {
@@ -527,7 +410,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       logsSummary: logsSummary || { totalRunHours: 0, totalOtHours: 0, totalBreakdowns: 0, loggedDaysCount: 0 },
       totalLogsCount: totalLogsCount || 0,
       currentPage: currentPage || 1,
-      logsPageSize: logsPageSize || 20,
+      logsPageSize: logsPageSize || 500,
       machines,
       dbClients,
       operators: operators || [],
@@ -579,25 +462,29 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
           : logsSelectedOperatorId,
     };
 
-    setLogsViewMode(targetMode);
+    startTransition(() => {
+      setLogsViewMode(targetMode);
+    });
 
     // 2. Check if target tab data is already in cache
     const cached = subTabCacheRef.current[targetMode];
     if (cached) {
       // Instant restore from cache (0ms latency, zero refetches!)
-      setActiveLogs(cached.hourLogs);
-      setActiveSummary(cached.logsSummary);
-      setActiveTotalCount(cached.totalLogsCount);
-      setActiveCurrentPage(cached.currentPage);
-      setActiveLogsPageSize(cached.logsPageSize);
-      if (cached.machines) setActiveMachinesList(cached.machines);
-      if (cached.dbClients) setActiveDbClients(cached.dbClients);
-      if (cached.operators && cached.operators.length > 0) setActiveOperatorsList(cached.operators);
-      if (cached.selectedId) {
-        if (targetMode === "machine") setLogsSelectedMachineId(cached.selectedId);
-        if (targetMode === "client") setLogsSelectedClientId(cached.selectedId);
-        if (targetMode === "operator") setLogsSelectedOperatorId(cached.selectedId);
-      }
+      startTransition(() => {
+        setActiveLogs(cached.hourLogs);
+        setActiveSummary(cached.logsSummary);
+        setActiveTotalCount(cached.totalLogsCount);
+        setActiveCurrentPage(cached.currentPage);
+        setActiveLogsPageSize(cached.logsPageSize);
+        if (cached.machines) setActiveMachinesList(cached.machines);
+        if (cached.dbClients) setActiveDbClients(cached.dbClients);
+        if (cached.operators && cached.operators.length > 0) setActiveOperatorsList(cached.operators);
+        if (cached.selectedId) {
+          if (targetMode === "machine") setLogsSelectedMachineId(cached.selectedId);
+          if (targetMode === "client") setLogsSelectedClientId(cached.selectedId);
+          if (targetMode === "operator") setLogsSelectedOperatorId(cached.selectedId);
+        }
+      });
 
       // Silent URL sync without full-page server re-render
       const params = new URLSearchParams(window.location.search);
@@ -618,7 +505,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
           params.delete("client");
         }
       }
-      window.history.replaceState(null, "", `/operations?${params.toString()}`);
+      window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
       return;
     }
 
@@ -638,7 +525,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       params.delete("machine");
       params.delete("operator");
       params.delete("site");
-      window.history.replaceState(null, "", `/operations?${params.toString()}`);
+      window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
 
       try {
         const res = await getOperationsClientLogsAction({
@@ -651,7 +538,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
           search: committedSearch || undefined,
           sort: (activeSort as any) || "date-desc",
           page: 1,
-          pageSize: 20,
+          pageSize: activeLogsPageSize || 500,
           fetchLogs: true,
         });
 
@@ -686,7 +573,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
             search: committedSearch || undefined,
             sort: (activeSort as any) || "date-desc",
             page: 1,
-            pageSize: 20,
+            pageSize: activeLogsPageSize || 500,
           });
           queryCacheRef.current.set(serializeNormalizedOperationsFilter(normalized), {
             hourLogs: d.hourLogs,
@@ -714,7 +601,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
           updatedParams.delete("machine");
           updatedParams.delete("operator");
           updatedParams.delete("site");
-          window.history.replaceState(null, "", `/operations?${updatedParams.toString()}`);
+          window.history.replaceState(null, "", `${pathname}?${updatedParams.toString()}`);
         }
       } catch (err) {
         console.error("[OperationsLogsTab] Failed to fetch client logs:", err);
@@ -736,7 +623,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       params.delete("client");
       params.delete("operator");
       params.delete("site");
-      window.history.replaceState(null, "", `/operations?${params.toString()}`);
+      window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
 
       try {
         const res = await getOperationsMachineLogsAction({
@@ -748,7 +635,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
           search: committedSearch || undefined,
           sort: (initialSort as any) || "date-desc",
           page: 1,
-          pageSize: 20,
+          pageSize: activeLogsPageSize || 500,
         });
 
         if (res.success && res.data) {
@@ -797,7 +684,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       params.delete("machine");
       params.delete("client");
       params.delete("site");
-      window.history.replaceState(null, "", `/operations?${params.toString()}`);
+      window.history.replaceState(null, "", `${pathname}?${params.toString()}`);
 
       try {
         const res = await getOperationsOperatorLogsAction({
@@ -808,7 +695,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
           search: committedSearch || undefined,
           sort: (initialSort as any) || "date-desc",
           page: 1,
-          pageSize: 20,
+          pageSize: activeLogsPageSize || 500,
         });
 
         if (res.success && res.data) {
@@ -931,7 +818,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
 
       const nextSort = updates.sort !== undefined ? String(updates.sort) : (s.initialSort || "date-desc");
       const nextPg = isExplicitPageChange && updates.page !== undefined ? Math.max(1, Number(updates.page)) : 1;
-      const nextPgSize = updates.pageSize !== undefined ? Math.max(1, Number(updates.pageSize)) : (s.currentLogsPageSize || 20);
+      const nextPgSize = updates.pageSize !== undefined ? Math.max(1, Number(updates.pageSize)) : (s.currentLogsPageSize || 500);
 
       // Update local filter selection states
       if (updates.month !== undefined) setLogsSelectedMonth(String(updates.month));
@@ -995,9 +882,9 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       if (normalized.search) currentParams.set("search", normalized.search); else currentParams.delete("search");
       if (normalized.sort && normalized.sort !== "date-desc") currentParams.set("sort", normalized.sort); else currentParams.delete("sort");
       if (normalized.page > 1) currentParams.set("page", String(normalized.page)); else currentParams.delete("page");
-      if (normalized.pageSize !== 20) currentParams.set("pageSize", String(normalized.pageSize)); else currentParams.delete("pageSize");
+      if (normalized.pageSize && normalized.pageSize !== 500) currentParams.set("pageSize", String(normalized.pageSize)); else currentParams.delete("pageSize");
 
-      window.history.replaceState(null, "", `/operations?${currentParams.toString()}`);
+      window.history.replaceState(null, "", `${pathname}?${currentParams.toString()}`);
 
       // 5. Query Cache Lookup (0ms instant hits, zero redundant database roundtrips)
       const cacheKey = serializeNormalizedOperationsFilter(normalized);
@@ -1229,8 +1116,9 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     return (activeOperatorsList || []).filter((u) => !u.status || u.status === "active");
   }, [activeOperatorsList]);
 
-  // Ordered machines: prioritize machines with logs
+  // Ordered machines: prioritize machines with logs (skipped in operator view)
   const logMachineIdsInOrder = useMemo(() => {
+    if (logsViewMode === "operator") return [];
     const seen = new Set<string>();
     const order: string[] = [];
     currentLogs.forEach((l) => {
@@ -1240,9 +1128,10 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       }
     });
     return order;
-  }, [currentLogs]);
+  }, [logsViewMode, currentLogs]);
 
   const orderedMachines = useMemo(() => {
+    if (logsViewMode === "operator") return [];
     const remaining = currentMachines.filter((m) => !logMachineIdsInOrder.includes(m.id));
     return [
       ...logMachineIdsInOrder
@@ -1250,7 +1139,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
         .filter(Boolean) as Machine[],
       ...remaining,
     ];
-  }, [logMachineIdsInOrder, currentMachines]);
+  }, [logsViewMode, logMachineIdsInOrder, currentMachines]);
 
   const activeMachineId = useMemo(() =>
     logsSelectedMachineId && logsSelectedMachineId !== "all"
@@ -1259,15 +1148,18 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     [logsSelectedMachineId, orderedMachines]
   );
 
-  const activeMachineObj = useMemo(() =>
-    orderedMachines.find((m) => m.id === activeMachineId) ||
-    currentMachines.find((m) => m.id === activeMachineId) ||
-    (currentLogs.find((l) => l.machine_id === activeMachineId)?.machine as any),
-    [orderedMachines, currentMachines, currentLogs, activeMachineId]
-  );
+  const activeMachineObj = useMemo(() => {
+    if (logsViewMode === "operator") return null;
+    return (
+      orderedMachines.find((m) => m.id === activeMachineId) ||
+      currentMachines.find((m) => m.id === activeMachineId) ||
+      (currentLogs.find((l) => l.machine_id === activeMachineId)?.machine as any)
+    );
+  }, [logsViewMode, orderedMachines, currentMachines, currentLogs, activeMachineId]);
 
-  // Ordered operators
+  // Ordered operators (only computed when in operator view)
   const logOperatorIdsInOrder = useMemo(() => {
+    if (logsViewMode !== "operator") return [];
     const seen = new Set<string>();
     const order: string[] = [];
     currentLogs.forEach((l) => {
@@ -1277,9 +1169,10 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       }
     });
     return order;
-  }, [currentLogs]);
+  }, [logsViewMode, currentLogs]);
 
   const orderedOperators = useMemo(() => {
+    if (logsViewMode !== "operator") return [];
     const remaining = activeOperators.filter((op) => !logOperatorIdsInOrder.includes(op.id));
     return [
       ...logOperatorIdsInOrder
@@ -1287,7 +1180,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
         .filter(Boolean) as User[],
       ...remaining,
     ];
-  }, [logOperatorIdsInOrder, activeOperators]);
+  }, [logsViewMode, logOperatorIdsInOrder, activeOperators]);
 
   const activeOperatorId = useMemo(() =>
     logsSelectedOperatorId && logsSelectedOperatorId !== "all"
@@ -1296,22 +1189,25 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     [logsSelectedOperatorId, orderedOperators]
   );
 
-  const activeOperatorObj = useMemo(() =>
-    orderedOperators.find((op) => op.id === activeOperatorId) ||
-    activeOperators.find((op) => op.id === activeOperatorId) ||
-    activeOperatorsList.find((op) => op.id === activeOperatorId) ||
-    operators.find((op) => op.id === activeOperatorId) ||
-    (currentLogs.find((l) => l.operator_id === activeOperatorId)?.operator as any),
-    [orderedOperators, activeOperators, activeOperatorsList, operators, currentLogs, activeOperatorId]
-  );
+  const activeOperatorObj = useMemo(() => {
+    if (logsViewMode !== "operator") return null;
+    return (
+      orderedOperators.find((op) => op.id === activeOperatorId) ||
+      activeOperators.find((op) => op.id === activeOperatorId) ||
+      activeOperatorsList.find((op) => op.id === activeOperatorId) ||
+      operators.find((op) => op.id === activeOperatorId) ||
+      (currentLogs.find((l) => l.operator_id === activeOperatorId)?.operator as any)
+    );
+  }, [logsViewMode, orderedOperators, activeOperators, activeOperatorsList, operators, currentLogs, activeOperatorId]);
 
   const activeOperatorName = useMemo(() =>
     activeOperatorObj?.full_name || activeOperatorObj?.name || "",
     [activeOperatorObj]
   );
 
-  // Comprehensive clients list derived from currentDbClients and currentLogs/currentMachines
+  // Comprehensive clients list derived from currentDbClients and currentLogs/currentMachines (only in client view)
   const allClientsList = useMemo(() => {
+    if (logsViewMode !== "client") return [];
     const clientsMap = new Map<string, any>();
 
     (currentDbClients || []).forEach((c) => {
@@ -1372,11 +1268,11 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     });
 
     return Array.from(clientsMap.values());
-  }, [currentDbClients, currentLogs, currentMachines]);
+  }, [logsViewMode, currentDbClients, currentLogs, currentMachines]);
 
   // Active selected client resolution
   const activeClient = useMemo(() => {
-    if (!allClientsList.length) return null;
+    if (logsViewMode !== "client" || !allClientsList.length) return null;
 
     if (logsSelectedClientId && logsSelectedClientId !== "all") {
       const found = allClientsList.find(
@@ -1403,7 +1299,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       )
     );
     return clientWithLogs || allClientsList[0];
-  }, [allClientsList, logsSelectedClientId, mostRecentClientId, currentLogs]);
+  }, [logsViewMode, allClientsList, logsSelectedClientId, mostRecentClientId, currentLogs]);
 
   const activeClientId = useMemo(() => activeClient?.id || "", [activeClient]);
   const activeClientName = useMemo(() =>
@@ -1414,7 +1310,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
 
   // Derived machine IDs associated with active selected client from logs
   const clientMachineIdsFromLogs = useMemo(() => {
-    if (!activeClientId && !activeClientName) return [];
+    if (logsViewMode !== "client" || (!activeClientId && !activeClientName)) return [];
     return Array.from(
       new Set(
         currentLogs
@@ -1435,11 +1331,11 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
           .filter(Boolean)
       )
     );
-  }, [currentLogs, activeClientId, activeClientName]);
+  }, [logsViewMode, currentLogs, activeClientId, activeClientName]);
 
   // Derived machines rented by active selected client
   const clientMachines = useMemo(() => {
-    if (!activeClientId && !activeClientName) return [];
+    if (logsViewMode !== "client" || (!activeClientId && !activeClientName)) return [];
     return currentMachines.filter((m) => {
       if (activeClientId && m.client_id === activeClientId) return true;
       if (activeClientId && (m as any).client?.id === activeClientId) return true;
@@ -1453,11 +1349,17 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       if (clientMachineIdsFromLogs.includes(m.id)) return true;
       return false;
     });
-  }, [currentMachines, activeClientId, activeClientName, clientMachineIdsFromLogs]);
+  }, [logsViewMode, currentMachines, activeClientId, activeClientName, clientMachineIdsFromLogs]);
 
-  // Derived unique site locations for active selected client
+  // Derived unique site locations for active selected client (only in client view)
   const clientSites = useMemo(() => {
+    if (logsViewMode !== "client") return [];
     const sites = new Set<string>();
+
+    // 1. Registered primary site street from client record
+    if (activeClient?.street && activeClient.street.trim()) {
+      sites.add(activeClient.street.trim());
+    }
 
     if (activeClient?.sites && Array.isArray(activeClient.sites)) {
       activeClient.sites.forEach((s: string) => {
@@ -1476,15 +1378,14 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     );
 
     matchingClients.forEach((c) => {
-      const fullAddr = formatClientFullAddress(c);
-      if (fullAddr) sites.add(fullAddr);
+      if (c.street && c.street.trim()) sites.add(c.street.trim());
     });
 
-    if (activeDbClient || activeClient) {
-      const primaryAddr = formatClientFullAddress(activeDbClient || activeClient);
-      if (primaryAddr) sites.add(primaryAddr);
+    if (activeDbClient?.street && activeDbClient.street.trim()) {
+      sites.add(activeDbClient.street.trim());
     }
 
+    // 2. Exact locations stored in shift hour logs
     currentLogs.forEach((l) => {
       const isClientLog =
         (activeClientId &&
@@ -1496,34 +1397,13 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
         clientMachines.some((m) => m.id === l.machine_id);
 
       if (isClientLog && l.location && l.location.trim()) {
-        const loc = l.location.trim();
-        const isFragmentOfKnownSite = Array.from(sites).some(
-          (site) =>
-            site.toLowerCase().includes(loc.toLowerCase()) ||
-            loc.toLowerCase().includes(site.toLowerCase())
-        );
-        if (!isFragmentOfKnownSite) {
-          sites.add(loc);
-        }
+        sites.add(l.location.trim());
       }
     });
 
-    const normalizedSites: string[] = [];
-    Array.from(sites).forEach((s) => {
-      const existingIdx = normalizedSites.findIndex(
-        (item) =>
-          item.toLowerCase().includes(s.toLowerCase()) ||
-          s.toLowerCase().includes(item.toLowerCase())
-      );
-      if (existingIdx === -1) {
-        normalizedSites.push(s);
-      } else if (s.length > normalizedSites[existingIdx].length) {
-        normalizedSites[existingIdx] = s;
-      }
-    });
-
-    return normalizedSites.filter(Boolean);
+    return Array.from(sites).filter(Boolean);
   }, [
+    logsViewMode,
     activeDbClient,
     activeClient,
     clientMachines,
@@ -1558,7 +1438,23 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     let localRun = 0;
     let localOt = 0;
     let localBkd = 0;
-    currentLogs.forEach((log) => {
+    let localWorkingHours = 0;
+    const uniqueDates = new Set<string>();
+
+    const isMachineFiltered =
+      logsViewMode === "client" &&
+      effectiveSelectedClientMachineId &&
+      effectiveSelectedClientMachineId !== "all";
+
+    const targetLogs = isMachineFiltered
+      ? currentLogs.filter(
+          (l) =>
+            l.machine_id === effectiveSelectedClientMachineId ||
+            (l.machine as any)?.id === effectiveSelectedClientMachineId
+        )
+      : currentLogs;
+
+    targetLogs.forEach((log) => {
       const startMtr = log.start_meter ?? 0;
       const endMtr = log.end_meter ?? startMtr;
       const diff = endMtr >= startMtr ? (endMtr - startMtr) : 0;
@@ -1567,8 +1463,21 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       const run = Math.max(0, Math.round((rawRun <= 24 ? rawRun : safeDiff) * 10) / 10);
       localRun += run;
       localOt += log.overtime_hours || 0;
+      localWorkingHours += calculateShiftWorkingHours(log);
       if (log.is_breakdown) localBkd++;
+      if (log.log_date) uniqueDates.add(log.log_date.split("T")[0]);
     });
+
+    if (isMachineFiltered) {
+      return {
+        totalFilteredRunHours: Math.round(localRun * 10) / 10,
+        totalFilteredOtHours: Math.round(localOt * 10) / 10,
+        totalFilteredWorkingHours: Math.round(localWorkingHours * 10) / 10,
+        totalFilteredBreakdowns: localBkd,
+        loggedDaysCount: uniqueDates.size,
+        totalMatchingLogs: targetLogs.length,
+      };
+    }
 
     return {
       totalFilteredRunHours: currentSummary
@@ -1577,15 +1486,23 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       totalFilteredOtHours: currentSummary
         ? currentSummary.totalOtHours
         : Math.round(localOt * 10) / 10,
+      totalFilteredWorkingHours: (currentSummary as any)?.totalWorkingHours ?? Math.round(localWorkingHours * 10) / 10,
       totalFilteredBreakdowns: currentSummary ? currentSummary.totalBreakdowns : localBkd,
       loggedDaysCount: currentSummary
         ? currentSummary.loggedDaysCount
-        : new Set(currentLogs.map((l) => l.log_date)).size,
+        : uniqueDates.size,
       totalMatchingLogs: currentTotalLogsCount ?? currentLogs.length,
     };
-  }, [currentLogs, currentSummary, currentTotalLogsCount]);
+  }, [currentLogs, currentSummary, currentTotalLogsCount, logsViewMode, effectiveSelectedClientMachineId]);
 
-  const { totalFilteredRunHours, totalFilteredOtHours, totalFilteredBreakdowns, loggedDaysCount, totalMatchingLogs } = aggregateMetrics;
+  const {
+    totalFilteredRunHours,
+    totalFilteredOtHours,
+    totalFilteredWorkingHours,
+    totalFilteredBreakdowns,
+    loggedDaysCount,
+    totalMatchingLogs,
+  } = aggregateMetrics;
 
   const currentMonthValue = getCurrentMonthValue();
   const selectedMonthLabel = useMemo(() =>
@@ -1594,7 +1511,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
     "September",
     [logsSelectedMonth, currentMonthValue]
   );
-  const displayWorkingDays = loggedDaysCount > 0 ? loggedDaysCount : 26;
+  const displayWorkingDays = loggedDaysCount;
 
   // On-demand lazy loader for expanding client group
   const handleToggleClientExpand = useCallback(async () => {
@@ -1740,7 +1657,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
           search: committedSearch || undefined,
           sort: (activeSort as any) || "date-desc",
           page: nextPage,
-          pageSize: currentLogsPageSize || 20,
+          pageSize: currentLogsPageSize || 500,
         });
         if (res.success && res.data) {
           nextLogs = res.data.hourLogs || [];
@@ -1764,7 +1681,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
           search: committedSearch || undefined,
           sort: (activeSort as any) || "date-desc",
           page: nextPage,
-          pageSize: currentLogsPageSize || 20,
+          pageSize: currentLogsPageSize || 500,
           fetchLogs: true,
         });
         if (res.success && res.data) {
@@ -1784,7 +1701,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
           search: committedSearch || undefined,
           sort: (activeSort as any) || "date-desc",
           page: nextPage,
-          pageSize: currentLogsPageSize || 20,
+          pageSize: currentLogsPageSize || 500,
         });
         if (res.success && res.data) {
           nextLogs = res.data.hourLogs || [];
@@ -2127,6 +2044,7 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
             isLoadingLogs={isClientDataLoading || isClientLogsLoading}
             totalFilteredRunHours={totalFilteredRunHours}
             totalFilteredOtHours={totalFilteredOtHours}
+            totalFilteredWorkingHours={totalFilteredWorkingHours}
             totalFilteredBreakdowns={totalFilteredBreakdowns}
             totalMatchingLogs={totalMatchingLogs}
           />
@@ -2154,6 +2072,8 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       <OperationsLogsTable
         logs={currentLogs}
         logsViewMode={logsViewMode}
+        selectedMachineId={logsViewMode === "client" ? effectiveSelectedClientMachineId : activeMachineId}
+        clientMachines={clientMachines}
         isPending={isPending || isClientDataLoading || isClientLogsLoading}
         currentPage={currentCurrentPage}
         logsPageSize={currentLogsPageSize}
@@ -2161,10 +2081,6 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
         onPageChange={handlePageChange}
         onPageSizeChange={handlePageSizeChange}
         onOpenConflictModal={handleOpenConflictModal}
-        onEditLog={handleRequestEditLog}
-        canEditLog={canEditLog}
-        onDeleteLog={handleRequestDeleteLog}
-        canDeleteLog={canDeleteLog}
         currentSort={activeSort}
         onSortChange={handleSortChange}
       />
@@ -2173,6 +2089,8 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
       <OperationsLogsMobileList
         logs={currentLogs}
         logsViewMode={logsViewMode}
+        selectedMachineId={logsViewMode === "client" ? effectiveSelectedClientMachineId : activeMachineId}
+        clientMachines={clientMachines}
         isPending={isPending || isClientDataLoading || isClientLogsLoading}
         currentPage={currentCurrentPage}
         logsPageSize={currentLogsPageSize}
@@ -2180,10 +2098,6 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
         onPageChange={handlePageChange}
         onPageSizeChange={handlePageSizeChange}
         onOpenConflictModal={handleOpenConflictModal}
-        onEditLog={handleRequestEditLog}
-        canEditLog={canEditLog}
-        onDeleteLog={handleRequestDeleteLog}
-        canDeleteLog={canDeleteLog}
         mobileLogsList={mobileLogsList}
         isLoadingMoreMobile={isLoadingMoreMobile}
         mobileHasMore={mobileHasMore}
@@ -2192,58 +2106,12 @@ export const OperationsLogsTab = React.memo(function OperationsLogsTab({
         mobileSentinelRef={mobileSentinelRef}
       />
 
-      {/* DELETE LOG CONFIRMATION (destructive action guard) */}
-      <ConfirmationDialog
-        isOpen={Boolean(logToDelete)}
-        onClose={() => setLogToDelete(null)}
-        onConfirm={handleConfirmDeleteLog}
-        title="Delete Daily Running Hour Log"
-        description={
-          <>
-            Permanently delete the{" "}
-            <strong>{logToDelete ? formatDate(logToDelete.log_date) : ""}</strong> daily running
-            hour log for{" "}
-            <strong>
-              {logToDelete?.machine
-                ? ((logToDelete.machine as any)?.model ||
-                  (logToDelete.machine as any)?.machine_code ||
-                  "equipment")
-                : "equipment"}
-            </strong>
-            ? The machine hour meter will be recalculated and this action cannot be undone.
-          </>
-        }
-        confirmLabel="Yes, Delete Log"
-        variant="danger"
-        loading={isDeletingLog}
-      />
-
       {/* DYNAMIC ON-DEMAND MODALS */}
       {showMachineHistoryModal && activeMachineObj && (
         <MachineHistoryQuickModal
           machine={activeMachineObj as any}
           open={showMachineHistoryModal}
           onClose={() => setShowMachineHistoryModal(false)}
-        />
-      )}
-
-      {logToEdit && (
-        <OperationsEditLogModal
-          log={logToEdit}
-          isOpen={Boolean(logToEdit)}
-          onClose={() => setLogToEdit(null)}
-          onSuccess={(updatedLog) => {
-            handleLogUpdated(updatedLog);
-            setLogToEdit(null);
-            startTransition(() => {
-              router.refresh();
-            });
-          }}
-          onRequestDelete={(log) => {
-            setLogToEdit(null);
-            setLogToDelete(log);
-          }}
-          canDelete={canDeleteLog(logToEdit)}
         />
       )}
 

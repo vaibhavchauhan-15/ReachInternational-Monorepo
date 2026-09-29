@@ -50,7 +50,7 @@ import {
 } from "@/components/ui";
 import type { MachineWithEngineer } from "@/lib/types/database";
 import type { User } from "@reachinternational/types";
-import { deleteMachine } from "@/app/actions/machines";
+import { deleteMachine, getMachinePersonnelFreshAction } from "@/app/actions/machines";
 import { formatDate } from "@reachinternational/utils";
 import {
   MachineInfoModal,
@@ -63,7 +63,11 @@ const HMRTab = lazy(() => import("./tabs/HMRTab"));
 const AuditTab = lazy(() => import("./tabs/AuditTab"));
 
 // ─── Types ───
-type PersonnelPick = Pick<User, "id" | "full_name" | "phone" | "email" | "shift_time">;
+type PersonnelPick = Pick<User, "id" | "full_name" | "phone" | "email" | "shift_time"> & {
+  shift_code?: string | null;
+  shift_start_time?: string | null;
+  shift_end_time?: string | null;
+};
 
 interface MachineClientViewProps {
   machine: MachineWithEngineer;
@@ -261,30 +265,74 @@ export function MachineClientView({
 
   // Local state representing live machine record (instantly updated on modal save)
   const [machineData, setMachineData] = useState<MachineWithEngineer>(machine);
-  useEffect(() => {
-    setMachineData((prev) => {
-      // If props update for the same machine, preserve any fresh state already updated in local state
-      if (prev.id === machine.id) {
-        return {
-          ...machine,
-          // Preserve personnel state
-          supervisors: prev.supervisors !== undefined ? prev.supervisors : machine.supervisors,
-          supervisor_ids: prev.supervisor_ids !== undefined ? prev.supervisor_ids : machine.supervisor_ids,
-          current_supervisor: prev.current_supervisor !== undefined ? prev.current_supervisor : machine.current_supervisor,
-          current_supervisor_id: prev.current_supervisor_id !== undefined ? prev.current_supervisor_id : machine.current_supervisor_id,
-          operators: prev.operators !== undefined ? prev.operators : machine.operators,
-          operator_ids: prev.operator_ids !== undefined ? prev.operator_ids : machine.operator_ids,
-          current_operator: prev.current_operator !== undefined ? prev.current_operator : machine.current_operator,
-          current_operator_id: prev.current_operator_id !== undefined ? prev.current_operator_id : machine.current_operator_id,
-          // Preserve client/rental state (prevents stale RSC cache overwriting optimistic update)
-          status: prev.status || machine.status,
-          client_id: prev.client_id !== undefined ? prev.client_id : machine.client_id,
-          client: prev.client !== undefined ? prev.client : machine.client,
-        };
+  const lastMutationTimeRef = useRef<number>(0);
+  const [isRefreshingPersonnel, setIsRefreshingPersonnel] = useState(false);
+
+  const handleMachineUpdated = (updatedFields: Partial<MachineWithEngineer>) => {
+    lastMutationTimeRef.current = Date.now();
+    setMachineData((prev) => ({
+      ...prev,
+      ...updatedFields,
+    }));
+  };
+
+  const handleManualRefreshPersonnel = async () => {
+    setIsRefreshingPersonnel(true);
+    try {
+      const fresh = await getMachinePersonnelFreshAction(machineData.id);
+      if (fresh.success && fresh.data) {
+        handleMachineUpdated(fresh.data as any);
+        toast("success", "Assignments synced", "Fetched latest shift assignments directly from database.");
+      } else {
+        toast("error", "Sync failed", fresh.error || "Could not fetch updated assignments.");
       }
-      return machine;
-    });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Sync error";
+      toast("error", "Sync failed", msg);
+    } finally {
+      setIsRefreshingPersonnel(false);
+    }
+  };
+
+  useEffect(() => {
+    // If a local mutation occurred within the last 4 seconds, don't allow a potentially stale RSC prop
+    // to revert our live personnel state
+    const isRecentlyMutated = Date.now() - lastMutationTimeRef.current < 4000;
+    if (isRecentlyMutated) {
+      setMachineData((prev) => ({
+        ...machine,
+        supervisors: prev.supervisors || machine.supervisors,
+        supervisor_ids: prev.supervisor_ids || machine.supervisor_ids,
+        current_supervisor_id: prev.current_supervisor_id || machine.current_supervisor_id,
+        current_supervisor: prev.current_supervisor || machine.current_supervisor,
+        operators: prev.operators || machine.operators,
+        operator_ids: prev.operator_ids || machine.operator_ids,
+        current_operator_id: prev.current_operator_id || machine.current_operator_id,
+        current_operator: prev.current_operator || machine.current_operator,
+      }));
+    } else {
+      setMachineData(machine);
+    }
   }, [machine]);
+
+  // Listener for instant database re-fetch broadcasts
+  useEffect(() => {
+    const handleSync = async () => {
+      try {
+        const fresh = await getMachinePersonnelFreshAction(machineData.id);
+        if (fresh.success && fresh.data) {
+          handleMachineUpdated(fresh.data as any);
+        }
+      } catch (e) {
+        console.error("Live personnel fetch error", e);
+      }
+    };
+
+    window.addEventListener("reach:refresh-machine-personnel", handleSync);
+    return () => {
+      window.removeEventListener("reach:refresh-machine-personnel", handleSync);
+    };
+  }, [machineData.id]);
 
   // Separate Modal States
   const [infoModalOpen, setInfoModalOpen] = useState(false);
@@ -307,13 +355,6 @@ export function MachineClientView({
       window.removeEventListener("reach:edit-machine-client", handleEditClient);
     };
   }, []);
-
-  const handleMachineUpdated = (updatedFields: Partial<MachineWithEngineer>) => {
-    setMachineData((prev) => ({
-      ...prev,
-      ...updatedFields,
-    }));
-  };
 
   // Client detail copy states
   const [copiedAddress, setCopiedAddress] = useState(false);
@@ -791,19 +832,32 @@ export function MachineClientView({
                 Assigned Shift Personnel
               </h3>
             </div>
-            {allowPersonnelEdit && (
-              <Button
-                variant="secondary"
-                size="sm"
-                icon={<AnimatedEdit size={12} className="text-[var(--color-ink)]" />}
-                onClick={() => setPersonnelModalOpen(true)}
-                title={isSupervisor ? "Assign Machine Operator" : "Edit Assigned Personnel"}
-                aria-label={isSupervisor ? "Assign Machine Operator" : "Edit Assigned Personnel"}
-                className="h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1"
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleManualRefreshPersonnel}
+                title="Fetch latest assignments from database"
+                aria-label="Refresh Personnel"
+                disabled={isRefreshingPersonnel}
+                className="h-8 px-2 sm:px-2.5 rounded-lg border border-[var(--color-hairline)] bg-[var(--color-canvas)] hover:bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] hover:text-[var(--color-ink)] transition-colors inline-flex items-center gap-1.5 text-xs font-medium cursor-pointer disabled:opacity-50"
               >
-                <span>{isSupervisor ? "Assign Operator" : "Edit"}</span>
-              </Button>
-            )}
+                <AnimatedLoader isSpinning={isRefreshingPersonnel} size={12} className={isRefreshingPersonnel ? "text-sky-500" : ""} />
+                <span className="hidden sm:inline">Sync</span>
+              </button>
+              {allowPersonnelEdit && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  icon={<AnimatedEdit size={12} className="text-[var(--color-ink)]" />}
+                  onClick={() => setPersonnelModalOpen(true)}
+                  title={isSupervisor ? "Assign Machine Operator" : "Edit Assigned Personnel"}
+                  aria-label={isSupervisor ? "Assign Machine Operator" : "Edit Assigned Personnel"}
+                  className="h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1"
+                >
+                  <span>{isSupervisor ? "Assign Operator" : "Edit"}</span>
+                </Button>
+              )}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mt-3.5">
@@ -1138,14 +1192,16 @@ function PersonnelCard({ person, shiftIndex, color }: { person: PersonnelPick; s
           <span className="font-bold text-xs sm:text-sm text-[var(--color-ink)] truncate max-w-[170px] sm:max-w-none" title={person.full_name}>
             {person.full_name}
           </span>
-          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${badgeClasses} shrink-0`}>
-            Shift {shiftIndex}
+          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${badgeClasses} shrink-0 font-mono`}>
+            {person.shift_code ? `Shift ${person.shift_code}` : `Shift ${shiftIndex}`}
           </span>
         </div>
         <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--color-mute)] mt-1">
           <AnimatedClock size={12} className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
           <span className="font-mono text-[var(--color-ink)] font-semibold">
-            {person.shift_time || (isTeal ? "08:00 AM - 08:00 PM" : "08:00 AM - 04:00 PM")}
+            {person.shift_start_time && person.shift_end_time
+              ? `${String(person.shift_start_time).slice(0, 5)} - ${String(person.shift_end_time).slice(0, 5)}`
+              : person.shift_time || (isTeal ? "08:00 AM - 08:00 PM" : "08:00 AM - 04:00 PM")}
           </span>
         </div>
       </div>

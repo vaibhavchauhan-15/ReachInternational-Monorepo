@@ -525,7 +525,7 @@ const styles = StyleSheet.create({
   },
   copyrightText: {
     flex: 1,
-    fontSize: 10,
+    fontSize: 12,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     letterSpacing: 0.5,
   },

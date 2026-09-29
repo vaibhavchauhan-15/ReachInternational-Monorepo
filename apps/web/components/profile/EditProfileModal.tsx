@@ -30,7 +30,7 @@ import {
   validateDocumentFile,
   buildDocumentPath,
 } from "@/lib/upload";
-import { validateAadhaarNumber, validateLicenseNumber } from "@reachinternational/utils";
+import { validateAadhaarNumber, validateLicenseNumber, formatTo12Hour, parseProfileShiftTime } from "@reachinternational/utils";
 import type { User as UserType } from "@/lib/types/database";
 import {
   FormSectionCard,
@@ -48,7 +48,7 @@ interface EditProfileModalProps {
 
 function parseShiftTimes(shiftStr?: string | null): { start: string; end: string } {
   if (!shiftStr) {
-    return { start: "08:00 AM", end: "08:00 PM" };
+    return { start: "09:00 AM", end: "06:00 PM" };
   }
   const matches = shiftStr.match(/\b(\d{1,2}:\d{2}(?:\s*(?:AM|PM|am|pm))?)\b/g);
   if (matches && matches.length >= 2) {
@@ -65,7 +65,21 @@ function parseShiftTimes(shiftStr?: string | null): { start: string; end: string
     };
     return { start: normalize(matches[0]), end: normalize(matches[1]) };
   }
-  return { start: "08:00 AM", end: "08:00 PM" };
+  return { start: "09:00 AM", end: "06:00 PM" };
+}
+
+function resolveInitialShiftTimes(u: UserType): { start: string; end: string } {
+  if (u.shift_start_time && u.shift_end_time) {
+    const s = formatTo12Hour(u.shift_start_time);
+    const e = formatTo12Hour(u.shift_end_time);
+    if (s && e) {
+      return { start: s, end: e };
+    }
+  }
+  if (u.shift_time) {
+    return parseShiftTimes(u.shift_time);
+  }
+  return { start: "09:00 AM", end: "06:00 PM" };
 }
 
 export function EditProfileModal({
@@ -80,7 +94,7 @@ export function EditProfileModal({
   const [fullName, setFullName] = useState(user.full_name || "");
   const [phone, setPhone] = useState(user.phone || "");
 
-  const initialTimes = parseShiftTimes(user.shift_time);
+  const initialTimes = resolveInitialShiftTimes(user);
   const [startTime, setStartTime] = useState(initialTimes.start);
   const [endTime, setEndTime] = useState(initialTimes.end);
 
@@ -141,7 +155,7 @@ export function EditProfileModal({
     if (isOpen) {
       setFullName(user.full_name || "");
       setPhone(user.phone || "");
-      const times = parseShiftTimes(user.shift_time);
+      const times = resolveInitialShiftTimes(user);
       setStartTime(times.start);
       setEndTime(times.end);
       setStreet(user.street || user.address || "");
@@ -448,11 +462,17 @@ export function EditProfileModal({
         ? `${startTime.trim()} - ${endTime.trim()}`
         : startTime.trim() || endTime.trim() || "";
 
+    const parsedShift = finalShift ? parseProfileShiftTime(finalShift) : null;
+    const shiftStart24 = parsedShift?.startTime || null;
+    const shiftEnd24 = parsedShift?.endTime || null;
+
     startTransition(async () => {
       const formData = new FormData();
       formData.set("full_name", fullName.trim());
       formData.set("phone", phone.trim());
       formData.set("shift_time", finalShift);
+      if (shiftStart24) formData.set("shift_start_time", shiftStart24);
+      if (shiftEnd24) formData.set("shift_end_time", shiftEnd24);
       formData.set("street", street.trim());
       formData.set("address", street.trim());
       formData.set("city", city.trim());

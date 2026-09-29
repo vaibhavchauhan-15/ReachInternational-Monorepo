@@ -15,7 +15,7 @@ export function getSampleExcelTemplate(): Blob {
 
   const sampleRows = [
     [
-      "RI-MC-0001",
+      "M/C-0001",
       "JCB 3DX EcoXcellence",
       "JCB",
       "SN-JCB-2024-001",
@@ -26,7 +26,7 @@ export function getSampleExcelTemplate(): Blob {
       "active",
     ],
     [
-      "RI-MC-0002",
+      "M/C-0002",
       "CAT 320D Hydraulic Excavator",
       "Caterpillar",
       "SN-CAT-2023-992",

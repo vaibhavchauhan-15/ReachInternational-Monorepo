@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Modal,
@@ -16,6 +16,7 @@ import {
   updateMachineInfoAction,
   updateMachineSupervisorsAction,
   updateMachineOperatorsAction,
+  updateMachinePersonnelAction,
   updateMachineClientAssignmentAction,
   checkMachineSerialNumberAvailable,
   getMachineModalOptionsAction,
@@ -26,13 +27,15 @@ import type { MachineWithEngineer } from "@/lib/types/database";
 import type { User, UserRole } from "@reachinternational/types";
 import { isManagerOrAbove } from "@reachinternational/permissions";
 import {
-  AnimatedShield,
-  AnimatedWrench,
+  AssignPersonnelModal,
+  type AssignPersonnelModalProps,
+} from "./AssignPersonnelModal";
+import {
   AnimatedAlertCircle,
   AnimatedBuilding,
   AnimatedInfo,
 } from "@/components/ui/animated-icons";
-import { Shield, Wrench, AlertCircle } from "lucide-react";
+import type { ClientShiftCode } from "@reachinternational/types";
 
 const HEALTH_STATUS_OPTIONS = [
   { value: "active", label: "Active" },
@@ -415,412 +418,10 @@ export function MachineInfoModal({
 // ═════════════════════════════════════════════════════════════════
 // 2. MACHINE PERSONNEL MODAL (Supervisor & Operator Assignments)
 // ═════════════════════════════════════════════════════════════════
-export interface MachinePersonnelModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  machine: MachineWithEngineer;
-  supervisors?: User[];
-  operators?: User[];
-  userRole?: UserRole | string;
-  onMachineUpdated?: (updated: Partial<MachineWithEngineer>) => void;
-}
+export type MachinePersonnelModalProps = AssignPersonnelModalProps;
 
-export function MachinePersonnelModal({
-  isOpen,
-  onClose,
-  machine,
-  supervisors = [],
-  operators = [],
-  userRole = "admin",
-  onMachineUpdated,
-}: MachinePersonnelModalProps) {
-  const router = useRouter();
-  const { toast } = useToast();
-
-  const canEditSupervisor = isManagerOrAbove(userRole as any);
-
-  const initialSupervisorIds = Array.isArray(machine.supervisor_ids)
-    ? machine.supervisor_ids
-    : machine.current_supervisor_id ? [machine.current_supervisor_id] : [];
-
-  const initialOperatorIds = Array.isArray(machine.operator_ids)
-    ? machine.operator_ids
-    : machine.current_operator_id ? [machine.current_operator_id] : [];
-
-  const [supervisorIds, setSupervisorIds] = useState<string[]>(initialSupervisorIds);
-  const [operatorIds, setOperatorIds] = useState<string[]>(initialOperatorIds);
-  const [isSaving, setIsSaving] = useState(false);
-
-  // Lazy-loaded options state with props fallback
-  const [lazySupervisors, setLazySupervisors] = useState<User[]>(() => supervisors || []);
-  const [lazyOperators, setLazyOperators] = useState<User[]>(() => operators || []);
-  const [isLoadingOptions, setIsLoadingOptions] = useState(false);
-
-  useEffect(() => {
-    if (supervisors && supervisors.length > 0) {
-      setLazySupervisors(supervisors);
-    }
-  }, [supervisors]);
-
-  useEffect(() => {
-    if (operators && operators.length > 0) {
-      setLazyOperators(operators);
-    }
-  }, [operators]);
-
-  // On-demand fetch when modal is open and options are empty
-  useEffect(() => {
-    if (!isOpen) return;
-    if (lazySupervisors.length > 0 && lazyOperators.length > 0) return;
-
-    let isMounted = true;
-    setIsLoadingOptions(true);
-    getMachineModalOptionsAction()
-      .then((data) => {
-        if (!isMounted) return;
-        if (data.supervisors && data.supervisors.length > 0) {
-          setLazySupervisors(data.supervisors);
-        }
-        if (data.operators && data.operators.length > 0) {
-          setLazyOperators(data.operators);
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to load personnel options for MachinePersonnelModal", err);
-      })
-      .finally(() => {
-        if (isMounted) setIsLoadingOptions(false);
-      });
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isOpen, lazySupervisors.length, lazyOperators.length]);
-
-  useEffect(() => {
-    if (isOpen) {
-      const supIds = Array.isArray(machine.supervisor_ids)
-        ? machine.supervisor_ids
-        : machine.current_supervisor_id ? [machine.current_supervisor_id] : [];
-      setSupervisorIds(supIds);
-
-      const opIds = Array.isArray(machine.operator_ids)
-        ? machine.operator_ids
-        : machine.current_operator_id ? [machine.current_operator_id] : [];
-      setOperatorIds(opIds);
-    }
-  }, [isOpen, machine]);
-
-  // Option Lists Hydration
-  const allSupervisors: Array<{
-    id: string;
-    full_name: string;
-    phone?: string | null;
-    email?: string | null;
-    shift_time?: string | null;
-    role?: string | null;
-    status?: string | null;
-  }> = (lazySupervisors || []).map((s) => ({
-    ...s,
-    full_name: s.full_name || (s as any).name || "Supervisor",
-    role: s.role || "supervisor",
-    status: s.status || "active",
-  }));
-
-  if (Array.isArray(machine.supervisors)) {
-    machine.supervisors.forEach((s) => {
-      if (s && !allSupervisors.some((item) => item.id === s.id)) {
-        allSupervisors.push({
-          id: s.id,
-          full_name: s.full_name || (s as any).name || "Supervisor",
-          phone: s.phone,
-          email: s.email,
-          shift_time: s.shift_time,
-          role: "supervisor",
-          status: "active",
-        });
-      }
-    });
-  }
-  if (machine.current_supervisor && machine.current_supervisor_id) {
-    if (!allSupervisors.some((s) => s.id === machine.current_supervisor_id)) {
-      allSupervisors.push({
-        id: machine.current_supervisor_id,
-        full_name: machine.current_supervisor.full_name || (machine.current_supervisor as any).name || "Supervisor",
-        phone: machine.current_supervisor.phone,
-        email: machine.current_supervisor.email,
-        shift_time: machine.current_supervisor.shift_time,
-        role: "supervisor",
-        status: "active",
-      });
-    }
-  }
-
-  const allOperators: Array<{
-    id: string;
-    full_name: string;
-    phone?: string | null;
-    email?: string | null;
-    shift_time?: string | null;
-    role?: string | null;
-    status?: string | null;
-  }> = (lazyOperators || [])
-    .filter((o) => (!o.role || o.role === "operator") && o.status !== "inactive")
-    .map((o) => ({
-      ...o,
-      full_name: o.full_name || (o as any).name || "Operator",
-      role: "operator",
-      status: o.status || "active",
-    }));
-
-  if (Array.isArray(machine.operators)) {
-    machine.operators.forEach((o) => {
-      if (o && (!(o as any).role || (o as any).role === "operator") && !allOperators.some((item) => item.id === o.id)) {
-        allOperators.push({
-          id: o.id,
-          full_name: o.full_name || (o as any).name || "Operator",
-          phone: o.phone,
-          email: o.email,
-          shift_time: o.shift_time,
-          role: "operator",
-          status: "active",
-        });
-      }
-    });
-  }
-  if (machine.current_operator && machine.current_operator_id) {
-    const currOp = machine.current_operator;
-    if ((!(currOp as any).role || (currOp as any).role === "operator") && !allOperators.some((o) => o.id === machine.current_operator_id)) {
-      allOperators.push({
-        id: machine.current_operator_id,
-        full_name: currOp.full_name || (currOp as any).name || "Operator",
-        phone: currOp.phone,
-        email: currOp.email,
-        shift_time: currOp.shift_time,
-        role: "operator",
-        status: "active",
-      });
-    }
-  }
-
-  const savedSupIds = Array.isArray(machine.supervisor_ids)
-    ? machine.supervisor_ids
-    : machine.current_supervisor_id ? [machine.current_supervisor_id] : [];
-  const isSupervisorsDirty =
-    JSON.stringify([...supervisorIds].sort()) !== JSON.stringify([...savedSupIds].sort());
-
-  const savedOpIds = Array.isArray(machine.operator_ids)
-    ? machine.operator_ids
-    : machine.current_operator_id ? [machine.current_operator_id] : [];
-  const isOperatorsDirty =
-    JSON.stringify([...operatorIds].sort()) !== JSON.stringify([...savedOpIds].sort());
-
-  const isSupervisor = userRole === "supervisor";
-  const isDirty = canEditSupervisor ? (isSupervisorsDirty || isOperatorsDirty) : isOperatorsDirty;
-
-  const handleSavePersonnel = async () => {
-    setIsSaving(true);
-    try {
-      const promises: Promise<any>[] = [];
-      const updatedFields: Partial<MachineWithEngineer> = {};
-
-      if (isSupervisorsDirty && canEditSupervisor) {
-        promises.push(
-          updateMachineSupervisorsAction(machine.id, supervisorIds).then((res) => {
-            if (res.error) throw new Error(res.error);
-            const freshSups = res.supervisors && res.supervisors.length > 0
-              ? res.supervisors
-              : (supervisorIds.length === 0 ? [] : allSupervisors.filter((s) => supervisorIds.includes(s.id)));
-            updatedFields.supervisor_ids = res.supervisor_ids !== undefined ? res.supervisor_ids : supervisorIds;
-            updatedFields.current_supervisor_id = res.current_supervisor_id !== undefined ? res.current_supervisor_id : null;
-            updatedFields.supervisors = freshSups as any;
-            updatedFields.current_supervisor = (freshSups[0] as any) || null;
-          })
-        );
-      }
-
-      if (isOperatorsDirty) {
-        promises.push(
-          updateMachineOperatorsAction(machine.id, operatorIds).then((res) => {
-            if (res.error) throw new Error(res.error);
-            const freshOps = res.operators && res.operators.length > 0
-              ? res.operators
-              : (operatorIds.length === 0 ? [] : allOperators.filter((o) => operatorIds.includes(o.id)));
-            updatedFields.operator_ids = res.operator_ids !== undefined ? res.operator_ids : operatorIds;
-            updatedFields.current_operator_id = res.current_operator_id !== undefined ? res.current_operator_id : null;
-            updatedFields.operators = freshOps as any;
-            updatedFields.current_operator = (freshOps[0] as any) || null;
-          })
-        );
-      }
-
-      await Promise.all(promises);
-
-      // Immediately invalidate and update assignment component with fresh database response
-      onMachineUpdated?.(updatedFields);
-
-      // Dedicated background verification query directly to DB without blocking UI or reloading
-      void getMachinePersonnelFreshAction(machine.id).then((freshRes) => {
-        if (freshRes.success && freshRes.data) {
-          onMachineUpdated?.(freshRes.data as any);
-        }
-      });
-
-      toast(
-        "success",
-        isSupervisor ? "Operator assignment updated" : "Personnel assignments updated",
-        isSupervisor
-          ? "Machine operator assignments saved successfully."
-          : "Supervisors and operators updated successfully."
-      );
-      onClose();
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to update personnel";
-      toast("error", "Update failed", msg);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return (
-    <Modal
-      open={isOpen}
-      onClose={onClose}
-      title={
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
-          <span className="font-bold text-sm sm:text-base text-[var(--color-ink)]">
-            {isSupervisor ? "Assign Machine Operator" : "Assign Shift Personnel"}
-          </span>
-          <span className="font-mono text-xs px-2 py-0.5 rounded bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] border border-[var(--color-hairline)] font-normal">
-            {machine.machine_id}
-          </span>
-          {(machine.model || machine.serial_number) && (
-            <span className="text-xs text-[var(--color-mute)] font-normal flex items-center gap-1">
-              <span>•</span>
-              {machine.model && <span className="font-medium text-[var(--color-ink)]">{machine.model}</span>}
-              {machine.model && machine.serial_number && <span>-</span>}
-              {machine.serial_number && <span className="font-mono">{machine.serial_number}</span>}
-            </span>
-          )}
-        </div>
-      }
-      size="lg"
-    >
-      <div className="space-y-4">
-        {/* Supervisors Section */}
-        <div
-          data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3 transition-colors"
-        >
-          <div className="flex items-center justify-between pb-2 border-b border-[var(--color-hairline)]">
-            <div className="flex items-center gap-2">
-              <AnimatedShield size={16} className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink)]">
-                Assigned Supervisors (Multi-Shift Oversight)
-              </span>
-            </div>
-            {!canEditSupervisor && (
-              <span className="text-[10px] text-[var(--color-mute)] font-medium">
-                Managed by Administrators
-              </span>
-            )}
-          </div>
-          {canEditSupervisor ? (
-            <MultiUserSelect
-              label=""
-              users={allSupervisors}
-              values={supervisorIds}
-              onChange={setSupervisorIds}
-              placeholder={isLoadingOptions && allSupervisors.length === 0 ? "Loading supervisors from database..." : "Search & assign supervisors..."}
-              disabled={isSaving}
-            />
-          ) : (
-            <div className="space-y-2 text-xs">
-              {allSupervisors.filter((s) => supervisorIds.includes(s.id)).length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {allSupervisors
-                    .filter((s) => supervisorIds.includes(s.id))
-                    .map((s) => (
-                      <span
-                        key={s.id}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--color-canvas-elevated)] border border-[var(--color-hairline)] text-[var(--color-ink)] shadow-2xs"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-teal-500" />
-                        <span>{s.full_name}</span>
-                      </span>
-                    ))}
-                </div>
-              ) : (
-                <p className="text-[11px] text-[var(--color-mute)] italic">No supervisors designated</p>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Operators Section */}
-        <div
-          data-hover-parent
-          className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3 transition-colors"
-        >
-          <div className="flex items-center justify-between pb-2 border-b border-[var(--color-hairline)]">
-            <div className="flex items-center gap-2">
-              <AnimatedWrench size={16} className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--color-ink)]">
-                Assigned Operators (24h Shift Execution)
-              </span>
-            </div>
-            <span className="text-[10px] text-[var(--color-mute)] font-medium">
-              Only active operators eligible
-            </span>
-          </div>
-          <MultiUserSelect
-            label=""
-            users={allOperators}
-            values={operatorIds}
-            onChange={setOperatorIds}
-            placeholder={isLoadingOptions && allOperators.length === 0 ? "Loading operators from database..." : "Search & assign operators..."}
-            disabled={isSaving}
-          />
-        </div>
-
-        {/* Footer Actions */}
-        <div className="pt-3 border-t border-[var(--color-hairline)] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="text-xs text-[var(--color-mute)] empty:hidden">
-            {isDirty && (
-              <span
-                data-hover-parent
-                className="text-amber-500 dark:text-amber-400 font-medium inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-xs transition-colors cursor-default"
-              >
-                <AnimatedAlertCircle size={14} className="w-3.5 h-3.5 shrink-0" />
-                <span>Unsaved roster changes</span>
-              </span>
-            )}
-          </div>
-          <div className="grid grid-cols-2 gap-2.5 w-full sm:w-auto sm:flex sm:items-center sm:gap-2 sm:ml-auto">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={onClose}
-              disabled={isSaving}
-              className="w-full sm:w-auto h-11 min-h-[44px] px-4 text-sm font-medium justify-center"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              loading={isSaving}
-              disabled={!isDirty || isSaving}
-              onClick={handleSavePersonnel}
-              className="w-full sm:w-auto h-11 min-h-[44px] px-5 text-sm font-semibold justify-center"
-            >
-              {isSupervisor ? "Save Operator Assignment" : "Update Personnel"}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </Modal>
-  );
+export function MachinePersonnelModal(props: MachinePersonnelModalProps) {
+  return <AssignPersonnelModal {...props} />;
 }
 
 // ═════════════════════════════════════════════════════════════════
@@ -900,18 +501,33 @@ export function MachineClientModal({
 
   const handleSaveClient = async () => {
     setIsSaving(true);
+    const selectedClientObj = allClients.find((c) => c.id === clientId);
+    // Instant optimistic update
+    const optimisticFields: Partial<MachineWithEngineer> = {
+      client_id: clientId || null,
+      status: clientId ? "rented" : "available",
+      client: (selectedClientObj as any) || null,
+    };
+    onMachineUpdated?.(optimisticFields);
+
     try {
       const res = await updateMachineClientAssignmentAction(machine.id, clientId || null);
       if (res.error) {
         toast("error", "Failed to update client assignment", res.error);
+        // Rollback
+        onMachineUpdated?.({
+          client_id: machine.client_id || null,
+          status: machine.status || "available",
+          client: machine.client || null,
+        });
       } else {
-        const selectedClientObj = allClients.find((c) => c.id === clientId);
         const updatedFields: Partial<MachineWithEngineer> = {
           client_id: res.client_id || null,
           status: res.status || "available",
           client: (selectedClientObj as any) || null,
         };
         onMachineUpdated?.(updatedFields);
+        onClose();
         router.refresh();
         toast(
           "success",
@@ -920,11 +536,15 @@ export function MachineClientModal({
             ? `Machine deployed to ${assignedClientName} (Status: Rented).`
             : "Client assignment cleared. Machine is now Available in fleet."
         );
-        onClose();
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to update client assignment";
       toast("error", "Failed to update client assignment", msg);
+      onMachineUpdated?.({
+        client_id: machine.client_id || null,
+        status: machine.status || "available",
+        client: machine.client || null,
+      });
     } finally {
       setIsSaving(false);
     }

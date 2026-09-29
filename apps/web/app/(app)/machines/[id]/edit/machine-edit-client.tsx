@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Button,
@@ -33,7 +33,13 @@ import {
   getMachineModalOptionsAction,
 } from "@/app/actions/machines";
 import type { Machine, User, UserRole } from "@/lib/types/database";
+import type { ClientShiftCode } from "@reachinternational/types";
 import { isManagerOrAbove } from "@reachinternational/permissions";
+import {
+  OperatorShiftRosterEditor,
+  type OperatorShiftAssignmentItem,
+  type ActiveOperatorOtherAssignment,
+} from "@/components/machines/OperatorShiftRosterEditor";
 
 export interface MachineEditClientProps {
   machine: Machine;
@@ -96,12 +102,57 @@ export function MachineEditClient({
   // -------------------------------------------------------------
   // CARD 3: Operator Assignment
   // -------------------------------------------------------------
-  const initialOperatorIds = Array.isArray(machine.operator_ids)
-    ? machine.operator_ids
-    : machine.current_operator_id ? [machine.current_operator_id] : [];
+  const [assignedOperators, setAssignedOperators] = useState<OperatorShiftAssignmentItem[]>(() => {
+    const rawOps: any[] = Array.isArray(machine.operators) && machine.operators.length > 0
+      ? machine.operators
+      : machine.current_operator
+      ? [machine.current_operator]
+      : [];
 
-  const [operatorIds, setOperatorIds] = useState<string[]>(initialOperatorIds);
+    const opIds = Array.isArray(machine.operator_ids)
+      ? machine.operator_ids
+      : machine.current_operator_id ? [machine.current_operator_id] : [];
+
+    const hydrated: OperatorShiftAssignmentItem[] = [];
+    const seenIds = new Set<string>();
+
+    rawOps.forEach((o: any, idx: number) => {
+      if (!o || !o.id || seenIds.has(o.id)) return;
+      seenIds.add(o.id);
+      hydrated.push({
+        operatorId: o.id,
+        operatorName: o.full_name || (o as any).name || "Operator",
+        phone: o.phone || null,
+        email: o.email || null,
+        shiftCode: o.shift_code || `S${(idx % 4) + 1}`,
+        shiftStartTime: o.shift_start_time || null,
+        shiftEndTime: o.shift_end_time || null,
+        notes: "Assigned via machine edit",
+      });
+    });
+
+    opIds.forEach((id: string) => {
+      if (seenIds.has(id)) return;
+      seenIds.add(id);
+      const matchedUser = operators.find((u) => u.id === id) || (machine.current_operator?.id === id ? machine.current_operator : null);
+      hydrated.push({
+        operatorId: id,
+        operatorName: matchedUser?.full_name || (matchedUser as any)?.name || "Operator",
+        phone: matchedUser?.phone || null,
+        email: matchedUser?.email || null,
+        shiftCode: (matchedUser as any)?.shift_code || `S${(hydrated.length % 4) + 1}`,
+        shiftStartTime: (matchedUser as any)?.shift_start_time || null,
+        shiftEndTime: (matchedUser as any)?.shift_end_time || null,
+        notes: "Assigned via machine edit",
+      });
+    });
+
+    return hydrated;
+  });
+  const [operatorRosterHasError, setOperatorRosterHasError] = useState(false);
   const [isSavingOperators, setIsSavingOperators] = useState(false);
+  const [clientShifts, setClientShifts] = useState<ClientShiftCode[]>([]);
+  const totalShifts = clientShifts.length > 0 ? clientShifts.length : 3;
 
   // -------------------------------------------------------------
   // CARD 4: Client Assignment & Rental Status
@@ -115,6 +166,7 @@ export function MachineEditClient({
   const [lazySupervisors, setLazySupervisors] = useState<User[]>(() => supervisors || []);
   const [lazyOperators, setLazyOperators] = useState<User[]>(() => operators || []);
   const [lazyClients, setLazyClients] = useState<ClientSelectItem[]>(() => clients || []);
+  const [lazyActiveAssignments, setLazyActiveAssignments] = useState<ActiveOperatorOtherAssignment[]>([]);
 
   useEffect(() => {
     if (supervisors && supervisors.length > 0) setLazySupervisors(supervisors);
@@ -129,7 +181,7 @@ export function MachineEditClient({
   }, [clients]);
 
   useEffect(() => {
-    if (lazySupervisors.length > 0 && lazyOperators.length > 0 && lazyClients.length > 0) return;
+    if (lazySupervisors.length > 0 && lazyOperators.length > 0 && lazyClients.length > 0 && lazyActiveAssignments.length > 0) return;
     let isMounted = true;
     getMachineModalOptionsAction()
       .then((data) => {
@@ -137,12 +189,13 @@ export function MachineEditClient({
         if (data.supervisors && data.supervisors.length > 0) setLazySupervisors(data.supervisors);
         if (data.operators && data.operators.length > 0) setLazyOperators(data.operators);
         if (data.clients && data.clients.length > 0) setLazyClients(data.clients as unknown as ClientSelectItem[]);
+        if (data.activeAssignments && data.activeAssignments.length > 0) setLazyActiveAssignments(data.activeAssignments);
       })
       .catch(() => {});
     return () => {
       isMounted = false;
     };
-  }, [lazySupervisors.length, lazyOperators.length, lazyClients.length]);
+  }, [lazySupervisors.length, lazyOperators.length, lazyClients.length, lazyActiveAssignments.length]);
 
   const allSupervisors: Array<{ id: string; full_name: string; phone?: string | null; email?: string | null; shift_time?: string | null }> = [...lazySupervisors];
   if (Array.isArray(machine.supervisors)) {
@@ -205,11 +258,26 @@ export function MachineEditClient({
   const isSupervisorsDirty =
     JSON.stringify([...supervisorIds].sort()) !== JSON.stringify([...savedSupIds].sort());
 
-  const savedOpIds = Array.isArray(savedMachine.operator_ids)
-    ? savedMachine.operator_ids
-    : savedMachine.current_operator_id ? [savedMachine.current_operator_id] : [];
-  const isOperatorsDirty =
-    JSON.stringify([...operatorIds].sort()) !== JSON.stringify([...savedOpIds].sort());
+  const savedOpAssignments = useMemo(() => {
+    const ops: any[] = Array.isArray(savedMachine.operators) && savedMachine.operators.length > 0
+      ? savedMachine.operators
+      : savedMachine.current_operator
+      ? [savedMachine.current_operator]
+      : [];
+    return ops.map((o: any, idx: number) => ({
+      id: o.id,
+      shiftCode: (o.shift_code || `S${(idx % 4) + 1}`).toUpperCase(),
+    })).sort((a: any, b: any) => a.id.localeCompare(b.id));
+  }, [savedMachine.operators, savedMachine.current_operator]);
+
+  const currentOpAssignments = useMemo(() => {
+    return assignedOperators.map((a) => ({
+      id: a.operatorId,
+      shiftCode: (a.shiftCode || "").toUpperCase(),
+    })).sort((a, b) => a.id.localeCompare(b.id));
+  }, [assignedOperators]);
+
+  const isOperatorsDirty = JSON.stringify(savedOpAssignments) !== JSON.stringify(currentOpAssignments);
 
   const isClientDirty = (clientId || "") !== (savedMachine.client_id || "");
 
@@ -346,21 +414,43 @@ export function MachineEditClient({
   const handleSaveOperators = async () => {
     setIsSavingOperators(true);
     try {
-      const res = await updateMachineOperatorsAction(machine.id, operatorIds);
+      const opPayload = assignedOperators.map((item) => ({
+        operatorId: item.operatorId,
+        shiftCode: item.shiftCode,
+        shiftStartTime: item.shiftStartTime,
+        shiftEndTime: item.shiftEndTime,
+        notes: item.notes || "Assigned via machine edit",
+      }));
+
+      const res = await updateMachineOperatorsAction(machine.id, opPayload);
       if (res.error) {
         toast("error", "Failed to update operators", res.error);
       } else {
+        const freshOps = res.operators && res.operators.length > 0
+          ? res.operators
+          : assignedOperators.map((a) => ({
+              id: a.operatorId,
+              full_name: a.operatorName,
+              phone: a.phone || null,
+              email: a.email || null,
+              shift_time: a.shiftStartTime && a.shiftEndTime ? `${a.shiftStartTime} - ${a.shiftEndTime}` : null,
+              shift_code: a.shiftCode,
+              shift_start_time: a.shiftStartTime || null,
+              shift_end_time: a.shiftEndTime || null,
+              role: "operator",
+            }));
+
         setSavedMachine((prev) => ({
           ...prev,
           operator_ids: res.operator_ids,
           current_operator_id: res.current_operator_id || null,
-          operators: (res.operators || prev.operators) as any,
+          operators: freshOps as any,
           current_operator: ((res.operators && res.operators[0]) || prev.current_operator) as any,
         }));
         toast(
           "success",
           "Operators updated",
-          `${operatorIds.length} operator${operatorIds.length === 1 ? "" : "s"} assigned for shift execution.`
+          `${assignedOperators.length} operator${assignedOperators.length === 1 ? "" : "s"} assigned for shift execution.`
         );
       }
     } catch (err: unknown) {
@@ -758,7 +848,7 @@ export function MachineEditClient({
               <div className="flex items-center gap-2">
                 <AnimatedShield size={16} className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
                 <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
-                  2. Supervisor Assignment (Multi-Shift Oversight)
+                  2. Assigned Supervisors
                 </h2>
               </div>
             </div>
@@ -812,19 +902,26 @@ export function MachineEditClient({
               <div className="flex items-center gap-2">
                 <AnimatedWrench size={16} className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
                 <h2 className="text-xs sm:text-sm font-semibold uppercase tracking-wider text-[var(--color-ink)]">
-                  3. Operator Assignment (24h Shift Execution)
+                  3. Assigned Operators (24h)
                 </h2>
               </div>
+              <span className="text-[10px] text-[var(--color-mute)] font-medium">
+                {assignedOperators.length}/{totalShifts} Shifts Assigned
+              </span>
             </div>
 
             <div>
-              <MultiUserSelect
-                label="Assigned Operators"
-                users={allOperators}
-                values={operatorIds}
-                onChange={setOperatorIds}
-                placeholder="Search & assign operators..."
+              <OperatorShiftRosterEditor
+                machineId={machine.id}
+                clientId={clientId}
+                allOperators={allOperators}
+                assignedOperators={assignedOperators}
+                otherAssignments={lazyActiveAssignments}
+                onChange={setAssignedOperators}
+                onErrorChange={(hasErr) => setOperatorRosterHasError(hasErr)}
+                onShiftsLoaded={setClientShifts}
                 disabled={isSavingOperators}
+                isLoadingOptions={lazyOperators.length === 0}
               />
             </div>
 
@@ -837,7 +934,7 @@ export function MachineEditClient({
                     className="text-amber-500 dark:text-amber-400 font-medium inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-xs transition-colors cursor-default"
                   >
                     <AnimatedAlertCircle size={14} className="w-3.5 h-3.5 shrink-0" />
-                    <span>Unsaved operator roster changes ({operatorIds.length} selected)</span>
+                    <span>Unsaved operator roster changes ({assignedOperators.length} assigned)</span>
                   </span>
                 )}
               </div>
@@ -846,7 +943,7 @@ export function MachineEditClient({
                 variant="primary"
                 size="sm"
                 loading={isSavingOperators}
-                disabled={!isOperatorsDirty || isSavingOperators}
+                disabled={!isOperatorsDirty || isSavingOperators || operatorRosterHasError}
                 onClick={handleSaveOperators}
                 className="min-h-[38px] px-4 font-semibold ml-auto"
               >

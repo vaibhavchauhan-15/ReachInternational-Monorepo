@@ -114,13 +114,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   titleText: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '700',
     marginBottom: 2,
   },
   messageText: {
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 13,
+    lineHeight: 19,
     fontWeight: '500',
   },
   dismissBtn: {

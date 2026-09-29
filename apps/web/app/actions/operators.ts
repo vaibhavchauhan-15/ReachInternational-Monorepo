@@ -2,11 +2,12 @@
 
 import crypto from "crypto";
 
-import { revalidateTag } from "next/cache";
+import { revalidateTag, revalidatePath } from "next/cache";
 import { getCurrentUser, requireRole } from "@/lib/dal";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { CACHE_TAGS, TAGS } from "@/lib/cache";
 import { logAudit } from "@/lib/audit";
+import type { User } from "@/lib/types/database";
 import {
   checkAndStoreIdempotencyKey,
   completeIdempotencyKey,
@@ -31,6 +32,8 @@ import {
   getISTDateString,
   isShiftEndInFuture,
   resolveOperationsDateRange,
+  resolveSiteMatchCandidates,
+  calculateShiftWorkingHours,
 } from "@reachinternational/utils";
 import { formatHourLogsData, fetchHourLogsResiliently } from "@/lib/queries/operators";
 import {
@@ -264,6 +267,7 @@ export async function submitOperatorHourLogAction(payload: {
   breakdownDuration?: string;
   breakdownHours?: number;
   shift?: string;
+  shiftCode?: string;
   machineCondition?: "good" | "fair" | "needs_attention" | "breakdown";
   location?: string;
   remarks?: string;
@@ -272,8 +276,17 @@ export async function submitOperatorHourLogAction(payload: {
   // SECURITY (F04): Require authenticated user with appropriate role for hour log submission
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
-  if (!["operator", "supervisor", "admin", "super_admin"].includes(user.role)) {
-    return { success: false, error: "Insufficient permissions. Only operators, supervisors, and admins can submit hour logs." };
+  if (!["operator", "manager", "admin", "super_admin"].includes(user.role)) {
+    return { success: false, error: "Insufficient permissions. Only operators (for their own shifts) and managers/admins can submit hour logs." };
+  }
+
+  // Assisted Entry Guard: Only roles above supervisor (manager, admin, super_admin) can enter logs on behalf of operators
+  const isAssisted = Boolean(payload.operatorId && payload.operatorId !== user.id);
+  if (isAssisted && !["super_admin", "admin", "manager"].includes(user.role)) {
+    return { success: false, error: "Insufficient permissions. Only roles above supervisor (manager, admin, super_admin) can enter logs on behalf of operators." };
+  }
+  if (!isAssisted && user.role !== "operator" && !["super_admin", "admin", "manager"].includes(user.role)) {
+    return { success: false, error: "Insufficient permissions. Site supervisors cannot enter machine shift logs." };
   }
 
   // Schema Validation (Stage 2: validate)
@@ -330,8 +343,8 @@ export async function submitOperatorHourLogAction(payload: {
   const todayDate = getISTDateString();
   const effectiveStartDate = payload.startDate || payload.logDate || todayDate;
 
-  // Resolve target operator: supervisors & admins can log on behalf of an operator, otherwise defaults to current user
-  const targetOperatorId = (["admin", "super_admin", "supervisor"].includes(user.role) && payload.operatorId)
+  // Resolve target operator: managers & admins can log on behalf of an operator, otherwise defaults to current user
+  const targetOperatorId = (["super_admin", "admin", "manager"].includes(user.role) && payload.operatorId)
     ? payload.operatorId
     : user.id;
 
@@ -418,11 +431,12 @@ export async function submitOperatorHourLogAction(payload: {
       effectiveBreakdownEndTime = formatTo12Hour(payload.breakdownEndTime) || payload.breakdownEndTime;
 
       // BUG-OP-03: Breakdown Duration Bounds Guard (cannot exceed total shift duration)
-      if (effectiveBreakdownHours > timing.durationHours) {
+      const totalShiftHours = timing.durationHours + (safeOvertime && safeOvertime > 0 ? safeOvertime : 0);
+      if (effectiveBreakdownHours > totalShiftHours) {
         await failIdempotencyKey(currentIdempotencyKey);
         return {
           success: false,
-          error: `Breakdown duration (${effectiveBreakdownHours}h) cannot exceed total shift duration (${timing.durationHours}h).`,
+          error: `Breakdown duration (${effectiveBreakdownHours}h) cannot exceed total shift duration (${totalShiftHours}h).`,
         };
       }
     } else {
@@ -514,11 +528,13 @@ export async function submitOperatorHourLogAction(payload: {
       p_breakdown_end_time: effectiveBreakdownEndTime,
       p_breakdown_duration: effectiveBreakdownDuration,
       p_breakdown_hours: effectiveBreakdownHours,
-      p_shift: payload.shift || null,
+      p_shift: payload.shiftCode ? `Shift ${payload.shiftCode.replace(/^shift\s*/i, "")}` : (payload.shift || null),
+      p_shift_code: payload.shiftCode || null,
       p_machine_condition: effectiveCondition,
       p_location: targetLocation,
       p_remarks: finalRemarks || null,
       p_idempotency_key: currentIdempotencyKey,
+      p_entered_by: user.id,
     });
 
     if (!rpcError && rpcResult && (rpcResult as { success?: boolean }).success) {
@@ -535,6 +551,8 @@ export async function submitOperatorHourLogAction(payload: {
         rpcError.message?.includes("maintenance or decommissioned") ||
         rpcError.message?.includes("Unauthorized operator") ||
         rpcError.message?.includes("Client ID does not match") ||
+        rpcError.message?.includes("already submitted a log for Shift") ||
+        rpcError.message?.includes("Not authorized to submit shift log") ||
         rpcError.code === "23514" ||
         rpcError.code === "42501" ||
         rpcError.code === "23503"
@@ -570,11 +588,14 @@ export async function submitOperatorHourLogAction(payload: {
       overtime_hours: timing.overtimeHours,
       normal_working_hours: timing.normalWorkingHours,
       is_breakdown: payload.isBreakdown ?? (effectiveCondition === "breakdown"),
-      shift: payload.shift || null,
+      shift: payload.shiftCode ? `Shift ${payload.shiftCode.replace(/^shift\s*/i, "")}` : (payload.shift || null),
+      shift_code: payload.shiftCode || null,
       machine_condition: effectiveCondition,
       location: targetLocation,
       remarks: finalRemarks || null,
       idempotency_key: currentIdempotencyKey,
+      entered_by: user.id,
+      entry_source: user.role === 'operator' ? 'operator' : (targetOperatorId === user.id ? 'operator' : user.role),
     };
 
     if (effectiveBreakdownDuration) {
@@ -667,18 +688,25 @@ export async function submitOperatorHourLogAction(payload: {
   const responsePayload = { success: true, data: resultData };
   await completeIdempotencyKey(currentIdempotencyKey, currentExecutionToken, responsePayload);
 
-  revalidateTag(CACHE_TAGS.machines, "max");
-  revalidateTag(CACHE_TAGS.dashboard, "max");
-  revalidateTag(TAGS.operationsLogs, "max");
-  revalidateTag(TAGS.operations, "max");
-  if (payload.machineId) revalidateTag(TAGS.machineOperations(payload.machineId), "max");
-  if (targetClientId) revalidateTag(TAGS.clientOperations(targetClientId), "max");
+  revalidateTag(CACHE_TAGS.machines, { expire: 0 });
+  revalidateTag(CACHE_TAGS.dashboard, { expire: 0 });
+  revalidateTag(TAGS.operationsLogs, { expire: 0 });
+  revalidateTag(TAGS.operations, { expire: 0 });
+  revalidateTag(TAGS.todayShiftMonitor, { expire: 0 });
+  if (payload.machineId) revalidateTag(TAGS.machineOperations(payload.machineId), { expire: 0 });
+  if (targetClientId) revalidateTag(TAGS.clientOperations(targetClientId), { expire: 0 });
   if (targetOperatorId) {
-    revalidateTag(TAGS.operatorOperations(targetOperatorId), "max");
-    revalidateTag(`operator-entry:${targetOperatorId}`, "max");
-    revalidateTag(TAGS.dashboardOperator(targetOperatorId), "max");
+    revalidateTag(TAGS.operatorOperations(targetOperatorId), { expire: 0 });
+    revalidateTag(`operator-entry:${targetOperatorId}`, { expire: 0 });
+    revalidateTag(TAGS.dashboardOperator(targetOperatorId), { expire: 0 });
   }
+
+  revalidatePath("/operations");
+  revalidatePath("/operations", "page");
+  revalidatePath("/running-logs");
+  revalidatePath("/dashboard");
   return responsePayload;
+
 }
 
 export async function updateOperatorHourLogAction(payload: {
@@ -697,261 +725,18 @@ export async function updateOperatorHourLogAction(payload: {
   breakdownDuration?: string;
   breakdownHours?: number;
   shift?: string;
+  shiftCode?: string;
   machineCondition?: "good" | "fair" | "needs_attention" | "breakdown";
   location?: string;
   remarks?: string;
-}) {
+}): Promise<{ success: boolean; error?: string; data?: any }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
 
-  // Schema Validation (Stage 2: validate)
-  const parsed = UpdateHourLogSchema.safeParse(payload);
-  if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message || "Validation failed." };
-  }
-
-  const supabase = createSupabaseAdminClient();
-
-  // Fetch existing log to verify ownership
-  const { data: existingLog } = await supabase
-    .from("machine_hour_logs")
-    .select("*")
-    .eq("id", payload.logId)
-    .single();
-
-  if (!existingLog) return { success: false, error: "Log entry not found." };
-
-  const userRoleLower = (user.role || "").toLowerCase();
-  const isManagerTier = isManagerOrAbove(userRoleLower);
-
-  if (!isManagerTier && existingLog.operator_id !== user.id) {
-    return { success: false, error: "You can only edit your own meter logs." };
-  }
-
-  // 7-day edit locking window enforcement for operators (managers and above can edit anytime)
-  if (!isManagerTier && existingLog.log_date) {
-    const logDateStr = existingLog.log_date.split("T")[0];
-    const parts = logDateStr.split("-").map(Number);
-    const now = new Date();
-    const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-
-    if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
-      const logDateMidnight = new Date(parts[0], parts[1] - 1, parts[2]).getTime();
-      const diffDays = Math.floor((todayMidnight - logDateMidnight) / (1000 * 60 * 60 * 24));
-      if (diffDays > 7) {
-        return { success: false, error: "This log entry is locked. Logs older than 7 days cannot be edited." };
-      }
-      if (diffDays < 0) {
-        return { success: false, error: "Cannot edit log entry with future date." };
-      }
-    }
-  }
-
-  const startMtr = payload.startMeter ?? existingLog.start_meter ?? 0;
-  const endMtr = payload.endMeter ?? existingLog.end_meter ?? startMtr;
-
-  if (endMtr < startMtr) {
-    return { success: false, error: "End hour meter reading cannot be less than starting hour meter reading." };
-  }
-
-  if (endMtr - startMtr > 24) {
-    return { success: false, error: "Machine running hours cannot exceed 24 hours in a single log." };
-  }
-
-  const effectiveCondition = payload.isBreakdown ? "breakdown" : (payload.machineCondition || existingLog.machine_condition || "good");
-  const targetStartTime = payload.startTime ?? existingLog.start_time ?? undefined;
-  const targetEndTime = payload.endTime ?? existingLog.end_time ?? undefined;
-  const targetStartDate = payload.startDate || existingLog.log_date;
-  const targetEndDate = payload.endDate || existingLog.end_date;
-
-  // Validate that updated log date is strictly within allowed 7-day range for non-managers
-  if (!isManagerTier && targetStartDate) {
-    const rawDate = targetStartDate.trim().split("T")[0];
-    const parts = rawDate.split("-").map(Number);
-    if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
-      const now = new Date();
-      const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-      const parsedMidnight = new Date(parts[0], parts[1] - 1, parts[2]).getTime();
-      const diffDays = Math.floor((todayMidnight - parsedMidnight) / (1000 * 60 * 60 * 24));
-      if (diffDays < 0) {
-        return { success: false, error: "Cannot set machine log to a future date." };
-      }
-      if (diffDays > 7) {
-        return { success: false, error: "Cannot set log date older than 7 days. You can only update logs within the previous 7 days." };
-      }
-    }
-  }
-
-  const safeEditOvertime = payload.overtimeHours !== undefined && !isNaN(Number(payload.overtimeHours))
-    ? Math.min(Math.max(0, Number(payload.overtimeHours)), 16.0)
-    : undefined;
-
-  const timing = computeShiftTiming({
-    startDate: targetStartDate,
-    startTime: targetStartTime,
-    endDate: targetEndDate,
-    endTime: targetEndTime,
-    manualOvertime: safeEditOvertime,
-  });
-
-  if (!timing.isValid || !timing.startDateTime || !timing.endDateTime) {
-    return { success: false, error: timing.errorMessage || "Invalid shift timing values." };
-  }
-
-  // Future Shift End Guard: Operator cannot enter logs before shift end (manager and above can correct/edit logs)
-  if (!isManagerTier && isShiftEndInFuture(timing.endDateTime, 1)) {
-    return { success: false, error: "Cannot log before shift end." };
-  }
-
-  // Check shift time overlap prior to database update
-  const overlapCheck = await checkShiftOverlapServer(supabase, {
-    machineId: existingLog.machine_id,
-    operatorId: existingLog.operator_id,
-    startDate: timing.resolvedStartDate,
-    startTime: targetStartTime,
-    endDate: timing.resolvedEndDate,
-    endTime: targetEndTime,
-    shift: payload.shift,
-    excludeLogId: payload.logId,
-  });
-
-  if (overlapCheck.hasOverlap) {
-    return { success: false, error: overlapCheck.errorMessage || "Shift time overlap detected." };
-  }
-
-  // Compute and standardize breakdown timing & formatted duration string
-  let effectiveBreakdownDuration = payload.breakdownDuration || null;
-  let effectiveBreakdownHours = payload.breakdownHours || 0;
-  let effectiveBreakdownStartTime = payload.breakdownStartTime || null;
-  let effectiveBreakdownEndTime = payload.breakdownEndTime || null;
-
-  if (payload.isBreakdown && payload.breakdownStartTime && payload.breakdownEndTime) {
-    const bkdStats = computeBreakdownDuration(payload.breakdownStartTime, payload.breakdownEndTime);
-    if (bkdStats.isValid) {
-      effectiveBreakdownDuration = bkdStats.fullBreakdownString;
-      effectiveBreakdownHours = bkdStats.durationDecimalHours;
-      effectiveBreakdownStartTime = formatTo12Hour(payload.breakdownStartTime) || payload.breakdownStartTime;
-      effectiveBreakdownEndTime = formatTo12Hour(payload.breakdownEndTime) || payload.breakdownEndTime;
-    }
-  }
-
-  let finalRemarks = payload.remarks?.trim() || "";
-  if (payload.isBreakdown && effectiveBreakdownDuration) {
-    const bkdPrefix = `[Breakdown Duration: ${effectiveBreakdownDuration}]`;
-    if (!finalRemarks.includes("[Breakdown Duration:")) {
-      finalRemarks = finalRemarks ? `${bkdPrefix} ${finalRemarks}` : bkdPrefix;
-    }
-  } else if (!payload.isBreakdown) {
-    finalRemarks = finalRemarks.replace(/\[Breakdown Duration:\s*[^\]]+\]\s*/gi, "").trim();
-  }
-
-  const updatePayload: Record<string, any> = {
-    client_id: payload.clientId ?? existingLog.client_id ?? null,
-    log_date: timing.resolvedStartDate,
-    end_date: timing.resolvedEndDate,
-    start_datetime: timing.startDateTime.toISOString(),
-    end_datetime: timing.endDateTime.toISOString(),
-    start_meter: startMtr,
-    end_meter: endMtr,
-    start_time: targetStartTime || null,
-    end_time: targetEndTime || null,
-    overtime_hours: timing.overtimeHours,
-    normal_working_hours: timing.normalWorkingHours,
-    is_breakdown: payload.isBreakdown ?? (effectiveCondition === "breakdown"),
-    shift: payload.shift || existingLog.shift || null,
-    machine_condition: effectiveCondition,
-    location: payload.location || null,
-    remarks: finalRemarks || null,
+  return {
+    success: false,
+    error: "Shift logs are strictly immutable and cannot be edited by any role.",
   };
-
-  if (payload.isBreakdown && effectiveBreakdownDuration) {
-    updatePayload.breakdown_start_time = effectiveBreakdownStartTime;
-    updatePayload.breakdown_end_time = effectiveBreakdownEndTime;
-    updatePayload.breakdown_duration = effectiveBreakdownDuration;
-    updatePayload.breakdown_hours = effectiveBreakdownHours;
-  } else if (!payload.isBreakdown) {
-    updatePayload.breakdown_start_time = null;
-    updatePayload.breakdown_end_time = null;
-    updatePayload.breakdown_duration = null;
-    updatePayload.breakdown_hours = 0;
-  }
-
-  let { data, error } = await supabase
-    .from("machine_hour_logs")
-    .update(updatePayload)
-    .eq("id", payload.logId)
-    .select()
-    .single();
-
-  if (error && (error.code === "42703" || error.message?.includes("breakdown_"))) {
-    delete updatePayload.breakdown_start_time;
-    delete updatePayload.breakdown_end_time;
-    delete updatePayload.breakdown_duration;
-    delete updatePayload.breakdown_hours;
-    const retry = await supabase
-      .from("machine_hour_logs")
-      .update(updatePayload)
-      .eq("id", payload.logId)
-      .select()
-      .single();
-    data = retry.data;
-    error = retry.error;
-  }
-
-  if (error) return { success: false, error: formatOperatorDatabaseError(error) };
-
-  // Update machine hour meter & health status
-  const machineUpdate: Record<string, unknown> = {
-    hour_meter: endMtr,
-    updated_at: new Date().toISOString(),
-  };
-
-  if (effectiveCondition === "breakdown" || payload.isBreakdown) {
-    machineUpdate.health_status = "breakdown";
-  } else {
-    machineUpdate.health_status = "active";
-  }
-
-  await supabase
-    .from("machines")
-    .update(machineUpdate)
-    .eq("id", existingLog.machine_id);
-
-  await logAudit({
-    user_id: user.id,
-    action: "operator.log_corrected",
-    entity_type: "machine_hour_log",
-    entity_id: payload.logId,
-    metadata: {
-      endMeter: endMtr,
-      startTime: payload.startTime,
-      endTime: payload.endTime,
-      startDate: timing.resolvedStartDate,
-      endDate: timing.resolvedEndDate,
-      startDatetime: timing.startDateTime.toISOString(),
-      endDatetime: timing.endDateTime.toISOString(),
-      overtimeHours: timing.overtimeHours,
-      normalWorkingHours: timing.normalWorkingHours,
-    },
-  });
-
-  revalidateTag(CACHE_TAGS.machines, "max");
-  revalidateTag(CACHE_TAGS.dashboard, "max");
-  revalidateTag(TAGS.operationsLogs, "max");
-  revalidateTag(TAGS.operations, "max");
-  revalidateTag(TAGS.operationLogDetail(payload.logId), "max");
-  revalidateTag(OPERATIONS_CACHE_TAGS.logSummary(payload.logId), "max");
-  revalidateTag(OPERATIONS_CACHE_TAGS.logDetails(payload.logId), "max");
-  revalidateTag(OPERATIONS_CACHE_TAGS.logHistory(payload.logId), "max");
-  revalidateTag(OPERATIONS_CACHE_TAGS.logAudit(payload.logId), "max");
-  if (existingLog?.machine_id) revalidateTag(TAGS.machineOperations(existingLog.machine_id), "max");
-  if (existingLog?.client_id) revalidateTag(TAGS.clientOperations(existingLog.client_id), "max");
-  if (existingLog?.operator_id) {
-    revalidateTag(TAGS.operatorOperations(existingLog.operator_id), "max");
-    revalidateTag(`operator-entry:${existingLog.operator_id}`, "max");
-    revalidateTag(TAGS.dashboardOperator(existingLog.operator_id), "max");
-  }
-  return { success: true, data };
 }
 
 /**
@@ -963,122 +748,13 @@ export async function updateOperatorHourLogAction(payload: {
 export async function deleteOperatorHourLogAction(payload: {
   logId: string;
   reason?: string | null;
-}) {
+}): Promise<{ success: boolean; error?: string; data?: any }> {
   const user = await getCurrentUser();
   if (!user) return { success: false, error: "Unauthorized" };
 
-  const parsed = DeleteHourLogSchema.safeParse(payload);
-  if (!parsed.success) {
-    return { success: false, error: parsed.error.issues[0]?.message || "Invalid log ID format." };
-  }
-
-  const supabase = createSupabaseAdminClient();
-
-  // 1. Fetch existing log to verify permissions and get machine_id / client_id / operator_id
-  const { data: existingLog, error: fetchErr } = await supabase
-    .from("machine_hour_logs")
-    .select("id, machine_id, client_id, operator_id, start_meter, end_meter, log_date, created_at")
-    .eq("id", parsed.data.logId)
-    .single();
-
-  if (fetchErr || !existingLog) {
-    return { success: false, error: "Log entry not found." };
-  }
-
-  // Permission check: strictly super_admin only
-  const userRoleLower = (user.role || "").toLowerCase();
-  if (userRoleLower !== "super_admin") {
-    return {
-      success: false,
-      error: "Unauthorized: Only Super Admin is authorized to delete machine hour logs.",
-    };
-  }
-
-  // 2. Delete the record
-  const { error: deleteErr } = await supabase
-    .from("machine_hour_logs")
-    .delete()
-    .eq("id", parsed.data.logId);
-
-  if (deleteErr) {
-    console.error("Error deleting machine hour log:", deleteErr);
-    return { success: false, error: formatOperatorDatabaseError(deleteErr) };
-  }
-
-  // 3. Reconcile machine meter reading if needed
-  // Fetch latest remaining log on this machine
-  const { data: latestRemaining } = await supabase
-    .from("machine_hour_logs")
-    .select("end_meter")
-    .eq("machine_id", existingLog.machine_id)
-    .order("log_date", { ascending: false })
-    .order("end_meter", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (latestRemaining && typeof latestRemaining.end_meter === "number") {
-    await supabase
-      .from("machines")
-      .update({
-        hour_meter: latestRemaining.end_meter,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", existingLog.machine_id);
-  } else if (existingLog.start_meter !== undefined && existingLog.start_meter !== null) {
-    // If no remaining logs, reset machine hour_meter to the start_meter of the deleted log
-    await supabase
-      .from("machines")
-      .update({
-        hour_meter: existingLog.start_meter,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", existingLog.machine_id);
-  }
-
-  // 4. Audit logging
-  await logAudit({
-    user_id: user.id,
-    action: "operator.log_deleted",
-    entity_type: "machine_hour_log",
-    entity_id: parsed.data.logId,
-    metadata: {
-      machineId: existingLog.machine_id,
-      operatorId: existingLog.operator_id,
-      clientId: existingLog.client_id,
-      logDate: existingLog.log_date,
-      startMeter: existingLog.start_meter,
-      endMeter: existingLog.end_meter,
-      reason: parsed.data.reason || null,
-      deletedBy: user.id,
-    },
-  });
-
-  // 5. Targeted cache invalidation (tag isolation: NEVER touch TAGS.operationsAssignments)
-  revalidateTag(CACHE_TAGS.machines, "max");
-  revalidateTag(CACHE_TAGS.dashboard, "max");
-  revalidateTag(TAGS.operationsLogs, "max");
-  revalidateTag(TAGS.operations, "max");
-  revalidateTag(TAGS.operationLogDetail(parsed.data.logId), "max");
-  revalidateTag(OPERATIONS_CACHE_TAGS.logSummary(parsed.data.logId), "max");
-  revalidateTag(OPERATIONS_CACHE_TAGS.logDetails(parsed.data.logId), "max");
-  revalidateTag(OPERATIONS_CACHE_TAGS.logHistory(parsed.data.logId), "max");
-  revalidateTag(OPERATIONS_CACHE_TAGS.logAudit(parsed.data.logId), "max");
-  if (existingLog.machine_id) revalidateTag(TAGS.machineOperations(existingLog.machine_id), "max");
-  if (existingLog.client_id) revalidateTag(TAGS.clientOperations(existingLog.client_id), "max");
-  if (existingLog.operator_id) {
-    revalidateTag(TAGS.operatorOperations(existingLog.operator_id), "max");
-    revalidateTag(`operator-entry:${existingLog.operator_id}`, "max");
-  }
-  revalidateTag(TAGS.machines, "max");
-
   return {
-    success: true,
-    data: {
-      id: parsed.data.logId,
-      machineId: existingLog.machine_id,
-      startMeter: existingLog.start_meter,
-      endMeter: existingLog.end_meter,
-    },
+    success: false,
+    error: "Shift logs are strictly immutable and cannot be deleted by any role.",
   };
 }
 
@@ -1353,7 +1029,7 @@ export async function recordMachineSiteMovementAction(payload: {
   return { success: true, data: { machineId: payload.machineId } };
 }
 
-export interface GetOperationsExportLogsParams {
+interface GetOperationsExportLogsParams {
   viewMode: "machine" | "client" | "operator";
   entityId?: string;
   clientId?: string;
@@ -1539,25 +1215,11 @@ export async function getOperationsExportLogsAction(params: GetOperationsExportL
           query = query.eq("machine_id", params.clientMachineId);
         }
         if (params.site && params.site !== "all") {
-          // Extract safe alphanumeric search tokens from the selected site
-          const siteTokens = params.site
-            .split(",")
-            .map((t) => t.replace(/[^a-zA-Z0-9\s-]/g, " ").trim())
-            .filter((t) => t.length >= 3);
-
-          // Find the most distinctive geographical token (e.g. city or district, avoiding generic words)
-          const primaryToken = siteTokens.find(
-            (t) =>
-              !t.toLowerCase().includes("mill") &&
-              !t.toLowerCase().includes("plot") &&
-              !t.toLowerCase().includes("centre") &&
-              !t.toLowerCase().includes("industrial")
-          ) || siteTokens[0];
-
-          if (primaryToken) {
-            query = query.ilike("location", `%${primaryToken}%`);
-          } else {
-            query = query.ilike("location", `%${params.site.replace(/[%_\\]/g, "").trim()}%`);
+          const siteCandidates = resolveSiteMatchCandidates(params.site);
+          if (siteCandidates.length === 1) {
+            query = query.eq("location", siteCandidates[0]);
+          } else if (siteCandidates.length > 1) {
+            query = query.in("location", siteCandidates);
           }
         }
       } else if (params.viewMode === "operator" && resolvedOperatorId && resolvedOperatorId !== "all") {
@@ -1628,6 +1290,7 @@ export async function getOperationsExportLogsAction(params: GetOperationsExportL
     let totalRunningHours = 0;
     let totalOtHours = 0;
     let totalBreakdowns = 0;
+    let totalWorkingHours = 0;
     const loggedDates = new Set<string>();
 
     for (const log of formattedLogs) {
@@ -1636,6 +1299,7 @@ export async function getOperationsExportLogsAction(params: GetOperationsExportL
       const run = log.running_hours ?? Math.max(0, Math.round((endMtr - startMtr) * 10) / 10);
       totalRunningHours += run;
       totalOtHours += log.overtime_hours || 0;
+      totalWorkingHours += calculateShiftWorkingHours(log);
       if (log.is_breakdown) totalBreakdowns++;
       if (log.log_date) loggedDates.add(log.log_date);
     }
@@ -1648,6 +1312,7 @@ export async function getOperationsExportLogsAction(params: GetOperationsExportL
         totalRunningHours: Math.round(totalRunningHours * 10) / 10,
         totalOtHours: Math.round(totalOtHours * 10) / 10,
         totalBreakdowns,
+        totalWorkingHours: Math.round(totalWorkingHours * 10) / 10,
         loggedDaysCount: loggedDates.size,
       },
     };
@@ -1770,6 +1435,76 @@ export async function getOperatorHistoryLogsAction(limit: number = 100): Promise
   }
 }
 
+/**
+ * Server action: fetch today's shift log monitor data.
+ * RBAC enforced at DB level (supervisor sees own operators only).
+ */
+export async function getTodayShiftMonitorAction(
+  logDate?: string,
+  search?: string,
+  bypassCache: boolean = false
+): Promise<{
+  success: boolean;
+  data?: import("@/lib/data/operations/today-shift-monitor").TodayShiftMonitorRow[];
+  error?: string;
+}> {
+  const user = await getCurrentUser();
+  if (!user) return { success: false, error: "Unauthorized" };
+  if (!["supervisor", "manager", "admin", "super_admin"].includes(user.role)) {
+    return { success: false, error: "Insufficient permissions" };
+  }
 
+  try {
+    const { getTodayShiftLogMonitor } = await import("@/lib/data/operations/today-shift-monitor");
+    const data = await getTodayShiftLogMonitor(user.id, logDate || undefined, search || undefined, bypassCache);
+    return { success: true, data };
+  } catch (err) {
+    console.error("[getTodayShiftMonitorAction] Exception:", err);
+    return { success: false, error: "Failed to fetch shift monitor data" };
+  }
+}
+
+/**
+ * Server action: fetch active operators list with cached DAL.
+ */
+export async function getActiveOperatorsAction(): Promise<{
+  success: boolean;
+  data?: User[];
+  error?: string;
+}> {
+  const user = await getCurrentUser();
+  if (!user) return { success: false, error: "Unauthorized" };
+
+  try {
+    const { getActiveOperators } = await import("@/lib/data/machines/machine-filters");
+    const operators = await getActiveOperators();
+    return { success: true, data: operators };
+  } catch (err: any) {
+    console.error("[getActiveOperatorsAction] Exception:", err);
+    return { success: false, error: err?.message || "Failed to fetch active operators" };
+  }
+}
+
+/**
+ * Server action: fetch fresh operator entry context (machine, client, shift codes, assigned shift).
+ */
+export async function getOperatorEntryContextAction(operatorId?: string): Promise<{
+  success: boolean;
+  data?: import("@reachinternational/types").OperatorEntryContext | null;
+  error?: string;
+}> {
+  const user = await getCurrentUser();
+  if (!user) return { success: false, error: "Unauthorized" };
+
+  try {
+    const targetId = operatorId || user.id;
+    const { getOperatorEntryContext } = await import("@/lib/queries/operator-entry");
+    const context = await getOperatorEntryContext(targetId);
+    return { success: true, data: context };
+  } catch (err: any) {
+    console.error("[getOperatorEntryContextAction] Exception:", err);
+    return { success: false, error: err?.message || "Failed to fetch operator entry context" };
+  }
+}
 
 

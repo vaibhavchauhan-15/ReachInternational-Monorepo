@@ -9,17 +9,51 @@ import { spacingNumeric } from '../tokens/spacing';
 import { radiusNumeric } from '../tokens/radius';
 import { breakpointsNumeric } from '../tokens/breakpoints';
 import { motionDurationsNumeric } from '../tokens/motion';
+import { fontSizesNumeric } from '../tokens/typography';
 
 export const reactNativeSpacing = spacingNumeric;
 export const reactNativeRadius = radiusNumeric;
 export const reactNativeBreakpoints = breakpointsNumeric;
 export const reactNativeMotionDurations = motionDurationsNumeric;
+export const reactNativeFontSizes = fontSizesNumeric;
+
+/**
+ * Standard Native Mobile Typography Hierarchy
+ * Strictly mapped to Primary, Secondary, and Tertiary font sizes:
+ * - Primary: Headings (22/18/16), Body (15), Button (15)
+ * - Secondary: Subtitles (14), Field Labels (13.5), Badges (12.5-13), Filter Pills (13)
+ * - Tertiary: Captions, Metadata, Monospace tags (12, absolute floor)
+ */
+export const reactNativeTypography = {
+  // Primary Tier
+  h1: { fontSize: 22, lineHeight: 28, fontWeight: '700' as const },
+  h2: { fontSize: 18, lineHeight: 24, fontWeight: '600' as const },
+  h3: { fontSize: 16, lineHeight: 22, fontWeight: '600' as const },
+  body: { fontSize: 15, lineHeight: 22, fontWeight: '400' as const },
+  bodyMedium: { fontSize: 15, lineHeight: 22, fontWeight: '500' as const },
+  bodyBold: { fontSize: 15, lineHeight: 22, fontWeight: '600' as const },
+  button: { fontSize: 15, lineHeight: 20, fontWeight: '600' as const },
+
+  // Secondary Tier
+  subtitle: { fontSize: 14, lineHeight: 20, fontWeight: '400' as const },
+  label: { fontSize: 13.5, lineHeight: 18, fontWeight: '600' as const },
+  badge: { fontSize: 12.5, lineHeight: 17, fontWeight: '600' as const },
+  filterPill: { fontSize: 13, lineHeight: 18, fontWeight: '500' as const },
+
+  // Tertiary Tier (Minimum 12, never below 12)
+  caption: { fontSize: 12, lineHeight: 16, fontWeight: '400' as const },
+  captionMedium: { fontSize: 12, lineHeight: 16, fontWeight: '500' as const },
+  captionBold: { fontSize: 12, lineHeight: 16, fontWeight: '600' as const },
+  mono: { fontSize: 12, lineHeight: 16, fontWeight: '600' as const },
+} as const;
 
 export interface ReactNativeTheme {
   isDark: boolean;
   colors: ColorTokens;
   spacing: typeof spacingNumeric;
   radius: typeof radiusNumeric;
+  typography: typeof reactNativeTypography;
+  fontSizes: typeof fontSizesNumeric;
   shadows: {
     none: {
       shadowColor: string;
@@ -50,6 +84,8 @@ export const lightThemeRN: ReactNativeTheme = {
   colors: colorsLight,
   spacing: spacingNumeric,
   radius: radiusNumeric,
+  typography: reactNativeTypography,
+  fontSizes: fontSizesNumeric,
   shadows: {
     none: {
       shadowColor: 'transparent',
@@ -80,6 +116,8 @@ export const darkThemeRN: ReactNativeTheme = {
   colors: colorsDark,
   spacing: spacingNumeric,
   radius: radiusNumeric,
+  typography: reactNativeTypography,
+  fontSizes: fontSizesNumeric,
   shadows: {
     none: {
       shadowColor: 'transparent',

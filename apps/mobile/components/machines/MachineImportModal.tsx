@@ -271,12 +271,12 @@ const styles = StyleSheet.create({
     borderColor: '#ef444430',
   },
   reqText: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '800',
     color: '#ef4444',
   },
   colDesc: {
-    fontSize: 11,
+    fontSize: 12.5,
     marginLeft: 20,
   },
   footer: {
@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   shareBtnText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
   },
 });

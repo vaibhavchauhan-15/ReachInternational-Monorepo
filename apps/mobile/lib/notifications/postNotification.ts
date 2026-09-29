@@ -252,6 +252,23 @@ export function notifyShiftEnded(shiftType: string, machineCode: string) {
   });
 }
 
+export function notifyAssistedShiftLogged(
+  operatorName: string,
+  machineCode: string,
+  runningHours: number,
+  supervisorName?: string
+) {
+  return postNotification({
+    category: 'log_entry',
+    title: 'Assisted Shift Log Recorded',
+    body: supervisorName
+      ? `Supervisor ${supervisorName} logged ${runningHours}h on ${machineCode} on behalf of ${operatorName}.`
+      : `Recorded ${runningHours}h shift log on ${machineCode} on behalf of ${operatorName}.`,
+    severity: 'info',
+    metadata: { operatorName, machineCode, runningHours, supervisorName },
+  });
+}
+
 // --- 4. Logs Export & Manage ---
 
 export function notifyLogsPdfExported(totalLogs: number, machineCount: number) {

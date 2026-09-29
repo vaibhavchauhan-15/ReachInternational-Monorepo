@@ -7,6 +7,7 @@ import { TAGS } from "@/lib/cache/tags";
 import {
   serializeClientLogsFilter,
   resolveOperationsDateRange,
+  resolveSiteMatchCandidates,
   OPERATIONS_CACHE_TTLS,
 } from "@reachinternational/utils";
 import {
@@ -44,6 +45,7 @@ export interface OperationsClientLogsResult {
   logsSummary: {
     totalRunHours: number;
     totalOtHours: number;
+    totalWorkingHours: number;
     totalBreakdowns: number;
     loggedDaysCount: number;
   };
@@ -71,6 +73,8 @@ const CLIENT_LOG_EXACT_PROJECTION = `
   normal_working_hours,
   is_breakdown,
   shift,
+  shift_code,
+  shift_scheduled_minutes,
   location,
   remarks,
   conflict_flag,
@@ -103,7 +107,7 @@ function formatClientCanonicalAddress(c?: any): string {
 export const getOperationsClientLogsData = cache(
   async (params: OperationsClientLogsParams = {}): Promise<OperationsClientLogsResult> => {
     const page = Math.max(1, Number(params.page) || 1);
-    const pageSize = Math.max(1, Number(params.pageSize) || 20);
+    const pageSize = Math.max(1, Number(params.pageSize) || 500);
     const fromIndex = (page - 1) * pageSize;
     const toIndex = fromIndex + pageSize - 1;
     const sort = params.sort || "date-desc";
@@ -149,7 +153,7 @@ export const getOperationsClientLogsData = cache(
         totalLogsCount: 0,
         currentPage: page,
         logsPageSize: pageSize,
-        logsSummary: { totalRunHours: 0, totalOtHours: 0, totalBreakdowns: 0, loggedDaysCount: 0 },
+        logsSummary: { totalRunHours: 0, totalOtHours: 0, totalWorkingHours: 0, totalBreakdowns: 0, loggedDaysCount: 0 },
         activeClientId: "",
         activeClient: null,
       };
@@ -213,6 +217,7 @@ export const getOperationsClientLogsData = cache(
         let summary = {
           totalRunHours: 0,
           totalOtHours: 0,
+          totalWorkingHours: 0,
           totalBreakdowns: 0,
           loggedDaysCount: 0,
         };
@@ -228,8 +233,12 @@ export const getOperationsClientLogsData = cache(
           }
 
           if (effectiveSite && effectiveSite !== "all") {
-            // Leverages GIN trigram index on location
-            query = query.ilike("location", `%${effectiveSite.replace(/[%_\\]/g, "").trim()}%`);
+            const siteCandidates = resolveSiteMatchCandidates(effectiveSite, activeClient?.street);
+            if (siteCandidates.length === 1) {
+              query = query.eq("location", siteCandidates[0]);
+            } else if (siteCandidates.length > 1) {
+              query = query.in("location", siteCandidates);
+            }
           }
 
           // Date range filters (half-open [2026-09-01, 2026-10-01) for month, exact range for custom)
@@ -310,9 +319,12 @@ export const getOperationsClientLogsData = cache(
             summary = {
               totalRunHours: Number(s.total_run_hours) || 0,
               totalOtHours: Number(s.total_ot_hours) || 0,
+              totalWorkingHours: Number(s.total_working_hours) || 0,
               totalBreakdowns: Number(s.total_breakdowns) || 0,
               loggedDaysCount: Number(s.logged_days_count) || 0,
             };
+          } else {
+            summary.totalWorkingHours = rawLogs.reduce((acc, l) => acc + (Number(l.normal_working_hours) || 8), 0);
           }
         } else {
           // Summary-only mode: ZERO machine_hour_logs table scans, ZERO user joins
@@ -331,6 +343,7 @@ export const getOperationsClientLogsData = cache(
             summary = {
               totalRunHours: Number(s.total_run_hours) || 0,
               totalOtHours: Number(s.total_ot_hours) || 0,
+              totalWorkingHours: Number(s.total_working_hours) || 0,
               totalBreakdowns: Number(s.total_breakdowns) || 0,
               loggedDaysCount: Number(s.logged_days_count) || 0,
             };
@@ -368,8 +381,11 @@ export const getOperationsClientLogsData = cache(
 
     // Aggregate distinct sites for active client
     const sitesSet = new Set<string>();
+    if (activeClient?.street && activeClient.street.trim()) {
+      sitesSet.add(activeClient.street.trim());
+    }
     const canonicalAddr = formatClientCanonicalAddress(activeClient);
-    if (canonicalAddr) sitesSet.add(canonicalAddr);
+    if (canonicalAddr && !sitesSet.has(canonicalAddr)) sitesSet.add(canonicalAddr);
 
     clientLocationsRaw.forEach((row: any) => {
       if (row.location && row.location.trim()) {

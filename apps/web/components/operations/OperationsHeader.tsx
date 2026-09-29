@@ -2,15 +2,17 @@
 
 import React from "react";
 import { Button } from "@/components/ui";
-import { Download } from "lucide-react";
+import { Download, UserPlus } from "lucide-react";
 
 export interface OperationsHeaderProps {
   onOpenPrintModal?: () => void;
+  onAssignOperator?: () => void;
   title?: string;
 }
 
 export const OperationsHeader = React.memo(function OperationsHeader({
   onOpenPrintModal,
+  onAssignOperator,
   title = "Fleet Operations",
 }: OperationsHeaderProps) {
   return (
@@ -22,6 +24,19 @@ export const OperationsHeader = React.memo(function OperationsHeader({
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        {onAssignOperator && (
+          <Button
+            variant="primary"
+            onClick={onAssignOperator}
+            icon={<UserPlus size={14} className="w-3.5 h-3.5 shrink-0" />}
+            className="h-9 px-3.5 font-semibold inline-flex flex-row items-center justify-center gap-1.5 text-xs sm:text-sm whitespace-nowrap cursor-pointer shadow-xs"
+            title="Assign Operator"
+            aria-label="Assign Operator"
+          >
+            Assign Operator
+          </Button>
+        )}
+
         {onOpenPrintModal && (
           <Button
             variant="ghost"

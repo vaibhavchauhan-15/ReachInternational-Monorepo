@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Modal, Badge } from "@/components/ui";
+import { Modal, Badge, Button } from "@/components/ui";
 import { Clock, Shield, Users, Phone, AlertCircle } from "lucide-react";
 import { AnimatedLoader } from "@/components/ui/animated-icons";
 import { getMachineAssignmentsAction } from "@/app/actions/machines";
@@ -11,19 +11,37 @@ interface MachineAssignmentsQuickModalProps {
   machine: Machine | null;
   open: boolean;
   onClose: () => void;
+  onEditPersonnel?: (machine: Machine) => void;
 }
 
 // Client-side session cache for on-demand assignment fetches
 const assignmentsSessionCache = new Map<string, OperatorMachineAssignment[]>();
 
+export function clearAssignmentsSessionCache(machineId?: string) {
+  if (machineId) {
+    assignmentsSessionCache.delete(machineId);
+  } else {
+    assignmentsSessionCache.clear();
+  }
+}
+
 export function MachineAssignmentsQuickModal({
   machine,
   open,
   onClose,
+  onEditPersonnel,
 }: MachineAssignmentsQuickModalProps) {
   const [assignments, setAssignments] = useState<OperatorMachineAssignment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleClear = () => {
+      if (machine?.id) assignmentsSessionCache.delete(machine.id);
+    };
+    window.addEventListener("reach:refresh-machine-personnel", handleClear);
+    return () => window.removeEventListener("reach:refresh-machine-personnel", handleClear);
+  }, [machine?.id]);
 
   useEffect(() => {
     if (!open || !machine?.id) {
@@ -158,6 +176,11 @@ export function MachineAssignmentsQuickModal({
 
                         {/* Shift Timing Chip */}
                         <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                          {assignment.shift_code && (
+                            <span className="px-2 py-0.5 rounded-lg font-mono font-extrabold text-[10px] bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                              Shift {assignment.shift_code}
+                            </span>
+                          )}
                           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[var(--color-canvas)] border border-[var(--color-hairline)] text-xs font-mono text-[var(--color-body)]">
                             <Clock size={12} className="text-sky-500" />
                             <span>
@@ -193,6 +216,31 @@ export function MachineAssignmentsQuickModal({
             )}
           </>
         )}
+      </div>
+      <div className="pt-3 border-t border-[var(--color-hairline)] flex items-center justify-between gap-2">
+        {onEditPersonnel && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              onClose();
+              onEditPersonnel(machine);
+            }}
+            className="text-xs font-semibold cursor-pointer"
+          >
+            Manage 24h Shift Roster
+          </Button>
+        )}
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={onClose}
+          className="ml-auto text-xs cursor-pointer"
+        >
+          Close
+        </Button>
       </div>
     </Modal>
   );

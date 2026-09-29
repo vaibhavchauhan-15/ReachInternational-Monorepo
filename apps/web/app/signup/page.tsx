@@ -16,6 +16,8 @@ import {
   AnimatedCreditCard,
   AnimatedClock,
   AnimatedUpload,
+  AnimatedBuilding2,
+  AnimatedFileText,
 } from "@/components/ui/animated-icons";
 import { signup, getSupervisorsAction, type AuthFormState } from "@/app/actions/auth";
 import { isSupervisedRole } from "@reachinternational/permissions";
@@ -30,7 +32,6 @@ import {
 } from "@/components/ui";
 import {
   UserAddressSection,
-  UserSalaryField,
   FormSectionCard,
   FormSubmitButton,
 } from "@/components/forms";
@@ -38,6 +39,9 @@ import {
   validateAadhaarNumber,
   validateLicenseNumber,
   formatAadhaar,
+  validateBankAccountNumber,
+  validateIfscCode,
+  formatIfscCode,
   INDIAN_STATES,
   getStateById,
   computeShiftTiming,
@@ -73,7 +77,8 @@ export default function SignupPage() {
     state: "",
     state_id: "",
     address: "",
-    monthly_salary: "",
+    bank_account_number: "",
+    bank_ifsc_code: "",
     aadhaar_number: "",
     license_number: "",
     password: "",
@@ -84,6 +89,10 @@ export default function SignupPage() {
   const [loadingSupervisors, setLoadingSupervisors] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
+  const [bankFile, setBankFile] = useState<File | null>(null);
+  const [bankPreviewUrl, setBankPreviewUrl] = useState<string | null>(null);
+  const [bankFileError, setBankFileError] = useState<string | null>(null);
+
   const [aadhaarFile, setAadhaarFile] = useState<File | null>(null);
   const [aadhaarPreviewUrl, setAadhaarPreviewUrl] = useState<string | null>(null);
   const [aadhaarFileError, setAadhaarFileError] = useState<string | null>(null);
@@ -91,6 +100,35 @@ export default function SignupPage() {
   const [licenseFile, setLicenseFile] = useState<File | null>(null);
   const [licensePreviewUrl, setLicensePreviewUrl] = useState<string | null>(null);
   const [licenseFileError, setLicenseFileError] = useState<string | null>(null);
+
+  const handleBankFileChange = (file: File | null) => {
+    if (bankPreviewUrl) URL.revokeObjectURL(bankPreviewUrl);
+    if (!file) {
+      setBankFile(null);
+      setBankPreviewUrl(null);
+      setBankFileError(null);
+      return;
+    }
+    const val = validateDocumentFile(file, DEFAULT_ALLOWED_DOCUMENT_MIME_TYPES, 2097152);
+    if (!val.valid) {
+      setBankFile(null);
+      setBankPreviewUrl(null);
+      setBankFileError(val.error || "Invalid file");
+    } else {
+      setBankFile(file);
+      setBankFileError(null);
+      setFieldErrors((prev) => {
+        const copy = { ...prev };
+        delete copy.bank_document_file;
+        return copy;
+      });
+      if (file.type.startsWith("image/")) {
+        setBankPreviewUrl(URL.createObjectURL(file));
+      } else {
+        setBankPreviewUrl(null);
+      }
+    }
+  };
 
   const handleAadhaarFileChange = (file: File | null) => {
     if (aadhaarPreviewUrl) URL.revokeObjectURL(aadhaarPreviewUrl);
@@ -202,11 +240,25 @@ export default function SignupPage() {
     const hasCity = formValues.city.trim().length >= 2;
     const hasDistrict = formValues.district.trim().length >= 2;
     const hasState = formValues.state.trim().length >= 2 || Boolean(formValues.state_id);
-    const hasSalary = formValues.monthly_salary.trim().length > 0 && Number(formValues.monthly_salary) > 0;
+    const hasBankAccount = validateBankAccountNumber(formValues.bank_account_number).isValid;
+    const hasBankIfsc = validateIfscCode(formValues.bank_ifsc_code).isValid;
+    const hasBankDoc = Boolean(bankFile);
     const hasAadhaar = formValues.aadhaar_number.trim().replace(/\D/g, "").length === 12;
     const hasAadhaarDoc = Boolean(aadhaarFile);
-    return hasStreet && hasCity && hasDistrict && hasState && hasSalary && hasAadhaar && hasAadhaarDoc;
-  }, [formValues.street, formValues.address, formValues.city, formValues.district, formValues.state, formValues.state_id, formValues.monthly_salary, formValues.aadhaar_number, aadhaarFile]);
+    return hasStreet && hasCity && hasDistrict && hasState && hasBankAccount && hasBankIfsc && hasBankDoc && hasAadhaar && hasAadhaarDoc;
+  }, [
+    formValues.street,
+    formValues.address,
+    formValues.city,
+    formValues.district,
+    formValues.state,
+    formValues.state_id,
+    formValues.bank_account_number,
+    formValues.bank_ifsc_code,
+    bankFile,
+    formValues.aadhaar_number,
+    aadhaarFile,
+  ]);
 
   const section4Complete = useMemo(() => {
     return (
@@ -250,8 +302,14 @@ export default function SignupPage() {
     if (!formValues.state.trim() && !formValues.state_id) {
       list.push("State");
     }
-    if (!formValues.monthly_salary.trim() || Number(formValues.monthly_salary) <= 0) {
-      list.push("Monthly Base Salary");
+    if (!formValues.bank_account_number.trim() || !validateBankAccountNumber(formValues.bank_account_number).isValid) {
+      list.push("Bank Account Number");
+    }
+    if (!formValues.bank_ifsc_code.trim() || !validateIfscCode(formValues.bank_ifsc_code).isValid) {
+      list.push("IFSC Code");
+    }
+    if (!bankFile) {
+      list.push("Bank Document");
     }
     if (formValues.aadhaar_number.trim().replace(/\D/g, "").length !== 12) {
       list.push("Aadhaar Number");
@@ -283,8 +341,11 @@ export default function SignupPage() {
     formValues.district,
     formValues.state,
     formValues.state_id,
-    formValues.monthly_salary,
+    formValues.bank_account_number,
+    formValues.bank_ifsc_code,
+    bankFile,
     formValues.aadhaar_number,
+    aadhaarFile,
     formValues.password,
     formValues.confirm_password,
     agreedToTerms,
@@ -316,7 +377,11 @@ export default function SignupPage() {
 
   const handleChange = (field: string, value: string) => {
     let formattedVal = value;
-    if (field === "aadhaar_number") {
+    if (field === "bank_account_number") {
+      formattedVal = value.replace(/\D/g, "").slice(0, 20);
+    } else if (field === "bank_ifsc_code") {
+      formattedVal = formatIfscCode(value).slice(0, 11);
+    } else if (field === "aadhaar_number") {
       formattedVal = formatAadhaar(value);
     } else if (field === "license_number") {
       formattedVal = value.toUpperCase();
@@ -335,6 +400,28 @@ export default function SignupPage() {
       setFormValues((prev) => ({ ...prev, address: formattedVal, street: formattedVal }));
     } else {
       setFormValues((prev) => ({ ...prev, [field]: formattedVal }));
+    }
+
+    // Instant validation for Bank Account Number
+    if (field === "bank_account_number") {
+      if (formattedVal.length >= 9) {
+        const res = validateBankAccountNumber(formattedVal);
+        if (!res.isValid) {
+          setFieldErrors((prev) => ({ ...prev, bank_account_number: res.error || "Invalid bank account number" }));
+          return;
+        }
+      }
+    }
+
+    // Instant validation for IFSC Code
+    if (field === "bank_ifsc_code") {
+      if (formattedVal.length === 11) {
+        const res = validateIfscCode(formattedVal);
+        if (!res.isValid) {
+          setFieldErrors((prev) => ({ ...prev, bank_ifsc_code: res.error || "Invalid IFSC code" }));
+          return;
+        }
+      }
     }
 
     // Instant validation for Aadhaar
@@ -360,7 +447,17 @@ export default function SignupPage() {
   };
 
   const handleBlur = (field: string) => {
-    if (field === "aadhaar_number" && formValues.aadhaar_number.trim()) {
+    if (field === "bank_account_number" && formValues.bank_account_number.trim()) {
+      const res = validateBankAccountNumber(formValues.bank_account_number);
+      if (!res.isValid) {
+        setFieldErrors((prev) => ({ ...prev, bank_account_number: res.error || "Invalid bank account number" }));
+      }
+    } else if (field === "bank_ifsc_code" && formValues.bank_ifsc_code.trim()) {
+      const res = validateIfscCode(formValues.bank_ifsc_code);
+      if (!res.isValid) {
+        setFieldErrors((prev) => ({ ...prev, bank_ifsc_code: res.error || "Invalid IFSC code format" }));
+      }
+    } else if (field === "aadhaar_number" && formValues.aadhaar_number.trim()) {
       const res = validateAadhaarNumber(formValues.aadhaar_number);
       if (!res.isValid) {
         setFieldErrors((prev) => ({ ...prev, aadhaar_number: res.error || "Invalid Aadhaar number" }));
@@ -406,8 +503,25 @@ export default function SignupPage() {
     if (!formValues.address.trim()) {
       errors.address = "Address (street / site base) is required.";
     }
-    if (!formValues.monthly_salary.trim() || Number(formValues.monthly_salary) <= 0) {
-      errors.monthly_salary = "Monthly base salary is required and must be greater than 0.";
+    if (!formValues.bank_account_number.trim()) {
+      errors.bank_account_number = "Bank account number is required.";
+    } else {
+      const bankRes = validateBankAccountNumber(formValues.bank_account_number);
+      if (!bankRes.isValid) {
+        errors.bank_account_number = bankRes.error || "Please enter a valid bank account number.";
+      }
+    }
+    if (!formValues.bank_ifsc_code.trim()) {
+      errors.bank_ifsc_code = "IFSC code is required.";
+    } else {
+      const ifscRes = validateIfscCode(formValues.bank_ifsc_code);
+      if (!ifscRes.isValid) {
+        errors.bank_ifsc_code = ifscRes.error || "Please enter a valid IFSC code (e.g. SBIN0001234).";
+      }
+    }
+    if (!bankFile) {
+      errors.bank_document_file = "Bank document (Passbook front page, cancelled cheque, or statement) is required.";
+      setBankFileError("Bank document (Passbook / Cheque / Statement) is required.");
     }
     if (!formValues.aadhaar_number.trim()) {
       errors.aadhaar_number = "Aadhaar card number is required.";
@@ -442,12 +556,17 @@ export default function SignupPage() {
     setFieldErrors({});
 
     const formData = new FormData(e.currentTarget);
+    if (bankFile) {
+      formData.set("bank_document_file", bankFile);
+    }
     if (aadhaarFile) {
       formData.set("aadhaar_file", aadhaarFile);
     }
     if (licenseFile) {
       formData.set("license_file", licenseFile);
     }
+    formData.set("bank_account_number", formValues.bank_account_number);
+    formData.set("bank_ifsc_code", formValues.bank_ifsc_code);
     try {
       const result = await signup({}, formData);
       setState(result);
@@ -473,6 +592,8 @@ export default function SignupPage() {
           state: result.fieldValues?.state ?? prev.state,
           state_id: result.fieldValues?.state_id ?? prev.state_id,
           address: result.fieldValues?.address ?? prev.address,
+          bank_account_number: result.fieldValues?.bank_account_number ?? prev.bank_account_number,
+          bank_ifsc_code: result.fieldValues?.bank_ifsc_code ?? prev.bank_ifsc_code,
           aadhaar_number: result.fieldValues?.aadhaar_number ?? prev.aadhaar_number,
           license_number: result.fieldValues?.license_number ?? prev.license_number,
         }));
@@ -607,7 +728,6 @@ export default function SignupPage() {
               <FormSectionCard
                 stepNumber={1}
                 title="Account & Role"
-                icon={<AnimatedUser size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />}
                 isMandatory={true}
                 isCompleted={section1Complete}
               >
@@ -718,7 +838,6 @@ export default function SignupPage() {
               <FormSectionCard
                 stepNumber={2}
                 title="Work Shift Schedule"
-                icon={<AnimatedClock size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />}
                 isMandatory={true}
                 isCompleted={section2Complete}
                 headerAction={
@@ -755,11 +874,10 @@ export default function SignupPage() {
                 </p>
               </FormSectionCard>
 
-              {/* Section 3: Address, Salary & Identity */}
+              {/* Section 3: Address, Banking & Identity */}
               <FormSectionCard
                 stepNumber={3}
-                title="Address, Salary & Identity"
-                icon={<AnimatedMapPin size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />}
+                title="Address, Banking & Identity"
                 isMandatory={true}
                 isCompleted={section3Complete}
               >
@@ -777,15 +895,135 @@ export default function SignupPage() {
                     idPrefix="signup"
                   />
 
-                  {/* Standardized Monthly Salary Box */}
-                  <UserSalaryField
-                    value={formValues.monthly_salary}
-                    onChange={(val) => handleChange("monthly_salary", val)}
-                    role={formValues.role}
-                    error={fieldErrors.monthly_salary}
-                    required={true}
-                    id="signup-salary"
-                  />
+                  {/* Bank Account Details */}
+                  <div className="pt-2 border-t border-[var(--color-hairline)]/60 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
+                        <AnimatedCreditCard size={15} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                        <span>Bank Account Details</span>
+                        <span className="text-rose-500 font-semibold">*</span>
+                      </span>
+                      <span className="text-[10px] text-[var(--color-mute)]">For payroll & compensation disbursement</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5">
+                      <Input
+                        id="signup-bank-account"
+                        name="bank_account_number"
+                        label={
+                          <span>
+                            Bank Account Number <span className="text-rose-500 font-semibold">*</span>
+                          </span>
+                        }
+                        type="text"
+                        inputMode="numeric"
+                        value={formValues.bank_account_number}
+                        onChange={(e) => handleChange("bank_account_number", e.target.value)}
+                        onBlur={() => handleBlur("bank_account_number")}
+                        placeholder="9 to 18-digit Account Number"
+                        maxLength={20}
+                        required
+                        error={fieldErrors.bank_account_number}
+                        icon={<AnimatedCreditCard size={15} />}
+                      />
+
+                      <Input
+                        id="signup-bank-ifsc"
+                        name="bank_ifsc_code"
+                        label={
+                          <span>
+                            IFSC Code <span className="text-rose-500 font-semibold">*</span>
+                          </span>
+                        }
+                        type="text"
+                        value={formValues.bank_ifsc_code}
+                        onChange={(e) => handleChange("bank_ifsc_code", e.target.value)}
+                        onBlur={() => handleBlur("bank_ifsc_code")}
+                        placeholder="e.g. SBIN0001234"
+                        maxLength={11}
+                        required
+                        autoCapitalize="characters"
+                        error={fieldErrors.bank_ifsc_code}
+                        icon={<AnimatedBuilding2 size={15} />}
+                      />
+                    </div>
+
+                    {/* Bank Document Upload Card (Mandatory: Passbook / Cheque / Statement) */}
+                    <div
+                      className={`rounded-xl border ${
+                        bankFileError || fieldErrors.bank_document_file
+                          ? "border-rose-500 dark:border-rose-400 bg-rose-500/5"
+                          : "border-[var(--color-hairline)] bg-[var(--color-canvas)]"
+                      } p-3 space-y-2 transition-colors hover:border-sky-500/30`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
+                          <AnimatedFileText size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
+                          <span>Bank Account Document</span>
+                          <span className="text-rose-500 font-semibold">*</span>
+                          <span className="text-[10px] font-normal text-[var(--color-mute)]">(Passbook / Cheque / Statement)</span>
+                        </span>
+                        <span className="text-[10px] text-[var(--color-mute)] font-mono">2 MB max</span>
+                      </div>
+
+                      <p className="text-[10px] text-[var(--color-mute)] leading-tight">
+                        Upload passbook front page photo, cancelled cheque, or bank statement clearly showing account holder name, account number, and IFSC code.
+                      </p>
+
+                      {!bankFile ? (
+                        <label className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-[var(--color-hairline)] hover:border-sky-500/50 cursor-pointer transition-colors group min-h-[48px]">
+                          <AnimatedUpload size={16} className="h-4 w-4 text-[var(--color-mute)] group-hover:text-sky-600 transition-colors shrink-0" />
+                          <span className="text-xs text-[var(--color-mute)] group-hover:text-[var(--color-ink)] transition-colors">
+                            Upload Passbook / Cheque / Statement (JPG, PNG, PDF)
+                          </span>
+                          <input
+                            type="file"
+                            name="bank_document_file"
+                            className="hidden"
+                            accept="image/*,application/pdf,.doc,.docx,.txt"
+                            onChange={(e) => handleBankFileChange(e.target.files?.[0] || null)}
+                          />
+                        </label>
+                      ) : (
+                        <div className="flex items-center gap-2.5 p-2 rounded-lg bg-sky-500/5 border border-sky-500/20">
+                          {bankPreviewUrl ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img
+                              src={bankPreviewUrl}
+                              alt="Bank document preview"
+                              className="h-10 w-10 rounded-lg object-cover border border-[var(--color-hairline)] shrink-0"
+                            />
+                          ) : (
+                            <div className="h-10 w-10 rounded-lg bg-[var(--color-hairline)] flex items-center justify-center shrink-0">
+                              <FileText className="h-5 w-5 text-sky-600" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-[var(--color-ink)] truncate">
+                              {bankFile.name}
+                            </p>
+                            <p className="text-[10px] text-[var(--color-mute)] font-mono">
+                              {(bankFile.size / 1024).toFixed(0)} KB · Attached
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleBankFileChange(null)}
+                            className="p-1.5 rounded-lg hover:bg-[var(--color-hairline)] text-[var(--color-mute)] hover:text-rose-500 transition-colors"
+                            title="Remove file"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+
+                      {(bankFileError || fieldErrors.bank_document_file) && (
+                        <p className="text-[11px] text-rose-500 font-medium flex items-center gap-1">
+                          {bankFileError || fieldErrors.bank_document_file}
+                        </p>
+                      )}
+                    </div>
+                  </div>
 
                   {/* Aadhaar Card Number | Driving Licence Number */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-2.5 pt-1 border-t border-[var(--color-hairline)]/60">
@@ -970,7 +1208,6 @@ export default function SignupPage() {
               <FormSectionCard
                 stepNumber={4}
                 title="Security Credentials"
-                icon={<AnimatedLock size={16} className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />}
                 isMandatory={true}
                 isCompleted={section4Complete}
               >

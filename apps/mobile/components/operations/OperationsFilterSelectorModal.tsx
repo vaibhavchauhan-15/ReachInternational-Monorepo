@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   codeText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
@@ -380,12 +380,12 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   badgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
   },
   optionSubLabel: {
-    fontSize: 12,
+    fontSize: 12.5,
     marginTop: 2,
   },
   checkWrap: {

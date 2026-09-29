@@ -44,6 +44,11 @@ async function fetchOperatorEntryContextFromDb(
       client: (res?.client as OperatorEntryContext["client"]) || null,
       last_hmr: typeof res?.last_hmr === "number" ? res.last_hmr : Number(res?.last_hmr) || 0,
       last_log: (res?.last_log as OperatorEntryContext["last_log"]) || null,
+      shift_codes: (res?.shift_codes as OperatorEntryContext["shift_codes"]) || [],
+      assigned_shift_code:
+        (res?.assigned_shift_code as string | null) ||
+        ((res?.operator as any)?.shift_code as string | null) ||
+        null,
     };
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);

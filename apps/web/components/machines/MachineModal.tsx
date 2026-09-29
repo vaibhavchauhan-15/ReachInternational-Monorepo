@@ -401,7 +401,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
 
             <div>
               <MultiUserSelect
-                label="Assigned Supervisors (Multi-Shift Oversight)"
+                label="Assigned Supervisors"
                 users={allSupervisors}
                 values={supervisorIds}
                 onChange={setSupervisorIds}
@@ -414,7 +414,7 @@ export function MachineModal({ open, onClose, machine, supervisors = [], operato
 
             <div>
               <MultiUserSelect
-                label="Assigned Operators (24h Shift Execution)"
+                label="Assigned Operators (24h)"
                 users={allOperators}
                 values={operatorIds}
                 onChange={setOperatorIds}

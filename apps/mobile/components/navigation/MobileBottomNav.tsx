@@ -255,8 +255,9 @@ const styles = StyleSheet.create({
     minHeight: 38,
   },
   itemLabel: {
-    fontSize: 9.5,
-    letterSpacing: -0.3,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: -0.2,
     marginTop: 1.5,
   },
   activeDot: {

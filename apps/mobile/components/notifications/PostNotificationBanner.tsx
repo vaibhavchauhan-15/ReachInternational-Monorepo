@@ -269,13 +269,13 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   categoryBadge: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
   timeText: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '500',
   },
   title: {
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   body: {
-    fontSize: 11,
+    fontSize: 13,
     lineHeight: 15,
   },
   closeBtn: {

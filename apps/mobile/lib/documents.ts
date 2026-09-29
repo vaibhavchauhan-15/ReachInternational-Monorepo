@@ -155,7 +155,7 @@ export async function getDocumentBinary(
  */
 export async function uploadUserDocumentDirect(params: {
   userId: string;
-  documentTypeCode: 'aadhaar' | 'driving_license';
+  documentTypeCode: 'aadhaar' | 'driving_license' | 'bank_document' | 'bank_passbook' | string;
   doc: MobilePickedDocument;
   onProgress?: (progressPercent: number) => void;
 }): Promise<{ success: boolean; path?: string; error?: string }> {

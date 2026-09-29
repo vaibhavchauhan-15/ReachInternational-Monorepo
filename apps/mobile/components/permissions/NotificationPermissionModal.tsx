@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   bulletDesc: {
-    fontSize: 11,
+    fontSize: 13,
     lineHeight: 15,
   },
   actionsRow: {

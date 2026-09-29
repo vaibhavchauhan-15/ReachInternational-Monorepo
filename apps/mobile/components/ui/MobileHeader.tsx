@@ -759,12 +759,12 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     height: '100%',
-    fontSize: 13,
+    fontSize: 14,
     padding: 0,
     margin: 0,
   },
   searchPlaceholderText: {
-    fontSize: 12.5,
+    fontSize: 13.5,
     flex: 1,
   },
   iconBtn: {
@@ -786,7 +786,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   quickAccessText: {
-    fontSize: 12.5,
+    fontSize: 13.5,
     fontWeight: '500',
   },
   quickAccessKbd: {
@@ -796,7 +796,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   quickAccessKbdText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     letterSpacing: -0.2,
   },
@@ -810,7 +810,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   offlinePillText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   modalBackdrop: {
@@ -837,7 +837,7 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   menuHeaderText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.8,
   },
@@ -854,7 +854,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   menuItemLabel: {
-    fontSize: 13,
+    fontSize: 14,
     flex: 1,
   },
   menuItemBadge: {
@@ -863,7 +863,7 @@ const styles = StyleSheet.create({
     borderRadius: radiusNumeric.full,
   },
   menuItemBadgeText: {
-    fontSize: 10.5,
+    fontSize: 12,
     fontWeight: '700',
   },
 });

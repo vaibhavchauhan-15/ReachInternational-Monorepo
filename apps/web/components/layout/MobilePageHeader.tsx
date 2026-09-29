@@ -184,7 +184,7 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
             </button>
           ) : null}
 
-          <h1 className="flex-1 min-w-0 truncate text-[15px] font-bold text-[var(--color-ink)] tracking-tight px-1">
+          <h1 className="flex-1 min-w-0 truncate text-[18px] sm:text-xl font-bold text-[var(--color-ink)] tracking-tight px-1">
             {title}
           </h1>
 
@@ -224,17 +224,17 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
 
       {/* 3-Dot More Menu Dropdown Card */}
       {showMoreMenu && moreOpen && (
-        <div className="md:hidden fixed right-3 top-[52px] z-50 w-52 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xl overflow-hidden py-1 divide-y divide-[var(--color-hairline)]">
+        <div className="md:hidden fixed right-3 top-[52px] z-50 w-56 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] shadow-xl overflow-hidden py-1 divide-y divide-[var(--color-hairline)]">
           {/* Contextual Action */}
-          {(canAddMachine || canAddClient || (pathname === "/users" && canCreateUser) || (pathname === "/operations" && userRole !== "operator")) && (
+          {(canAddMachine || canAddClient || (pathname === "/users" && canCreateUser) || ((pathname === "/operations" || normalizedPath === "/operations") && userRole !== "operator")) && (
             <div className="py-0.5">
-              {pathname === "/operations" && userRole !== "operator" && (
+              {(pathname === "/operations" || normalizedPath === "/operations") && userRole !== "operator" && (
                 <button
                   type="button"
                   onClick={handleAssign}
-                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-[13px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
                 >
-                  <AnimatedUserCheck size={15} className="text-sky-500" />
+                  <AnimatedUserPlus size={16} className="text-sky-500" />
                   <span>Assign Operator</span>
                 </button>
               )}
@@ -246,9 +246,9 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
                     setMoreOpen(false);
                     handleAdd();
                   }}
-                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-[13px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
                 >
-                  <AnimatedPlus size={15} className="text-emerald-500" />
+                  <AnimatedPlus size={16} className="text-emerald-500" />
                   <span>Add Machine</span>
                 </button>
               )}
@@ -260,9 +260,9 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
                     setMoreOpen(false);
                     handleAddClient();
                   }}
-                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-[13px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
                 >
-                  <AnimatedUserPlus size={15} className="text-emerald-500" />
+                  <AnimatedUserPlus size={16} className="text-emerald-500" />
                   <span>Add Client</span>
                 </button>
               )}
@@ -274,9 +274,9 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
                     setMoreOpen(false);
                     handleAddUser();
                   }}
-                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-[13px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
                 >
-                  <AnimatedUserPlus size={15} className="text-emerald-500" />
+                  <AnimatedUserPlus size={16} className="text-emerald-500" />
                   <span>Add User</span>
                 </button>
               )}
@@ -293,9 +293,9 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
                     setMoreOpen(false);
                     window.dispatchEvent(new CustomEvent("reach:edit-machine-info"));
                   }}
-                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-[13px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
                 >
-                  <AnimatedEdit size={15} className="text-amber-500 shrink-0" />
+                  <AnimatedEdit size={16} className="text-amber-500 shrink-0" />
                   <span>Edit Machine Info</span>
                 </button>
               )}
@@ -306,9 +306,9 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
                   setMoreOpen(false);
                   window.dispatchEvent(new CustomEvent("reach:edit-machine-personnel"));
                 }}
-                className="w-full flex items-center gap-2.5 px-3.5 h-10 text-[13px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
               >
-                <AnimatedUserCheck size={15} className="text-teal-600 dark:text-teal-400 shrink-0" />
+                <AnimatedUserCheck size={16} className="text-teal-600 dark:text-teal-400 shrink-0" />
                 <span>{userRole === "supervisor" ? "Assign Operator" : "Edit Shift Personnel"}</span>
               </button>
 
@@ -319,9 +319,9 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
                     setMoreOpen(false);
                     window.dispatchEvent(new CustomEvent("reach:edit-machine-client"));
                   }}
-                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-[13px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+                  className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
                 >
-                  <AnimatedCheck size={15} className="text-sky-500 shrink-0" />
+                  <AnimatedCheck size={16} className="text-sky-500 shrink-0" />
                   <span>Edit Client Assignment</span>
                 </button>
               )}
@@ -333,18 +333,18 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
             <button
               type="button"
               onClick={() => handleExport("excel")}
-              className="w-full flex items-center gap-2.5 px-3.5 h-10 text-[13px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+              className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
             >
-              <AnimatedFileSpreadsheet size={15} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <AnimatedFileSpreadsheet size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>Export Excel</span>
             </button>
 
             <button
               type="button"
               onClick={() => handleExport("csv")}
-              className="w-full flex items-center gap-2.5 px-3.5 h-10 text-[13px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+              className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
             >
-              <AnimatedFileText size={15} className="text-sky-600 dark:text-sky-400 shrink-0" />
+              <AnimatedFileText size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />
               <span>Export CSV</span>
             </button>
           </div>
@@ -354,9 +354,9 @@ export function MobilePageHeader({ userRole }: { userRole?: string }) {
             <button
               type="button"
               onClick={handlePrint}
-              className="w-full flex items-center gap-2.5 px-3.5 h-10 text-[13px] font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
+              className="w-full flex items-center gap-2.5 px-3.5 h-10 text-sm font-medium text-[var(--color-ink)] hover:bg-[var(--color-canvas)] transition-colors cursor-pointer"
             >
-              <AnimatedPrinter size={15} className="text-purple-600 dark:text-purple-400 shrink-0" />
+              <AnimatedPrinter size={16} className="text-purple-600 dark:text-purple-400 shrink-0" />
               <span>Print / PDF Report</span>
             </button>
           </div>

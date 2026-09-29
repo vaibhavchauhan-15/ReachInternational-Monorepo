@@ -9,6 +9,7 @@ export { TAGS, CACHE_TIERS, OPERATIONS_CACHE_TIERS, OPERATIONS_CACHE_TTLS };
  * Legacy CACHE_TAGS map maintained for full backwards compatibility across existing code.
  */
 export const CACHE_TAGS = {
+  clients: TAGS.clients,
   dashboard: TAGS.dashboard,
   dashboardKpis: TAGS.dashboardKpis,
   dashboardCharts: TAGS.dashboardCharts,

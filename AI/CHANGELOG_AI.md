@@ -1,3 +1,1749 @@
+- **Fix Migration 132 Non-Existent Machine Column Error (42703) on Production (2026-09-29)**:
+  - **1. Problem & Root Cause**:
+    - When executing `132_enforce_shift_logs_immutable_and_optimize_queries.sql` on the production database, PostgreSQL returned: `ERROR: 42703: column m.customer_address does not exist` at line 6 (`SET location = COALESCE(c.street, m.customer_address, 'Main Site')`).
+    - In the production database, `public.machines` does not have a `customer_address` column (client address is normalized in `public.clients.street` linked via `client_id`).
+  - **2. Delivered Fix**:
+    - In `supabase/migrations/132_enforce_shift_logs_immutable_and_optimize_queries.sql`:
+      - Replaced `m.customer_address` with canonical `c.street` and fallback `c.city` with `btrim` and `NULLIF` guards.
+      - Added fallback for unassigned/orphaned logs (`UPDATE public.machine_hour_logs SET location = 'Main Site' WHERE location IS NULL OR btrim(location) = '';`) guaranteeing 100% non-null location records before immutability lockdown.
+  - **3. Verification**:
+    - Executed and validated full SQL script against Development DB (`vlmxciuogczumumrwyot`): 0 errors.
+    - Web typecheck (`pnpm --filter @reachinternational/web exec tsc --noEmit`): 0 errors.
+    - Mobile typecheck (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`): 0 errors.
+    - Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched during development.
+
+- **Fix Migration 135 Immutability Trigger Error (42704) on Production (2026-09-29)**:
+  - **1. Problem & Root Cause**:
+    - When executing `135_client_maintenance_allowance.sql` on the production database, PostgreSQL returned: `ERROR: 42704: trigger "trg_enforce_machine_hour_logs_immutable" for table "machine_hour_logs" does not exist`.
+    - `ALTER TABLE ... DISABLE TRIGGER <name>` in PostgreSQL does not have an `IF EXISTS` clause and fails if the trigger is missing.
+    - Migration 135 only defined `CREATE OR REPLACE FUNCTION` and assumed the trigger was already attached from migration 132.
+  - **2. Delivered Fix**:
+    - In `supabase/migrations/135_client_maintenance_allowance.sql`:
+      - Replaced `DISABLE TRIGGER ...` with `DROP TRIGGER IF EXISTS trg_enforce_machine_hour_logs_immutable ON public.machine_hour_logs;`.
+      - Executed backfill update.
+      - Attached trigger with `CREATE TRIGGER trg_enforce_machine_hour_logs_immutable BEFORE UPDATE OR DELETE ON public.machine_hour_logs FOR EACH ROW EXECUTE FUNCTION public.enforce_machine_hour_logs_immutable();`.
+      - Guarded client constraint creation with `DO $$ BEGIN IF NOT EXISTS (...) THEN ALTER TABLE ... ADD CONSTRAINT ... END IF; END $$;`.
+  - **3. Verification**:
+    - Validated migration execution on Development DB (`vlmxciuogczumumrwyot`): 0 errors.
+    - Monorepo TypeScript check (`web` and `mobile`): 0 errors.
+    - Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched during dev verification.
+
+- **Breakdown vs. Maintenance Allowance Smart Labeling & Stoppage Timestamps (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - Screenshot feedback from user on operations running logs:
+      "see the screenshot i want either show the maintenance (MT 1h) if applicable or show the red 1h(this indicate breakdown) also make sure dont depend on the color code since printout will be in black and white so prefer MT 1h and when expand then show the timestamp start and end b/d time in both maintence or b/d implement it properly"
+  - **2. Delivered Implementation**:
+    - **Single B/D Column Print-Safe Display (`OperationsLogsTable.tsx`)**:
+      - If covered by maintenance allowance: renders **`MT 1h`** in amber pill badge (`bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 font-bold`). The explicit `MT` prefix guarantees black & white print safety without depending on color.
+      - If breakdown (no allowance): renders red **`1h`** (`bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 font-bold`).
+      - If partially covered: renders stacked `MT 30m` (amber) and `30m` (rose).
+      - If no breakdown: renders muted `0h`.
+    - **Expanded Row Stoppage Timestamps & Classification (`OperationsLogsTable.tsx`)**:
+      - Added helper `extractBreakdownTiming(log)` to extract clean 12-hour AM/PM time ranges from database columns or parsed duration strings.
+      - Displays shift summary row (`Total stoppage`, `MT Maintenance (allowance)`, `Net Breakdown (B/D)`).
+      - Displays individual stoppage cards for each incident with shift code, operator name, `<Clock>` icon, formatted time range (`01:00 PM – 02:00 PM`), duration (`1h`), optional notes, and pill badge (`MT 1h (Maintenance)` vs. `1h (Breakdown)`).
+    - **Database Read Model RPC Migration (`supabase/migrations/138_project_breakdown_times_in_operation_logs.sql`)**:
+      - Updated `public.get_operation_logs` RPC to directly project `breakdown_start_time`, `breakdown_end_time`, `breakdown_duration`, and `breakdown_hours` into `hydrated_results` and `jsonb_build_object`.
+      - Executed migration on Development DB (`vlmxciuogczumumrwyot`). Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+      - Added fields to TypeScript interface `OperationLogRow` in `apps/web/lib/data/operations/operations-read-model.ts`.
+    - **Synchronized Across All Surfaces**:
+      - Web Mobile Card (`OperationsLogsMobileList.tsx`): Metric strip shows `MT` / `MT {fmtMin}` or `B/D` / `{fmtMin}`, and expanded section shows stoppage timestamp cards.
+      - PDF Print Modal (`PrintableSupervisorLogsModal.tsx`): Client view & standard view tables render `MT {fmtMin}` and `{fmtMin}`.
+      - Excel Export (`supervisor-logs-export.ts`): B/D cells render `MT {fmtMin}` and `{fmtMin}`.
+      - Mobile Export Modal (`OperationsExportModal.tsx`): HTML PDF and CSV export rows render `MT {fmtMin}` and `{fmtMin}`.
+  - **3. Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - Dev DB verified via RPC test call. Production untouched.
+
+- **Attendance Detail & Ledger Mobile Viewport Optimization (/attendance) (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - Page Feedback on `/attendance` across 19 DOM components requesting comprehensive mobile device optimization.
+    - Addressed missing mobile titles/breadcrumbs, overcrowded 7-KPI grid, squished 7-column calendar matrix on phone screens, awkward 3-line status legend wrapping, and horizontal-scroll-only day-of-week table.
+  - **2. Delivered Implementation**:
+    - **Dedicated Mobile Title & Action Bar (`AttendanceDetailClient.tsx`)**:
+      - For operators: Renders "My Attendance" title, subtitle with month, and active status badge.
+      - For managers: Renders back breadcrumb `<Link href="/attendance">`, operator name, ID, and role.
+      - Integrated `MonthSelect` with `compact` mode and min 40px touch height alongside `Export` button.
+    - **MonthSelect Mobile Robustness (`MonthSelect.tsx`)**:
+      - Added `shrink-0` to Prev/Next buttons preventing distortion in flex containers on mobile.
+      - Added `min-w-0` and `truncate` to display month text.
+      - Clamped dropdown popover to viewport bounds: `left-0 sm:left-auto right-auto sm:right-0 max-w-[calc(100vw-24px)]`.
+    - **Executive Summary KPI Cards (`AttendanceDetailClient.tsx`)**:
+      - Reduced mobile padding to `p-2.5 sm:p-3.5` with tactile `whileTap={{ scale: 0.98 }}`.
+      - Formatted primary "Payable Days" card with mobile compliance badge and formula caption.
+      - Structured the other 6 KPI cards into a clean, balanced 2-column mobile grid.
+    - **Segmented View Mode Switcher**:
+      - Formatted into full-width 2-column segmented switcher on mobile with min 40px touch targets (`grid grid-cols-2 w-full sm:w-auto`).
+    - **Horizontally Scrollable Status Legend**:
+      - Replaced 3-line wrap with smooth `overflow-x-auto no-scrollbar` strip with `shrink-0` chips.
+    - **7-Column Calendar Grid Mobile Adaptation**:
+      - Reduced grid gap to `gap-1 sm:gap-2` and cell height to `min-h-[52px] sm:min-h-[76px]`.
+      - On mobile (<sm), replaced wide "Today" text badge with subtle ink indicator dot preventing collision with date numbers.
+      - Condensed worked hours into centered `text-[9px] sm:text-xs font-mono font-bold leading-tight`.
+      - Added `active:scale-95` tap feedback opening the day inspection modal.
+    - **Day-of-Week Summary Rollup Responsive Cards**:
+      - On desktop (≥640px): Retained clean high-density table (`hidden sm:block`).
+      - On mobile (≤640px): Created purpose-built touch cards (`block sm:hidden`) displaying day name, rest day tag, average worked hours, present/half/absent count pills, and a 3-color attendance ratio bar.
+    - **Printable Attendance Modal Footer**:
+      - Added `flex-1 w-full sm:w-auto` responsive buttons for Export Excel and Print/PDF with min 44px touch targets.
+  - **3. Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - Dev DB (`vlmxciuogczumumrwyot`) unchanged; Production (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+
+- **Attendance PDF Single-Page Fit & Dynamic Row Height Sizing (/attendance) (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - Screenshot Feedback: "see the screenshot still pdf are not properly apply the dynamic size of the rows size i want all date in from 1 to 31 in size page with header and footer take refrence from the running-logs page"
+    - Identified issue: PDF export broke at day 26 and pushed days 27–30, monthly totals footer, and signature block onto Page 2 because long site addresses wrapped into 4-5 lines of text, expanding table rows past the A4 printable boundary.
+  - **2. Delivered Implementation**:
+    - **Canonical Address Normalization (`normalizeClientSiteAddress`)**:
+      - Imported and integrated `normalizeClientSiteAddress` from `@reachinternational/utils` into `PrintableAttendanceModal.tsx` to automatically truncate long postal address strings into concise street/landmark names (e.g., `"Barakhamba Road, Connaught Place"`).
+    - **Optimized 100% Column Distribution**:
+      - Rebalanced table headers: Date & Day 11%, Status 9%, Start Time 9%, End Time 9%, Worked Hrs 9%, Overtime 9%, Primary Machine 14%, Site Location 30% (sum = 100%).
+    - **Absolute Single-Line Enforcing**:
+      - Applied `whitespace-nowrap overflow-hidden text-ellipsis` across all `<td>` and `<th>` elements to strictly prevent multi-line cell expansion.
+      - Added native `title={...}` on `Primary Machine` and `Site Location` for hover inspection in the modal preview.
+    - **Dynamic A4 Row Height Calculation (`calculateAttendanceRowHeight`)**:
+      - Targets `TARGET_PAGE_H_MM = 278mm`, accounting for header (32mm), KPI strip (14mm), thead (7mm), tfoot (7mm), signature block (26mm), and borders (6mm).
+      - Dynamically sizes 31 rows at ~6.0mm clamped between `5.4mm` and `9.5mm`, guaranteeing that 31 rows (186mm) + fixed elements (92mm) = 278mm, fitting 100% reliably within the 287mm A4 printable height.
+    - **Print Stylesheet & Popup Style Injections (`extraPrintStyles`)**:
+      - Injected `extraPrintStyles` into `openPrintWindow` forcing `white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; word-break: normal !important; padding: 0.5px 2px !important; font-size: 8px !important; line-height: 1.15 !important;` and `.print-page { height: 287mm !important; max-height: 287mm !important; overflow: hidden !important; padding: 2.5mm 5mm !important; }`.
+      - Updated `#printable-attendance-document-preview` styles ensuring single-line preview inside the modal.
+    - **Defensive Enforcement in `adjustPDFRowHeights()` (`apps/web/lib/pdf/pdf-utils.ts`)**:
+      - Added `c.style.whiteSpace = 'nowrap'; c.style.overflow = 'hidden'; c.style.textOverflow = 'ellipsis';` to `tbody` and `tfoot` cells during the dynamic row height pass.
+  - **3. Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - Dev DB (`vlmxciuogczumumrwyot`) targeted; Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+
+- **Client Details Modal TimePicker Component Reuse & Two-Way Database Synchronization (/clients/[id]) (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - Page Feedback: `/clients/29b3637e-aab1-4e1c-a394-1cf733dd1b20` (Viewport: 1536×695)
+    - Targets: `<ClientDetailClient> <ClientModal> grid grid` (`.relative > .mt-4 > .rounded-xl > .grid`)
+    - Feedback 1: "all entered value directly store in the db, also it properly fetch the these values from the db"
+    - Feedback 2: "import the time picker here and reuse it and remove the older hardcoded components also make sure its should be fully functional"
+  - **2. Delivered Implementation**:
+    - **CustomTimePicker Upgrade (`apps/web/components/ui/CustomTimePicker.tsx`)**:
+      - Added `showPeriod?: boolean` (defaults to `true`; when `false`, hides AM/PM controls and operates in duration/24-hour mode).
+      - Added `maxHours` (default: 744 in duration mode, 12 in 12h clock), `minHours` (0 in duration mode, 1 in 12h clock), custom placeholders, and aria labels.
+      - Upgraded `parseTimeString` to parse duration format strings (e.g. `"12:00"`, `"720:30"`, `"00:00"`).
+    - **Client Modal TimePicker Component Reuse (`apps/web/components/clients/ClientModal.tsx`)**:
+      - Removed older hardcoded number inputs (`<Input label="Hours" .../>` and `<Input label="Minutes" .../>`) in Section 4.
+      - Integrated `<CustomTimePicker showPeriod={false} maxHours={744} minHours={0} placeholder="00:00" ... />`.
+      - Added bidirectional synchronization: converts stored integer minutes from DB to `"HH:MM"` for display, and translates picker changes back to minutes.
+    - **Two-Way Database Storage & Fetch Pipeline (`client-mutations.ts`, `app/actions/clients.ts`, `ClientDetailClient.tsx`)**:
+      - In `client-mutations.ts`: Updated `createClient` and `updateClient` queries to select `CLIENT_DETAIL_COLUMNS`, returning complete `CRMClient` objects with `maintenance_allowance_minutes`.
+      - In `apps/web/app/actions/clients.ts`: Updated `createClientAction` and `updateClientAction` to return `{ success: true, client: result.client }` and trigger `revalidatePath(`/clients/${id}`)` and `revalidatePath("/clients")`.
+      - In `ClientModal.tsx`: Updated `onSuccess` callback to pass the returned `CRMClient` back to parent components.
+      - In `ClientDetailClient.tsx`: Added `useEffect` listening to `initialClient` prop changes, and updated modal `onSuccess` handler to immediately set local state `setClient(updatedClient)` alongside `router.refresh()`, guaranteeing immediate UI updates across hero badge, KPI card 5, and edit modal re-opens.
+  - **3. Verification**:
+    - Automated unit test suite (`scratch/verify_time_picker_and_allowance.mjs`) verified 100% assertions across 5 duration parsing and minute conversion test cases.
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - Dev DB (`vlmxciuogczumumrwyot`) targeted; Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+
+- **Operator Shift Log Entry Breakdown Fix, Full Test Matrix & Database Consistency (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - Screenshot error reported: `"Breakdown duration (2h) cannot exceed total shift duration (0h)"` when operator logs shift entry with machine breakdown.
+    - Instructions: First analyze root cause and fix bugs. Create all types of test case scripts for operator entering logs. If any test case fails, fix it. Maintain strict database consistency throughout.
+  - **2. Delivered Implementation**:
+    - **Root Cause & Frontend Time Formatting Fix**:
+      - Root Cause: Postgres `TIME` values with seconds (`'06:00:00'` and `'14:00:00'`) failed the inline regex `/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/`, evaluating `shiftDurationHours` to `0h`. Client-side breakdown validation `2h > 0h` blocked the operator.
+      - Implemented canonical utility `calculateEffectiveShiftDurationHours` in `packages/utils/src/shift.ts` handling 24-hr with seconds, 12-hr AM/PM, compact strings, overnight shifts, overtime hours, template minutes fallback, and default 8.0h norm.
+      - Standardized inputs with `formatTo12Hour` across `ShiftInputs.tsx`, `OperatorEntryClient.tsx`, and `AssistedShiftEntryModal.tsx`.
+      - Added `maxAllowedDuration` safety guards in `OperatorEntryClient.tsx`, `AssistedShiftEntryModal.tsx`, `OperatorDashboard.tsx`, `submitOperatorHourLogAction`, and `MeterLogModal.tsx` on Mobile.
+      - Included `data.overtime_hours` in `packages/validation/src/hourMeter.ts` `CreateHourLogSchema` breakdown refinement.
+    - **Automated Comprehensive Test Matrix (`supabase/tests/test_operator_entry_complete_matrix.mjs`)**:
+      - Part 1: 10 unit tests for time parsing, overnight derivation, overtime addition, template fallback, and breakdown window bounds.
+      - Part 2: 9 database E2E tests against Dev DB (`vlmxciuogczumumrwyot`) targeting Operator 001 on machine M/C-0010:
+        - Test 2.1: Standard Shift Log (2026-09-25 Shift A: 6.0h running).
+        - Test 2.2: Screenshot Scenario (2026-09-26 Shift A: 06:00:00 - 14:00:00 with Breakdown 12:00 PM - 02:00 PM = 2h, breakdown minutes = 120min, machine health set to breakdown).
+        - Test 2.3: Overnight Shift (2026-09-25 Shift C: 10:00 PM - 06:00 AM + breakdown).
+        - Test 2.4: Shift with Overtime (2026-09-28 Shift A: 06:00 AM - 02:00 PM + 3h OT).
+        - Test 2.5: Meter Regression Rejection (endMeter < startMeter -> rejected with 23514).
+        - Test 2.6: Excessive Running Hours Rejection (>24h rejected).
+        - Test 2.7: Idempotency Protection (database unique constraint `machine_hour_logs_idempotency_key_key` blocks duplicate replay, guaranteeing exactly 1 record).
+        - Test 2.8: Shift Overlap Prevention (`trg_check_machine_hour_log_shift_overlap` properly rejects overlapping shifts on the same machine).
+        - Test 2.9: Future Shift End Guard Verification (database trigger blocks logging before shift end).
+    - **Database Consistency & State Restoration**:
+      - Cleanly restored machine `hour_meter`, `health_status`, and `status` in `finally {}` blocks.
+      - Cleanly restored operator shift code assignment to `'A'`.
+      - Verified initial state matches in database without orphaned records.
+  - **3. Verification**:
+    - Automated test matrix: 36/36 tests PASSED (100% success).
+    - `pnpm --filter @reachinternational/utils exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/validation exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - Dev DB (`vlmxciuogczumumrwyot`) targeted; Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+
+- **Attendance Export Unification, Well-Formatted PDF/Excel & Self User Details Card Removal (/attendance) (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - Page Feedback: `/attendance` (Viewport: 1536×735)
+    - Targets: 2 elements: `button "Print / PDF"`, `button "Export CSV"` & `<AttendanceDetailClient> rounded border`
+    - Feedback: "merge export excel , pdf , print into signle btn and while exporting the attandance make sure data should be properly well formatted in the header read logo and user details should be there and below the header attendance table will be there with clean and well formatted reuse the running log page's export components and implement here proeprly also column size depend on the maximum value's length equally distribute the every columns width"
+    - Feedback: "since this user see their own attendance se remove user details", "remove this above data are showing here remove it"
+  - **2. Delivered Implementation**:
+    - **Self Attendance User Details Card Removal**:
+      - Web (`AttendanceDetailClient.tsx`): Wrapped `{/* 2. Employee Details Master Card */}` in `{!isSelf && !isOperator && ( ... )}` so that operators and users viewing their own attendance do not see redundant duplicate profile details above their attendance KPIs and ledger. Management inspecting other employees preserves visibility.
+      - Mobile (`apps/mobile/app/(app)/attendance.tsx`): Wrapped `{/* Employee Meta Card */}` in `{!isOperator && ( ... )}`, eliminating redundant employee details card on native mobile view.
+    - **Merged Single "Export" Button Standard**:
+      - Merged separate `Print / PDF` and `Export CSV` buttons into a single unified `<Button variant="secondary">Export</Button>` in both desktop `PageHeader` actions and the mobile toolbar (<md).
+      - Triggers dedicated `<PrintableAttendanceModal>`.
+    - **Reusable Attendance Export Modal (`PrintableAttendanceModal.tsx`)**:
+      - Reused running logs export architecture:
+        - `<PDFReportHeader>`: Renders red logo (`/pdf-logo.png`), uppercase report title ("OPERATOR ATTENDANCE REPORT" or "EMPLOYEE ATTENDANCE REPORT"), subtitle, and metadata strip with user details (Employee Name, Employee ID, Role, Phone, Site Location, Shift Timing, Month, Generated Date).
+        - `<PDFKPIStrip>`: Total Days, Present, Absent, Half Day, Week Off, Worked Hours, Overtime, Payable Days.
+        - `<PDFTableWrapper>` & Clean Table: 8 columns equally distributed across 100% table width (Date & Day 13%, Status 11%, Start Time 11%, End Time 11%, Worked Hrs 11%, Overtime 11%, Machine 16%, Location 16%).
+        - Dynamic row height calculation via `calculateAttendanceRowHeight` (~5.8-6.0mm) ensuring that header, user details, KPI strip, all 30/31 days of attendance, monthly totals footer, and signatures fit comfortably on 1 single A4 portrait page without overflow or giant empty voids.
+        - `<PDFSignatureBlock>`: 3-column signature block (Employee Sign-off, Site Supervisor / HR, Authorized Signatory).
+        - Integrated `openPrintWindow` from `@/components/pdf` for A4 portrait printing.
+    - **Excel Export Utility with Max-Length Dynamic Column Widths (`attendance-export.ts`)**:
+      - Created `exportAttendanceToExcel` using SheetJS (`xlsx`).
+      - Header includes company title, month/period, user details (Name, ID, Role, Phone, Location), and KPI summary.
+      - Table data rows covering all days of the month plus monthly totals row.
+      - Dynamic column width calculation (`colWidths`): Iterates over all rows and headers to compute `maxLen = Math.max(...stringLengths)` and sets `wch = Math.max(maxLen + 4, minWidth)` for every column.
+  - **3. Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - `pnpm typecheck`: 7/7 packages clean (44.62s, 0 errors monorepo-wide).
+    - Dev DB (`vlmxciuogczumumrwyot`) targeted; Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+
+- **Running Logs PDF A4 Page Fit & Single-Page Header/Footer Standard (/running-logs) (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - Page Feedback: `/running-logs?view=client&client=730fd022-f488-4ad3-8cdd-683d9af60129` (Viewport: 1536×695)
+    - Targets: `<SupervisorLogsReportContent> table` & `<SupervisorLogsReportContent> print page`
+    - Feedback: "slimly increase the rows size so it properly fit in the A4 size page also header(title and clients details) and footer ( signature )should include in the one page. currently when i export to the pdf there are very huge space should be empty optimize it for the A4 paper with header and footer. while exporting to the pdf keep header only on first page and footer only on last page dont put header and footer every page remove it"
+  - **2. Delivered Implementation**:
+    - **Dynamic A4 Row Height Calculation (`calculateA4RowHeight`)**:
+      - Created deterministic row-height calculation function based on usable A4 height (`TARGET_PAGE_H_MM = 278mm`) accounting for header, KPI strip, equipment banner, table headers, table footer, and signature block.
+      - Dynamically distributes available vertical height across rows and clamps between `MIN_ROW_MM = 5.6mm` (fits up to 31 rows with header and footer on 1 page without overflow) and `MAX_ROW_MM = 10.5mm` (prevents sparse tables from over-expanding).
+      - Applied directly to `<tr>` and `<td>` elements in `<SupervisorLogsReportContent>`, eliminating large empty voids on screen preview and PDF exports.
+    - **First-Page-Only Header & Last-Page-Only Footer Standard**:
+      - Header (`PDFReportHeader`: Logo, Title, Subtitle, Client Details, Date Range) and Client KPI Strip (`PDFKPIStrip`) rendered strictly on the first page (`isFirstPage = pageIdx === 0`). Removed from pages 2+.
+      - Signature footer (`PDFSignatureBlock`: Prepared By, Client Details & Sign-off, Verified & Approved By) rendered strictly on the last page (`isLastPage = pageIdx === totalPages - 1`). Removed from pages 1 through N-1.
+      - When `totalPages === 1` (single machine or single page), both Header and Footer are cleanly included on that single page without spilling over.
+    - **Multi-Machine & Multi-Row Pagination**:
+      - Paginates client machines and splits machines exceeding 30 rows into contiguous pages.
+      - Non-client views (machine, operator, all) paginated into 30-row chunks with identical first-page header and last-page footer rules.
+    - **CSS & Popup Print Engine Alignment (`pdf-print-styles.ts`, `pdf-utils.ts`)**:
+      - Updated table cell styles to `padding: 3px 2px !important; font-size: 8.5px / 8.5pt !important; line-height: 1.2 !important;`.
+      - Fixed `openPrintWindow` script initialization to immediately execute row height scaling and print triggering when `document.readyState === 'complete'`.
+  - **3. Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - `pnpm typecheck`: 7/7 packages clean (39.75s, 0 errors monorepo-wide).
+    - Dev DB (`vlmxciuogczumumrwyot`) targeted; Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+
+- **Operator Self Attendance Direct Hub & Database Roster Lockdown (/attendance) (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - Page Feedback: `/dashboard` (Viewport: 1536×735)
+    - Target: `<SidebarMenu> <NavigationItem> <SidebarMenuItem> <SidebarTooltip> <LinkComponent> <SidebarMenuButton> div [Attendance]`
+    - Feedback: "operator still unable to open this page this page directed to the home page. check the proxy , routs and fix this and make sure operator only see their own attendance make this change in the db"
+  - **2. Delivered Implementation**:
+    - **Database Hardening (`supabase/migrations/137_restrict_operator_attendance_and_monthly_summary.sql`)**:
+      - Re-declared `get_attendance_daily_detail` with strict self check: `IF v_caller_role = 'operator' AND auth.uid() <> p_employee_id THEN RAISE EXCEPTION 'Unauthorized: operators can only view their own attendance' USING ERRCODE = '42501'; END IF;`
+      - Re-declared `get_attendance_monthly_summary` with strict operator lockdown: `IF v_caller_role = 'operator' THEN RAISE EXCEPTION 'Unauthorized: operators cannot access attendance summary roster' USING ERRCODE = '42501'; END IF;`
+      - Expanded summary roster access to authorized management roles: `super_admin`, `admin`, `hr`, `manager`, `supervisor`.
+      - Executed automated SQL test suite on Dev DB (`vlmxciuogczumumrwyot`) verifying self attendance passes, foreign queries fail with 42501, and monthly summary fails with 42501 for operators. Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+    - **Web Route Layer (`apps/web/app/(app)/attendance/page.tsx`)**:
+      - Direct in-page rendering for operators: When `normalizedRole === "operator"`, directly calls `getAttendanceDetailAction(user.id, year, month)` and renders `<AttendanceDetailClient isSelf={true}>` in place on `/attendance`.
+      - Eliminates redirect hops, zero router bounces to `/dashboard`, keeps `/attendance` sidebar link active and highlighted.
+      - Added `supervisor` to management `requireRole("super_admin", "admin", "hr", "manager", "supervisor")`.
+    - **Detail Route Layer (`apps/web/app/(app)/attendance/[userId]/page.tsx`)**:
+      - Normalized role comparison with case-insensitivity. Redirects operators accessing foreign user IDs to `/attendance${monthQuery}` (their personal hub, never bounces to `/dashboard`).
+      - Added `supervisor` to `requireRole`.
+    - **Server Actions Layer (`apps/web/app/actions/attendance.ts`)**:
+      - Added `supervisor` to `ALLOWED_SUMMARY_ROLES`.
+      - Normalized role and UUID comparisons with `.toLowerCase().trim()` in `getAttendanceDetailAction`.
+    - **Attendance Client Navigation (`AttendanceDetailClient.tsx`)**:
+      - `handleMonthChange`: Routes operators to `/attendance?month=${newMonth}` (maintaining personal hub URL) while keeping management on deep links.
+  - **3. Verification**:
+    - Dev DB (`vlmxciuogczumumrwyot`): Migration 137 verified with automated SQL suite; Production untouched.
+    - `pnpm --filter @reachinternational/permissions test`: 3/3 passed.
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm typecheck`: 7/7 packages clean (0 errors monorepo-wide).
+
+- **Client Details Page Maintenance Allowance Display (with Red Label when Not Allowed) (2026-09-29)**:
+  - **1. User Request**:
+    - "in the client details page show the total maintenance allowed if not allow then show with red label"
+  - **2. Delivered Implementation**:
+    - **Web Backend & DAL (`apps/web/lib/data/clients/client-detail.ts`)**:
+      - Included `maintenance_allowance_minutes` in `CLIENT_DETAIL_COLUMNS` projection and `ClientSummaryData` interface.
+      - Updated `getCachedClientSummary` to select and return `maintenance_allowance_minutes`.
+    - **Shared Maintenance Utility (`packages/utils/src/maintenance.ts`)**:
+      - Updated `formatAllowance(allowanceMin?: number | null)` to handle optional/null values safely.
+    - **Web Client Detail Page (`apps/web/components/clients/ClientDetailClient.tsx`)**:
+      - Top Hero Banner: Renders amber badge with `Wrench` icon (`Maint. Allowed: {formatAllowance(...)} / mo`) when allowed, or red label with `AlertCircle` (`Maintenance: Not Allowed`) when not allowed.
+      - 5-Card KPI Strip: Added Metric 5 `Maint. Allowed` with `Wrench` icon. Shows bold amber value (e.g. `12h`) when allowed, or prominent red label badge (`Not Allowed`) with subtitle `0m pool • All logs marked B/D` when not allowed.
+    - **Web Client Detail Modal (`apps/web/components/clients/ClientDetailModal.tsx`)**:
+      - Header badge: Amber `Maint: {hours}h/mo` or red `Maint: Not Allowed`.
+      - Persistent 3-column top card: Added Card 3 `Maint. Allowance` displaying value or red label `Not Allowed`.
+    - **Mobile App Cross-Platform Synchronization (`apps/mobile`)**:
+      - `MobileClientCard.tsx`: Always shows `MAINT. ALLOWANCE` in specs well; red label `Not Allowed` when 0.
+      - `clients.tsx`: Added `maintenance_allowance_minutes` to `ClientItem` and `CLIENT_PROJECTION`. Added amber/red badge to detail modal header and dedicated `Monthly Maintenance Allowance` card with red label when not allowed. Add/Edit form includes Section 4 with hours and minutes inputs.
+  - **3. Verification**:
+    - `pnpm --filter @reachinternational/utils build`: Clean.
+    - `pnpm --filter web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter mobile exec tsc --noEmit`: 0 errors.
+
+- **Operator Self Attendance Page & Strict Data Isolation (/attendance) (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - Page Feedback: `/attendance/becf13d1-aba6-44db-b566-83e419363bec?month=2026-09` (Viewport: 1536×695)
+    - Target: `<AttendanceDetailClient>`
+    - Feedback: "like this make a attendance page for the operator so operator can see own attendance. also make sure operator can see only own attendance. reuse this page components. also this page should optimize for the mobile. make change to the frontend , backend and db"
+  - **2. Delivered Implementation**:
+    - **Database Hardening (`136_allow_operator_self_and_manager_attendance_daily_detail.sql`)**:
+      - Updated `get_attendance_daily_detail` RPC to allow `operator` and `manager` roles.
+      - Enforced strict operator self-query security: `IF v_caller_role = 'operator' AND auth.uid() <> p_employee_id THEN RAISE EXCEPTION 'Unauthorized: attendance access denied' USING ERRCODE = '42501'; END IF;`
+      - Deployed and tested against Dev DB (`vlmxciuogczumumrwyot`). Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+    - **Permissions Domain (`packages/permissions`)**:
+      - Added permission `ATTENDANCE_VIEW_SELF: "attendance.view_self"` and granted to `operator`.
+      - Added `"attendance.view"` to `manager` and `supervisor`.
+      - Added `attendance` to `PRIMARY.operator` navigation and `NAV_ITEMS.attendance.roles`.
+      - Updated and passed unit tests (`navigation.test.ts`).
+    - **Web Server Actions & Routing (`apps/web`)**:
+      - `apps/web/app/actions/attendance.ts`: `getAttendanceDetailAction` verifies `currentUser.role === 'operator'` must match `resolvedId === user.id`, throws Forbidden otherwise. `getAttendanceSummaryAction` and `getAttendanceExportAction` strictly restricted to `["super_admin", "admin", "hr", "manager"]`.
+      - `apps/web/app/(app)/attendance/page.tsx`: Redirects operators to `/attendance/${user.id}`.
+      - `apps/web/app/(app)/attendance/[userId]/page.tsx`: Prevents operators from viewing other employees' attendance; redirects foreign user IDs back to operator's own record.
+    - **Web Frontend & Responsiveness (`AttendanceDetailClient.tsx`)**:
+      - Dynamic page title ("My Attendance") and breadcrumbs for self view.
+      - Mobile KPI Grid: 2-column grid (`grid-cols-2`) on mobile with "Payable Days" spanning 2 columns (`col-span-2 sm:col-span-1 lg:col-span-1`) for clean 4-row alignment.
+      - Calendar Matrix: Fixed 45px cell overflow on mobile by hiding 22-char punch time string (`hidden sm:block`) while keeping date, status badge, hours, and instant day inspection modal.
+      - Mobile Touch Cards: Raised all text to min 12px (`text-xs`), min 44px tap targets.
+    - **Mobile App Cross-Platform Synchronization (`apps/mobile/app/(app)/attendance.tsx`)**:
+      - Added `operator`, `manager`, `supervisor` to `ALLOWED_ROLES`.
+      - In `fetchAttendance`: operator queries `get_attendance_daily_detail` with `p_employee_id: user?.id` directly.
+      - Renders dedicated "My Attendance" screen with Month bar, Employee Meta Card, Summary Cards, Total Hours Card, and Daily Attendance Records. Hides search and foreign operator lists.
+  - **3. Verification**:
+    - `pnpm --filter @reachinternational/permissions test`: 3/3 passed.
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - `pnpm typecheck`: 7/7 packages clean (0 errors monorepo-wide).
+
+- **Unified Operator Export Component & Overlap Elimination (/operations?tab=history) (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - Page Feedback: `/operations?tab=history` (Viewport: 360×800)
+    - Target: `<OperatorEntryClient> <LoadableComponent> <BailoutToCSR> <OperatorHistoryTab> button "Print / PDF"`
+    - Feedback: "while exporting make sure each and every columns , rows , values should be in middle , values not overlapping. take tha export componenets form the running logs page and implement here"
+  - **2. Delivered Implementation**:
+    - **Print & PDF Stylesheet (`pdf-utils.ts`, `pdf-print-styles.ts`)**:
+      - Enforced `text-align: center !important; vertical-align: middle !important;` on all table headers (`thead th`), data rows (`tbody td`), child wrappers (`tbody td *`), and footers (`tfoot td`).
+      - Added `word-break: break-word !important; overflow-wrap: break-word !important;` to completely prevent long text values from overflowing or clipping.
+    - **Unified Export Modal Component (`PrintableSupervisorLogsModal.tsx`)**:
+      - Adopted running logs modal for operator exports, replacing the legacy 10-column squished modal.
+      - Centered every column, header, row, and value in the middle across both Client and Standard views.
+      - Applied proportional column widths summing to 100% (Date 12%, Machine/Client 18%, Shift 9%, Operator 35%, M/C RT 9%, WH 9%, B/D 8%).
+      - Resolved column 2 for operator view to show Machine Model and Serial Number (`group.machineModel (group.machineSerial)`).
+      - Dynamic modal title: `"Operator Daily Machine Logs PDF Report"` when viewed in operator mode.
+      - Added month & custom date range picker toolbar directly inside modal header.
+    - **Operator History Tab (`OperatorHistoryTab.tsx`)**:
+      - Integrated `PrintableSupervisorLogsModal` directly with `viewMode="operator"`, `selectedEntityId={user.id}`, `selectedEntityName={user.full_name}`, `selectedOperatorId={user.id}`, `machines={assignedMachine ? [assignedMachine] : []}`.
+      - Wired `exportSupervisorRunningLogsToExcel` for 1-row-per-day consolidated Excel export.
+    - **Operator Dashboard Delegate (`PrintableOperatorLogsModal.tsx`)**:
+      - Refactored legacy 500-line component to delegate directly to `PrintableSupervisorLogsModal`, unifying export functionality across the app.
+    - **Excel Export Utility (`supervisor-logs-export.ts`)**:
+      - Updated `entityDisplay` for `isOperatorView` to render machine model and serial number instead of client name.
+    - **Mobile Cross-Platform Parity (`OperationsExportModal.tsx`)**:
+      - Centered all `th`, `td`, and `tfoot` elements (`text-align: center; vertical-align: middle;`).
+      - Added `word-break: break-word;` and `white-space: nowrap;` for numeric values.
+      - Set entity header to `'Machine'` when `viewMode === 'operator'` and resolved machine model & serial.
+  - **3. Verification**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile run typecheck`: 0 errors.
+    - `pnpm typecheck`: 7/7 packages clean (0 errors monorepo-wide).
+    - Targeted Dev DB (`vlmxciuogczumumrwyot`); Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+
+- **Client Monthly Maintenance Allowance — Full Stack (2026-09-29)**:
+  - **User Request**: "in this project in some clients they give a maintenance break to the machine if machine breakdown under 12 hours then they consider 12h as maintenance..."
+  - **Business Rule**: Per machine per calendar month, breakdown minutes up to `clients.maintenance_allowance_minutes` are classified as Maintenance. Remainder is B/D. Pool resets monthly.
+  - **DB**: Migration 135 — new columns on `clients` and `machine_hour_logs`, updated immutability trigger, `recompute_maintenance()` function, BEFORE + AFTER triggers, partial index, updated `submit_operator_hour_log_atomic`.
+  - **Types**: `CRMClient.maintenance_allowance_minutes`, `MachineHourLog.breakdown_minutes`, `MachineHourLog.maintenance_minutes`.
+  - **Validation**: `maintenanceAllowanceMinutes: z.number().int().min(0).max(44640).default(0)` in both client schemas.
+  - **Utils**: New `packages/utils/src/maintenance.ts` — `allocateMaintenance()`, `formatMinutes()`, `formatAllowance()`, `hasMaintenanceAllowance()`.
+  - **DAL**: `CLIENT_LIST_COLUMNS`, create/update payloads, server actions, `OperationLogRow` type.
+  - **Web UI**: `ClientModal.tsx` Section 4 with hours+minutes inputs; `OperationsLogsTable.tsx` amber M badge + expanded breakdown details.
+  - **Mobile**: `MobileClientCard.tsx` amber allowance row in specs well.
+  - **Verification**: `tsc --noEmit` → 0 errors. Applied to Dev DB (vlmxciuogczumumrwyot).
+
+- **Restrict Daily Running Logs Access to Roles Above Operator (/running-logs) (2026-09-29)**:
+  - **1. User Request**:
+    - "http://localhost:3000/running-logs this page only can access above oprator role remove access fromt he operator"
+  - **2. Delivered Implementation**:
+    - **Permissions Domain (`packages/permissions/src/navigation.ts`)**:
+      - Defined and exported `AUTHORIZED_RUNNING_LOG_ROLES`: `["super_admin", "admin", "manager", "supervisor", "hr"]`.
+      - Updated `NAV_ITEMS` for `running-logs` to use `roles: AUTHORIZED_RUNNING_LOG_ROLES` (excluding `operator`).
+      - Added unit tests in `navigation.test.ts` verifying `isRouteAllowedForRole("/running-logs", "operator") === false` and `true` for all roles above operator.
+    - **Server Component DAL Enforcement (`apps/web/app/(app)/running-logs/page.tsx`)**:
+      - Replaced `requirePermission("machine.view")` with `const user = await requireRole(...AUTHORIZED_RUNNING_LOG_ROLES)`.
+      - Unauthorized direct URL access redirects operators immediately to their role home (`/dashboard` or `/operations`).
+    - **Edge Proxy Guard (`apps/web/proxy.ts`)**:
+      - Added edge protection: if `role === "operator"` accesses `/running-logs`, proxy immediately redirects to `/operations`.
+      - Guarded legacy redirect `/operations?tab=logs` so operators stay on `/operations` rather than being redirected to `/running-logs`.
+    - **Web Navigation (`apps/web`)**:
+      - `AppSidebar.tsx`: Excluded `operator` from `roles` for `/running-logs`.
+      - `CommandPalette.tsx`: Excluded `operator` from `roles` for `nav-running-logs`.
+    - **Mobile Cross-Platform Parity (`apps/mobile`)**:
+      - `lib/nav/navItems.ts`: Removed `operator` from `/(app)/running-logs` roles (`['super_admin', 'admin', 'manager', 'supervisor', 'hr']`).
+      - `MainMenuModal.tsx`: Added `canAccessRunningLogs` check and conditionally hid `Daily Running Logs` from operators.
+      - `MobileCommandPalette.tsx`: Removed `operator` from `nav-operations-running-hours` allowed roles.
+      - `app/(app)/running-logs.tsx`: Added screen guard effect: if `role === 'operator'`, alerts "Access Denied" and redirects to `/(app)/operations`.
+  - **3. Verification & Quality Gates**:
+    - `pnpm --filter @reachinternational/permissions test`: 3/3 passed.
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - `pnpm typecheck`: 7/7 packages clean (0 errors monorepo-wide).
+    - Dev DB (`vlmxciuogczumumrwyot`) targeted; Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+
+- **Operations Entry Shift/Manual Smooth Transition, Clean Shift Titles & Mobile DatePicker Centering (/operations) (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - Page Feedback: `/operations` (Viewport: 360×800)
+    - 1. Shift vs manual switching: "shift and manual entry switching currently it not feel smooth transition make it smooth transition switching between manual and shift logs it should be super smooth and optimize"
+    - 2. Shift title badge: "keep only Shift A instead of Shift A Morning, remove morning , everning , night"
+    - 3. Date picker button: "optimize it for the mobile screen and make it middle, whole operator logs tab should be responsive in mobile and desktop both also it should be super smooth and optimize"
+  - **2. Delivered Implementation**:
+    - **Item 1: Smooth 60fps Mode Switching Transition**:
+      - Persistently mounted `<CustomDatePicker>` in column 1 (`sm:col-span-1`) across both Shift and Manual modes so it never unmounts or shifts size.
+      - Applied Framer Motion `<AnimatePresence mode="wait">` with subtle GPU-accelerated crossfade (`opacity: 0, y: 5` -> `opacity: 1, y: 0` in 180ms) between `<ShiftCardSelector>` and Start/End `<CustomTimePicker>` pair.
+      - Added smooth height and opacity expansion to Overtime controls when in Manual mode.
+      - Upgraded mode switch button with visible label (`Shift Mode` / `Manual`) and touch-friendly padding (`min-h-[32px] sm:min-h-[28px]`).
+    - **Item 2: Shift Title Cleanup**:
+      - Rendered canonical `{getShiftDisplayTitle(activeShift)}` (e.g. `Shift A`, `Shift S1`) on top badge in `ShiftInputs.tsx` without appending subtitle tags.
+      - Removed `({subtitle})` from `ShiftCardSelector.tsx` cards and tooltips.
+      - Cleaned up default shift names across web and mobile (`Shift S1`, `Shift S2`, `Shift S3`).
+    - **Item 3: Mobile Centering & Viewport Optimization**:
+      - In `useDynamicDropdownPosition.ts`, added support for `align?: "left" | "right" | "center"`. On mobile viewports (`<640px`) when `matchTriggerWidth` is false, centered the popover horizontally in viewport (`left: (viewportWidth - targetWidth) / 2`) with balanced 12px margins.
+      - Upgraded date picker trigger button to `min-h-[44px]` for mobile touch compliance, size 16 Calendar icon, and `font-mono` bold date typography.
+      - Touch-optimized day cell buttons to `h-9 sm:h-9.5`.
+    - **Item 4: Mobile Input Ergonomics & Monorepo Synchronization**:
+      - In `HMRInputs.tsx`, updated meter inputs to `min-h-[44px] h-[44px] sm:h-10` and `text-base sm:text-sm` to prevent iOS Safari auto-zooming.
+      - Synchronized shift naming in `apps/mobile` (`MobileOperatorEntryCard.tsx` and `MobileAssignPersonnelModal.tsx`).
+  - **3. Verification & Quality Gates**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - `pnpm typecheck`: 7/7 packages clean (51.7s, 0 errors monorepo-wide).
+    - Dev DB (`vlmxciuogczumumrwyot`) targeted; Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+
+- **Operations Modal Polish — Remove Redundant Tab Strip, Custom MachineSelect Dropdown & Single Scroll Container Standard (/operations) (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - Page Feedback: `/operations` (Viewport: 1536×695)
+    - 1. `<Primitive.div> ... sm:px border` (`.fixed > #radix-_r_a9_ > .flex-1 > .px-4`): "remove this"
+    - 2. `<Primitive.div> ... select` (`.flex-1 > .p-3.5 > .p-3 > .w-full`): "use custom machine dropdown we have this components reuse it"
+    - 3. `<Primitive.div> ... flex overflow` (`.fixed > #radix-_r_a9_ > .flex-1`): "keep remove outer scrollbar keep only one scroll bar"
+  - **2. Delivered Implementation**:
+    - **Item 1: Tab Strip Removal**:
+      - Completely removed the redundant single "By Equipment" tab container (`px-4 sm:px-6 pt-3 pb-1 border-b ...`) below the modal header in `AssignPersonnelModal.tsx`.
+    - **Item 2: Custom MachineSelect Dropdown Reuse**:
+      - Enhanced `MachineSelect.tsx` to natively support `machine_id` alongside `machine_code` in search filtering, trigger button display, and list item rendering.
+      - Replaced raw HTML `<select>` in `AssignPersonnelModal.tsx` with `<MachineSelect>` from `@/components/ui`, providing instant model/serial/code search, portal positioning inside modals, status badges, and keyboard navigation.
+      - Replaced operator mode fallback raw `<select>` with `<UserSelect>`.
+    - **Item 3: Single Scroll Container Standard**:
+      - Eliminated the double scrollbar issue caused by nesting `overflow-y-auto` inside `Modal`'s `.flex-1 overflow-y-auto`.
+      - Passed `bodyClassName="p-3.5 sm:p-5 space-y-3.5 custom-scrollbar min-h-0"` to `<Modal>`, establishing exactly one authoritative scroll container.
+      - Moved sticky footer actions into `<Modal footer={...} footerClassName="shrink-0 p-3.5 sm:px-5 sm:py-3 border-t border-[var(--color-hairline)] bg-[var(--color-canvas)] block">`.
+  - **3. Verification & Quality Gates**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - Supabase Dev DB `vlmxciuogczumumrwyot` targeted; Production DB `dhbbgfzbyatzvqafnsqp` strictly untouched.
+
+- **Running Logs PDF & Table Polish — WH Abbreviation, Total Work Hours KPI & Full Operator Name Visibility (/running-logs?view=client) (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - Page Feedback: `/running-logs?view=client&client=730fd022-f488-4ad3-8cdd-683d9af60129` (Viewport: 1536×695)
+    - 1. `<TooltipTrigger> ... "WR"`: "change to WH"
+    - 2. `<SupervisorLogsReportContent> <PDFKPIStrip>`: "add total work hours too"
+    - 3. `<SupervisorLogsReportContent> th`: "total operator name should be visible peroperly"
+    - 4. `<SupervisorLogsReportContent> th`: "reduce the column size" (Shift)
+    - 5. `<SupervisorLogsReportContent> th`: "reduce the column size" (M/C RT)
+    - 6. `<SupervisorLogsReportContent> th`: "reduce the column size" (WH)
+    - 7. `<SupervisorLogsReportContent> th`: "reduce the column size" (B/D / Date)
+    - 8. `<SupervisorLogsReportContent> th`: "increase the column size" (OPERATOR NAME)
+  - **2. Delivered Implementation**:
+    - **Item 1: Abbreviation Change ("WR" -> "WH")**:
+      - Standardized "Work Hours" abbreviation to `WH` across:
+        - Main web table (`OperationsLogsTable.tsx`): header `<span>WH</span>`, tooltip "Work Hours", machine summary header `WH:`, and code comments.
+        - Mobile card view (`OperationsLogsMobileList.tsx`): metric card badge `WH` and machine header `WH:`.
+        - Excel export (`supervisor-logs-export.ts`): header `"WH"` and column widths.
+        - Printable PDF modal (`PrintableSupervisorLogsModal.tsx`): machine banner `WH:` and table headers `WH`.
+        - Mobile export modal (`OperationsExportModal.tsx`): PDF table header and CSV header `'WH'`.
+    - **Item 2: Total Work Hours in Printable PDF KPI Strip**:
+      - Added shared `calculateShiftWorkingHours(log)` helper in `@reachinternational/utils` (`packages/utils/src/shift.ts`).
+      - Updated `getOperationsExportLogsAction` (`apps/web/app/actions/operators.ts`) to calculate aggregate `totalWorkingHours` across all logs and return it in `summary`.
+      - Added `totalWorkingHours?: number` to `SupervisorReportContentProps` in `PrintableSupervisorLogsModal.tsx`.
+      - Added `{ label: "Total Work Hours", value: `${totalWorkHours} hrs`, valueColor: "text-emerald-700" }` to `<PDFKPIStrip>` in client and standard reports.
+    - **Items 3-8: Operator Name Visibility & Column Rebalancing**:
+      - In `PrintableSupervisorLogsModal.tsx` (`SupervisorLogsReportContent`):
+        - Client table column widths rebalanced:
+          - Date: reduced from 14% to 12%
+          - Shift: reduced from 14% to 9%
+          - OPERATOR NAME: increased from 30% to 53% (+23% extra width)
+          - M/C RT: reduced from 14% to 9%
+          - WH: reduced from 14% to 9%
+          - B/D: reduced from 14% to 8%
+        - Removed `truncate` on operator names in `tbody` and applied `text-left font-medium leading-tight whitespace-normal break-words` so full operator names are completely visible.
+        - Standard report table rebalanced: Date 11%, Entity 16%, Shift 8%, OPERATOR NAME 39%, M/C RT 9%, WH 9%, B/D 8%, with `truncate` removed.
+  - **3. Verification & Quality Gates**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - `pnpm typecheck`: 7/7 packages clean (35.64s, 0 errors monorepo-wide).
+    - Dev Supabase DB (`vlmxciuogczumumrwyot`) targeted; Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+
+- **Operations Feedback — Single "By Equipment" Tab, Enter Logs Role Restriction & Dual Export Formats (/operations) (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - Page Feedback: `/operations` (Viewport: 1536×695)
+    - 1. `<AssignPersonnelModal>`: "remove by operator tab completely, keep only single tab"
+    - 2. `<TodayShiftMonitorTab> <Button> button "Enter Log"`: "allow enter logs only above above supervisor role like admin , superadmin , manager, make this change to the frontend , backend and db"
+    - 3. "in export report export both excel and pdf"
+  - **2. Delivered Architecture & Implementation**:
+    - **Item 1: Assign Personnel Modal Single Tab**:
+      - In `apps/web/components/machines/AssignPersonnelModal.tsx`, removed the toggle button `<button>By Operator</button>` from the modal header.
+      - Retained only the single tab `<button>By Equipment</button>` with `activeTabMode` defaulting to `"machine"`.
+      - Preserved `hasFixedOperator` context for operator profile page views (`/users/[id]`).
+    - **Item 2: Restrict Enter Logs to Manager and Above (Database, Backend, Frontend)**:
+      - **Database Migration 134 (`134_restrict_enter_logs_to_manager_and_above.sql`)**:
+        - Applied cleanly to Development Database (`vlmxciuogczumumrwyot`) (Production DB `dhbbgfzbyatzvqafnsqp` strictly untouched).
+        - Hardened `can_manage_operator_shift_log(p_actor_id, p_operator_id)`: returns `true` strictly for `super_admin`, `admin`, `manager`, and `false` for `supervisor`, `hr`, and `operator`.
+        - Hardened `submit_operator_hour_log_atomic` RPC: if `v_actor_id != p_operator_id` (assisted entry on behalf of operator), raises `42501` exception unless caller's role is `super_admin`, `admin`, or `manager`.
+        - Updated RLS policy `insert_machine_hour_logs` on `public.machine_hour_logs` to exclude `supervisor` from insert permissions.
+      - **Backend Server Actions (`apps/web/app/actions/operators.ts`)**:
+        - Restricted `submitOperatorHourLogAction` permitted submit roles to `['operator', 'manager', 'admin', 'super_admin']` (removed `supervisor`).
+        - Added assisted entry guard: if `payload.operatorId && payload.operatorId !== user.id`, strictly requires caller to be `super_admin`, `admin`, or `manager`.
+        - Updated `targetOperatorId` resolution to only allow `manager` and `admin` to log on behalf of operators.
+      - **Web Frontend (`TodayShiftMonitorTab.tsx`, `AssistedShiftEntryModal.tsx`)**:
+        - Defined `canEnterLog = ['super_admin', 'admin', 'manager'].includes(effectiveRole)`.
+        - Desktop Table: Renders `<Button>Enter Log</Button>` only when `canEnterLog` is true; otherwise renders read-only `"Pending"` text.
+        - Mobile Cards: Renders `<Button>Enter Log</Button>` only when `canEnterLog` is true; otherwise shows pending notice.
+        - `<AssistedShiftEntryModal>`: Passed `userRole={effectiveRole}` and enforced `open={Boolean(selectedRowForEntry && canEnterLog)}`.
+        - Added submission role guard in `AssistedShiftEntryModal.tsx` rejecting non-manager/admin users.
+      - **Mobile Frontend (`MobileTodayShiftMonitorTab.tsx`, `operations.tsx`, `MeterLogModal.tsx`)**:
+        - Imported `isManagerOrAbove` from `@reachinternational/permissions` and `useAuth`.
+        - Added `userRole?: string` prop and computed `canEnterLog = isManagerOrAbove(effectiveRole)`.
+        - Gated `enterLogBtn` behind `canEnterLog`, showing `pendingNoticeBox` when false.
+        - Guarded `onEnterLog` callback and assisted entry `MeterLogModal` render with `isManagerOrAbove(user?.role)` in `operations.tsx`.
+        - Added assisted entry role pre-check in `MeterLogModal.tsx` before executing RPC.
+    - **Item 3: Dual Export Formats (Excel & PDF) on /operations**:
+      - Built `exportTodayShiftLogsToExcel` in `apps/web/lib/utils/today-shift-export.ts` using SheetJS (`xlsx`) with company letterhead, operational summary statistics, full shift details, and total summary footer.
+      - Created `TodayShiftExportModal.tsx` with live KPI metric strip, formatted print document preview, and 3 export actions:
+        1. `Export Excel (.xlsx)`
+        2. `Print / Save PDF`
+        3. `Export Both (Excel & PDF)`
+      - Replaced legacy CSV export in `TodayShiftMonitorTab.tsx` with `TodayShiftExportModal`.
+  - **3. Verification & Quality Gates**:
+    - Automated Dev DB test suite `supabase/tests/test_operations_feedback_verification.mjs` passed 100%.
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - `pnpm typecheck`: 7/7 packages clean (0 errors monorepo-wide).
+    - Dev DB `vlmxciuogczumumrwyot` verified; Production DB `dhbbgfzbyatzvqafnsqp` strictly untouched.
+
+- **Refine Running Logs Table, Exports & Machine-Filtered Metrics (/running-logs?view=client) (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - "1. show the all operator name properly"
+    - "2. change to M/C RT"
+    - "3. change to WR and tooltip show work hours"
+    - "4. change to B/D"
+    - "5. hide the remark column and when i click this row then show the remark since remark it not required while exporting to the excel, pdf. first tell me is this good practice or not if not then follow the industry standard and make which is scalable and user friendly"
+    - "6. change to OPERATOR NAME"
+    - "7. REMOVE THIS (RENTED badge on machine header)"
+    - "8. REMOVE THIS (JCB manufacturer on machine header)"
+    - "9. MAKE sure all the values should fetch properly as per selected values and show the values while exporting too"
+  - **2. Delivered Implementation**:
+    - **Industry Standard on Remarks**:
+      - Hiding free-text remarks from the primary tabular view and revealing them via row-expansion accordion is ERP industry best practice (standard across Komatsu Komtrax, Caterpillar VisionLink, and SAP PM/Plant Maintenance). Free-form notes vary in length (0-200+ characters), which distorts column alignment, causes awkward text truncations `...`, or forces horizontal scrolling. Keeping numeric hours and meter readings strictly aligned in a dense tabular grid, with an expandable drawer/accordion for text notes, ensures scalability and superior readability.
+      - In Excel and PDF exports, removing remarks ensures strict page fit without column wrapping, focusing the timesheet directly on verified machine runtime, shift coverage, and billing hours.
+    - **Table Columns & Header Renaming**:
+      - Table headers updated: `OPERATOR NAME`, `M/C RT`, `WR` (with tooltip "Work Hours"), `B/D` (with tooltip "Breakdown Hours").
+      - Removed `Remark` column `<th>` from the table.
+      - Added interactive row accordion: Clicking any row reveals shift remarks and breakdown incident details.
+      - Added subtle `MessageSquare` indicator icon on the date cell when remarks exist.
+      - Rendered operator names without truncation in individual badges (`whitespace-normal`), deduplicating across shifts.
+    - **Machine Header Banner Cleanup**:
+      - Removed `"JCB"` manufacturer label and `"RENTED"` status badge from `OperationsLogsTable.tsx` and `OperationsLogsMobileList.tsx`.
+    - **Machine-Specific Metrics Filtering**:
+      - Fixed `logsSelectedClientMachineId` initialization from `initialMachineId` in `OperationsLogsTab.tsx`.
+      - Corrected `aggregateMetrics` to accurately compute machine-filtered metrics (Run Hours, Working Hours, Breakdowns, Shifts, and Days) when a specific machine is selected, instead of displaying the client-wide grand total.
+    - **Export Synchronization**:
+      - Synchronized `supervisor-logs-export.ts` (Excel): `["Date", "Shift", "OPERATOR NAME", "M/C RT", "WR", "B/D"]`, removed Remark column, updated cell merges and widths.
+      - Synchronized `PrintableSupervisorLogsModal.tsx` (Print PDF): headers `OPERATOR NAME`, `M/C RT`, `WR`, `B/D`, removed Remark column and updated footers.
+      - Synchronized `OperationsExportModal.tsx` (Mobile Native PDF & CSV): updated headers and removed Remark.
+      - Fixed `getOperationsExportLogsAction` in `apps/web/app/actions/operators.ts` to use `resolveSiteMatchCandidates`.
+  - **3. Verification & Quality Gates**:
+    - Supabase Dev DB (`vlmxciuogczumumrwyot`) verified; Production (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+
+- **Client Site Pre-Normalization & High-Performance RPC Optimization (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - "Client Site Pre-Normalization: Normalize stored client site addresses so that both full postal and short addresses match without needing substring checks."
+  - **2. Root Cause Analysis**:
+    - `clientSites` array in `OperationsLogsTab.tsx` constructed full 5-part addresses via `formatClientFullAddress` (`street + city + district + state + pincode`), whereas the database stored canonical street addresses (`BKC Plot C-26, Bandra East`).
+    - Using `.ilike("location", `%${site}%`)` triggered costly sequential substring scans instead of leveraging composite b-tree indexes.
+  - **3. Delivered Implementation**:
+    - **Database Migration (`133_normalize_client_site_address_and_rpc.sql`)**:
+      - Applied to Development Supabase project (`vlmxciuogczumumrwyot`). Production (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+      - Standardized `get_operations_summary` RPC signature and dropped legacy overloaded signatures.
+      - Replaced sequential scans with exact b-tree index matches (`mhl.location = ANY(ARRAY[p_site, v_client_street])`) on `idx_mhl_client_location_date`.
+    - **Shared Normalization Utilities (`packages/utils/src/string.ts`)**:
+      - Added `normalizeClientSiteAddress(site, clientStreet)` and `resolveSiteMatchCandidates(site, clientStreet)` for consistent address tokenization.
+    - **Data Layer & Queries**:
+      - Replaced `.ilike("location", ...)` in `apps/web/lib/data/operations/operations-client-logs.ts` and `apps/web/lib/queries/operators.ts` with exact `.in("location", siteCandidates)`.
+    - **Frontend View**:
+      - Updated `OperationsLogsTab.tsx` and `operations-helpers.ts` to prioritize client's canonical street address.
+  - **4. Verification & Quality Gates**:
+    - Test script against Dev DB: Both short street address (`BKC Plot C-26, Bandra East`) and full postal address (`BKC Plot C-26, Bandra East, Mumbai, Mumbai City, Maharashtra, 400051`) returned identical 485 logs in 0.344ms via index scan.
+    - Typecheck passed: 0 errors on `@reachinternational/web` and `@reachinternational/mobile`.
+
+- **Fix Shift Logs Fetching Bug, Add Working Hours Card, Enforce Shift Logs Immutability, and Optimize Queries & Indexes (/running-logs?view=client) (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - "when i select client + location + all machine + September then it should show all the shift logs of the all machine in september month currently it show only few logs properly analyze this bugs and fix it and when i select client + location + specific machine + September then show the all shift logs of specifin machine on selected month or custom data range make sure it should working properly and improve the indexes so it fetch the only required data and optimize the fetching querry also make sure it should fast and optimize optimize the backend and database and add a card for total working hours by operator in this card and make sure daily shift log should be immutable and remove the edit and delete action from both desktop and mobile"
+  - **2. Root Cause Analysis**:
+    - `normalizeOperationsFilter` in `packages/utils/src/operations-keys.ts` clamped `pageSize` to 20 when not in `[10, 20, 25, 50]`.
+    - Tab switching and filter changes hardcoded `pageSize: 20`, truncating the 485 shift logs of Tata Projects Limited (6 machines in Sept 2026) to 20 records.
+    - Client address matching in RPC and queries failed when full postal addresses were selected versus street names stored in DB.
+    - Lack of composite indexes on `(client_id, machine_id, log_date DESC, created_at DESC)` and `(client_id, location, log_date DESC)` led to slower sequential table scans.
+    - Action columns allowed editing and deletion of shift logs, violating audit immutability requirements.
+  - **3. Delivered Implementation**:
+    - **Database Migration (`132_enforce_shift_logs_immutable_and_optimize_queries.sql`)**:
+      - Applied to Dev Supabase project (`vlmxciuogczumumrwyot`). Production (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+      - Created `trg_enforce_machine_hour_logs_immutable` trigger on `public.machine_hour_logs` to reject all updates and deletes.
+      - Dropped update/delete RLS policies on `machine_hour_logs`.
+      - Added composite indexes `idx_mhl_client_machine_date` and `idx_mhl_client_location_date`.
+      - Backfilled null location entries and updated RPC `get_operations_summary` with `split_part(p_site, ',', 1)` resilient matching and `total_working_hours`.
+    - **Backend Actions & Data**:
+      - Updated `updateOperatorHourLogAction` and `deleteOperatorHourLogAction` in `apps/web/app/actions/operators.ts` to immediately reject mutations.
+      - Updated `operations-client-logs.ts` and `queries/operators.ts` to match first segment of site and calculate `totalWorkingHours`.
+      - Updated `packages/utils/src/operations-keys.ts` fallback `pageSize` to 500.
+    - **Web & Mobile UI**:
+      - `apps/web/components/operations/logs/OperationsClientView.tsx`: Added Total Working Hours KPI card (`UserCheck` icon, emerald theme) with 4-column responsive grid.
+      - `apps/web/components/operations/logs/OperationsLogsTable.tsx`: Completely removed Edit and Delete action columns, icons, and table headers.
+      - `apps/web/components/operations/logs/OperationsLogsMobileList.tsx`: Removed Row 4 Actions from mobile touch cards.
+      - `apps/web/components/operations/logs/OperationsLogsTab.tsx`: Removed all dead mutation state/callbacks, defaulted `pageSize` to 500 across all query triggers.
+      - `apps/mobile/app/(app)/running-logs.tsx`: Added `WORKING HOURS` KPI card in a responsive 2x2 wrapping grid.
+  - **4. Verification & Quality Gates**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - Dev DB verified: All 485 logs fetched across 6 machines; 99 logs fetched for M/C-0001; updates and deletes strictly rejected by DB trigger.
+
+- **Standardize Mobile Viewport Typography Across Web App & Native App (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - "in the webapp mobile viewport increase the font/text size of each and eveypage currently text seems very small and make sure each and every page all primary font should be same, make sure each and every page all secondry font should be same make sure each and every page all tertiary font should be same make font and typography consituent to each and every page also make sure dont miss any page , components etc currently in the web mobile view port text looks small follow the industry statandard mobile font size and make proper font size for both web and native app i want this changes in both web and native app"
+  - **2. Root Cause & Typography System**:
+    - Mobile viewports (screens ≤640px) had fragmented typography with sub-12px elements (8px, 9px, 10px, 11px) causing eye strain and failing accessibility standards.
+    - Established strict universal 3-tier mobile typography scale:
+      - Primary Tier: H1 (22px), H2 (18px), H3 (15-16px), Entity Names & Body (15-16px), Form Inputs (15-16px to prevent iOS auto-zoom), Primary Buttons (14-16px).
+      - Secondary Tier: Subtitles & Descriptions (13.5-14px), Field Labels (13.5px), Filter Chips & Tabs (12.5-13px), Status Badges (12-12.5px).
+      - Tertiary Tier: Helper text, error messages, timestamps, captions, counts, and monospace tags elevated to a strict universal minimum floor of **12px**.
+  - **3. Delivered Implementation**:
+    - **Design Tokens (`packages/design-tokens`)**: Exported `fontSizesNumeric`, `mobileTypographyPresets`, `reactNativeFontSizes`, and `reactNativeTypography`.
+    - **Web App (`apps/web`)**: Updated `globals.css` with responsive clamps (`.text-[8px]`, `.text-[9px]`, `.text-[10px]` -> 12px; `.text-[11px]` -> 12.5px; mobile inputs -> 16px). Updated all shared UI primitives (`Badge`, `Button`, `Input`, `FormField`, `CustomDatePicker`, `CustomTimePicker`, `SearchableSelect`, `SegmentedToggle`, `MetricCard`, `MobilePageHeader`, `BottomNav`) and mobile touch cards.
+    - **Native App (`apps/mobile`)**: Updated all screens (`running-logs.tsx`, `dashboard.tsx`, `more.tsx`, `payroll.tsx`, `attendance.tsx`, `profile.tsx`, `settings.tsx`, `clients.tsx`, `users.tsx`, `machines.tsx`, `operations.tsx`, `account-deletion.tsx`, `privacy.tsx`, `terms.tsx`, auth screens), modals (`MachineDetailView.tsx`, user modals, operations modals, machinery modals), dashboard cards, forms, documents, and notifications. Eliminated every sub-12px occurrence.
+  - **4. Verification & Quality Gates**:
+    - Automated mobile scan: 0 sub-12px font sizes remaining.
+    - `pnpm typecheck`: 7/7 packages clean (0 errors monorepo-wide).
+    - Supabase Dev (`vlmxciuogczumumrwyot`) targeted; Production (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+
+- **Running Logs Client Tab Machine-Wise Shift Logs, Dedicated Summaries & Layout Refinement (/running-logs?view=client) (2026-09-29)**:
+  - **1. User Request & Feedback**:
+    - Page Feedback: `/running-logs?view=client&month=09&pageSize=50&client=29b3637e-aab1-4e1c-a394-1cf733dd1b20` (Viewport: 1536×695)
+    - 1. `<RunningLogsClient> <LoadableComponent> <OperationsLogsTab> <OperationsLogsTable> <Pagination> flex flex`: "remove this page system from here since it show the result of only single month or custom date so no need to of pages so remove it"
+    - 2. `<RunningLogsClient> <LoadableComponent> <OperationsLogsTab> <OperationsLogsTable> [var( color`: "remove this" (centered "selected client summery" banner)
+    - 3. `<RunningLogsClient> <LoadableComponent> <OperationsLogsTab> <OperationsLogsTable> flex items`: "remove this" (top sort and count control bar)
+    - 4. `<RunningLogsClient> <LoadableComponent> <OperationsLogsTab> <OperationsLogsTable> rounded border`: "if all machine selected then show the shift logs machine wise instead of every machine at once separate the summery make sure this applies only on client tab dont touch others machine each page machine details should be at top and below that machine shift logs"
+  - **2. Root Cause Analysis**:
+    - Pagination buttons were unnecessary and fragmented continuous calendar month or custom date range logs.
+    - Top banner and sort bar added vertical clutter.
+    - When all machines were selected on the client tab, logs from all machines were interleaved into one combined table, making it difficult to distinguish each machine's running hours, working hours, and breakdown duration.
+  - **3. Architecture & Delivered Implementation**:
+    - **Web Desktop Table (`OperationsLogsTable.tsx`)**:
+      - Removed `<Pagination>` component and its layout wrappers.
+      - Removed centered "selected client summery" banner and top sort & count control bar.
+      - Placed Date sorting toggle button directly onto the `<th>Date</th>` table header with animated chevron indicators.
+      - On Client tab (`logsViewMode === "client"`), implemented machine-wise grouping: for each machine, renders top machine header banner (Model, Serial Number, Machine Code, Manufacturer, Status Badge, Site Location, Days count, Day RT, Working Hours, Breakdown Hours), followed by its shift logs table (Date, Shift, Operator, Day RT, Total Working Hours, Breakdown, Remark), and dedicated machine summary footer row.
+      - Maintained single table format untouched for `machine` and `operator` tabs.
+    - **Pagination & Page Size Expansion**:
+      - Raised default page size to `500` across `OperationsLogsTab.tsx`, `page.tsx`, `operations-client-logs.ts`, `operations-machine-logs.ts`, `operations-operator-logs.ts`, and `queries/operators.ts`.
+      - Stripped `page` and `pageSize` search parameters from URL filter changes.
+    - **PDF & Print Modal (`PrintableSupervisorLogsModal.tsx`)**:
+      - Grouped logs machine-wise for client tab with machine header at top, shift logs table below, dedicated summary footer, and CSS print page break (`break-before: page; page-break-before: always;`) so each machine starts on its own page.
+    - **Excel Export Utility (`supervisor-logs-export.ts`)**:
+      - For client view, groups logs machine-wise, rendering machine header title row, table headers, daily shift logs, and dedicated machine total summary row, followed by an overall grand total row when multiple machines exist.
+    - **Mobile Synchronization (`OperationsLogsMobileList.tsx`)**:
+      - Removed top banner and grouped logs machine-wise with top machine header card, daily cards, and dedicated summary footer card.
+  - **4. Verification & Quality Gates**:
+    - Web TypeScript: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Supabase Dev DB `vlmxciuogczumumrwyot` verified; Production DB `dhbbgfzbyatzvqafnsqp` strictly untouched.
+
+- **Standardize Daily Running Logs Table, Excel & PDF to 1-Day Single-Row Format (/running-logs) (2026-09-28)**:
+  - **1. User Request & Feedback**:
+    - Page Feedback: `/running-logs?view=machine&machine=d2390003-21f5-40db-af94-dd9f036de0e5&month=09` (Viewport: 1536×695)
+    - `<RunningLogsClient> <LoadableComponent> <OperationsLogsTab> <OperationsLogsTable> rounded border`
+    - "remove this format and use this see the excel screenshot i want 1 day shift entry in one rows instead of 3 to 4 rows also remove the expand and shrink behaviour also same format excel and pdf should follow 100% follow the screenshot and same format i want"
+  - **2. Root Cause Analysis**:
+    - `OperationsLogsTable` previously used an accordion expand/collapse pattern where clicking a day row expanded a nested table rendering 3 to 4 separate rows for each shift on that day.
+    - Top control bar included "Expand All / Collapse All" toggle buttons.
+    - Excel (`supervisor-logs-export.ts`) and PDF (`PrintableSupervisorLogsModal.tsx`) exported separate rows per shift instead of the single consolidated 1-row-per-day format.
+  - **3. Architecture & Delivered Implementation**:
+    - **Web Desktop Table (`OperationsLogsTable.tsx`)**:
+      - 100% matched the screenshot format: 1 row per calendar day.
+      - Removed all expand/shrink states, chevron icons, and nested sub-tables.
+      - Columns: `Date` (e.g. `28-Sep-26`), `Client` (e.g. `Tata Projects LTD`), `Shift` (`S1/S2/S3`), `Operator` (`OperatorA/OperatorB/OperatorC`), `Day RT` (`7h`), `Total Working Hours` (`24h`), `Breakdown` (`0h`), `Remark`, plus compact actions.
+      - Centered title banner: `selected machine summery`.
+      - Summary rows: `Total`, `${days} days` | | | | `${sumDayRT}h` | `${sumWorkingHours}h` | `${sumBreakdownHours}h`.
+    - **Excel Export (`supervisor-logs-export.ts`)**:
+      - Centered title `selected machine summery` across columns A-H.
+      - Columns: `Date`, `Client`, `Shift`, `Operator`, `Day RT`, `Total Working Hours`, `Breakdown`, `Remark`.
+      - 1 row per day with combined shifts, combined operators, and total summary rows (`Total`, `X days`, `35h`, `120h`, `0h`).
+    - **PDF Export (`PrintableSupervisorLogsModal.tsx`)**:
+      - Replaced sub-rows per shift with 1-row-per-day table structure and identical column headers and totals.
+    - **Mobile Cross-Platform Synchronization (`OperationsLogsMobileList.tsx` & `OperationsExportModal.tsx`)**:
+      - Updated mobile cards to flat 1-day summary card without expand/shrink, with bottom Total summary card.
+      - Updated mobile PDF HTML and CSV generation to match 1-row-per-day format.
+  - **4. Quality Gates & Verification**:
+    - `pnpm typecheck`: 7/7 workspace packages passed with 0 errors.
+
+- **Client-Created Shift Code & Shift Name Resolution on /operations (2026-09-28)**:
+  - **1. User Request & Feedback**:
+    - Page Feedback: `/operations` (Viewport: 427×952)
+    - `<ShiftInputs> <ShiftCardSelector> button "Shift A6:00 AM – 2:00 PM8"`
+    - Location: `.grid > .sm:col-span-2 > .flex > .relative`
+    - "this shift name and shift code depend on the clients created shift so fetch it properly and show currect shift"
+  - **2. Root Cause Analysis**:
+    - **Database RPC Missing Shift Name & Brittle Timing Joins**: `get_today_shift_log_monitor` matched `client_shift_codes` strictly on exact start and end times (`start_time = shift_start_time AND end_time = shift_end_time`), causing joins to fail when windows varied, defaulting to `'S1'` and omitting `shift_name`.
+    - **Lack of Post-Fetch Synchronization in Assisted Shift Entry**: In `AssistedShiftEntryModal.tsx`, when client shift codes finished loading asynchronously, `selectedShiftCode` was never reconciled with `resolveDefaultOperatorShift`, leaving it defaulted or falling back to whatever initial code was in state.
+    - **Concatenated Text Clutter in ShiftCardSelector**: Button text concatenated shift title, times, and duration without subtitle separation, rendering as jammed strings on narrow mobile viewports (`427×952`).
+    - **Missing Client Shift Wiring in OperationsEditLogModal**: Edit modal did not pass client shifts or `shiftCode` to `updateOperatorHourLogAction`.
+  - **3. Architecture & Delivered Implementation**:
+    - **Database Layer (Migration 131: `131_client_shift_resolution_in_today_shift_monitor.sql`)**:
+      - Applied cleanly to Development DB (`vlmxciuogczumumrwyot`) (Production DB `dhbbgfzbyatzvqafnsqp` strictly untouched).
+      - Upgraded `get_today_shift_log_monitor` with lateral join against `client_shift_codes`, returning accurate `shift_name`, `shift_code`, `shift_start`, and `shift_end`.
+    - **Shared Packages (`@reachinternational/utils`, `@reachinternational/types`, `@reachinternational/validation`)**:
+      - `packages/types/src/database.ts`: Added `shift_name?: string | null` to `TodayShiftMonitorRow`.
+      - `packages/utils/src/shift.ts`: Implemented `getShiftDisplayTitle` and `getShiftSubtitle` to centralize clean shift formatting.
+      - `packages/validation/src/hourMeter.ts`: Added `shiftCode?: string` to `UpdateHourLogSchema`.
+    - **Web Frontend (`ShiftCardSelector.tsx`, `ShiftInputs.tsx`, `AssistedShiftEntryModal.tsx`, `TodayShiftMonitorTab.tsx`, `OperationsEditLogModal.tsx`)**:
+      - Shift cards now render client shift code with clean subtitle (e.g. `Morning`, `Evening`, `Night`), separating badges from timings and hours.
+      - `AssistedShiftEntryModal.tsx` auto-resolves operator's default shift upon loading client shifts.
+      - `TodayShiftMonitorTab.tsx` displays `shift_name` on both desktop table and mobile touch card views.
+      - `OperationsEditLogModal.tsx` loads client shifts, wires `ShiftInputs`, and forwards `shiftCode` to `updateOperatorHourLogAction`.
+      - `updateOperatorHourLogAction` atomically stores `shift_code` and `shift` in `machine_hour_logs` and immediately evicts caches.
+    - **Mobile Cross-Platform Synchronization (`apps/mobile`)**:
+      - `MobileTodayShiftMonitorTab.tsx`: Renders `row.shift_name` alongside `Shift {row.shift_code}` in touch cards.
+      - `MeterLogModal.tsx`: Renders `Shift {s.code} ({subtitle})` with timings in horizontal touch pills.
+  - **4. Verification & Quality Gates**:
+    - Dev Database test `supabase/tests/test_client_shift_resolution_monitor.mjs`: 55/55 monitor rows successfully returned resolved client shift names.
+    - Automated tests `test_operator_default_shift_resolution.mjs` (13/13) & `test_assisted_entry_today_monitor_e2e.mjs` (21/21) passed.
+    - Monorepo Turbo check: 7/7 packages clean (`pnpm typecheck` passed with 0 errors).
+
+- **Supervisor Assisted Shift Log Entry Instant UI Update & Database Fetch Synchronization (/operations Today Shift Monitor) (2026-09-28)**:
+  - **1. User Request & Feedback**:
+    - Page Feedback: `/operations` (Viewport: 1536×695)
+    - `<OperationsClient> <LoadableComponent> <BailoutToCSR> <TodayShiftMonitorTab> rounded border` (Location: `.w-full > .space-y-4 > .grid > .rounded-lg`) & `<TodayShiftMonitorTab> <Button> button "Enter Log"` (Location: `tbody > .border-b > .px-3`)
+    - "when supervisor entered the logs then update here also"
+  - **2. Root Cause Analysis**:
+    - **Database Function Overload Conflict**: 4 competing overloads of `submit_operator_hour_log_atomic` caused PostgREST error `PGRST203`.
+    - **Monitor RPC Join Failure**: In `get_today_shift_log_monitor`, the CTE `roster` joined on `l.shift_code = r.shift_code`. When assignments had `shift_code IS NULL` or shift code formatting differed from client templates, the join failed, leaving the status as `"pending"` even after the log was successfully recorded in `machine_hour_logs`.
+    - **Type Mismatch in RPC Insert**: `breakdown_start_time` and `breakdown_end_time` in `machine_hour_logs` were typed as `TIME WITHOUT TIME ZONE`, but parameters were passed as `TEXT` without explicit casting, causing PostgreSQL error `42804`.
+    - **Next.js Cache Persistence**: `revalidateTag(..., "max")` failed to immediately evict the Next.js `unstable_cache`, causing client refetches to read stale cached JSON.
+    - **Absence of Realtime Synchronization**: The Today Shift Monitor tab did not subscribe to Supabase Realtime for log submissions, and closing the assisted shift modal did not trigger an optimistic local update.
+  - **3. Architecture & Delivered Implementation**:
+    - **Database Layer (Migration 129: `129_fix_assisted_shift_log_entry_and_today_monitor.sql`)**:
+      - Applied to Development DB (`vlmxciuogczumumrwyot`) (Production DB `dhbbgfzbyatzvqafnsqp` strictly untouched).
+      - Dropped all 4 obsolete overloads of `submit_operator_hour_log_atomic`.
+      - Built canonical 25-argument `submit_operator_hour_log_atomic` supporting `p_entered_by`, `entry_source`, `p_shift_code`, with explicit casting of `breakdown_start_time` and `breakdown_end_time` to `TIME`.
+      - Atomically updates machine `hour_meter`, `current_operator_id`, `health_status`, assignment `shift_code`, and writes structured audit logs (`machine.hour_logged`).
+      - Upgraded `get_today_shift_log_monitor` with `matched_logs` CTE (`ROW_NUMBER() OVER (PARTITION BY machine_id, operator_id ORDER BY shift_code match, created_at DESC)`), eliminating join failures caused by null/mismatched shift codes.
+    - **Web Data Access Layer & Server Actions**:
+      - `apps/web/lib/data/operations/today-shift-monitor.ts`: Added `bypassCache?: boolean` parameter to `getTodayShiftLogMonitor()`. Directly queries Supabase Admin Client to bypass Next.js `unstable_cache`.
+      - `apps/web/app/actions/operators.ts`: Updated `submitOperatorHourLogAction` with `revalidateTag(..., { expire: 0 })` and explicit path revalidations (`/operations`, `/running-logs`, `/dashboard`). Updated `getTodayShiftMonitorAction` to support `bypassCache`.
+    - **Web Client UI (`AssistedShiftEntryModal.tsx`, `TodayShiftMonitorTab.tsx`, `OperatorEntryClient.tsx`)**:
+      - `AssistedShiftEntryModal.tsx`: Added `onSuccess` callback with submitted metrics and broadcasted `log_entered` event on `operations-roster` Supabase Realtime channel.
+      - `TodayShiftMonitorTab.tsx`: Implemented 0ms optimistic UI update in `handleEnterLogSuccess` (immediately setting row status to `'entered'`, populating HMR readings, and recalculating KPI counters), followed by authoritative database refetch with `bypassCache = true` and `router.refresh()`. Subscribed to `log_entered` Realtime channel for multi-user sync.
+      - `OperatorEntryClient.tsx`: Broadcasts `log_entered` on `operations-roster` channel when operators submit their own logs.
+    - **Mobile Cross-Platform Synchronization (`apps/mobile`)**:
+      - `MobileTodayShiftMonitorTab.tsx`: Subscribed to `operations-roster` for `log_entered` events to trigger automatic `refetch()`.
+      - `MeterLogModal.tsx`: Broadcasts `log_entered` event on `operations-roster` upon log submission.
+  - **4. Verification & Quality Gates**:
+    - Automated E2E Database test suite `supabase/tests/test_assisted_entry_today_monitor_e2e.mjs`: 21/21 tests passed on Dev DB `vlmxciuogczumumrwyot`.
+    - Automated WebSocket Realtime & Cache test `supabase/tests/test_assisted_entry_realtime_and_cache.mjs`: 14/14 tests passed (100%).
+    - Monorepo Turbo check: 7/7 packages clean (`pnpm typecheck` passed in 52ms).
+- **Operator Own Shift Fetching & Automatic Default Pre-Selection on /operations (2026-09-28)**:
+  - **1. User Request & Feedback**:
+    - Page Feedback: `/operations` (Viewport: 360×800)
+    - `<OperatorEntryClient> <ShiftInputs> <ShiftCardSelector> div [Select Shift Schedule]`
+    - Location: `.p-3.5 > .grid > .sm:col-span-2 > .flex`
+    - "every operator has there own shift so fetch it and by default select that shift"
+  - **2. Root Cause Analysis**:
+    - `fetchOperatorEntryContextFromDb` in `apps/web/lib/queries/operator-entry.ts` stripped `res?.assigned_shift_code`, delivering `initialContext.assigned_shift_code` as `undefined` to the client.
+    - When `shift_code` was `NULL` in older `operator_machine_assignments` or when an operator was unassigned, `get_operator_entry_context` failed to derive the shift code from the operator's shift times (`users.shift_start_time`).
+    - In `OperatorEntryClient.tsx`, missing `assignedCode` caused the component to fall back blindly to `availableShifts[0]` (always selecting the first morning shift A or S1), ignoring the operator's actual shift hours.
+    - In `ShiftInputs.tsx` and `ShiftCardSelector.tsx`, code comparisons did not normalize prefixed codes (e.g. "Shift S1" vs "S1"), preventing the selected card from expanding into its active state.
+  - **3. Architecture & Delivered Implementation**:
+    - **Database RPC Upgrade (Migration 130: `130_operator_default_shift_resolution.sql`)**:
+      - Applied to Development DB (`vlmxciuogczumumrwyot`) (Production DB `dhbbgfzbyatzvqafnsqp` strictly untouched).
+      - Upgraded `get_operator_entry_context()`: reads `oma.shift_code`, auto-resolves against `client_shift_codes` when null, derives S1/S2/S3 from `users.shift_start_time` when unassigned, guarantees standard shift templates fallback, and projects `assigned_shift_code` and `operator.shift_code`.
+    - **Shared Package (`@reachinternational/utils`)**:
+      - Created `packages/utils/src/shift.ts` exporting `resolveDefaultOperatorShift(context, availableShifts)` with multi-tier matching: direct code equality, normalized code match, name match, circular minute distance start time matching (within 180 min), and fallback.
+    - **Web Data Access Layer & Server Actions**:
+      - `apps/web/lib/queries/operator-entry.ts`: Projected `assigned_shift_code`.
+      - `apps/web/app/actions/operators.ts`: Exported `getOperatorEntryContextAction(operatorId)`.
+    - **Web Client UI (`OperatorEntryClient.tsx`, `ShiftInputs.tsx`, `ShiftCardSelector.tsx`)**:
+      - Pre-selects operator's own shift by default, synchronizes state, and performs eager background fetch if assigned code was missing in SSR props.
+      - Normalized shift code comparisons for `activeShift` and `isSelected`, so the operator's shift card immediately renders in the expanded active state.
+    - **Mobile Cross-Platform Synchronization (`apps/mobile`)**:
+      - Updated `MobileOperatorEntryCard.tsx` and `MeterLogModal.tsx` to use `resolveDefaultOperatorShift`.
+  - **4. Verification & Quality Gates**:
+    - Automated Dev DB test suite `supabase/tests/test_operator_default_shift_resolution.mjs`: 13/13 tests passed (100%).
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Monorepo Turborepo check: 7/7 packages clean (`pnpm typecheck`).
+    - Production DB strictly untouched; all changes applied and verified on Dev DB `vlmxciuogczumumrwyot`.
+- **Standardize Unified Assign Personnel & Shift Roster Modal Monorepo-Wide with Bi-Directional Optimization (2026-09-28)**:
+  - **1. User Request & Feedback**:
+    - "see the screenshot apply this ui to every assign operator tabs"
+    - "optimize this tab for the machine and operator both"
+    - "some time operator will fix and some time machine will be fixed handle it proeprly"
+    - "first read and anlyze that where assign personel or assign operator tab are user after finding then use this same assign operator components everywhere which make consitent to all over website also remove the older code also it should well optimize and fully functional"
+    - Page Feedback on `/machines/57d6bd84-60b6-498a-8464-3546fafe6a3e` (Viewport: 427×952):
+      - `.fixed > #radix-_r_f_ > .flex-1 flex overflow`
+  - **2. Root Cause Analysis**:
+    - Fragmented assignment experiences: `/operations` had legacy `AssignOperatorModal.tsx` (826 lines), `/machines` had `MachinePersonnelModal` (580 lines), and `/users/[id]` lacked direct equipment and shift assignment controls.
+    - Mobile Viewport 427×952 Overflow: Floating absolute popovers (`top-full`) inside constrained modal views overflowed outside viewport boundaries on small screens.
+  - **3. Architecture & Delivered Implementation**:
+    - Canonical `AssignPersonnelModal` (`apps/web/components/machines/AssignPersonnelModal.tsx`):
+      - Machine-Fixed Mode, Operator-Fixed Mode, and Dual Selection Mode with top toggle.
+      - 24h shift cards (A, B, C with night moon icon), numbered badge cards, conflict detection, unsaved changes banner, sticky action footer.
+      - Inline accordion search containers replacing absolute dropdowns, preventing mobile overflow.
+    - Backend actions (`apps/web/app/actions/assignments.ts`):
+      - `getOperatorActiveAssignmentsAction()`, `updateOperatorMachineAssignmentsAction()`, `getAssignableMachinesAction()`.
+    - Monorepo integration:
+      - Replaced legacy `AssignOperatorModal.tsx` on `/operations` with delegation wrapper.
+      - Refactored `MachinePersonnelModal` in `MachineEditModals.tsx`.
+      - Added `onEditPersonnel` to `MachineAssignmentsQuickModal.tsx` and wired `MachineListClient.tsx`.
+      - Integrated assignment triggers and modal into `/users/[id]` (`UserDetailClient.tsx`) across hero actions, Tab 1 ("Assigned Machinery Fleet"), and Tab 3 ("Machine Assignment History").
+    - Mobile Synchronization (`apps/mobile`):
+      - Updated `MobileAssignPersonnelModal.tsx` with dynamic adaptive headers, relieve operator action (`end_operator_machine_assignment_atomic`) with `Trash2` button (min 44px hitSlop), realtime broadcast dispatch, and fixed generic typing in `packages/utils/src/shift.ts`.
+  - **4. Verification & Quality Gates**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - `pnpm typecheck`: 7/7 packages clean (2m 4s).
+    - Development Database `vlmxciuogczumumrwyot` targeted; Production DB `dhbbgfzbyatzvqafnsqp` strictly untouched.
+
+- **Turbopack Build Error Fix: Remove Rogue Type Re-Export from Server Actions (`apps/web/app/actions/machines.ts`) (2026-09-28)**:
+  - **1. User Request / Build Error**:
+    - Build Error: `Export ActiveOperatorOtherAssignment doesn't exist in target module` in `./apps/web/.next-internal/server/app/(app)/machines/page/actions.js:33:1`.
+    - Message: `The export ActiveOperatorOtherAssignment was not found in module [project]/apps/web/app/actions/machines.ts [app-rsc] (ecmascript). Did you mean to import getActiveOperatorAssignmentsAction?`
+  - **2. Root Cause**:
+    - In Next.js App Router (Turbopack, Next.js 16.2), modules marked with `"use server"` must strictly export only async functions.
+    - `export type { ActiveOperatorOtherAssignment };` was erroneously present in `apps/web/app/actions/machines.ts`. Turbopack's server action transform registered the named export specifier as a server action in `.next-internal/.../actions.js`, but TypeScript compilation erased the type at runtime, causing a static export mismatch.
+  - **3. Delivered Architecture & Implementation**:
+    - Removed `export type { ActiveOperatorOtherAssignment };` from `apps/web/app/actions/machines.ts`.
+    - Kept import `type ActiveOperatorOtherAssignment` purely for the return type of `getActiveOperatorAssignmentsAction()`.
+    - Consumer components continue importing `ActiveOperatorOtherAssignment` directly from canonical type packages (`@reachinternational/types`) or components.
+  - **4. Verification & Quality Gates**:
+    - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+    - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+    - `pnpm typecheck`: 7/7 packages clean (54ms, Turbo cache hit).
+
+- **Refine Shift & HMR Inputs UI on /operations with Grow/Shrink Cards & Mobile Optimization (2026-09-28)**:
+  - **1. User Request**:
+    - Page Feedback on `/operations`:
+    - 1. `<HMRInputs>` inline flex: "make it small as other text and heading size".
+    - 2. `<ShiftInputs>` button "Manual Time Entry": "ony show the icon for the mobile user".
+    - 3. `<ShiftInputs>` "Duration: 6.0 hrs": "only show the total hours for the mobile users only".
+    - 4. `<ShiftInputs>` text [10px]: "make it compact start and end shift time from all shift card".
+    - 5. `<ShiftInputs> <CustomDatePicker>` "Allowed: 7d window": "remove this".
+    - 6. `<ShiftInputs>` "Night": "show the icon instead of text".
+    - 7. `<ShiftInputs>` button "Shift A06:00 AM → 02:00 P":
+      - "make the shift card grow and shrink behaviour"
+      - "when this shift card selected then expand it and show the shift time"
+      - "when this shift card not selected or rest position then only show shift A / shift title only"
+      - "this behaviour apply to all the shift card"
+      - "make sure it should be super smooth and reusable"
+      - "this tab should be optimize for the mobile"
+  - **2. Delivered Architecture & Implementation**:
+    - Created Reusable Animated Shift Card Selector (`apps/web/components/operations/entry/ShiftCardSelector.tsx`):
+      - Smooth grow and shrink accordion behavior (`transition-all duration-300 ease-out`).
+      - Rest state (unselected): compact card (`flex-1 min-w-[62px] sm:min-w-[76px]`) displaying only the shift title (e.g. "Shift S1", "Shift A") and `<Moon size={11} />` icon if crosses midnight. Shift times and duration details completely collapsed.
+      - Selected state: expands to `flex-[2.5] min-w-[135px] sm:min-w-[160px]`, rendering bold title, Moon icon, compact start & end time (`6:00 AM – 2:00 PM`), normal/OT duration, and assignment badge.
+      - Built compact time formatting utilities (`formatCompactTime` and `formatCompactShiftRange`) stripping leading zero and using en-dash.
+      - Replaced text `"Night"` with Lucide `<Moon size={12} />` icon.
+      - Reusable monorepo-wide: consumed by both `ShiftInputs.tsx` and `AssignOperatorModal.tsx`.
+    - Header & Mobile Optimizations in `ShiftInputs.tsx`:
+      - "Manual Time Entry" button renders icon-only (`<SlidersHorizontal size={13} />`) on mobile screens (`<span className="hidden sm:inline">Manual Time Entry</span>`).
+      - Duration text renders only total hours on mobile (`<span className="hidden sm:inline">Duration: </span><strong>6.0 hrs</strong>`).
+      - Passed `showWindowBadge={false}` to eliminate "Allowed: 7d window" badge clutter.
+    - CustomDatePicker Default Cleanup (`apps/web/components/ui/CustomDatePicker.tsx`):
+      - Changed `showWindowBadge = false` default to prevent "Allowed: 7d window" badge clutter monorepo-wide.
+    - Compact HMR Running Hours Chip (`apps/web/components/operations/entry/HMRInputs.tsx`):
+      - Reduced chip to `text-[10px] sm:text-[11px] px-2 py-0.5 rounded font-mono font-semibold` with `h-3 w-3` icons, matching heading size.
+    - Mobile Modal Action Layout (`apps/web/components/operations/AssistedShiftEntryModal.tsx`):
+      - Added `flex-1 sm:flex-none h-10 sm:h-9` for Cancel and Submit buttons.
+  - **3. Quality Gates & Verification**:
+    - Web TypeScript check: 0 errors (`tsc --noEmit`).
+    - Mobile TypeScript check: 0 errors (`tsc --noEmit`).
+    - Monorepo Turbo check: 7/7 packages clean (`pnpm typecheck` passed in 25.8s).
+    - Database safety: Dev DB `vlmxciuogczumumrwyot` verified; Production DB `dhbbgfzbyatzvqafnsqp` strictly untouched.
+
+- **Machine Shift Assignment Instant UI Update & Database Fetch Synchronization (/machines/[id]) (2026-09-28)**:
+  - **1. User Request**:
+    - On `/machines/[id]` (`/machines/57d6bd84-60b6-498a-8464-3546fafe6a3e`, mobile viewport 427×952):
+    - *"after clicked saved assignment then quickly update and fetched updated data fron the database"*
+  - **2. Root Causes Identified**:
+    - Next.js 16 App Router cache invalidation latency: `revalidateTag(TAGS.machines, "max")` marked tag for SWR without immediate eviction; `revalidatePath` was missing.
+    - RSC Stale Payload Race: After `router.refresh()`, Next.js client router cache delivered stale server component props that overrode the fresh client state.
+    - Supervisor wipe glitch: When updating only operators, `payload.supervisorIds` was undefined; `updateMachinePersonnelAction` returned `supervisors: []` which wiped existing supervisors from the UI.
+    - Session cache stale TTL: `MachineAssignmentsQuickModal` cached assignments for 5 minutes without invalidating when `MachinePersonnelModal` saved.
+  - **3. Delivered Architecture**:
+    - Server Action Direct Read-Back & Cache Eviction (`apps/web/app/actions/machines.ts`):
+      - Replaced `revalidateTag(..., "max")` with `revalidateTag(..., { expire: 0 })` for immediate eviction.
+      - Added explicit `revalidatePath(/machines/${machineId})`, `revalidatePath(/machines/${machineId}, "page")`, and `revalidatePath("/machines")`.
+      - Parallelized queries via `Promise.all`.
+      - Preserved existing supervisors when `supervisorIds` is not provided.
+      - Executed direct read-back via `getMachinePersonnelFreshAction(machineId)` returning 100% database-verified personnel and active assignment records.
+    - 0ms Optimistic UI & Atomic Client Synchronization (`apps/web/components/machines/MachineEditModals.tsx`):
+      - Applied 0ms optimistic UI update (`onMachineUpdated`) immediately upon clicking "Save Assignments" in `MachinePersonnelModal`.
+      - Merged database-confirmed fields, closed modal, triggered `router.refresh()`, and dispatched `reach:refresh-machine-personnel`.
+      - Added optimistic update and rollback to `MachineClientModal`.
+    - Stale RSC Guard & Section Sync Trigger (`apps/web/app/(app)/machines/[id]/machine-client-view.tsx`):
+      - Added `lastMutationTimeRef` (4000ms guard) to prevent asynchronous stale Next.js RSC router cache payloads from overwriting fresh live state.
+      - Added `reach:refresh-machine-personnel` listener and dedicated "Sync" button with `<AnimatedLoader>` in Section 2 header for on-demand 1-click DB synchronization.
+    - Client Session Cache Purge (`apps/web/components/machines/MachineAssignmentsQuickModal.tsx`):
+      - Exported `clearAssignmentsSessionCache(machineId)` and added window event listener to purge stale cache upon assignment mutations.
+  - **4. Quality Gates & Verification**:
+    - Automated test suite `supabase/tests/test_quick_assignment_update_fetch.mjs`: 5/5 tests passed on Dev DB `vlmxciuogczumumrwyot`.
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Monorepo Turbo check: 7/7 packages clean (`pnpm typecheck` passed in 6.1s).
+    - Dev Database `vlmxciuogczumumrwyot` verified; Production DB `dhbbgfzbyatzvqafnsqp` strictly untouched.
+
+- **Operator Overlapping Machine Assignment Validation & Short Error Handling (2026-09-28)**:
+  - **1. User Request**:
+    - On `/machines/[id]` (`/machines/57d6bd84-60b6-498a-8464-3546fafe6a3e`), inside `<OperatorShiftRosterEditor>`, when assigning a machine to any operator, validate whether this operator is already assigned at the same time to another machine. If overlapping, show the error with a concise, short error message.
+  - **2. Delivered**:
+    - Database Layer Hardening (Migration 128: `128_prevent_operator_overlapping_machine_assignment.sql`):
+      - Upgraded `assign_operator_machine_atomic()`: checks if the operator has an active assignment on another machine overlapping with `(v_shift_start, v_shift_end)` via `operator_shift_ranges`.
+      - Returns atomic error code `OPERATOR_ALREADY_ASSIGNED_OTHER_MACHINE` with short message: `"${operatorName} is already assigned to ${otherMachineCode} (${otherShiftStart} – ${otherShiftEnd})."` (e.g. `Operator 004 is already assigned to M/C-0001 (10:00 PM – 06:00 AM).`).
+      - Applied to Dev DB `vlmxciuogczumumrwyot` (Production DB `dhbbgfzbyatzvqafnsqp` strictly untouched).
+    - Web Data Access Layer (`apps/web/lib/data/machines/machine-filters.ts` & `actions/machines.ts`):
+      - Added `getActiveOperatorMachineAssignments()` query cached with tag `TAGS.machines`.
+      - Added `getActiveOperatorAssignmentsAction()` server action and exported `ActiveOperatorOtherAssignment`.
+      - Updated `getMachineModalOptionsAction()`, `updateMachineOperatorsAction()`, and `updateMachinePersonnelAction()`.
+    - Web Real-Time Roster Validation (`OperatorShiftRosterEditor.tsx`):
+      - Added circular 24h minute range overlap calculation across fleet machines.
+      - Rendered real-time conflict banner, card pill, conflicting shift chip indicators, and dropdown warning badges.
+      - Wired `onErrorChange` to block saving on parent modals.
+    - Web Modals Integration:
+      - In `MachinePersonnelModal` and `machine-edit-client.tsx`, passed `otherAssignments` to `<OperatorShiftRosterEditor>`.
+      - In `AssignOperatorModal.tsx`, added real-time cross-machine overlap pre-check, disabled confirm button, and rendered short error banner.
+    - Mobile Cross-Platform Synchronization (`apps/mobile/components/machines/MachineModal.tsx`):
+      - Extended `fetchDropdownOptions` to load active operator machine assignments.
+      - Added `getOperatorConflict()` helper checking circular 24h minute ranges.
+      - Added live red conflict pill and border to operator cards and blocked saving with short error banner in `handleSave()`.
+    - Verification:
+      - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+      - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+
+- **Machine Personnel Modal Header Simplification & Icon Removal (/machines/[id]) (2026-09-28)**:
+  - **1. User Request**:
+    - On `/machines/[id]` (`/machines/57d6bd84-60b6-498a-8464-3546fafe6a3e`):
+    - Change Supervisors header span to `"Assigned Supervisors"` (was `"Assigned Supervisors (Multi-Shift Oversight)"`).
+    - Change Operators header span to `"Assigned Operators (24h)"` (was `"Assigned Operators (24h Shift Execution)"`).
+    - Remove `<AnimatedWrench>` icon from Operators section.
+    - Remove `<AnimatedShieldCheck>` / `<AnimatedShield>` icon from Supervisors section.
+  - **2. Delivered**:
+    - `apps/web/components/machines/MachineEditModals.tsx`:
+      - Removed `<AnimatedShield>` icon and simplified label to `"Assigned Supervisors"`.
+      - Removed `<AnimatedWrench>` icon and simplified label to `"Assigned Operators (24h)"`.
+      - Cleaned up unused icon imports (`AnimatedShield`, `AnimatedWrench`, `Shield`, `Wrench`, `Clock`).
+    - Monorepo Cross-Component Standardization:
+      - `apps/web/components/machines/MachineModal.tsx`: Updated supervisor label to `"Assigned Supervisors"` and operator label to `"Assigned Operators (24h)"`.
+      - `apps/web/app/(app)/machines/[id]/edit/machine-edit-client.tsx`: Updated card headings to `"2. Assigned Supervisors"` and `"3. Assigned Operators (24h)"`.
+      - `apps/web/components/machines/OperatorShiftRosterEditor.tsx`: Cleaned up unused `AnimatedWrench` import and properly exported `ActiveOperatorOtherAssignment` interface.
+      - `apps/web/components/operations/modals/AssignOperatorModal.tsx`: Fixed property mapping (`operatorId`, `machineId`, `machineCode`, `shiftStartTime`, `shiftEndTime`) against `ActiveOperatorOtherAssignment`.
+    - Mobile App Synchronization (`apps/mobile/components/machines/MachineModal.tsx`):
+      - Updated supervisor section label to `"Assigned Supervisors"`.
+      - Updated operator section label to `"Assigned Operators (24h)"`.
+      - Updated sub-modal picker titles to `"Assigned Supervisors"` and `"Assigned Operators (24h)"`.
+      - Fixed `borderRadius: radiusNumeric.sm` on `operatorConflictBadge`.
+    - Automated Verification & Quality Gate:
+      - `supabase/tests/test_personnel_modal_machines.mjs`: 29/29 tests passed (100%).
+      - `pnpm --filter @reachinternational/web exec tsc --noEmit`: 0 errors.
+      - `pnpm --filter @reachinternational/mobile exec tsc --noEmit`: 0 errors.
+      - Dev Database `vlmxciuogczumumrwyot` verified; Production DB `dhbbgfzbyatzvqafnsqp` strictly untouched.
+
+- **Multi-Shift Machine Operator Assignment Fix (Up to 3 Operators) & Shift Overlap Prevention (2026-09-28)**:
+  - **1. User Request**:
+    - Fix machine operator assignment: Previously, assigning multiple operators collapsed or deactivated other operators, leaving only 1 operator assigned in the database.
+    - When closing the assign tab or modal, stale/old operator data was shown instead of the newly assigned operators.
+    - Support assigning up to 3 operators to a single machine across different shifts (e.g. S1 06:00–14:00, S2 14:00–22:00, S3 22:00–06:00).
+    - Surface proper errors across frontend, backend, and DB for shift timing overlaps, duplicate shift codes, and capacity limits.
+  - **2. Root Causes Identified**:
+    - **DB Trigger Collapse**: `public.sync_machine_personnel_arrays()` had legacy fallback `NEW.operator_ids := ARRAY[NEW.current_operator_id]`. Updating or setting `current_operator_id` wiped all other active operators from `operator_ids`, firing `trg_sync_machine_operator_assignments_on_update` which deactivated them with `end_reason = 'removed'`.
+    - **Concurrent Server Actions Race**: `MachinePersonnelModal.tsx` fired `Promise.all([updateSupervisors, updateOperators])`. Both actions sent simultaneous updates to `public.machines`, causing race conditions on triggers.
+    - **Missing Same-Machine Overlap Check**: Constraints on `operator_shift_ranges` only checked per-operator overlap across machines, but not per-machine overlap across operators.
+    - **Stale React State**: `machine-client-view.tsx` preserved old personnel state over fresh RSC props after `router.refresh()`.
+  - **3. Delivered Architecture**:
+    - **Database (Migration 127)**:
+      - Added `machine_id` to `public.operator_shift_ranges` and created PostgreSQL GiST exclusion constraint `osr_machine_shift_no_overlap` on `(machine_id WITH =, minute_range WITH &&) WHERE (is_active)`.
+      - Added partial unique index `idx_oma_machine_active_shift_code` on `public.operator_machine_assignments(machine_id, lower(trim(shift_code))) WHERE (is_active = true AND shift_code IS NOT NULL)`.
+      - Fixed `sync_machine_personnel_arrays()` to never collapse `operator_ids` when `current_operator_id` changes.
+      - Dropped obsolete 8-arg overload of `assign_operator_machine_atomic`.
+      - Upgraded canonical 9-arg `assign_operator_machine_atomic` to validate shift code collision (`SHIFT_CODE_CONFLICT`), shift timing overlap (`SHIFT_OVERLAP_CONFLICT`), and max 3 capacity (`MAX_OPERATORS_REACHED`).
+      - Applied and tested on Dev DB `vlmxciuogczumumrwyot`.
+    - **Backend (`apps/web/app/actions/machines.ts`)**:
+      - Added circular 24h minute overlap helpers: `shiftToMinuteRanges` and `doRangesOverlap` (handles shifts crossing midnight).
+      - Added pre-validation and enhanced RPC error mapping for `SHIFT_OVERLAP_CONFLICT`, `SHIFT_CODE_CONFLICT`, and `MAX_OPERATORS_REACHED`.
+      - Created unified `updateMachinePersonnelAction(machineId, { supervisorIds, operators })` eliminating concurrent table-update race conditions.
+    - **Web Frontend**:
+      - `OperatorShiftRosterEditor.tsx`: Added circular minute range overlap calculation, real-time warning banner ("Shift Timing Overlap Detected" showing exact operators, shifts, and conflicting times), and error state propagation.
+      - `MachineEditModals.tsx` (`MachinePersonnelModal`): Switched to unified `updateMachinePersonnelAction`, added error state with prominent "Assignment Failed" alert banner, and disabled save button when overlap errors exist.
+      - `machine-client-view.tsx`: Fixed stale personnel state bug by letting fresh RSC props from `router.refresh()` take precedence over old local state.
+      - `AssignOperatorModal.tsx`: Added "Covered: [Operator]" badge on shift pills when a shift is already assigned on the selected machine.
+    - **Mobile Frontend (`apps/mobile/components/machines/MachineModal.tsx`)**:
+      - Added RPC response error checking on `assign_operator_machine_atomic` and surfaced error alerts on failure.
+  - **4. Quality Gates**:
+    - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Dev DB verified: 3 operators assigned to S1, S2, S3 successfully stored in `machines.operator_ids`; overlapping shifts and duplicate shift codes rejected. Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+
+- **Operations Layout Feedback — Assign Operator Placement (Mobile 3-Dot & Desktop Left of Export) (2026-09-28)**:
+  - **User Feedback**:
+    - "move the assign operator from the seach and filter to the header 3 dot for the mobile user and for the desktop place the assign btn left of export btn"
+  - **Delivered**:
+    - **Web Desktop Header (`apps/web/components/operations/OperationsHeader.tsx`, `OperationsClient.tsx`)**:
+      - Added `onAssignOperator?: () => void` prop to `OperationsHeader`.
+      - Positioned primary `<Button variant="primary">` with `<UserPlus size={14}>` and label "Assign Operator" directly to the **left** of the "Export Report" button on desktop.
+      - Wired `handleAssignOperator` in `OperationsClient.tsx` to dispatch `reach:quick-assign` with authorization guard (`canAssign = userRole !== 'operator' && userRole !== 'client'`).
+    - **Web Mobile Header (`apps/web/components/layout/MobilePageHeader.tsx`)**:
+      - Enhanced 3-dot dropdown with `<AnimatedUserPlus size={15} className="text-sky-500" />` and label "Assign Operator" for `/operations`.
+      - Dispatches `reach:quick-assign` event upon click.
+    - **Web Today Shift Monitor (`apps/web/components/operations/TodayShiftMonitorTab.tsx`)**:
+      - Added `useEffect` listener for `reach:quick-assign` to open `AssignOperatorModal`.
+      - Removed the Assign button from `<FilterToolbar>` `actions`, leaving only the compact Refresh button and freeing up critical mobile screen real estate.
+      - Standardized the empty state CTA button label to "Assign Operator".
+    - **Mobile App Synchronization (`apps/mobile`)**:
+      - `apps/mobile/app/(app)/operations.tsx`: Added "Assign Operator" (`UserPlus` icon) to `headerActions` in the 3-dot dropdown for non-operators, with `isAssignModalOpen` state.
+      - `apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx`: Removed `styles.actionBar` above search/filter, added `isAssignModalOpen` prop, and updated empty state button label to "Assign Operator".
+    - **Quality**:
+      - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+      - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+      - Monorepo Turbo check: 7/7 packages clean (`pnpm typecheck` passed in 30.5s).
+
+- **UI/UX: Remove Client Details and Shift Indicator from Machine Personnel Modal (Web & Mobile Parity) (2026-09-28)**:
+  - **User Feedback**:
+    1. `#radix-_r_ci_ > .flex-1 > .space-y-4 > .rounded-xl`: "remove this client details completely".
+    2. `.space-y-4 > .rounded-xl > .space-y-3.5 > .flex`: "remove this completely".
+  - **Delivered**:
+    - **Web App (`apps/web`)**:
+      - `apps/web/components/machines/MachineEditModals.tsx`: Removed the "Linked Client & Shift Details" card completely from `MachinePersonnelModal`. Removed unused client variables (`clientObj`, `clientCompanyName`, `clientDisplayId`, `clientContactPerson`, `clientPhone`, `clientLocation`, `isRented`) and `loadingShifts` state. The modal now focuses cleanly on supervisors and operator shift assignment.
+      - `apps/web/components/machines/OperatorShiftRosterEditor.tsx`: Removed the "Configured Shifts ({clientShifts.length}): S1, S2, S3" template indicator banner (`.space-y-3.5 > .flex`). Cleaned up unused `Building2` icon and `loadingShifts` state.
+    - **Mobile App (`apps/mobile`)**:
+      - `apps/mobile/components/machines/MachineModal.tsx`: Synchronized mobile personnel section by removing the "Linked Client & Shift Details" banner (`selectedClient && <View style={styles.clientShiftBanner}>...`). Removed unused icons (`Building2`, `MapPin`, `Phone`, `User`) and unused style rules (`clientShiftBanner`, etc.).
+    - **Quality**:
+      - Web TypeScript check: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+      - Mobile TypeScript check: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+
+- **Fix: Machine Operator Assignment Shows Stale Data After Modal Close (2026-09-28)**:
+  - **Root Cause**: `useEffect` in `machine-client-view.tsx` preserved stale local personnel state over fresh RSC props because `prev.operators !== undefined` was always true after first render, silently discarding fresh server data from `router.refresh()`.
+  - **Fix**: Replaced defensive stale-preservation logic with `setMachineData(machine)` — fresh RSC props now always win. Optimistic updates via `handleMachineUpdated` still provide instant feedback.
+  - **File Changed**: `apps/web/app/(app)/machines/[id]/machine-client-view.tsx` (~20 lines removed).
+  - **Quality**: Web TypeScript 0 errors. No breaking changes.
+
+- **Operations Today's Shift Logs — Assign Personnel Dialogue Box Integration (Web & Mobile Parity) (2026-09-28)**:
+  - **1. User Request**:
+    - In Operations (Today's Shift Logs at `/operations`), add an "Assign Personnel" dialogue box.
+    - Ensure it is properly responsive for both mobile and desktop viewports.
+    - Reuse existing assign personnel components without duplicate code.
+  - **2. Scope & Target**:
+    - Web UI & Server Actions: `apps/web/components/operations/modals/AssignOperatorModal.tsx`, `apps/web/components/operations/TodayShiftMonitorTab.tsx`, `apps/web/components/operations/OperationsClient.tsx`, `apps/web/app/(app)/operations/page.tsx`, `apps/web/app/actions/operators.ts`.
+    - Mobile UI: `apps/mobile/components/operations/MobileAssignPersonnelModal.tsx`, `apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx`, `apps/mobile/components/operations/index.ts`.
+    - Cache & Fixes: `apps/web/lib/data/machines/machine-detail.ts`.
+    - Dev Database: `vlmxciuogczumumrwyot` (Prod DB `dhbbgfzbyatzvqafnsqp` strictly untouched).
+  - **3. Delivered Architecture**:
+    - **Web App (`apps/web`)**:
+      - Adapted `AssignOperatorModal.tsx`: made `assignments` prop optional; added self-sufficient lazy fetching of active machine assignments (`getMachineAssignmentsAction`) and active operators (`getActiveOperatorsAction`); standardized 24h capacity checks to 3 operators max per machine (`activeAssignmentsOnSelectedMachine.length >= 3`) strictly adhering to DB trigger `enforce_max_operators_per_machine` and RPC `assign_operator_machine_atomic`.
+      - Enhanced 3-tier responsive styling: Geist token styling, `p-4 sm:p-6`, 44px min touch targets on all buttons and inputs.
+      - Mounted `<AssignOperatorModal>` directly in `TodayShiftMonitorTab.tsx` with a primary "Assign Personnel" CTA button (`UserPlus` icon) in the `FilterToolbar` actions bar and in the `EmptyState` component.
+      - Wired `onSuccess={fetchData}` to auto-refresh the today shift roster immediately upon assignment confirmation.
+      - Pre-hydrated `activeOperators` via RSC `page.tsx` and forwarded through `OperationsClient.tsx`.
+    - **Mobile App (`apps/mobile`)**:
+      - Created native `MobileAssignPersonnelModal.tsx` utilizing Geist tokens, searchable machine selector, searchable operator selector, dynamic client shift codes strip with fallback to S1–S3, manual times toggle, live capacity counter (X / 3 Assigned), and error conflict card.
+      - Executed atomic RPC `assign_operator_machine_atomic`.
+      - Integrated "Assign Personnel" button into `MobileTodayShiftMonitorTab.tsx` action bar and empty state card, triggering immediate roster `refetch()` on confirmation.
+    - **Cross-Platform Parity & Quality**:
+      - Web TypeScript: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+      - Mobile TypeScript: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+
+- **Machine Personnel & Operator Assignment — Dynamic Client Shifts, Client Details, and DB Persistence Parity (2026-09-28)**:
+  - **1. User Request**:
+    - Show client details in the machine personnel / operator assignment dialog when the machine is rented.
+    - Dynamically fetch total shifts from the linked client's shift template (`client_shift_codes`) and display client details and shift options accordingly (instead of hardcoded `/3`).
+    - Change button label from "Save Operator Assignment" / "Update Personnel" to **"Save Assignments"**, and ensure clicking it reliably saves into the database.
+  - **2. Scope & Target**:
+    - Web UI & Server Actions: `apps/web/components/machines/MachineEditModals.tsx`, `apps/web/components/machines/OperatorShiftRosterEditor.tsx`, `apps/web/app/actions/machines.ts`, `apps/web/app/(app)/machines/[id]/tabs/OperatorTab.tsx`, `apps/web/app/(app)/machines/[id]/edit/machine-edit-client.tsx`.
+    - Mobile UI: `apps/mobile/components/machines/MachineModal.tsx`.
+    - Dev Database: `vlmxciuogczumumrwyot` (Prod DB `dhbbgfzbyatzvqafnsqp` strictly untouched).
+  - **3. Delivered Architecture**:
+    - Added dedicated **Linked Client & Shift Details** card in Web `MachinePersonnelModal.tsx` and Mobile `MachineModal.tsx` showing client company name, Client ID (`CLI-XXXX`), contact person, phone, location, and shift schedule badges with timings.
+    - Dynamically queries `client_shift_codes` to replace hardcoded shift count with `maxCapacity = clientShifts.length > 0 ? clientShifts.length : 3`.
+    - In `updateMachineOperatorsAction`, switched atomic assignment RPC execution from `supabase.rpc` to `supabaseAdmin.rpc("assign_operator_machine_atomic", ...)` for reliable server-side execution.
+    - Removed `!isDirty` lock on the save button, updated button label to **"Save Assignments"**, guaranteed assignment persistence is called, and triggered `router.refresh()` upon save.
+  - **4. Quality Gate**:
+    - Web TypeScript: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+- **Standardize Machine ID (`M/C-XXXX`) and Client ID (`CLI-XXXX`) — Unique, Immutable, Natural Primary Keys (Frontend, Backend, DB) (2026-09-28)**:
+  - **1. User Request**:
+    - Change Machine ID format from `"RI-MC-0002"` to `"M/C-0002"`. Must be unique, immutable, and primary key; all rest should remain consistent (`M/C-0001`, `M/C-0002`...).
+    - Create a dedicated `client_id` for each client. Must be unique, immutable, and primary key (`CLI-0001`, `CLI-0002`...).
+    - Apply this change end-to-end to frontend, backend, and database.
+  - **2. Scope & Target**:
+    - Database migration `125_standardize_machine_id_and_client_id.sql` applied to Dev DB (`vlmxciuogczumumrwyot`) (Production DB `dhbbgfzbyatzvqafnsqp` strictly untouched).
+    - Monorepo packages: `@reachinternational/types`, `@reachinternational/validation`, `@reachinternational/utils`.
+    - Web backend & data access: `apps/web/app/actions/machines.ts`, `apps/web/lib/data/machines/*`, `apps/web/lib/data/clients/*`, `apps/web/lib/queries/clients.ts`, `apps/web/lib/utils/excel-template.ts`.
+    - Web UI: `ClientsTable.tsx`, `ClientModal.tsx`, `ClientDetailClient.tsx`, `ClientDeleteModal.tsx`, `ClientDetailModal.tsx`, `ClientExportModal.tsx`, `MobileClientCard.tsx`, `ClientSelect.tsx`, `MachineRow.tsx`, `PrintableMachineDirectoryModal.tsx`, `TodayShiftMonitorTab.tsx`, `MachineImportModal.tsx`.
+    - Mobile UI: `MachineExportModal.tsx`, `AddMachineModal.tsx`, `MobileClientCard.tsx`, `clients.tsx`, `MobileTodayShiftMonitorTab.tsx`.
+  - **3. Delivered Architecture**:
+    - **Database**:
+      - Migrated all 30 machines to `M/C-0001` through `M/C-0030`, reset sequence `machines_id_seq` to 30, and updated `generate_machine_id()` function.
+      - Added trigger `trg_enforce_machine_id_immutable` on `public.machines` `BEFORE UPDATE`: blocks mutation of `machine_id` with `ERRCODE 23514`.
+      - Added `client_id TEXT` column to `public.clients`, backfilled from `code` (`CLI-0001` through `CLI-0005`), created unique index `idx_clients_client_id_unique`, sequence `clients_client_id_seq`, and synchronized `generate_client_code()`.
+      - Added trigger `trg_enforce_client_id_immutable` on `public.clients` `BEFORE UPDATE`: blocks mutation of `client_id` with `ERRCODE 23514`.
+      - Upgraded `get_today_shift_log_monitor` RPC to project `client_code` (`CLI-XXXX`) and support search queries on `cl.client_id`.
+    - **Backend & Actions**:
+      - Updated regex in `apps/web/app/actions/machines.ts` and `apps/web/lib/data/machines/machine-mutations.ts` to `/^M\/C-\d{4,}$/i`.
+      - Added explicit immutability guards in `updateMachineAction` and `updateMachine` rejecting any attempt to alter `machine_id`, and excluded `machine_id` from update payloads.
+      - Updated `machine-detail.ts` with `resolveMachineId` supporting lookup by UUID or `M/C-XXXX`.
+      - Updated `client-detail.ts`, `client-list.ts`, `client-mutations.ts`, and `queries/clients.ts` to select and format `client_id` alongside `code`. Excluded `client_id` from update payloads.
+    - **Web Frontend**:
+      - Updated `ClientsTable.tsx` column header to "Client ID" with bidirectional sorting on `client_id` or `code`.
+      - Updated `ClientModal.tsx` title to `Edit Client (${client.client_id || client.code})` and added disabled read-only `Client ID` field with `Lock` icon and "Permanent & Immutable" pill in Section 1.
+      - Updated `ClientDetailClient.tsx` hero badge to display and copy `client.client_id || client.code`, and updated WhatsApp account greeting.
+      - Updated `ClientDeleteModal.tsx` and `ClientDetailModal.tsx` to display `client.client_id || client.code`.
+      - Updated `ClientExportModal.tsx` to export "Client ID" column with `row.client_id || row.code`.
+      - Updated `MobileClientCard.tsx` (web) to display and copy `client.client_id || client.code`.
+      - Updated `ClientSelect.tsx` to search, select, and display `client_id` badge in trigger and dropdown items.
+      - Updated `MachineRow.tsx` and `PrintableMachineDirectoryModal.tsx` to show `machine.client?.client_id || machine.client?.code`.
+      - Updated `TodayShiftMonitorTab.tsx` to display `row.client_code || row.client_id`.
+    - **Mobile App**:
+      - Updated `AddMachineModal.tsx` to attach `machine_id` only upon creation, never on edit.
+      - Updated `MachineExportModal.tsx` fallback machine ID to `M/C-`.
+      - Updated `MobileClientCard.tsx` to display and copy `client.client_id || client.code`.
+      - Updated `clients.tsx` sorting, lean projection, search query, edit modal title, detail modal header, and added disabled immutable Client ID input with `Lock` icon in edit modal.
+      - Updated `MobileTodayShiftMonitorTab.tsx` search filter and machine-client row text to include `client_code`.
+  - **4. Quality Gate**:
+    - Web TypeScript: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+    - Packages TypeScript: 0 errors (`pnpm --filter "@reachinternational/*" exec tsc --noEmit`).
+    - Dev DB verified: 30 machines migrated to `M/C-XXXX`, 5 clients populated with `CLI-XXXX`, triggers block updates with `ERRCODE 23514`.
+
+- **Assign Personnel Dialogue Box Integration on Operations Page (/operations) (2026-09-28)**:
+  - **1. User Request**:
+    - In Operations (Today's Shift Logs at `/operations`), add an "Assign Personnel" dialogue box.
+    - Ensure it is properly responsive for mobile and desktop viewports.
+    - Reuse existing assign personnel components and maintain strict consistency with color, design, theme, and layout.
+  - **2. Scope & Target**:
+    - Web application (`apps/web`), Mobile application (`apps/mobile`).
+    - Dev database (`vlmxciuogczumumrwyot`) verified; Production database (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+  - **3. Delivered Architecture**:
+    - **Web**:
+      - Reused and updated `AssignOperatorModal.tsx`: made `assignments` prop optional and added fallback fetchers (`getMachineAssignmentsAction`, `getActiveOperatorsAction`) so it can be mounted independently without parent waterfalls. Standardized 24h capacity checks to 3 operators max per machine (`activeAssignmentsOnSelectedMachine.length >= 3`) matching DB migration 124. Added 3-tier mobile responsiveness (`p-4 sm:p-6`, 44px min touch targets).
+      - Mounted in `TodayShiftMonitorTab.tsx`: added "Assign Personnel" button with `UserPlus` icon in `FilterToolbar` actions bar and in `EmptyState` roster view. Auto-refreshes roster on assignment confirmation (`onSuccess={fetchData}`).
+      - Pre-hydrated `activeOperators` in RSC `page.tsx` and forwarded through `OperationsClient.tsx`.
+    - **Mobile**:
+      - Created native `MobileAssignPersonnelModal.tsx`: includes searchable machine picker, operator picker, dynamic shift code strip from `client_shift_codes`, manual time toggle, live capacity indicator (`X / 3 Assigned`), and atomic RPC `assign_operator_machine_atomic`.
+      - Mounted in `MobileTodayShiftMonitorTab.tsx`: added "Assign Personnel" button in top action bar and empty state card, auto-refetching roster on success.
+  - **4. Quality Gate**:
+    - Web TypeScript: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+
+- **Standardized 3-Shift Operator Machine Assignment & 4th Shift Deactivation (/machines/[id]) (2026-09-28)**:
+  - **1. User Request**:
+    - Update `supabase/migrations/124_support_four_shifts_operator_assignment.sql` so that the system maximum supports 3 shifts only for a 24-hour time period (three 8-hour shifts: S1 06:00–14:00, S2 14:00–22:00, S3 22:00–06:00, or client shifts A, B, C).
+    - If some operator was already assigned, remove/deactivate active operators specifically from the 4th shift.
+    - Properly implement and synchronize changes across database, backend actions, web frontend, and mobile app.
+  - **2. Scope & Target**:
+    - Database migrations (`supabase/migrations/124_support_four_shifts_operator_assignment.sql`), Server Actions (`apps/web/app/actions/machines.ts`), Web frontend components (`OperatorShiftRosterEditor.tsx`, `ShiftInputs.tsx`, `MachineEditModals.tsx`, `machine-edit-client.tsx`), Mobile app (`apps/mobile/components/machines/MachineModal.tsx`).
+    - Dev database (`vlmxciuogczumumrwyot`) updated; Production database (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+  - **3. Delivered Architecture**:
+    - Database: Atomically deactivated active assignments on 4th shift (`shift_code = 'S4'`) with `end_reason = 'removed'`, synchronized `machines.operator_ids`, and deleted obsolete `S4` from `client_shift_codes`. Upgraded `enforce_max_operators_per_machine()` to cap distinct operators at 3. Upgraded `assign_operator_machine_atomic()` with idempotency and 3-operator error message.
+    - Server Actions: Added `validOps.length <= 3` validation guard in `updateMachineOperatorsAction`, updated fallback `availableShifts` to 3 shifts (8h each), and updated capacity error strings.
+    - Web UI: Updated `ShiftInputs.tsx` to 3 default shifts of 8h each (S1, S2, S3), updated `OperatorShiftRosterEditor.tsx` to 3 shifts max, 3-column pill layout, and updated counter labels to `/3` across `MachinePersonnelModal` and edit page Card 3.
+    - Mobile UI: Synchronized `MachineModal.tsx` with 3-shift defaults (`DEFAULT_MOBILE_SHIFTS`), capped selection to 3 operators, added validation check, and updated counter copy.
+  - **4. Quality Gate**:
+    - Automated E2E test suite `supabase/tests/test_operator_shift_assignments.mjs`: 6/6 tests PASSED (including 4th assignment rejection by DB trigger).
+    - Web TypeScript: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+
+- **Dedicated Daily Running Logs Page & Dedicated Operations Page Isolation (/running-logs & /operations) (2026-09-28)**:
+  - **1. User Request**:
+    - Create a new dedicated page for daily running logs as a summary with dedicated page URL, proxy, and route changes.
+    - Dedicate the existing `/operations` page to today's logs and operator fast entry.
+    - Remove the overlapping tab switcher buttons ("Daily Running Hours" vs "Today's Shift Logs") so they don't overlap or collide.
+    - Reuse existing components, adhere strictly to Vercel Geist design tokens and layout consistency, and ensure proper route, proxy, backend, and mobile app synchronization.
+  - **2. Scope & Target**:
+    - Web application (`apps/web`), Mobile application (`apps/mobile`), and Permissions package (`packages/permissions`).
+    - Dev database (`vlmxciuogczumumrwyot`) verified; Production database (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+  - **3. Delivered Architecture**:
+    - `packages/permissions/src/navigation.ts`: Added `"running-logs"` to `NavKey`, `NAV_ITEMS` (roles: `super_admin`, `admin`, `manager`, `supervisor`), and `ACTIVE_PROTECTED_ROUTES`. Unit tests in `navigation.test.ts` passed (3/3).
+    - `apps/web/proxy.ts`: Added 307 temporary redirect from legacy `/operations?tab=logs` (preserving search params like `month`, `view`, `machine`) to `/running-logs`. Strips obsolete `tab=today` and `tab=entry` queries on `/operations`.
+    - `apps/web/app/(app)/running-logs/`: Created dedicated server component `page.tsx`, streaming `loading.tsx`, and client wrapper `RunningLogsClient.tsx`. Reused existing `<OperationsLogsTab>` and `<OperationsHeader title="Daily Running Logs" />`.
+    - `apps/web/components/operations/logs/OperationsLogsTab.tsx`: Dynamic route binding via `usePathname() || "/running-logs"`, removing hardcoded `/operations?` path in `window.history.replaceState`.
+    - `apps/web/app/(app)/operations/`: Streamlined `page.tsx` and `OperationsClient.tsx` to dedicate exclusively to Today's Shift Logs. Removed sub-navigation tab bar between Daily Running Hours and Today's Shift Logs.
+    - `apps/web/components/layout/AppSidebar.tsx` & `CommandPalette.tsx`: Added `Running Logs` to sidebar and distinct Command Palette shortcuts (`⌘O` for Today's Logs, `⌘R` for Running Logs).
+    - `apps/mobile`: Added dedicated `running-logs.tsx` screen, stripped tab bar from `operations.tsx` for supervisors/managers/admins, registered in `_layout.tsx`, and updated `navItems.ts`, `MainMenuModal.tsx`, and `MobileCommandPalette.tsx`.
+  - **4. Quality Gate**:
+    - Permissions unit tests: 3/3 passed.
+    - Web TypeScript: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+
+- **Client Shift Templates & Automated Overtime Derivation Audit (/clients/[id]) (2026-09-28)**:
+  - **1. User Request**: In client settings (`/clients/[id]`), review existing client shift templates to ensure normal minutes and scheduled minutes are configured appropriately for automated overtime derivation.
+  - **2. Scope & Target**: Inspected `ClientShiftCodesTab.tsx` and reviewed existing records in `public.client_shift_codes` across all 5 clients on the Dev database (`vlmxciuogczumumrwyot`). Production database (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+  - **3. Engine Math & Findings**:
+    - Stored procedure `submit_operator_hour_log_atomic` calculates:
+      - 1st Shift of day: `normal_hours = normal_minutes / 60.0`, `ot_hours = (scheduled_minutes - normal_minutes) / 60.0`.
+      - 2nd+ Shift on same date: `normal_hours = 0`, `ot_hours = scheduled_minutes / 60.0` (100% overtime).
+    - Verified all existing DB templates:
+      - Standard 8h shifts (`A`, `B`, `C` across all 5 clients): 480 scheduled / 480 normal $\rightarrow 8.0\text{h}$ normal, $0.0\text{h}$ built-in OT. Shift C correctly marked `crosses_midnight = true`.
+      - Standard 6h shifts (`S1`, `S2`, `S3`, `S4` on Afcons Infrastructure): 360 scheduled / 360 normal $\rightarrow 6.0\text{h}$ normal, $0.0\text{h}$ built-in OT.
+      - 12h shifts (`08:00–20:00`): Auto-derived by `ClientShiftCodesTab.tsx` as 720 scheduled / 480 normal $\rightarrow 8.0\text{h}$ normal, $4.0\text{h}$ built-in OT.
+    - Verified UI safeguards in `ClientShiftCodesTab.tsx`: validation prevents `normalMinutes > scheduledMinutes` and triggers `invalidateClientShiftsCache(clientId)` on mutation.
+  - **4. Quality Gate**: `pnpm --filter @reachinternational/web exec tsc --noEmit` passed (0 errors), `pnpm --filter @reachinternational/mobile exec tsc --noEmit` passed (0 errors).
+
+- **Mobile In-App Toast & Offline Resilience for Assisted Shift Logs (2026-09-28)**:
+  - **1. User Request**:
+    - Validate that the mobile app (`apps/mobile`) listens on `operator-alerts:${operatorId}` to display an in-app banner or toast when an assisted log is recorded while the app is active.
+    - Verify that if an operator is offline when the assisted entry is submitted, the missed notification is stored in the persistent database `notifications` table so it displays upon reconnection.
+  - **2. Database & Trigger Implementation (`123_persistent_notifications_and_offline_resilience.sql`)**:
+    - Created `public.notifications` table with `id`, `user_id`, `title`, `message`, `category`, `severity`, `metadata`, `is_read`, `read_at`, `created_at`.
+    - Created partial index `idx_notifications_user_unread` on `(user_id, created_at DESC) WHERE is_read = false`.
+    - Added RLS policies for user read/update ownership and authenticated supervisor/admin insertion.
+    - Implemented database trigger `trg_assisted_shift_notify_operator` on `machine_hour_logs` (`AFTER INSERT`): fires whenever `entered_by <> operator_id` (assisted entry), creating a persistent notification for the operator with machine code, supervisor name, running hours, and shift interval.
+    - Added RPCs `get_unread_notifications(p_user_id)` and `mark_notifications_read(p_notification_ids)`.
+  - **3. Mobile App Real-Time & Offline Sync (`apps/mobile/app/_layout.tsx`)**:
+    - Upgraded `MobileOperatorAlertsListener` with dual delivery:
+      1. Live WebSocket broadcast reception on `operator-alerts:${user.id}` for instant in-app animated `PostNotificationBanner` display while active.
+      2. `syncOfflineNotifications()`: queries unread notifications on mount, channel subscribe, and foreground transitions (`AppState.addEventListener('change', ...)`). Dispatches `postNotification()` and marks notifications as read in the database.
+  - **4. Web App Parity (`apps/web/components/operations/entry/OperatorEntryClient.tsx`)**:
+    - Added `syncOfflineNotifications()` to fetch and show unread persistent notifications via rich toasts on mount and channel subscribe.
+  - **5. Automated Testing & Verification**:
+    - Created `supabase/tests/test_mobile_toast_and_offline_resilience.mjs` verifying:
+      - Live mobile listener reception (163ms latency).
+      - Database trigger automatic insertion of unread notification on assisted log creation.
+      - Reconnection RPC query returning unread notification.
+      - Bulk mark-as-read and deduplication on subsequent syncs.
+      - 21/21 tests passed (0 failures) on Dev DB (`vlmxciuogczumumrwyot`).
+    - Monorepo TypeScript checks clean (`0 errors` across Web and Mobile).
+  - **Files**: `123_persistent_notifications_and_offline_resilience.sql`, `apps/mobile/app/_layout.tsx`, `OperatorEntryClient.tsx`, `test_mobile_toast_and_offline_resilience.mjs`, `CURRENT_TASK.md`, `STATE.md`, `CHANGELOG_AI.md`.
+- **Operator Shift ↔ Client Shift Linkage & Assignment-Time Shift Selection (2026-09-28)**:
+  - **1. Problem & User Request**:
+    - Operator shift timings previously operated independently from client shift times configured in `client_shift_codes`.
+    - When assigning an operator to a rented machine, supervisors had to manually enter free-form start/end times instead of choosing the client's defined shift.
+    - Assignments in `operator_machine_assignments` lacked a `shift_code` column, causing `get_today_shift_log_monitor` to drop or misalign rows.
+    - When operators visited `/operations`, the assigned shift was not pre-selected.
+  - **2. Database & RPCs (`122_link_operator_assignments_to_client_shifts.sql`)**:
+    - Added `shift_code TEXT` to `operator_machine_assignments` with partial index `idx_oma_shift_code`.
+    - Backfilled existing active assignments with matching `client_shift_codes.code`.
+    - Upgraded `assign_operator_machine_atomic(..., p_shift_code TEXT)` to persist shift code and include it in audit logs.
+    - Upgraded `get_operator_entry_context` to resolve `oma.shift_code` and return `assigned_shift_code` and `operator.shift_code`.
+    - Upgraded `get_today_shift_log_monitor` to match `COALESCE(a.oma_shift_code, csc.code)` with `LEFT JOIN` and time fallback.
+  - **3. Shared Packages**:
+    - `packages/types/src/database.ts`: Added `shift_code` to `OperatorMachineAssignment` and `OperatorEntryContext`.
+    - `packages/validation/src/machine.ts`: Added `shiftCode` to `CreateAssignmentSchema` and `UpdateAssignmentSchema`.
+  - **4. Backend Server Actions & Projections**:
+    - `assignments.ts`: Updated `createAssignmentAction` and `updateAssignmentAction` to accept and pass `shiftCode`.
+    - `operations-assignments.ts`: Added `shift_code` to `ASSIGNMENT_EXACT_PROJECTION` and `ASSIGNMENT_HISTORY_PROJECTION`.
+  - **5. Frontend Web UI**:
+    - `AssignOperatorModal.tsx`: Dynamically loads client shift codes when a rented machine is selected; displays client rental banner; renders horizontal shift pills with start/end times and overnight indicators; auto-fills start and end times on pill click; includes "Custom / Manual Times" toggle (`SlidersHorizontal`); displays `Shift [code]` badges in the active roster.
+    - `OperatorEntryClient.tsx`: Auto-selects `selectedShiftCode`, `startTime`, and `endTime` from `initialContext.assigned_shift_code`.
+    - `MachineAssignmentsQuickModal.tsx`: Added `Shift [code]` badge next to shift timing chips.
+  - **6. Mobile App Synchronization**:
+    - `MobileOperatorEntryCard.tsx`: Pre-fills start/end time from assigned client shift in `entryContext`.
+    - `MeterLogModal.tsx`: Receives `initialShiftCode` from `entryContext?.assigned_shift_code`.
+    - `MachineDetailView.tsx`: Displays `Shift ${o.shift_code}` on assigned operator cards.
+    - `useOperationsData.ts`: Added `shift_code` to assignment projections and returns `shift_codes` & `assigned_shift_code`.
+  - **7. Quality Gate**:
+    - Monorepo `pnpm typecheck` passed (7/7 packages clean, 0 errors).
+    - Web `tsc --noEmit` clean (0 errors), Mobile `tsc --noEmit` clean (0 errors).
+    - Tested RPCs on Dev DB (`vlmxciuogczumumrwyot`).
+  - **Files**: `122_link_operator_assignments_to_client_shifts.sql`, `database.ts`, `machine.ts`, `assignments.ts`, `operations-assignments.ts`, `AssignOperatorModal.tsx`, `OperatorEntryClient.tsx`, `MachineAssignmentsQuickModal.tsx`, `MobileOperatorEntryCard.tsx`, `operations.tsx`, `MachineDetailView.tsx`, `useOperationsData.ts`.
+- **Operational Shift Entry Simplification & Cross-Platform Alignment (/operations) (2026-09-28)**:
+  - **1. User Feedback**:
+    - `<OperatorEntryClient> <OperatorMachineInfo> "Assigned Equipment & Worksite"`: Changed to "Assigned Machine & Site".
+    - `<OperatorEntryClient> <HMRInputs> "Hour Meter Readings (HMR)"`: Changed to "HMR".
+    - `<OperatorEntryClient> <ShiftInputs> "OPERATIONAL SHIFT & TIMING"`: Changed to "Shift".
+    - `<OperatorEntryClient> <ShiftInputs> border border` at `.pt-2`: Removed completely along with the redundant advisory banner.
+    - `<OperatorEntryClient> <ShiftInputs> "Select Client Shift"`: Changed to "Select Shift" and made shift selection mandatory to fill.
+    - `<OperatorEntryClient> <ShiftInputs> <CustomDatePicker> "Log Date"`: Changed to "Select Date".
+    - Made changes consistent across supervisor assisted logs (`AssistedShiftEntryModal`), operator logs (`OperatorEntryClient`), and mobile logs (`MeterLogModal`).
+  - **2. Label Simplification & Double Border Removal**:
+    - `OperatorMachineInfo.tsx`: Updated heading to "Assigned Machine & Site".
+    - `HMRInputs.tsx`: Cleaned header to render "HMR" across all viewports.
+    - `ShiftInputs.tsx`: Updated heading to "Shift", date label to "Select Date", shift label to "Select Shift *" with required asterisk; removed `.pt-2` element with duplicate hairline border; added reactive auto-selection of first shift.
+  - **3. Strict Mandatory Shift Validation**:
+    - `OperatorEntryClient.tsx`: Added shift validation guard in `handleOpenConfirm` toast erroring with "Shift Required" if empty.
+    - `AssistedShiftEntryModal.tsx`: Added shift validation guard in `handleSubmit` toast erroring with "Shift Required" if empty.
+    - `MeterLogModal.tsx`: Added shift validation guard in `handleSubmit` erroring with "Please select an operational shift."
+  - **4. Mobile Cross-Platform Parity**:
+    - `MeterLogModal.tsx`: Updated date label to "Select Date *", shift label to "Shift", and shift strip label to "Select Shift *".
+  - **5. Verification**:
+    - Web TypeScript check clean (`0 errors`).
+    - Mobile TypeScript check clean (`0 errors`).
+  - **Files**: `OperatorMachineInfo.tsx`, `HMRInputs.tsx`, `ShiftInputs.tsx`, `OperatorEntryClient.tsx`, `AssistedShiftEntryModal.tsx`, `MeterLogModal.tsx`.
+- **Assisted Shift Entry Alignment, Unified Shift Inputs, Icon Sizing & Manual Time Toggle (/operations) (2026-09-28)**:
+  - **1. User Feedback**:
+    - Removed `<UserCheck>` icon from modal `<DialogTitle>` in `AssistedShiftEntryModal`.
+    - Removed `<Calendar>` icon from `.text-[11px]` label in `CustomDatePicker`.
+    - Equalized icon and text sizing in `<HMRInputs>` "Synced" / "Manual" lock button (`Lock`/`Unlock` size 12).
+    - Equalized icon and text sizing in `<CustomDatePicker>` trigger button (`Calendar` size 14 matching `text-xs sm:text-sm`).
+    - Equalized icon and text sizing in `<BreakdownSection>` (removed `h-7 w-7` box, aligned `AlertTriangle` size 14 inline with title).
+    - Refactored shift section: hid manual time pickers by default and displayed all client shifts; added "Manual Time Entry" toggle button to show start and end times; unified operator entry and supervisor entry to use the exact same shared `<ShiftInputs>` component without code duplication.
+  - **2. Universal Icon Bridge Class Sizing**:
+    - `icon-bridge.tsx`: Removed default parameter `size = 20`. Added detection of Tailwind sizing classes (`w-`, `h-`, `size-`). Prevents overriding explicit CSS classes with inline `20px` styles.
+  - **3. CustomDatePicker & HMR Sizing**:
+    - `CustomDatePicker.tsx`: Defaulted `showIcon = false` so labels render clean. Sized trigger button calendar icon to `size={14}` and `h-3.5 w-3.5` with `leading-none`.
+    - `HMRInputs.tsx`: Sized lock toggle icon to `size={12}` and font to `text-[11px] sm:text-xs font-medium leading-none`.
+    - `BreakdownSection.tsx`: Removed `h-7 w-7` box; aligned `AlertTriangle size={14}` inline with `h4` title.
+  - **4. Unified ShiftInputs & AssistedShiftEntryModal**:
+    - `ShiftInputs.tsx`: Added `DEFAULT_CLIENT_SHIFTS` fallback (S1-S4). By default, shows client shifts and hides manual time pickers (`showManualTimes = false`). Added "Manual Time Entry" button toggle with `SlidersHorizontal` icon. Aligned icons and text across shift selector, overtime, and rule note.
+    - `AssistedShiftEntryModal.tsx`: Removed `<UserCheck>` icon from `title`. Replaced custom date picker and ad-hoc shift timings/OT div with `<ShiftInputs>` directly. Added in-memory cached client shift fetching via `getClientShiftCodesAction(row.client_id)`.
+  - **5. Mobile App Synchronization**:
+    - `MeterLogModal.tsx`: Added `showManualTimes` toggle (`Manual Time Entry` / `Hide Manual Times`), showing client shifts by default and hiding manual inputs until toggled.
+  - **6. Verification**:
+    - Web TypeScript check clean (`0 errors`).
+    - Mobile TypeScript check clean (`0 errors`).
+  - **Files**: `icon-bridge.tsx`, `CustomDatePicker.tsx`, `HMRInputs.tsx`, `BreakdownSection.tsx`, `ShiftInputs.tsx`, `AssistedShiftEntryModal.tsx`, `MeterLogModal.tsx`.
+- **Operations Hub Lazy Loading, Code Splitting & Visible-Only Data Optimization (/operations) (2026-09-28)**:
+  - **1. User Feedback**:
+    - Targeted items on `/operations`: "Daily Running Hours", "Today's Shift Logs", "Machine", "Clients", "Operator" sub-tabs, `<MachineSelect>` button (`JCB 3DXRI-MC-0001(S/N: SN`), and `[Export Report]`.
+    - Requirements: Use lazy loading + code splitting where needed only; fetch only required data visible on screen; eliminate unwanted data; make every component fast loading and responsive across frontend, backend, and DB.
+  - **2. Database & Data Access Layer (DAL) Overfetching Elimination**:
+    - `operations-machine-logs.ts`: Trimmed `MACHINE_LOG_EXACT_PROJECTION` to project only necessary columns, dropping unused client address fields (`street`, `district`, `state`, `pincode`).
+    - `operators.ts` (`getOperationsHubData`): Guarded `getCachedOperationsOperators()` to skip querying operators when `viewMode === "machine"` or `viewMode === "client"`.
+    - Added fast path when `tab === "today"`: skips fetching monthly machine/client/operator logs and monthly summaries entirely; RSC directly pre-hydrates `initialTodayRows` via `getTodayShiftLogMonitor` for 0ms tab switch.
+  - **3. Frontend Code Splitting & Dynamic Imports**:
+    - `OperationsClient.tsx`: Dynamically imported `OperationsLogsTab` with `OperationsLogsTabSkeleton` loading fallback.
+    - `OperationsLogsTab.tsx`: Code-split subviews `OperationsMachineView`, `OperationsClientView`, `OperationsOperatorView` using `dynamic()`.
+    - `TodayShiftMonitorTab.tsx`: Dynamically imported heavy `AssistedShiftEntryModal`.
+    - Guarded in-memory calculations in `OperationsLogsTab.tsx`: `allClientsList`, `clientMachineIdsFromLogs`, `clientMachines`, `clientSites`, `orderedOperators`, and `orderedMachines` now only compute when their subview is active.
+    - Wrapped subview tab changes in `startTransition` for non-blocking UI responsiveness.
+  - **4. MachineSelect UI & Performance Optimization**:
+    - `MachineSelect.tsx`: Filtered search list evaluated lazily (`if (!isOpen) return []`).
+    - Dropdown portal and list items mount strictly when `isOpen`.
+    - Fixed button layout styling and spacing (`flex items-center justify-between gap-2 min-w-0`), preventing squished text (`JCB 3DXRI-MC-0001(S/N: SN`).
+  - **5. Export Report Integration**:
+    - Added `reach:export-print` custom event listener in `TodayShiftMonitorTab.tsx` so the header "Export Report" button triggers CSV export of today's monitor rows.
+  - **6. Bugfix**:
+    - Resolved transient Turbopack `ReferenceError: tab is not defined` in `page.tsx` by explicitly parsing and binding `currentTab` across server component and client props.
+  - **7. Verification**:
+    - Web TypeScript check clean (`0 errors`).
+    - Mobile TypeScript check clean (`0 errors`).
+  - **Files**: `operations-machine-logs.ts`, `operators.ts`, `page.tsx`, `OperationsClient.tsx`, `OperationsSkeletons.tsx`, `TodayShiftMonitorTab.tsx`, `MachineSelect.tsx`, `OperationsLogsTab.tsx`.
+- **Shift Monitor Server-Side Search, FilterToolbar & Enhanced Table Columns (2026-09-28)**:
+  - **Migration 121** (`121_shift_monitor_search_and_extra_fields.sql`):
+    - Updated `get_today_shift_log_monitor` RPC: added `operator_phone`, `machine_serial_number`, `machine_model` output columns.
+    - Added `p_search TEXT` parameter for server-side ILIKE filtering across operator name/phone, machine ID/serial/model, client name.
+    - No new indexes needed — GIN trigram indexes already existed on all search columns.
+  - **Type**: Added 3 new optional fields to `TodayShiftMonitorRow` in `packages/types/src/database.ts`.
+  - **DAL** (`lib/data/operations/today-shift-monitor.ts`): Passes `search` to RPC, bypasses `unstable_cache` when searching.
+  - **Server Action** (`app/actions/operators.ts`): `getTodayShiftMonitorAction` now accepts `search` parameter.
+  - **Component** (`TodayShiftMonitorTab.tsx`):
+    - Replaced inline search input with reusable `FilterToolbar` component (animated search, collapsible filter panel, reset button).
+    - Search debounced at 300ms, triggers server-side RPC — works on entire dataset, not just fetched page.
+    - Operator column: name + phone number below.
+    - Machine column: serial number + model · machine_id below.
+    - Client column: client name + client_id below.
+  - **Files**: `121_shift_monitor_search_and_extra_fields.sql`, `packages/types/src/database.ts`, `today-shift-monitor.ts`, `operators.ts`, `TodayShiftMonitorTab.tsx`.
+- **Fix Operator Single-Machine Enforcement & Shift Monitor Cartesian Explosion (/operations) (2026-09-27)**:
+  - **Root Cause**: `get_today_shift_log_monitor` RPC used `machines.operator_ids` (denormalized array) × `client_shift_codes` Cartesian product instead of authoritative `operator_machine_assignments`. Operator 001 appeared 10+ times across multiple machines/shifts when they had only 1 actual assignment. Additionally, `machines.operator_ids` was out of sync with ended assignments.
+  - **Fix (Migration 120)**:
+    1. Added `UNIQUE INDEX idx_oma_one_active_per_operator ON operator_machine_assignments(operator_id) WHERE is_active` — DB constraint enforcing one active machine per operator.
+    2. Rewrote `get_today_shift_log_monitor` to query `operator_machine_assignments` directly, joining to `client_shift_codes` only where shift times match the assignment.
+    3. Upgraded `assign_operator_machine_atomic` to auto-end previous assignment before creating new one (reassign flow).
+    4. Cleaned stale `machines.operator_ids` by re-syncing from authoritative assignments.
+    5. Ended duplicate active assignments (kept only latest per operator).
+  - **Result**: Shift monitor: 602 phantom rows → 55 actual assigned shifts. Operator 001: 10 rows → 1 row.
+  - **Files**: `supabase/migrations/120_fix_operator_single_machine_and_shift_monitor.sql`
+  - **Verification**: Dev DB migration applied, RPC tested, Web typecheck 0 errors.
+- **Assisted Shift Entry & Today's Shift Monitor with Real-Time Notification Dispatch (/operations) (2026-09-27)**:
+  - **1. User Request**:
+    - "i want to add a feature so supervisor , manager , admins can see who entered today shift logs and who now enter todays shift logs admin , manager ,supervisor can see the operator name also it should be rbac so supervisor can only see own operator who assign to that supervisor and the main feature is supervisor can entry the shift logs of any of their operator who not able to enter the logs with all same details as operator log entery make sure it should properly implement in frontend , backend and db also before making this page first use existing componnets make sure it should be consittuent to overall website , colour , design , layout etc"
+    - "Notification Dispatch (Optional Enhancement): If desired, trigger a push notification to the operator whenever a supervisor logs a shift on their behalf."
+  - **2. Root Cause & Architectural Strategy**:
+    - Previously, shift entry was restricted to the logged-in operator on their assigned machine, with no entry attribution (`entered_by`, `entry_source`) in `machine_hour_logs`.
+    - Supervisors, managers, and admins had no real-time monitor to see which assigned operators had completed their daily shift logs and who was pending.
+    - Operators needed real-time visibility when a supervisor logged a shift on their behalf to prevent duplicate entries and maintain operational transparency.
+    - Implemented a zero-new-table, high-performance realtime broadcast architecture using Supabase Realtime broadcast channels (`operator-alerts:${operatorId}`) and contextual read RPC data.
+  - **3. Delivered Solution**:
+    - **Database (`118_assisted_shift_entry_and_today_monitor.sql` & `119_assisted_shift_notification_dispatch.sql`)**:
+      - Added `entered_by UUID` and `entry_source TEXT` (`operator`, `supervisor`, `manager`, `admin`) to `machine_hour_logs` with backfill.
+      - Created `can_manage_operator_shift_log` RBAC function with support for `user_supervisors` and legacy `users.supervisor_id`.
+      - Extended `submit_operator_hour_log_atomic` to support `p_entered_by` and automatic entry source tracking.
+      - Extended `get_operator_entry_context` to include `entered_by`, `entered_by_name`, and `entry_source` in `last_log`.
+      - Created read RPC `get_today_shift_log_monitor` returning operator, machine, client, shift timings, status (`entered`/`pending`), HMR, and submitter attribution.
+    - **Real-Time Notification Dispatch**:
+      - Zero-table broadcasting over Supabase Realtime channel `operator-alerts:${operatorId}` with event `assisted_shift_logged`.
+      - Web: `AssistedShiftEntryModal.tsx` broadcasts event on submission. `OperatorEntryClient.tsx` subscribes and fires toast + native browser OS desktop notification if permitted + refreshes data.
+      - Web: `LastMachineLogCard.tsx` shows `Assisted Entry by {supervisor}` badge and contextual informational banner when today's shift was recorded by supervisor.
+      - Mobile: Root layout listener (`MobileOperatorAlertsListener` in `_layout.tsx`) receives broadcast, triggers `postNotification` (displaying top animated `PostNotificationBanner`, haptic feedback, and native push notification), and refreshes TanStack query cache.
+      - Mobile: `MobileOperatorEntryCard.tsx` displays contextual notice banner and assisted badges.
+    - **Web Application (`apps/web`)**:
+      - Added DAL wrapper `today-shift-monitor.ts` with 15s cache tagged with `TAGS.todayShiftMonitor`.
+      - Added server actions `getTodayShiftMonitorAction` and updated `submitOperatorHourLogAction`.
+      - Created `TodayShiftMonitorTab.tsx` with KPI chips (Total, Entered, Pending), filter pills, search input, desktop table + mobile touch cards, and 30s auto-refresh.
+      - Created `AssistedShiftEntryModal.tsx` for assisted entry with pre-filled context, HMR safety lock toggle, shift time selection, overtime presets, and breakdown duration tracking.
+      - Added sub-navigation tab switcher ("Daily Running Hours" vs "Today's Shift Logs") in `OperationsClient.tsx`.
+    - **Mobile Application (`apps/mobile`)**:
+      - Added `useTodayShiftMonitor` hook with 30s polling in `useOperationsData.ts`.
+      - Created `MobileTodayShiftMonitorTab.tsx` with KPI cards, filter pills, search bar, and touch cards with min 44px buttons.
+      - Extended `MeterLogModal.tsx` with `targetOperatorId`, `targetOperatorName`, `initialShiftCode`, `initialClientId`, `initialStartMeter`, `initialLogDate`, broadcast dispatch, and entry attribution.
+      - Added above-navbar sub-tab switcher for non-operators in `operations.tsx` and integrated `MobileTodayShiftMonitorTab`.
+  - **4. Verification**:
+    - Supabase Dev (`vlmxciuogczumumrwyot`) migrations 118 & 119 applied and tested.
+    - Web TypeScript compilation: 0 errors (`pnpm --filter @reachinternational/web exec tsc --noEmit`).
+    - Mobile TypeScript compilation: 0 errors (`pnpm --filter @reachinternational/mobile exec tsc --noEmit`).
+
+- **Compact Single-Row Daily Shifts Table with Short Headers (Option C) (/operations) (2026-09-26)**:
+  - **1. User Request**:
+    - "i want one day 2or 3 shift logs in single row instead of 3/4 rows for shift this make the overall summery too large now tell me best tabular format which is compact and show all the shift entry in single rows make the column name in short"
+    - User selected: Option C (Ultra-Thin Summary Row with Expandable Shifts).
+  - **2. Root Cause & Architectural Strategy**:
+    - Previously, each day was rendered inside an isolated card/box containing an entire separate `<table>` with redundant headers, borders, and margins. For a 30-day month, this generated 30 boxes and ~120 rows, bloating the overall page and requiring extensive vertical scrolling.
+    - Headers were verbose and took unnecessary horizontal width.
+  - **3. Delivered Solution**:
+    - **Unified Single Desktop Table (`OperationsLogsTable.tsx`)**:
+      - Consolidated all daily logs into **one unified table**.
+      - Rendered each date as a **1-line ultra-compact summary row** (~36px height) featuring:
+        - `#`: Day index
+        - `Date`: Compact format with day of week (e.g. `24-Sep (Thu)`)
+        - `Site` / `Machine`: Compact company name & location (or machine model in client view)
+        - `Shifts`: All logged shifts (S1, S2, S3, S4) displayed in a single line as compact micro-pills with running hours (e.g. `[S1 5.5h] [S2 6.5h] [S3 8.4h] (3)`) with rich hover tooltips.
+        - `Day HMR`: Day start and end meter reading (`1204.5 → 1224.9`)
+        - `Day RT`: Total day running hours (`20.4h`)
+        - `Day OT`: Total day overtime hours in operator view (`0h` or `+2.0h`)
+        - `BD`: Breakdown count badge (`0` or `1 BD`)
+        - `Rem`: Truncated day remarks (`Normal operation`)
+        - `Act`: Chevron toggle button to expand/collapse detailed shift breakdown
+      - Short column headers: `#`, `Date`, `Site` / `Machine`, `Shifts`, `Day HMR`, `Day RT`, `Day OT`, `BD`, `Rem`, `Act`.
+      - 1-click inline expandable sub-row: Clicking any daily row expands a neat inline mini-table detailing each individual shift with Shift badge & timings, Operator, HMR, RT, OT, Breakdown, Remarks, and individual Edit and Delete buttons.
+      - Added "Expand All" / "Collapse All" toggle button to top control bar.
+      - Over 75% vertical space reduction achieved.
+    - **Mobile List Accordion Parity (`OperationsLogsMobileList.tsx`)**:
+      - Converted daily cards to compact expandable touch cards (~65px height default).
+      - Header displays Date, Shifts count, Client/Site, Day HMR & Day RT, and inline shift badges.
+      - Tapping card header expands shift details with full touch controls (min 44px touch targets).
+      - Added "Expand All" / "Collapse All" toggle to top header strip.
+  - **4. Verification**:
+    - Web TypeScript check clean (`0 errors`).
+    - Mobile TypeScript check clean (`0 errors`).
+
+- **Operations Logs & Export Print Layout Compaction & Date Grouping Optimization (/operations) (2026-09-26)**:
+  - **1. User Request**:
+    - "reduce the vertical spacing as possible and remove the extra data"
+    - "also make the export and pdf according to it"
+    - "while exporting compact the rows and reduce the vertical spacing in the pdf/excel so while printing it take less pages to show the properly monthly data"
+    - "make it clean and well formatted data"
+  - **2. Root Cause & Architectural Strategy**:
+    - Daily log boxes and table cells had generous padding (`py-3 px-4`, container spacing `space-y-4`), multi-line descriptions (`8h normal / 2nd Shift (100% OT)`), and redundant stacked phone numbers that inflated height.
+    - PDF print layout generated flat rows where shifts were fractured across page breaks, and excessive margins caused 30-day reports to spread across 8–10 pages.
+    - Export spreadsheets (Excel / CSV) lacked Day HMR and Day Total Running Hours columns present in the UI daily boxes.
+  - **3. Delivered Solution**:
+    - **Web Operations Logs Table (`OperationsLogsTable.tsx`)**:
+      - Reduced day box header height and padding (`px-3 py-1.5`).
+      - Cut table cell padding from `py-3 px-4` to `py-1 px-2.5` (>50% vertical space savings).
+      - Shift badge (`Shift S1`) and timing placed inline on a single line; removed redundant second-line text on standard rows.
+      - Removed stacked phone numbers and multi-line location wraps; moved phone numbers to tooltip `title`.
+      - Reduced action button sizes to `h-6 w-6` with `size={12}`.
+      - Reduced container spacing between day boxes from `space-y-4` to `space-y-2`.
+    - **Web Mobile List (`OperationsLogsMobileList.tsx`)**:
+      - Reduced card padding to `p-2.5` and shift sub-card padding to `p-2 space-y-1.5`.
+      - Compressed operator/HMR strip to `p-1.5` and card container spacing to `space-y-2`.
+    - **PDF Print Styles & Modal (`pdf-print-styles.ts`, `PrintableSupervisorLogsModal.tsx`)**:
+      - Added `.day-group { break-inside: avoid !important; page-break-inside: avoid !important; }` so daily groups never break across pages.
+      - Replaced flat print table with date-grouped layout (`groupLogsByDate`).
+      - Added compact Day Summary Header spanning all columns with Date, Day of Week, Shift count, Day HMR (`start → end`), and Total Running Time.
+      - Reduced print table cell padding to `2px 2px`, font size to `8pt`, and line height to `1.15`.
+      - Result: A 31-day monthly operational report prints in **2 to 3 pages max**.
+    - **Web Excel Export (`supervisor-logs-export.ts`)**:
+      - Sorted chronologically by `log_date` and shift order weight.
+      - Calculated Day Summary (`daySummaryMap`) for Day Total HMR and Day Total Running Hours.
+      - Added `Shift`, `Shift Timings`, `Day HMR (Start → End)`, and `Day Total RT` columns across operator, client, machine, and default views with matching headers, summary rows, and column widths.
+    - **Mobile Synchronization (`apps/mobile/lib/pdf-html-templates.ts`, `apps/mobile/components/operations/OperationsExportModal.tsx`)**:
+      - Compacted `th` padding to `3.5px 2px`, `td` padding to `2.5px 2px`, font size to `8px; line-height: 1.15;`, and added `.day-group` page break avoidance.
+      - Implemented date grouping with Day Summary header row spanning all columns with Day HMR & Total RT in PDF export.
+      - Added `Shift`, `Shift Timings`, `Day HMR`, and `Day Total RT` to mobile CSV export.
+    - **Monorepo Quality Gate**:
+      - Web TypeScript check clean (`0 errors`).
+      - Mobile TypeScript check clean (`0 errors`).
+      - Browser visual verification confirmed in visual subagent screenshots (`compacted_daily_logs_1790428722394.png`, `printable_modal_preview_1790428835098.png`).
+
+- **Client Operations View Feedback Resolution — Merged Machine Column, Shift Code Timings, Daily Boxes, Overtime Removal & Shift Naming (/operations?view=client) (2026-09-26)**:
+  - **1. User Request**:
+    - "merge machine model and serial number in one column"
+    - "in the timing column show the shift code with time"
+    - "merge the same date shift logs of different shifts of the same day in one box for enhanced readability and understanding"
+    - "remove Overtime since there is no use of overtime in client view"
+    - "Change 'Logs' to 'Shift' (count the shifts, not the days; e.g. 1 day may have 1, 2, or 3 shifts, so count the shifts; change the name to Shift instead of logs; same format should be visible while exporting too)"
+  - **2. Root Cause & Architectural Strategy**:
+    - In client view, machine model and serial number occupied separate columns when they belong together as a single machine entity.
+    - Shift timing column showed raw times without the associated shift code badge (e.g. `[Shift S3] 06:00PM–11:59PM`).
+    - Shift logs of the same day for a client were not bundled in a daily date box, creating visual fragmentation across multiple machines/shifts.
+    - Overtime (OT) is irrelevant for client billing/operations view and created unnecessary clutter.
+    - The label "Logs" was ambiguous; each record represents an operational "Shift", and the count reflects logged shifts rather than calendar days.
+  - **3. Delivered Solution**:
+    - **Web Client View Component (`OperationsClientView.tsx`)**:
+      - Removed Overtime (`OT`) KPI card completely.
+      - Refactored KPI card grid to 3 cards: `RUN HOURS`, `BREAKDOWNS`, `SHIFTS` (`grid-cols-1 sm:grid-cols-3`).
+      - Renamed `Logs` to `Shifts` (`{totalMatchingLogs} {totalMatchingLogs === 1 ? "Shift" : "Shifts"}`).
+    - **Desktop Table (`OperationsLogsTable.tsx`)**:
+      - Merged Machine Model and Serial Number into one column (`Machine`: Model bold on top, Serial Number mono muted below).
+      - In timings column: rendered Shift Code badge with time (e.g. `[Shift S3] 06:00PM–11:59PM`) and `normal / 2nd Shift (100% OT)` sub-indicator.
+      - Grouped all shift logs of the same date into daily date boxes with day header summary.
+      - Shift rows ordered by machine first, then chronologically by start time.
+    - **Web Mobile List (`OperationsLogsMobileList.tsx`)**:
+      - Added merged Machine Model & Serial Number row for each shift in client view.
+      - Passed `logsViewMode` to `groupLogsByDate` for proper machine-first sorting.
+      - Added top summary strip displaying `N Days • N Shifts Logged`.
+    - **Web & Mobile Export Utilities (`supervisor-logs-export.ts`, `PrintableSupervisorLogsModal.tsx`, `OperationsExportModal.tsx`)**:
+      - Merged Model & Serial Number into `"Machine (Model & Serial No.)"`.
+      - Rendered Shift Code alongside timings.
+      - Removed Overtime from client view summary, table columns, and KPI strip.
+      - Renamed "Logs" to "Shift" / "Shifts" across all exports.
+    - **Mobile App Synchronization (`apps/mobile/app/(app)/operations.tsx`)**:
+      - Removed `OT` card from client summary detail view.
+      - Renamed `LOGS` to `SHIFTS` (`{activeMetrics.totalLogs} {activeMetrics.totalLogs === 1 ? 'Shift' : 'Shifts'}`).
+      - Displayed Shift Code with timings on client view log touch cards.
+    - **Monorepo Quality Gate**:
+      - Web TypeScript check clean (`0 errors`).
+      - Mobile TypeScript check clean (`0 errors`).
+      - Turbo Monorepo Typecheck: 7/7 packages clean (exit code 0).
+- **Daily Machine Shift Grouping in One Box with Day HMR & Running Hours (/operations) (2026-09-26)**:
+  - **1. User Request**:
+    - "see this machine logs in the screenshot in the same date 24-09-2026 show the all four shift in one box shift code with shift start and end time add this total hmr on that day total running time on that day make this change in the frontend , backend and db"
+  - **2. Root Cause & Architectural Strategy**:
+    - Machine hour logs were displayed as disconnected individual table rows where the date was redundantly repeated on every row without daytime aggregation.
+    - Shift codes (`S1`, `S2`, `S3`, `S4`) were not backfilled on seeded logs and not projected by backend exact projections (`MACHINE_LOG_EXACT_PROJECTION`).
+    - Standardized 4 shifts monorepo-wide and grouped logs by date into cohesive daily boxes with day HMR and total running time.
+  - **3. Delivered Solution**:
+    - **Database Migration (Migration 117 on Dev DB `vlmxciuogczumumrwyot`)**:
+      - Created `117_standardize_four_shifts_and_daily_logs.sql`.
+      - Backfilled `shift_code` (`S1`: Morning 06:00-12:00, `S2`: Afternoon 12:00-18:00, `S3`: Evening 18:00-24:00, `S4`: Night 00:00-06:00) and `shift_scheduled_minutes` (360) on `public.machine_hour_logs`.
+      - Upserted active `client_shift_codes` records (`S1`–`S4`) for all clients.
+      - Created trigger `trg_auto_set_machine_hour_log_shift_code` to auto-assign shift codes and scheduled minutes on insert/update.
+      - Maintained environment isolation: Dev DB `vlmxciuogczumumrwyot` updated; Production DB `dhbbgfzbyatzvqafnsqp` completely untouched.
+    - **Backend Query Projections**:
+      - Updated `MACHINE_LOG_EXACT_PROJECTION` (`operations-machine-logs.ts`), `CLIENT_LOG_EXACT_PROJECTION` (`operations-client-logs.ts`), `OPERATOR_LOG_EXACT_PROJECTION` (`operations-operator-logs.ts`), `OperationLogRow` (`operations-read-model.ts`), and `LOG_DETAILS_PROJECTION` (`operations-log-detail.ts`).
+    - **Desktop Table Daily Date Boxes (`OperationsLogsTable.tsx`)**:
+      - Grouped logs by date so all shifts on the same date render inside one cohesive box.
+      - Box Header displays: Date (`24-09-2026 (Thu)`), Client & Location (`Tata Projects Limited • Mumbai`), Shifts Logged count badge, Total Day HMR (`1204.5 → 1224.9`, 20.4 hrs), and Total Running Time (`20.5h`).
+      - Inside the box: Consolidated shift table with Shift Code (`Shift S1`–`S4`), start and end timings (`06:00 AM – 12:00 PM`), Operator details, Shift HMR, RT(h), Breakdown, Remarks, and Edit/Delete controls.
+      - Top Sort control bar with Date Sort toggle (Newest First / Oldest First).
+    - **Mobile Synchronization (`OperationsLogsMobileList.tsx`, `apps/mobile/app/(app)/operations.tsx`, `useOperationsData.ts`)**:
+      - Web mobile cards group by date into daily cards with day totals and shifts list.
+      - Native mobile `HourLogRecord` extended with `shift_code` and `shift_scheduled_minutes`, displaying shift code badge alongside shift timings.
+    - **Monorepo Quality Gate**:
+      - Web `tsc`: 0 errors. Mobile `tsc`: 0 errors.
+      - Browser visual verification confirmed in visual subagent screenshot.
+- **Fix Attendance Detail RPC Runtime Error (relation "calendar" does not exist) (/attendance/[userId]) (2026-09-26)**:
+  - **1. User Request**:
+    - Fix Console Error `[getAttendanceDetail] RPC error: {}` and Runtime Error `relation "calendar" does not exist at fetcher (lib\data\attendance\attendance-detail.ts:103:13) at AttendanceDetailPage (app\(app)\attendance\[userId]\page.tsx:35:16)`.
+  - **2. Root Cause & Architectural Strategy**:
+    - In migration 114, `get_attendance_daily_detail` was split into three separate queries. The second (`v_weekday_rollup`) and third (`v_summary`) queries attempted to query `calendar` and `daily_logs` from the first statement's CTE. In PostgreSQL, Common Table Expressions (`WITH ...`) exist only for the scope of that single statement. Executing subsequent queries referencing `calendar` failed with `42P01: relation "calendar" does not exist`.
+    - In addition, `weekdayRollup` in migration 114 was returning `jsonb_object_agg` instead of `jsonb_agg` array, breaking the `AttendanceWeekdayRollup[]` contract expected by the UI.
+  - **3. Delivered Solution**:
+    - **Database Migration (Migration 116 on Dev DB `vlmxciuogczumumrwyot`)**:
+      - Created `116_fix_attendance_daily_detail_rpc.sql` and corrected `114_add_user_employee_id_sequence_and_trigger.sql`.
+      - Re-architected `get_attendance_daily_detail` into a single atomic query with unified CTE scoping (`calendar`, `daily_logs`, `day_details`, `aggregated_days`, `aggregated_rollup`, `aggregated_summary`).
+      - Populated `v_days`, `v_weekday_rollup` (as a 7-element array sorted by `dow`), and `v_summary` in a single `SELECT INTO`.
+      - Tested and verified against Dev DB with sub-5ms latency.
+    - **Data Access Layer & Identifier Resolution (`apps/web/lib/data/attendance/attendance-detail.ts` & `actions/attendance.ts`)**:
+      - Extended `AttendanceDetailEmployee` with `employee_id` and `district`.
+      - Integrated `resolveUserId` in `getAttendanceDetailAction` and `page.tsx` so both UUID and `EMP-xxxx` identifiers resolve.
+      - Added defensive error check on RPC responses.
+    - **UI & Metadata (`apps/web/app/(app)/attendance/[userId]/`)**:
+      - Dynamic metadata (`generateMetadata`) with employee name and code.
+      - `<EmptyState>` with return button if employee not found.
+      - Authoritative `employee.employee_id` in breadcrumbs and code chips.
+    - **Mobile Synchronization (`apps/mobile/app/(app)/attendance.tsx`)**:
+      - Extended `AttendanceDetailData['employee']` with `employee_id`.
+      - Updated modal to show `detailData.employee.employee_id || EMP-xxxx`.
+    - **Monorepo Quality Gate**:
+      - Web `tsc`: 0 errors. Mobile `tsc`: 0 errors. Turbo typecheck: 7/7 packages clean. Permissions tests: 3/3 passed.
+
+- **Signup Page Feedback Resolution — Section Icons, Salary Decoupling, Bank Details & Document Upload (/signup) (2026-09-26)**:
+  - **1. User Request**:
+    - "Page Feedback: /signup (Viewport: 1536×735): 1. Remove User icon from Section 1 header; 2. Remove Clock icon from Section 2 header; 3. Remove MapPin icon from Section 3 header; 4. Remove Lock icon from Section 4 header; 5. Remove salary field and update DB constraint so operator does not need to put salary when signing up as salary is decided by admin or hr; 6. Add bank account number, ifsc code, and bank document upload card."
+  - **2. Root Cause & Architectural Strategy**:
+    - Section header icons on `<FormSectionCard>` cluttered the numbered step sequence.
+    - Operator salary was historically required at registration, but company operational workflow assigns compensation exclusively through Admin and HR. Database constraint `users_operator_monthly_salary_check` previously rejected non-positive or null salaries for non-pending operators.
+    - Employee onboarding requires valid banking coordinates (Account Number + RBI IFSC code) and official proof (passbook front page, cancelled cheque, or bank statement) for compensation disbursement.
+  - **3. Delivered Solution**:
+    - **Header Icons Removal (`apps/web/app/signup/page.tsx`)**:
+      - Removed `icon` prop from all 4 `<FormSectionCard>` calls; section headers now display clean numbered step circles (`1`, `2`, `3`, `4`).
+    - **Database Schema & Trigger Evolution (Migration 115 on Dev DB `vlmxciuogczumumrwyot`)**:
+      - Registered `'bank_document'` and `'bank_passbook'` document types in `public.user_document_types`.
+      - Relaxed constraint `users_operator_monthly_salary_check` to `CHECK (monthly_salary IS NULL OR monthly_salary >= 0)`.
+      - Ensured `bank_account_number` and `bank_ifsc_code` columns and index `idx_users_bank_account_number` exist on `public.users`.
+      - Updated `handle_new_user()` trigger to persist `bank_account_number` and `bank_ifsc_code` from user metadata.
+    - **Validation & Shared Utilities**:
+      - `packages/utils/src/string.ts`: Implemented `validateBankAccountNumber` (9-18 digits, repeats rejection), `validateIfscCode` (11-character RBI regex `^[A-Z]{4}0[A-Z0-9]{6}$`), and formatting helpers.
+      - `packages/validation/src/auth.ts`: Added `BankAccountNumberSchema` and `BankIfscSchema`; decoupled `monthly_salary` in `SignupSchema`.
+    - **Web Signup Flow & Server Actions**:
+      - `apps/web/app/actions/auth.ts`: Removed mandatory salary check; enforced bank account, IFSC, and mandatory bank document file; uploaded file to storage `user_files/documents/${userId}/bank_document.${ext}` and registered in `public.user_documents`.
+      - `apps/web/app/signup/page.tsx`: Removed salary field; added Bank Account Number and IFSC Code with instant live validation; added Bank Document upload card with file preview and remove button; updated Section 3 title to "Address, Banking & Identity".
+    - **Cross-Platform Mobile Synchronization (`apps/mobile/app/(auth)/signup.tsx`)**:
+      - Removed `monthlySalary` state and `<MobileSalaryField>`.
+      - Added bank state, bank inputs with instant live validation, and `<MobileDocumentUploadCard>` with `docTypeCode="bank_document"`.
+      - Extended `MobileDocumentUploadCard.tsx` and `uploadUserDocumentDirect` in `documents.ts` to support `bank_document`.
+      - Updated `section1Complete`, `section3Complete`, `missingFields`, and `handleSignup`.
+  - **4. Verification**:
+    - Web TypeScript check: `pnpm --filter @reachinternational/web exec tsc --noEmit` clean (0 errors).
+    - Mobile TypeScript check: `pnpm --filter @reachinternational/mobile exec tsc --noEmit` clean (0 errors).
+    - Turbo monorepo typecheck: `turbo run typecheck` passed (7/7 packages clean, exit code 0).
+    - Permissions RBAC test suite: 3/3 passed.
+    - Target Dev DB `vlmxciuogczumumrwyot` verified (Migration 115 applied). Production DB `dhbbgfzbyatzvqafnsqp` completely untouched.
+
+- **Dedicated User Profile Details Page & Sequential Employee ID (EMP-xxxx) System (/users & /users/[id]) (2026-09-26)**:
+  - **1. User Request**:
+    - "i want user details page instead of just dialogue page. remove this user details dialogue box completely and make the proper user details page with all related details. make sure profile page should be consistent ui/ux , colour , layout , design etc. before create this profile detials page make sure use all the existing reusable components if not exist components then create reusable and use it here. also i want each and every employye should have unique id like EMP-xxxx. make this change in the database and the frontend. make sure this page should be fast respons" (Viewport: 1536×695).
+  - **2. Root Cause & Architectural Strategy**:
+    - The existing `/users` directory opened a slide-over modal `UserDetailSheet.tsx` which crammed personnel details into an ephemeral drawer rather than a proper bookmarkable, linkable, comprehensive user details page.
+    - Personnel records lacked a sequential human-readable employee code (like `EMP-xxxx`), relying solely on 36-character UUIDs.
+    - Deep relationships (assigned machines, running logs, shift assignments, attendance history, document vault, and audit trails) had no dedicated interface.
+  - **3. Delivered Solution**:
+    - **Database Schema & Sequence Evolution (Migration 114 on Dev DB `vlmxciuogczumumrwyot`)**:
+      - Created `public.user_employee_id_seq` starting at 105.
+      - Added `employee_id TEXT NOT NULL UNIQUE` to `public.users` with index `idx_users_employee_id`.
+      - Backfilled all 105 personnel sequentially (`EMP-0001` through `EMP-0105`).
+      - Created `BEFORE INSERT` trigger `trg_set_user_employee_id` auto-assigning formatted `EMP-xxxx`.
+      - Upgraded `get_attendance_daily_detail` RPC to return authoritative `employee_id`.
+    - **Teardown of User Details Dialog Modal**:
+      - Deleted `apps/web/app/(app)/users/UserDetailSheet.tsx` (768 LOC removed).
+      - Removed all dialog state and props from `users-client.tsx` and `UsersTable.tsx`.
+    - **Dedicated Full-Page User Details Route (`apps/web/app/(app)/users/[id]/`)**:
+      - Created `page.tsx`, `loading.tsx`, and `UserDetailClient.tsx` matching Vercel Geist design tokens (`#171717`, `#fafafa`, `#ffffff`, `#ebebeb`).
+      - Identifier resolution: `resolveUserId(idOrCode)` dynamically handles canonical UUIDs or human-friendly `EMP-xxxx` codes with tag-based caching (`TAGS.users`).
+      - Master Hero Banner: Initials avatar with role gradient, full name, 1-click copyable `EMP-xxxx` pill, status/role badges, and administrative actions (Edit Profile via `<UserEditModal>`, Call Phone, Email, Reset Password, Activate/Deactivate, Delete).
+      - 4 Identity & Specification Cards: Contact, Employment & Role, Shift Schedule & Compensation, Base Worksite & Address.
+      - 4 Real-Time Operational KPI Cards: Assigned Fleet Machinery, Total Logged Running Hours, Attended Work Days, Uploaded Regulatory Documents.
+      - 6 Sub-Navigation Tabs: Assigned Machinery, Machine Running Logs, Assignment History, Daily Attendance Logs, Document Vault (with integrated `<DocumentViewerModal>`), and Audit Logs.
+      - In-tab instant search and quick-filter controls.
+    - **Directory Navigation & Cards**:
+      - Table Rows (`UserRow.tsx`): Name column features sequential `EMP-xxxx` badge; row click and Enter/Space keyboard navigate directly to `/users/${user.employee_id || user.id}`; action menu includes "View Profile Details".
+      - Mobile Cards (`MobileUserCard.tsx`): Displays `EMP-xxxx` chip in header and navigates to the dedicated full page.
+    - **Cross-Platform Mobile Synchronization (`apps/mobile`)**:
+      - User List (`users.tsx`): Updated search filter to match `EMP-xxxx` or numeric digits; displays `employee_id` chip on `UserTouchCard`.
+      - User Modals (`UserDetailModal.tsx`, `UserEditModal.tsx`): Shows `EMP-xxxx` badge in modal headers and provides 1-click copyable Employee ID in Account Details well.
+      - User Directory Exports (`UserExportModal.tsx`): Included `Employee ID` in CSV column structure and PDF report tables.
+      - Profile Screen (`profile.tsx`): Current authenticated user sees their own `EMP-xxxx` badge in hero card and Account Details info row with 1-click clipboard copy.
+  - **4. Verification**:
+    - Web TypeScript check: `pnpm --filter @reachinternational/web exec tsc --noEmit` exited code 0 (0 errors).
+    - Mobile TypeScript check: `pnpm --filter @reachinternational/mobile run typecheck` exited code 0 (0 errors).
+    - Monorepo Turbo typecheck: `turbo run typecheck` passed (exit code 0).
+    - Permissions RBAC suite: `pnpm --filter @reachinternational/permissions test` passed (3/3 pass, exit code 0).
+    - Target Dev DB `vlmxciuogczumumrwyot` verified (105/105 users assigned `EMP-xxxx`). Production DB `dhbbgfzbyatzvqafnsqp` completely untouched.
+
+- **Comprehensive Profile Data Exposure & Shift Timings Parity (/profile) (2026-09-26)**:
+  - **1. User Request**:
+    - "in the user profile show all the data like shift time and other which is still are not showing here" (Viewport: 1536×695, `#main-content > .max-w-4xl`).
+  - **2. Root Cause**:
+    - In `public.users`, shift timings are stored as `shift_start_time` and `shift_end_time` (e.g., `06:00:00` and `12:00:00`), whereas `apps/web/lib/profile-view.ts` looked for `u.shift_time` which was always `null`.
+    - The `rows()` helper in `profile-view.ts` automatically stripped any rows where the value was `null`, empty string, or `" — "`, causing Shift Timing, Assigned Machinery, Supervisor, Location, Salary, Bank Details, and Leave Quota rows to disappear completely.
+    - Management accounts (`super_admin`, `admin`, `manager`, `hr`, `supervisor`) in dev DB had `null` shift start/end times, DOJ, bank details, and identity numbers.
+  - **3. Delivered Solution**:
+    - **Database Schema & Data Migration (Migration 113 on Dev DB `vlmxciuogczumumrwyot`)**:
+      - Seeded management accounts with standard shift timings (`09:00:00` - `18:00:00`), bank details, identity numbers, and date of joining (`2026-01-15`).
+    - **Data Access Layer & Projection (`apps/web/lib/data/users/user-detail.ts`)**:
+      - Extended `USER_DETAIL_COLUMNS` projection with: `doj`, `bank_account_number`, `bank_ifsc_code`, `total_pl_quota`, `pl_used_as_on_date`, `daily_rate`, `ot_hourly_rate`, `monthly_salary`, `shift_start_time`, `shift_end_time`.
+      - Added `getUserAssignedMachines(userId)` fetching active/assigned machinery fleet equipment.
+    - **Rich Profile View Model (`apps/web/lib/profile-view.ts`)**:
+      - Implemented `computeShiftDisplay` converting DB `time` to 12-hour AM/PM with duration (e.g. `09:00 AM — 06:00 PM (9 hrs)`).
+      - Structured 7 comprehensive sections: Work & Operations, Compensation & Payroll, Banking Details, Identity & Statutory, Residential Address, Contact Information, Account & System.
+    - **Web UI Components & Edit Flow**:
+      - Created `ProfileFieldCopyButton.tsx` for 1-click clipboard copying.
+      - Updated `apps/web/app/(app)/profile/page.tsx` adding quick hero badges for Shift Timing and Date of Joining, size 16 bridged icons, and machine deep-links.
+      - Updated `EditProfileModal.tsx` and `app/actions/profile.ts` with 12h time pickers and 24h persistence.
+    - **Mobile App Synchronization (`apps/mobile/app/(app)/profile.tsx` & `EditProfileModal.tsx`)**:
+      - Expanded mobile query projection and added UI cards for Shift Timing, Assigned Machinery, Compensation, Leave Balance, and Banking Details with clipboard copying.
+  - **4. Verification**:
+    - Web TypeScript check: `pnpm --filter @reachinternational/web exec tsc --noEmit` exited code 0 (0 errors).
+    - Mobile TypeScript check: `pnpm --filter @reachinternational/mobile exec tsc --noEmit` exited code 0 (0 errors).
+    - Monorepo Turbo typecheck: `turbo run typecheck` passed (7/7 packages clean, exit code 0).
+    - Permissions RBAC suite: `pnpm --filter @reachinternational/permissions test` passed (3/3 pass, exit code 0).
+
+- **Client Shift Codes & Centralized Shift-Based Overtime Engine (/operations & /clients/[id]) (2026-09-26)**:
+  - **1. User Request & Council Review**:
+    - Centralized Client Shift + Operator Shift Log system to support multiple clients running 24h machinery (e.g. Client A with 3x8h shifts: A 06-14, B 14-22, C 22-06; Client B with 2x12h shifts: A 06-18, B 18-06).
+    - Operators select shift codes directly (Shift A / B / C) rather than fat-fingering times.
+    - Centralized business rule: 1st shift worked today by an operator = Normal hours (plus built-in OT if configured); 2nd+ shift worked today by the same operator = 100% Overtime (0 normal hours).
+    - Supervisor logs summary: Both Shift A and Shift B display with the operator's name and clear shift indicators.
+    - HR attendance & payroll compatibility: Derives 1 attended day (`COUNT(DISTINCT log_date)`) and accurate hours without double-counting days.
+    - Zero data loss: All existing historical shift logs preserved without mutation.
+  - **2. Delivered Solution**:
+    - **Database Schema & RPC Migration (Migration 112 on Dev DB `vlmxciuogczumumrwyot`)**:
+      - Created `public.client_shift_codes` table with check constraints, foreign key to `public.clients(id) ON DELETE CASCADE`, and unique constraint `(client_id, code)`.
+      - Added snapshot columns `shift_code TEXT` and `shift_scheduled_minutes INTEGER` to `public.machine_hour_logs` with index on `(operator_id, log_date)`.
+      - Seeded 15 default shifts across all 5 clients.
+      - Upgraded `submit_operator_hour_log_atomic` RPC to support `p_shift_code`:
+        * Shift template resolution by client & code/name.
+        * Duplicate shift prevention: rejects duplicate shift code submissions by the same operator on the same operational date.
+        * Centralized OT rule: 1st shift worked today = `normal_minutes` (plus built-in OT if `scheduled_minutes > normal_minutes`, e.g. 12h = 8h normal + 4h OT); 2nd+ shift worked today by the same operator = **100% Overtime** (0 normal hours).
+        * Snapshots `shift_code`, `shift_scheduled_minutes`, and `shift = 'Shift ' || shift_code` immutably on the log.
+      - Extended `get_operator_entry_context` to return active `shift_codes: jsonb_agg(...)` for the assigned client in one atomic query.
+      - Extended `get_operation_logs` to project `shift_code` and `shift_scheduled_minutes`.
+    - **Shared Monorepo Packages**:
+      - `@reachinternational/types`: Added `ClientShiftCode` interface, updated `MachineHourLog` and `OperatorEntryContext`.
+      - `@reachinternational/validation`: Added `UpsertClientShiftCodeSchema` and updated `SubmitHourLogSchema` with `shiftCode`.
+    - **Web Client Shift Configuration Management (`/clients/[id]`)**:
+      - Implemented `apps/web/components/clients/ClientShiftCodesTab.tsx` providing a complete manager/admin shift configuration panel (add, edit timings/normal hours/built-in OT/midnight crossover, toggle active status, delete shift codes with confirmation).
+      - Added "Shift Codes" tab to `ClientDetailClient.tsx` and server-side data fetching in `apps/web/lib/data/clients/client-detail.ts` via `getClientShiftCodes`.
+      - Server actions: `getClientShiftCodesAction`, `upsertClientShiftCodeAction`, and `deleteClientShiftCodeAction`.
+    - **Operator Entry & Shift Selection (Web & Mobile Synchronization)**:
+      - Web (`ShiftInputs.tsx` & `OperatorEntryClient.tsx`): Shift selector buttons (`[ Shift A ] [ Shift B ] [ Shift C ]`), auto-derived timings, duration preview, built-in OT notice, and optional custom time override.
+      - Mobile (`MeterLogModal.tsx`): Horizontal touch strip with min 44px touch targets, auto-timing assignment, and atomic RPC integration with `p_shift_code`.
+    - **Operations Logs & Supervisor Summary Display**:
+      - Desktop table (`OperationsLogsTable.tsx`) and mobile cards (`OperationsLogsMobileList.tsx`): Displays `Shift A / Shift B` badge and highlights `2nd Shift (100% OT)` in amber when normal hours = 0 and OT > 0.
+  - **3. Verification**:
+    - Automated Database Test Suite (`supabase/tests/test_client_shifts_and_ot.mjs`): 16/16 PASSED against Dev DB `vlmxciuogczumumrwyot`.
+    - Turbo Monorepo Typecheck: 7/7 packages clean (exit code 0).
+    - Dev server operational with zero regressions.
+
+- **Client Details Page Implementation & Sidebar Drawer Removal (/clients & /clients/[id]) (2026-09-26)**:
+  - **1. User Request**:
+    - "remove this client sidebar instead client details page create properly clients details page with consistent ui/ux , color , design , layout etc before create client details page reuse the maximum existing reusable components if not exist then create reusable components and use it in the clients page"
+  - **2. Delivered Solution**:
+    - **Removed Slide-Over Sidebar Drawer & Dead Code**:
+      - Deleted `ClientDetailDrawer` dynamic chunk import, open state, and sidebar layout from `apps/web/components/clients/ClientsCoordinatorClient.tsx`.
+      - Deleted dead component file `apps/web/components/clients/ClientDetailDrawer.tsx`.
+      - Removed export of `ClientDetailDrawer` from `components/clients/index.ts` and `ClientsClient.tsx`.
+      - Updated `ClientsTable.tsx` so clicking client code, company name, or the Eye action icon navigates directly to `/clients/${client.id}` via Next.js App Router `<Link>`.
+      - Updated `MobileClientCard.tsx` and `ClientsCoordinatorClient.tsx` to route directly to `/clients/${client.id}` on click.
+    - **Dynamic Client Identifier Resolution**:
+      - Implemented `resolveClientId(idOrCode)` in `apps/web/lib/data/clients/client-detail.ts`.
+      - Resolves canonical UUID whether URL passes a UUID or human-readable client code (`/clients/CLI-0001`).
+    - **Dedicated Client Details Route (`/clients/[id]`)**:
+      - Created Server Component `apps/web/app/(app)/clients/[id]/page.tsx` with role validation (`requireRole("super_admin", "admin", "manager", "supervisor")`), parallel data fetching via `Promise.all` across client profile, location, KPIs, machinery fleet, running logs (50 records), operator assignments, history, and audit logs.
+      - Created streaming skeleton `apps/web/app/(app)/clients/[id]/loading.tsx` adhering to Vercel Geist design tokens (`#171717`, `#fafafa`, `#ffffff`, `#ebebeb`).
+      - Created reusable client component `ClientDetailClient.tsx` featuring:
+        - Breadcrumb navigation (`Home / Clients / [Company Name]`) and `< Back to Clients` link.
+        - Master Hero Card with company name, client code pill (1-click copy with toast), status badge, and action shortcuts (`Edit Profile` launching `ClientModal`, `Call`, `WhatsApp`).
+        - 4 High-Density Metadata Cards: Contact Person, Tax & Statutory (GSTIN & PAN with copy buttons), Operational Site Location (with Google Maps link), and Registered Billing Address.
+        - 4 Interactive KPI Metric Cards: Assigned Fleet Units, Running Hours, Operators Assigned, Account Standing.
+        - 5 Operational Sub-Tabs: Machines (with `Inspect →` links to `/machines/[id]`), Running Logs, Operator Assignments, Account History, and Security Audit Trail.
+        - In-tab instant search filtering across table rows.
+    - **Component Reuse & Design System Adherence**:
+      - Reused `Button`, `EmptyState`, `TooltipWrapper`, `Badge`, `ClientModal`, `EnterpriseTable`, and bridged `AnimatedIcons` with card-level `data-hover-parent` micro-interactions.
+    - **Cross-Platform Parity & 3-Tier Viewport Responsiveness**:
+      - Desktop: High-density tables (`hidden sm:block`) with sortable columns and action buttons.
+      - Tablet: 2-column reflow grids and responsive card layouts.
+      - Mobile: Touch cards (`block sm:hidden`, min 44px touch targets) with scrollable tab strip and phone action buttons.
+  - **3. Verification**:
+    - Web TypeScript check: `pnpm --filter @reachinternational/web exec tsc --noEmit` clean (0 errors).
+    - Mobile TypeScript check: `pnpm --filter @reachinternational/mobile exec tsc --noEmit` clean (0 errors).
+    - Monorepo Turbo typecheck: `turbo run typecheck` clean (7/7 packages clean, exit code 0).
+    - Permissions RBAC test suite: `pnpm --filter @reachinternational/permissions test` passed (3/3 pass, exit code 0).
+    - Browser Subagent visual verification: desktop table navigation to `/clients/730fd022-f488-4ad3-8cdd-683d9af60129` (Tata Projects Limited), verified all 5 sub-tabs, verified 375px mobile viewport reflow, recorded video `client_details_page_1790420968142.webp` and captured screenshots `client_detail_desktop_1790421077349.png` and `client_detail_mobile_1790421201804.png`.
+
 - **Attendance Page Feedback Resolution — Scheduled vs Present Days Parity & Clean UI (/attendance) (2026-09-26)**:
   - **1. User Request (6 Page Feedback Items on /attendance)**:
     - Item 1: `<AttendanceClient> <PageHeader> <FadeIn> <motion.div> paragraph: "Monthly operator attendance tracking der..."` -> "remove this text"

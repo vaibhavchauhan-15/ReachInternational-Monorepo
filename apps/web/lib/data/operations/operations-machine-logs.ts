@@ -71,13 +71,15 @@ const MACHINE_LOG_EXACT_PROJECTION = `
   normal_working_hours,
   is_breakdown,
   shift,
+  shift_code,
+  shift_scheduled_minutes,
   location,
   remarks,
   conflict_flag,
   conflict_reason,
   conflict_status,
   created_at,
-  client:clients!machine_hour_logs_client_id_fkey(id, code, company_name, street, city, district, state, pincode),
+  client:clients!machine_hour_logs_client_id_fkey(id, code, company_name, city),
   operator:users!machine_hour_logs_operator_id_fkey(id, full_name, phone)
 `;
 
@@ -96,7 +98,7 @@ const MACHINE_LOG_EXACT_PROJECTION = `
 export const getOperationsMachineLogsData = cache(
   async (params: OperationsMachineLogsParams = {}): Promise<OperationsMachineLogsResult> => {
     const page = Math.max(1, Number(params.page) || 1);
-    const pageSize = Math.max(1, Number(params.pageSize) || 20);
+    const pageSize = Math.max(1, Number(params.pageSize) || 500);
     const fromIndex = (page - 1) * pageSize;
     const toIndex = fromIndex + pageSize - 1;
     const sort = params.sort || "date-desc";

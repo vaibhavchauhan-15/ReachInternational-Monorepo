@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   incompleteChipText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#f43f5e',
   },
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   readyText: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: '#10b981',
     fontWeight: '500',
   },

@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   lockBadgeText: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '500',
   },
   readOnlyBox: {
@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
     paddingLeft: 4,
   },
   helperText: {
-    fontSize: 11,
+    fontSize: 12.5,
     lineHeight: 15,
     marginTop: 2,
     paddingHorizontal: 2,

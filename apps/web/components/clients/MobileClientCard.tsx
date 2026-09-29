@@ -33,14 +33,15 @@ export const MobileClientCard = memo(function MobileClientCard({
 }: MobileClientCardProps) {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
+  const clientIdentifier = client.client_id || client.code;
 
   const handleCopyCode = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-    if (!client.code) return;
-    navigator.clipboard.writeText(client.code);
+    if (!clientIdentifier) return;
+    navigator.clipboard.writeText(clientIdentifier);
     setCopied(true);
-    toast("success", `Copied Client Code: ${client.code}`);
+    toast("success", `Copied Client ID: ${clientIdentifier}`);
     setTimeout(() => setCopied(false), 1800);
   };
 
@@ -74,15 +75,15 @@ export const MobileClientCard = memo(function MobileClientCard({
       <div className="flex items-start justify-between gap-2.5">
         <div className="flex flex-col min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            {client.code && (
+            {clientIdentifier && (
               <button
                 onClick={handleCopyCode}
                 type="button"
                 className="inline-flex items-center gap-1.5 h-7 px-2 rounded-md bg-[var(--color-hairline-soft-surface)] hover:bg-[var(--color-hairline)] border border-[var(--color-hairline)] text-xs font-mono font-bold uppercase text-[var(--color-ink)] hover:text-sky-600 dark:hover:text-sky-400 active:scale-95 transition-all cursor-pointer"
-                title="Click to copy Client Code"
+                title="Click to copy Client ID"
               >
                 <span>
-                  <Highlight text={client.code} query={searchTerm} />
+                  <Highlight text={clientIdentifier} query={searchTerm} />
                 </span>
                 {copied ? (
                   <AnimatedCheck size={13} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -92,12 +93,12 @@ export const MobileClientCard = memo(function MobileClientCard({
               </button>
             )}
 
-            <span className="text-xs sm:text-sm font-bold text-[var(--color-ink)] truncate tracking-tight">
+            <span className="text-sm sm:text-base font-bold text-[var(--color-ink)] truncate tracking-tight">
               <Highlight text={client.company_name || client.client_name || "Untitled Client"} query={searchTerm} />
             </span>
           </div>
 
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-[var(--color-mute)] mt-1.5 font-medium">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[var(--color-mute)] mt-1.5 font-medium">
             {client.contact_person && (
               <span className="text-[var(--color-body)]">
                 Contact: <Highlight text={client.contact_person} query={searchTerm} />
@@ -109,12 +110,12 @@ export const MobileClientCard = memo(function MobileClientCard({
               </span>
             )}
             {client.gstin && (
-              <span className="font-mono text-[10px] bg-purple-500/10 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/20 font-semibold">
+              <span className="font-mono text-xs bg-purple-500/10 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/20 font-semibold">
                 GST: <Highlight text={client.gstin} query={searchTerm} />
               </span>
             )}
             {client.pan_number && (
-              <span className="font-mono text-[10px] bg-sky-500/10 text-sky-700 dark:text-sky-300 px-1.5 py-0.5 rounded border border-sky-500/20 font-semibold">
+              <span className="font-mono text-xs bg-sky-500/10 text-sky-700 dark:text-sky-300 px-1.5 py-0.5 rounded border border-sky-500/20 font-semibold">
                 PAN: <Highlight text={client.pan_number} query={searchTerm} />
               </span>
             )}
@@ -124,15 +125,15 @@ export const MobileClientCard = memo(function MobileClientCard({
         {/* Status Badge */}
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           {client.deleted_at ? (
-            <Badge variant="overdue" dot className="whitespace-nowrap text-[10px] sm:text-xs">
+            <Badge variant="overdue" dot className="whitespace-nowrap text-xs">
               Soft Deleted
             </Badge>
           ) : client.status === "inactive" ? (
-            <Badge variant="warning" dot className="whitespace-nowrap text-[10px] sm:text-xs">
+            <Badge variant="warning" dot className="whitespace-nowrap text-xs">
               Inactive
             </Badge>
           ) : (
-            <Badge variant="success" dot className="whitespace-nowrap text-[10px] sm:text-xs">
+            <Badge variant="success" dot className="whitespace-nowrap text-xs">
               Active
             </Badge>
           )}
@@ -141,7 +142,7 @@ export const MobileClientCard = memo(function MobileClientCard({
 
       {/* Structured Key Specs Inset Well */}
       <div className="p-3 rounded-xl bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] text-xs flex flex-col gap-2.5">
-        <div className="grid grid-cols-2 gap-2 text-[11px]">
+        <div className="grid grid-cols-2 gap-2 text-xs">
           <div>
             <span className="text-[var(--color-mute)] font-medium block">Contact Person:</span>
             <span
@@ -162,7 +163,7 @@ export const MobileClientCard = memo(function MobileClientCard({
           </div>
         </div>
 
-        <div className="pt-2 border-t border-[var(--color-hairline)] grid grid-cols-2 gap-2 text-[11px]">
+        <div className="pt-2 border-t border-[var(--color-hairline)] grid grid-cols-2 gap-2 text-xs">
           <div>
             <span className="text-[var(--color-mute)] font-medium block">Phone:</span>
             {client.phone ? (
@@ -171,7 +172,7 @@ export const MobileClientCard = memo(function MobileClientCard({
                 onClick={(e) => e.stopPropagation()}
                 className="font-mono font-bold text-xs text-[var(--color-ink)] hover:text-sky-600 dark:hover:text-sky-400 mt-0.5 truncate flex items-center gap-1 transition-colors"
               >
-                <Phone size={11} className="text-[var(--color-mute)] shrink-0" />
+                <Phone size={12} className="text-[var(--color-mute)] shrink-0" />
                 <span className="truncate">{client.phone}</span>
               </a>
             ) : (

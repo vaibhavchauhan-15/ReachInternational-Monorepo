@@ -3,7 +3,7 @@ import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { TAGS, CACHE_TIERS } from "@/lib/cache";
-import type { User } from "@/lib/types/database";
+import type { User, ActiveOperatorOtherAssignment } from "@/lib/types/database";
 
 export interface MachineFilterOptions {
   supervisors: User[];
@@ -11,6 +11,8 @@ export interface MachineFilterOptions {
   statuses: Array<{ value: string; label: string }>;
   healthStatuses: Array<{ value: string; label: string }>;
 }
+
+export type { ActiveOperatorOtherAssignment };
 
 export const getActiveSupervisors = unstable_cache(
   async (): Promise<User[]> => {
@@ -88,6 +90,43 @@ export const getActiveOperators = unstable_cache(
   },
   ["active-operators-v10"],
   { revalidate: CACHE_TIERS.CLASS_B_DIRECTORY, tags: [TAGS.machinesMeta, TAGS.users] }
+);
+
+export const getActiveOperatorMachineAssignments = unstable_cache(
+  async (): Promise<ActiveOperatorOtherAssignment[]> => {
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("operator_machine_assignments")
+      .select(`
+        operator_id,
+        machine_id,
+        shift_code,
+        shift_start_time,
+        shift_end_time,
+        machines!inner(id, machine_id),
+        users!inner(id, full_name)
+      `)
+      .eq("is_active", true);
+
+    if (error || !data) {
+      console.error("[machine-filters] Error fetching active operator assignments:", error?.message || error);
+      return [];
+    }
+
+    return data
+      .filter((row: any) => row.operator_id && row.machine_id && row.shift_start_time && row.shift_end_time)
+      .map((row: any) => ({
+        operatorId: row.operator_id,
+        operatorName: row.users?.full_name || "Operator",
+        machineId: row.machine_id,
+        machineCode: row.machines?.machine_id || "Machine",
+        shiftCode: row.shift_code || null,
+        shiftStartTime: String(row.shift_start_time).slice(0, 8),
+        shiftEndTime: String(row.shift_end_time).slice(0, 8),
+      }));
+  },
+  ["active-operator-machine-assignments-v1"],
+  { revalidate: CACHE_TIERS.CLASS_B_FLEET, tags: [TAGS.machines, TAGS.users] }
 );
 
 

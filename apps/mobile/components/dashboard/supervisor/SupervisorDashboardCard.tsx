@@ -78,7 +78,7 @@ export const SupervisorDashboardCard: React.FC<SupervisorDashboardCardProps> = (
 
 const styles = StyleSheet.create({
   eyebrowHeader: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.8,
     marginBottom: spacingNumeric.xs,

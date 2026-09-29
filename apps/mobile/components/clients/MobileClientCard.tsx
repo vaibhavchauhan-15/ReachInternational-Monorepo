@@ -14,12 +14,14 @@ import {
   Trash2,
   Copy,
   Check,
+  Wrench,
 } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 
 export interface MobileClientCardProps {
   client: {
     id: string;
+    client_id?: string;
     code: string;
     company_name: string;
     contact_person?: string;
@@ -38,6 +40,8 @@ export interface MobileClientCardProps {
     billing_district?: string;
     billing_state?: string;
     billing_pincode?: string;
+    /** Monthly maintenance allowance in minutes per machine. 0 = no allowance. */
+    maintenance_allowance_minutes?: number;
     status: 'active' | 'inactive';
     deleted_at?: string | null;
   };
@@ -58,12 +62,13 @@ export const MobileClientCard: React.FC<MobileClientCardProps> = ({
 }) => {
   const { theme, isDark } = useTheme();
   const [copied, setCopied] = useState(false);
+  const displayId = client.client_id || client.code;
 
   const handleCopyCode = async () => {
-    if (!client.code) return;
+    if (!displayId) return;
     try {
       if (Clipboard && Clipboard.setStringAsync) {
-        await Clipboard.setStringAsync(client.code);
+        await Clipboard.setStringAsync(displayId);
       }
     } catch {
       // Graceful fallback
@@ -80,6 +85,14 @@ export const MobileClientCard: React.FC<MobileClientCardProps> = ({
     ? '#10b981'
     : '#f59e0b';
 
+  // Format maintenance allowance for display
+  const allowanceMin = client.maintenance_allowance_minutes ?? 0;
+  const allowanceH = Math.floor(allowanceMin / 60);
+  const allowanceM = allowanceMin % 60;
+  const allowanceLabel = allowanceMin > 0
+    ? `${allowanceH > 0 ? `${allowanceH}h` : ''}${allowanceH > 0 && allowanceM > 0 ? ' ' : ''}${allowanceM > 0 ? `${allowanceM}m` : ''}`
+    : null;
+
   return (
     <View
       style={[
@@ -91,7 +104,7 @@ export const MobileClientCard: React.FC<MobileClientCardProps> = ({
         },
       ]}
     >
-      {/* Top Header Row: Code Copy Pill + Status Badge */}
+      {/* Top Header Row: Client ID Copy Pill + Status Badge */}
       <View style={styles.headerRow}>
         <View style={styles.headerLeft}>
           <TouchableOpacity
@@ -104,10 +117,10 @@ export const MobileClientCard: React.FC<MobileClientCardProps> = ({
                 borderColor: theme.colors.hairline,
               },
             ]}
-            accessibilityLabel={`Copy client code ${client.code}`}
+            accessibilityLabel={`Copy client ID ${displayId}`}
           >
             <HighlightText
-              text={client.code}
+              text={displayId}
               query={searchTerm}
               style={[styles.codeText, { color: theme.colors.ink }]}
               matchStyle={{ color: isDark ? '#3291ff' : '#0070f3', fontWeight: '700' }}
@@ -218,6 +231,28 @@ export const MobileClientCard: React.FC<MobileClientCardProps> = ({
             </Text>
           </View>
         </View>
+
+        {/* Monthly Maintenance Allowance row */}
+        <View style={[styles.specDivider, { backgroundColor: theme.colors.hairline }]} />
+        <View style={styles.specGridRow}>
+          <View style={[styles.specCol, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+            <Wrench size={13} color={allowanceLabel ? (isDark ? '#fbbf24' : '#d97706') : '#ef4444'} />
+            <Text style={[styles.specLabel, { color: theme.colors.mute }]}>MAINT. ALLOWANCE</Text>
+          </View>
+          {allowanceLabel ? (
+            <View style={[styles.allowanceBadge, { backgroundColor: isDark ? 'rgba(251, 191, 36, 0.15)' : '#fef3c7', borderColor: isDark ? 'rgba(251, 191, 36, 0.3)' : '#fcd34d' }]}>
+              <Text style={[styles.taxBadgeText, { color: isDark ? '#fbbf24' : '#92400e' }]}>
+                {allowanceLabel} / machine / mo
+              </Text>
+            </View>
+          ) : (
+            <View style={[styles.allowanceBadge, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fff1f2', borderColor: isDark ? 'rgba(239, 68, 68, 0.3)' : '#fecdd3' }]}>
+              <Text style={[styles.taxBadgeText, { color: '#e11d48' }]}>
+                Not Allowed
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
 
       {/* Touch Action Buttons Row (min 44px targets) */}
@@ -308,7 +343,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   codeText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontWeight: '700',
     letterSpacing: 0.2,
@@ -317,9 +352,9 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
   },
   companyName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    lineHeight: 19,
+    lineHeight: 20,
   },
   tagRow: {
     flexDirection: 'row',
@@ -334,7 +369,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   taxBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontWeight: '700',
   },
@@ -356,13 +391,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   specLabel: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   specValue: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '600',
   },
   monoText: {
@@ -371,6 +406,12 @@ const styles = StyleSheet.create({
   specDivider: {
     height: 1,
     width: '100%',
+  },
+  allowanceBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radiusNumeric.sm,
+    borderWidth: 1,
   },
   cardActions: {
     flexDirection: 'row',

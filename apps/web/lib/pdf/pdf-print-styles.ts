@@ -44,14 +44,29 @@ export function getPrintStylesheet(
             vertical-align: middle !important;
             background-color: #f3f4f6 !important;
             border: 1px solid #171717 !important;
+            padding: 3px 2px !important;
+            font-size: 8.5px !important;
           }
           #${previewId} .print-table tbody td {
             text-align: center !important;
             vertical-align: middle !important;
             border: 1px solid #d4d4d4 !important;
+            padding: 3px 2px !important;
+            font-size: 8.5px !important;
+            line-height: 1.2 !important;
+            word-break: break-word !important;
+            overflow-wrap: break-word !important;
           }
           #${previewId} .print-table tbody td * {
             text-align: center !important;
+          }
+          #${previewId} .print-table tfoot td {
+            text-align: center !important;
+            vertical-align: middle !important;
+          }
+          #${previewId} .day-group {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
           }`
     : "";
 
@@ -122,6 +137,31 @@ export function getPrintStylesheet(
             width: 100% !important;
             margin: 0 auto !important;
           }
+          .print-page {
+            width: 210mm !important;
+            height: 287mm !important;
+            max-height: 287mm !important;
+            min-height: 287mm !important;
+            page-break-after: always !important;
+            break-after: page !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            box-sizing: border-box !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+            padding: 1.5mm 0 !important;
+            margin: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: #ffffff !important;
+            overflow: hidden !important;
+          }
+          .print-page:last-child {
+            page-break-after: auto !important;
+            break-after: auto !important;
+          }
           .print-table-wrap {
             overflow: visible !important;
             width: 100% !important;
@@ -145,15 +185,31 @@ export function getPrintStylesheet(
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             border: 1px solid #171717 !important;
+            padding: 2.5px 2px !important;
+            font-size: 8pt !important;
+            line-height: 1.1 !important;
           }
           .print-table tbody td {
             text-align: center !important;
             vertical-align: middle !important;
             border: 1px solid #d4d4d4 !important;
+            padding: 3px 2px !important;
+            font-size: 8.5pt !important;
+            line-height: 1.2 !important;
+            word-break: break-word !important;
+            overflow-wrap: break-word !important;
           }
           .print-table tbody td * {
             text-align: center !important;
+          }
+          .print-table tfoot td {
+            text-align: center !important;
+            vertical-align: middle !important;
           }${kpiStripPrintStyles}
+          .day-group {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
           tr {
             page-break-inside: avoid !important;
             break-inside: avoid !important;

@@ -3,3 +3,6 @@ export * from './OperationsExportModal';
 export * from './OperationsFilterSelectorModal';
 export * from './OperationsSkeleton';
 export * from './SiteMovementModal';
+export * from './MobileTodayShiftMonitorTab';
+export * from './MobileAssignPersonnelModal';
+

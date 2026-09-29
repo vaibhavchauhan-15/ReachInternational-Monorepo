@@ -12,6 +12,7 @@ import { useDynamicDropdownPosition } from "@/lib/hooks/useDynamicDropdownPositi
 
 export interface ClientSelectItem {
   id: string;
+  client_id?: string | null;
   client_name?: string | null;
   name?: string | null;
   company_name?: string | null;
@@ -103,6 +104,7 @@ export function ClientSelect({
       clients.find(
         (c) =>
           c.id === value ||
+          (c.client_id && c.client_id.toLowerCase().trim() === vLower) ||
           (c.client_name && c.client_name.toLowerCase().trim() === vLower) ||
           (c.company_name && c.company_name.toLowerCase().trim() === vLower) ||
           (c.name && c.name.toLowerCase().trim() === vLower) ||
@@ -115,14 +117,14 @@ export function ClientSelect({
     return getFormattedClientLocation(selectedClient);
   }, [selectedClient]);
 
-  // Search filter matching client name, company name, code, city, state, address
+  // Search filter matching client name, company name, code, client_id, city, state, address
   const filteredClients = useMemo(() => {
     if (!searchQuery.trim()) return clients;
     const q = searchQuery.toLowerCase().trim();
     return clients.filter((c) => {
       const nameMatch = (c.client_name || c.name)?.toLowerCase().includes(q);
       const companyMatch = c.company_name?.toLowerCase().includes(q);
-      const codeMatch = c.code?.toLowerCase().includes(q);
+      const codeMatch = (c.client_id || c.code)?.toLowerCase().includes(q);
       const cityMatch = c.city?.toLowerCase().includes(q);
       const stateMatch = c.state?.toLowerCase().includes(q);
       const addressMatch = (c.street || c.address)?.toLowerCase().includes(q);
@@ -220,6 +222,11 @@ export function ClientSelect({
               <span className="truncate font-bold text-[var(--color-ink)] shrink-0 max-w-[55%] sm:max-w-[60%]">
                 {clientDisplayName}
               </span>
+              {(selectedClient.client_id || selectedClient.code) && (
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-hairline-soft-surface)] text-sky-600 dark:text-sky-400 font-semibold border border-[var(--color-hairline)] shrink-0">
+                  {selectedClient.client_id || selectedClient.code}
+                </span>
+              )}
               {clientLocationStr && (
                 <span className="text-[11px] sm:text-xs text-[var(--color-mute)] font-normal truncate">
                   • {clientLocationStr}
@@ -379,8 +386,15 @@ export function ClientSelect({
                         }`}
                       >
                         <div className="min-w-0 pr-2 flex-1">
-                          <div className="font-bold text-[var(--color-ink)] truncate text-xs sm:text-[13px]">
-                            {cName}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-[var(--color-ink)] truncate text-xs sm:text-[13px]">
+                              {cName}
+                            </span>
+                            {(c.client_id || c.code) && (
+                              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[var(--color-hairline-soft-surface)] text-sky-600 dark:text-sky-400 font-semibold border border-[var(--color-hairline)] shrink-0">
+                                {c.client_id || c.code}
+                              </span>
+                            )}
                           </div>
                           {cLoc && (
                             <div className="text-[11px] text-[var(--color-mute)] font-normal truncate mt-0.5">

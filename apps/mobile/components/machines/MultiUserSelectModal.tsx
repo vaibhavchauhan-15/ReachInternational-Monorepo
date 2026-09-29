@@ -385,12 +385,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   chipsLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
     textTransform: 'uppercase',
   },
   clearBtnText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   chipsScroll: {
@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   chipText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   userList: {
@@ -460,12 +460,12 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   shiftText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   phoneText: {
-    fontSize: 11,
+    fontSize: 12.5,
   },
   emptyWrap: {
     padding: spacingNumeric.xl,

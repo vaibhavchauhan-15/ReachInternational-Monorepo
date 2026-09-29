@@ -1,6 +1,7 @@
 "use client";
 
 import React, { memo } from "react";
+import Link from "next/link";
 import { Edit2, Trash2, Eye, Building2, Phone, Receipt, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import type { CRMClient } from "@/lib/types/database";
 import { Pagination } from "@/components/ui";
@@ -43,27 +44,27 @@ const ClientTableRow = memo(function ClientTableRow({
 }) {
   return (
     <tr className="hover:bg-[var(--color-hairline-soft-surface)]/60 transition-colors group">
-      {/* Code */}
+      {/* Client ID */}
       <td className="py-2.5 px-4 font-mono font-bold text-sky-600 dark:text-sky-400 whitespace-nowrap">
-        <button
-          type="button"
+        <Link
+          href={`/clients/${client.id}`}
           onClick={() => onViewClient(client)}
           className="hover:underline cursor-pointer focus:outline-hidden"
           title="View Client Details"
         >
-          {client.code}
-        </button>
+          {client.client_id || client.code}
+        </Link>
       </td>
 
       {/* Company & Tax */}
       <td className="py-2.5 px-4 max-w-[260px]">
-        <button
-          type="button"
+        <Link
+          href={`/clients/${client.id}`}
           onClick={() => onViewClient(client)}
           className="font-bold text-[var(--color-ink)] hover:text-sky-600 text-left transition-colors cursor-pointer block truncate focus:outline-hidden"
         >
           {client.company_name || client.client_name}
-        </button>
+        </Link>
         {(client.gstin || client.pan_number) && (
           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
             {client.gstin && (
@@ -131,14 +132,14 @@ const ClientTableRow = memo(function ClientTableRow({
       {/* Actions */}
       <td className="py-2.5 px-4 text-right whitespace-nowrap">
         <div className="flex items-center justify-end gap-1">
-          <button
-            type="button"
+          <Link
+            href={`/clients/${client.id}`}
             onClick={() => onViewClient(client)}
             className="rounded-md p-1.5 text-[var(--color-mute)] hover:bg-[var(--color-hairline-soft-surface)] hover:text-sky-600 transition-colors cursor-pointer"
             title="View Details"
           >
             <Eye className="h-3.5 w-3.5" />
-          </button>
+          </Link>
           {canManageClients && (
             <button
               type="button"
@@ -199,12 +200,12 @@ export const ClientsTable = memo(function ClientsTable({
           <thead>
             <tr className="border-b border-[var(--color-hairline)] bg-[var(--color-canvas)] text-[11px] font-bold text-[var(--color-mute)] uppercase tracking-wider select-none">
               <th
-                onClick={() => onSortChange("code")}
+                onClick={() => onSortChange(sortField === "code" ? "code" : "client_id")}
                 className="py-2.5 px-4 cursor-pointer hover:text-[var(--color-ink)] transition-colors"
               >
                 <div className="flex items-center gap-1">
-                  <span>Code</span>
-                  {renderSortIcon("code")}
+                  <span>Client ID</span>
+                  {renderSortIcon("client_id") || renderSortIcon("code")}
                 </div>
               </th>
               <th

@@ -12,6 +12,9 @@ import {
   parseBreakdownString,
 } from "@reachinternational/utils";
 import { updateOperatorHourLogAction } from "@/app/actions/operators";
+import { getClientShiftCodesAction } from "@/app/actions/clients";
+import { getCachedClientShifts, setCachedClientShifts } from "@/lib/cache/client-shifts-cache";
+import type { ClientShiftCode } from "@reachinternational/types";
 
 import { HMRInputs } from "../entry/HMRInputs";
 import { ShiftInputs } from "../entry/ShiftInputs";
@@ -81,6 +84,37 @@ export function OperationsEditLogModal({
   const [breakdownEndTime, setBreakdownEndTime] = useState<string>(parsedBkdEnd);
   const [breakdownReason, setBreakdownReason] = useState<string>(initialReason);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+
+  const [clientShifts, setClientShifts] = useState<ClientShiftCode[]>([]);
+  const [selectedShiftCode, setSelectedShiftCode] = useState<string>(
+    log.shift_code || (log.shift ? log.shift.replace(/^shift\s*/i, "").trim() : "S1")
+  );
+
+  React.useEffect(() => {
+    if (!isOpen || !log.client_id) return;
+
+    const cached = getCachedClientShifts(log.client_id);
+    if (cached && cached.length > 0) {
+      setClientShifts(cached);
+      return;
+    }
+
+    getClientShiftCodesAction(log.client_id).then((res) => {
+      if (res.success && res.data && res.data.length > 0) {
+        const formatted: ClientShiftCode[] = res.data
+          .filter((s: any) => s.is_active !== false)
+          .map((s: any) => ({
+            ...s,
+            raw_start_time: formatTo12Hour(s.start_time) || s.start_time,
+            raw_end_time: formatTo12Hour(s.end_time) || s.end_time,
+            start_time: formatTo12Hour(s.start_time) || s.start_time,
+            end_time: formatTo12Hour(s.end_time) || s.end_time,
+          }));
+        setCachedClientShifts(log.client_id!, formatted);
+        setClientShifts(formatted);
+      }
+    });
+  }, [isOpen, log.client_id]);
 
   // Meter calculation
   const startMtrNum = parseFloat(startMeter) || 0;
@@ -190,6 +224,8 @@ export function OperationsEditLogModal({
           endMeter: endMtrNum,
           startTime,
           endTime,
+          shiftCode: selectedShiftCode || undefined,
+          shift: selectedShiftCode ? `Shift ${selectedShiftCode.replace(/^shift\s*/i, "")}` : undefined,
           overtimeHours: parseFloat(overtimeHours) || 0,
           isBreakdown,
           breakdownStartTime: isBreakdown ? breakdownStartTime : undefined,
@@ -217,6 +253,8 @@ export function OperationsEditLogModal({
             running_hours: liveRunningHours,
             start_time: startTime,
             end_time: endTime,
+            shift_code: selectedShiftCode || log.shift_code || null,
+            shift: selectedShiftCode ? `Shift ${selectedShiftCode.replace(/^shift\s*/i, "")}` : log.shift || null,
             overtime_hours: parseFloat(overtimeHours) || 0,
             is_breakdown: isBreakdown,
             breakdown_start_time: isBreakdown ? breakdownStartTime : null,
@@ -259,6 +297,7 @@ export function OperationsEditLogModal({
       breakdownStartTime,
       breakdownEndTime,
       liveRunningHours,
+      selectedShiftCode,
       toast,
       onSuccess,
       onClose,
@@ -346,6 +385,9 @@ export function OperationsEditLogModal({
           overtimeHours={overtimeHours}
           onOvertimeChange={setOvertimeHours}
           shiftDurationHours={shiftStats.durationHours}
+          shiftCodes={clientShifts.length > 0 ? clientShifts : undefined}
+          selectedShiftCode={selectedShiftCode}
+          onSelectShiftCode={setSelectedShiftCode}
         />
 
         {/* Section 3: Machine Breakdown (Reused from Log Entry) */}

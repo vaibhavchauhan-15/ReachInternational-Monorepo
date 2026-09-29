@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   profileEmail: {
-    fontSize: 12,
+    fontSize: 12.5,
     marginTop: 1,
   },
   roleBadge: {
@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   roleText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
   },
   editBtn: {
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
     gap: spacingNumeric.xs,
   },
   sectionTitle: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     letterSpacing: 1,
     paddingHorizontal: 4,

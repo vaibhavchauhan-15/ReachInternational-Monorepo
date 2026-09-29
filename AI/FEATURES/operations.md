@@ -11,6 +11,162 @@ It provides complete cross-platform parity between the Next.js Web App (`apps/we
 
 > **⚠️ REMOVED (2026-09-16)**: The Operations Log Detail Modal (`OperationsLogDetailModal.tsx`) has been completely removed per user feedback. Log rows in `OperationsLogsTable.tsx` and `OperationsLogsMobileList.tsx` are fully non-clickable; the row eye (view) icon was replaced with a destructive delete (trash) icon wired through `deleteOperatorHourLogAction` with a `ConfirmationDialog` guard. The delete control is RBAC-gated per row via an optional `canDeleteLog?: (log: MachineHourLog) => boolean` prop (supplied by `OperationsLogsTab.tsx` from `userRole`/`user`; mirrors the server action: supervisor+ may delete any log, operators only their own within 24h). Historical references to the detail modal below are retained for archival context only.
 
+## 0.7. Operator Shift Log Entry Breakdown Calculation Fix & Complete Test Suite (2026-09-29)
+Resolved critical client-side validation error blocking operator shift entries containing machine breakdowns:
+- **Root Cause & Time Parsing Fix**:
+  - In `OperatorEntryClient.tsx` and `AssistedShiftEntryModal.tsx`, `shiftDurationHours` was calculated using an inline regex `/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/`.
+  - When shift templates (`client_shift_codes`) load from RPC `get_operator_entry_context`, `raw_start_time` and `raw_end_time` are Postgres `TIME` values with seconds (e.g. `'06:00:00'` and `'14:00:00'`).
+  - The regex failed on seconds, evaluating `shiftDurationHours` to `0h`. Any entered breakdown (e.g. 12:00 PM to 02:00 PM = 2h) triggered the blocking error: `"Breakdown duration (2h) cannot exceed total shift duration (0h)."`.
+  - Implemented `calculateEffectiveShiftDurationHours` in `packages/utils/src/shift.ts`: parses 24-hr with seconds, 12-hr AM/PM, compact strings, handles overnight shifts, overtime hours, template minutes fallback, and defaults to 8.0h norm.
+  - Standardized start and end times with `formatTo12Hour` across `ShiftInputs.tsx`, `OperatorEntryClient.tsx`, and `AssistedShiftEntryModal.tsx`.
+  - Added safety fallback guards `maxAllowedDuration = shiftDurationHours > 0 ? shiftDurationHours : 24` in `OperatorEntryClient.tsx`, `AssistedShiftEntryModal.tsx`, `OperatorDashboard.tsx`, `submitOperatorHourLogAction`, and `MeterLogModal.tsx` on Mobile.
+  - Updated `CreateHourLogSchema` in `packages/validation/src/hourMeter.ts` to include `data.overtime_hours` in allowable shift duration.
+- **Automated Comprehensive Test Matrix (`supabase/tests/test_operator_entry_complete_matrix.mjs`)**:
+  - 10 unit tests for time parsing, overnight calculation, overtime addition, template fallback, and breakdown window bounds.
+  - 9 database E2E tests against Dev DB (`vlmxciuogczumumrwyot`) targeting `Operator 001` on `M/C-0010` (the exact screenshot scenario):
+    - Standard Shift Log Entry (6.0h running).
+    - Screenshot Scenario (Shift A with 2h Breakdown: 12:00 PM - 02:00 PM).
+    - Overnight Shift Entry (Shift C: 10:00 PM - 06:00 AM with breakdown).
+    - Shift Entry with Overtime (Shift A + 3h OT).
+    - Live RPC Validation: Meter regression rejection (`23514`).
+    - Live RPC Validation: Excessive running hours rejection (>24h).
+    - Idempotency Protection: Replay attack prevention via unique constraint.
+    - Shift Overlap Prevention: Trigger rejection on overlapping shift ranges.
+    - Future Shift End Guard: Trigger rejection on logging future shifts.
+- **Database Consistency Restoration**:
+  - Restored machine `hour_meter`, `health_status`, and `status` to pristine values in `finally {}` blocks.
+  - Restored operator shift code assignment to `'A'`.
+  - Confirmed 100% database consistency.
+
+## 0.6. Single "By Equipment" Tab, Enter Logs Role Restriction (Manager+) & Dual Export Formats (2026-09-29)
+Enhanced `/operations` (Today's Shift Logs) and operational assignment workflows:
+- **Assign Personnel Modal Single Tab**:
+  - Removed `<button>By Operator</button>` toggle from the header of `AssignPersonnelModal.tsx`.
+  - Retained only the single tab `<button>By Equipment</button>` with `activeTabMode` defaulting strictly to `"machine"`, ensuring equipment remains the central anchor when assigning multi-supervisors and 24h operator rosters.
+- **Enter Logs Role Restriction (Manager or Above Across Database, Backend, and Frontend)**:
+  - Restricted entering shift logs (assisted shift entry) exclusively to roles above supervisor (`manager`, `admin`, `super_admin`).
+  - **Database Migration 134 (`134_restrict_enter_logs_to_manager_and_above.sql`)**:
+    - `can_manage_operator_shift_log` returns `true` strictly for `super_admin`, `admin`, `manager`, and `false` for `supervisor`, `hr`, and `operator`.
+    - `submit_operator_hour_log_atomic` RPC raises `42501` exception if caller is not manager or above when logging on behalf of an operator.
+    - Updated `insert_machine_hour_logs` RLS policy to disallow supervisor inserts.
+  - **Backend Server Actions (`apps/web/app/actions/operators.ts`)**:
+    - Removed `supervisor` from allowed roles in `submitOperatorHourLogAction`.
+    - Added assisted entry guard requiring caller to be manager or above when `operatorId !== user.id`.
+    - Updated `targetOperatorId` resolution to only allow managers and admins to submit on behalf of operators.
+  - **Web Frontend (`TodayShiftMonitorTab.tsx`, `AssistedShiftEntryModal.tsx`)**:
+    - Gated `<Button>Enter Log</Button>` behind `canEnterLog = ['super_admin', 'admin', 'manager'].includes(effectiveRole)`.
+    - Non-privileged roles (supervisors, operators) view clean read-only `"Pending"` status.
+    - Modal rejects submission if user role is not manager or above.
+  - **Mobile Frontend (`MobileTodayShiftMonitorTab.tsx`, `operations.tsx`, `MeterLogModal.tsx`)**:
+    - Gated mobile "Enter Log" button and assisted shift modal behind `isManagerOrAbove(userRole)`.
+    - Renders pending notice box when user lacks permission.
+- **Dual Export Formats (Excel & PDF)**:
+  - Created `exportTodayShiftLogsToExcel` in `apps/web/lib/utils/today-shift-export.ts` using SheetJS (`xlsx`) with company letterhead, operational summary statistics, all shift columns, and summary footer.
+  - Created `TodayShiftExportModal.tsx` with live KPI metric strip, formatted print document preview, and 3 export actions:
+    1. `Export Excel (.xlsx)`: Instant workbook download.
+    2. `Print / Save PDF`: Native browser print / save-as-PDF dialog.
+    3. `Export Both (Excel & PDF)`: Triggers both `.xlsx` download and PDF print preview simultaneously.
+  - Replaced legacy CSV export in `TodayShiftMonitorTab.tsx` with `TodayShiftExportModal`.
+
+## 0.5. Assign Personnel Dialogue Box Integration (/operations Today's Shift Logs) (2026-09-28)
+Integrated an accessible "Assign Personnel" modal directly into the Today's Shift Logs operations dashboard across Web and Mobile:
+- **Web App (`apps/web`)**:
+  - Reused and adapted [AssignOperatorModal.tsx](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/web/components/operations/modals/AssignOperatorModal.tsx):
+    - Made `assignments` optional with self-sufficient fallback: auto-fetches active machine assignments via `getMachineAssignmentsAction(selectedMachineId)` and active operators via `getActiveOperatorsAction()`.
+    - Standardized 24h capacity checks to 3 operators max per machine (`activeAssignmentsOnSelectedMachine.length >= 3`), strictly matching DB trigger `enforce_max_operators_per_machine` and RPC `assign_operator_machine_atomic`.
+    - Enhanced responsive layout with Geist tokens: `p-4 sm:p-6`, 44px min touch targets on form controls, inputs, and close buttons.
+  - Mounted directly in [TodayShiftMonitorTab.tsx](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/web/components/operations/TodayShiftMonitorTab.tsx):
+    - Added "Assign Personnel" CTA in the top `FilterToolbar` actions bar alongside the Refresh button (`UserPlus` icon).
+    - Added "Assign Personnel" CTA in `EmptyState` (`No Shift Roster Found`) to guide supervisors/managers when no assignments exist.
+    - Wired `onSuccess={fetchData}` to auto-refresh the today shift monitor roster immediately upon assignment confirmation.
+  - Pre-hydrated `activeOperators` in RSC [page.tsx](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/web/app/(app)/operations/page.tsx) and forwarded via [OperationsClient.tsx](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/web/components/operations/OperationsClient.tsx).
+- **Mobile App (`apps/mobile`)**:
+  - Created native [MobileAssignPersonnelModal.tsx](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/mobile/components/operations/MobileAssignPersonnelModal.tsx):
+    - Searchable machine picker with live status badge and client info.
+    - Searchable operator picker with role and phone details.
+    - Dynamic shift selector strip: auto-resolves client shifts from `client_shift_codes` for rented machines with fallback to standard shifts S1–S3.
+    - Custom / Manual times toggle with start/end time text inputs.
+    - Real-time capacity counter: checks `operator_machine_assignments` for the selected machine and blocks assignment when active operators $\ge 3$.
+    - Calls atomic RPC `assign_operator_machine_atomic` with automatic error card and conflict notifications.
+  - Mounted in [MobileTodayShiftMonitorTab.tsx](file:///c:/Users/vaibh/PROGRAMMING/PROJECTS/ReachInternational-Monorepo/apps/mobile/components/operations/MobileTodayShiftMonitorTab.tsx):
+    - Added "Assign Personnel" primary button in the action bar above the filter strip.
+    - Added secondary action button in the empty state card.
+    - Triggers `refetch()` on confirmation to update the mobile shift monitor instantly.
+
+## 0.4. Dedicated Route Separation: /operations (Today's Shift Logs) & /running-logs (Daily Running Logs) (2026-09-28)
+Separated the previously co-located operations tabs into dedicated routes to prevent visual crowding, sub-navigation overlap, and heavy query waterfalls:
+- **Dedicated Daily Running Logs Page (`/running-logs`)**:
+  - URL: `/running-logs`
+  - Access: `super_admin`, `admin`, `manager`, `supervisor`. Operators navigating to `/running-logs` are cleanly redirected to `/operations`.
+  - Reuses existing `<OperationsLogsTab>` component directly inside `<RunningLogsClient>`, displaying `<OperationsHeader title="Daily Running Logs" />`.
+  - Full support for 3 view modes (`Machine`, `Client`, `Operator`), date-grouped compact daily boxes, expandable shift rows, inline edit/delete controls for managers, and multi-format PDF/Excel exports.
+  - URL query persistence (`month`, `view`, `machineId`, `clientId`, `operatorId`) updated dynamically using `window.history.replaceState` with `usePathname() || "/running-logs"`.
+- **Dedicated Today's Shift Logs Page (`/operations`)**:
+  - URL: `/operations`
+  - Dedicated exclusively to real-time operations:
+    - **Operators**: Fast-pathed directly to single-shift log entry shell (`<OperatorEntryClient />`).
+    - **Supervisors / Managers / Admins**: Render `<TodayShiftMonitorTab />` with live shift completion roster (`entered` vs `pending`), server-side search across operator name/phone/machine/client, status filters, 30s auto-refresh, and 1-click `<AssistedShiftEntryModal>`.
+  - **No Sub-Navigation Overlap**: Sub-navbar tab buttons ("Daily Running Hours" vs "Today's Shift Logs") completely removed.
+- **Next.js Proxy Redirects (`apps/web/proxy.ts`)**:
+  - Legacy `/operations?tab=logs` automatically 307-redirects to `/running-logs`, preserving any filter query parameters (`month`, `view`, `machine`, etc.) while stripping obsolete `tab=` parameter.
+  - Obsolete `tab=today` and `tab=entry` queries on `/operations` are stripped via 307 redirect.
+- **Cross-Platform Parity (`apps/mobile`)**:
+  - Created dedicated mobile screen `apps/mobile/app/(app)/running-logs.tsx` with view mode switcher, KPI cards, compact date cards, and export modal.
+  - Mobile `apps/mobile/app/(app)/operations.tsx` stripped of the top sub-navbar tab strip, dedicated directly to `MobileTodayShiftMonitorTab`.
+  - Updated mobile router layout (`_layout.tsx`), navigation items (`navItems.ts`), main menu modal (`MainMenuModal.tsx`), and mobile command palette.
+
+## 0.3. Operator Shift ↔ Client Shift Linkage & Assignment Selection (2026-09-28)
+An authoritative linkage ensuring that operator shift schedules are derived directly from the CRM client's operational shifts:
+- **Client Shifts as Single Source of Truth**:
+  - Each machine is rented to a client (`machines.client_id`), and clients configure standardized shifts in `client_shift_codes` (e.g. S1: 06:00-12:00, S2: 12:00-18:00, S3: 18:00-24:00, S4: 00:00-06:00 or custom 8h/12h shifts).
+  - When assigning an operator to a machine in `AssignOperatorModal.tsx`, supervisors now select from the client's actual shift templates rather than entering arbitrary manual hours.
+  - Selecting a client shift pill automatically populates `shift_code`, `shift_start_time`, and `shift_end_time`.
+  - Supervisors can toggle "Custom / Manual Times" (`SlidersHorizontal` icon) if a non-standard shift override is necessary.
+- **Database Architecture (`migration 122`)**:
+  - `public.operator_machine_assignments`: Added `shift_code TEXT` column with partial index `idx_oma_shift_code` (`WHERE is_active = true`).
+  - Active assignments backfilled from matching `client_shift_codes.code`.
+  - RPC `assign_operator_machine_atomic`: Accepts `p_shift_code TEXT`, persists it to `operator_machine_assignments`, and includes it in audit metadata.
+  - RPC `get_operator_entry_context`: Resolves active assignment's `shift_code` and returns `assigned_shift_code` and `operator.shift_code`.
+  - RPC `get_today_shift_log_monitor`: Roster CTE links directly on `COALESCE(a.oma_shift_code, csc.code)` with `LEFT JOIN` and start/end time fallback, guaranteeing zero dropped rows.
+- **Automatic Shift & Timing Pre-selection**:
+  - When the operator opens `/operations` (`OperatorEntryClient.tsx`), the assigned client shift code is read from `initialContext.assigned_shift_code`.
+  - The assigned shift pill is automatically selected, and its start/end times and default built-in overtime are auto-populated.
+  - In Mobile App (`MeterLogModal.tsx`, `MobileOperatorEntryCard.tsx`), `initialShiftCode` is pre-populated from `entryContext?.assigned_shift_code`.
+
+## 0.2. Assisted Shift Entry & Today's Shift Monitor with RBAC (2026-09-27, updated 2026-09-28)
+A dedicated operational feature for Supervisors, Managers, and Admins to monitor real-time shift completion across active machinery and enter shifts on behalf of operators who are unable to log their own shifts (e.g. field connectivity failure, hardware issues).
+- **Core RBAC Rules**:
+  - **Supervisors**: Scoped strictly to operators assigned to them via `user_supervisors` (or legacy `users.supervisor_id`). Cannot see or enter logs for operators under other supervisors.
+  - **Managers / Admins / Super Admins**: Global operational scope; can view all operators across the company and perform assisted entry for any operator.
+  - **Operators / Drivers**: Fast-pathed directly to their own log entry shell.
+- **Unified Entry Components (Zero Duplication)**:
+  - Both Operator Entry (`OperatorEntryClient.tsx`) and Supervisor Assisted Entry (`AssistedShiftEntryModal.tsx`) share the exact same components: `<HMRInputs>`, `<ShiftInputs>`, and `<BreakdownSection>`.
+  - `<ShiftInputs>`: Shows all client shift pills by default (`Shift S1`, `Shift S2`, etc. or custom client shifts with `DEFAULT_CLIENT_SHIFTS` fallback). Manual Start Time and End Time pickers are hidden by default, toggled via the "Manual Time Entry" button.
+  - Equalized icon and text sizing: Lock toggle (`size={12}`), Date picker trigger (`Calendar size={14}`), Breakdown header (`AlertTriangle size={14}` inline without oversized boxes), and Shift selector icons (`size={13}`) aligned with labels.
+- **Database Architecture (`migration 118`)**:
+  - Columns `entered_by UUID REFERENCES auth.users(id)` and `entry_source TEXT` (`operator`, `supervisor`, `manager`, `admin`) added to `machine_hour_logs`.
+  - RPC `get_today_shift_log_monitor(p_actor_id, p_log_date)` provides active roster rows with status (`entered` vs `pending`), machine, client, shift timings, HMR, and submitter attribution.
+  - RPC `submit_operator_hour_log_atomic` accepts `p_entered_by` and automatically records the submitter identity and entry source.
+  - Auth function `can_manage_operator_shift_log(p_actor_id, p_operator_id)` enforces supervisor-operator link.
+- **Web UI (`apps/web`)**:
+  - Sub-navigation toggle in `/operations` between "Daily Running Hours" and "Today's Shift Logs".
+  - `TodayShiftMonitorTab.tsx`: KPI cards (Total, Entered, Pending), filter pills (`All`, `Pending`, `Entered`), search box, 30s auto-refresh, high-density desktop table + mobile touch cards.
+  - `AssistedShiftEntryModal.tsx`: Clean header (`title="Assisted Shift Entry"` without icon), pre-filled operator context, start meter safety unlock toggle, unified `<ShiftInputs>` with cached client shifts, overtime presets, breakdown duration calculator, and remarks.
+- **Real-Time Notification Dispatch & Offline Resilience (`migration 123`)**:
+  - **Ephemeral Real-Time Broadcast**: Dispatched over Supabase Realtime channel `operator-alerts:${operatorId}` with event `assisted_shift_logged`.
+  - **Active Mobile Listener**: `MobileOperatorAlertsListener` in `apps/mobile/app/_layout.tsx` catches the event instantly, triggering `postNotification` (top animated `PostNotificationBanner`, haptic feedback, and native Android/iOS system notifications), and invalidates TanStack Query cache.
+  - **Persistent Notifications Table (`public.notifications`)**:
+    - Automatic `AFTER INSERT` database trigger `trg_assisted_shift_notify_operator` on `machine_hour_logs` guarantees that whenever `entered_by <> operator_id` (assisted entry), a persistent notification row is created in `public.notifications` for the target operator with machine code, supervisor name, running hours, and shift times.
+    - Protected by partial index `idx_notifications_user_unread` (`WHERE is_read = false`) and strict RLS.
+  - **Offline Resilience & Reconnection Sync**:
+    - When an operator's mobile app opens, reconnects, or returns from background (`AppState.addEventListener('change', ...)`), `syncOfflineNotifications()` queries unread notifications from `public.notifications`.
+    - Automatically displays them via `postNotification()`, triggers query cache invalidations, and marks them as read (`is_read = true, read_at = now()`) to prevent duplicate toasts on subsequent reconnections.
+    - Web operator client (`OperatorEntryClient.tsx`) performs identical offline sync on mount.
+- **Mobile UI (`apps/mobile`)**:
+  - Sub-navigation above navbar in `operations.tsx` for non-operators ("Daily Running Hours" vs "Today's Shift Logs").
+  - `MobileTodayShiftMonitorTab.tsx`: KPI summary cards, filter pills, search input, and responsive touch cards with min 44px "Enter Shift Log" button.
+  - `MeterLogModal.tsx`: Supports `showManualTimes` toggle; displays client shift touch cards by default and hides manual time pickers until toggled.
+
 ## 0. Operator Landing Page Architecture (`Entry / History`) (2026-09-19)
 When an authenticated operator visits Fleet Operations (`/operations`), the page fast-paths to an ultra-lean, specialized entry experience:
 - **Dedicated Read-Model RPC**: `public.get_operator_entry_context(p_operator_id uuid)` fetches ONLY:
@@ -766,5 +922,69 @@ Execute an automated, deep security audit and regression test suite (`supabase/t
 - Production Capacity Budgets: **8 / 8 Passed** (`performance/load-test/scripts/operations-load-test.mjs`).
 - Performance Benchmark Budgets: **7 / 7 Passed** (`performance/load-test/scripts/operations-performance-agent.mjs`).
 - **CERTIFICATION**: ALL 24 PHASES OF THE OPERATIONS HUB MASTER OPTIMIZATION PLAN ARE FULLY COMPLETE, TESTED, AND PRODUCTION READY.
+
+---
+
+## 25. Daily Machine Shift Grouping in One Box Architecture (2026-09-26)
+
+### Overview
+Operational logs on `/operations` (`tab=logs`) are grouped by date (`log_date`) so that all four shifts of a single day (Shift S1: Morning, Shift S2: Afternoon, Shift S3: Evening, Shift S4: Night) render inside one cohesive, high-density date box instead of disconnected individual table rows.
+
+### Core Components & Capabilities
+1. **Day Box Header**:
+   - Date: Formatted date with day of week (e.g. `24-09-2026 (Thu)`).
+   - Client & Site Location: e.g. `Tata Projects Limited • Mumbai`.
+   - Shifts Count Badge: e.g. `4 Shifts Logged`.
+   - **Total Day HMR**: Earliest shift start meter to latest shift end meter (e.g. `1204.5 → 1224.9`, net delta `20.4 hrs`).
+   - **Total Day Running Time**: Sum of shift running hours on that day (e.g. `20.5h`).
+2. **Consolidated Shifts Table (Inside the Box)**:
+   - Shift Code Badge: `Shift S1`, `Shift S2`, `Shift S3`, `Shift S4`.
+   - Start & End Timings: `06:00 AM – 12:00 PM`, `12:00 PM – 06:00 PM`, `06:00 PM – 11:59 PM`, `12:00 AM – 06:00 AM`.
+   - Shift Name: `Morning`, `Afternoon`, `Evening`, `Night`.
+   - Operator: Name, phone, and 2nd Shift (100% OT) badge if applicable.
+   - Shift HMR: `start_meter → end_meter` with meter decreased / high hours guards.
+   - Shift RT(h): Running hours for that shift.
+   - Breakdown: Breakdown duration/details or `0`.
+   - Remarks: Clean sanitized operational notes.
+   - Inline Action Buttons: Edit (`Pencil`) and Delete (`Trash2`) with RBAC gating and tooltips.
+3. **Database Parity (Migration 117)**:
+   - Standardized 4 shifts (`S1`, `S2`, `S3`, `S4`) with 360 scheduled minutes each.
+   - Backfilled all `shift_code` values on `public.machine_hour_logs`.
+   - Added trigger `trg_auto_set_machine_hour_log_shift_code` to auto-populate shift code on new entries.
+   - Upserted `client_shift_codes` records across all clients.
+4. **Cross-Platform Mobile Synchronization**:
+   - Web Mobile (`OperationsLogsMobileList.tsx`): Groups into daily cards with day totals and nested shift rows.
+   - Native Mobile (`apps/mobile/app/(app)/operations.tsx`): Updated `HourLogRecord` with `shift_code` and displays `Shift S1` badge alongside shift timings.
+
+---
+
+## 26. Compact Single-Row Daily Shifts Table with Short Headers (Option C) (2026-09-26)
+
+### Overview
+Addresses user feedback on `/operations?view=machine` to condense daily shift logs into a single compact row per day with shortened column names, eliminating vertical bloat and excessive height across monthly operational summaries.
+
+### Architecture & Layout
+1. **Single Unified Table (`OperationsLogsTable.tsx`)**:
+   - Replaced multiple daily cards/boxes with **one single high-density table**.
+   - Each day is rendered as an ultra-compact **1-line summary row** (~36px height) displaying:
+     - `#`: Day index (`1`, `2`, ...)
+     - `Date`: Compact format e.g. `24-Sep (Thu)`
+     - `Site` / `Machine`: Company name & location (or machine model in client view)
+     - `Shifts`: All logged shifts (S1, S2, S3, S4) displayed in a single line as compact micro-pills with running hours (`[S1 5.5h] [S2 6.5h] [S3 8.4h] (3)`) with rich hover tooltips.
+     - `Day HMR`: Day start and end meter reading (`1204.5 → 1224.9`)
+     - `Day RT`: Total day running hours (`20.4h`)
+     - `Day OT`: Total day overtime hours in operator view (`0h` or `+2.0h`)
+     - `BD`: Breakdown count badge (`0` or `1 BD`)
+     - `Rem`: Truncated day remarks (`Normal operation`)
+     - `Act`: Chevron toggle button to expand/collapse detailed shift breakdown
+   - Short column headers: `#`, `Date`, `Site` / `Machine`, `Shifts`, `Day HMR`, `Day RT`, `Day OT`, `BD`, `Rem`, `Act`.
+   - 1-click inline expandable sub-row: Clicking any daily row expands a neat inline mini-table detailing each individual shift with Shift badge & timings, Operator, HMR, RT, OT, Breakdown, Remarks, and individual Edit and Delete buttons.
+   - Added "Expand All" / "Collapse All" toggle button to top control bar.
+   - Over 75% vertical space reduction achieved.
+2. **Mobile List Accordion Parity (`OperationsLogsMobileList.tsx`)**:
+   - Converted daily cards to compact expandable touch cards (~65px height default).
+   - Header displays Date, Shifts count, Client/Site, Day HMR & Day RT, and inline shift badges.
+   - Tapping card header expands shift details with full touch controls (min 44px touch targets).
+   - Added "Expand All" / "Collapse All" toggle to top header strip.
 
 

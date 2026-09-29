@@ -14,6 +14,7 @@ export interface MachineSelectItem {
   id: string;
   machine_name?: string | null;
   machine_code?: string | null;
+  machine_id?: string | null;
   model?: string | null;
   serial_number?: string | null;
   engine_serial_no?: string | null;
@@ -83,13 +84,14 @@ export function MachineSelect({
     return machines.find((m) => m.id === value) || null;
   }, [machines, value, isAllSelected]);
 
-  // Search filter matching machine name, serial no, model, machine code, engine serial, manufacturer
+  // Search filter matching machine name, serial no, model, machine code, engine serial, manufacturer (lazy: only when open)
   const filteredMachines = useMemo(() => {
+    if (!isOpen) return [];
     if (!searchQuery.trim()) return machines;
     const q = searchQuery.toLowerCase().trim();
     return machines.filter((m) => {
       const nameMatch = m.machine_name?.toLowerCase().includes(q);
-      const codeMatch = m.machine_code?.toLowerCase().includes(q);
+      const codeMatch = (m.machine_code || m.machine_id)?.toLowerCase().includes(q);
       const modelMatch = m.model?.toLowerCase().includes(q);
       const serialMatch = m.serial_number?.toLowerCase().includes(q);
       const engineMatch = m.engine_serial_no?.toLowerCase().includes(q);
@@ -97,7 +99,7 @@ export function MachineSelect({
       const cityMatch = m.city?.toLowerCase().includes(q);
       return nameMatch || codeMatch || modelMatch || serialMatch || engineMatch || mfgMatch || cityMatch;
     });
-  }, [machines, searchQuery]);
+  }, [machines, searchQuery, isOpen]);
 
   const handleOpenToggle = () => {
     if (disabled) return;
@@ -182,21 +184,21 @@ export function MachineSelect({
               </span>
             </span>
           ) : selectedMachine ? (
-            <>
-              <span className="truncate font-bold">
+            <span className="truncate flex items-center gap-1.5 min-w-0">
+              <span className="truncate font-bold text-[var(--color-ink)]">
                 {selectedMachine.model || selectedMachine.machine_name}
               </span>
-              {selectedMachine.machine_code && (
-                <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 font-mono text-[10px] shrink-0 font-bold">
-                  {selectedMachine.machine_code}
+              {(selectedMachine.machine_code || selectedMachine.machine_id) && (
+                <span className="px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 font-mono text-[10px] shrink-0 font-bold border border-sky-500/20">
+                  {selectedMachine.machine_code || selectedMachine.machine_id}
                 </span>
               )}
               {!compact && selectedMachine.serial_number && (
-                <span className="text-[10px] text-[var(--color-mute)] font-mono truncate">
+                <span className="text-[10px] text-[var(--color-mute)] font-mono shrink-0 whitespace-nowrap">
                   (S/N: {selectedMachine.serial_number})
                 </span>
               )}
-            </>
+            </span>
           ) : (
             <span className="text-[var(--color-mute)] font-normal">{placeholder}</span>
           )}
@@ -229,7 +231,7 @@ export function MachineSelect({
       )}
 
       {/* Popover Menu rendered via Portal with Dynamic Viewport Positioning & Smooth Transitions */}
-      {mounted && portalTarget && createPortal(
+      {isOpen && mounted && portalTarget && createPortal(
         <AnimatePresence onExitComplete={() => setSearchQuery("")}>
           {isOpen && isPositioned && (
             <motion.div
@@ -337,9 +339,9 @@ export function MachineSelect({
                         <div className="min-w-0 pr-2 flex-1">
                           <div className="font-bold flex items-center gap-2 truncate">
                             <span className="truncate">{modelTitle}</span>
-                            {m.machine_code && (
+                            {(m.machine_code || m.machine_id) && (
                               <span className="font-mono text-[10px] text-sky-600 dark:text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded shrink-0">
-                                {m.machine_code}
+                                {m.machine_code || m.machine_id}
                               </span>
                             )}
                             {m.status && ["maintenance", "decommissioned", "inactive"].includes(m.status) && (

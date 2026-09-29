@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   versionText: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     fontWeight: '600',
   },
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
   heroSubtitle: {
-    fontSize: 12,
+    fontSize: 13.5,
     marginTop: 3,
   },
   divider: {
@@ -368,11 +368,11 @@ const styles = StyleSheet.create({
     marginTop: spacingNumeric.md,
   },
   contactLabel: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '500',
   },
   contactValue: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     marginTop: 2,
   },
@@ -383,11 +383,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   brandFooterText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     marginTop: 6,
   },
   copyrightText: {
-    fontSize: 11,
+    fontSize: 12,
   },
 });

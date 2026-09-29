@@ -47,7 +47,8 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   text: {
-    fontSize: 11,
+    fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.4,

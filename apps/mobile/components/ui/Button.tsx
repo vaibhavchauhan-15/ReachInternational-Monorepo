@@ -132,9 +132,9 @@ export const Button: React.FC<ButtonProps> = ({
       color = theme.colors.link;
     }
 
-    let fontSize = 14;
-    if (size === 'sm') fontSize = 13;
-    if (size === 'lg') fontSize = 16;
+    let fontSize = 15;
+    if (size === 'sm') fontSize = 13.5;
+    if (size === 'lg') fontSize = 16.5;
 
     return {
       color,

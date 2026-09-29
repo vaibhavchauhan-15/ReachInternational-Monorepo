@@ -2263,6 +2263,7 @@ export function MachineListClient({
             setAssignmentModalOpen(false);
             setActiveAssignmentMachine(null);
           }}
+          onEditPersonnel={handleOpenEditPersonnel}
         />
       )}
 

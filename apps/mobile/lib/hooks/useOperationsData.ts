@@ -6,7 +6,7 @@ import {
   OPERATIONS_QUERY_KEYS,
   OPERATIONS_CACHE_TTLS,
 } from '@reachinternational/utils';
-import type { OperatorEntryContext } from '@reachinternational/types';
+import type { OperatorEntryContext, TodayShiftMonitorRow } from '@reachinternational/types';
 import { supabase } from '../supabase';
 
 export interface ActiveShiftAssignment {
@@ -91,6 +91,7 @@ export function useOperationsMasterData(enabled: boolean = true) {
             operator_id,
             shift_start_time,
             shift_end_time,
+            shift_code,
             crosses_midnight,
             assigned_at,
             assigned_by,
@@ -219,6 +220,9 @@ export function useOperationsLogs(rawFilters?: RawOperationsFilterInput, enabled
           normal_working_hours,
           location,
           is_breakdown,
+          shift,
+          shift_code,
+          shift_scheduled_minutes,
           remarks,
           created_at,
           conflict_flag,
@@ -306,10 +310,39 @@ export function useOperatorEntryContext(operatorId?: string) {
         client: res?.client || null,
         last_hmr: typeof res?.last_hmr === 'number' ? res.last_hmr : Number(res?.last_hmr) || 0,
         last_log: res?.last_log || null,
+        shift_codes: res?.shift_codes || [],
+        assigned_shift_code: res?.assigned_shift_code || null,
       };
     },
     enabled: Boolean(operatorId),
     staleTime: 15_000, // 15 seconds operational cache
+  });
+}
+
+/**
+ * Hook for Today's Shift Log Monitor on Mobile.
+ * Queries get_today_shift_log_monitor RPC with 30s auto-refresh interval.
+ */
+export function useTodayShiftMonitor(actorId?: string, logDate?: string, enabled: boolean = true) {
+  return useQuery<TodayShiftMonitorRow[]>({
+    queryKey: ['operations', 'today-shift-monitor', actorId, logDate || 'today'],
+    enabled: Boolean(actorId) && enabled,
+    queryFn: async () => {
+      if (!actorId) return [];
+      const { data, error } = await supabase.rpc('get_today_shift_log_monitor', {
+        p_actor_id: actorId,
+        ...(logDate ? { p_log_date: logDate } : {}),
+      });
+
+      if (error) {
+        console.error('[useTodayShiftMonitor] RPC Error:', error);
+        return [];
+      }
+
+      return (data as TodayShiftMonitorRow[]) || [];
+    },
+    staleTime: 15_000,
+    refetchInterval: 30_000,
   });
 }
 

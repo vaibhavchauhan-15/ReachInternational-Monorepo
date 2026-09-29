@@ -138,7 +138,7 @@ export const MachineExportModal: React.FC<MachineExportModalProps> = ({
 
     const rowsHtml = filteredMachines
       .map((m, idx) => {
-        const mId = m.machine_id || `RI-MC-${String(idx + 1).padStart(4, '0')}`;
+        const mId = m.machine_id || `M/C-${String(idx + 1).padStart(4, '0')}`;
         const model = m.model || '—';
         const serial = m.serial_number || '—';
         const category = m.category?.name || m.category_name || 'Industrial';
@@ -478,7 +478,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   subtitle: {
-    fontSize: 11,
+    fontSize: 13,
     marginTop: 1,
   },
   closeBtn: {
@@ -491,7 +491,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   filterSectionLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   filterTabText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
   },
   metricsStrip: {
@@ -524,13 +524,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   metricLabel: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   metricValue: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
     marginTop: 2,
   },

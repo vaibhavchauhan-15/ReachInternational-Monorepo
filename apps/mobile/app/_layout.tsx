@@ -4,11 +4,12 @@
  */
 
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet, Platform, AppState, type AppStateStatus } from 'react-native';
 import { Slot } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { AuthProvider } from '../lib/auth/useAuth';
+import { QueryClient, QueryClientProvider, useQueryClient } from '@tanstack/react-query';
+import { AuthProvider, useAuth } from '../lib/auth/useAuth';
+import { supabase } from '../lib/supabase';
 import { ThemeProvider, useTheme } from '../components/ui/ThemeProvider';
 import { PostNotificationBanner } from '../components/notifications';
 import * as SplashScreen from 'expo-splash-screen';
@@ -68,6 +69,110 @@ const queryClient = new QueryClient({
   },
 });
 
+function MobileOperatorAlertsListener() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  // Offline resilience: sync any notifications stored while operator was disconnected
+  const syncOfflineNotifications = React.useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const { data: unreadNotifications, error } = await supabase
+        .from('notifications')
+        .select('id, user_id, title, message, category, severity, metadata, created_at')
+        .eq('user_id', user.id)
+        .eq('is_read', false)
+        .order('created_at', { ascending: true });
+
+      if (error || !unreadNotifications || unreadNotifications.length === 0) return;
+
+      const idsToMarkRead: string[] = [];
+      for (const notif of unreadNotifications) {
+        idsToMarkRead.push(notif.id);
+        postNotification({
+          id: notif.id,
+          category: (notif.category as any) || 'log_entry',
+          title: notif.title || 'Shift Logged on Your Behalf',
+          body: notif.message,
+          severity: (notif.severity as any) || 'info',
+          metadata: notif.metadata,
+        });
+      }
+
+      if (idsToMarkRead.length > 0) {
+        await supabase
+          .from('notifications')
+          .update({ is_read: true, read_at: new Date().toISOString() })
+          .in('id', idsToMarkRead);
+
+        queryClient.invalidateQueries({
+          queryKey: ['operator', 'entry-context', user.id],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['operations', 'logs'],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['today-shift-monitor'],
+        });
+      }
+    } catch (err) {
+      console.warn('[OfflineNotifications] Sync notice:', err);
+    }
+  }, [user?.id, queryClient]);
+
+  React.useEffect(() => {
+    if (!user?.id) return;
+
+    // 1. Initial offline notifications sync on mount / authentication
+    syncOfflineNotifications();
+
+    // 2. Re-sync offline notifications when app transitions back to active foreground
+    const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
+      if (nextAppState === 'active') {
+        syncOfflineNotifications();
+      }
+    });
+
+    // 3. Realtime WebSocket listener for immediate delivery while active
+    const alertChannel = supabase.channel(`operator-alerts:${user.id}`);
+    alertChannel
+      .on('broadcast', { event: 'assisted_shift_logged' }, (eventPayload) => {
+        const data = eventPayload?.payload;
+        if (data) {
+          postNotification({
+            category: 'log_entry',
+            title: data.title || 'Shift Logged on Your Behalf',
+            body: data.body || `A supervisor recorded your shift on equipment ${data.machineCode || 'Equipment'} (${data.runningHours}h).`,
+            severity: 'info',
+            metadata: data,
+          });
+
+          queryClient.invalidateQueries({
+            queryKey: ['operator', 'entry-context', user.id],
+          });
+          queryClient.invalidateQueries({
+            queryKey: ['operations', 'logs'],
+          });
+          queryClient.invalidateQueries({
+            queryKey: ['today-shift-monitor'],
+          });
+        }
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          syncOfflineNotifications();
+        }
+      });
+
+    return () => {
+      subscription.remove();
+      supabase.removeChannel(alertChannel);
+    };
+  }, [user?.id, queryClient, syncOfflineNotifications]);
+
+  return null;
+}
+
 function ThemedAppContainer() {
   const { theme, isDark } = useTheme();
 
@@ -103,6 +208,7 @@ function ThemedAppContainer() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Slot />
       <PostNotificationBanner />
+      <MobileOperatorAlertsListener />
       <MobileAgentation />
       <MobileGoogleAnalytics />
     </View>

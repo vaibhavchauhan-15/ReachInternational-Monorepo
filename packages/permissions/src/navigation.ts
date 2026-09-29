@@ -4,6 +4,7 @@ import type { UserRole } from "@reachinternational/types";
 export type NavKey =
   | "home"
   | "operations"
+  | "running-logs"
   | "machines"
   | "clients"
   | "users"
@@ -45,6 +46,15 @@ export const AUTHORIZED_CLIENT_ROLES: readonly UserRole[] = [
   "supervisor",
 ];
 
+// Matches roles authorized to access Daily Running Logs (/running-logs)
+export const AUTHORIZED_RUNNING_LOG_ROLES: readonly UserRole[] = [
+  "super_admin",
+  "admin",
+  "manager",
+  "supervisor",
+  "hr",
+];
+
 const AUDIT_ROLES: readonly UserRole[] = [
   "super_admin",
   "admin",
@@ -76,6 +86,14 @@ export const NAV_ITEMS: NavItem[] = [
       "operator",
     ],
     roleLabel: { operator: "Log" },
+  },
+  {
+    key: "running-logs",
+    label: "Running Logs",
+    href: "/running-logs",
+    icon: "activity",
+    match: ["/running-logs"],
+    roles: AUTHORIZED_RUNNING_LOG_ROLES,
   },
   {
     key: "machines",
@@ -143,6 +161,9 @@ export const NAV_ITEMS: NavItem[] = [
       "super_admin",
       "admin",
       "hr",
+      "manager",
+      "supervisor",
+      "operator",
     ],
   },
 ];
@@ -185,6 +206,7 @@ export const ACTIVE_PROTECTED_ROUTES: readonly string[] = [
   "/dashboard",
   "/machines",
   "/operations",
+  "/running-logs",
   "/clients",
   "/users",
   "/payroll",
@@ -285,7 +307,7 @@ export function isRouteAllowedForRole(pathname: string, role: UserRole): boolean
 // ─── Bar slot order per role (max 4 primary + More/Account) ─────
 // ponytail: hand-picked per role; derive from usage data only if it ever matters.
 export const PRIMARY: Record<UserRole, NavKey[]> = {
-  operator: ["home", "operations", "machines"],
+  operator: ["home", "operations", "machines", "attendance"],
   supervisor: ["home", "operations", "machines", "users"],
   hr: ["home", "operations", "attendance", "payroll"],
   manager: ["home", "operations", "machines", "clients"],

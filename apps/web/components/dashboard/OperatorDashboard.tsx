@@ -1062,11 +1062,12 @@ export function OperatorDashboard({
         toast("error", "Invalid Breakdown Time", breakdownStats?.errorMessage || "Please enter valid breakdown start and end times.");
         return;
       }
-      if (operatingStats.isValid && breakdownStats.durationDecimalHours > operatingStats.durationHours) {
+      const maxAllowedDuration = operatingStats.durationHours > 0 ? operatingStats.durationHours : 24;
+      if (operatingStats.isValid && breakdownStats.durationDecimalHours > maxAllowedDuration) {
         toast(
           "error",
           "Invalid Breakdown Duration",
-          `Breakdown duration (${breakdownStats.durationDecimalHours}h) cannot exceed total shift duration (${operatingStats.durationHours}h).`
+          `Breakdown duration (${breakdownStats.durationDecimalHours}h) cannot exceed total shift duration (${maxAllowedDuration}h).`
         );
         return;
       }
@@ -1776,7 +1777,7 @@ export function OperatorDashboard({
                       <AnimatedAlertTriangle size={14} className="shrink-0 text-amber-500" />
                       <span>{breakdownStats.errorMessage || "Please verify breakdown start and end times."}</span>
                     </div>
-                  ) : isBreakdown && breakdownStats?.isValid && operatingStats.isValid && breakdownStats.durationDecimalHours > operatingStats.durationHours ? (
+                  ) : isBreakdown && breakdownStats?.isValid && operatingStats.isValid && operatingStats.durationHours > 0 && breakdownStats.durationDecimalHours > operatingStats.durationHours ? (
                     <div className="p-2 sm:p-2.5 rounded-lg border bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300 text-[11px] sm:text-xs font-bold flex items-center gap-2">
                       <AnimatedAlertTriangle size={14} className="shrink-0 text-rose-500" />
                       <span>{`Breakdown duration (${breakdownStats.durationDecimalHours}h) cannot exceed total shift duration (${operatingStats.durationHours}h).`}</span>

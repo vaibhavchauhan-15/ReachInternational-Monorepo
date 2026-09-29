@@ -269,7 +269,7 @@ export function MachineImportModal({ open, onClose, onSuccess }: MachineImportMo
         {!result && !isPending && (
           <div className="text-xs text-[var(--color-mute)] space-y-1">
             <p>• Supported columns: Machine ID, Model, Manufacturer, Serial Number, Year of MFG, Hour Meter, Service Count, Status, Health Status.</p>
-            <p>• Machine ID is optional (auto-generated format: RI-MC-0001 if left blank).</p>
+            <p>• Machine ID is optional (auto-generated format: M/C-0001 if left blank).</p>
             <p>• Status options: &quot;available&quot; or &quot;rented&quot; (default: &quot;available&quot;).</p>
             <p>• Health Status options: &quot;active&quot;, &quot;under_maintenance&quot;, or &quot;breakdown&quot; (default: &quot;active&quot;).</p>
           </div>

@@ -81,7 +81,7 @@ export default function ForgotPasswordScreen() {
             onPress={() => setMode(isDark ? 'light' : 'dark')}
             style={[styles.themeBtn, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}
           >
-            <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.mute }}>
+            <Text style={{ fontSize: 12.5, fontWeight: '600', color: theme.colors.mute }}>
               {isDark ? 'LIGHT' : 'DARK'}
             </Text>
           </TouchableOpacity>
@@ -190,8 +190,8 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
   subtitle: {
-    fontSize: 12,
-    lineHeight: 17,
+    fontSize: 14,
+    lineHeight: 19,
     marginTop: 4,
     marginBottom: spacingNumeric.md,
   },

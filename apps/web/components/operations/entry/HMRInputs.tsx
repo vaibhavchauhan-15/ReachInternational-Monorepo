@@ -32,17 +32,16 @@ export function HMRInputs({
     <div className="p-3.5 sm:p-4 rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)]/50 space-y-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[10px] sm:text-[11px] font-bold tracking-wider uppercase text-[var(--color-mute)] font-mono">
-          <span className="sm:hidden">HMR</span>
-          <span className="hidden sm:inline">Hour Meter Readings (HMR)</span>
+          HMR
         </span>
 
         {/* Dynamic Running Hours Chip */}
         <div
-          className={`inline-flex items-center shrink-0 px-2.5 py-1 rounded-lg text-[11px] sm:text-xs font-mono font-bold transition-colors ${
+          className={`inline-flex items-center shrink-0 px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-mono font-semibold transition-colors ${
             isMeterRegressed
-              ? "bg-rose-500/10 text-rose-600 border border-rose-500/20 gap-1.5"
+              ? "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20 gap-1"
               : isOver24Hours
-              ? "bg-amber-500/10 text-amber-600 border border-amber-500/20 gap-1.5"
+              ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 gap-1"
               : runningHours > 0
               ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
               : "bg-[var(--color-canvas-elevated)] text-[var(--color-mute)] border border-[var(--color-hairline)]"
@@ -50,12 +49,12 @@ export function HMRInputs({
         >
           {isMeterRegressed ? (
             <>
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <AlertTriangle className="h-3 w-3 shrink-0" />
               <span>Invalid Meter</span>
             </>
           ) : isOver24Hours ? (
             <>
-              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              <AlertTriangle className="h-3 w-3 shrink-0" />
               <span>&gt;24 hrs</span>
             </>
           ) : (
@@ -75,18 +74,18 @@ export function HMRInputs({
             <button
               type="button"
               onClick={onToggleLock}
-              className="text-[10px] text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors"
+              className="text-[11px] sm:text-xs text-[var(--color-mute)] hover:text-[var(--color-ink)] inline-flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
               title={isStartMeterLocked ? "Click to unlock and edit start meter" : "Click to lock start meter"}
             >
               {isStartMeterLocked ? (
                 <>
-                  <Lock className="h-3 w-3 text-emerald-500" />
-                  <span>Synced</span>
+                  <Lock size={12} className="h-3 w-3 text-emerald-500 shrink-0" />
+                  <span className="leading-none font-medium">Synced</span>
                 </>
               ) : (
                 <>
-                  <Unlock className="h-3 w-3 text-amber-500" />
-                  <span>Manual</span>
+                  <Unlock size={12} className="h-3 w-3 text-amber-500 shrink-0" />
+                  <span className="leading-none font-medium">Manual</span>
                 </>
               )}
             </button>
@@ -100,7 +99,7 @@ export function HMRInputs({
               onChange={(e) => onStartMeterChange(e.target.value)}
               disabled={isStartMeterLocked}
               required
-              className={`w-full h-10 px-3 rounded-lg border font-mono text-sm font-semibold transition-colors ${
+              className={`w-full min-h-[44px] h-[44px] sm:h-10 px-3 rounded-lg border font-mono text-base sm:text-sm font-semibold transition-colors ${
                 isStartMeterLocked
                   ? "bg-[var(--color-canvas)] text-[var(--color-mute)] border-[var(--color-hairline)] cursor-not-allowed"
                   : "bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] border-[var(--color-hairline)] focus:outline-none focus:ring-2 focus:ring-[var(--color-link)]"
@@ -132,7 +131,7 @@ export function HMRInputs({
               value={endMeter}
               onChange={(e) => onEndMeterChange(e.target.value)}
               required
-              className={`w-full h-10 px-3 rounded-lg border font-mono text-sm font-bold transition-colors bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] ${
+              className={`w-full min-h-[44px] h-[44px] sm:h-10 px-3 rounded-lg border font-mono text-base sm:text-sm font-bold transition-colors bg-[var(--color-canvas-elevated)] text-[var(--color-ink)] ${
                 isMeterRegressed
                   ? "border-rose-500 focus:ring-2 focus:ring-rose-500"
                   : "border-[var(--color-hairline)] focus:outline-none focus:ring-2 focus:ring-[var(--color-link)]"

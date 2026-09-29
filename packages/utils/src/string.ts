@@ -361,3 +361,194 @@ export function formatLicenseNumber(lic?: string | null): string {
   return result.formatted || lic.trim().toUpperCase();
 }
 
+// ---------------------------------------------------------------------------
+// Indian Banking Validation (Bank Account Number & RBI IFSC Code)
+// ---------------------------------------------------------------------------
+
+export interface BankAccountValidationResult {
+  isValid: boolean;
+  error?: string;
+  clean?: string;
+}
+
+/**
+ * Validates an Indian Bank Account Number:
+ * 1. Must be between 9 and 18 digits (standard Indian banking system range).
+ * 2. Digits only, ignoring spaces and hyphens.
+ * 3. Cannot consist entirely of zeros or single repeated digits.
+ */
+export function validateBankAccountNumber(account?: string | null): BankAccountValidationResult {
+  if (!account || !account.trim()) {
+    return { isValid: false, error: "Bank account number is required." };
+  }
+
+  const raw = account.trim();
+  const clean = raw.replace(/[\s\-]/g, "");
+
+  if (!/^\d+$/.test(clean)) {
+    return {
+      isValid: false,
+      error: "Bank account number must contain digits only.",
+      clean,
+    };
+  }
+
+  if (clean.length < 9 || clean.length > 18) {
+    return {
+      isValid: false,
+      error: `Bank account number must be between 9 and 18 digits (entered ${clean.length} digits).`,
+      clean,
+    };
+  }
+
+  // Reject repeating single digits like 000000000, 111111111, etc.
+  if (/^(\d)\1{8,}$/.test(clean)) {
+    return {
+      isValid: false,
+      error: "Invalid bank account number (cannot consist of repeating identical digits).",
+      clean,
+    };
+  }
+
+  return {
+    isValid: true,
+    clean,
+  };
+}
+
+export function isValidBankAccount(account?: string | null): boolean {
+  return validateBankAccountNumber(account).isValid;
+}
+
+/**
+ * Masks a bank account number showing only the last 4 digits (e.g. ••••••••1234).
+ */
+export function maskBankAccount(account?: string | null): string {
+  if (!account || !account.trim()) return "—";
+  const clean = account.replace(/\D/g, "");
+  if (clean.length < 4) return account.trim();
+  return `••••••••${clean.slice(-4)}`;
+}
+
+export interface IfscValidationResult {
+  isValid: boolean;
+  error?: string;
+  clean?: string;
+}
+
+/**
+ * Validates an Indian Financial System Code (IFSC) according to RBI standards:
+ * Standard Format: 11 characters alphanumeric
+ * 1. First 4 characters: Alphabetic characters representing the bank code.
+ * 2. 5th character: Always '0' (reserved for future use).
+ * 3. Last 6 characters: Alphanumeric characters representing the specific branch.
+ * Example: SBIN0001234, HDFC0000128, ICIC0000002, PUNB0123400
+ */
+export function validateIfscCode(ifsc?: string | null): IfscValidationResult {
+  if (!ifsc || !ifsc.trim()) {
+    return { isValid: false, error: "IFSC code is required." };
+  }
+
+  const clean = ifsc.trim().toUpperCase().replace(/[\s\-]/g, "");
+
+  if (clean.length !== 11) {
+    return {
+      isValid: false,
+      error: `IFSC code must be exactly 11 characters (entered ${clean.length} characters).`,
+      clean,
+    };
+  }
+
+  const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+  if (!ifscRegex.test(clean)) {
+    if (!/^[A-Z]{4}/.test(clean)) {
+      return {
+        isValid: false,
+        error: "First 4 characters of IFSC code must be alphabetic bank code (e.g. SBIN, HDFC, ICIC).",
+        clean,
+      };
+    }
+    if (clean[4] !== "0") {
+      return {
+        isValid: false,
+        error: "5th character of IFSC code must be zero '0'.",
+        clean,
+      };
+    }
+    return {
+      isValid: false,
+      error: "Invalid IFSC code format. Example: SBIN0001234 or HDFC0000128.",
+      clean,
+    };
+  }
+
+  return {
+    isValid: true,
+    clean,
+  };
+}
+
+export function isValidIfsc(ifsc?: string | null): boolean {
+  return validateIfscCode(ifsc).isValid;
+}
+
+export function formatIfscCode(ifsc?: string | null): string {
+  if (!ifsc) return "";
+  return ifsc.trim().toUpperCase().replace(/[\s\-]/g, "");
+}
+
+/**
+ * Normalizes client site addresses into their canonical primary site representation.
+ * Handles both full postal strings (e.g. "BKC Plot C-26, Bandra East, Mumbai, Mumbai City, Maharashtra, 400051")
+ * and short street addresses (e.g. "BKC Plot C-26, Bandra East") to ensure exact equality matching
+ * without substring or regex searches.
+ */
+export function normalizeClientSiteAddress(
+  site?: string | null,
+  clientStreet?: string | null
+): string {
+  if (!site) return "";
+  const trimmed = site.trim();
+  if (!trimmed || trimmed.toLowerCase() === "all") return "";
+
+  // If a client registered street is known and the site string starts with it, return the exact street
+  if (clientStreet && clientStreet.trim()) {
+    const streetClean = clientStreet.trim();
+    if (trimmed.toLowerCase().startsWith(streetClean.toLowerCase())) {
+      return streetClean;
+    }
+  }
+
+  // If passed a comma-separated address ending with postal information (pincode/city/state),
+  // strip standard trailing postal elements to extract the canonical site street
+  const parts = trimmed.split(",").map((s) => s.trim()).filter(Boolean);
+  if (parts.length >= 3) {
+    const lastPart = parts[parts.length - 1];
+    // If last part is a 6-digit pin code or string has 4+ postal segments
+    if (/^\d{6}$/.test(lastPart) || parts.length >= 4) {
+      return `${parts[0]}, ${parts[1]}`;
+    }
+  }
+
+  return trimmed;
+}
+
+/**
+ * Returns distinct candidate site strings for exact b-tree equality matching.
+ * Produces an array of canonical variations (e.g. [rawSite, canonicalSite, clientStreet])
+ * eliminating the need for slow ILIKE '%...%' substring scans.
+ */
+export function resolveSiteMatchCandidates(
+  site?: string | null,
+  clientStreet?: string | null
+): string[] {
+  if (!site || site.toLowerCase() === "all") return [];
+  const normalized = normalizeClientSiteAddress(site, clientStreet);
+  const candidates = new Set<string>();
+  if (site.trim()) candidates.add(site.trim());
+  if (normalized) candidates.add(normalized);
+  if (clientStreet && clientStreet.trim()) candidates.add(clientStreet.trim());
+  return Array.from(candidates);
+}
+
+

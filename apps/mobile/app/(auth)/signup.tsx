@@ -28,6 +28,9 @@ import {
   validateAadhaarNumber,
   validateLicenseNumber,
   formatAadhaar,
+  validateBankAccountNumber,
+  validateIfscCode,
+  formatIfscCode,
   INDIAN_STATES,
   getStateById,
   computeShiftTiming,
@@ -38,7 +41,6 @@ import { MobileDocumentUploadCard } from '../../components/documents/MobileDocum
 import {
   MobileFormSectionCard,
   MobileAddressFields,
-  MobileSalaryField,
   MobileSubmitButton,
 } from '../../components/forms';
 import {
@@ -49,6 +51,7 @@ import {
   MapPin,
   ShieldCheck,
   CreditCard,
+  Building2,
   ChevronDown,
   X,
   Check,
@@ -74,7 +77,6 @@ export default function SignupScreen() {
   const [phone, setPhone] = useState('');
   const [selectedRole, setSelectedRole] = useState('operator');
   const [roleModalVisible, setRoleModalVisible] = useState(false);
-  const [monthlySalary, setMonthlySalary] = useState('');
 
   const [shiftStartTime, setShiftStartTime] = useState('08:00 AM');
   const [shiftEndTime, setShiftEndTime] = useState('08:00 PM');
@@ -84,6 +86,11 @@ export default function SignupScreen() {
   const [district, setDistrict] = useState('');
   const [stateVal, setStateVal] = useState('');
   const [stateId, setStateId] = useState<number | null>(null);
+
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [bankIfscCode, setBankIfscCode] = useState('');
+  const [bankDoc, setBankDoc] = useState<MobilePickedDocument | null>(null);
+  const [bankDocError, setBankDocError] = useState<string | null>(null);
 
   const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [aadhaarDoc, setAadhaarDoc] = useState<MobilePickedDocument | null>(null);
@@ -156,6 +163,41 @@ export default function SignupScreen() {
     }
   };
 
+  const handleBankAccountChange = (val: string) => {
+    const clean = val.replace(/\D/g, '').slice(0, 18);
+    setBankAccountNumber(clean);
+    clearFieldError('bank_account_number');
+    if (clean.length > 0 && (clean.length < 9 || clean.length > 18)) {
+      setFieldErrors((prev) => ({
+        ...prev,
+        bank_account_number: 'Account number must be between 9 and 18 digits.',
+      }));
+    } else if (clean.length >= 9) {
+      const res = validateBankAccountNumber(clean);
+      if (!res.isValid) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          bank_account_number: res.error || 'Invalid bank account number.',
+        }));
+      }
+    }
+  };
+
+  const handleBankIfscChange = (val: string) => {
+    const formatted = formatIfscCode(val);
+    setBankIfscCode(formatted);
+    clearFieldError('bank_ifsc_code');
+    if (formatted.length === 11) {
+      const res = validateIfscCode(formatted);
+      if (!res.isValid) {
+        setFieldErrors((prev) => ({
+          ...prev,
+          bank_ifsc_code: res.error || 'Invalid IFSC code format (e.g. SBIN0001234).',
+        }));
+      }
+    }
+  };
+
   const handleAadhaarChange = (val: string) => {
     const formatted = formatAadhaar(val);
     setAadhaarNumber(formatted);
@@ -218,11 +260,27 @@ export default function SignupScreen() {
       errors.state = 'State is required.';
     }
 
-    if (selectedRole === 'operator') {
-      const sal = Number(monthlySalary);
-      if (!monthlySalary || isNaN(sal) || sal <= 0) {
-        errors.monthly_salary = 'Monthly salary is mandatory for operator accounts and must be greater than 0.';
+    if (!bankAccountNumber.trim()) {
+      errors.bank_account_number = 'Bank account number is required.';
+    } else {
+      const bankRes = validateBankAccountNumber(bankAccountNumber);
+      if (!bankRes.isValid) {
+        errors.bank_account_number = bankRes.error || 'Invalid bank account number (9 to 18 digits).';
       }
+    }
+
+    if (!bankIfscCode.trim()) {
+      errors.bank_ifsc_code = 'Bank IFSC code is required.';
+    } else {
+      const ifscRes = validateIfscCode(bankIfscCode);
+      if (!ifscRes.isValid) {
+        errors.bank_ifsc_code = ifscRes.error || 'Invalid IFSC code format (e.g. SBIN0001234).';
+      }
+    }
+
+    if (!bankDoc) {
+      errors.bank_doc = 'Bank account document (Passbook / Cheque / Statement) is required.';
+      setBankDocError('Bank account document (Passbook / Cheque / Statement) is required.');
     }
 
     if (!aadhaarNumber.trim()) {
@@ -303,7 +361,9 @@ export default function SignupScreen() {
             state: stateVal.trim(),
             state_id: stateId,
             location: `${street.trim() ? `${street.trim()}, ` : ''}${city.trim()}, ${district.trim()}, ${stateVal.trim()}`,
-            monthly_salary: monthlySalary ? Number(monthlySalary) : null,
+            monthly_salary: null,
+            bank_account_number: bankAccountNumber.trim(),
+            bank_ifsc_code: bankIfscCode.trim().toUpperCase(),
             aadhaar_number: aadhaarNumber.replace(/\D/g, ''),
             license_number: licenseNumber.trim().toUpperCase() || null,
           },
@@ -318,6 +378,17 @@ export default function SignupScreen() {
         // Upload documents if selected and user was created
         if (data?.user?.id) {
           const userId = data.user.id;
+          if (bankDoc) {
+            try {
+              await uploadUserDocumentDirect({
+                userId,
+                documentTypeCode: 'bank_document',
+                doc: bankDoc,
+              });
+            } catch (bErr) {
+              console.warn('[Signup] Bank document upload deferred:', bErr);
+            }
+          }
           if (aadhaarDoc) {
             try {
               await uploadUserDocumentDirect({
@@ -361,8 +432,7 @@ export default function SignupScreen() {
     email.trim().length > 0 &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim().toLowerCase()) &&
     cleanPhone.length >= 10 &&
-    (!isSupervisedRole(selectedRole) || supervisors.length === 0 || selectedSupervisorId) &&
-    (selectedRole !== 'operator' || (monthlySalary && Number(monthlySalary) > 0))
+    (!isSupervisedRole(selectedRole) || supervisors.length === 0 || selectedSupervisorId)
   );
 
   const section2Complete = Boolean(
@@ -370,10 +440,19 @@ export default function SignupScreen() {
     shiftEndTime.trim().length > 0
   );
 
+  const cleanBankAcc = bankAccountNumber.replace(/\D/g, '');
+  const cleanIfsc = bankIfscCode.trim().toUpperCase();
+
   const section3Complete = Boolean(
     city.trim().length >= 2 &&
     district.trim().length >= 2 &&
     (stateVal.trim().length > 0 || stateId !== null) &&
+    cleanBankAcc.length >= 9 &&
+    cleanBankAcc.length <= 18 &&
+    validateBankAccountNumber(cleanBankAcc).isValid &&
+    cleanIfsc.length === 11 &&
+    validateIfscCode(cleanIfsc).isValid &&
+    Boolean(bankDoc) &&
     aadhaarNumber.replace(/\D/g, '').length === 12 &&
     Boolean(aadhaarDoc)
   );
@@ -393,12 +472,14 @@ export default function SignupScreen() {
   if (!fullName.trim() || fullName.trim().length < 2) missingFields.push('Full Name');
   if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim().toLowerCase())) missingFields.push('Valid Email');
   if (cleanPhone.length < 10) missingFields.push('10-digit Phone');
-  if (selectedRole === 'operator' && (!monthlySalary || Number(monthlySalary) <= 0)) missingFields.push('Monthly Salary');
   if (isSupervisedRole(selectedRole) && supervisors.length > 0 && !selectedSupervisorId) missingFields.push('Supervisor');
   if (!shiftStartTime.trim() || !shiftEndTime.trim()) missingFields.push('Shift Hours');
   if (!city.trim() || city.trim().length < 2) missingFields.push('City/Town');
   if (!district.trim() || district.trim().length < 2) missingFields.push('District');
   if (!stateVal.trim() && !stateId) missingFields.push('State');
+  if (!cleanBankAcc || !validateBankAccountNumber(cleanBankAcc).isValid) missingFields.push('Bank Account Number');
+  if (!cleanIfsc || !validateIfscCode(cleanIfsc).isValid) missingFields.push('Bank IFSC Code');
+  if (!bankDoc) missingFields.push('Bank Document');
   if (aadhaarNumber.replace(/\D/g, '').length !== 12) missingFields.push('12-digit Aadhaar');
   if (!aadhaarDoc) missingFields.push('Aadhaar Document');
   if (!password || password.length < 8) missingFields.push('Password (8+ chars)');
@@ -578,20 +659,6 @@ export default function SignupScreen() {
                   </View>
                 )}
 
-                {/* Monthly Salary Input for Operators */}
-                {selectedRole === 'operator' && (
-                  <View style={{ paddingTop: 6, borderTopWidth: 1, borderTopColor: cardBorder }}>
-                    <MobileSalaryField
-                      value={monthlySalary}
-                      onChangeText={(val) => {
-                        setMonthlySalary(val);
-                        clearFieldError('monthly_salary');
-                      }}
-                      role={selectedRole}
-                      error={fieldErrors.monthly_salary}
-                    />
-                  </View>
-                )}
               </MobileFormSectionCard>
 
               {/* Section 2: Work Shift Schedule */}
@@ -628,11 +695,11 @@ export default function SignupScreen() {
                 )}
               </MobileFormSectionCard>
 
-              {/* Section 3: Work Location & Identity */}
+              {/* Section 3: Address, Banking & Identity */}
               <MobileFormSectionCard
                 stepNumber={3}
-                title="Work Location & Documents"
-                description="Field operations base location and regulatory compliance credentials."
+                title="Address, Banking & Identity"
+                description="Field operations base location, bank account details, and statutory identity credentials."
                 isMandatory={true}
                 isCompleted={section3Complete}
               >
@@ -667,6 +734,72 @@ export default function SignupScreen() {
                   }}
                   required={true}
                 />
+
+                {/* Bank Account Details */}
+                <View
+                  style={[
+                    styles.bankCard,
+                    {
+                      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(0, 0, 0, 0.02)',
+                      borderColor: (fieldErrors.bank_doc || bankDocError)
+                        ? '#ef4444'
+                        : cardBorder,
+                    },
+                  ]}
+                >
+                  <View style={styles.bankHeaderRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <CreditCard size={15} color="#0ea5e9" />
+                      <Text style={[styles.bankTitle, { color: theme.colors.ink }]}>
+                        Bank Account Details <Text style={{ color: '#ef4444' }}>*</Text>
+                      </Text>
+                    </View>
+                    <Text style={[styles.bankSubtitle, { color: theme.colors.mute }]}>
+                      For payroll & compensation
+                    </Text>
+                  </View>
+
+                  <Input
+                    label="Bank Account Number"
+                    required
+                    placeholder="9 to 18-digit Account Number"
+                    value={bankAccountNumber}
+                    onChangeText={handleBankAccountChange}
+                    keyboardType="numeric"
+                    maxLength={18}
+                    error={fieldErrors.bank_account_number}
+                    leftIcon={<CreditCard size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                  />
+
+                  <Input
+                    label="IFSC Code"
+                    required
+                    placeholder="e.g. SBIN0001234"
+                    value={bankIfscCode}
+                    onChangeText={handleBankIfscChange}
+                    autoCapitalize="characters"
+                    maxLength={11}
+                    error={fieldErrors.bank_ifsc_code}
+                    leftIcon={<Building2 size={16} color={isDark ? '#737373' : '#9ca3af'} />}
+                  />
+
+                  <MobileDocumentUploadCard
+                    title="Bank Account Document (Front / Cheque / PDF) *"
+                    subtitle="Passbook front page, cancelled cheque, or statement (max 2 MB)"
+                    docTypeCode="bank_document"
+                    selectedDoc={bankDoc}
+                    onDocSelected={(doc) => {
+                      setBankDoc(doc);
+                      setBankDocError(null);
+                      clearFieldError('bank_doc');
+                    }}
+                    onDocRemoved={() => {
+                      setBankDoc(null);
+                      setBankDocError(null);
+                    }}
+                    errorMessage={bankDocError || fieldErrors.bank_doc}
+                  />
+                </View>
 
                 <Input
                   label="Aadhaar Card Number"
@@ -826,7 +959,7 @@ export default function SignupScreen() {
                   </Text>
                 </TouchableOpacity>
                 {fieldErrors.terms && (
-                  <Text style={{ fontSize: 11, color: '#ef4444', marginTop: 4, marginLeft: 30 }}>
+                  <Text style={{ fontSize: 12.5, color: '#ef4444', marginTop: 4, marginLeft: 30 }}>
                     {fieldErrors.terms}
                   </Text>
                 )}
@@ -1087,11 +1220,11 @@ const styles = StyleSheet.create({
   },
   sectionBadgeText: {
     color: '#0ea5e9',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
   },
   sectionTitle: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
@@ -1106,7 +1239,7 @@ const styles = StyleSheet.create({
   },
   shiftPillText: {
     color: '#0ea5e9',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
   },
   selectGroup: {
@@ -1114,7 +1247,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   fieldLabel: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '500',
     marginBottom: 6,
     letterSpacing: -0.1,
@@ -1133,7 +1266,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   selectSubtext: {
-    fontSize: 11,
+    fontSize: 12.5,
     marginTop: 1,
   },
   twoColumnRow: {
@@ -1141,7 +1274,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   helperCaption: {
-    fontSize: 11,
+    fontSize: 12.5,
     lineHeight: 16,
     marginTop: 4,
   },
@@ -1158,7 +1291,7 @@ const styles = StyleSheet.create({
   },
   noteText: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 12.5,
     lineHeight: 17,
     color: '#0ea5e9',
   },
@@ -1212,7 +1345,7 @@ const styles = StyleSheet.create({
   },
   copyrightText: {
     flex: 1,
-    fontSize: 10,
+    fontSize: 12,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     letterSpacing: 0.5,
   },
@@ -1227,7 +1360,7 @@ const styles = StyleSheet.create({
   },
   errorText: {
     color: '#ef4444',
-    fontSize: 11,
+    fontSize: 12.5,
     marginTop: 4,
     fontWeight: '500',
   },
@@ -1274,7 +1407,30 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   modalItemDesc: {
-    fontSize: 12,
+    fontSize: 12.5,
     marginTop: 2,
+  },
+  bankCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    gap: 10,
+    marginTop: 6,
+    marginBottom: 10,
+  },
+  bankHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 6,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(150, 150, 150, 0.25)',
+  },
+  bankTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  bankSubtitle: {
+    fontSize: 12,
   },
 });

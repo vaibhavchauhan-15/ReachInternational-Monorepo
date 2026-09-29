@@ -1649,6 +1649,7 @@ export async function getUserDetailAction(userId: string): Promise<{ user: User 
 
 export interface UserProfileCardData {
   id: string;
+  employee_id?: string | null;
   full_name: string;
   email: string | null;
   phone: string | null;
@@ -1685,7 +1686,7 @@ export async function getMyProfileCardDetailsAction(): Promise<{
     const { data, error } = await adminClient
       .from("users")
       .select(
-        "id, full_name, email, phone, role, city, district, state, street, aadhaar_number, license_number, shift_start_time, shift_end_time, monthly_salary"
+        "id, employee_id, full_name, email, phone, role, city, district, state, street, aadhaar_number, license_number, shift_start_time, shift_end_time, monthly_salary"
       )
       .eq("id", currentUser.id)
       .single();
@@ -1701,6 +1702,7 @@ export async function getMyProfileCardDetailsAction(): Promise<{
     return {
       profile: {
         id: data.id,
+        employee_id: data.employee_id,
         full_name: data.full_name,
         email: data.email || currentUser.email || null,
         phone: data.phone,

@@ -36,21 +36,18 @@ export function BreakdownSection({
       }`}
     >
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div
-            className={`h-7 w-7 rounded-lg flex items-center justify-center shrink-0 ${
+        <div className="flex items-center gap-1.5">
+          <AlertTriangle
+            size={14}
+            className={`h-3.5 w-3.5 shrink-0 ${
               isBreakdown
-                ? "bg-rose-500/20 text-rose-600 dark:text-rose-400"
-                : "bg-[var(--color-canvas-elevated)] text-[var(--color-mute)] border border-[var(--color-hairline)]"
+                ? "text-rose-600 dark:text-rose-400"
+                : "text-[var(--color-mute)]"
             }`}
-          >
-            <AlertTriangle className="h-4 w-4" />
-          </div>
-          <div>
-            <h4 className="text-xs sm:text-sm font-bold text-[var(--color-ink)]">
-              Machine Breakdown
-            </h4>
-          </div>
+          />
+          <h4 className="text-xs sm:text-sm font-bold text-[var(--color-ink)] leading-none">
+            Machine Breakdown
+          </h4>
         </div>
 
         <button

@@ -37,6 +37,8 @@ export interface OperationLogRow {
   overtime_hours?: number | null;
   is_breakdown?: boolean | null;
   shift?: string | null;
+  shift_code?: string | null;
+  shift_scheduled_minutes?: number | null;
   location?: string | null;
   remarks?: string | null;
   conflict_flag?: boolean | null;
@@ -65,6 +67,20 @@ export interface OperationLogRow {
     full_name?: string;
     phone?: string;
   };
+  entered_by?: string | null;
+  entered_by_name?: string | null;
+  entry_source?: string | null;
+  /** Integer minutes of breakdown for this log (breakdown_hours * 60). */
+  breakdown_minutes?: number | null;
+  breakdown_hours?: number | null;
+  breakdown_start_time?: string | null;
+  breakdown_end_time?: string | null;
+  breakdown_duration?: string | null;
+  /**
+   * Minutes classified as maintenance (covered by client allowance).
+   * net_breakdown_minutes = breakdown_minutes - maintenance_minutes.
+   */
+  maintenance_minutes?: number;
 }
 
 export interface OperationLogsResponse {

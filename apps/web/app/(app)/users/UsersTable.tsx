@@ -163,7 +163,6 @@ export interface UsersTableProps {
   someFilteredSelected: boolean;
   onSelectAllFiltered: () => void;
   onToggleSelect: (userId: string) => void;
-  onOpenSheet: (user: User) => void;
   onEditUser: (user: User) => void;
   onResetPassword: (userId: string) => void;
   onToggleStatus: (userId: string) => void;
@@ -200,7 +199,6 @@ export function UsersTable({
   someFilteredSelected,
   onSelectAllFiltered,
   onToggleSelect,
-  onOpenSheet,
   onEditUser,
   onResetPassword,
   onToggleStatus,
@@ -274,7 +272,6 @@ export function UsersTable({
                     selectable={!readOnly}
                     isSelected={selectedUserIds.includes(u.id)}
                     onToggleSelect={onToggleSelect}
-                    onOpenSheet={onOpenSheet}
                     onResetPassword={onResetPassword}
                     onToggleStatus={onToggleStatus}
                     searchTerm={searchTerm}
@@ -434,7 +431,6 @@ export function UsersTable({
                       isSelected={selectedUserIds.includes(u.id)}
                       supervisors={supervisors}
                       onToggleSelect={onToggleSelect}
-                      onViewDetails={onOpenSheet}
                       onEdit={onEditUser}
                       onResetPassword={onResetPassword}
                       onToggleStatus={onToggleStatus}

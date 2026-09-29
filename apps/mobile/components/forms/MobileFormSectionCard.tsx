@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stepNumberText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   title: {
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(16, 185, 129, 0.25)',
   },
   completedBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     color: '#10b981',
   },
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   mandatoryBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     color: '#f43f5e',
   },
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   optionalBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '500',
   },
   readOnlyBadge: {
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   readOnlyBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '500',
   },
   description: {

@@ -26,7 +26,7 @@ export function PDFKPIStrip({ items, variant = "light" }: PDFKPIStripProps) {
 
   return (
     <div
-      className={`grid gap-1.5 p-2 rounded-lg text-center font-mono kpi-strip ${
+      className={`grid gap-1 p-1.5 rounded-lg text-center font-mono kpi-strip ${
         isLight
           ? "bg-neutral-100 border border-neutral-300"
           : "bg-neutral-900 text-white"

@@ -105,6 +105,7 @@ export function formatMergedAddress(u: UserRecord): string {
 function generateCSV(users: UserRecord[]): string {
   const headers = [
     'S.No',
+    'Employee ID',
     'Full Name',
     'Email Address',
     'Mobile Number',
@@ -126,6 +127,7 @@ function generateCSV(users: UserRecord[]): string {
 
   const rows = users.map((u, index) => [
     index + 1,
+    u.employee_id || '',
     u.full_name || '',
     u.email || '',
     u.phone || '',
@@ -197,7 +199,10 @@ function generateReportHtml(users: UserRecord[], scopeLabel: string): string {
       return `
         <tr style="background-color: ${rowBg};">
           <td style="width: 3%; font-family: monospace; font-size: 8px;">${index + 1}</td>
-          <td style="width: 13%; text-align: left; font-weight: 600; font-size: 8.5px;">${u.full_name || '—'}</td>
+          <td style="width: 13%; text-align: left; font-weight: 600; font-size: 8.5px;">
+            ${u.full_name || '—'}
+            ${u.employee_id ? `<br/><span style="font-family: monospace; font-size: 7px; color: #525252; font-weight: 700;">${u.employee_id}</span>` : ''}
+          </td>
           <td style="width: 14%; text-align: left; font-size: 8px; word-break: break-all;">${u.email || '—'}</td>
           <td style="width: 9%; font-family: monospace; font-size: 8px;">${u.phone || '—'}</td>
           <td style="width: 8%; font-size: 8px; font-weight: 600;">${formatRoleName(u.role)}</td>
@@ -714,7 +719,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   subtitle: {
-    fontSize: 11,
+    fontSize: 13.5,
     marginTop: 1,
   },
   closeBtn: {
@@ -747,10 +752,10 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   formatToggleText: {
-    fontSize: 11,
+    fontSize: 12.5,
   },
   metaText: {
-    fontSize: 11,
+    fontSize: 12.5,
   },
   optionsList: {
     padding: spacingNumeric.md,
@@ -779,7 +784,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   optionDesc: {
-    fontSize: 11,
+    fontSize: 12.5,
     marginTop: 1,
   },
   countBadge: {
@@ -789,7 +794,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   countBadgeText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
   },
   footer: {

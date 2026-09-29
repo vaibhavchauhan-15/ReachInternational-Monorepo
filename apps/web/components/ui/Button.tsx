@@ -80,10 +80,10 @@ const variantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: "h-8 sm:h-8.5 px-3 text-xs font-semibold rounded-lg",
-  md: "h-9 sm:h-9.5 px-3.5 sm:px-4 text-xs sm:text-sm font-semibold rounded-lg",
-  lg: "h-11 sm:h-11.5 px-5 text-xs sm:text-sm font-semibold rounded-lg",
-  icon: "h-8.5 sm:h-9 w-8.5 sm:w-9 p-0 rounded-lg justify-center",
+  sm: "h-8.5 sm:h-8.5 px-3 text-xs sm:text-xs font-semibold rounded-lg",
+  md: "h-10 sm:h-9.5 px-4 sm:px-4 text-sm sm:text-sm font-semibold rounded-lg",
+  lg: "h-12 sm:h-11.5 px-5 text-base sm:text-base font-semibold rounded-lg",
+  icon: "h-9.5 sm:h-9 w-9.5 sm:w-9 p-0 rounded-lg justify-center",
 };
 
 export const Button = forwardRef<HTMLButtonElement, Props>(

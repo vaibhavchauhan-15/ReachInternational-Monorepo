@@ -78,10 +78,6 @@ const UserEditModal = dynamic(
   () => import("./UserEditModal").then((mod) => mod.UserEditModal),
   { ssr: false }
 );
-const UserDetailSheet = dynamic(
-  () => import("./UserDetailSheet").then((mod) => mod.UserDetailSheet),
-  { ssr: false }
-);
 const ProfileChangeRequests = dynamic(
   () => import("./ProfileChangeRequests").then((mod) => mod.ProfileChangeRequests),
   { ssr: false }
@@ -192,7 +188,6 @@ export function UsersPageClient({
   }, [readOnly]);
 
   const [showEditModal, setShowEditModal] = useState<User | null>(null);
-  const [selectedSheetUser, setSelectedSheetUser] = useState<User | null>(null);
   const [resetConfirmUser, setResetConfirmUser] = useState<{ id: string; name: string; email: string } | null>(null);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [copiedPassword, setCopiedPassword] = useState(false);
@@ -1361,7 +1356,7 @@ export function UsersPageClient({
           onReject={handleReject}
           onApproveAll={handleApproveAll}
           onRejectAllConfirm={() => setShowRejectAllConfirm(true)}
-          onSelectUser={(u) => setSelectedSheetUser(u)}
+          onSelectUser={(u) => router.push(`/users/${u.id}`)}
           loadingState={loading}
           isBulkApproving={isBulkApproving}
           isBulkRejecting={isBulkRejecting}
@@ -1409,7 +1404,6 @@ export function UsersPageClient({
         someFilteredSelected={someFilteredSelected}
         onSelectAllFiltered={handleSelectAllFiltered}
         onToggleSelect={handleToggleSelect}
-        onOpenSheet={(u) => setSelectedSheetUser(u)}
         onEditUser={(u) => setShowEditModal(u)}
         onResetPassword={(userId) => {
           const source = searchResults ?? usersList;
@@ -1445,35 +1439,6 @@ export function UsersPageClient({
       />
 
       {/* 7. Dialogs & Modals */}
-      {selectedSheetUser && (
-        <UserDetailSheet
-          user={selectedSheetUser}
-          onClose={() => setSelectedSheetUser(null)}
-          currentUser={currentUser}
-          isSuperAdmin={isSuperAdmin}
-          loadingId={loading}
-          supervisors={supervisorOptions}
-          onEdit={(u) => {
-            setSelectedSheetUser(null);
-            setShowEditModal(u);
-          }}
-          onResetPassword={(userId) => {
-            const u = usersList.find((x) => x.id === userId) || (selectedSheetUser.id === userId ? selectedSheetUser : null);
-            if (u) handleResetPassword(u);
-          }}
-          onToggleStatus={(userId) => {
-            const u = usersList.find((x) => x.id === userId) || (selectedSheetUser.id === userId ? selectedSheetUser : null);
-            if (u) handleToggleStatus(userId, u.status as any);
-          }}
-          onUpdateRole={handleRoleChange}
-          onUpdateSupervisor={handleSupervisorChange}
-          onDelete={(userId) => {
-            const u = usersList.find((x) => x.id === userId) || (selectedSheetUser.id === userId ? selectedSheetUser : null);
-            if (u) handleDeleteUser(u);
-          }}
-        />
-      )}
-
       {showCreateModal && (
         <UserCreateModal
           open={showCreateModal}

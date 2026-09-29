@@ -138,12 +138,12 @@ export function SearchableSelect({
       onKeyDown={handleKeyDown}
     >
       {label && (
-        <label className="block text-[12px] sm:text-[13px] font-semibold text-[var(--color-ink)] mb-1 flex items-center justify-between select-none">
+        <label className="block text-[13.5px] sm:text-[13.5px] font-semibold text-[var(--color-ink)] mb-1 flex items-center justify-between select-none">
           <span className="flex items-center gap-1.5">
             {label} {required && <span className="text-rose-500 font-semibold">*</span>}
           </span>
           {count !== undefined && (
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-md bg-[var(--color-canvas)] text-[var(--color-mute)] border border-[var(--color-hairline)] font-medium">
+            <span className="text-xs font-mono px-1.5 py-0.5 rounded-md bg-[var(--color-canvas)] text-[var(--color-mute)] border border-[var(--color-hairline)] font-medium">
               {count} Total
             </span>
           )}
@@ -156,7 +156,7 @@ export function SearchableSelect({
         type="button"
         disabled={disabled}
         onClick={handleOpenToggle}
-        className={`w-full px-3 sm:px-3.5 rounded-lg border text-xs sm:text-[13px] font-medium text-[var(--color-ink)] flex items-center justify-between transition-all shadow-2xs ${
+        className={`w-full px-3.5 sm:px-3.5 rounded-lg border text-sm sm:text-sm font-medium text-[var(--color-ink)] flex items-center justify-between transition-all shadow-2xs ${
           compact ? "h-[38px] min-h-[38px] py-1.5" : "h-[42px] sm:h-[44px] min-h-[42px] sm:min-h-[44px]"
         } ${
           error
@@ -172,7 +172,7 @@ export function SearchableSelect({
           {isAllSelected ? (
             <span className="font-bold text-[var(--color-ink)] flex items-center gap-2">
               <span>{allLabel}</span>
-              <span className="px-1.5 py-0.5 rounded bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] font-mono text-[10px]">
+              <span className="px-1.5 py-0.5 rounded bg-[var(--color-hairline-soft-surface)] text-[var(--color-mute)] font-mono text-xs">
                 {options.length} Total
               </span>
             </span>
@@ -184,7 +184,7 @@ export function SearchableSelect({
               </span>
               {selectedOption.badge && (
                 <span
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-mono shrink-0 ${
+                  className={`px-1.5 py-0.5 rounded text-xs font-mono shrink-0 ${
                     selectedOption.badgeClassName ||
                     "bg-sky-500/10 text-sky-600 dark:text-sky-400"
                   }`}
@@ -193,7 +193,7 @@ export function SearchableSelect({
                 </span>
               )}
               {!compact && selectedOption.description && (
-                <span className="text-[10px] text-[var(--color-mute)] truncate hidden md:inline">
+                <span className="text-xs text-[var(--color-mute)] truncate hidden md:inline">
                   ({selectedOption.description})
                 </span>
               )}

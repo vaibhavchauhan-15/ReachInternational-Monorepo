@@ -29,6 +29,20 @@ export interface CustomTimePickerProps {
   toggleOrientation?: "horizontal" | "vertical";
   /** Layout placement for the AM/PM toggle relative to time picker box. Defaults to "stacked" for mobile optimization. */
   toggleLayout?: "stacked" | "side-by-side";
+  /** Whether to show the AM/PM period toggle. If false, behaves as duration or 24-hour picker (e.g. for maintenance allowance). Defaults to true. */
+  showPeriod?: boolean;
+  /** Maximum allowable hours (e.g. 744 for month maintenance allowance, 23 for 24h, 12 for 12h). Defaults to 12 if showPeriod=true, else 744. */
+  maxHours?: number;
+  /** Minimum allowable hours. Defaults to 1 if showPeriod=true, else 0. */
+  minHours?: number;
+  /** Custom hour placeholder (defaults to "08" if showPeriod=true, else "00"). */
+  hourPlaceholder?: string;
+  /** Custom minute placeholder (defaults to "00"). */
+  minutePlaceholder?: string;
+  /** Custom hour input aria-label. */
+  hourAriaLabel?: string;
+  /** Custom minute input aria-label. */
+  minuteAriaLabel?: string;
 }
 
 export type TimeInputProps = CustomTimePickerProps;
@@ -36,7 +50,10 @@ export type TimeInputProps = CustomTimePickerProps;
 /**
  * Parses any incoming time string into { hour: string, minute: string, period: "AM" | "PM" }
  */
-function parseTimeString(timeStr?: string | null): {
+function parseTimeString(
+  timeStr?: string | null,
+  showPeriod: boolean = true
+): {
   hour: string;
   minute: string;
   period: "AM" | "PM";
@@ -46,6 +63,20 @@ function parseTimeString(timeStr?: string | null): {
   }
 
   const clean = timeStr.trim().toUpperCase();
+
+  // If showPeriod is false, handle duration / 24-hour time strings like "12:00", "720:30", "0:0", "12"
+  if (!showPeriod) {
+    const durMatch = clean.match(/^(\d{1,4})(?::(\d{1,2}))?$/);
+    if (durMatch) {
+      const rawH = parseInt(durMatch[1], 10);
+      const rawM = durMatch[2] !== undefined ? parseInt(durMatch[2], 10) : 0;
+      return {
+        hour: isNaN(rawH) ? "" : String(rawH).padStart(2, "0"),
+        minute: isNaN(rawM) ? "00" : String(rawM).padStart(2, "0"),
+        period: "AM",
+      };
+    }
+  }
 
   // Match 12-hour with AM/PM (e.g. "08:00 AM", "010:030 AM", "8:30PM", "8:00")
   const ampmMatch = clean.match(/^(\d{1,3}):(\d{1,3})(?::\d{2})?\s*(AM|PM)?$/i);
@@ -80,6 +111,13 @@ function parseTimeString(timeStr?: string | null): {
   if (match24) {
     let hours = parseInt(match24[1], 10);
     const rawM = parseInt(match24[2], 10);
+    if (!showPeriod) {
+      return {
+        hour: String(hours).padStart(2, "0"),
+        minute: String(isNaN(rawM) ? 0 : rawM).padStart(2, "0"),
+        period: "AM",
+      };
+    }
     const period: "AM" | "PM" = hours >= 12 ? "PM" : "AM";
     hours = hours % 12;
     if (hours === 0) hours = 12;
@@ -111,9 +149,19 @@ export function CustomTimePicker({
   toggleLayout = "side-by-side",
   hideIcon = false,
   showIcon = true,
+  showPeriod = true,
+  maxHours,
+  minHours,
+  hourPlaceholder,
+  minutePlaceholder,
+  hourAriaLabel,
+  minuteAriaLabel,
 }: CustomTimePickerProps) {
+  const effectiveMinH = minHours ?? (showPeriod ? 1 : 0);
+  const effectiveMaxH = maxHours ?? (showPeriod ? 12 : 744);
+
   // Parse initial state from value prop
-  const parsed = useMemo(() => parseTimeString(value), [value]);
+  const parsed = useMemo(() => parseTimeString(value, showPeriod), [value, showPeriod]);
 
   const [hour, setHour] = useState<string>(parsed.hour);
   const [minute, setMinute] = useState<string>(parsed.minute);
@@ -126,11 +174,11 @@ export function CustomTimePicker({
 
   // Sync internal state if external value changes
   useEffect(() => {
-    const current = parseTimeString(value);
+    const current = parseTimeString(value, showPeriod);
     setHour(current.hour);
     setMinute(current.minute);
     setPeriod(current.period);
-  }, [value]);
+  }, [value, showPeriod]);
 
   // Validation logic
   const validation = useMemo(() => {
@@ -142,19 +190,23 @@ export function CustomTimePicker({
 
     if (!trimmedH) {
       if (required || touched) {
-        hourErr = "Hour is required (1–12)";
+        hourErr = showPeriod
+          ? "Hour is required (1–12)"
+          : `Hours is required (${effectiveMinH}–${effectiveMaxH})`;
       }
     } else {
       const hNum = parseInt(trimmedH, 10);
-      if (isNaN(hNum) || hNum < 1 || hNum > 12) {
-        hourErr = "Hour must be between 1 and 12";
+      if (isNaN(hNum) || hNum < effectiveMinH || hNum > effectiveMaxH) {
+        hourErr = showPeriod
+          ? "Hour must be between 1 and 12"
+          : `Hours must be between ${effectiveMinH} and ${effectiveMaxH}`;
       }
     }
 
     if (trimmedM !== "") {
       const mNum = parseInt(trimmedM, 10);
-      if (isNaN(mNum) || mNum < 0 || mNum > 60) {
-        minuteErr = "Minutes must be between 0 and 60";
+      if (isNaN(mNum) || mNum < 0 || mNum > 59) {
+        minuteErr = "Minutes must be between 0 and 59";
       }
     }
 
@@ -168,7 +220,7 @@ export function CustomTimePicker({
       hasError,
       errorMessage,
     };
-  }, [hour, minute, required, touched, externalError, isInvalid, hideErrorMessage]);
+  }, [hour, minute, required, touched, externalError, isInvalid, hideErrorMessage, showPeriod, effectiveMinH, effectiveMaxH]);
 
   // Notify parent of error state changes
   useEffect(() => {
@@ -187,24 +239,27 @@ export function CustomTimePicker({
       }
 
       const hNum = parseInt(trimmedH, 10);
-      if (isNaN(hNum) || hNum < 1 || hNum > 12) {
+      if (isNaN(hNum) || hNum < effectiveMinH || hNum > effectiveMaxH) {
         return;
       }
 
       let mNum = 0;
       if (trimmedM !== "") {
         mNum = parseInt(trimmedM, 10);
-        if (isNaN(mNum) || mNum < 0 || mNum > 60) {
+        if (isNaN(mNum) || mNum < 0 || mNum > 59) {
           return;
         }
       }
 
       const formattedH = String(hNum).padStart(2, "0");
       const formattedM = String(mNum).padStart(2, "0");
-      const formattedTime = `${formattedH}:${formattedM} ${newPeriod}`;
-      onChange(formattedTime);
+      if (!showPeriod) {
+        onChange(`${formattedH}:${formattedM}`);
+      } else {
+        onChange(`${formattedH}:${formattedM} ${newPeriod}`);
+      }
     },
-    [onChange]
+    [onChange, showPeriod, effectiveMinH, effectiveMaxH]
   );
 
   const handleHourChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -219,26 +274,27 @@ export function CustomTimePicker({
     }
 
     let sanitized = digits;
-    // Automatically sanitize 3+ digits with leading zero (e.g. "010" -> "10", "030" -> "30", "008" -> "8")
-    if (digits.length > 2 && digits.startsWith("0")) {
+    const maxDigits = effectiveMaxH > 99 ? 3 : 2;
+
+    if (digits.length > maxDigits && digits.startsWith("0")) {
       const parsedNum = parseInt(digits, 10);
       sanitized = isNaN(parsedNum) ? "" : String(parsedNum);
-    } else if (digits.length > 2) {
+    } else if (digits.length > maxDigits) {
       const parsedNum = parseInt(digits, 10);
-      if (!isNaN(parsedNum) && parsedNum >= 1 && parsedNum <= 12) {
+      if (!isNaN(parsedNum) && parsedNum >= effectiveMinH && parsedNum <= effectiveMaxH) {
         sanitized = String(parsedNum);
       } else {
-        sanitized = digits.slice(-2);
+        sanitized = digits.slice(-maxDigits);
       }
     }
 
     setHour(sanitized);
     emitFormattedTime(sanitized, minute, period);
 
-    // Ergonomic auto-advance: if 2 digits entered and valid (e.g. "08", "12"), advance focus to minute input
-    if (sanitized.length === 2) {
+    // Ergonomic auto-advance: if 2 digits entered and valid in standard clock
+    if (sanitized.length >= 2 && effectiveMaxH <= 24) {
       const num = parseInt(sanitized, 10);
-      if (!isNaN(num) && num >= 1 && num <= 12) {
+      if (!isNaN(num) && num >= effectiveMinH && num <= effectiveMaxH) {
         setTimeout(() => {
           minuteInputRef.current?.focus();
           minuteInputRef.current?.select();
@@ -255,16 +311,18 @@ export function CustomTimePicker({
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setTouched(true);
-      const curr = parseInt(hour, 10) || 12;
-      const next = curr >= 12 ? 1 : curr + 1;
+      const curr = parseInt(hour, 10);
+      const base = isNaN(curr) ? (showPeriod ? 12 : 0) : curr;
+      const next = base >= effectiveMaxH ? effectiveMinH : base + 1;
       const padded = String(next).padStart(2, "0");
       setHour(padded);
       emitFormattedTime(padded, minute, period);
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       setTouched(true);
-      const curr = parseInt(hour, 10) || 1;
-      const prev = curr <= 1 ? 12 : curr - 1;
+      const curr = parseInt(hour, 10);
+      const base = isNaN(curr) ? (showPeriod ? 1 : 0) : curr;
+      const prev = base <= effectiveMinH ? effectiveMaxH : base - 1;
       const padded = String(prev).padStart(2, "0");
       setHour(padded);
       emitFormattedTime(padded, minute, period);
@@ -277,7 +335,7 @@ export function CustomTimePicker({
     if (trimmedH) {
       const hNum = parseInt(trimmedH, 10);
       if (!isNaN(hNum)) {
-        if (hNum >= 1 && hNum <= 12) {
+        if (hNum >= effectiveMinH && hNum <= effectiveMaxH) {
           const padded = String(hNum).padStart(2, "0");
           setHour(padded);
           emitFormattedTime(padded, minute, period);
@@ -307,7 +365,7 @@ export function CustomTimePicker({
       sanitized = isNaN(parsedNum) ? "" : String(parsedNum);
     } else if (digits.length > 2) {
       const parsedNum = parseInt(digits, 10);
-      if (!isNaN(parsedNum) && parsedNum >= 0 && parsedNum <= 60) {
+      if (!isNaN(parsedNum) && parsedNum >= 0 && parsedNum <= 59) {
         sanitized = String(parsedNum);
       } else {
         sanitized = digits.slice(-2);
@@ -355,7 +413,7 @@ export function CustomTimePicker({
     } else {
       const mNum = parseInt(trimmedM, 10);
       if (!isNaN(mNum)) {
-        if (mNum >= 0 && mNum <= 60) {
+        if (mNum >= 0 && mNum <= 59) {
           const padded = String(mNum).padStart(2, "0");
           setMinute(padded);
           emitFormattedTime(hour, padded, period);
@@ -396,7 +454,7 @@ export function CustomTimePicker({
         <label
           className={
             labelClassName ||
-            "block text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 flex items-center gap-1.5 min-w-0"
+            "block text-[13.5px] sm:text-xs font-semibold text-[var(--color-ink)] mb-1 flex items-center gap-1.5 min-w-0"
           }
         >
           {!hideIcon && showIcon && <AnimatedClock size={14} className={`h-3.5 w-3.5 ${iconColor} shrink-0`} />}
@@ -409,18 +467,20 @@ export function CustomTimePicker({
       <div
         className={cn(
           "w-full",
-          toggleLayout === "stacked"
+          !showPeriod
+            ? "flex items-center"
+            : toggleLayout === "stacked"
             ? "flex flex-col gap-1.5"
             : "flex items-center gap-1 sm:gap-1.5"
         )}
       >
-        {/* 1. Time Picker Box: Digital Time Input Cluster Only (Balanced width) */}
+        {/* 1. Time Picker Box: Digital Time Input Cluster Only */}
         <div
           ref={containerRef}
           onClick={handleContainerClick}
           className={cn(
-            "group relative flex items-center justify-center min-h-[38px] sm:min-h-[42px] h-9.5 sm:h-[42px] px-1.5 xs:px-2 sm:px-2.5 rounded-xl border bg-[var(--color-canvas)] text-[var(--color-ink)] transition-all shadow-2xs cursor-text",
-            toggleLayout === "stacked" ? "w-full" : "flex-1 min-w-0 max-w-[115px] sm:max-w-[135px]",
+            "group relative flex items-center justify-center min-h-[42px] sm:min-h-[44px] h-[42px] sm:h-[44px] px-2 xs:px-3 sm:px-3 rounded-xl border bg-[var(--color-canvas)] text-[var(--color-ink)] transition-all shadow-2xs cursor-text",
+            !showPeriod ? "w-full" : toggleLayout === "stacked" ? "w-full" : "flex-1 min-w-0",
             "focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500 dark:focus-within:ring-sky-400/20 dark:focus-within:border-sky-400",
             validation.hasError || Boolean(externalError)
               ? "border-rose-500 focus-within:ring-rose-500/20 focus-within:border-rose-500 dark:border-rose-500"
@@ -428,27 +488,30 @@ export function CustomTimePicker({
             disabled && "opacity-50 pointer-events-none bg-neutral-100 dark:bg-neutral-900 cursor-not-allowed"
           )}
         >
-          <div className="time-cluster-area flex items-center justify-center gap-0.5 sm:gap-1 min-w-0">
+          <div className="time-cluster-area flex items-center justify-center gap-1 sm:gap-1.5 min-w-0">
             {/* Hours Input */}
             <input
               ref={hourInputRef}
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
-              maxLength={3}
+              maxLength={effectiveMaxH > 99 ? 3 : 2}
               value={hour}
               onChange={handleHourChange}
               onKeyDown={handleHourKeyDown}
               onBlur={handleHourBlur}
               onFocus={(e) => e.target.select()}
               disabled={disabled}
-              placeholder="08"
-              aria-label="Hours (1-12)"
-              className="w-7 xs:w-7.5 sm:w-8 h-7 sm:h-8 p-0 text-center font-mono text-xs xs:text-sm sm:text-base font-bold rounded-lg bg-transparent hover:bg-neutral-200/50 dark:hover:bg-neutral-800/70 focus:bg-neutral-200/60 dark:focus:bg-neutral-800 text-[var(--color-ink)] focus:outline-none transition-colors select-all"
+              placeholder={hourPlaceholder || (showPeriod ? "08" : "00")}
+              aria-label={hourAriaLabel || (showPeriod ? "Hours (1-12)" : `Hours (${effectiveMinH}-${effectiveMaxH})`)}
+              className={cn(
+                effectiveMaxH > 99 ? "w-11 sm:w-12" : "w-8 sm:w-9",
+                "h-8 sm:h-9 p-0 text-center font-mono text-sm sm:text-base font-bold rounded-lg bg-transparent hover:bg-neutral-200/50 dark:hover:bg-neutral-800/70 focus:bg-neutral-200/60 dark:focus:bg-neutral-800 text-[var(--color-ink)] focus:outline-none transition-colors select-all"
+              )}
             />
 
             {/* Colon Separator */}
-            <span className="font-mono text-xs xs:text-sm sm:text-base font-bold text-[var(--color-mute)] select-none px-0.25 opacity-70 shrink-0">
+            <span className="font-mono text-sm sm:text-base font-bold text-[var(--color-mute)] select-none opacity-70 shrink-0">
               :
             </span>
 
@@ -458,84 +521,86 @@ export function CustomTimePicker({
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
-              maxLength={3}
+              maxLength={2}
               value={minute}
               onChange={handleMinuteChange}
               onKeyDown={handleMinuteKeyDown}
               onBlur={handleMinuteBlur}
               onFocus={(e) => e.target.select()}
               disabled={disabled}
-              placeholder="00"
-              aria-label="Minutes (0-60, optional)"
-              className="w-7 xs:w-7.5 sm:w-8 h-7 sm:h-8 p-0 text-center font-mono text-xs xs:text-sm sm:text-base font-bold rounded-lg bg-transparent hover:bg-neutral-200/50 dark:hover:bg-neutral-800/70 focus:bg-neutral-200/60 dark:focus:bg-neutral-800 text-[var(--color-ink)] focus:outline-none transition-colors select-all"
+              placeholder={minutePlaceholder || "00"}
+              aria-label={minuteAriaLabel || "Minutes (0-59)"}
+              className="w-8 sm:w-9 h-8 sm:h-9 p-0 text-center font-mono text-sm sm:text-base font-bold rounded-lg bg-transparent hover:bg-neutral-200/50 dark:hover:bg-neutral-800/70 focus:bg-neutral-200/60 dark:focus:bg-neutral-800 text-[var(--color-ink)] focus:outline-none transition-colors select-all"
             />
           </div>
         </div>
 
-        {/* 2. Separate AM/PM Segmented Toggle Layout (Generous touch width) */}
-        <div
-          role="radiogroup"
-          aria-label="Select AM or PM period"
-          className={cn(
-            "relative p-0.5 border border-neutral-200/80 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 shadow-inner select-none transition-colors shrink-0",
-            toggleLayout === "stacked"
-              ? "grid grid-cols-2 gap-1 w-full h-8.5 sm:h-9.5 rounded-xl"
-              : "inline-flex items-center gap-0.5 h-9.5 sm:h-[42px] rounded-xl",
-            disabled && "opacity-50 pointer-events-none cursor-not-allowed"
-          )}
-        >
-          <button
-            type="button"
-            role="radio"
-            aria-checked={period === "AM"}
-            disabled={disabled}
-            onClick={() => handlePeriodChange("AM")}
+        {/* 2. Separate AM/PM Segmented Toggle Layout (only when showPeriod is true) */}
+        {showPeriod && (
+          <div
+            role="radiogroup"
+            aria-label="Select AM or PM period"
             className={cn(
-              "relative font-bold transition-all cursor-pointer select-none leading-none z-10 flex items-center justify-center",
+              "relative p-0.5 border border-neutral-200/80 dark:border-neutral-800 bg-neutral-100 dark:bg-neutral-900 shadow-inner select-none transition-colors shrink-0",
               toggleLayout === "stacked"
-                ? "h-full w-full rounded-lg text-xs font-bold min-h-[30px] sm:min-h-[32px]"
-                : "h-full min-w-[34px] xs:min-w-[38px] sm:min-w-[44px] px-2 xs:px-2.5 sm:px-3 rounded-lg text-xs sm:text-xs",
-              period === "AM"
-                ? "text-white font-extrabold"
-                : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-bold"
+                ? "grid grid-cols-2 gap-1 w-full h-8.5 sm:h-9.5 rounded-xl"
+                : "inline-flex items-center gap-0.5 h-[42px] sm:h-[44px] rounded-xl",
+              disabled && "opacity-50 pointer-events-none cursor-not-allowed"
             )}
           >
-            {period === "AM" && (
-              <motion.div
-                layoutId={`ampm-active-${timePickerId}`}
-                className="absolute inset-0 bg-sky-600 dark:bg-sky-500 rounded-lg shadow-2xs -z-10"
-                transition={{ type: "spring", stiffness: 500, damping: 35 }}
-              />
-            )}
-            AM
-          </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={period === "AM"}
+              disabled={disabled}
+              onClick={() => handlePeriodChange("AM")}
+              className={cn(
+                "relative font-bold transition-all cursor-pointer select-none leading-none z-10 flex items-center justify-center",
+                toggleLayout === "stacked"
+                  ? "h-full w-full rounded-lg text-xs font-bold min-h-[30px] sm:min-h-[32px]"
+                  : "h-full min-w-[34px] xs:min-w-[38px] sm:min-w-[44px] px-2 xs:px-2.5 sm:px-3 rounded-lg text-xs sm:text-xs",
+                period === "AM"
+                  ? "text-white font-extrabold"
+                  : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-bold"
+              )}
+            >
+              {period === "AM" && (
+                <motion.div
+                  layoutId={`ampm-active-${timePickerId}`}
+                  className="absolute inset-0 bg-sky-600 dark:bg-sky-500 rounded-lg shadow-2xs -z-10"
+                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                />
+              )}
+              AM
+            </button>
 
-          <button
-            type="button"
-            role="radio"
-            aria-checked={period === "PM"}
-            disabled={disabled}
-            onClick={() => handlePeriodChange("PM")}
-            className={cn(
-              "relative font-bold transition-all cursor-pointer select-none leading-none z-10 flex items-center justify-center",
-              toggleLayout === "stacked"
-                ? "h-full w-full rounded-lg text-xs font-bold min-h-[30px] sm:min-h-[32px]"
-                : "h-full min-w-[34px] xs:min-w-[38px] sm:min-w-[44px] px-2 xs:px-2.5 sm:px-3 rounded-lg text-xs sm:text-xs",
-              period === "PM"
-                ? "text-white font-extrabold"
-                : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-bold"
-            )}
-          >
-            {period === "PM" && (
-              <motion.div
-                layoutId={`ampm-active-${timePickerId}`}
-                className="absolute inset-0 bg-sky-600 dark:bg-sky-500 rounded-lg shadow-2xs -z-10"
-                transition={{ type: "spring", stiffness: 500, damping: 35 }}
-              />
-            )}
-            PM
-          </button>
-        </div>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={period === "PM"}
+              disabled={disabled}
+              onClick={() => handlePeriodChange("PM")}
+              className={cn(
+                "relative font-bold transition-all cursor-pointer select-none leading-none z-10 flex items-center justify-center",
+                toggleLayout === "stacked"
+                  ? "h-full w-full rounded-lg text-xs font-bold min-h-[30px] sm:min-h-[32px]"
+                  : "h-full min-w-[34px] xs:min-w-[38px] sm:min-w-[44px] px-2 xs:px-2.5 sm:px-3 rounded-lg text-xs sm:text-xs",
+                period === "PM"
+                  ? "text-white font-extrabold"
+                  : "text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-bold"
+              )}
+            >
+              {period === "PM" && (
+                <motion.div
+                  layoutId={`ampm-active-${timePickerId}`}
+                  className="absolute inset-0 bg-sky-600 dark:bg-sky-500 rounded-lg shadow-2xs -z-10"
+                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                />
+              )}
+              PM
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Inline Validation Error Message */}

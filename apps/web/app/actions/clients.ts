@@ -1,6 +1,8 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/dal";
 import {
   createClient,
@@ -19,6 +21,7 @@ export interface ClientFormState {
   error?: string;
   fieldErrors?: Record<string, string>;
   success?: boolean;
+  client?: CRMClient;
 }
 
 /**
@@ -67,6 +70,7 @@ export async function createClientAction(state: ClientFormState, formData: FormD
       billingState: isBillingDiff ? (formData.get("billingState") as string)?.trim() || "" : "",
       billingPincode: isBillingDiff ? (formData.get("billingPincode") as string)?.trim() || "" : "",
       status: ((formData.get("status") as string) || "active") as "active" | "inactive",
+      maintenanceAllowanceMinutes: parseInt((formData.get("maintenanceAllowanceMinutes") as string) || "0", 10) || 0,
     };
 
     const result = await createClient(payload, user.id);
@@ -78,7 +82,9 @@ export async function createClientAction(state: ClientFormState, formData: FormD
       };
     }
 
-    return { success: true };
+    revalidatePath("/clients");
+
+    return { success: true, client: result.client };
   } catch (err: any) {
     console.error("createClientAction exception:", err);
     return { error: err.message || "An unexpected error occurred while adding client details." };
@@ -137,6 +143,7 @@ export async function updateClientAction(state: ClientFormState, formData: FormD
       billingState: isBillingDiff ? (formData.get("billingState") as string)?.trim() || "" : "",
       billingPincode: isBillingDiff ? (formData.get("billingPincode") as string)?.trim() || "" : "",
       status: ((formData.get("status") as string) || "active") as "active" | "inactive",
+      maintenanceAllowanceMinutes: parseInt((formData.get("maintenanceAllowanceMinutes") as string) || "0", 10) || 0,
     };
 
     const result = await updateClient(payload, user.id);
@@ -148,7 +155,10 @@ export async function updateClientAction(state: ClientFormState, formData: FormD
       };
     }
 
-    return { success: true };
+    revalidatePath(`/clients/${id}`);
+    revalidatePath("/clients");
+
+    return { success: true, client: result.client };
   } catch (err: any) {
     console.error("updateClientAction exception:", err);
     return { error: err.message || "An unexpected error occurred while updating client details." };
@@ -275,6 +285,148 @@ export async function getClientListAction(
       success: false,
       error: err.message || "Failed to load client directory data.",
     };
+  }
+}
+
+/**
+ * Server Action: Fetch active and inactive shift codes for a specific client
+ */
+export async function getClientShiftCodesAction(
+  clientId: string
+): Promise<{ success: boolean; data?: any[]; error?: string }> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Authentication required." };
+    }
+
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("client_shift_codes")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("display_order", { ascending: true })
+      .order("code", { ascending: true });
+
+    if (error) {
+      return { success: false, error: error.message };
+    }
+
+    return { success: true, data: data || [] };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to fetch shift codes." };
+  }
+}
+
+/**
+ * Server Action: Create or update a client shift code
+ */
+export async function upsertClientShiftCodeAction(
+  input: any
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Authentication required." };
+    }
+
+    if (!["super_admin", "admin", "manager"].includes(user.role)) {
+      return { success: false, error: "Unauthorized: Insufficient permissions to configure shift codes." };
+    }
+
+    const supabase = createSupabaseAdminClient();
+
+    const record = {
+      client_id: input.clientId,
+      code: input.code.toUpperCase().trim(),
+      name: input.name ? input.name.trim() : `Shift ${input.code.toUpperCase().trim()}`,
+      start_time: input.startTime,
+      end_time: input.endTime,
+      crosses_midnight: Boolean(input.crossesMidnight),
+      scheduled_minutes: Number(input.scheduledMinutes),
+      normal_minutes: Number(input.normalMinutes),
+      display_order: Number(input.displayOrder || 0),
+      is_active: input.isActive ?? true,
+      updated_at: new Date().toISOString(),
+    };
+
+    let result;
+    if (input.id) {
+      const { data, error } = await supabase
+        .from("client_shift_codes")
+        .update(record)
+        .eq("id", input.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      result = data;
+    } else {
+      const { data, error } = await supabase
+        .from("client_shift_codes")
+        .insert([record])
+        .select()
+        .single();
+
+      if (error) throw error;
+      result = data;
+    }
+
+    try {
+      const { revalidateTag, revalidatePath } = await import("next/cache");
+      const { CACHE_TAGS } = await import("@/lib/cache");
+      revalidateTag(CACHE_TAGS.clients, "max");
+      revalidateTag(CACHE_TAGS.operations, "max");
+      revalidatePath(`/clients/${input.clientId}`);
+    } catch {
+      // Non-blocking cache revalidation
+    }
+
+    return { success: true, data: result };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to save shift code." };
+  }
+}
+
+/**
+ * Server Action: Delete or toggle a client shift code
+ */
+export async function deleteClientShiftCodeAction(
+  shiftCodeId: string,
+  clientId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return { success: false, error: "Authentication required." };
+    }
+
+    if (!["super_admin", "admin", "manager"].includes(user.role)) {
+      return { success: false, error: "Unauthorized: Insufficient permissions to delete shift codes." };
+    }
+
+    const supabase = createSupabaseAdminClient();
+    const { error } = await supabase
+      .from("client_shift_codes")
+      .delete()
+      .eq("id", shiftCodeId)
+      .eq("client_id", clientId);
+
+    if (error) throw error;
+
+    try {
+      const { revalidateTag, revalidatePath } = await import("next/cache");
+      const { CACHE_TAGS } = await import("@/lib/cache");
+      revalidateTag(CACHE_TAGS.clients, "max");
+      revalidateTag(CACHE_TAGS.operations, "max");
+      revalidatePath(`/clients/${clientId}`);
+    } catch {
+      // Non-blocking
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to delete shift code." };
   }
 }
 

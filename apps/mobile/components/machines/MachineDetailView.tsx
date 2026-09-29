@@ -1478,7 +1478,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                               {o.full_name}
                             </Text>
                             <Text style={[styles.staffShiftTag, { color: '#f59e0b' }]}>
-                              Shift {idx + 1}
+                              {o.shift_code ? `Shift ${o.shift_code}` : `Shift ${idx + 1}`}
                             </Text>
                           </View>
 
@@ -1902,17 +1902,17 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
                         {/* Operating Hours & Breakdown Details */}
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4, borderTopWidth: 1, borderTopColor: theme.colors.hairline, borderBottomWidth: log.remarks ? 1 : 0, borderBottomColor: theme.colors.hairline }}>
-                          <Text style={{ fontSize: 11, color: theme.colors.ink, fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }) }}>
+                          <Text style={{ fontSize: 12.5, color: theme.colors.ink, fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }) }}>
                             Worked: <Text style={{ fontWeight: '700' }}>{log.running_hours || 0} hrs</Text>
                           </Text>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <Text style={{ fontSize: 11, color: theme.colors.mute }}>Breakdown:</Text>
+                            <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Breakdown:</Text>
                             {Boolean(log.is_breakdown || (Number(log.breakdown_hours) > 0)) ? (
-                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#e11d48', fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }) }}>
+                              <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#e11d48', fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }) }}>
                                 {Number(log.breakdown_hours) > 0 ? `${log.breakdown_hours} hrs` : 'Breakdown'}
                               </Text>
                             ) : (
-                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669', fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }) }}>
+                              <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#059669', fontFamily: Platform.select({ ios: 'Menlo', default: 'monospace' }) }}>
                                 0
                               </Text>
                             )}
@@ -2298,15 +2298,15 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                                     {log.deletions.map((del: any, dIdx: number) => (
                                       <View key={dIdx} style={[styles.auditDeletionItem, { backgroundColor: theme.colors.canvasElevated, borderColor: '#e11d4820' }]}>
                                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                          <Text style={{ fontSize: 9, fontWeight: '800', color: '#e11d48', textTransform: 'uppercase' }}>
+                                          <Text style={{ fontSize: 12, fontWeight: '800', color: '#e11d48', textTransform: 'uppercase' }}>
                                             {del.label}:
                                           </Text>
-                                          <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.ink, textDecorationLine: 'line-through' }}>
+                                          <Text style={{ fontSize: 12.5, fontWeight: '600', color: theme.colors.ink, textDecorationLine: 'line-through' }}>
                                             {del.deletedValue}
                                           </Text>
                                         </View>
                                         {del.reason ? (
-                                          <Text style={{ fontSize: 10, color: theme.colors.mute, fontStyle: 'italic' }}>
+                                          <Text style={{ fontSize: 12, color: theme.colors.mute, fontStyle: 'italic' }}>
                                             {del.reason}
                                           </Text>
                                         ) : null}
@@ -2361,18 +2361,18 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                                   >
                                     {/* 1. Worked */}
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                      <Text style={{ fontSize: 11, color: theme.colors.mute, fontWeight: '600' }}>Worked :</Text>
-                                      <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '800', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                                      <Text style={{ fontSize: 12.5, color: theme.colors.mute, fontWeight: '600' }}>Worked :</Text>
+                                      <Text style={{ fontSize: 12.5, color: theme.colors.ink, fontWeight: '800', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
                                         {Number(log.metadata.runningHours || log.metadata.running_hours || 0).toFixed(1).replace(/\.0$/, '')} hrs
                                       </Text>
                                     </View>
 
-                                    <Text style={{ fontSize: 10, color: theme.colors.hairline }}>•</Text>
+                                    <Text style={{ fontSize: 12, color: theme.colors.hairline }}>•</Text>
 
                                     {/* 2. Meter Range */}
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                      <Text style={{ fontSize: 11, color: theme.colors.mute, fontWeight: '600' }}>Meter:</Text>
-                                      <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '700', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                                      <Text style={{ fontSize: 12.5, color: theme.colors.mute, fontWeight: '600' }}>Meter:</Text>
+                                      <Text style={{ fontSize: 12.5, color: theme.colors.ink, fontWeight: '700', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
                                         {log.metadata.startMeter ?? log.metadata.start_meter ?? '—'} →{' '}
                                         <Text style={{ color: '#059669' }}>
                                           {log.metadata.endMeter ?? log.metadata.end_meter ?? '—'}
@@ -2380,27 +2380,27 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                                       </Text>
                                     </View>
 
-                                    <Text style={{ fontSize: 10, color: theme.colors.hairline }}>•</Text>
+                                    <Text style={{ fontSize: 12, color: theme.colors.hairline }}>•</Text>
 
                                     {/* 3. Shift Time */}
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%' }}>
-                                      <Text style={{ fontSize: 11, color: theme.colors.mute, fontWeight: '600' }}>Shift:</Text>
-                                      <Text style={{ fontSize: 11, color: theme.colors.ink, fontWeight: '600' }} numberOfLines={1}>
+                                      <Text style={{ fontSize: 12.5, color: theme.colors.mute, fontWeight: '600' }}>Shift:</Text>
+                                      <Text style={{ fontSize: 12.5, color: theme.colors.ink, fontWeight: '600' }} numberOfLines={1}>
                                         {formatShiftTimingWithDateMobile(log.metadata)}
                                       </Text>
                                     </View>
 
-                                    <Text style={{ fontSize: 10, color: theme.colors.hairline }}>•</Text>
+                                    <Text style={{ fontSize: 12, color: theme.colors.hairline }}>•</Text>
 
                                     {/* 4. Breakdown */}
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                      <Text style={{ fontSize: 11, color: theme.colors.mute, fontWeight: '600' }}>Breakdown:</Text>
+                                      <Text style={{ fontSize: 12.5, color: theme.colors.mute, fontWeight: '600' }}>Breakdown:</Text>
                                       {log.metadata.isBreakdown ? (
-                                        <Text style={{ fontSize: 11, color: '#e11d48', fontWeight: '800', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                                        <Text style={{ fontSize: 12.5, color: '#e11d48', fontWeight: '800', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
                                           {log.metadata.breakdownDuration || (log.metadata.breakdownHours ? `${log.metadata.breakdownHours}h` : 'Breakdown')}
                                         </Text>
                                       ) : (
-                                        <Text style={{ fontSize: 11, color: '#059669', fontWeight: '800', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
+                                        <Text style={{ fontSize: 12.5, color: '#059669', fontWeight: '800', fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
                                           0
                                         </Text>
                                       )}
@@ -2439,7 +2439,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
 
                               {/* Target Machine & Timestamps Footer on all cards */}
                               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: theme.colors.hairline + '50' }}>
-                                <Text style={{ fontSize: 10, color: theme.colors.mute }}>
+                                <Text style={{ fontSize: 12, color: theme.colors.mute }}>
                                   Target: {machine.model || 'Machine'}
                                   {machine.serial_number ? ` • ${machine.serial_number}` : ''}
                                   {machine.machine_id ? ` (${machine.machine_id})` : ''}
@@ -2535,7 +2535,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     Audit Details
                   </Text>
                 </View>
-                <Text style={{ fontSize: 10, color: theme.colors.mute }}>
+                <Text style={{ fontSize: 12, color: theme.colors.mute }}>
                   {selectedMobileAuditLog ? formatFullDateTimeMobile(selectedMobileAuditLog.created_at) : ''}
                 </Text>
               </View>
@@ -2560,7 +2560,7 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.ink }}>
                         {selectedMobileAuditLog.actor_name || selectedMobileAuditLog.user?.full_name || 'System Operator'}
                       </Text>
-                      <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.mute, textTransform: 'capitalize' }}>
+                      <Text style={{ fontSize: 12.5, fontWeight: '600', color: theme.colors.mute, textTransform: 'capitalize' }}>
                         {(selectedMobileAuditLog.actor_role || selectedMobileAuditLog.user?.role || 'Staff').replace(/_/g, ' ')}
                       </Text>
                     </View>
@@ -2573,19 +2573,19 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                     </Text>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                       <View>
-                        <Text style={{ fontSize: 10, color: theme.colors.mute }}>Model</Text>
+                        <Text style={{ fontSize: 12, color: theme.colors.mute }}>Model</Text>
                         <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.ink }}>
                           {selectedMobileAuditLog.metadata?.model || machine.model || '50B-9'}
                         </Text>
                       </View>
                       <View>
-                        <Text style={{ fontSize: 10, color: theme.colors.mute }}>Machine ID</Text>
+                        <Text style={{ fontSize: 12, color: theme.colors.mute }}>Machine ID</Text>
                         <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.link }}>
                           {selectedMobileAuditLog.metadata?.machineCode || machine.machine_id || '—'}
                         </Text>
                       </View>
                       <View>
-                        <Text style={{ fontSize: 10, color: theme.colors.mute }}>Serial</Text>
+                        <Text style={{ fontSize: 12, color: theme.colors.mute }}>Serial</Text>
                         <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.ink, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
                           {selectedMobileAuditLog.metadata?.serial_number || machine.serial_number || '—'}
                         </Text>
@@ -2601,14 +2601,14 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       </Text>
                       <View style={{ gap: 6 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <Text style={{ fontSize: 11, color: theme.colors.mute }}>Duration:</Text>
+                          <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Duration:</Text>
                           <Text style={{ fontSize: 12, fontWeight: '800', color: '#e11d48' }}>
                             {selectedMobileAuditLog.metadata?.breakdownDuration || (selectedMobileAuditLog.metadata?.breakdownHours ? `${selectedMobileAuditLog.metadata.breakdownHours}h` : 'Breakdown')}
                           </Text>
                         </View>
                         {selectedMobileAuditLog.metadata?.breakdownReason && (
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                            <Text style={{ fontSize: 11, color: theme.colors.mute }}>Reason:</Text>
+                            <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Reason:</Text>
                             <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.ink }}>
                               {selectedMobileAuditLog.metadata.breakdownReason}
                             </Text>
@@ -2625,13 +2625,13 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       </Text>
                       <View style={{ gap: 6 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <Text style={{ fontSize: 11, color: theme.colors.mute }}>Worked Hours:</Text>
+                          <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Worked Hours:</Text>
                           <Text style={{ fontSize: 12, fontWeight: '800', color: theme.colors.ink }}>
                             {Number(selectedMobileAuditLog.metadata.runningHours || selectedMobileAuditLog.metadata.running_hours || 0).toFixed(1)} hrs
                           </Text>
                         </View>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <Text style={{ fontSize: 11, color: theme.colors.mute }}>Meter Range:</Text>
+                          <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Meter Range:</Text>
                           <Text style={{ fontSize: 12, fontWeight: '700', color: theme.colors.ink, fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace' }}>
                             {selectedMobileAuditLog.metadata.startMeter ?? selectedMobileAuditLog.metadata.start_meter ?? '—'} →{' '}
                             <Text style={{ color: '#059669' }}>
@@ -2640,21 +2640,21 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                           </Text>
                         </View>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <Text style={{ fontSize: 11, color: theme.colors.mute }}>Breakdown Condition:</Text>
+                          <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Breakdown Condition:</Text>
                           <Text style={{ fontSize: 12, fontWeight: '800', color: selectedMobileAuditLog.isBreakdown ? '#e11d48' : '#059669' }}>
                             {selectedMobileAuditLog.isBreakdown ? selectedMobileAuditLog.metadata?.breakdownDuration || 'Active' : '0 (Normal)'}
                           </Text>
                         </View>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <Text style={{ fontSize: 11, color: theme.colors.mute }}>Shift Timing:</Text>
-                          <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.ink }}>
+                          <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Shift Timing:</Text>
+                          <Text style={{ fontSize: 12.5, fontWeight: '600', color: theme.colors.ink }}>
                             {formatShiftTimingWithDateMobile(selectedMobileAuditLog.metadata)}
                           </Text>
                         </View>
                         {selectedMobileAuditLog.metadata.location && (
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <Text style={{ fontSize: 11, color: theme.colors.mute }}>Location:</Text>
-                            <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.ink, maxWidth: '65%' }} numberOfLines={1}>
+                            <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Location:</Text>
+                            <Text style={{ fontSize: 12.5, fontWeight: '600', color: theme.colors.ink, maxWidth: '65%' }} numberOfLines={1}>
                               {selectedMobileAuditLog.metadata.location}
                             </Text>
                           </View>
@@ -2672,15 +2672,15 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       <View style={{ gap: 6 }}>
                         {selectedMobileAuditLog.diffs.map((diff: any, dIdx: number) => (
                           <View key={dIdx} style={{ gap: 2 }}>
-                            <Text style={{ fontSize: 11, fontWeight: '700', color: theme.colors.ink }}>
+                            <Text style={{ fontSize: 12.5, fontWeight: '700', color: theme.colors.ink }}>
                               {diff.label}
                             </Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <Text style={{ fontSize: 11, color: theme.colors.mute, textDecorationLine: 'line-through' }}>
+                              <Text style={{ fontSize: 12.5, color: theme.colors.mute, textDecorationLine: 'line-through' }}>
                                 {diff.previous}
                               </Text>
                               <ArrowRight size={10} color="#059669" />
-                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>
+                              <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#059669' }}>
                                 {diff.updated}
                               </Text>
                             </View>
@@ -2698,14 +2698,14 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       <View style={{ gap: 6 }}>
                         {selectedMobileAuditLog.deletions.map((del: any, dIdx: number) => (
                           <View key={dIdx} style={{ gap: 2 }}>
-                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#e11d48' }}>
+                            <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#e11d48' }}>
                               {del.label}
                             </Text>
-                            <Text style={{ fontSize: 11, color: theme.colors.ink, textDecorationLine: 'line-through' }}>
+                            <Text style={{ fontSize: 12.5, color: theme.colors.ink, textDecorationLine: 'line-through' }}>
                               {del.deletedValue}
                             </Text>
                             {del.reason ? (
-                              <Text style={{ fontSize: 10, color: theme.colors.mute, fontStyle: 'italic' }}>
+                              <Text style={{ fontSize: 12, color: theme.colors.mute, fontStyle: 'italic' }}>
                                 {del.reason}
                               </Text>
                             ) : null}
@@ -2721,10 +2721,10 @@ export const MachineDetailView: React.FC<MachineDetailViewProps> = ({
                       AUDIT METADATA
                     </Text>
                     <View style={{ gap: 4 }}>
-                      <Text style={{ fontSize: 10, color: theme.colors.mute }}>
+                      <Text style={{ fontSize: 12, color: theme.colors.mute }}>
                         Action: <Text style={{ color: theme.colors.ink, fontWeight: '600' }}>{selectedMobileAuditLog.action}</Text>
                       </Text>
-                      <Text style={{ fontSize: 10, color: theme.colors.mute }}>
+                      <Text style={{ fontSize: 12, color: theme.colors.mute }}>
                         Log ID: <Text style={{ fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace', color: theme.colors.ink }}>{selectedMobileAuditLog.id}</Text>
                       </Text>
                     </View>
@@ -2940,7 +2940,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   tabCountText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
   },
   tabContentArea: {
@@ -2979,7 +2979,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   clientCodePillText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: '#0ea5e9',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
@@ -3014,13 +3014,13 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   specBoxLabel: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
   specCountBadge: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     color: '#10b981',
   },
@@ -3029,7 +3029,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   specBoxValueMono: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
@@ -3077,12 +3077,12 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   oversightBadgeText: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '700',
     color: '#10b981',
   },
   noStaffText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontStyle: 'italic',
     paddingVertical: 8,
     textAlign: 'center',
@@ -3109,7 +3109,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   staffShiftTag: {
-    fontSize: 10,
+    fontSize: 12,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   clockRow: {
@@ -3119,7 +3119,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   clockTimeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     color: '#10b981',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
@@ -3223,7 +3223,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   noClientSub: {
-    fontSize: 11,
+    fontSize: 12.5,
     textAlign: 'center',
     lineHeight: 16,
   },
@@ -3234,7 +3234,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   totalHoursText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
@@ -3279,7 +3279,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   emptyLogsSub: {
-    fontSize: 11,
+    fontSize: 12.5,
     textAlign: 'center',
     lineHeight: 16,
   },
@@ -3327,11 +3327,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   filterChipText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   resetFilterText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     marginLeft: 4,
   },
@@ -3358,7 +3358,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   logOperatorName: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
   },
   logMeterBox: {
@@ -3384,13 +3384,13 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   runningHoursBadgeText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '800',
     color: '#0ea5e9',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   logRemarksText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontStyle: 'italic',
   },
   paginationRow: {
@@ -3407,11 +3407,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   pageBtnText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   pageIndicatorText: {
-    fontSize: 11,
+    fontSize: 12.5,
   },
   auditControlsCard: {
     padding: spacingNumeric.sm,
@@ -3446,7 +3446,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   auditFilterChipText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   auditListWrap: {
@@ -3477,7 +3477,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   auditCardActorRole: {
-    fontSize: 10,
+    fontSize: 12,
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: 4,
@@ -3490,7 +3490,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   auditCardTimeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   auditMiniGrid: {
@@ -3507,7 +3507,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   auditMiniLabel: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -3525,7 +3525,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   auditBreakdownText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
     flex: 1,
   },
@@ -3535,7 +3535,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   auditLocationText: {
-    fontSize: 11,
+    fontSize: 12.5,
     flex: 1,
   },
   auditAssignRow: {
@@ -3551,7 +3551,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   auditGenericText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontStyle: 'italic',
   },
   auditTechToggleBtn: {
@@ -3562,7 +3562,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   auditTechToggleText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
   },
   auditJsonBox: {
@@ -3572,7 +3572,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   auditJsonText: {
-    fontSize: 10,
+    fontSize: 12,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   auditDeletionBox: {
@@ -3587,7 +3587,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   auditDeletionTitle: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#e11d48',
   },
@@ -3609,7 +3609,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   auditDiffTitle: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -3621,7 +3621,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   auditDiffLabel: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   auditDiffValuesRow: {
@@ -3631,12 +3631,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   auditDiffPrevText: {
-    fontSize: 10,
+    fontSize: 12,
     textDecorationLine: 'line-through',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   auditDiffUpdatedText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: '#059669',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
@@ -3663,7 +3663,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   auditDateBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
@@ -3717,7 +3717,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   auditModalSectionTitle: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.6,
   },

@@ -1,6 +1,6 @@
 /**
  * ServiceCentric Shared Utilities — Overtime Shift Conflict Parser & Warning Generator
- * Converts raw database conflict reason codes (e.g. "overtime_overlaps_assignment:RI-MC-0012")
+ * Converts raw database conflict reason codes (e.g. "overtime_overlaps_assignment:M/C-0012")
  * into human-readable titles, severity ratings, compliance risk advisories, and supervisor resolution guidance.
  */
 
@@ -18,7 +18,7 @@ export interface ConflictLogMeta {
 }
 
 export interface DetailedConflictWarning {
-  /** Concise, high-contrast title (e.g. "Shift Overlap with RI-MC-0012") */
+  /** Concise, high-contrast title (e.g. "Shift Overlap with M/C-0012") */
   title: string;
   /** High-impact badge tag (e.g. "DUAL MACHINE CUSTODY CONFLICT") */
   badgeText: string;
@@ -84,8 +84,8 @@ export function parseConflictReason(
     raw.includes('SHIFT_OVERLAP_CONFLICT') ||
     raw.includes('overlapping shift window')
   ) {
-    // Attempt to extract machine code if present
-    const mMatch = raw.match(/assigned to ([A-Z0-9_\-]+)/i);
+    // Attempt to extract machine code if present (supports M/C-XXXX format)
+    const mMatch = raw.match(/assigned to ([A-Z0-9_\-\/]+)/i);
     const conflictingMachine = mMatch ? mMatch[1] : null;
 
     return {

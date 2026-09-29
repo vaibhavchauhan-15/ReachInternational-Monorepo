@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   subtitle: {
-    fontSize: 11,
+    fontSize: 13,
     marginTop: 1,
   },
   closeBtn: {
@@ -351,16 +351,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   formTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     marginBottom: 8,
   },
   textInput: {
-    height: 42,
+    height: 44,
     borderWidth: 1,
     borderRadius: radiusNumeric.md,
     paddingHorizontal: 12,
-    fontSize: 14,
+    fontSize: 15,
     marginBottom: 8,
   },
   textArea: {
@@ -378,18 +378,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   loadingText: {
-    fontSize: 12,
+    fontSize: 13,
   },
   emptyContainer: {
     padding: 32,
     alignItems: 'center',
   },
   emptyTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
   },
   emptySubtitle: {
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 4,
     textAlign: 'center',
   },
@@ -418,13 +418,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   catName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
   },
   catDesc: {
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 2,
-    lineHeight: 16,
+    lineHeight: 17,
   },
   deleteBtn: {
     padding: 8,

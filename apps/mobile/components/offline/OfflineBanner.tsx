@@ -108,16 +108,16 @@ const styles = StyleSheet.create({
     marginRight: 2,
   },
   title: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     letterSpacing: -0.2,
   },
   bullet: {
-    fontSize: 10,
+    fontSize: 12,
     opacity: 0.6,
   },
   countText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
     opacity: 0.9,
   },

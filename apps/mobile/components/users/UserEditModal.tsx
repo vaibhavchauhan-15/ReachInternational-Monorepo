@@ -288,7 +288,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
               <View>
                 <Text style={[styles.title, { color: theme.colors.ink }]}>Edit User Account</Text>
                 <Text style={[styles.subtitle, { color: theme.colors.mute }]}>
-                  {user.full_name} ({user.email})
+                  {user.full_name} {user.employee_id ? `• ${user.employee_id} ` : ''}({user.email})
                 </Text>
               </View>
             </View>
@@ -557,7 +557,7 @@ export const UserEditModal: React.FC<UserEditModalProps> = ({
                         <Text style={[styles.modalItemText, { color: isSelected ? theme.colors.link : theme.colors.ink, fontWeight: isSelected ? '700' : '500' }]}>
                           {s.full_name}
                         </Text>
-                        {s.email ? <Text style={{ fontSize: 11, color: theme.colors.mute, marginTop: 2 }}>{s.email}</Text> : null}
+                        {s.email ? <Text style={{ fontSize: 12.5, color: theme.colors.mute, marginTop: 2 }}>{s.email}</Text> : null}
                       </View>
                       {isSelected && <Check size={16} color={theme.colors.link} />}
                     </TouchableOpacity>
@@ -610,7 +610,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   subtitle: {
-    fontSize: 11,
+    fontSize: 13.5,
     marginTop: 1,
   },
   closeBtn: {

@@ -25,7 +25,7 @@ export interface PDFSignatureBlockProps {
 
 export function PDFSignatureBlock({ columns }: PDFSignatureBlockProps) {
   return (
-    <div className="grid grid-cols-3 gap-3 sm:gap-4 pt-3 border-t border-neutral-300 text-center text-[9.5px] text-neutral-600 print-signature-block">
+    <div className="grid grid-cols-3 gap-2 sm:gap-3 pt-2 border-t border-neutral-300 text-center text-[9px] text-neutral-600 print-signature-block">
       {columns.map((col, idx) => (
         <div key={idx} className="flex flex-col items-center space-y-0.5">
           <span className="font-extrabold text-neutral-900 text-[9.5px] uppercase tracking-wider">

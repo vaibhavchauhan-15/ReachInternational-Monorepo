@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   noticeSub: {
-    fontSize: 11,
+    fontSize: 12.5,
     lineHeight: 16,
   },
   pwdWell: {
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   pwdLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.6,
   },

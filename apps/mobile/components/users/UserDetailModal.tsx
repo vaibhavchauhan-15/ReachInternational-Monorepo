@@ -54,6 +54,7 @@ import * as Clipboard from 'expo-clipboard';
 
 export interface UserRecord {
   id: string;
+  employee_id?: string | null;
   email: string;
   full_name: string;
   phone?: string | null;
@@ -414,9 +415,37 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                 {roleMeta.icon}
               </View>
               <View style={styles.headerTextWrap}>
-                <Text style={[styles.userName, { color: theme.colors.ink }]} numberOfLines={1}>
-                  {user.full_name}
-                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.userName, { color: theme.colors.ink, flexShrink: 1 }]} numberOfLines={1}>
+                    {user.full_name}
+                  </Text>
+                  {user.employee_id ? (
+                    <TouchableOpacity
+                      onPress={() => copyToClipboard(user.employee_id!, 'Employee ID')}
+                      activeOpacity={0.7}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 3,
+                        backgroundColor: theme.colors.canvasElevated,
+                        borderWidth: 1,
+                        borderColor: theme.colors.hairline,
+                        paddingHorizontal: 5,
+                        paddingVertical: 1.5,
+                        borderRadius: 4,
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: '700', color: theme.colors.ink }}>
+                        {user.employee_id}
+                      </Text>
+                      {copiedField === 'Employee ID' ? (
+                        <Check size={9} color="#10b981" />
+                      ) : (
+                        <Copy size={9} color={theme.colors.mute} />
+                      )}
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
                 <View style={styles.badgesRow}>
                   {/* Role Badge */}
                   <View
@@ -517,6 +546,32 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                   )}
                 </TouchableOpacity>
               </View>
+
+              {/* Employee ID */}
+              {user.employee_id ? (
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLabelWrap}>
+                    <CreditCard size={13} color={theme.colors.mute} />
+                    <Text style={[styles.detailLabel, { color: theme.colors.mute }]}>Employee ID</Text>
+                  </View>
+                  <View style={styles.detailValueWrap}>
+                    <Text style={[styles.detailValue, { color: theme.colors.ink, fontFamily: 'monospace', fontWeight: '600' }]}>
+                      {user.employee_id}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.fieldCopyBtn}
+                      onPress={() => copyToClipboard(user.employee_id!, 'Employee ID')}
+                      activeOpacity={0.7}
+                    >
+                      {copiedField === 'Employee ID' ? (
+                        <Check size={13} color="#10b981" />
+                      ) : (
+                        <Copy size={13} color={theme.colors.mute} />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : null}
 
               {/* Email */}
               <View style={styles.detailRow}>
@@ -1022,7 +1077,7 @@ export const UserDetailModal: React.FC<UserDetailModalProps> = ({
                         <Text style={[styles.pickerModalItemText, { color: isCurrent ? theme.colors.link : theme.colors.ink, fontWeight: isCurrent ? '700' : '500' }]}>
                           {s.full_name}
                         </Text>
-                        {s.email ? <Text style={{ fontSize: 11, color: theme.colors.mute }}>{s.email}</Text> : null}
+                        {s.email ? <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>{s.email}</Text> : null}
                       </View>
                       {isCurrent && <Check size={16} color={theme.colors.link} />}
                     </TouchableOpacity>
@@ -1109,7 +1164,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   roleBadgeText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   statusBadge: {
@@ -1127,7 +1182,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   statusBadgeText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   closeBtn: {
@@ -1172,7 +1227,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   detailsWellTitle: {
-    fontSize: 10,
+    fontSize: 12,
     fontFamily: 'monospace',
     fontWeight: '700',
     letterSpacing: 0.8,
@@ -1183,7 +1238,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   idCopyText: {
-    fontSize: 10,
+    fontSize: 12,
     fontFamily: 'monospace',
   },
   detailRow: {
@@ -1214,7 +1269,7 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   relativeTimeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontFamily: 'monospace',
     marginTop: 1,
   },
@@ -1223,7 +1278,7 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   managementSectionTitle: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     letterSpacing: 0.6,
   },
@@ -1333,7 +1388,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   sectionEyebrow: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.8,
     marginBottom: spacingNumeric.xs,
@@ -1353,7 +1408,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   docMeta: {
-    fontSize: 10,
+    fontSize: 12,
     marginTop: 1,
     fontFamily: 'monospace',
   },
@@ -1368,7 +1423,7 @@ const styles = StyleSheet.create({
     minHeight: 32,
   },
   viewDocBtnText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
   },
 });

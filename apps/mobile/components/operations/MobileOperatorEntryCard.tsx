@@ -25,6 +25,8 @@ import {
   getISTDateString,
   formatTo12Hour,
   formatDate,
+  resolveDefaultOperatorShift,
+  type ShiftMatchTarget,
 } from '@reachinternational/utils';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
 import { useQueryClient } from '@tanstack/react-query';
@@ -37,6 +39,7 @@ import {
   CheckCircle2,
   Calendar,
   AlertCircle,
+  UserCheck,
 } from 'lucide-react-native';
 
 
@@ -76,13 +79,32 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
         setStartMeter(hmrStr);
         setEndMeter((prev) => (prev === '' ? hmrStr : prev));
       }
-      if (entryContext.operator?.shift_start) {
-        const parsedStart = formatTo12Hour(entryContext.operator.shift_start);
-        if (parsedStart) setStartTime(parsedStart);
-      }
-      if (entryContext.operator?.shift_end) {
-        const parsedEnd = formatTo12Hour(entryContext.operator.shift_end);
-        if (parsedEnd) setEndTime(parsedEnd);
+
+      const defaultShifts: ShiftMatchTarget[] = [
+        { code: 'S1', name: 'Shift S1', start_time: '06:00 AM', end_time: '02:00 PM', raw_start_time: '06:00:00', raw_end_time: '14:00:00' },
+        { code: 'S2', name: 'Shift S2', start_time: '02:00 PM', end_time: '10:00 PM', raw_start_time: '14:00:00', raw_end_time: '22:00:00' },
+        { code: 'S3', name: 'Shift S3', start_time: '10:00 PM', end_time: '06:00 AM', raw_start_time: '22:00:00', raw_end_time: '06:00:00' },
+      ];
+      const availableShifts: ShiftMatchTarget[] = entryContext.shift_codes && entryContext.shift_codes.length > 0
+        ? entryContext.shift_codes
+        : defaultShifts;
+
+      const matchedShift = resolveDefaultOperatorShift(entryContext, availableShifts);
+
+      if (matchedShift) {
+        const s = formatTo12Hour(matchedShift.start_time) || matchedShift.start_time;
+        const e = formatTo12Hour(matchedShift.end_time) || matchedShift.end_time;
+        if (s) setStartTime(s);
+        if (e) setEndTime(e);
+      } else {
+        if (entryContext.operator?.shift_start) {
+          const parsedStart = formatTo12Hour(entryContext.operator.shift_start);
+          if (parsedStart) setStartTime(parsedStart);
+        }
+        if (entryContext.operator?.shift_end) {
+          const parsedEnd = formatTo12Hour(entryContext.operator.shift_end);
+          if (parsedEnd) setEndTime(parsedEnd);
+        }
       }
     }
   }, [entryContext]);
@@ -347,39 +369,90 @@ export const MobileOperatorEntryCard: React.FC<MobileOperatorEntryCardProps> = (
 
       {/* 3. Last Recorded Log Banner */}
       {entryContext.last_log ? (
-        <View
-          style={[
-            styles.hmrBanner,
-            {
-              backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : '#f0fdf4',
-              borderColor: isDark ? 'rgba(16, 185, 129, 0.3)' : '#bbf7d0',
-              paddingVertical: 10,
-              paddingHorizontal: 12,
-            },
-          ]}
-        >
-          <Text style={{ fontSize: 10, fontWeight: '700', color: isDark ? '#6ee7b7' : '#047857', textTransform: 'uppercase', fontFamily: 'monospace', marginBottom: 6 }}>
-            Last Recorded Machine Log
-          </Text>
+        <View style={{ marginBottom: spacingNumeric.sm, gap: 8 }}>
+          {/* Contextual Notice if Today's Shift was Logged by Supervisor */}
+          {Boolean(
+            entryContext.last_log.entry_source &&
+            entryContext.last_log.entry_source !== 'operator' &&
+            entryContext.last_log.log_date === getISTDateString()
+          ) && (
+            <View
+              style={[
+                styles.hmrBanner,
+                {
+                  backgroundColor: isDark ? 'rgba(56, 189, 248, 0.12)' : '#f0f9ff',
+                  borderColor: isDark ? 'rgba(56, 189, 248, 0.3)' : '#bae6fd',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  marginBottom: 0,
+                },
+              ]}
+            >
+              <UserCheck size={18} color={isDark ? '#38bdf8' : '#0284c7'} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: isDark ? '#e0f2fe' : '#0369a1' }}>
+                  Today's Shift Logged by Supervisor
+                </Text>
+                <Text style={{ fontSize: 12.5, color: isDark ? '#bae6fd' : '#0c4a6e', marginTop: 2 }}>
+                  Supervisor {entryContext.last_log.entered_by_name || 'Your supervisor'} recorded your shift for today.
+                </Text>
+              </View>
+            </View>
+          )}
 
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <View>
-              <Text style={{ fontSize: 10, color: isDark ? '#a7f3d0' : '#065f46' }}>Last Recorded Date</Text>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: isDark ? '#ecfdf5' : '#064e3b', fontFamily: 'monospace', marginTop: 2 }}>
-                {formatDate(entryContext.last_log.log_date)}
+          <View
+            style={[
+              styles.hmrBanner,
+              {
+                backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : '#f0fdf4',
+                borderColor: isDark ? 'rgba(16, 185, 129, 0.3)' : '#bbf7d0',
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                marginBottom: 0,
+              },
+            ]}
+          >
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: isDark ? '#6ee7b7' : '#047857', textTransform: 'uppercase', fontFamily: 'monospace' }}>
+                Last Recorded Machine Log
               </Text>
+              {entryContext.last_log.entry_source && entryContext.last_log.entry_source !== 'operator' && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 4, backgroundColor: isDark ? 'rgba(56, 189, 248, 0.2)' : '#e0f2fe' }}>
+                  <UserCheck size={12} color={isDark ? '#38bdf8' : '#0284c7'} />
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: isDark ? '#38bdf8' : '#0284c7' }}>
+                    Assisted
+                  </Text>
+                </View>
+              )}
             </View>
-            <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontSize: 10, color: isDark ? '#a7f3d0' : '#065f46' }}>Shift End Time</Text>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: isDark ? '#ecfdf5' : '#064e3b', fontFamily: 'monospace', marginTop: 2 }}>
-                {formatTo12Hour(entryContext.last_log.end_time) || entryContext.last_log.end_time || '—'}
-              </Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={{ fontSize: 10, color: isDark ? '#a7f3d0' : '#065f46' }}>Last Entry By</Text>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: isDark ? '#ecfdf5' : '#064e3b', marginTop: 2 }} numberOfLines={1}>
-                {entryContext.last_log.operator_name || 'Operator'}
-              </Text>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View>
+                <Text style={{ fontSize: 12, color: isDark ? '#a7f3d0' : '#065f46' }}>Last Recorded Date</Text>
+                <Text style={{ fontSize: 13.5, fontWeight: '700', color: isDark ? '#ecfdf5' : '#064e3b', fontFamily: 'monospace', marginTop: 2 }}>
+                  {formatDate(entryContext.last_log.log_date)}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 12, color: isDark ? '#a7f3d0' : '#065f46' }}>Shift End Time</Text>
+                <Text style={{ fontSize: 13.5, fontWeight: '700', color: isDark ? '#ecfdf5' : '#064e3b', fontFamily: 'monospace', marginTop: 2 }}>
+                  {formatTo12Hour(entryContext.last_log.end_time) || entryContext.last_log.end_time || '—'}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={{ fontSize: 12, color: isDark ? '#a7f3d0' : '#065f46' }}>Last Entry By</Text>
+                <Text style={{ fontSize: 13.5, fontWeight: '700', color: isDark ? '#ecfdf5' : '#064e3b', marginTop: 2 }} numberOfLines={1}>
+                  {entryContext.last_log.operator_name || 'Operator'}
+                </Text>
+                {entryContext.last_log.entry_source && entryContext.last_log.entry_source !== 'operator' && (
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: isDark ? '#93c5fd' : '#1d4ed8', marginTop: 1 }}>
+                    (by {entryContext.last_log.entered_by_name || 'Supervisor'})
+                  </Text>
+                )}
+              </View>
             </View>
           </View>
         </View>
@@ -701,16 +774,16 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   summaryPillLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     textTransform: 'uppercase',
   },
   summaryPillTitle: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '700',
   },
   summaryPillSub: {
-    fontSize: 11,
+    fontSize: 12.5,
     marginTop: 2,
   },
   hmrBanner: {
@@ -724,11 +797,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   hmrBannerLabel: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '500',
   },
   hmrBannerValue: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
   },
   statusBanner: {
@@ -741,7 +814,7 @@ const styles = StyleSheet.create({
     marginBottom: spacingNumeric.sm,
   },
   statusText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     flex: 1,
   },
@@ -752,7 +825,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   inputLabel: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '600',
   },
   dateChipRow: {
@@ -772,7 +845,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   dateChipText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
   },
   twoColumnRow: {
@@ -788,7 +861,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   runningHoursLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '500',
   },
   runningHoursValue: {
@@ -804,7 +877,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(245, 158, 11, 0.08)',
   },
   overtimeText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#d97706',
   },
@@ -817,11 +890,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   toggleTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
   },
   toggleSubtitle: {
-    fontSize: 11,
+    fontSize: 12.5,
   },
   breakdownSection: {
     gap: 8,
@@ -830,7 +903,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(239, 68, 68, 0.04)',
   },
   breakdownDurationText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
     color: '#e11d48',
   },

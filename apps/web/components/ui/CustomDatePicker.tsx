@@ -36,7 +36,7 @@ export interface CustomDatePickerProps {
   className?: string;
   disabled?: boolean;
   helperText?: string;
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
   hideIcon?: boolean;
   showIcon?: boolean;
 }
@@ -84,7 +84,7 @@ export function CustomDatePicker({
   allowFutureDays = 0,
   allowAnyPast = false,
   allowAnyFuture = false,
-  showWindowBadge = true,
+  showWindowBadge = false,
   showRelativeBadge = true,
   label,
   labelClassName,
@@ -93,8 +93,9 @@ export function CustomDatePicker({
   className = "",
   disabled = false,
   helperText,
+  align,
   hideIcon = false,
-  showIcon = true,
+  showIcon = false,
 }: CustomDatePickerProps) {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -149,6 +150,7 @@ export function CustomDatePicker({
     minWidth: 280,
     maxHeightCap: 400,
     matchTriggerWidth: false,
+    align,
   });
 
   // Close calendar popover on Escape key
@@ -352,7 +354,7 @@ export function CustomDatePicker({
           <div className="flex items-center justify-between mb-1">
             <label
               className={cn(
-                "text-[11px] sm:text-xs font-semibold text-[var(--color-ink)] inline-flex items-center gap-1.5 min-w-0 leading-none",
+                "text-[13.5px] sm:text-xs font-semibold text-[var(--color-ink)] inline-flex items-center gap-1.5 min-w-0 leading-none",
                 labelClassName
               )}
             >
@@ -371,7 +373,7 @@ export function CustomDatePicker({
               )}
             </label>
             {showWindowBadge && (
-              <span className="text-[10px] text-sky-600 dark:text-sky-400 font-semibold tracking-tight shrink-0">
+              <span className="text-xs text-sky-600 dark:text-sky-400 font-semibold tracking-tight shrink-0">
                 <span className="hidden xs:inline">Allowed: </span>7d window
               </span>
             )}
@@ -383,7 +385,7 @@ export function CustomDatePicker({
           type="button"
           disabled={disabled}
           onClick={handleOpenToggle}
-          className={`w-full px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl border bg-[var(--color-canvas)] text-xs font-bold text-[var(--color-ink)] flex items-center justify-between transition-all cursor-pointer shadow-2xs min-h-[42px] ${
+          className={`w-full px-3.5 py-2.5 rounded-xl border bg-[var(--color-canvas)] text-sm font-semibold text-[var(--color-ink)] flex items-center justify-between transition-all cursor-pointer shadow-2xs min-h-[44px] ${
             isCalendarOpen
               ? "border-sky-500 ring-2 ring-sky-500/20 bg-[var(--color-canvas-elevated)]"
               : "border-[var(--color-hairline)] hover:border-sky-500/50"
@@ -392,13 +394,13 @@ export function CustomDatePicker({
           aria-haspopup="dialog"
         >
           <div className="flex items-center gap-2 min-w-0 truncate">
-            <Calendar className="h-4 w-4 text-sky-500 shrink-0" />
-            <span className="truncate font-extrabold text-[var(--color-ink)]">
+            <Calendar size={16} className="h-4 w-4 text-sky-500 shrink-0" />
+            <span className="truncate font-bold font-mono text-sm text-[var(--color-ink)] leading-none">
               {formattedDisplayValue}
             </span>
             {relativeBadge && (
               <span
-                className={`px-1.5 py-0.5 rounded text-[10px] font-extrabold shrink-0 ${relativeBadge.colorClass}`}
+                className={`px-2 py-0.5 rounded text-xs font-bold shrink-0 leading-none ${relativeBadge.colorClass}`}
               >
                 {relativeBadge.label}
               </span>
@@ -406,8 +408,8 @@ export function CustomDatePicker({
           </div>
 
           <ChevronDown
-            size={16}
-            className={`text-[var(--color-mute)] shrink-0 transition-transform duration-200 ml-1.5 ${
+            size={14}
+            className={`h-3.5 w-3.5 text-[var(--color-mute)] shrink-0 transition-transform duration-200 ml-1.5 ${
               isCalendarOpen ? "rotate-180 text-sky-500" : ""
             }`}
           />
@@ -415,7 +417,7 @@ export function CustomDatePicker({
       </div>
 
       {helperText && (
-        <p className="text-[10px] text-[var(--color-mute)] mt-1 font-medium">
+        <p className="text-xs text-[var(--color-mute)] mt-1 font-medium">
           {helperText}
         </p>
       )}
@@ -531,7 +533,7 @@ export function CustomDatePicker({
                             ? "Today"
                             : `${cell.diffDays} day${cell.diffDays === 1 ? "" : "s"} ago`
                         }
-                        className={`relative h-8 sm:h-9 w-full rounded-xl text-xs flex flex-col items-center justify-center transition-all ${
+                        className={`relative h-9 sm:h-9.5 w-full rounded-xl text-xs flex flex-col items-center justify-center transition-all ${
                           isSelected
                             ? "bg-sky-600 text-white font-extrabold shadow-md ring-2 ring-sky-500/30 scale-105 z-10"
                             : isCellDisabled

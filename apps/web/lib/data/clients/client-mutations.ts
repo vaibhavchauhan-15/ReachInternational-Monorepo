@@ -11,6 +11,7 @@ import {
   type UpdateClientInput,
 } from "@reachinternational/validation";
 import type { CRMClient } from "@/lib/types/database";
+import { CLIENT_DETAIL_COLUMNS } from "./client-detail";
 
 export interface ClientMutationResult {
   success: boolean;
@@ -72,13 +73,14 @@ export async function createClient(
       billing_state: data.isBillingAddressDifferent ? data.billingState?.trim() || null : null,
       billing_pincode: data.isBillingAddressDifferent ? data.billingPincode?.trim() || null : null,
       status: data.status || "active",
+      maintenance_allowance_minutes: data.maintenanceAllowanceMinutes ?? 0,
     };
 
     const supabase = await createSupabaseServerClient();
     const { data: createdClient, error: dbError } = await supabase
       .from("clients")
       .insert([insertPayload])
-      .select("id, code, company_name, status, city")
+      .select(CLIENT_DETAIL_COLUMNS)
       .single();
 
     if (dbError || !createdClient) {
@@ -96,6 +98,7 @@ export async function createClient(
         entity_type: "clients",
         entity_id: createdClient.id,
         metadata: {
+          client_id: createdClient.client_id || createdClient.code,
           client_code: createdClient.code,
           company_name: createdClient.company_name,
           gstin: data.gstin,
@@ -111,9 +114,20 @@ export async function createClient(
       revalidateTag(TAGS.clientsLocations, "max");
     }
 
+    const raw = createdClient as any;
+    const formattedClient: CRMClient = {
+      ...raw,
+      client_id: raw.client_id || raw.code,
+      street: resolvedStreet,
+      address: [resolvedStreet, raw.city, raw.district, raw.state, raw.pincode].filter(Boolean).join(", "),
+      client_name: raw.company_name,
+      maintenance_allowance_minutes: raw.maintenance_allowance_minutes ?? 0,
+      status: raw.status ?? "active",
+    };
+
     return {
       success: true,
-      client: createdClient as unknown as CRMClient,
+      client: formattedClient,
     };
   } catch (err: any) {
     console.error("createClient exception:", err);
@@ -173,6 +187,7 @@ export async function updateClient(
       billing_state: data.isBillingAddressDifferent ? data.billingState?.trim() || null : null,
       billing_pincode: data.isBillingAddressDifferent ? data.billingPincode?.trim() || null : null,
       status: data.status || "active",
+      maintenance_allowance_minutes: data.maintenanceAllowanceMinutes ?? 0,
       updated_at: new Date().toISOString(),
     };
 
@@ -181,7 +196,7 @@ export async function updateClient(
       .from("clients")
       .update(updatePayload)
       .eq("id", data.id)
-      .select("id, code, company_name, status")
+      .select(CLIENT_DETAIL_COLUMNS)
       .single();
 
     if (dbError) {
@@ -217,9 +232,20 @@ export async function updateClient(
       revalidateTag(TAGS.clientsLocations, "max");
     }
 
+    const raw = updatedClient as any;
+    const formattedClient: CRMClient = {
+      ...raw,
+      client_id: raw.client_id || raw.code,
+      street: resolvedStreet,
+      address: [resolvedStreet, raw.city, raw.district, raw.state, raw.pincode].filter(Boolean).join(", "),
+      client_name: raw.company_name,
+      maintenance_allowance_minutes: raw.maintenance_allowance_minutes ?? 0,
+      status: raw.status ?? "active",
+    };
+
     return {
       success: true,
-      client: updatedClient as unknown as CRMClient,
+      client: formattedClient,
     };
   } catch (err: any) {
     console.error("updateClient exception:", err);

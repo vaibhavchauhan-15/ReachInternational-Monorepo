@@ -189,7 +189,7 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
           updated_at: new Date().toISOString(),
         };
 
-        if (machineId.trim()) {
+        if (!machineToEdit && machineId.trim()) {
           payload.machine_id = machineId.trim().toUpperCase();
         }
 
@@ -312,7 +312,7 @@ export const AddMachineModal: React.FC<AddMachineModalProps> = ({
                 </Text>
                 {operatorIds.length > 0 && (
                   <TouchableOpacity onPress={() => setOperatorIds([])}>
-                    <Text style={{ fontSize: 11, color: theme.colors.link, fontWeight: '600' }}>Clear</Text>
+                    <Text style={{ fontSize: 12.5, color: theme.colors.link, fontWeight: '600' }}>Clear</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -539,7 +539,7 @@ const styles = StyleSheet.create({
     marginBottom: spacingNumeric.sm,
   },
   groupLabel: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '600',
     marginBottom: 6,
   },
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pillText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '500',
   },
   footer: {

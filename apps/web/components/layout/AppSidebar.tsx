@@ -6,6 +6,7 @@ import {
   AnimatedUsers,
   AnimatedWrench,
   AnimatedGauge,
+  AnimatedActivity,
   AnimatedBuilding2,
   AnimatedScrollText,
   AnimatedSettings,
@@ -60,6 +61,12 @@ export const mainNavItems: NavItem[] = [
     roles: ["super_admin", "admin", "manager", "supervisor", "hr", "operator"],
   },
   {
+    href: "/running-logs",
+    label: "Running Logs",
+    icon: AnimatedActivity,
+    roles: ["super_admin", "admin", "manager", "supervisor", "hr"],
+  },
+  {
     href: "/clients",
     label: "Clients",
     icon: AnimatedBuilding2,
@@ -75,7 +82,7 @@ export const mainNavItems: NavItem[] = [
     href: "/attendance",
     label: "Attendance",
     icon: AnimatedCalendarCheck,
-    roles: ["super_admin", "admin", "hr"],
+    roles: ["super_admin", "admin", "hr", "manager", "supervisor", "operator"],
   },
   {
     href: "/payroll",
@@ -114,6 +121,8 @@ export function AppSidebar({ user, collapsed, onToggleCollapse }: AppSidebarProp
         if (b.href === "/operations") return 1;
         if (a.href === "/machines") return -1;
         if (b.href === "/machines") return 1;
+        if (a.href === "/attendance") return -1;
+        if (b.href === "/attendance") return 1;
         if (a.href === "/settings") return 1;
         if (b.href === "/settings") return -1;
         return 0;

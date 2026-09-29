@@ -117,14 +117,14 @@ export function MobileMachineCard({
               )}
             </button>
             {machine.model && (
-              <span className="text-xs sm:text-sm font-bold text-[var(--color-ink)] truncate tracking-tight">
+              <span className="text-sm sm:text-base font-bold text-[var(--color-ink)] truncate tracking-tight">
                 <Highlight text={machine.model} query={searchTerm} />
               </span>
             )}
           </div>
 
           {machine.serial_number && (
-            <div className="flex items-center gap-x-2 text-[11px] text-[var(--color-mute)] mt-1.5 font-medium">
+            <div className="flex items-center gap-x-2 text-xs text-[var(--color-mute)] mt-1.5 font-medium">
               <span className="font-mono text-[var(--color-body)]">
                 S/N: <Highlight text={machine.serial_number} query={searchTerm} />
               </span>
@@ -135,32 +135,32 @@ export function MobileMachineCard({
         {/* Health & Status Badges */}
         <div className="flex flex-col items-end gap-1.5 shrink-0">
           {machine.health_status === "breakdown" && (
-            <Badge variant="overdue" dot className="whitespace-nowrap text-[10px] sm:text-xs">
+            <Badge variant="overdue" dot className="whitespace-nowrap text-xs">
               Breakdown
             </Badge>
           )}
           {machine.health_status === "under_maintenance" && (
-            <Badge variant="warning" dot className="whitespace-nowrap text-[10px] sm:text-xs">
+            <Badge variant="warning" dot className="whitespace-nowrap text-xs">
               Maintenance
             </Badge>
           )}
           {machine.health_status === "spare" && (
-            <Badge variant="spare" dot className="whitespace-nowrap text-[10px] sm:text-xs">
+            <Badge variant="spare" dot className="whitespace-nowrap text-xs">
               Spare
             </Badge>
           )}
           {(!machine.health_status || machine.health_status === "active") && (
-            <Badge variant="success" dot className="whitespace-nowrap text-[10px] sm:text-xs">
+            <Badge variant="success" dot className="whitespace-nowrap text-xs">
               Active
             </Badge>
           )}
 
           {machine.status === "rented" ? (
-            <Badge variant="info" dot className="whitespace-nowrap text-[10px] sm:text-xs">
+            <Badge variant="info" dot className="whitespace-nowrap text-xs">
               Rented
             </Badge>
           ) : (
-            <Badge variant="neutral" className="whitespace-nowrap text-[10px] sm:text-xs">
+            <Badge variant="neutral" className="whitespace-nowrap text-xs">
               Available
             </Badge>
           )}
@@ -169,7 +169,7 @@ export function MobileMachineCard({
 
       {/* Structured Key Specs Inset Well */}
       <div className="p-3 rounded-xl bg-[var(--color-hairline-soft-surface)] border border-[var(--color-hairline)] text-xs flex flex-col gap-2.5">
-        <div className="grid grid-cols-2 gap-2 text-[11px]">
+        <div className="grid grid-cols-2 gap-2 text-xs">
           <div
             onClick={(e) => {
               if (onViewHistory) {
@@ -206,7 +206,7 @@ export function MobileMachineCard({
               onViewAssignments(machine);
             }
           }}
-          className={`pt-2 border-t border-[var(--color-hairline)] grid grid-cols-2 gap-2 text-[11px] ${
+          className={`pt-2 border-t border-[var(--color-hairline)] grid grid-cols-2 gap-2 text-xs ${
             onViewAssignments ? "cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-lg p-1 -m-1 transition-colors" : ""
           }`}
           title={onViewAssignments ? "Tap to inspect 24h shift coverage" : undefined}
@@ -227,12 +227,7 @@ export function MobileMachineCard({
               const count = sups.length;
               const visible = sups.slice(0, 3);
               const remaining = count > 3 ? count - 3 : 0;
-              const textSize =
-                count === 1
-                  ? "text-xs font-semibold"
-                  : count === 2
-                  ? "text-[11px] leading-tight font-semibold"
-                  : "text-[10px] leading-[1.25] font-semibold";
+              const textSize = "text-xs font-semibold";
 
               return (
                 <div className="flex flex-col gap-0.5 min-w-0" title={sups.map((s) => s.full_name).join(", ")}>
@@ -244,7 +239,7 @@ export function MobileMachineCard({
                           {s.full_name}
                         </span>
                         {isLast && remaining > 0 && (
-                          <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 shrink-0">
+                          <span className="text-xs font-bold px-1 py-0.2 rounded bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20 shrink-0">
                             +{remaining}
                           </span>
                         )}
@@ -271,12 +266,7 @@ export function MobileMachineCard({
               const count = ops.length;
               const visible = ops.slice(0, 3);
               const remaining = count > 3 ? count - 3 : 0;
-              const textSize =
-                count === 1
-                  ? "text-xs font-semibold"
-                  : count === 2
-                  ? "text-[11px] leading-tight font-semibold"
-                  : "text-[10px] leading-[1.25] font-semibold";
+              const textSize = "text-xs font-semibold";
 
               return (
                 <div className="flex flex-col gap-0.5 min-w-0" title={ops.map((o) => o.full_name).join(", ")}>
@@ -288,7 +278,7 @@ export function MobileMachineCard({
                           {o.full_name}
                         </span>
                         {isLast && remaining > 0 && (
-                          <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
+                          <span className="text-xs font-bold px-1 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
                             +{remaining}
                           </span>
                         )}

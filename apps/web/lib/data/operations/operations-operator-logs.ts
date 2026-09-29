@@ -66,6 +66,8 @@ const OPERATOR_LOG_EXACT_PROJECTION = `
   normal_working_hours,
   is_breakdown,
   shift,
+  shift_code,
+  shift_scheduled_minutes,
   location,
   remarks,
   conflict_flag,
@@ -92,7 +94,7 @@ const OPERATOR_LOG_EXACT_PROJECTION = `
 export const getOperationsOperatorLogsData = cache(
   async (params: OperationsOperatorLogsParams = {}): Promise<OperationsOperatorLogsResult> => {
     const page = Math.max(1, Number(params.page) || 1);
-    const pageSize = Math.max(1, Number(params.pageSize) || 20);
+    const pageSize = Math.max(1, Number(params.pageSize) || 500);
     const fromIndex = (page - 1) * pageSize;
     const toIndex = fromIndex + pageSize - 1;
     const sort = params.sort || "date-desc";

@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   conflictMeta: {
-    fontSize: 11,
+    fontSize: 12.5,
     marginTop: 2,
   },
   errorBox: {

@@ -268,7 +268,7 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
                   <View style={[styles.divider, { backgroundColor: theme.colors.hairline }]} />
                   <View style={styles.conflictEntityRow}>
                     <AlertTriangle size={14} color={isDark ? '#f87171' : '#dc2626'} />
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: isDark ? '#f87171' : '#b91c1c' }}>
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: isDark ? '#f87171' : '#b91c1c' }}>
                       Conflicting Equipment: {conflictDetails.conflictingEntity}
                     </Text>
                   </View>
@@ -311,7 +311,7 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
                 ]}
               >
                 <AlertTriangle size={14} color={isDark ? '#f87171' : '#dc2626'} />
-                <Text style={{ color: isDark ? '#f87171' : '#b91c1c', fontSize: 11, fontWeight: '600', flex: 1 }}>{error}</Text>
+                <Text style={{ color: isDark ? '#f87171' : '#b91c1c', fontSize: 12.5, fontWeight: '600', flex: 1 }}>{error}</Text>
               </View>
             ) : null}
 
@@ -330,11 +330,11 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Check size={14} color={action === 'acknowledge' ? (isDark ? '#38bdf8' : '#0284c7') : theme.colors.mute} />
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: action === 'acknowledge' ? (isDark ? '#38bdf8' : '#0369a1') : theme.colors.mute }}>
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: action === 'acknowledge' ? (isDark ? '#38bdf8' : '#0369a1') : theme.colors.mute }}>
                     Acknowledge
                   </Text>
                 </View>
-                <Text style={{ fontSize: 10, color: theme.colors.mute, marginTop: 4 }}>
+                <Text style={{ fontSize: 12, color: theme.colors.mute, marginTop: 4 }}>
                   {conflictDetails.resolutionGuidance.acknowledgeAdvice}
                 </Text>
               </TouchableOpacity>
@@ -351,11 +351,11 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <Clock size={14} color={action === 'adjust' ? (isDark ? '#fbbf24' : '#d97706') : theme.colors.mute} />
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: action === 'adjust' ? (isDark ? '#fbbf24' : '#b45309') : theme.colors.mute }}>
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: action === 'adjust' ? (isDark ? '#fbbf24' : '#b45309') : theme.colors.mute }}>
                     Adjust Time
                   </Text>
                 </View>
-                <Text style={{ fontSize: 10, color: theme.colors.mute, marginTop: 4 }}>
+                <Text style={{ fontSize: 12, color: theme.colors.mute, marginTop: 4 }}>
                   {conflictDetails.resolutionGuidance.adjustAdvice}
                 </Text>
               </TouchableOpacity>
@@ -392,7 +392,7 @@ export const MobileConflictResolutionModal: React.FC<MobileConflictResolutionMod
                     <Info size={13} color={adjustedCalculation.valid ? (isDark ? '#34d399' : '#059669') : (isDark ? '#f87171' : '#dc2626')} />
                     <Text
                       style={{
-                        fontSize: 11,
+                        fontSize: 12.5,
                         fontWeight: '600',
                         color: adjustedCalculation.valid ? (isDark ? '#34d399' : '#047857') : (isDark ? '#f87171' : '#b91c1c'),
                         flex: 1,
@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   subtitle: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '600',
     marginTop: 2,
   },
@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   severityPillText: {
-    fontSize: 9,
+    fontSize: 12,
     fontWeight: '800',
     color: '#ffffff',
     letterSpacing: 0.5,
@@ -498,16 +498,16 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   otChipText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
   },
   alertHeading: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '800',
     marginTop: 2,
   },
   alertNarrative: {
-    fontSize: 11,
+    fontSize: 12.5,
     lineHeight: 16,
     fontWeight: '500',
   },
@@ -518,7 +518,7 @@ const styles = StyleSheet.create({
     marginBottom: spacingNumeric.sm,
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '800',
     marginBottom: 6,
   },
@@ -530,13 +530,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   summaryLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
   summaryValue: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
     marginTop: 2,
   },
@@ -560,7 +560,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   riskTitle: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '800',
   },
   bulletRow: {
@@ -569,13 +569,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   bulletDot: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    lineHeight: 15,
+    lineHeight: 16,
   },
   bulletText: {
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 12.5,
+    lineHeight: 16,
     flex: 1,
   },
   divider: {
@@ -595,7 +595,7 @@ const styles = StyleSheet.create({
     maxHeight: 460,
   },
   label: {
-    fontSize: 11,
+    fontSize: 13.5,
     fontWeight: '700',
     marginBottom: 6,
   },

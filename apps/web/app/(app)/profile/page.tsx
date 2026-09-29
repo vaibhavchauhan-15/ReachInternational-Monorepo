@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ExternalLink } from "lucide-react";
 import { verifySession } from "@/lib/dal";
 import { getUserDetail, getMyPendingProfileRequest } from "@/lib/data/users";
 import { getUserDocumentsAction, getDocumentTypesAction } from "@/app/actions/documents";
@@ -8,9 +10,31 @@ import { ProfileEditButton } from "@/components/profile/ProfileEditButton";
 import { ProfilePendingBanner } from "@/components/profile/ProfilePendingBanner";
 import { AadhaarProfileField } from "@/components/profile/AadhaarProfileField";
 import { ProfileDocumentsSection } from "@/components/profile/ProfileDocumentsSection";
+import { ProfileFieldCopyButton } from "@/components/profile/ProfileFieldCopyButton";
+import {
+  AnimatedBriefcase,
+  AnimatedCreditCard,
+  AnimatedBuilding,
+  AnimatedShieldCheck,
+  AnimatedMapPin,
+  AnimatedPhone,
+  AnimatedUser,
+  AnimatedClock,
+  AnimatedCalendar,
+} from "@/components/ui/animated-icons";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
+
+const SECTION_ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+  briefcase: AnimatedBriefcase,
+  "credit-card": AnimatedCreditCard,
+  building: AnimatedBuilding,
+  shield: AnimatedShieldCheck,
+  "map-pin": AnimatedMapPin,
+  phone: AnimatedPhone,
+  user: AnimatedUser,
+};
 
 export default async function ProfilePage() {
   const { userId } = await verifySession();
@@ -29,7 +53,9 @@ export default async function ProfilePage() {
   const roleMeta = ROLE_CONFIG[user.role] || {
     label: user.role.replace("_", " "),
     badgeClass: "bg-neutral-500/10 text-neutral-600 dark:text-neutral-400 border-neutral-500/20",
+    icon: AnimatedUser,
   };
+  const RoleIcon = roleMeta.icon || AnimatedUser;
 
   return (
     <div className="max-w-4xl mx-auto space-y-5 pb-12 select-none">
@@ -48,15 +74,28 @@ export default async function ProfilePage() {
               <p className="text-xs text-[var(--color-mute)] break-all mt-0.5 select-text">
                 {view.email}
               </p>
-              <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <div className="mt-2.5 flex items-center gap-2 flex-wrap">
                 <span
                   className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${roleMeta.badgeClass}`}
                 >
+                  <RoleIcon size={12} />
                   {roleMeta.label}
                 </span>
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 uppercase">
                   {view.status}
                 </span>
+                {/* Shift Timing Quick Badge */}
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
+                  <AnimatedClock size={12} />
+                  <span>{view.shiftTimingDisplay}</span>
+                </span>
+                {/* Joined Date Quick Badge */}
+                {view.joinedDateDisplay && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-neutral-500/10 text-neutral-600 dark:text-neutral-400 border border-neutral-500/20">
+                    <AnimatedCalendar size={12} />
+                    <span>Joined {view.joinedDateDisplay}</span>
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -78,51 +117,83 @@ export default async function ProfilePage() {
 
       {/* ─── Detail Sections Responsive 2-Col Grid ─── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {view.sections.map((section) => (
-          <section
-            key={section.title}
-            aria-label={section.title}
-            className="border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] rounded-2xl p-4 sm:p-5 shadow-xs"
-          >
-            <h2 className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)] mb-2">
-              {section.title}
-            </h2>
-            <dl className="divide-y divide-[var(--color-hairline)]">
-              {section.rows.map((row) => {
-                const isIdentityOrPhone =
-                  row.label === "Aadhaar" ||
-                  row.label === "Driving licence" ||
-                  row.label === "Mobile";
-                const isAadhaar = row.label === "Aadhaar";
+        {view.sections.map((section) => {
+          const SectionIcon = SECTION_ICONS[section.iconName] || AnimatedUser;
 
-                return (
-                  <div
-                    key={row.label}
-                    className="py-2.5 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs"
-                  >
-                    <dt className="font-medium text-[var(--color-mute)] shrink-0 sm:w-1/3">
-                      {row.label}
-                    </dt>
-                    <dd
-                      className={`font-bold text-[var(--color-ink)] break-words sm:w-2/3 sm:text-right select-text ${
-                        isIdentityOrPhone ? "font-mono tracking-tight" : ""
-                      }`}
+          return (
+            <section
+              key={section.title}
+              aria-label={section.title}
+              data-hover-parent
+              className="border border-[var(--color-hairline)] bg-[var(--color-canvas-elevated)] rounded-2xl p-4 sm:p-5 shadow-xs transition-colors"
+            >
+              <div className="flex items-center gap-2 pb-2 mb-2 border-b border-[var(--color-hairline)]/60">
+                <SectionIcon size={16} className="text-sky-600 dark:text-sky-400 shrink-0" />
+                <h2 className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-mute)]">
+                  {section.title}
+                </h2>
+              </div>
+              <dl className="divide-y divide-[var(--color-hairline)]">
+                {section.rows.map((row) => {
+                  const isAadhaar = row.label === "Aadhaar";
+
+                  return (
+                    <div
+                      key={row.label}
+                      className="py-2.5 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 text-xs"
                     >
-                      {isAadhaar && user.aadhaar_number ? (
-                        <AadhaarProfileField
-                          aadhaarNumber={user.aadhaar_number}
-                          maskedFallback={row.value}
-                        />
-                      ) : (
-                        row.value
-                      )}
-                    </dd>
-                  </div>
-                );
-              })}
-            </dl>
-          </section>
-        ))}
+                      <dt className="font-medium text-[var(--color-mute)] shrink-0 sm:w-1/3">
+                        {row.label}
+                      </dt>
+                      <dd
+                        className={`font-bold text-[var(--color-ink)] break-words sm:w-2/3 sm:text-right flex items-center justify-start sm:justify-end gap-1.5 select-text ${
+                          row.isMonospace ? "font-mono tracking-tight" : ""
+                        }`}
+                      >
+                        {isAadhaar && user.aadhaar_number ? (
+                          <AadhaarProfileField
+                            aadhaarNumber={user.aadhaar_number}
+                            maskedFallback={row.value}
+                          />
+                        ) : row.href ? (
+                          <Link
+                            href={row.href}
+                            className="text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center gap-1 font-semibold"
+                          >
+                            <span>{row.value}</span>
+                            <ExternalLink size={12} className="shrink-0" />
+                          </Link>
+                        ) : (
+                          <>
+                            {row.badge ? (
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                  row.badge.variant === "warning"
+                                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                                    : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                                }`}
+                              >
+                                {row.badge.label}
+                              </span>
+                            ) : (
+                              <span>{row.value}</span>
+                            )}
+                            {row.copyable && row.copyValue && (
+                              <ProfileFieldCopyButton
+                                value={row.copyValue}
+                                label={row.label}
+                              />
+                            )}
+                          </>
+                        )}
+                      </dd>
+                    </div>
+                  );
+                })}
+              </dl>
+            </section>
+          );
+        })}
       </div>
 
       {/* ─── Identity Document Uploads ─── */}

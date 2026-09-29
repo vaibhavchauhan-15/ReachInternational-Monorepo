@@ -124,8 +124,9 @@ export function buildPdfHtmlStyles(options: PdfHtmlTemplateOptions = {}): string
     th {
       background-color: #f3f4f6;
       border: 1px solid #171717;
-      padding: 6px 3px;
-      font-size: 9px;
+      padding: 3.5px 2px;
+      font-size: 8px;
+      line-height: 1.15;
       text-transform: uppercase;
       font-weight: 900;
       text-align: center;
@@ -138,10 +139,16 @@ export function buildPdfHtmlStyles(options: PdfHtmlTemplateOptions = {}): string
       border: 1px solid #d4d4d4;
       vertical-align: middle;
       text-align: center;
-      padding: 5px 4px;
+      padding: 2.5px 2px;
+      font-size: 8px;
+      line-height: 1.15;
     }
     tr {
       page-break-inside: avoid;
+    }
+    .day-group {
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
     }
     .signatures {
       display: grid;

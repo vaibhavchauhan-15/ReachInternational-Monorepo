@@ -495,7 +495,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   zoomNotice: {
-    fontSize: 11,
+    fontSize: 12.5,
   },
   webViewWrapper: {
     flex: 1,

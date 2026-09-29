@@ -715,7 +715,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   badgeText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     textTransform: 'uppercase',
   },
@@ -726,9 +726,9 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 14,
     textAlign: 'center',
-    lineHeight: 18,
+    lineHeight: 19,
     paddingHorizontal: 12,
   },
   formCard: {
@@ -749,19 +749,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   stepPill: {
-    width: 20,
-    height: 20,
+    width: 22,
+    height: 22,
     borderRadius: 6,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 8,
   },
   stepNumber: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
   },
   sectionTitle: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -774,7 +774,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   shiftBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
   },
@@ -796,7 +796,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   label: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '600',
     marginBottom: 6,
   },
@@ -818,11 +818,11 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   selectTriggerText: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '600',
   },
   selectTriggerDesc: {
-    fontSize: 11,
+    fontSize: 12.5,
     marginTop: 2,
   },
   errorBox: {
@@ -832,7 +832,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   errorText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   noticeBox: {

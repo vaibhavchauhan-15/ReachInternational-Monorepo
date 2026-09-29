@@ -5,11 +5,13 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { TAGS, CACHE_TIERS } from "@/lib/cache";
 import { CLIENT_KEYS } from "@reachinternational/utils";
 import type { CRMClient } from "@/lib/types/database";
+import type { ClientShiftCode } from "@reachinternational/types";
 
 // ─── Section Interfaces ──────────────────────────────────────────────────────
 
 export interface ClientSummaryData {
   id: string;
+  client_id: string;
   code: string;
   company_name: string;
   contact_person: string | null;
@@ -21,6 +23,7 @@ export interface ClientSummaryData {
   created_at: string;
   updated_at: string;
   machine_count: number;
+  maintenance_allowance_minutes?: number;
 }
 
 export interface ClientLocationData {
@@ -126,13 +129,28 @@ export interface ClientDetailResponse {
 }
 
 export const CLIENT_DETAIL_COLUMNS =
-  "id, code, company_name, contact_person, phone, gstin, pan_number, street, city, district, state, pincode, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode, status, deleted_at, created_at, updated_at";
+  "id, client_id, code, company_name, contact_person, phone, gstin, pan_number, street, city, district, state, pincode, is_billing_address_different, billing_address, billing_city, billing_district, billing_state, billing_pincode, status, deleted_at, created_at, updated_at, maintenance_allowance_minutes";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isValidUuid(id?: string | null): boolean {
   if (!id || typeof id !== "string") return false;
   return UUID_REGEX.test(id.trim());
+}
+
+export async function resolveClientId(idOrCode: string): Promise<string | null> {
+  if (!idOrCode || typeof idOrCode !== "string") return null;
+  const trimmed = idOrCode.trim();
+  if (isValidUuid(trimmed)) return trimmed;
+
+  const supabase = createSupabaseAdminClient();
+  const { data } = await supabase
+    .from("clients")
+    .select("id")
+    .or(`client_id.ilike.${trimmed},code.ilike.${trimmed}`)
+    .maybeSingle();
+
+  return data?.id || null;
 }
 
 // ─── 1. Client Summary (Immediate) ───────────────────────────────────────────
@@ -146,7 +164,7 @@ export function getCachedClientSummary(id: string) {
       const [clientRes, countRes] = await Promise.all([
         supabase
           .from("clients")
-          .select("id, code, company_name, contact_person, phone, gstin, pan_number, status, deleted_at, created_at, updated_at")
+          .select("id, client_id, code, company_name, contact_person, phone, gstin, pan_number, status, deleted_at, created_at, updated_at, maintenance_allowance_minutes")
           .eq("id", id)
           .single(),
         supabase
@@ -163,6 +181,7 @@ export function getCachedClientSummary(id: string) {
       const raw = clientRes.data;
       return {
         id: raw.id,
+        client_id: raw.client_id || raw.code,
         code: raw.code,
         company_name: raw.company_name,
         contact_person: raw.contact_person,
@@ -174,6 +193,7 @@ export function getCachedClientSummary(id: string) {
         created_at: raw.created_at,
         updated_at: raw.updated_at,
         machine_count: countRes.count ?? 0,
+        maintenance_allowance_minutes: raw.maintenance_allowance_minutes ?? 0,
       };
     },
     [CLIENT_KEYS.detailSummary(id)],
@@ -538,6 +558,42 @@ export function getCachedClientAuditLogs(id: string, limit = 30) {
 export const getClientAuditLogs = cache(
   async (id: string, limit = 30): Promise<ClientAuditItem[]> => {
     return getCachedClientAuditLogs(id, limit);
+  }
+);
+
+// ─── 8. Client Shift Codes (For Tab & Operational Config) ──────────────────
+
+export function getCachedClientShiftCodes(id: string) {
+  return unstable_cache(
+    async (): Promise<ClientShiftCode[]> => {
+      if (!isValidUuid(id)) return [];
+
+      const supabase = createSupabaseAdminClient();
+      const { data, error } = await supabase
+        .from("client_shift_codes")
+        .select("*")
+        .eq("client_id", id)
+        .order("display_order", { ascending: true })
+        .order("code", { ascending: true });
+
+      if (error) {
+        console.error("Error in getClientShiftCodes:", error.message);
+        return [];
+      }
+
+      return (data || []) as ClientShiftCode[];
+    },
+    [CLIENT_KEYS.detail(id), "shift_codes"],
+    {
+      revalidate: CACHE_TIERS.CLASS_B_FLEET,
+      tags: [TAGS.clientDetail(id), TAGS.clients],
+    }
+  )();
+}
+
+export const getClientShiftCodes = cache(
+  async (id: string): Promise<ClientShiftCode[]> => {
+    return getCachedClientShiftCodes(id);
   }
 );
 

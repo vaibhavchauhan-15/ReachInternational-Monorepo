@@ -7,16 +7,17 @@ import {
   AnimatedMapPin,
   AnimatedReceipt,
 } from "@/components/ui/animated-icons";
-import { AlertCircle, Save } from "lucide-react";
+import { AlertCircle, Save, Lock, Wrench } from "lucide-react";
 import type { CRMClient } from "@/lib/types/database";
 import { createClientAction, updateClientAction, type ClientFormState } from "@/app/actions/clients";
-import { Button, Input, Switch } from "@/components/ui";
+import { Button, Input, Switch, CustomTimePicker } from "@/components/ui";
+import { invalidateClientShiftsCache } from "@/lib/cache/client-shifts-cache";
 
 interface ClientModalProps {
   isOpen: boolean;
   onClose: () => void;
   client?: CRMClient | null;
-  onSuccess?: () => void;
+  onSuccess?: (updatedClient?: CRMClient) => void;
 }
 
 export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalProps) {
@@ -47,6 +48,11 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
   const [billingState, setBillingState] = useState("");
   const [billingPincode, setBillingPincode] = useState("");
 
+  // Monthly Maintenance Allowance (managed with CustomTimePicker)
+  const [allowanceHours, setAllowanceHours] = useState(0);
+  const [allowanceMinutes, setAllowanceMinutes] = useState(0);
+  const [allowanceTime, setAllowanceTime] = useState("00:00");
+
   const formContainerRef = useRef<HTMLFormElement>(null);
   const billingSectionRef = useRef<HTMLDivElement>(null);
 
@@ -70,6 +76,14 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
       setBillingDistrict(client.billing_district || "");
       setBillingState(client.billing_state || "");
       setBillingPincode(client.billing_pincode || "");
+
+      // Load maintenance allowance from stored minutes
+      const totalMin = client.maintenance_allowance_minutes ?? 0;
+      const h = Math.floor(totalMin / 60);
+      const m = totalMin % 60;
+      setAllowanceHours(h);
+      setAllowanceMinutes(m);
+      setAllowanceTime(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
     } else {
       setCompanyName("");
       setContactPerson("");
@@ -87,9 +101,26 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
       setBillingDistrict("");
       setBillingState("");
       setBillingPincode("");
+      setAllowanceHours(0);
+      setAllowanceMinutes(0);
+      setAllowanceTime("00:00");
     }
     setFormState({});
   }, [client, isOpen]);
+
+  const handleAllowanceTimeChange = (val: string) => {
+    setAllowanceTime(val);
+    if (!val || !val.includes(":")) {
+      setAllowanceHours(0);
+      setAllowanceMinutes(0);
+      return;
+    }
+    const [hStr, mStr] = val.split(":");
+    const h = parseInt(hStr, 10) || 0;
+    const m = parseInt(mStr, 10) || 0;
+    setAllowanceHours(h);
+    setAllowanceMinutes(m);
+  };
 
   if (!isOpen) return null;
 
@@ -129,6 +160,9 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
     formData.append("billingState", billingState);
     formData.append("billingPincode", billingPincode);
     formData.append("status", client?.status || "active");
+    // Compute total allowance in minutes from hours + minutes inputs
+    const totalAllowanceMinutes = Math.max(0, (allowanceHours * 60) + allowanceMinutes);
+    formData.append("maintenanceAllowanceMinutes", String(totalAllowanceMinutes));
 
     // Validate all required fields
     const missingFields: string[] = [];
@@ -166,7 +200,10 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
     if (res.error) {
       setFormState(res);
     } else if (res.success) {
-      onSuccess?.();
+      if (client?.id) {
+        invalidateClientShiftsCache(client.id);
+      }
+      onSuccess?.(res.client);
       onClose();
     }
   }
@@ -178,7 +215,7 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
         <div className="flex items-center justify-between border-b border-[var(--color-hairline)] pb-4 shrink-0">
           <div>
             <h3 className="text-lg font-bold text-[var(--color-ink)] tracking-tight">
-              {isEditing ? `Edit Client (${client?.code || "Client Details"})` : "Add New Client"}
+              {isEditing ? `Edit Client (${client?.client_id || client?.code || "Client Details"})` : "Add New Client"}
             </h3>
           </div>
           <button
@@ -217,6 +254,24 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
             </div>
 
             <div className="space-y-3">
+              {isEditing && (client?.client_id || client?.code) && (
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="text-xs font-semibold text-[var(--color-mute)]">Client ID</span>
+                    <span className="inline-flex items-center gap-1 rounded bg-[var(--color-hairline-soft-surface)] px-1.5 py-0.5 text-[10px] font-mono text-[var(--color-mute)] border border-[var(--color-hairline)]">
+                      <Lock className="h-2.5 w-2.5 text-amber-500" />
+                      Permanent &amp; Immutable
+                    </span>
+                  </div>
+                  <Input
+                    value={client.client_id || client.code || ""}
+                    readOnly
+                    disabled
+                    className="font-mono bg-[var(--color-hairline-soft-surface)] text-[var(--color-ink)] opacity-80 cursor-not-allowed font-semibold"
+                  />
+                </div>
+              )}
+
               <Input
                 label="Company Name"
                 required
@@ -416,6 +471,44 @@ export function ClientModal({ isOpen, onClose, client, onSuccess }: ClientModalP
                 Billing address is currently configured to match the site location.
               </p>
             )}
+          </div>
+
+          {/* Section 4: Monthly Maintenance Allowance */}
+          <div
+            data-hover-parent
+            className="rounded-xl border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-3.5 space-y-3 transition-colors"
+          >
+            <div className="flex items-center justify-between pb-2 border-b border-[var(--color-hairline)]">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[var(--color-mute)]">
+                <Wrench size={16} className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                Monthly Maintenance Allowance
+              </div>
+              {(allowanceHours > 0 || allowanceMinutes > 0) && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-300">
+                  {allowanceHours > 0 && `${allowanceHours}h`}{allowanceHours > 0 && allowanceMinutes > 0 && " "}{allowanceMinutes > 0 && `${allowanceMinutes}m`} / machine / month
+                </span>
+              )}
+            </div>
+
+            <p className="text-[11px] text-[var(--color-mute)] leading-relaxed">
+              Breakdown time up to this limit per machine per calendar month will be classified as <span className="font-semibold text-amber-700 dark:text-amber-400">Maintenance</span> instead of B/D. Leave at 0 for no allowance.
+            </p>
+
+            <div className="grid grid-cols-1 gap-3">
+              <CustomTimePicker
+                label="Maintenance Allowance Window (Hours : Minutes)"
+                iconColor="text-amber-500"
+                value={allowanceTime}
+                onChange={handleAllowanceTimeChange}
+                showPeriod={false}
+                maxHours={744}
+                minHours={0}
+                hourPlaceholder="00"
+                minutePlaceholder="00"
+                error={formState.fieldErrors?.maintenanceAllowanceMinutes}
+                helperText="Format: HH:MM (e.g. 12:00 for 12 hours). Breakdowns up to this monthly limit per machine are classified as Maintenance instead of B/D. Leave at 00:00 for no allowance."
+              />
+            </div>
           </div>
 
           {/* Footer Actions */}

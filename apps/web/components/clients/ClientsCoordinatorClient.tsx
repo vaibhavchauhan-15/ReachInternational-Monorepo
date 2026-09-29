@@ -46,10 +46,6 @@ const EditClientModal = dynamic(
   { ssr: false }
 );
 
-const ClientDetailDrawer = dynamic(
-  () => import("./ClientDetailDrawer").then((mod) => mod.ClientDetailDrawer),
-  { ssr: false }
-);
 
 const DeleteDialog = dynamic(
   () => import("./ClientDeleteModal").then((mod) => mod.ClientDeleteModal),
@@ -396,8 +392,6 @@ export function ClientsCoordinatorClient({
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<CRMClient | null>(null);
 
-  const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
-  const [viewingClient, setViewingClient] = useState<CRMClient | null>(null);
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletingClient, setDeletingClient] = useState<CRMClient | null>(null);
@@ -1022,10 +1016,12 @@ export function ClientsCoordinatorClient({
     setIsEditModalOpen(true);
   }, []);
 
-  const handleOpenDetailDrawer = useCallback((client: CRMClient) => {
-    setViewingClient(client);
-    setIsDetailDrawerOpen(true);
-  }, []);
+  const handleOpenDetailDrawer = useCallback(
+    (client: CRMClient) => {
+      router.push(`/clients/${client.id}`);
+    },
+    [router]
+  );
 
   const handleOpenDeleteDialog = useCallback((client: CRMClient) => {
     setDeletingClient(client);
@@ -1604,22 +1600,6 @@ export function ClientsCoordinatorClient({
         />
       )}
 
-      {/* Lazy ClientDetailDrawer */}
-      {isDetailDrawerOpen && (
-        <ClientDetailDrawer
-          isOpen={isDetailDrawerOpen}
-          onClose={() => {
-            setIsDetailDrawerOpen(false);
-            setViewingClient(null);
-          }}
-          client={viewingClient}
-          onOpenEdit={(c) => {
-            setIsDetailDrawerOpen(false);
-            setViewingClient(null);
-            handleOpenEditModal(c);
-          }}
-        />
-      )}
 
       {/* Lazy DeleteDialog */}
       {isDeleteDialogOpen && (

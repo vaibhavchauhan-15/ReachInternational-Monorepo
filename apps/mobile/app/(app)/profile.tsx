@@ -5,7 +5,7 @@ import { useAuth } from '../../lib/auth/useAuth';
 import { Card, Badge, Button, useTheme, MobileHeader, ReachInternationalLogo, HeaderActionItem } from '../../components/ui';
 import { EditProfileModal } from '../../components/profile/EditProfileModal';
 import { spacingNumeric, radiusNumeric } from '@reachinternational/design-tokens';
-import { formatDate } from '@reachinternational/utils';
+import { formatDate, formatShiftTimingRange } from '@reachinternational/utils';
 import { supabase } from '../../lib/supabase';
 import * as Clipboard from 'expo-clipboard';
 import {
@@ -37,6 +37,9 @@ import {
   Copy,
   ExternalLink,
   CreditCard,
+  Calendar,
+  Building2,
+  Briefcase,
 } from 'lucide-react-native';
 import {
   getNotificationPermissionStatus,
@@ -61,14 +64,15 @@ export default function ProfileScreen() {
   const [showFullAadhaar, setShowFullAadhaar] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [userDocuments, setUserDocuments] = useState<any[]>([]);
+  const [assignedMachines, setAssignedMachines] = useState<any[]>([]);
 
   const fetchProfileData = useCallback(async () => {
     if (!user?.id) return;
     try {
-      const [userRes, reqRes, notifRes, docRes] = await Promise.all([
+      const [userRes, reqRes, notifRes, docRes, machineRes] = await Promise.all([
         supabase
           .from('users')
-          .select('id, full_name, phone, role, status, complete_profile, shift_start_time, shift_end_time, city, district, state, state_id, street, aadhaar_number, license_number, email, supervisor_id, monthly_salary, supervisor:users!supervisor_id(full_name)')
+          .select('id, employee_id, full_name, phone, role, status, complete_profile, shift_start_time, shift_end_time, city, district, state, state_id, street, aadhaar_number, license_number, email, supervisor_id, monthly_salary, daily_rate, ot_hourly_rate, doj, bank_account_number, bank_ifsc_code, total_pl_quota, pl_used_as_on_date, supervisor:users!supervisor_id(full_name)')
           .eq('id', user.id)
           .maybeSingle(),
         supabase
@@ -84,6 +88,11 @@ export default function ProfileScreen() {
           .select('id, user_id, document_type_code, storage_path, mime_type, file_size_bytes, created_at, updated_at')
           .eq('user_id', user.id)
           .order('document_type_code'),
+        supabase
+          .from('machines')
+          .select('id, machine_id, machine_name, model, status')
+          .or(`current_operator_id.eq.${user.id},operator_ids.cs.{${user.id}},current_supervisor_id.eq.${user.id},supervisor_ids.cs.{${user.id}}`)
+          .order('machine_id'),
       ]);
 
       if (userRes.data) {
@@ -92,6 +101,7 @@ export default function ProfileScreen() {
           address: userRes.data.street || null,
         });
       }
+      setAssignedMachines(machineRes.data || []);
       setPendingRequest(reqRes.data || null);
       setNotificationStatus(notifRes);
 
@@ -208,7 +218,33 @@ export default function ProfileScreen() {
 
   const fullName = profile.full_name || metadata.full_name || (user?.email ? user.email.split('@')[0] : 'User');
   const userPhone = profile.phone || metadata.phone || '—';
-  const shiftSchedule = profile.shift_time || metadata.shift_time || 'General / Day Shift (08:00 AM - 08:00 PM)';
+  
+  const shiftSchedule = useMemo(() => {
+    if (profile.shift_start_time && profile.shift_end_time) {
+      return formatShiftTimingRange(profile.shift_start_time, profile.shift_end_time);
+    }
+    if (profile.shift_time || metadata.shift_time) {
+      return profile.shift_time || metadata.shift_time;
+    }
+    return '09:00 AM — 06:00 PM';
+  }, [profile.shift_start_time, profile.shift_end_time, profile.shift_time, metadata.shift_time]);
+
+  const machinesDisplay = useMemo(() => {
+    if (assignedMachines && assignedMachines.length > 0) {
+      return assignedMachines.map((m: any) => `${m.machine_id} (${m.model || m.machine_name})`).join(', ');
+    }
+    if (profile.role === 'operator' || profile.role === 'supervisor') {
+      return 'None currently assigned';
+    }
+    return 'Fleet-wide Management';
+  }, [assignedMachines, profile.role]);
+
+  const dojDisplay = profile.doj ? formatDate(profile.doj) : profile.created_at ? formatDate(profile.created_at) : 'Not Configured';
+  const bankAccountDisplay = profile.bank_account_number || 'Not Configured';
+  const bankIfscDisplay = profile.bank_ifsc_code || 'Not Configured';
+  const plQuota = profile.total_pl_quota !== null && profile.total_pl_quota !== undefined ? Number(profile.total_pl_quota) : 12;
+  const plUsed = profile.pl_used_as_on_date !== null && profile.pl_used_as_on_date !== undefined ? Number(profile.pl_used_as_on_date) : 0;
+  const plBalanceDisplay = `${Math.max(0, plQuota - plUsed)} Days available (${plUsed} used)`;
   
   const city = profile.city || metadata.city;
   const district = profile.district || metadata.district;
@@ -348,12 +384,53 @@ export default function ProfileScreen() {
               </Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.profileName, { color: theme.colors.ink }]}>{fullName}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.profileName, { color: theme.colors.ink, flexShrink: 1 }]}>{fullName}</Text>
+                {Boolean(profile.employee_id || metadata.employee_id) && (
+                  <View style={{ backgroundColor: theme.colors.canvas, borderWidth: 1, borderColor: theme.colors.hairline, paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 4 }}>
+                    <Text style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: '700', color: theme.colors.ink }}>
+                      {profile.employee_id || metadata.employee_id}
+                    </Text>
+                  </View>
+                )}
+              </View>
               <Text style={[styles.profileEmail, { color: theme.colors.mute }]}>{user?.email || 'N/A'}</Text>
             </View>
           </View>
 
           <View style={styles.divider} />
+
+          {/* Employee ID Info Row */}
+          {Boolean(profile.employee_id || metadata.employee_id) && (
+            <>
+              <View style={styles.infoRow}>
+                <CreditCard size={14} color={theme.colors.link} />
+                <Text style={[styles.label, { color: theme.colors.mute }]}>Employee ID:</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    const empId = profile.employee_id || metadata.employee_id;
+                    if (Clipboard && Clipboard.setStringAsync) {
+                      Clipboard.setStringAsync(empId);
+                    }
+                    setCopiedField('Employee ID');
+                    setTimeout(() => setCopiedField(null), 2000);
+                  }}
+                  activeOpacity={0.7}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                >
+                  <Text style={[styles.value, { color: theme.colors.ink, fontFamily: 'monospace', fontWeight: '700' }]}>
+                    {profile.employee_id || metadata.employee_id}
+                  </Text>
+                  {copiedField === 'Employee ID' ? (
+                    <CheckCircle2 size={12} color="#10b981" />
+                  ) : (
+                    <Copy size={12} color={theme.colors.mute} />
+                  )}
+                </TouchableOpacity>
+              </View>
+              <View style={styles.divider} />
+            </>
+          )}
 
           {/* Role */}
           <View style={styles.infoRow}>
@@ -373,6 +450,28 @@ export default function ProfileScreen() {
             </Text>
           </View>
 
+          <View style={styles.divider} />
+
+          {/* Date of Joining */}
+          <View style={styles.infoRow}>
+            <Calendar size={14} color={theme.colors.link} />
+            <Text style={[styles.label, { color: theme.colors.mute }]}>Date of Joining:</Text>
+            <Text style={[styles.value, { color: theme.colors.ink }]}>
+              {dojDisplay}
+            </Text>
+          </View>
+
+          <View style={styles.divider} />
+
+          {/* Assigned Machinery */}
+          <View style={styles.infoRow}>
+            <Building2 size={14} color={theme.colors.link} />
+            <Text style={[styles.label, { color: theme.colors.mute }]}>Machinery:</Text>
+            <Text style={[styles.value, { color: theme.colors.ink }]} numberOfLines={2}>
+              {machinesDisplay}
+            </Text>
+          </View>
+
           {/* Supervisor (only if set) */}
           {Boolean(profile.supervisor?.full_name || metadata.supervisor_name) && (
             <>
@@ -387,8 +486,6 @@ export default function ProfileScreen() {
             </>
           )}
 
-
-
           <View style={styles.divider} />
 
           {/* Phone */}
@@ -396,6 +493,20 @@ export default function ProfileScreen() {
             <Phone size={14} color={theme.colors.mute} />
             <Text style={[styles.label, { color: theme.colors.mute }]}>Mobile Phone:</Text>
             <Text style={[styles.value, { color: theme.colors.ink }]}>{userPhone}</Text>
+            {userPhone !== '—' && (
+              <TouchableOpacity
+                style={styles.fieldActionBtn}
+                onPress={() => copyToClipboard(userPhone.replace(/\D/g, ''), "Phone")}
+                activeOpacity={0.7}
+                accessibilityLabel="Copy phone number"
+              >
+                {copiedField === "Phone" ? (
+                  <CheckCircle2 size={15} color="#10b981" />
+                ) : (
+                  <Copy size={15} color={theme.colors.mute} />
+                )}
+              </TouchableOpacity>
+            )}
           </View>
 
           <View style={styles.divider} />
@@ -410,18 +521,101 @@ export default function ProfileScreen() {
           </View>
 
           {/* Monthly Salary */}
-          {Boolean(dbUser?.monthly_salary && Number(dbUser.monthly_salary) > 0) && (
+          {Boolean(profile.monthly_salary) && (
             <>
               <View style={styles.divider} />
               <View style={styles.infoRow}>
                 <CreditCard size={14} color="#10b981" />
                 <Text style={[styles.label, { color: theme.colors.mute }]}>Monthly Salary:</Text>
                 <Text style={[styles.value, { color: '#10b981', fontWeight: '700' }]}>
-                  ₹{Number(dbUser?.monthly_salary).toLocaleString('en-IN')} / mo
+                  ₹{Number(profile.monthly_salary).toLocaleString('en-IN')} / mo
                 </Text>
               </View>
             </>
           )}
+
+          {Boolean(profile.daily_rate && Number(profile.daily_rate) > 0) && (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.infoRow}>
+                <CreditCard size={14} color="#10b981" />
+                <Text style={[styles.label, { color: theme.colors.mute }]}>Daily Wage:</Text>
+                <Text style={[styles.value, { color: theme.colors.ink }]}>
+                  ₹{Number(profile.daily_rate).toLocaleString('en-IN')} / day
+                </Text>
+              </View>
+            </>
+          )}
+
+          {Boolean(profile.ot_hourly_rate && Number(profile.ot_hourly_rate) > 0) && (
+            <>
+              <View style={styles.divider} />
+              <View style={styles.infoRow}>
+                <Clock size={14} color="#10b981" />
+                <Text style={[styles.label, { color: theme.colors.mute }]}>OT Rate:</Text>
+                <Text style={[styles.value, { color: theme.colors.ink }]}>
+                  ₹{Number(profile.ot_hourly_rate).toLocaleString('en-IN')} / hr
+                </Text>
+              </View>
+            </>
+          )}
+
+          {/* Leave Quota & Balance */}
+          <View style={styles.divider} />
+          <View style={styles.infoRow}>
+            <Briefcase size={14} color={theme.colors.link} />
+            <Text style={[styles.label, { color: theme.colors.mute }]}>Leave Balance:</Text>
+            <Text style={[styles.value, { color: theme.colors.ink }]} numberOfLines={1}>
+              {plBalanceDisplay}
+            </Text>
+          </View>
+
+          {/* Banking Details */}
+          <View style={styles.divider} />
+          <View style={styles.infoRow}>
+            <Building size={14} color={theme.colors.link} />
+            <Text style={[styles.label, { color: theme.colors.mute }]}>Bank Account:</Text>
+            <Text style={[styles.value, { color: theme.colors.ink, fontFamily: 'monospace' }]} numberOfLines={1}>
+              {bankAccountDisplay}
+            </Text>
+            {bankAccountDisplay !== 'Not Configured' && (
+              <TouchableOpacity
+                style={styles.fieldActionBtn}
+                onPress={() => copyToClipboard(bankAccountDisplay, "Bank Account")}
+                activeOpacity={0.7}
+                accessibilityLabel="Copy bank account number"
+              >
+                {copiedField === "Bank Account" ? (
+                  <CheckCircle2 size={15} color="#10b981" />
+                ) : (
+                  <Copy size={15} color={theme.colors.mute} />
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.divider} />
+          <View style={styles.infoRow}>
+            <Building size={14} color={theme.colors.link} />
+            <Text style={[styles.label, { color: theme.colors.mute }]}>Bank IFSC:</Text>
+            <Text style={[styles.value, { color: theme.colors.ink, fontFamily: 'monospace' }]} numberOfLines={1}>
+              {bankIfscDisplay}
+            </Text>
+            {bankIfscDisplay !== 'Not Configured' && (
+              <TouchableOpacity
+                style={styles.fieldActionBtn}
+                onPress={() => copyToClipboard(bankIfscDisplay, "IFSC")}
+                activeOpacity={0.7}
+                accessibilityLabel="Copy IFSC code"
+              >
+                {copiedField === "IFSC" ? (
+                  <CheckCircle2 size={15} color="#10b981" />
+                ) : (
+                  <Copy size={15} color={theme.colors.mute} />
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
 
           <View style={styles.divider} />
 
@@ -471,6 +665,20 @@ export default function ProfileScreen() {
             <Text style={[styles.value, { color: theme.colors.ink, fontFamily: 'monospace' }]} numberOfLines={1}>
               {licenceDisplay}
             </Text>
+            {licenceDisplay !== 'Not Provided' && (
+              <TouchableOpacity
+                style={styles.fieldActionBtn}
+                onPress={() => copyToClipboard(licenceDisplay, "Licence")}
+                activeOpacity={0.7}
+                accessibilityLabel="Copy driving licence number"
+              >
+                {copiedField === "Licence" ? (
+                  <CheckCircle2 size={15} color="#10b981" />
+                ) : (
+                  <Copy size={15} color={theme.colors.mute} />
+                )}
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Identity Documents Status / Viewing */}
@@ -660,10 +868,10 @@ export default function ProfileScreen() {
                 <Trash2 size={16} color="#dc2626" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.ink }}>
+                <Text style={{ fontSize: 13.5, fontWeight: '700', color: theme.colors.ink }}>
                   Request Account Deletion
                 </Text>
-                <Text style={{ fontSize: 11, color: theme.colors.mute }}>
+                <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>
                   Permanent de-provisioning & personal data erasure
                 </Text>
               </View>
@@ -758,7 +966,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(220, 38, 38, 0.08)',
   },
   cancelRequestText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#dc2626',
   },
@@ -779,15 +987,15 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   profileName: {
-    fontSize: 16,
+    fontSize: 16.5,
     fontWeight: '800',
   },
   profileEmail: {
-    fontSize: 12,
+    fontSize: 12.5,
     marginTop: 1,
   },
   sectionEyebrow: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.8,
     marginBottom: spacingNumeric.xs,
@@ -797,8 +1005,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  label: { fontSize: 11, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3 },
-  value: { fontSize: 13, fontWeight: '700', flex: 1 },
+  label: { fontSize: 12.5, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.3 },
+  value: { fontSize: 13.5, fontWeight: '700', flex: 1 },
   divider: { height: 1, backgroundColor: 'rgba(150,150,150,0.15)', marginVertical: spacingNumeric.xs + 2 },
   brandFooter: {
     alignItems: 'center',
@@ -807,7 +1015,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   brandFooterText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '500',
     letterSpacing: 0.5,
   },
@@ -831,13 +1039,13 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   permName: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
     letterSpacing: -0.2,
   },
   permSub: {
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12.5,
+    lineHeight: 16,
   },
   inlineActionRow: {
     flexDirection: 'row',
@@ -862,11 +1070,11 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   docName: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
   },
   docMeta: {
-    fontSize: 10,
+    fontSize: 12,
     marginTop: 1,
     fontFamily: 'monospace',
   },
@@ -881,7 +1089,7 @@ const styles = StyleSheet.create({
     minHeight: 32,
   },
   viewDocBtnText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
   },
 });

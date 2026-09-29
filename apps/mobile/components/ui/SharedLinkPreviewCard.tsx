@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   brandTitle: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   domainText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '500',
   },
   closeBtn: {
@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   urlText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     fontWeight: '600',
   },

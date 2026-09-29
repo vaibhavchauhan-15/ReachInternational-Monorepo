@@ -28,10 +28,11 @@ export interface PaginatedClientsResponse {
  * Excludes heavy billing addresses, audit history, relational equipment, and machine logs.
  */
 export const CLIENT_LIST_COLUMNS =
-  "id, code, company_name, contact_person, phone, gstin, pan_number, street, city, district, state, pincode, is_billing_address_different, status, deleted_at";
+  "id, client_id, code, company_name, contact_person, phone, gstin, pan_number, street, city, district, state, pincode, is_billing_address_different, status, deleted_at, maintenance_allowance_minutes";
 
 const ALLOWED_SORT_COLUMNS: Record<string, string> = {
   company_name: "company_name",
+  client_id: "client_id",
   code: "code",
   contact_person: "contact_person",
   city: "city",
@@ -53,6 +54,7 @@ function formatClientRecords(records: any[]): CRMClient[] {
 
     return {
       ...client,
+      client_id: client.client_id || client.code,
       street,
       address: fullAddress,
       client_name: client.company_name,

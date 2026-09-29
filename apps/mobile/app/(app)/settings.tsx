@@ -620,7 +620,7 @@ export default function SettingsScreen() {
           <Text style={[styles.brandFooterText, { color: theme.colors.mute }]}>
             {BRAND_NAME} • {BRAND_TAGLINE}
           </Text>
-          <Text style={[styles.brandFooterText, { color: theme.colors.mute, fontSize: 11, marginTop: 2 }]}>
+          <Text style={[styles.brandFooterText, { color: theme.colors.mute, fontSize: 12, marginTop: 2 }]}>
             {BRAND_WEBSITE_DISPLAY} • {BRAND_EMAIL}
           </Text>
         </View>
@@ -995,8 +995,8 @@ export default function SettingsScreen() {
             {newPassword.length > 0 && (
               <View style={{ marginVertical: 4 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <Text style={{ fontSize: 11, color: theme.colors.mute }}>Password strength:</Text>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: strengthMeta.color }}>
+                  <Text style={{ fontSize: 12.5, color: theme.colors.mute }}>Password strength:</Text>
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: strengthMeta.color }}>
                     {strengthMeta.label}
                   </Text>
                 </View>
@@ -1025,13 +1025,13 @@ export default function SettingsScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2, marginBottom: 6 }}>
                 {passwordsMatch ? (
                   <>
-                    <CheckCircle2 size={13} color="#059669" />
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#059669' }}>Passwords match</Text>
+                    <CheckCircle2 size={14} color="#059669" />
+                    <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#059669' }}>Passwords match</Text>
                   </>
                 ) : (
                   <>
-                    <XCircle size={13} color="#e11d48" />
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#e11d48' }}>Passwords do not match</Text>
+                    <XCircle size={14} color="#e11d48" />
+                    <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#e11d48' }}>Passwords do not match</Text>
                   </>
                 )}
               </View>
@@ -1095,21 +1095,21 @@ export default function SettingsScreen() {
             <ScrollView style={{ maxHeight: 440 }} showsVerticalScrollIndicator={false}>
               <View style={{ marginBottom: spacingNumeric.sm, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Badge status="pending" customLabel="DATA SUBJECT RIGHT" />
-                <Text style={{ fontSize: 11, color: theme.colors.mute, fontWeight: '500' }}>
+                <Text style={{ fontSize: 12, color: theme.colors.mute, fontWeight: '500' }}>
                   Google Play Policy
                 </Text>
               </View>
 
-              <Text style={{ fontSize: 12, color: theme.colors.mute, lineHeight: 18, marginBottom: spacingNumeric.sm }}>
+              <Text style={{ fontSize: 13, color: theme.colors.mute, lineHeight: 18, marginBottom: spacingNumeric.sm }}>
                 Under Google Play policies and statutory data privacy regulations, you have the right to request permanent account de-provisioning and personal data erasure.
               </Text>
 
               {/* Data Purged */}
               <View style={[styles.deletionInfoCard, { borderColor: 'rgba(220, 38, 38, 0.25)', backgroundColor: 'rgba(220, 38, 38, 0.04)' }]}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: '#dc2626', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#dc2626', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>
                   Data Permanently Purged
                 </Text>
-                <Text style={{ fontSize: 11, color: theme.colors.ink, lineHeight: 16 }}>
+                <Text style={{ fontSize: 12.5, color: theme.colors.ink, lineHeight: 17 }}>
                   • Legal name, official email, and contact phone{'\n'}
                   • Authentication credentials and active sessions{'\n'}
                   • Masked Aadhaar and Driving Licence records{'\n'}
@@ -1120,10 +1120,10 @@ export default function SettingsScreen() {
 
               {/* Statutory Records Retained */}
               <View style={[styles.deletionInfoCard, { borderColor: 'rgba(217, 119, 6, 0.25)', backgroundColor: 'rgba(217, 119, 6, 0.04)', marginTop: 8 }]}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: '#d97706', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#d97706', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.4 }}>
                   Statutory Records Retained
                 </Text>
-                <Text style={{ fontSize: 11, color: theme.colors.ink, lineHeight: 16 }}>
+                <Text style={{ fontSize: 12.5, color: theme.colors.ink, lineHeight: 17 }}>
                   Under equipment safety statutes, historical machine hour meter logs (HMR), pre-shift safety checklists, and breakdown tickets are preserved in an anonymized format for auditing and regulatory insurance purposes.
                 </Text>
               </View>
@@ -1223,7 +1223,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   roleText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
   },
   editBtn: {
@@ -1268,29 +1268,29 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   userName: {
-    fontSize: 15,
+    fontSize: 15.5,
     fontWeight: '700',
   },
   userSubtext: {
-    fontSize: 12,
+    fontSize: 12.5,
     marginTop: 2,
   },
   userPhone: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
     marginTop: 1,
   },
   cardActionHint: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '600',
     marginTop: 4,
   },
   cardTitle: {
-    fontSize: 15,
+    fontSize: 15.5,
     fontWeight: '700',
   },
   cardSubtitle: {
-    fontSize: 12,
+    fontSize: 12.5,
     marginTop: 2,
   },
   sectionHeaderRow: {
@@ -1305,7 +1305,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
   },
   prefSubheading: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '500',
     marginBottom: 8,
   },
@@ -1325,7 +1325,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   themeOptionText: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   divider: {
@@ -1342,11 +1342,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   permName: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '600',
   },
   permDesc: {
-    fontSize: 11,
+    fontSize: 12.5,
     lineHeight: 16,
   },
   aboutInfoLine: {
@@ -1356,10 +1356,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   aboutLabel: {
-    fontSize: 12,
+    fontSize: 12.5,
   },
   aboutValue: {
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '600',
   },
   legalNavRow: {
@@ -1369,7 +1369,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   legalNavText: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '600',
   },
   brandFooter: {
@@ -1379,7 +1379,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacingNumeric.md,
   },
   brandFooterText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
   },
   toggleRow: {
@@ -1389,11 +1389,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   toggleLabel: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '600',
   },
   toggleDescription: {
-    fontSize: 11,
+    fontSize: 12.5,
     marginTop: 2,
     paddingRight: 8,
   },
@@ -1423,11 +1423,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   modalTitle: {
-    fontSize: 16,
+    fontSize: 16.5,
     fontWeight: '700',
   },
   modalSubtitle: {
-    fontSize: 12,
+    fontSize: 13,
     lineHeight: 17,
     marginBottom: 12,
   },
@@ -1458,7 +1458,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   fieldLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.6,
   },

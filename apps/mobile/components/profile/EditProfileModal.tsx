@@ -23,6 +23,7 @@ import {
   validateAadhaarNumber,
   validateLicenseNumber,
   parseProfileShiftTime,
+  formatTo12Hour,
 } from '@reachinternational/utils';
 import { ProfileUpdateSchema } from '@reachinternational/validation';
 import { notifyProfileUpdated, notifyProfileRequestSubmitted } from '../../lib/notifications';
@@ -76,7 +77,24 @@ function parseShiftTimes(shiftStr?: string | null): { start: string; end: string
     };
     return { start: normalize(matches[0]), end: normalize(matches[1]) };
   }
-  return { start: '08:00 AM', end: '08:00 PM' };
+  return { start: '09:00 AM', end: '06:00 PM' };
+}
+
+function resolveInitialShiftTimes(src: any, meta: any): { start: string; end: string } {
+  const start = src?.shift_start_time || meta?.shift_start_time;
+  const end = src?.shift_end_time || meta?.shift_end_time;
+  if (start && end) {
+    const s = formatTo12Hour(start);
+    const e = formatTo12Hour(end);
+    if (s && e) {
+      return { start: s, end: e };
+    }
+  }
+  const shiftStr = src?.shift_time || meta?.shift_time;
+  if (shiftStr) {
+    return parseShiftTimes(shiftStr);
+  }
+  return { start: '09:00 AM', end: '06:00 PM' };
 }
 
 export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: EditProfileModalProps) {
@@ -125,7 +143,7 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
       setFullName(src.full_name || meta.full_name || '');
       setPhone(src.phone || meta.phone || '');
       
-      const times = parseShiftTimes(src.shift_time || meta.shift_time);
+      const times = resolveInitialShiftTimes(src, meta);
       setStartTime(times.start);
       setEndTime(times.end);
       
@@ -535,10 +553,14 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
         }
       }
 
+      const parsedShift = parsed.data.shift_time ? parseProfileShiftTime(parsed.data.shift_time) : null;
+
       const payload = {
         full_name: parsed.data.full_name,
         phone: parsed.data.phone,
         shift_time: parsed.data.shift_time || null,
+        ...(parsedShift?.startTime ? { shift_start_time: parsedShift.startTime } : {}),
+        ...(parsedShift?.endTime ? { shift_end_time: parsedShift.endTime } : {}),
         street: street.trim() || null,
         address: street.trim() || null,
         city: parsed.data.city,
@@ -552,7 +574,6 @@ export function EditProfileModal({ visible, onClose, onSuccess, currentUser }: E
 
       if (isSuperAdmin) {
         // Direct update for Super Admin
-        const parsedShift = parsed.data.shift_time ? parseProfileShiftTime(parsed.data.shift_time) : null;
         const userTablePayload: Record<string, unknown> = {
           full_name: parsed.data.full_name,
           phone: parsed.data.phone,
@@ -970,7 +991,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   modalSubtitle: {
-    fontSize: 11,
+    fontSize: 13.5,
     marginTop: 1,
   },
   closeBtn: {
@@ -993,7 +1014,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   noticeText: {
-    fontSize: 11,
+    fontSize: 12.5,
     marginTop: 2,
     lineHeight: 15,
   },

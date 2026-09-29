@@ -2,6 +2,8 @@ import { z } from "zod";
 import {
   validateAadhaarNumber,
   validateLicenseNumber,
+  validateBankAccountNumber,
+  validateIfscCode,
   INDIAN_STATE_CODES,
 } from "@reachinternational/utils";
 
@@ -9,6 +11,34 @@ export const LoginSchema = z.object({
   email: z.string().trim().email("Invalid email address").max(255, "Email address cannot exceed 255 characters"),
   password: z.string().min(6, "Password must be at least 6 characters").max(128, "Password cannot exceed 128 characters"),
 });
+
+export const BankAccountNumberSchema = z
+  .string()
+  .trim()
+  .min(1, "Bank account number is required")
+  .superRefine((val, ctx) => {
+    const res = validateBankAccountNumber(val);
+    if (!res.isValid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: res.error || "Invalid bank account number",
+      });
+    }
+  });
+
+export const BankIfscSchema = z
+  .string()
+  .trim()
+  .min(1, "IFSC code is required")
+  .superRefine((val, ctx) => {
+    const res = validateIfscCode(val);
+    if (!res.isValid) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: res.error || "Invalid IFSC code",
+      });
+    }
+  });
 
 export const AadhaarFieldSchema = z
   .string()
@@ -77,6 +107,8 @@ export const SignupSchema = z.object({
   supervisor_id: z.string().trim().max(100).optional().nullable(),
   working_location_id: z.string().trim().max(100).optional().nullable(),
   monthly_salary: z.number().min(0, "Monthly salary must be positive").optional().nullable(),
+  bank_account_number: BankAccountNumberSchema,
+  bank_ifsc_code: BankIfscSchema,
   aadhaar_number: AadhaarRequiredFieldSchema,
   license_number: LicenseFieldSchema,
 }).superRefine((data, ctx) => {

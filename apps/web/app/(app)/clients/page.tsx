@@ -27,9 +27,8 @@ export const metadata: Metadata = {
  * 3. Current status (URL search param or default 'all')
  * 4. Current search (URL search param or default '')
  * 5. First page of clients (getClientList with exact lean projection)
- *
  * Strictly NOT loaded on initial load:
- * - Client details (deferred to ClientDetailDrawer)
+ * - Client details (deferred to dedicated Client Details Page /clients/[id])
  * - Location hierarchy (embedded cities_list in scalar KPI summary, 0 extra DB queries)
  * - Machines (0 machine table queries)
  * - Operators (0 operator queries)

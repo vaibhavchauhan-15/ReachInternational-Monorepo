@@ -62,7 +62,7 @@ export function Badge({
   ...props
 }: BadgeProps) {
   return (
-    <span className={`badge-base ${variantClasses[variant]} ${className}`} {...props}>
+    <span className={`badge-base text-xs font-semibold ${variantClasses[variant]} ${className}`} {...props}>
       {dot && <span className={`h-1.5 w-1.5 rounded-full ${dotColors[variant]}`} />}
       {children}
     </span>

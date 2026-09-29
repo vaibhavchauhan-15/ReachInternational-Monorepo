@@ -8,7 +8,7 @@ import { TAGS } from "@/lib/cache";
 import { formatMachineDatabaseError } from "@/lib/utils/machine-errors";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const MACHINE_ID_REGEX = /^RI-MC-\d{4,}$/i;
+const MACHINE_ID_REGEX = /^M\/C-\d{4,}$/i;
 
 export interface CreateMachineInput {
   machine_id?: string | null;
@@ -114,8 +114,8 @@ export async function createMachine(input: CreateMachineInput): Promise<Mutation
     if (!input.manufacturer?.trim()) errors.manufacturer = "Manufacturer is required.";
 
     let machineId = input.machine_id?.trim()?.toUpperCase() || null;
-    if (machineId && !MACHINE_ID_REGEX.test(machineId) && !/^[A-Z0-9\-]{3,20}$/.test(machineId)) {
-      errors.machine_id = "Machine ID format should be RI-MC-0001 or valid alphanumeric string.";
+    if (machineId && !MACHINE_ID_REGEX.test(machineId) && !/^[A-Z0-9\-\/]{3,20}$/.test(machineId)) {
+      errors.machine_id = "Machine ID format should be M/C-0001 or valid alphanumeric string.";
     }
 
     const healthStatus = input.health_status || "active";
@@ -143,12 +143,12 @@ export async function createMachine(input: CreateMachineInput): Promise<Mutation
       };
     }
 
-    // Auto-generate next RI-MC-XXXX if not provided
+    // Auto-generate next M/C-XXXX if not provided
     if (!machineId) {
       const { data: existingMachines } = await supabase
         .from("machines")
         .select("machine_id")
-        .like("machine_id", "RI-MC-%")
+        .like("machine_id", "M/C-%")
         .order("created_at", { ascending: false })
         .limit(100);
 
@@ -156,7 +156,7 @@ export async function createMachine(input: CreateMachineInput): Promise<Mutation
       if (existingMachines && existingMachines.length > 0) {
         for (const m of existingMachines) {
           if (m.machine_id) {
-            const match = m.machine_id.match(/^RI-MC-(\d+)$/i);
+            const match = m.machine_id.match(/^M\/C-(\d+)$/i);
             if (match) {
               const num = parseInt(match[1], 10);
               if (!isNaN(num) && num > maxNum) maxNum = num;
@@ -164,7 +164,7 @@ export async function createMachine(input: CreateMachineInput): Promise<Mutation
           }
         }
       }
-      machineId = `RI-MC-${String(maxNum + 1).padStart(4, "0")}`;
+      machineId = `M/C-${String(maxNum + 1).padStart(4, "0")}`;
     }
 
     const supervisor_ids = (input.supervisor_ids || []).filter(isValidUuid);
@@ -345,11 +345,16 @@ export async function updateMachine(id: string, input: UpdateMachineInput): Prom
       }
     }
 
+    if (input.machine_id?.trim() && previousMachine?.machine_id && input.machine_id.trim().toUpperCase() !== previousMachine.machine_id) {
+      return {
+        error: "Machine ID is immutable and cannot be changed.",
+        fieldErrors: { machine_id: "Machine ID cannot be edited." },
+      };
+    }
+
     const updatePayload: Record<string, any> = {
       updated_at: new Date().toISOString(),
     };
-
-    if (input.machine_id?.trim()) updatePayload.machine_id = input.machine_id.trim().toUpperCase();
     if (input.model?.trim()) updatePayload.model = input.model.trim();
     if (input.serial_number?.trim()) updatePayload.serial_number = input.serial_number.trim();
     if (input.year_of_mfg?.trim()) updatePayload.year_of_mfg = input.year_of_mfg.trim();
