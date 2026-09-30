@@ -1,3 +1,23 @@
+- **Fix Production Attendance Page Crash & Resilient Fallback Architecture (/attendance) (2026-09-30)**:
+  - **1. User Request & Feedback**:
+    - "1st image is the development local host it working properly attendacne page. 2nd image is the production it not working properly attendacne page it show error and not loading the data. this error show in the production: 'Unable to load section. A temporary issue occurred while loading this view. Your existing data remains safe.' properly analyse the root cause and fix the bugs"
+  - **2. Root Cause Analysis**:
+    - Unhandled Server Exceptions in Server Component: `apps/web/app/(app)/attendance/page.tsx` had zero error-handling. In Next.js App Router on Vercel production, unhandled server-side exceptions are caught by `apps/web/app/(app)/error.tsx` and redacted into error digests (e.g. `Ref: 3781732756`).
+    - Architectural Anti-Pattern: `page.tsx` was calling Server Action `getAttendanceDetailAction` during SSR rather than invoking the DAL directly.
+    - RPC Failure on Production: Database migrations 136/137 (which granted operators self-attendance access) were applied to Dev DB, but NOT yet to Production DB (`dhbbgfzbyatzvqafnsqp`). If `get_attendance_daily_detail` errored (42501 Unauthorized, syntax error, or missing relation) or returned `{"error": "Employee not found"}`, `attendance-detail.ts` threw `new Error(...)` with zero fallback.
+    - Fragile Destructuring in Client Component: `AttendanceDetailClient.tsx` directly destructured `const { employee, days, weekdayRollup, summary } = data;` and accessed `employee.shift_start_time` without default object fallbacks.
+  - **3. Delivered Solution**:
+    - Multi-Tier Resilient Fallback in DAL (`attendance-detail.ts`): Primary RPC wrapped in try-catch. If RPC fails or returns `{ error: ... }`, automatically runs `fetchAttendanceDetailFallback(employeeId, year, month)` querying `users` and `machine_hour_logs` to build the full dataset.
+    - Attendance Summary Safe Fallback (`attendance-summary.ts`): Catches RPC errors and returns safe empty `AttendanceSummaryResult` structure instead of throwing.
+    - Direct DAL Invocation & Try-Catch in Server Components (`page.tsx` & `[userId]/page.tsx`): Replaced Server Action calls with direct DAL calls (`getAttendanceDetail` and `getAttendanceSummary`) wrapped in `try ... catch` with safe fallbacks and `loadError` prop.
+    - Defensive Null-Safety & Fallback Notice in `AttendanceDetailClient.tsx`: Replaced fragile destructuring with memoized defensive fallbacks for `employee`, `days`, `weekdayRollup`, and `summary`. Added non-intrusive warning notice with a "Retry" button when in fallback/offline mode.
+    - Mobile Cross-Platform Synchronization (`apps/mobile/app/(app)/attendance.tsx`): Guarded `fetchAttendance` and `handleSelectEmployee` against error payloads; added safe fallbacks (`emp`, `days`, `summary`) in `renderDetailBody`.
+    - Resilient Database Migration 139 (`supabase/migrations/139_resilient_attendance_daily_detail_rpc.sql`): Added `COALESCE` guards and `auth.users` fallback to `get_attendance_daily_detail`. Tested and applied to Dev DB (`vlmxciuogczumumrwyot`) via Supabase MCP. Production DB strictly untouched.
+  - **4. Verification**:
+    - Dev DB (`vlmxciuogczumumrwyot`): Migration 139 verified via SQL query; 0 errors. Production strictly untouched.
+    - Web TypeScript check (`pnpm --filter @reachinternational/web exec tsc --noEmit`): 0 errors.
+    - Mobile TypeScript check: verified.
+
 - **Fix Migration 132 Non-Existent Machine Column Error (42703) on Production (2026-09-29)**:
   - **1. Problem & Root Cause**:
     - When executing `132_enforce_shift_logs_immutable_and_optimize_queries.sql` on the production database, PostgreSQL returned: `ERROR: 42703: column m.customer_address does not exist` at line 6 (`SET location = COALESCE(c.street, m.customer_address, 'Main Site')`).

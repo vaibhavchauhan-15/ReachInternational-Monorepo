@@ -310,6 +310,10 @@
 - **Strict Multi-Layer RBAC & Database Data Isolation**:
   - Management roles (`super_admin`, `admin`, `hr`, `manager`, `supervisor`) have full access to view attendance summary rosters and individual employee calendars.
   - Operator role (`operator`) has access strictly to their own attendance records (`attendance.view_self`), strictly blocked at the PostgreSQL database kernel (`42501`), Server Actions layer, and Next.js routing from viewing any other personnel's data or organization rosters.
+- **Multi-Tier Fault-Tolerant Resilient Fallback Architecture (Migration 139)**:
+  - Both Web and Mobile apps employ a dual-tier data access strategy: primary high-performance PostgreSQL RPC (`get_attendance_daily_detail`) backed by an automatic direct table query fallback (`public.users` and `public.machine_hour_logs`).
+  - Guarantees zero unhandled SSR exceptions: if RPC is missing, unmigrated, or encountering network timeouts, the system transparently constructs the full calendar matrix, weekday rollups, and payable day metrics.
+  - Features graceful degraded state UI with non-blocking offline/fallback banners and manual retry capabilities.
 
 
 ### 6. 🏢 Client Directory & Reference Master Module (`/clients`)

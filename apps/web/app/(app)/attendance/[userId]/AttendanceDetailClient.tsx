@@ -12,6 +12,7 @@ import {
   Modal,
   useToast,
 } from "@/components/ui";
+import { AlertCircle, RotateCcw } from "lucide-react";
 import {
   AnimatedUserCheck,
   AnimatedUserX,
@@ -37,6 +38,7 @@ interface AttendanceDetailClientProps {
   currentMonth: string;
   userRole?: string;
   isSelf?: boolean;
+  loadError?: string | null;
 }
 
 const STATUS_CHIP: Record<string, { label: string; name: string; color: string; cellBg: string; badgeVariant: "success" | "warning" | "error" | "neutral" }> = {
@@ -136,6 +138,7 @@ export function AttendanceDetailClient({
   currentMonth,
   userRole,
   isSelf,
+  loadError,
 }: AttendanceDetailClientProps) {
   const isOperator = userRole === "operator" || isSelf;
   const router = useRouter();
@@ -145,7 +148,44 @@ export function AttendanceDetailClient({
   const [viewMode, setViewMode] = useState<ViewMode>("calendar");
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
-  const { employee, days, weekdayRollup, summary } = data;
+  // Safe defensive extraction with robust fallbacks
+  const employee = useMemo(() => {
+    return {
+      id: data?.employee?.id || "",
+      employee_id: data?.employee?.employee_id || null,
+      full_name: data?.employee?.full_name || (isOperator ? "Operator" : "Employee"),
+      email: data?.employee?.email || null,
+      phone: data?.employee?.phone || null,
+      role: data?.employee?.role || "operator",
+      city: data?.employee?.city || null,
+      district: data?.employee?.district || null,
+      state: data?.employee?.state || null,
+      shift_start_time: data?.employee?.shift_start_time || "06:00:00",
+      shift_end_time: data?.employee?.shift_end_time || "14:00:00",
+    };
+  }, [data?.employee, isOperator]);
+
+  const days = useMemo(() => {
+    return Array.isArray(data?.days) ? data.days : [];
+  }, [data?.days]);
+
+  const weekdayRollup = useMemo(() => {
+    return Array.isArray(data?.weekdayRollup) ? data.weekdayRollup : [];
+  }, [data?.weekdayRollup]);
+
+  const summary = useMemo(() => {
+    return data?.summary || {
+      presentDays: 0,
+      absentDays: 0,
+      halfDays: 0,
+      weekOffs: 0,
+      disabledDays: 0,
+      totalWorkedMinutes: 0,
+      totalOtMinutes: 0,
+      totalBreakdownMinutes: 0,
+      payableDays: 0,
+    };
+  }, [data?.summary]);
 
   // Format month title (e.g. "September 2026")
   const [yearStr, monthStr] = currentMonth.split("-");
@@ -164,13 +204,13 @@ export function AttendanceDetailClient({
 
   // Compute shift duration in hours
   const shiftDurationHours = useMemo(() => {
-    const startMins = parseTimeToMinutes(employee.shift_start_time);
-    const endMins = parseTimeToMinutes(employee.shift_end_time);
+    const startMins = parseTimeToMinutes(employee?.shift_start_time);
+    const endMins = parseTimeToMinutes(employee?.shift_end_time);
     if (startMins !== null && endMins !== null && endMins > startMins) {
       return (endMins - startMins) / 60;
     }
     return 8; // standard 8h fallback
-  }, [employee.shift_start_time, employee.shift_end_time]);
+  }, [employee?.shift_start_time, employee?.shift_end_time]);
 
   // Derive per-day punch details (punchIn, punchOut, machine, location)
   const enrichedDays = useMemo(() => {
@@ -354,6 +394,24 @@ export function AttendanceDetailClient({
 
   return (
     <div className="flex flex-col gap-3.5 sm:gap-5 md:gap-6 pb-28 sm:pb-24 md:pb-8 px-2.5 sm:px-4 md:px-0">
+      {loadError && (
+        <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3.5 py-2.5 flex items-center justify-between gap-3 text-xs text-amber-700 dark:text-amber-300 print:hidden">
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertCircle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span className="truncate">Notice: Live attendance synchronization is currently in resilient cached/fallback mode.</span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.refresh()}
+            className="h-7 px-2 text-[11px] font-semibold text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 shrink-0 gap-1"
+          >
+            <RotateCcw className="w-3 h-3" />
+            <span>Retry</span>
+          </Button>
+        </div>
+      )}
+
       {/* 1. Desktop Page Header Toolbar (Hidden on mobile < md & when printing) */}
       <div className="hidden md:block print:hidden">
         <PageHeader

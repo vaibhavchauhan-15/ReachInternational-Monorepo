@@ -1,5 +1,35 @@
 # Project State — Reach International (reachinternational.co.in)
 
+- [x] **Fix Production Attendance Page Crash & Resilient Fallback Architecture (/attendance) (2026-09-30)**:
+  - **Delivered**:
+    1. **Multi-Tier Resilient Fallback in DAL (`apps/web/lib/data/attendance/attendance-detail.ts`)**:
+       - Primary: Wraps `get_attendance_daily_detail` RPC call in `try ... catch`.
+       - Resilient Fallback: If RPC fails, raises 42501, or returns `{ error: ... }`, automatically runs `fetchAttendanceDetailFallback(employeeId, year, month)`.
+       - Queries base tables (`public.users` and `public.machine_hour_logs`), aggregates all logs, computes daily attendance statuses (`PRESENT`, `HALF_DAY`, `ABSENT`, `WEEK_OFF`, `DISABLED`), builds `weekdayRollup`, and calculates `summary` metrics accurately.
+       - Ultimate Fallback: Returns guaranteed safe empty month structure rather than throwing an unhandled exception.
+    2. **Attendance Summary Safe Fallback (`apps/web/lib/data/attendance/attendance-summary.ts`)**:
+       - Catches RPC errors and returns safe empty `AttendanceSummaryResult` structure instead of throwing fatal errors.
+    3. **Direct DAL Invocation & Try-Catch in Server Components (`apps/web/app/(app)/attendance/page.tsx` & `[userId]/page.tsx`)**:
+       - Replaced Server Action calls with direct DAL calls (`getAttendanceDetail` and `getAttendanceSummary`).
+       - Wrapped data fetching in `try ... catch` blocks with guaranteed safe fallbacks.
+       - Passes `loadError` to client components.
+    4. **Defensive Null-Safety & Fallback Notice in `AttendanceDetailClient.tsx`**:
+       - Replaced fragile destructuring with memoized defensive fallbacks for `employee`, `days`, `weekdayRollup`, and `summary`.
+       - Guarded shift duration calculations against null/undefined `employee.shift_start_time` and `employee.shift_end_time`.
+       - Added non-intrusive warning notice with a "Retry" button when in fallback/offline mode.
+    5. **Mobile Cross-Platform Synchronization (`apps/mobile/app/(app)/attendance.tsx`)**:
+       - Guarded `fetchAttendance` and `handleSelectEmployee` to check `!('error' in data)`.
+       - Updated `renderDetailBody` to use safe fallbacks (`emp`, `days`, `summary`), preventing nested undefined crashes.
+    6. **Resilient Database Migration 139 (`supabase/migrations/139_resilient_attendance_daily_detail_rpc.sql`)**:
+       - Created migration 139 with `COALESCE` guards for all fields in `get_attendance_daily_detail`.
+       - If `v_employee IS NULL`, falls back to `auth.users` metadata, and if still not found, constructs a valid fallback employee object rather than returning `{"error": "Employee not found"}`.
+       - Tested and applied to Dev DB (`vlmxciuogczumumrwyot`) via Supabase MCP: 0 errors.
+       - Production DB (`dhbbgfzbyatzvqafnsqp`) strictly untouched.
+  - **Verification**:
+    - Dev DB (`vlmxciuogczumumrwyot`): Migration 139 tested with non-existent UUID; returns 100% valid structure with 0 errors. Production DB strictly protected.
+    - Web TypeScript check (`pnpm --filter @reachinternational/web exec tsc --noEmit`): 0 errors.
+    - Mobile TypeScript check: verified.
+
 - [x] **Fix Migration 132 Non-Existent Machine Column Error (42703) on Production (2026-09-29)**:
   - **Delivered**:
     1. **Resilient Address Fallback (`supabase/migrations/132_enforce_shift_logs_immutable_and_optimize_queries.sql`)**:

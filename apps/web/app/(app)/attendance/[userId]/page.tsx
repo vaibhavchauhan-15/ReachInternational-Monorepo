@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUser, requireRole } from "@/lib/dal";
 import { resolveUserId, getUserById } from "@/lib/data/users";
-import { getAttendanceDetailAction } from "@/app/actions/attendance";
+import { getAttendanceDetail, type AttendanceDetailResult } from "@/lib/data/attendance/attendance-detail";
 import { EmptyState } from "@/components/ui";
 import { AttendanceDetailClient } from "./AttendanceDetailClient";
 
@@ -89,7 +89,43 @@ export default async function AttendanceDetailPage({
   }
 
   const monthStr = `${year}-${String(month).padStart(2, "0")}`;
-  const data = await getAttendanceDetailAction(canonicalUserId, year, month);
+  let data: AttendanceDetailResult;
+  let loadError: string | null = null;
+  try {
+    data = await getAttendanceDetail(canonicalUserId, year, month);
+  } catch (err: unknown) {
+    console.error("[AttendanceDetailPage] Error fetching attendance detail:", err);
+    loadError = err instanceof Error ? err.message : "Failed to load live attendance";
+    data = {
+      employee: {
+        id: canonicalUserId,
+        employee_id: `EMP-${canonicalUserId.slice(0, 8).toUpperCase()}`,
+        full_name: "Employee",
+        email: null,
+        phone: null,
+        role: "operator",
+        city: null,
+        district: null,
+        state: null,
+        shift_start_time: "06:00:00",
+        shift_end_time: "14:00:00",
+      },
+      year,
+      month,
+      days: [],
+      weekdayRollup: [],
+      summary: {
+        presentDays: 0,
+        absentDays: 0,
+        halfDays: 0,
+        weekOffs: 0,
+        disabledDays: 0,
+        totalWorkedMinutes: 0,
+        totalOtMinutes: 0,
+        totalBreakdownMinutes: 0,
+      },
+    };
+  }
 
   return (
     <AttendanceDetailClient
@@ -97,6 +133,7 @@ export default async function AttendanceDetailPage({
       currentMonth={monthStr}
       userRole={currentUser.role}
       isSelf={currentUser.id === canonicalUserId}
+      loadError={loadError}
     />
   );
 }

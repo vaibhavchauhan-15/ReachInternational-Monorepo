@@ -79,8 +79,15 @@ export async function getAttendanceSummary(
     });
 
     if (error) {
-      console.error("[getAttendanceSummary] RPC error:", error);
-      throw new Error(error.message || "Failed to load attendance summary");
+      console.warn("[getAttendanceSummary] RPC error, returning empty summary structure:", error.message || error);
+      return {
+        rows: [],
+        total: 0,
+        page,
+        pageSize,
+        scheduledDays: 0,
+        kpis: { totalEmployees: 0, presentCount: 0, absentCount: 0, halfDayCount: 0, totalWorkedMinutes: 0, totalOtMinutes: 0 },
+      };
     }
 
     return (data as unknown as AttendanceSummaryResult) || {

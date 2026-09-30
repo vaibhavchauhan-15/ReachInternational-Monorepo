@@ -209,8 +209,11 @@ export default function AttendanceScreen() {
         if (error) {
           console.error('[AttendanceScreen] Operator fetch error:', error);
           Alert.alert('Error', error.message || 'Failed to fetch attendance data');
-        } else if (data) {
+        } else if (data && !('error' in (data as any))) {
           setDetailData(data as unknown as AttendanceDetailData);
+        } else if (data && 'error' in (data as any)) {
+          console.warn('[AttendanceScreen] Operator fetch returned error:', (data as any).error);
+          Alert.alert('Attendance', (data as any).error || 'Unable to load attendance data');
         }
       } else {
         const { data, error } = await supabase.rpc('get_attendance_monthly_summary', {
@@ -285,8 +288,10 @@ export default function AttendanceScreen() {
       });
       if (error) {
         Alert.alert('Error', error.message || 'Failed to load employee detail');
-      } else if (data) {
+      } else if (data && !('error' in (data as any))) {
         setDetailData(data as unknown as AttendanceDetailData);
+      } else if (data && 'error' in (data as any)) {
+        Alert.alert('Attendance', (data as any).error || 'Unable to load employee detail');
       }
     } catch (err: any) {
       console.error('[AttendanceDetail] Error:', err);
@@ -391,6 +396,30 @@ export default function AttendanceScreen() {
   };
 
   const renderDetailBody = (data: AttendanceDetailData) => {
+    const emp = data?.employee || {
+      id: user?.id || '',
+      employee_id: null,
+      full_name: (user as any)?.user_metadata?.full_name || (user as any)?.full_name || 'Operator',
+      email: user?.email || null,
+      phone: (user as any)?.phone || null,
+      role: 'operator',
+      city: null,
+      district: null,
+      state: null,
+      shift_start_time: '06:00:00',
+      shift_end_time: '14:00:00',
+    };
+    const days = Array.isArray(data?.days) ? data.days : [];
+    const summary = data?.summary || {
+      presentDays: 0,
+      absentDays: 0,
+      halfDays: 0,
+      weekOffs: 0,
+      totalWorkedMinutes: 0,
+      totalOtMinutes: 0,
+      totalBreakdownMinutes: 0,
+    };
+
     return (
       <View>
         {/* Employee Meta Card (Hidden when operator views their own attendance) */}
@@ -400,13 +429,13 @@ export default function AttendanceScreen() {
               <View style={styles.modalEmpCol}>
                 <Text style={[styles.modalEmpLabel, { color: theme.colors.mute }]}>EMPLOYEE ID</Text>
                 <Text style={[styles.modalEmpValue, { color: theme.colors.ink }]}>
-                  {data.employee.employee_id || `EMP-${data.employee.id.slice(0, 8).toUpperCase()}`}
+                  {emp.employee_id || `EMP-${emp.id.slice(0, 8).toUpperCase()}`}
                 </Text>
               </View>
               <View style={styles.modalEmpCol}>
                 <Text style={[styles.modalEmpLabel, { color: theme.colors.mute }]}>PHONE</Text>
                 <Text style={[styles.modalEmpValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                  {data.employee.phone || '—'}
+                  {emp.phone || '—'}
                 </Text>
               </View>
             </View>
@@ -415,14 +444,14 @@ export default function AttendanceScreen() {
               <View style={styles.modalEmpCol}>
                 <Text style={[styles.modalEmpLabel, { color: theme.colors.mute }]}>SITE LOCATION</Text>
                 <Text style={[styles.modalEmpValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                  {data.employee.city ? `${data.employee.city}${data.employee.state ? `, ${data.employee.state}` : ''}` : '—'}
+                  {emp.city ? `${emp.city}${emp.state ? `, ${emp.state}` : ''}` : '—'}
                 </Text>
               </View>
               <View style={styles.modalEmpCol}>
                 <Text style={[styles.modalEmpLabel, { color: theme.colors.mute }]}>SHIFT</Text>
                 <Text style={[styles.modalEmpValue, { color: theme.colors.ink }]} numberOfLines={1}>
-                  {data.employee.shift_start_time && data.employee.shift_end_time
-                    ? `${formatTimeAMPM(data.employee.shift_start_time)} – ${formatTimeAMPM(data.employee.shift_end_time)}`
+                  {emp.shift_start_time && emp.shift_end_time
+                    ? `${formatTimeAMPM(emp.shift_start_time)} – ${formatTimeAMPM(emp.shift_end_time)}`
                     : '08:00 AM – 05:00 PM'}
                 </Text>
               </View>
@@ -433,19 +462,19 @@ export default function AttendanceScreen() {
         {/* Summary Cards */}
         <View style={styles.detailSummaryRow}>
           <View style={[styles.detailStatCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <Text style={[styles.detailStatNum, { color: '#16a34a' }]}>{data.summary.presentDays}</Text>
+            <Text style={[styles.detailStatNum, { color: '#16a34a' }]}>{summary.presentDays}</Text>
             <Text style={[styles.detailStatLabel, { color: theme.colors.mute }]}>Present</Text>
           </View>
           <View style={[styles.detailStatCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <Text style={[styles.detailStatNum, { color: '#dc2626' }]}>{data.summary.absentDays}</Text>
+            <Text style={[styles.detailStatNum, { color: '#dc2626' }]}>{summary.absentDays}</Text>
             <Text style={[styles.detailStatLabel, { color: theme.colors.mute }]}>Absent</Text>
           </View>
           <View style={[styles.detailStatCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <Text style={[styles.detailStatNum, { color: '#d97706' }]}>{data.summary.halfDays}</Text>
+            <Text style={[styles.detailStatNum, { color: '#d97706' }]}>{summary.halfDays}</Text>
             <Text style={[styles.detailStatLabel, { color: theme.colors.mute }]}>Half Days</Text>
           </View>
           <View style={[styles.detailStatCard, { backgroundColor: theme.colors.canvasElevated, borderColor: theme.colors.hairline }]}>
-            <Text style={[styles.detailStatNum, { color: '#6b7280' }]}>{data.summary.weekOffs}</Text>
+            <Text style={[styles.detailStatNum, { color: '#6b7280' }]}>{summary.weekOffs}</Text>
             <Text style={[styles.detailStatLabel, { color: theme.colors.mute }]}>Week Offs</Text>
           </View>
         </View>
@@ -455,13 +484,13 @@ export default function AttendanceScreen() {
           <View style={styles.hoursCol}>
             <Text style={[styles.hoursSub, { color: theme.colors.mute }]}>Total Worked</Text>
             <Text style={[styles.hoursMain, { color: theme.colors.ink }]}>
-              {formatMins(data.summary.totalWorkedMinutes)}
+              {formatMins(summary.totalWorkedMinutes)}
             </Text>
           </View>
           <View style={styles.hoursCol}>
             <Text style={[styles.hoursSub, { color: theme.colors.mute }]}>Total Overtime</Text>
             <Text style={[styles.hoursMain, { color: '#2563eb' }]}>
-              {formatMins(data.summary.totalOtMinutes)}
+              {formatMins(summary.totalOtMinutes)}
             </Text>
           </View>
         </View>
@@ -469,7 +498,7 @@ export default function AttendanceScreen() {
         {/* Day-by-Day Log List */}
         <Text style={[styles.sectionHeading, { color: theme.colors.ink }]}>Daily Attendance Records</Text>
 
-        {data.days.map((day) => {
+        {days.map((day) => {
           const dayNum = day.date.split('-')[2];
           const dowLabel = DOW_LABELS[day.dow];
           const isSunday = day.dow === 0;
